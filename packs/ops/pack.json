@@ -1,0 +1,49 @@
+{
+  "name": "ops",
+  "version": "0.1.0",
+  "description": "Operate in production — cut releases fail-closed, run incidents to blameless post-mortems.",
+  "declaredTools": [
+    "claude",
+    "cursor",
+    "copilot",
+    "codex"
+  ],
+  "permissions": {
+    "toolFootprint": [
+      "read",
+      "edit",
+      "execute",
+      "spawn"
+    ],
+    "touchedPaths": [
+      "CHANGELOG.md",
+      "package.json",
+      "package-lock.json",
+      "pnpm-lock.yaml",
+      "yarn.lock",
+      "dist/**",
+      ".github/workflows/**",
+      ".gitlab-ci.yml",
+      "azure-pipelines.yml",
+      "Dockerfile",
+      ".dockerignore",
+      "docker-compose.yml",
+      "compose.yaml",
+      "k8s/**",
+      "docs/incidents/**",
+      "docs/runbooks/**",
+      ".stamity/inbox.md"
+    ]
+  },
+  "integrity": {
+    "agents/stamity-devops.md": "36a418a9f02d6a5fb88077ca4f50c0693caddf52e8f8398c881523321043c660",
+    "agents/stamity-incident-responder.md": "e307dbf3edbf21b5cc44a766b33cdfb1a20c2ab14031360079c1affeb5abed89",
+    "commands/stamity-incident-response.md": "4aeebfdf2c1f44ca86a43a4229595af81aadf4498a160c3ce038e501c863147d",
+    "commands/stamity-release.md": "38458ccb6a6c8f89313c531a105ea2935fc32021da3047b17fcdffa30e55d8c3",
+    "skills/stamity-ci-pipeline/SKILL.md": "98f4e09c664f0af53ba72468496afc638c69e3108bc2f073472c720930eb8fcb",
+    "skills/stamity-containerize/SKILL.md": "f4d30400fb29eafe928103239969a92ba337e52ba38b4b7a7cb86a8ec39c78a1",
+    "skills/stamity-gh-agentic-workflows/SKILL.md": "abb9c4312303a4fff2b29510f5ca34826e30ec8366f722a34e21f65ef3189999",
+    "skills/stamity-incident-response/SKILL.md": "f11ab78cc3b3ca58f9a2a1789234f317372a1c5742f56350511f40fcda648c23",
+    "skills/stamity-release/SKILL.md": "28a383903a8c56e005a52959f7b26913ccfc7d55e0cec530f8b2105c3630ce53"
+  }
+}

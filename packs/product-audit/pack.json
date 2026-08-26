@@ -1,0 +1,26 @@
+{
+  "name": "product-audit",
+  "version": "0.1.0",
+  "description": "Point-in-time whole-product assessment — opens board epics or reports; assesses, never modifies.",
+  "integrity": {
+    "commands/stamity-benchmark.md": "9a6ea76181d93f3221e379177b941d1a5275acc3ef4c8042b9e5d11bd57a1b03",
+    "commands/stamity-product-audit.md": "ea2c9d03b7c04ee8b8ab1842e815e38e6fc908a90f56fe624aba2e800224a32f",
+    "rules/stamity-epic-audit-frame.md": "ac848c276d31ec14c9906234d27927f0a296a34139e4c2cc5aca307833a4d6c9",
+    "skills/stamity-perf-audit/SKILL.md": "7e191c375cc28804c2a3518aec29d80cc7764468d765355fc1fc9ebe56d8a0d1"
+  },
+  "permissions": {
+    "toolFootprint": [
+      "read",
+      "execute",
+      "network",
+      "spawn",
+      "edit"
+    ],
+    "touchedPaths": [
+      ".stamity/audits/**",
+      ".stamity/benchmarks/**",
+      ".stamity/verify/**"
+    ]
+  },
+  "maxFootprintBytes": 262144
+}
