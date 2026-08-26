@@ -1,0 +1,34 @@
+# stamity
+
+> An ESM-only TypeScript CLI that generates agentic coding setups — a charter, commands,
+> agents, skills, rules, hooks and MCP wiring — for four AI coding clients from one
+> canonical source model.
+
+Every path below is relative to the repository root, and every page is markdown. A page
+rendered from code names the command that rewrites it — there is more than one generator
+here — and the test suite byte-compares each against a fresh render, so a page that lags
+its generator fails a check instead of reading as current. An entry naming no command is
+hand-written or corpus source. Nothing here links outside this tree.
+
+## Start here
+
+- [README](README.md): what this repository is, the command surface, where each subject lives, and the local loop.
+- [Contributing](CONTRIBUTING.md): the development loop, the three test lanes, and the regeneration command for every derived file.
+- [Security](SECURITY.md): what the engine defends today, how, and what it explicitly does not defend.
+- [Governance](GOVERNANCE.md): who decides, the two required checks a change passes to land, and what the private layer holds.
+- [Code of conduct](CODE_OF_CONDUCT.md): the behaviour expected here, the two channels a report goes through, and the enforcement ladder.
+
+## Generated reference
+
+- [CLI reference](docs/cli-reference.md): every command, argument, flag and exit status, rendered from the program itself. Regenerate with `node scripts/generate-docs.mjs`.
+- [Configuration reference](docs/configuration.md): every addressable config key, what it accepts, and what binds when it is unset. Regenerate with `node scripts/generate-docs.mjs`.
+- [Client capability matrix](docs/capability-matrix.md): what each supported client can do, rendered from the adapters' declared dialect facts. Regenerate with `node scripts/generate-capability-matrix.mjs`.
+
+## Content corpus
+
+- [Agents](docs/reference/agents.md): every agent in the corpus — its trigger, tags, load mode and retirement condition. Regenerate with `node scripts/generate-docs.mjs`.
+- [Skills](docs/reference/skills.md): every skill in the corpus — its trigger, tags, load mode and retirement condition. Regenerate with `node scripts/generate-docs.mjs`.
+- [Rules](docs/reference/rules.md): every rule in the corpus — its trigger, tags, load mode and retirement condition. Regenerate with `node scripts/generate-docs.mjs`.
+- [Commands](docs/reference/commands.md): every command in the corpus — its trigger, tags, load mode and retirement condition. Regenerate with `node scripts/generate-docs.mjs`.
+- [Packs](docs/reference/packs.md): the first-party packs `add` can install, and what each one ships. Regenerate with `node scripts/generate-docs.mjs`.
+- [Charter](content/charter/stamity-charter.md): the always-on context every generated setup carries: repo facts, floor invariants, touchpoint index.
