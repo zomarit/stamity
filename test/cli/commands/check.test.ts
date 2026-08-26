@@ -1,0 +1,877 @@
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  checkCommand,
+  checkNodeVersion,
+  runDoctor,
+  runDriftGate,
+  type DoctorCheck,
+} from "../../../src/cli/commands/check.ts";
+import {
+  __resetContentRootCacheForTests,
+  __setContentRootForTests,
+} from "../../../src/content/contentRoot.ts";
+import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
+import { createApp, createEngine } from "../../../src/index.ts";
+import {
+  createManifest,
+  manifestPath,
+  readManifest,
+  writeManifest,
+} from "../../../src/manifest/manifest.ts";
+import type { Tool } from "../../../src/types/core.ts";
+import { EngineError } from "../../../src/types/errors.ts";
+import { packOwner, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
+import { STATE_DIR } from "../../../src/types/markers.ts";
+import { runInProcess } from "../../support/inProcess.ts";
+import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
+
+/**
+ * Real-filesystem lane: check's whole subject is what is on disk — a manifest,
+ * state directories, ledgered files that may or may not still exist, temp-file
+ * litter — and every gate it drives reads the filesystem directly, with no fs
+ * seam a virtual volume could occupy.
+ *
+ * Two fixture rules make the assertions mean something:
+ *
+ * - the bundled content root is pinned at `<repo>/corpus` and seeded with a
+ *   minimal charter. It was pinned ABSENT while the emission planner was the
+ *   no-op; with emission live, check's drift gate runs `planSync`, and core
+ *   emission refuses an absent charter outright (`src/content/charter.ts`), so
+ *   an absent corpus now models a broken install rather than a clean repo. The
+ *   corpus stays minimal so an empty ledger still reads "clean", never drift;
+ * - each fixture carries exactly the one defect its test names, so a doctor row
+ *   or an exit code is a statement about check's logic rather than about how
+ *   much a fixture happened to trip.
+ */
+
+const getRepo = useTempDir("stamity-check");
+
+afterEach(() => {
+  __resetContentRootCacheForTests();
+});
+
+const T0 = new Date("2026-01-01T00:00:00.000Z");
+
+/** Minimal viable corpus: the charter is the only artifact core emission requires. */
+const CHARTER_FIXTURE = [
+  "---",
+  "id: charter",
+  "type: charter",
+  "description: fixture charter",
+  "tags: [orchestration]",
+  "load: always",
+  "obsolete_when: fixture trigger",
+  "---",
+  "",
+  "# Test Charter",
+  "",
+  "Charter guidance body.",
+  "",
+].join("\n");
+
+interface DriftDoc {
+  clean: boolean;
+  changes: { path: string; action: string }[];
+  missing: string[];
+  reclaimPending: number;
+}
+
+interface ProvenanceDoc {
+  generatedBy: string;
+  updatedAt: string;
+  manifestVersion: string;
+  perAdapter: { adapter: string; files: number; stampedVersion: string | null }[];
+  packs: { packId: string; files: number }[];
+}
+
+interface Envelope {
+  ok: boolean;
+  command: string;
+  version: string;
+  doctor: DoctorCheck[];
+  drift: DriftDoc | null;
+  driftStatus: "evaluated" | "no-manifest" | "failed";
+  provenance: ProvenanceDoc | null;
+  error?: unknown;
+}
+
+interface SeedOptions {
+  tools?: Tool[];
+  ledger?: LedgerEntry[];
+  /** Manifest schema version override, for the generation-tolerance case. */
+  version?: string;
+  /** Engine version stamped as `generatedBy`. */
+  generatedBy?: string;
+  mcpServers?: string[];
+  /** `false` leaves `.stamity/learnings` and `.stamity/handoffs` absent. */
+  stateDirs?: boolean;
+  files?: Record<string, string>;
+}
+
+/**
+ * An initialised repository: seeded corpus, a valid manifest, the state
+ * directories, and — new with live emission — the emitted files themselves,
+ * so every doctor row except the ones a test deliberately breaks reads `pass`
+ * and the drift gate reads clean.
+ *
+ * Why the sync run: `runDriftGate` calls `planSync` and counts every plan entry
+ * that is not `unchanged`. While the planner was the no-op it planned nothing,
+ * so a manifest with an empty ledger and no generated files on disk was
+ * indistinguishable from a synced repo. It no longer is — that repo is now
+ * genuinely drifted (`stamity sync` would create eight files), and asserting it
+ * reads "clean" would assert a falsehood. The fixture therefore performs the
+ * sync it always implied, which is also what makes the `.claude/settings.json`
+ * trace real rather than a hand-seeded `{}` stub.
+ *
+ * Ordering: the sync runs against the manifest WITHOUT `opts.ledger`, because
+ * apply rewrites each tool's ledger rows from what it emitted; the caller's
+ * extra rows (missing files, pack rows, deselected adapters) are appended
+ * afterwards, and `opts.files` is seeded last so a test's deliberate defect
+ * always wins over generated bytes.
+ */
+async function seedRepo(handle: TempDirHandle, opts: SeedOptions = {}): Promise<string> {
+  __setContentRootForTests(handle.path("corpus"));
+  await handle.seedFiles({ "corpus/charter/stamity-charter.md": CHARTER_FIXTURE });
+
+  // The sync always runs at THIS build's version, so the emitted files are
+  // current; `opts.generatedBy` re-stamps only the manifest's provenance field
+  // below. Syncing at a stale version instead would stamp every managed block
+  // stale too, which is real drift and not the "manifest says it was generated
+  // by an older engine" state the skew test is about.
+  const engineVersion = createApp().version;
+  const base = createManifest({
+    tools: opts.tools ?? ["claude"],
+    selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+    generatorVersion: engineVersion,
+    now: T0,
+    ...(opts.mcpServers === undefined ? {} : { mcp: { servers: opts.mcpServers } }),
+  });
+  await writeManifest(handle.dir, base, { now: T0 });
+
+  if (opts.stateDirs !== false) {
+    await Promise.all(
+      ["learnings", "handoffs"].map((name) =>
+        mkdir(join(handle.dir, STATE_DIR, name), { recursive: true }),
+      ),
+    );
+  }
+
+  const plan = await planSync(handle.dir, engineVersion);
+  await applySync(handle.dir, plan, { engineVersion, force: false, dryRun: false, now: T0 });
+
+  // Re-stamp what apply refreshed (`generatedBy`, `updatedAt`, schema version)
+  // back to the fixture's pinned values, and append the caller's ledger rows.
+  const synced = await readManifest(handle.dir);
+  const manifest: SetupManifest = {
+    ...(synced ?? base),
+    generatedBy: opts.generatedBy ?? engineVersion,
+    ...(opts.version === undefined ? {} : { version: opts.version }),
+    ledger: [...(synced?.ledger ?? []), ...(opts.ledger ?? [])],
+  };
+  await writeManifest(handle.dir, manifest, { now: T0 });
+
+  if (opts.files !== undefined) await handle.seedFiles(opts.files);
+  return handle.dir;
+}
+
+/** Runs `check --json` and parses the single document the funnel emits. */
+async function runJson(cwd: string): Promise<{ code: number; doc: Envelope }> {
+  const result = await runInProcess([checkCommand], ["check", "--json"], { cwd });
+  const lines = result.stdout.trim().split("\n");
+  // One run, one document: a second line would mean human output leaked past
+  // the funnel's JSON suppression.
+  expect(lines).toHaveLength(1);
+  return { code: result.code, doc: JSON.parse(lines[0] ?? "") as Envelope };
+}
+
+function runHuman(cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
+  return runInProcess([checkCommand], ["check"], { cwd });
+}
+
+function row(doc: Envelope, id: string): DoctorCheck {
+  const found = doc.doctor.find((entry) => entry.id === id);
+  if (found === undefined) throw new Error(`no doctor row ${id} in ${JSON.stringify(doc.doctor)}`);
+  return found;
+}
+
+describe("checkNodeVersion", () => {
+  // The failing branch is unreachable in-process — the suite runs on a Node
+  // that already satisfies the floor — so the comparison is exercised as the
+  // pure function it is, with the version injected.
+
+  it("passes a version inside the range", () => {
+    expect(checkNodeVersion("22.12.0", ">=22.12")).toEqual({
+      id: "node-version",
+      status: "pass",
+      detail: "Node 22.12.0 satisfies >=22.12",
+    });
+  });
+
+  it("fails a version below the floor, naming the range and the fix", () => {
+    const check = checkNodeVersion("20.19.4", ">=22.12");
+
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("20.19.4");
+    expect(check.detail).toContain(">=22.12");
+    expect(check.detail).toContain("re-run");
+  });
+
+  it("accepts a prerelease build of a satisfying major", () => {
+    // semver excludes prereleases from a plain range by default; a Node nightly
+    // on a satisfying major is a real installation, not a floor violation.
+    expect(checkNodeVersion("24.0.0-nightly20260101abcdef", ">=22.12").status).toBe("pass");
+  });
+
+  it("warns rather than fails on an unparseable version or an unreadable range", () => {
+    const unparseable = checkNodeVersion("not-a-version", ">=22.12");
+    expect(unparseable.status).toBe("warn");
+    expect(unparseable.detail).toContain("not-a-version");
+
+    const noRange = checkNodeVersion("22.14.0", null);
+    expect(noRange.status).toBe("warn");
+    expect(noRange.detail).toContain("engines.node");
+  });
+});
+
+describe("check — a healthy repository", () => {
+  it("exits 0 with no failing row, clean drift, and the manifest as provenance", async () => {
+    const root = await seedRepo(getRepo());
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(doc.ok).toBe(true);
+    expect(doc.doctor.filter((entry) => entry.status === "fail")).toEqual([]);
+    expect(row(doc, "manifest").status).toBe("pass");
+    // A freshly synced repo is the honest clean state; it was an empty ledger
+    // over an empty corpus while emission was a no-op.
+    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0 });
+    expect(doc.provenance?.generatedBy).toBe(createApp().version);
+    expect(doc.provenance?.manifestVersion).toBe("1.0.0");
+    // Was `files: 0`. Counted off the ledger rather than pinned to a literal so
+    // the rollup stays asserted without this suite owning the adapter's file
+    // count; the guard below keeps it from passing vacuously at zero.
+    const ledgerRows = (await readManifest(root))?.ledger ?? [];
+    expect(ledgerRows.length).toBeGreaterThan(0);
+    expect(doc.provenance?.perAdapter).toEqual([
+      // `null` because the emitted set mixes stamped (managed-block) and
+      // unstamped (whole-file) artifacts, which is what a null stamp means.
+      { adapter: "claude", files: ledgerRows.length, stampedVersion: null },
+    ]);
+  });
+
+  it("prints the doctor table, the drift verdict, provenance, and a closing line", async () => {
+    const root = await seedRepo(getRepo());
+
+    const result = await runHuman(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("doctor");
+    expect(result.stdout).toContain("node-version");
+    expect(result.stdout).toContain("drift: clean");
+    expect(result.stdout).toContain("provenance (the manifest is the record)");
+    expect(result.stdout).toContain("nothing to do");
+    expect(result.stderr).toBe("");
+  });
+
+  it("returns the nine doctor rows in a fixed order", async () => {
+    const root = await seedRepo(getRepo());
+
+    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root }));
+
+    // Grew by one: `pack-integrity` re-hashes installed pack content
+    // against what the install recorded. It is last because it is the only row
+    // whose cost scales with what the repo installed, and reading order puts
+    // the environment probes first.
+    expect(doctor.map((entry) => entry.id)).toEqual([
+      "node-version",
+      "git-available",
+      "manifest",
+      "state-dirs",
+      "learnings",
+      "tmp-hygiene",
+      "env-mcp",
+      "tool-traces",
+      "pack-integrity",
+    ]);
+  });
+
+  it("notes engine-version skew on the manifest row without failing it", async () => {
+    const root = await seedRepo(getRepo(), { generatedBy: "0.9.0" });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "manifest").status).toBe("pass");
+    expect(row(doc, "manifest").detail).toContain("0.9.0");
+    expect(row(doc, "manifest").detail).toContain("this build is");
+  });
+});
+
+describe("check — an un-initialised repository", () => {
+  it("fails the manifest row with the init next step and exits 1", async () => {
+    const handle = getRepo();
+    __setContentRootForTests(handle.path("corpus"));
+
+    const { code, doc } = await runJson(handle.dir);
+
+    expect(code).toBe(1);
+    expect(doc.ok).toBe(false);
+    expect(row(doc, "manifest").status).toBe("fail");
+    expect(row(doc, "manifest").detail).toContain("npx @zomarit/stamity init");
+    // The gate could not run, and check says so rather than claiming a verdict.
+    expect(doc.drift).toBeNull();
+    expect(doc.provenance).toBeNull();
+  });
+
+  it("names the same next step in human output", async () => {
+    const handle = getRepo();
+    __setContentRootForTests(handle.path("corpus"));
+
+    const result = await runHuman(handle.dir);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("fail");
+    expect(result.stdout).toContain("drift: not evaluated");
+    expect(result.stdout).toContain("next:");
+    expect(result.stdout).toContain("npx @zomarit/stamity init");
+  });
+
+  it("fails the same way when .stamity exists but the manifest was hand-deleted", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    await rm(manifestPath(root));
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(1);
+    // The state directories survive, so the ONLY failing row is the manifest —
+    // a half-deleted state dir must not read as a broken environment.
+    expect(doc.doctor.filter((entry) => entry.status === "fail").map((entry) => entry.id)).toEqual([
+      "manifest",
+    ]);
+    expect(row(doc, "manifest").detail).toContain("npx @zomarit/stamity init");
+    expect(row(doc, "state-dirs").status).toBe("pass");
+  });
+
+  it("fails with the engine's own field messages when the manifest is corrupt", async () => {
+    const handle = getRepo();
+    __setContentRootForTests(handle.path("corpus"));
+    await handle.seedFiles({ [`${STATE_DIR}/manifest.json`]: '{"version": 1, "tools": []}\n' });
+
+    const { code, doc } = await runJson(handle.dir);
+
+    expect(code).toBe(1);
+    expect(row(doc, "manifest").status).toBe("fail");
+    // Passed through verbatim: re-wording the engine's field list here would
+    // put a second, staler copy of every rule in the CLI.
+    expect(row(doc, "manifest").detail).toContain("`version` must be a semantic version string");
+    expect(row(doc, "manifest").detail).toContain("`tools` must name at least one target tool");
+    expect(doc.drift).toBeNull();
+  });
+});
+
+describe("check — the drift gate", () => {
+  const packRow: LedgerEntry = {
+    path: "docs/pack-guide.md",
+    adapter: packOwner("demo"),
+    artifactId: "guide",
+    artifactType: "skill",
+  };
+
+  it("names a ledgered file that is gone, and goes clean again once it is back", async () => {
+    // A pack row, not an adapter row: pack content is excluded from the reclaim
+    // sweep by construction, so this fixture isolates the missing-file source of
+    // drift from the reclaim source exercised below.
+    const handle = getRepo();
+    const root = await seedRepo(handle, {
+      ledger: [packRow],
+      files: { "docs/pack-guide.md": "# Guide\n" },
+    });
+
+    const before = await runJson(root);
+    expect(before.code).toBe(0);
+    expect(before.doc.drift?.clean).toBe(true);
+
+    await rm(join(root, "docs/pack-guide.md"));
+    const during = await runJson(root);
+    expect(during.code).toBe(1);
+    expect(during.doc.ok).toBe(false);
+    expect(during.doc.drift?.missing).toEqual(["docs/pack-guide.md"]);
+    expect(during.doc.drift?.clean).toBe(false);
+
+    await writeFile(join(root, "docs/pack-guide.md"), "# Guide\n", "utf8");
+    const after = await runJson(root);
+    expect(after.code).toBe(0);
+    expect(after.doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0 });
+  });
+
+  it("prints the missing path and the sync next step in human output", async () => {
+    const root = await seedRepo(getRepo(), { ledger: [packRow] });
+
+    const result = await runHuman(root);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("ledgered file(s) missing");
+    expect(result.stdout).toContain("docs/pack-guide.md");
+    expect(result.stdout).toContain("npx @zomarit/stamity sync");
+    // Pack rows still appear in the provenance rollup, missing file or not.
+    expect(result.stdout).toContain("pack demo: 1 file(s)");
+  });
+
+  it("counts a deselected adapter row as reclaim-pending drift", async () => {
+    // An adapter-owned ledger row at a path the planner does NOT emit has
+    // nothing re-emitting it: the row is queued for reclaim, which is drift even
+    // though the file itself is present and unchanged. The path was `CLAUDE.md`
+    // while the planner was the no-op and emitted nothing; claude now emits
+    // exactly that file, so the row would be re-emitted rather than reclaimed —
+    // a path outside the emitted set is what the scenario actually needs.
+    const root = await seedRepo(getRepo(), {
+      ledger: [
+        {
+          path: "docs/legacy-guide.md",
+          adapter: "claude",
+          artifactId: "legacy-guide",
+          artifactType: "infra",
+        },
+      ],
+      files: { "docs/legacy-guide.md": "# Legacy\n" },
+    });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(1);
+    expect(doc.drift).toMatchObject({ clean: false, missing: [], reclaimPending: 1 });
+    expect(doc.drift?.changes).toEqual([]);
+
+    // A queued reclaim is drift with no changed and no missing path, so the
+    // human report has nothing to list — the next step is the only thing that
+    // tells the reader what to do about it, and sync is what drains the queue.
+    const human = await runHuman(root);
+    expect(human.stdout).toContain("queued for reclaim");
+    expect(human.stdout).toContain("npx @zomarit/stamity sync");
+  });
+
+  it("counts a path claimed twice in the ledger as one missing file", async () => {
+    const root = await seedRepo(getRepo(), {
+      tools: ["claude", "cursor"],
+      ledger: [
+        {
+          path: "docs/shared.md",
+          adapter: packOwner("alpha"),
+          artifactId: "shared",
+          artifactType: "rule",
+        },
+      ],
+    });
+
+    const report = await runDriftGate(root, "1.0.0");
+
+    expect(report.missing).toEqual(["docs/shared.md"]);
+  });
+
+  it("propagates the engine's un-initialised failure to a direct caller", async () => {
+    // The command collapses this to `drift: null` on purpose; the gate itself
+    // stays honest so any other caller sees the real failure.
+    const handle = getRepo();
+    __setContentRootForTests(handle.path("corpus"));
+
+    await expect(runDriftGate(handle.dir, "1.0.0")).rejects.toBeInstanceOf(EngineError);
+  });
+});
+
+describe("check — advisory warnings", () => {
+  it("exits 0 when the only findings are a missing state subdir and an absent git repo", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { stateDirs: false });
+    // FIXTURE CHANGE: `stateDirs: false` used to be enough, because the
+    // write verbs left these directories to the stores. Both verbs scaffold
+    // them now — with a `.gitkeep`, so a clone keeps them — so the warning
+    // state has to be produced the way a repository actually reaches it: by
+    // something removing them after the setup was written.
+    await rm(join(root, STATE_DIR, "learnings"), { recursive: true, force: true });
+    await rm(join(root, STATE_DIR, "handoffs"), { recursive: true, force: true });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(doc.ok).toBe(true);
+    expect(row(doc, "state-dirs").status).toBe("warn");
+    expect(row(doc, "state-dirs").detail).toContain(`${STATE_DIR}/learnings`);
+    expect(row(doc, "state-dirs").detail).toContain(`${STATE_DIR}/handoffs`);
+    // ASSERTION ADDED: the remedy has to be a command that does the
+    // thing. This row named `npx @zomarit/stamity init`, which refuses an initialised
+    // repo with exit 1 and recreates nothing — so the warning was permanent for
+    // every teammate who cloned the repository.
+    expect(row(doc, "state-dirs").detail).toContain("npx @zomarit/stamity sync");
+    expect(row(doc, "state-dirs").detail).not.toContain("npx @zomarit/stamity init");
+    // A temp directory is not a git repository; git-less repos are legal, so the
+    // row is never a failure whichever way the probe answers.
+    expect(row(doc, "git-available").status).not.toBe("fail");
+  });
+
+  /**
+   * REPLACES "warns about a target tool with no config on disk".
+   *
+   * That test deleted `.cursor/` and asserted the warning. The warning was real
+   * for cursor and permanently WRONG for copilot: the probe read the repo
+   * analyzer's vendor-indicator table, where copilot's trace is
+   * `.github/copilot-instructions.md` — a file the adapter deliberately never
+   * emits, because copilot reads the root `AGENTS.md` natively. So every
+   * copilot-targeting repo warned forever and was told `sync` would fix it,
+   * which sync cannot do: no such output exists in the plan. Deleting a tool's
+   * directory is now the DRIFT gate's finding (it names the missing paths), and
+   * this row answers the question it can answer from the ledger: has anything
+   * been emitted for this tool at all.
+   */
+  it("gives a copilot-only repo no tool-traces warning, because none is true", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["copilot"] });
+
+    const { doc } = await runJson(root);
+
+    expect(row(doc, "tool-traces").status).toBe("pass");
+    expect(row(doc, "tool-traces").detail).not.toContain("copilot-instructions");
+    // And the remedy that could never have worked is gone with it.
+    expect(row(doc, "tool-traces").detail).not.toContain("stamity sync");
+  });
+
+  it("still warns when a target tool has no emitted files at all", async () => {
+    // The state the row exists for, and the one sync genuinely fixes: cursor is
+    // targeted but nothing was ever emitted for it, so it holds no ledger rows.
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    const manifest = await readManifest(root);
+    await writeManifest(
+      root,
+      { ...(manifest as SetupManifest), tools: ["claude", "cursor"] },
+      { now: T0 },
+    );
+
+    const { doc } = await runJson(root);
+
+    expect(row(doc, "tool-traces").status).toBe("warn");
+    expect(row(doc, "tool-traces").detail).toContain("cursor");
+    expect(row(doc, "tool-traces").detail).toContain("npx @zomarit/stamity sync");
+  });
+
+  it("passes tool-traces once every target tool has emitted files", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "cursor"] });
+
+    const { doc } = await runJson(root);
+
+    expect(row(doc, "tool-traces").status).toBe("pass");
+  });
+
+  it("reports writer temp-file litter without deleting it", async () => {
+    // Fixture corrected, not weakened: the writer's temp name carries the
+    // engine's own token (`<file>.tmp.<token><8hex>`, `src/merge/atomicWrite.ts`)
+    // so the repo-wide sweep can prove it owns what it matches. The old
+    // `notes.md.tmp.deadbeef` fixture is a shape several tools share and the
+    // sweep correctly no longer claims it — the litter this row reports has to
+    // be litter this engine actually left.
+    const root = await seedRepo(getRepo(), {
+      files: { "notes.md.tmp.stamity-deadbeef": "half-written\n" },
+    });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "tmp-hygiene").status).toBe("warn");
+    expect(row(doc, "tmp-hygiene").detail).toContain("notes.md.tmp.stamity-deadbeef");
+    // Report-only: check is a read verb, so the sweep it drives must leave the
+    // file exactly where it found it.
+    expect(existsSync(join(root, "notes.md.tmp.stamity-deadbeef"))).toBe(true);
+  });
+
+  it("warns on invalid learnings and points at validate for the detail", async () => {
+    const root = await seedRepo(getRepo(), {
+      files: { [`${STATE_DIR}/learnings/broken.md`]: "no frontmatter, no sections\n" },
+    });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "learnings").status).toBe("warn");
+    expect(row(doc, "learnings").detail).toContain("npx @zomarit/stamity validate");
+  });
+});
+
+describe("check — MCP credentials", () => {
+  it("stays quiet when no MCP servers are selected", async () => {
+    const root = await seedRepo(getRepo());
+
+    const { doc } = await runJson(root);
+
+    expect(row(doc, "env-mcp").status).toBe("pass");
+    expect(row(doc, "env-mcp").detail).toContain("no MCP servers selected");
+  });
+
+  it("warns — and still exits 0 — while placeholders are unfilled", async () => {
+    const root = await seedRepo(getRepo(), {
+      mcpServers: ["github"],
+      files: { ".env.mcp": "GITHUB_TOKEN=\nOTHER_TOKEN=\n" },
+    });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "env-mcp").status).toBe("warn");
+    expect(row(doc, "env-mcp").detail).toContain("2 of 2");
+    expect(row(doc, "env-mcp").detail).toContain("GITHUB_TOKEN");
+  });
+
+  it("passes once the credentials are filled, and never prints a value", async () => {
+    const secret = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB";
+    const root = await seedRepo(getRepo(), {
+      mcpServers: ["github"],
+      files: { ".env.mcp": `GITHUB_TOKEN=${secret}\n` },
+    });
+
+    const { code, doc } = await runJson(root);
+    const human = await runHuman(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "env-mcp").status).toBe("pass");
+    expect(JSON.stringify(doc)).not.toContain(secret);
+    expect(human.stdout).not.toContain(secret);
+  });
+
+  it("warns when servers are selected but the credential file is absent", async () => {
+    const root = await seedRepo(getRepo(), { mcpServers: ["github"] });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "env-mcp").status).toBe("warn");
+    expect(row(doc, "env-mcp").detail).toContain(".env.mcp is absent");
+  });
+});
+
+describe("check — the JSON envelope", () => {
+  it("carries all four payload keys, and ok tracks the exit code in both directions", async () => {
+    // The CI contract in one assertion: a pipeline reads `ok`, so `ok` and the
+    // exit code must never be able to disagree. One repository, one mutation
+    // between the two runs, so the flip is attributable to that mutation.
+    const root = await seedRepo(getRepo(), {
+      ledger: [
+        { path: "docs/gone.md", adapter: packOwner("demo"), artifactId: "gone", artifactType: "skill" },
+      ],
+      files: { "docs/gone.md": "# Guide\n" },
+    });
+
+    const healthy = await runJson(root);
+
+    expect(healthy.code).toBe(0);
+    expect(healthy.doc.ok).toBe(true);
+    expect(healthy.doc.command).toBe("check");
+    expect(healthy.doc.version).toBe(createApp().version);
+    expect(Object.keys(healthy.doc)).toEqual(
+      expect.arrayContaining(["doctor", "drift", "provenance", "ok"]),
+    );
+    expect(healthy.doc.doctor.length).toBeGreaterThan(0);
+    expect(healthy.doc.drift).not.toBeNull();
+    expect(healthy.doc.provenance).not.toBeNull();
+
+    await rm(join(root, "docs/gone.md"));
+    const failing = await runJson(root);
+
+    expect(failing.code).toBe(1);
+    expect(failing.doc.ok).toBe(false);
+    expect(failing.doc.command).toBe("check");
+    // A failure envelope must still carry the full report: the run answered
+    // every question, and `ok:false` is one of its answers, not a substitute
+    // for the rest (a thrown failure would have replaced this with `error`).
+    expect(failing.doc.doctor.length).toBe(healthy.doc.doctor.length);
+    expect(failing.doc.drift?.missing).toEqual(["docs/gone.md"]);
+    expect(failing.doc.provenance).not.toBeNull();
+  });
+});
+
+describe("check — manifest schema tolerance", () => {
+  it("runs the drift gate normally for a same-major schema version with no migration", async () => {
+    // MANIFEST_VERSION is 1.0.0 and the migration registry is empty, so the
+    // no-migration path is seeded from the other side of the same major: only a
+    // MAJOR-newer manifest is refused, and that refusal lives in the engine.
+    const root = await seedRepo(getRepo(), { version: "1.1.0" });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "manifest").status).toBe("pass");
+    expect(row(doc, "manifest").detail).toContain("schema 1.1.0");
+    expect(doc.drift?.clean).toBe(true);
+    expect(doc.provenance?.manifestVersion).toBe("1.1.0");
+  });
+});
+
+describe("check — installed pack integrity", () => {
+  /** An installed pack: bytes on disk plus the ledger row the install records. */
+  async function seedInstalledPack(
+    handle: TempDirHandle,
+    body: string,
+  ): Promise<{ root: string; relPath: string }> {
+    const relPath = `${STATE_DIR}/packs/demo/agents/stamity-demo.md`;
+    const root = await seedRepo(handle, {
+      ledger: [
+        {
+          path: relPath,
+          adapter: packOwner("demo"),
+          artifactId: "demo",
+          artifactType: "agent",
+          contentHash: createHash("sha256").update(body).digest("hex"),
+        },
+      ],
+      files: { [relPath]: body },
+    });
+    return { root, relPath };
+  }
+
+  it("passes while the installed bytes still match what the install recorded", async () => {
+    const { root } = await seedInstalledPack(getRepo(), "# demo agent\n");
+
+    const { doc } = await runJson(root);
+
+    expect(row(doc, "pack-integrity").status).toBe("pass");
+    expect(row(doc, "pack-integrity").detail).toContain("still match the hashes recorded");
+  });
+
+  it("fails naming the pack when a pack body was edited after install, and the remedy is NOT sync", async () => {
+    // The failure nothing else on this screen can see. Drift reports an edited
+    // pack body as ordinary regeneration drift, and the remedy drift recommends
+    // — `sync` — carries the edited bytes into the generated setup, laundering
+    // the tamper. This row speaks integrity vocabulary and points elsewhere.
+    const handle = getRepo();
+    const { root, relPath } = await seedInstalledPack(handle, "# demo agent\n");
+    await writeFile(join(root, relPath), "# demo agent\nplus something nobody installed\n", "utf8");
+
+    const { code, doc } = await runJson(root);
+    const human = await runHuman(root);
+
+    expect(code).toBe(1);
+    expect(doc.ok).toBe(false);
+    const integrity = row(doc, "pack-integrity");
+    expect(integrity.status).toBe("fail");
+    expect(integrity.detail).toContain("demo");
+    expect(integrity.detail).toContain(relPath);
+    expect(integrity.detail).toContain("This is not regeneration drift");
+
+    // The next-step block must not send the operator to the verb that spreads it.
+    const nextBlock = human.stdout.slice(human.stdout.indexOf("next:"));
+    expect(nextBlock).toContain("stamity clean --pack");
+    expect(nextBlock).toContain("do not run sync first");
+  });
+
+  it("reports a pack file that was deleted after install", async () => {
+    const handle = getRepo();
+    const { root, relPath } = await seedInstalledPack(handle, "# demo agent\n");
+    await rm(join(root, relPath));
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(1);
+    expect(row(doc, "pack-integrity").status).toBe("fail");
+    expect(row(doc, "pack-integrity").detail).toContain("is missing from the repo");
+  });
+
+  it("does no work, and says so, when nothing is installed", async () => {
+    const root = await seedRepo(getRepo());
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "pack-integrity").status).toBe("pass");
+    expect(row(doc, "pack-integrity").detail).toContain("no installed pack content");
+  });
+});
+
+describe("check — a drift gate that cannot run", () => {
+  /**
+   * A repo whose manifest is readable and whose plan is not. The manifest names
+   * a content selection the corpus cannot satisfy — core emission refuses an
+   * absent charter outright (`src/content/charter.ts`) — so `planSync` throws
+   * with a real, diagnosable message while every doctor probe still answers.
+   * That is exactly the shape a pack bricking projection produces, and the
+   * shape the old wide swallow reported as "the manifest has to be readable
+   * first" two lines under a `manifest` row reading `ok`.
+   */
+  async function seedUnplannableRepo(handle: TempDirHandle): Promise<string> {
+    const root = await seedRepo(handle);
+    // Remove the charter AFTER the fixture sync, so the manifest and the
+    // emitted files are real and only the NEXT plan fails.
+    await rm(handle.path("corpus"), { recursive: true, force: true });
+    return root;
+  }
+
+  it("exits 1, keeps the manifest row passing, and reports the true reason", async () => {
+    const handle = getRepo();
+    const root = await seedUnplannableRepo(handle);
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(1);
+    expect(doc.ok).toBe(false);
+    // The manifest IS readable, and the row keeps saying so — the old message
+    // told the operator to fix the one thing that was demonstrably fine.
+    expect(row(doc, "manifest").status).toBe("pass");
+    expect(doc.drift).toBeNull();
+    expect(doc.driftStatus).toBe("failed");
+    // The cause reaches a machine caller as an error document.
+    const error = doc.error as { code: string; message: string; why: string; next: string };
+    expect(error.message).toContain("could not evaluate drift");
+    expect(error.why.length).toBeGreaterThan(0);
+    expect(error.next).toContain("stamity check");
+  });
+
+  it("never prints `all green` while the run exits non-zero, and names the stopped mechanism", async () => {
+    const handle = getRepo();
+    const root = await seedUnplannableRepo(handle);
+
+    const result = await runHuman(root);
+
+    expect(result.code).toBe(1);
+    // The contradiction this closes: a human read "all green — nothing to do"
+    // off the same screen a CI job read exit 1 from, and the human was wrong.
+    expect(result.stdout).not.toContain("all green");
+    expect(result.stdout).toContain("drift: not evaluated");
+    // Not just "no verdict": drift detection is the mechanism that catches a
+    // generated file being edited, and the screen has to say it has stopped.
+    expect(result.stdout).toContain("tampering with a generated file would NOT be detected");
+    expect(result.stdout).toContain("next:");
+  });
+
+  it("still says `the manifest has to be readable first` when that IS the reason", async () => {
+    // The narrow swallow that survives: an un-initialised repo. The `manifest`
+    // row owns that message with its fix, so drift does not repeat it as a
+    // second failure — it points at the row.
+    const handle = getRepo();
+    __setContentRootForTests(handle.path("corpus"));
+
+    const { code, doc } = await runJson(handle.dir);
+
+    expect(code).toBe(1);
+    expect(doc.driftStatus).toBe("no-manifest");
+    expect(doc.drift).toBeNull();
+    const human = await runHuman(handle.dir);
+    expect(human.stdout).toContain("drift: not evaluated");
+    expect(human.stdout).toContain("manifest row above");
+    expect(human.stdout).not.toContain("all green");
+  });
+
+  it("keeps printing the nothing-to-do close for a genuinely green run", async () => {
+    // The temp fixture is not a git repository, so `git-available` warns — the
+    // green close is therefore the advisory variant, and the exit is still 0.
+    // Both halves matter: the honesty rule must not have made a passing run
+    // print a `next:` list it has nothing to put in.
+    const root = await seedRepo(getRepo());
+
+    const result = await runHuman(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("nothing to do");
+    expect(result.stdout).not.toContain("next:");
+  });
+});

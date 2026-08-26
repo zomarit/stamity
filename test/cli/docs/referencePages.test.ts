@@ -1,0 +1,372 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterAll, describe, expect, it } from "vitest";
+import {
+  REFERENCE_PAGES,
+  REGENERATE_COMMAND,
+  generatedBanner,
+  renderReferencePages,
+} from "../../../src/cli/docs/referencePages.ts";
+import { buildContentIndex, type CatalogItem } from "../../../src/content/catalog.ts";
+import { lookupCatalogEntry } from "../../../src/pack/curated.ts";
+import { CONTENT_CLASSES } from "../../../src/types/content.ts";
+import { EngineError } from "../../../src/types/errors.ts";
+
+/**
+ * The drift gate on the per-class reference pages.
+ *
+ * Each page is a projection of artifact frontmatter, so an artifact added,
+ * retired, re-tagged, or re-described has to show up as a byte diff. The
+ * refusal cases run against seeded corpora on disk rather than the real one:
+ * the corpus frontmatter contract already forbids the defects, so the only
+ * way to prove this renderer catches them is to build a corpus that has them.
+ */
+
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+const MODULE_SOURCE_PATH = join(REPO_ROOT, "src/cli/docs/referencePages.ts");
+const SCRIPT_PATH = join(REPO_ROOT, "scripts/generate-docs.mjs");
+const REAL_PACKS_ROOT = join(REPO_ROOT, "packs");
+
+const staleMessage = (page: string): string =>
+  `${page} is stale — the render no longer matches the committed page. ` +
+  `Regenerate it with \`${REGENERATE_COMMAND}\` and commit the diff.`;
+
+const committed = (relPath: string): string => readFileSync(join(REPO_ROOT, relPath), "utf-8");
+
+const live = async (): Promise<ReadonlyMap<string, string>> => await renderReferencePages();
+
+/** A valid artifact body; every defect case removes exactly one field from it. */
+function artifact(fields: Record<string, string>): string {
+  const front = Object.entries(fields)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\n");
+  return `---\n${front}\n---\n\n# body\n\nBody text.\n`;
+}
+
+const VALID_AGENT: Record<string, string> = {
+  id: "probe",
+  type: "agent",
+  description: "Does one probing job.",
+  tags: "[implementation]",
+  load: "on-demand",
+  obsolete_when: "clients probe unprompted",
+};
+
+/** A seeded corpus + packs root, torn down by the caller. */
+async function seed(
+  agentFields: Record<string, string>,
+  options: { readonly packJson?: string | null } = {},
+): Promise<{ contentRoot: string; packsRoot: string; cleanup: () => void }> {
+  const dir = mkdtempSync(join(tmpdir(), "stamity-p6u03-corpus-"));
+  const contentRoot = join(dir, "content");
+  const packsRoot = join(dir, "packs");
+  const agentPath = join(contentRoot, "agents", "stamity-probe.md");
+  await mkdir(dirname(agentPath), { recursive: true });
+  await writeFile(agentPath, artifact(agentFields), "utf-8");
+
+  await mkdir(join(packsRoot, "probe-pack"), { recursive: true });
+  if (options.packJson !== null) {
+    await writeFile(
+      join(packsRoot, "probe-pack", "pack.json"),
+      options.packJson ??
+        JSON.stringify({
+          name: "probe-pack",
+          version: "0.0.1",
+          description: "A probe pack.",
+          integrity: {},
+        }),
+      "utf-8",
+    );
+  }
+  return { contentRoot, packsRoot, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+describe("renderReferencePages — drift gate", () => {
+  it("byte-matches every committed page", async () => {
+    const pages = await live();
+    expect([...pages.keys()]).toEqual(REFERENCE_PAGES.map((page) => page.path));
+    for (const [path, bytes] of pages) {
+      expect(bytes, staleMessage(path)).toBe(committed(path));
+    }
+  });
+
+  it("gives every page a generated banner naming the regen command", async () => {
+    for (const bytes of (await live()).values()) {
+      expect(bytes.startsWith(`${generatedBanner()}\n`)).toBe(true);
+      expect(bytes).toContain(REGENERATE_COMMAND);
+    }
+  });
+
+  it("ends every page with exactly one trailing newline and no CR", async () => {
+    for (const bytes of (await live()).values()) {
+      expect(bytes.endsWith("\n")).toBe(true);
+      expect(bytes.endsWith("\n\n")).toBe(false);
+      expect(bytes).not.toContain("\r");
+    }
+  });
+
+  it("renders byte-identically twice", async () => {
+    const [first, second] = await Promise.all([live(), live()]);
+    expect([...second]).toEqual([...first]);
+  });
+
+  it("reads no clock", () => {
+    const source = readFileSync(MODULE_SOURCE_PATH, "utf-8");
+    expect(source).not.toMatch(/\bnew Date\b/);
+    expect(source).not.toMatch(/\bDate\.(now|UTC|parse)\(/);
+    expect(source).not.toMatch(/toISOString\(/);
+  });
+
+  it("links nothing outside the tree", async () => {
+    for (const [path, bytes] of await live()) {
+      expect(bytes, `${path} carries an absolute URL`).not.toContain("http");
+      expect(bytes).not.toMatch(/[a-z][a-z0-9+.-]*:\/\//i);
+    }
+  });
+
+  it("covers every content class with a page, plus the pack inventory", () => {
+    expect(REFERENCE_PAGES.map((page) => page.covers)).toEqual([...CONTENT_CLASSES, "packs"]);
+  });
+});
+
+describe("frontmatter projection", () => {
+  it("puts every corpus artifact on its class page exactly once, in id order", async () => {
+    const [pages, index] = await Promise.all([live(), buildContentIndex()]);
+    for (const spec of REFERENCE_PAGES) {
+      if (spec.covers === "packs") continue;
+      const page = pages.get(spec.path) ?? "";
+      const expected = index.items
+        .filter((item) => item.type === spec.covers)
+        .map((item) => item.id)
+        .toSorted();
+      const headings = page
+        .split("\n")
+        .filter((line) => line.startsWith("### "))
+        .map((line) => line.slice(5, -1));
+      expect(headings, `${spec.path} artifact set`).toEqual(expected);
+      expect(page).toContain(`${String(expected.length)} ${String(spec.covers)}s.`);
+    }
+  });
+
+  it("projects description, tags, load and obsolete_when verbatim", async () => {
+    const [pages, index] = await Promise.all([live(), buildContentIndex()]);
+    const pageFor = (item: CatalogItem): string =>
+      pages.get(REFERENCE_PAGES.find((page) => page.covers === item.type)?.path ?? "") ?? "";
+
+    for (const item of index.items) {
+      const page = pageFor(item);
+      expect(page, `${item.id} description`).toContain(item.description);
+      expect(page).toContain(`- **Tags:** ${item.tags.map((tag) => `\`${tag}\``).join(", ")}`);
+      expect(page).toContain(`- **Load:** \`${String(item.frontmatter["load"])}\``);
+      expect(page).toContain(`- **Obsolete when:** ${String(item.frontmatter["obsolete_when"])}`);
+    }
+  });
+
+  it("never restates a body — only the frontmatter projection reaches the page", async () => {
+    const [pages, index] = await Promise.all([live(), buildContentIndex()]);
+    const agents = pages.get("docs/reference/agents.md") ?? "";
+    for (const item of index.items.filter((entry) => entry.type === "agent")) {
+      // A body's first heading line would be the giveaway if bodies leaked.
+      const bodyHeading = item.body.split("\n").find((line) => line.startsWith("## "));
+      if (bodyHeading !== undefined) expect(agents).not.toContain(bodyHeading);
+    }
+  });
+
+  it("explains the catalog's command-id prefix on the commands page", async () => {
+    const commands = (await live()).get("docs/reference/commands.md") ?? "";
+    expect(commands).toContain("`cmd-`");
+    expect(commands).toContain("### `cmd-");
+  });
+});
+
+describe("pack inventory", () => {
+  it("lists every first-party pack with its version and an install line the binary accepts", async () => {
+    const packs = (await live()).get("docs/reference/packs.md") ?? "";
+    for (const id of ["ops", "product-audit", "scaffold"]) {
+      expect(packs, `packs page omits ${id}`).toContain(`### \`${id}\``);
+      // Changed line (not a weakening): the page printed
+      // `stamity add ./packs/<id>` for all three, and `add` REFUSES that — a
+      // path-shaped spec never consults the catalog, so it resolves at the
+      // pinless floor and the trust gate stops it. All three are catalogued, so
+      // the bare id is the line that resolves to their pin. The pack IS in the
+      // catalog, asserted directly so this is not just a string swap.
+      expect(lookupCatalogEntry(id), `${id} is not in the curated catalog`).toBeDefined();
+      expect(packs).toContain(`- **Install:** \`stamity add ${id}\``);
+      expect(packs).not.toContain(`stamity add ./packs/${id}\``);
+    }
+    expect(packs).toContain("3 packs.");
+    expect(packs).toMatch(/- \*\*Ships:\*\* `agents` \(\d+\)/);
+  });
+
+  it("renders the directory form with --allow-untrusted for an uncatalogued pack", async () => {
+    // The other branch, on a pack the catalog does not carry: the directory
+    // form is then the only route, and it needs the explicit opt-in because
+    // there is no pin to verify the content against.
+    const fixture = await seed(VALID_AGENT);
+    try {
+      const pages = await renderReferencePages({
+        contentRoot: fixture.contentRoot,
+        packsRoot: fixture.packsRoot,
+      });
+      const packs = pages.get("docs/reference/packs.md") ?? "";
+
+      expect(lookupCatalogEntry("probe-pack")).toBeUndefined();
+      expect(packs).toContain("`stamity add ./packs/probe-pack --allow-untrusted`");
+      expect(packs).toContain("no pin to verify against");
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("states that re-add is the only update route, from the generator and not from page bytes", async () => {
+    // No pack source has an auto-update path — not the first-party
+    // packs, not an org-allowlisted source — and nothing told an operator that
+    // re-adding IS the update. The sentence has to live in the generator: the
+    // page is byte-compared against this render, so a fact typed into the
+    // committed file is erased by the next regeneration.
+    const intro = REFERENCE_PAGES.find((page) => page.covers === "packs")?.intro ?? "";
+    expect(intro).toContain("Updating a pack means adding it again");
+    expect(intro).toContain("no auto-update path");
+    expect(intro).toContain("allowlisted");
+
+    const packs = (await live()).get("docs/reference/packs.md") ?? "";
+    expect(packs).toContain(intro);
+  });
+
+  it("refuses a pack directory with no pack.json, naming the path", async () => {
+    const fixture = await seed(VALID_AGENT, { packJson: null });
+    try {
+      await expect(
+        renderReferencePages({ contentRoot: fixture.contentRoot, packsRoot: fixture.packsRoot }),
+      ).rejects.toThrowError(/probe-pack[\\/]pack\.json/);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("refuses a pack whose manifest declares no description, naming the pack", async () => {
+    const fixture = await seed(VALID_AGENT, {
+      packJson: JSON.stringify({ name: "probe-pack", version: "0.0.1", integrity: {} }),
+    });
+    try {
+      await expect(
+        renderReferencePages({ contentRoot: fixture.contentRoot, packsRoot: fixture.packsRoot }),
+      ).rejects.toThrowError(/"probe-pack" declares no `description`/);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("refuses a missing packs directory rather than claiming there are none", async () => {
+    await expect(
+      renderReferencePages({ packsRoot: join(tmpdir(), "stamity-p6u03-absent-packs") }),
+    ).rejects.toThrowError(/Cannot read the pack directory/);
+  });
+});
+
+describe("refuse-to-render on a defective artifact", () => {
+  const omit = (field: string): Record<string, string> => {
+    const copy = { ...VALID_AGENT };
+    delete copy[field];
+    return copy;
+  };
+
+  it.each([
+    ["description", "description"],
+    ["obsolete_when", "obsolete_when"],
+    ["load", "load"],
+    ["tags", "tags"],
+  ])("refuses an artifact with no %s, naming the artifact and its path", async (field) => {
+    const fixture = await seed(omit(field));
+    try {
+      const call = renderReferencePages({
+        contentRoot: fixture.contentRoot,
+        packsRoot: fixture.packsRoot,
+      });
+      await expect(call).rejects.toThrowError(EngineError);
+      await expect(call).rejects.toThrowError(/"probe"/);
+      await expect(call).rejects.toThrowError(new RegExp(`\`${field}\``));
+      await expect(call).rejects.toThrowError(/agents\/stamity-probe\.md/);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("treats a blank value the same as a missing one", async () => {
+    const fixture = await seed({ ...VALID_AGENT, obsolete_when: '"   "' });
+    try {
+      await expect(
+        renderReferencePages({ contentRoot: fixture.contentRoot, packsRoot: fixture.packsRoot }),
+      ).rejects.toThrowError(/`obsolete_when`/);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("classifies the refusal as VALIDATION_ERROR", async () => {
+    const fixture = await seed(omit("description"));
+    try {
+      await renderReferencePages({
+        contentRoot: fixture.contentRoot,
+        packsRoot: fixture.packsRoot,
+      });
+      expect.unreachable("a description-less artifact must refuse");
+    } catch (err) {
+      expect((err as EngineError).code).toBe("VALIDATION_ERROR");
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("renders a well-formed seeded corpus, so the cases above isolate one defect each", async () => {
+    const fixture = await seed(VALID_AGENT);
+    try {
+      const pages = await renderReferencePages({
+        contentRoot: fixture.contentRoot,
+        packsRoot: fixture.packsRoot,
+      });
+      const agents = pages.get("docs/reference/agents.md") ?? "";
+      expect(agents).toContain("### `probe`");
+      expect(agents).toContain("1 agent.");
+      expect(pages.get("docs/reference/packs.md") ?? "").toContain("### `probe-pack`");
+      // An empty class is a legitimate state, not a defect.
+      expect(pages.get("docs/reference/rules.md") ?? "").toContain("No rules in the corpus.");
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
+
+describe("scripts/generate-docs.mjs --page reference", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "stamity-p6u03-ref-"));
+  afterAll(() => rmSync(workspace, { recursive: true, force: true }));
+
+  it("writes every page, and a second run produces zero diff", async () => {
+    const run = (): Map<string, string> => {
+      execFileSync(process.execPath, [SCRIPT_PATH, "--page", "reference", "--out-dir", workspace], {
+        encoding: "utf-8",
+      });
+      return new Map(
+        REFERENCE_PAGES.map((page) => [
+          page.path,
+          readFileSync(join(workspace, page.path), "utf-8"),
+        ]),
+      );
+    };
+    const expected = await live();
+    const first = run();
+    expect([...first]).toEqual([...expected]);
+    expect([...run()]).toEqual([...first]);
+  });
+
+  it("reads the real packs root by default", () => {
+    expect(readFileSync(join(workspace, "docs/reference/packs.md"), "utf-8")).toContain(
+      "### `ops`",
+    );
+    expect(REAL_PACKS_ROOT.endsWith("packs")).toBe(true);
+  });
+});

@@ -1,0 +1,665 @@
+import { spawnSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { CONTENT_CLASSES } from "../src/types/content.ts";
+import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
+
+/**
+ * The gate on the three hand-written pages.
+ *
+ * Everything else under `docs/` is generated and drift-tested against its
+ * renderer; these three are typed by a human, so the only guard is this file.
+ * It asserts the properties a rewrite could silently break — the public
+ * opening surviving a reflow, the ≤150-line budget, links that stay inside the
+ * tree or inside this repository's own GitHub home, no bare domain, no contact
+ * address — and re-runs the leak gate so a leaked reserved name fails here too,
+ * not only in CI.
+ *
+ * The absolute-URL rule is an ALLOWLIST, not a ban. A published page has two
+ * addresses it must be able to print — the advisory form and the issue tracker
+ * — and both live under one URL prefix, so the rule is that prefix and nothing
+ * else. A ban would have forced the security page to describe its own reporting
+ * channel in prose, which is how a reporter ends up guessing.
+ *
+ * Link EXISTENCE covers every non-anchor target. It used to exempt four
+ * generated pages that had not shipped yet, which suppressed the check on four
+ * of about nine targets; all four have shipped, and an exemption kept past its
+ * reason means renaming one of them breaks README and passes both suites.
+ *
+ * Two properties are asserted on all three pages because the hand bucket is
+ * DEFINED by them: a currency header naming what the page was verified against,
+ * and a published re-open trigger — a falsifiable condition under which the page
+ * must be rewritten. A hand page without them is a page nobody can tell is
+ * stale. SECURITY.md carries a third, in two halves: every control it claims
+ * names an enclosing symbol that exists in the file it names, AND something
+ * under `src/` references that symbol. Existence alone is what let the tool-
+ * allowlist row cite an in-process check with no production caller while
+ * calling the control "enforced in-process and by the emitted guard" — a
+ * symbol that exists and nothing calls is how a page overstates a defence.
+ *
+ * One class of claim on these pages is not a matter of taste but of arithmetic:
+ * README's map row counts the corpus, and its client-surface prose describes
+ * what the adapters emit. Hand-kept numbers about a growing corpus go stale
+ * silently — the specialist tier took agents from 7 to 10 and the row still
+ * read 7 — so the last describe block derives those facts from the mechanisms
+ * themselves (the content catalog's own walk, the generated capability matrix)
+ * and holds the prose to them.
+ */
+
+const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
+
+const README = "README.md";
+const SECURITY = "SECURITY.md";
+const CONTRIBUTING = "CONTRIBUTING.md";
+
+/**
+ * The two community pages. They are root files, and they are deliberately NOT members of
+ * `PAGES`.
+ *
+ * The hand bucket is defined by properties these two do not share. GOVERNANCE.md names the CI
+ * gates a merge waits on, and no assertion here can tell whether that list still matches
+ * `.github/workflows/` — its own re-open trigger says so and sends a maintainer to read the
+ * workflow. CODE_OF_CONDUCT.md is the Contributor Covenant, whose licence requires attribution
+ * links to contributor-covenant.org: the one place in this tree where an outside URL is a
+ * licence term rather than a leak, and precisely what the `PAGES` absolute-URL allowlist exists
+ * to reject. Putting either in `PAGES` would mean weakening a rule that is right for the three
+ * pages it was written for.
+ *
+ * What does bind them is the map: README links both, so the link-resolution assertion below
+ * covers their existence. The leak gate covers their content, over the whole tree.
+ */
+const GOVERNANCE = "GOVERNANCE.md";
+const CODE_OF_CONDUCT = "CODE_OF_CONDUCT.md";
+
+/** The three hand pages, by repo-relative path. */
+const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
+
+/** README's hard budget, per the hand-page posture (≤150 lines). */
+const README_MAX_LINES = 150;
+
+/** The product, its installable package, and the owner the pages name. */
+const PRODUCT = "stamity";
+const SCOPED_PACKAGE = "@zomarit/stamity";
+const OWNER = "Zomarit";
+
+/** The install line a first-time reader runs — README's opening must show it. */
+const INSTALL_COMMAND = `npx ${SCOPED_PACKAGE} init`;
+
+/** The private disclosure form SECURITY.md sends a reporter to. */
+const ADVISORY_URL = "https://github.com/zomarit/stamity/security/advisories/new";
+
+/**
+ * Reserved names, assembled from fragments so this file is scanned by the leak
+ * gate under the same rules as every other file — a test that spelled them out
+ * would need its own exemption to pass its own assertion. The retired working
+ * name joined the list at 1.0.0: it is the one name that appeared throughout
+ * this tree, so a page that still carries it is the likeliest leak of the set.
+ */
+const RESERVED_TOKENS: readonly string[] = [
+  ["tess", "ity"].join(""),
+  ["apris", "ity"].join(""),
+  ["h4t", "cher"].join(""),
+  ["hat", "ch3r"].join(""),
+  ["nes", "tor"].join(""),
+];
+
+/** Every absolute URL on a page, with sentence punctuation trimmed off the tail. */
+const ABSOLUTE_URLS = /[a-z][a-z0-9+.-]*:\/\/[^\s<>()[\]`"']+/gi;
+
+/**
+ * The ONE absolute-URL family these pages may name: this repository's own
+ * GitHub home, and nothing above or beside it. `zomarit/stamityx` and
+ * `github.com/other/stamity` both fail — the boundary is a path segment, not a
+ * prefix match.
+ */
+const ALLOWED_URL = /^https:\/\/github\.com\/zomarit\/stamity(?:\/[\w./-]*)?$/;
+
+/** A bare domain — the shape a support site or product URL would arrive as. */
+const BARE_DOMAIN = /\b[a-z0-9][a-z0-9-]*\.(?:com|io|dev|org|net|ai|app|co|xyz)\b/i;
+
+/** An email address — the pages publish a form, never an inbox. */
+const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
+
+/**
+ * The currency header, in either of its two forms. A commit sha is what a page
+ * cites once there is history to cite; the release cut is what the first cut
+ * has instead, and both name a point a reader can go and check.
+ */
+const CURRENCY_HEADER =
+  /<!--\s*HAND-WRITTEN PAGE — verified against the tree at (?:commit [0-9a-f]{7,40}|the \d+\.\d+\.\d+ release cut \(\d{4}-\d{2}-\d{2}\))\./;
+
+/** Absolute URLs removed, so the domain and link rules read only what is left. */
+const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
+
+/** `[text](target)` — the only link form these pages use. */
+const MARKDOWN_LINK = /\[[^\]]*\]\(([^)]+)\)/g;
+
+/** Every target README links. All of them exist; a broken one is a regression. */
+const README_LINK_TARGETS: readonly string[] = [
+  "content/",
+  "packs/",
+  "docs/capability-matrix.md",
+  "docs/cli-reference.md",
+  "docs/configuration.md",
+  "docs/reference/",
+  "llms.txt",
+  SECURITY,
+  CONTRIBUTING,
+  // The community surface joined the map at publication. Listing both here is what turns
+  // "resolves every link target it names" into a guard on their existence: drop either file
+  // and README keeps a row pointing at nothing, which is the failure this list is for.
+  GOVERNANCE,
+  CODE_OF_CONDUCT,
+];
+
+/** The generated client-capability page — the mechanism README's surface prose must agree with. */
+const CAPABILITY_MATRIX = "docs/capability-matrix.md";
+
+/**
+ * README's map row for the corpus, matched by its `content/` link so the
+ * assertion binds that row and not a digit elsewhere on the page. Capture 1 is
+ * the row's description cell.
+ */
+const CORPUS_ROW = /^\|\s*\[`content\/`]\(content\/\)\s*\|([^|]*)\|/m;
+
+/** `10 agents` — one count and the class noun it counts, inside the corpus row. */
+const COUNTED_NOUN = /(\d+)\s+([a-z]+)/g;
+
+/** Codex's declared command-surface cap, read out of the generated matrix. */
+const CODEX_COMMAND_SURFACE = /^\| `command-surface` \| ([^|]*)\|/m;
+
+const read = (relPath: string): string => readFileSync(join(REPO_ROOT, relPath), "utf-8");
+
+const lines = (text: string): string[] => text.replace(/\n$/, "").split("\n");
+
+const linkTargets = (text: string): string[] =>
+  [...text.matchAll(MARKDOWN_LINK)].map((match) => match[1] ?? "");
+
+/** Singular of a class noun read out of prose — every corpus class pluralizes with `s`. */
+const singular = (noun: string): string => (noun.endsWith("s") ? noun.slice(0, -1) : noun);
+
+/**
+ * What the corpus holds per class, keyed by singular class noun.
+ *
+ * Counted through the engine's own catalog walk, not by listing files: the
+ * catalog is what decides an artifact IS one. A skill is its directory, so
+ * `content/skills/` holds 8 skills across 18 markdown files, and a raw file
+ * count would state 18. The charter is the one piece of corpus content the
+ * catalog does not index — it is not an addressable class — so it is counted
+ * off disk to keep it in the same map.
+ */
+async function corpusCounts(): Promise<Map<string, number>> {
+  const index = await loadCorpusIndex();
+  const counts = new Map<string, number>();
+  for (const klass of CONTENT_CLASSES) {
+    counts.set(klass, index.items.filter((item) => item.type === klass).length);
+  }
+  const charters = readdirSync(join(CORPUS_ROOT, "charter")).filter((name) => name.endsWith(".md"));
+  counts.set("charter", charters.length);
+  return counts;
+}
+
+describe("hand pages", () => {
+  it("all three exist and carry real content", () => {
+    for (const page of PAGES) {
+      expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
+      expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
+    }
+  });
+
+  it("links inside the tree, or inside this repository's own GitHub home", () => {
+    for (const page of PAGES) {
+      const text = read(page);
+
+      // Every absolute URL on the page is one of ours, path segment for path
+      // segment. Publication earned these pages exactly two outside addresses;
+      // it did not earn a general licence to link out.
+      for (const url of text.match(ABSOLUTE_URLS) ?? []) {
+        const trimmed = url.replace(/[.,;:]+$/, "");
+        expect(trimmed, `${page} links outside the repository's GitHub home`).toMatch(ALLOWED_URL);
+      }
+
+      // Domains and addresses are read from what is left once those are gone,
+      // so `github.com` inside an allowed URL is not a bare domain and does not
+      // buy a page the right to name a second host in prose.
+      const rest = withoutAllowedUrls(text);
+      expect(BARE_DOMAIN.exec(rest)?.[0] ?? "", `${page} carries a bare domain`).toBe("");
+      expect(EMAIL.exec(rest)?.[0] ?? "", `${page} carries an email address`).toBe("");
+
+      for (const target of linkTargets(text)) {
+        if (ALLOWED_URL.test(target)) continue;
+        expect(target, `${page} link is not repo-relative`).not.toMatch(/^[a-z][a-z0-9+.-]*:/i);
+        expect(target, `${page} link is root- or protocol-absolute`).not.toMatch(/^\//);
+      }
+    }
+  });
+
+  it("names the product and the scoped package", () => {
+    // The positive half: a published page that never says what the thing is
+    // called, or what to install to get it, is a page a reader cannot act on.
+    const readme = read(README);
+    expect(readme, "README does not name the product").toContain(PRODUCT);
+    expect(readme, "README does not name the installable package").toContain(SCOPED_PACKAGE);
+    expect(readme, "README does not name the owner").toContain(OWNER);
+
+    // The negative half outlives the rename: these three pages are the public
+    // face, so a retired or predecessor name surfacing here is the leak that
+    // matters most. The leak gate below covers the tree; this covers the face.
+    for (const page of PAGES) {
+      const text = read(page).toLowerCase();
+      for (const token of RESERVED_TOKENS) {
+        expect(text.includes(token), `${page} names a reserved token`).toBe(false);
+      }
+    }
+  });
+
+  it("carries a currency header and a published re-open trigger", () => {
+    // The hand bucket is DEFINED by these two: a page nobody can date and nobody
+    // can falsify is a page nobody can tell is stale. The generated half of the
+    // split implemented its own version of this — a "GENERATED FILE, rewrite it
+    // with X" header — and the hand half shipped with neither.
+    for (const page of PAGES) {
+      const head = lines(read(page)).slice(0, 6).join("\n");
+
+      expect(head, `${page} has no currency header`).toMatch(CURRENCY_HEADER);
+      // Falsifiable, not aspirational: the trigger names a condition a reader can
+      // check, and the suite that would catch it.
+      expect(head, `${page} publishes no re-open trigger`).toMatch(/Re-open when:/);
+      expect(head, `${page}'s re-open trigger names no check`).toMatch(/test\/docsPages\.test\.ts/);
+    }
+  });
+
+  it("passes the leak gate", () => {
+    const gate = join(REPO_ROOT, "scripts/leak-gate.mjs");
+    const result = spawnSync(process.execPath, [gate], {
+      cwd: REPO_ROOT,
+      encoding: "utf-8",
+    });
+    const detail =
+      result.status === 0 ? "" : `exit ${String(result.status)}\n${result.stdout}${result.stderr}`;
+    expect(detail).toBe("");
+  });
+});
+
+describe("README", () => {
+  it("opens on the public title, a pitch, and the install command", () => {
+    // What replaced the byte-pinned PRIVATE banner. The banner was pinned line
+    // for line because it was a legal posture; the opening that replaced it is
+    // pinned by SHAPE, because a first-time reader needs three things off the
+    // top — what this is called, what it does, and what to type — and a rewrite
+    // that drops any of them is the failure this guards. Anchored to the H1, so
+    // the currency header above it can grow without moving the assertion.
+    const readmeLines = lines(read(README));
+
+    const title = readmeLines.indexOf(`# ${PRODUCT}`);
+    expect(title, "README has no title").toBeGreaterThanOrEqual(0);
+    expect(readmeLines[title + 1]).toBe("");
+
+    const pitch = readmeLines[title + 2] ?? "";
+    // A blockquote directly under the title is the shape the retired private
+    // banner had, and the shape a new one would arrive in.
+    expect(pitch.startsWith(">"), "README opens on a banner rather than a pitch").toBe(false);
+    expect(pitch.length, "README states no pitch under its title").toBeGreaterThan(0);
+    expect(pitch, "README's opening line does not name the owner").toContain(OWNER);
+
+    expect(read(README), "README never shows the install command").toContain(INSTALL_COMMAND);
+  });
+
+  it("stays within the hand-page line budget", () => {
+    expect(lines(read(README)).length).toBeLessThanOrEqual(README_MAX_LINES);
+  });
+
+  it("states the command surface — seven verbs plus the plumbing verb", () => {
+    const text = read(README);
+    for (const command of ["init", "sync", "check", "validate", "add", "config", "clean"]) {
+      expect(text, `README omits \`${command}\``).toContain(`\`${command}\``);
+    }
+    expect(text).toContain("`learn`");
+  });
+
+  it("links the map and the local-use entry points", () => {
+    const text = read(README);
+    const targets = new Set(linkTargets(text));
+    for (const target of README_LINK_TARGETS) {
+      expect(targets.has(target), `README does not link ${target}`).toBe(true);
+    }
+    expect(text).toContain("npm run check");
+    expect(text).toContain("node dist/cli.js check");
+  });
+
+  it("resolves every link target it names", () => {
+    // No exemption list. The four generated pages it used to skip have shipped,
+    // and a skip kept past its reason hides a rename from both suites.
+    const checked: string[] = [];
+    for (const target of linkTargets(read(README))) {
+      if (target.startsWith("#")) continue;
+      checked.push(target);
+      expect(existsSync(join(REPO_ROOT, target)), `README links missing ${target}`).toBe(true);
+    }
+    expect(checked.length, "README stopped linking anything").toBeGreaterThanOrEqual(
+      README_LINK_TARGETS.length,
+    );
+  });
+});
+
+describe("README corpus claims", () => {
+  it("names every corpus class and states the count the catalog indexes", async () => {
+    const expected = await corpusCounts();
+    for (const [noun, count] of expected) {
+      expect(count, `the corpus holds no ${noun}, so its count asserts nothing`).toBeGreaterThan(0);
+    }
+
+    const row = CORPUS_ROW.exec(read(README))?.[1] ?? "";
+    expect(row, "README has no `content/` map row to read counts from").not.toBe("");
+
+    const stated = new Map<string, number>();
+    for (const [, digits, noun] of row.matchAll(COUNTED_NOUN)) {
+      stated.set(singular(noun ?? ""), Number(digits ?? ""));
+    }
+
+    // Set equality in both directions. A class dropped from the sentence fails,
+    // and so does one the corpus does not have — the row used to count hook
+    // scripts, which are generated from code and were never corpus content.
+    expect([...stated.keys()].toSorted()).toEqual([...expected.keys()].toSorted());
+    for (const [noun, count] of expected) {
+      expect(stated.get(noun), `README states the wrong ${noun} count`).toBe(count);
+    }
+  });
+
+  it("keeps hook scripts out of the corpus and cites where they are generated", () => {
+    expect(
+      existsSync(join(CORPUS_ROOT, "hooks")),
+      "hooks became corpus content — README's map row and its hook note both need updating",
+    ).toBe(false);
+
+    const source = "src/hooks/scripts.ts";
+    expect(existsSync(join(REPO_ROOT, source)), `README cites missing ${source}`).toBe(true);
+    expect(read(README)).toContain(source);
+  });
+
+  it("says Codex has no command surface only while its adapter declares none", () => {
+    const matrix = read(CAPABILITY_MATRIX);
+    const sectionStart = matrix.indexOf("### `codex`");
+    expect(sectionStart, "capability matrix has no codex section").toBeGreaterThanOrEqual(0);
+
+    const declared = (CODEX_COMMAND_SURFACE.exec(matrix.slice(sectionStart))?.[1] ?? "").trim();
+    expect(declared, "codex declares no command-surface cap").not.toBe("");
+    expect(declared, "codex gained a command surface — README's prose is now wrong").toMatch(
+      /^none/,
+    );
+    expect(read(README)).toMatch(/Codex has no\s+repository-level command home/);
+  });
+});
+
+const SRC_ROOT = join(REPO_ROOT, "src");
+
+/** Every `.ts` file under `src/`, absolute. */
+function sourceFiles(dir: string = SRC_ROOT, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const absolute = join(dir, entry.name);
+    if (entry.isDirectory()) sourceFiles(absolute, out);
+    else if (entry.name.endsWith(".ts")) out.push(absolute);
+  }
+  return out;
+}
+
+/** Source with comments removed — a `{@link name}` mention is not a use. */
+const withoutComments = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^[ \t]*\/\/.*$/gm, " ");
+
+/**
+ * Repo-relative files that reference `symbol` outside comments and outside its
+ * own declaration — the call-graph answer to "does anything here use this".
+ *
+ * REFERENCES, not importers, and the difference is the point: the declaring
+ * module counts, because a symbol reached only from a wired sibling in the same
+ * file is still reached — `BANNED_LIFECYCLE_SCRIPTS` feeds a set one screen
+ * below it and never leaves `manifest.ts`. An importer scan would read four of
+ * the table's live controls as dead. What is excluded is the declaration itself
+ * and every doc comment naming it, which is the exact evidence a symbol-
+ * existence check mistakes for use.
+ *
+ * `test/tools/allowlist.test.ts` keeps its own scan for a narrower question —
+ * which modules IMPORT the check — so the two are separate on purpose.
+ */
+function referencesTo(symbol: string, declaredIn: string): string[] {
+  const declaration = new RegExp(
+    String.raw`(?:export\s+)?(?:async\s+)?(?:function|const|class|interface|type|enum)\s+${symbol}\b`,
+    "g",
+  );
+  const found: string[] = [];
+  for (const file of sourceFiles()) {
+    const relPath = relative(REPO_ROOT, file);
+    const source = withoutComments(readFileSync(file, "utf-8"));
+    const body = relPath === declaredIn ? source.replace(declaration, " ") : source;
+    if (new RegExp(String.raw`\b${symbol}\b`).test(body)) found.push(relPath);
+  }
+  return found;
+}
+
+describe("SECURITY.md", () => {
+  const text = read(SECURITY);
+
+  it("names one disclosure channel, and the versions it will fix", () => {
+    // This page used to have no channel to name and said so. Publishing turns
+    // that into an obligation with two halves a reporter needs before they can
+    // act: WHERE a report goes privately, and WHICH versions a fix would reach.
+    // A page with the first and not the second sends a reporter to a form and
+    // leaves them guessing whether their version is in scope.
+    expect(text, "SECURITY.md names no advisory form").toContain(ADVISORY_URL);
+    expect(text).toMatch(/private vulnerability reporting/i);
+    expect(text, "SECURITY.md does not say a public issue is the wrong channel").toMatch(
+      /[Dd]o not\s+open a public issue/,
+    );
+    expect(text).toMatch(/CVE/);
+
+    // The supported-versions table was a tracked gap while nothing shipped. It
+    // is a table now, so it is asserted as one rather than as an admission.
+    expect(text, "SECURITY.md has no supported-versions section").toMatch(/## Supported versions/);
+    expect(text, "SECURITY.md does not mark 1.x supported").toMatch(/\|\s*`1\.x`\s*\|\s*Yes/);
+  });
+
+  it("points every control at a file AND an enclosing symbol that exist", () => {
+    // The addresses used to be `file:line`, which the page itself admitted drift
+    // with the code — and by the time they had drifted, two rows were claiming
+    // controls whose functions had no production caller at all. A `file::symbol`
+    // address is checkable, and this is the check.
+    const pointers = [...text.matchAll(/`([^`]+)`/g)]
+      .map((match) => match[1] ?? "")
+      .filter((span) => span.startsWith("src/"));
+
+    expect(pointers.length).toBeGreaterThanOrEqual(10);
+    // Line-number addresses are retired: they cannot be verified, so they are not
+    // allowed back in.
+    for (const pointer of pointers) {
+      expect(pointer, `SECURITY.md cites ${pointer} by line number`).not.toMatch(/:\d+$/);
+    }
+
+    let symbolsChecked = 0;
+    for (const pointer of new Set(pointers)) {
+      const [file = "", symbol] = pointer.split("::");
+      expect(existsSync(join(REPO_ROOT, file)), `SECURITY.md cites missing ${file}`).toBe(true);
+      if (symbol === undefined) continue;
+      symbolsChecked += 1;
+      const source = read(file);
+      // A declaration of that name, in that file — not a mention of it.
+      const declared = new RegExp(
+        `\\b(?:function|const|class|interface|type|enum)\\s+${symbol}\\b|\\b${symbol}\\s*[(:=]`,
+      );
+      expect(declared.test(source), `${file} declares no ${symbol}`).toBe(true);
+    }
+    expect(symbolsChecked, "SECURITY.md names no enclosing symbols").toBeGreaterThanOrEqual(10);
+  });
+
+  it("cites no control in the table that nothing under src/ reaches", () => {
+    // The tool-allowlist row cited `checkToolAccess` and called the control
+    // "enforced in-process and by the emitted guard", while that function has no
+    // production caller at all — the generated guard script is the whole of it,
+    // as `src/tools/allowlist.ts` says in its own header. Symbol EXISTENCE
+    // passed the claim through, so the table's addresses are now held to the
+    // call graph too: an address in this table names something the engine runs.
+    const table = text.slice(
+      text.indexOf("## What the engine defends today"),
+      text.indexOf("## Network and data handling"),
+    );
+    const cited = [...table.matchAll(/`(src\/[^`]+::[A-Za-z_$][\w$]*)`/g)].map(
+      (match) => match[1] ?? "",
+    );
+    expect(cited.length, "the control table cites no symbol at all").toBeGreaterThanOrEqual(10);
+
+    for (const pointer of new Set(cited)) {
+      const [file = "", symbol = ""] = pointer.split("::");
+      expect(
+        referencesTo(symbol, file),
+        `SECURITY.md claims ${pointer} as an active control, but nothing under src/ ` +
+          `references it. Cite what runs, and state the unwired half under ` +
+          `"What it does not defend".`,
+      ).not.toEqual([]);
+    }
+  });
+
+  it("holds the in-process check's disclosure to the call graph, both ways", () => {
+    // The counterpart of the table gate, and the mirror of the header assertion
+    // in test/tools/allowlist.test.ts: while nothing calls the check, the page
+    // may not claim in-process enforcement and must name the function below the
+    // line; the moment something calls it, this fails until the page is rewritten.
+    const wired = referencesTo("checkToolAccess", "src/tools/allowlist.ts");
+
+    if (wired.length === 0) {
+      expect(text, "SECURITY.md claims in-process enforcement nothing calls").not.toMatch(
+        /[Ee]nforced in-process/,
+      );
+      expect(
+        text.indexOf("checkToolAccess"),
+        'checkToolAccess has no production caller and is not disclosed under "What it does not defend"',
+      ).toBeGreaterThan(text.indexOf("## What it does not defend"));
+    } else {
+      expect(
+        text,
+        `checkToolAccess is referenced by ${wired.join(", ")} — SECURITY.md still calls it unwired.`,
+      ).not.toMatch(/no production caller/);
+    }
+  });
+
+  it("states the three install routes and that none of them fetches", () => {
+    // The page said only bundled packs and local directories install, while the
+    // default refusal coaches an operator toward the third route and --help
+    // documents it. Understating the surface is the same defect as overstating
+    // a control.
+    expect(text).toMatch(/node_modules/);
+    expect(text).toMatch(/local directory/i);
+    expect(text).toMatch(/bundled first-party packs/i);
+    expect(text).toMatch(/fetched over the network/i);
+    // And the org-policy line no longer contradicts it eleven lines earlier.
+    expect(text).toMatch(/org trust policy[\s\S]{0,80}narrows them/i);
+  });
+
+  it("names the client config files a pack hook actually lands in", () => {
+    // The hook caveat pointed at `.stamity/generated/hooks/`, which is where the
+    // ENGINE's own scripts land. A pack-supplied hook never lands there: it
+    // becomes an entry in the client's own config.
+    for (const path of [".claude/settings.json", ".cursor/hooks.json", ".codex/hooks.json"]) {
+      expect(text, `SECURITY.md omits ${path}`).toContain(path);
+    }
+    expect(text).toContain(".stamity/generated/hooks/");
+    expect(text).toMatch(/MCP server definition[\s\S]{0,20}likewise becomes a launcher/i);
+  });
+
+  it("ledgers the obligations it has not met instead of implying they are met", () => {
+    // Two obligations were once accepted as risk in silence: no supported-
+    // versions table existed anywhere, and the threat model was written as
+    // "re-run a pass", which implies one exists to re-run. The first shipped at
+    // 1.0.0 and is asserted as a table above; the rest are still ledgered, and
+    // a page that quietly drops the ledger reads as one that met them.
+    expect(text).toMatch(/standards mapping/i);
+    expect(text).toMatch(/no threat-model document exists to re-run/i);
+    expect(text).not.toMatch(/re-run a threat-model pass/i);
+  });
+
+  it("does not claim a control whose functions no production path calls", () => {
+    // Both rows asserted an ACTIVE defense. `guardInput` and
+    // `validateAgentOutput` have no caller outside their module and reject
+    // nothing; `hashToolManifest` and `detectToolManifestDrift` likewise.
+    for (const unwired of [
+      "guardInput",
+      "validateAgentOutput",
+      "hashToolManifest",
+      "detectToolManifestDrift",
+    ]) {
+      const index = text.indexOf(unwired);
+      expect(index, `SECURITY.md never mentions ${unwired}`).toBeGreaterThan(0);
+      expect(
+        index,
+        `${unwired} is claimed above "What it does not defend"`,
+      ).toBeGreaterThan(text.indexOf("## What it does not defend"));
+    }
+    // The one live bound is stated as the live one.
+    expect(text).toContain("MAX_USER_CONTENT_LENGTH");
+    expect(text).toMatch(/250 000-character/);
+  });
+
+  it("covers the four surfaces the phase claims, and the limits", () => {
+    expect(text).toMatch(/trust ladder/i);
+    expect(text).toMatch(/deny-scan/i);
+    expect(text).toMatch(/allowlist/i);
+    expect(text).toMatch(/atomic rename/i);
+    expect(text).toMatch(/does not defend/i);
+  });
+});
+
+describe("CONTRIBUTING.md", () => {
+  const text = read(CONTRIBUTING);
+
+  it("states the public contribution posture, approval count included", () => {
+    expect(text, "CONTRIBUTING does not say contributions are open").toMatch(
+      /[Pp]ull requests are welcome/,
+    );
+    // The solo-maintainer reality, stated rather than dressed up: a contributor
+    // who reads "0 required approvals" knows what merged their patch, and a
+    // page that hid it would be describing a review that does not happen.
+    expect(text, "CONTRIBUTING does not state the required-approval count").toMatch(
+      /0 required approvals/,
+    );
+    expect(text, "CONTRIBUTING does not say CI gates the merge").toMatch(/CI/);
+    // Dogfood-as-review: the setup this repo emits is the setup that reviews it.
+    expect(text, "CONTRIBUTING names no review path for an external PR").toContain(
+      `/${PRODUCT}-pr-resolve`,
+    );
+    expect(text, "CONTRIBUTING omits the DCO sign-off").toContain("git commit -s");
+    expect(text).toMatch(/DCO/);
+    expect(text).toMatch(/[Cc]onventional-commit/);
+    // The closed posture is retired; it must not read as closed again.
+    expect(text).not.toMatch(/external contributions are not accepted/i);
+  });
+
+  it("documents the dev loop and the three test lanes", () => {
+    expect(text).toContain("npm run check");
+    expect(text).toMatch(/virtual-filesystem unit tests/i);
+    expect(text).toMatch(/golden files/i);
+    expect(text).toMatch(/child-process end-to-end/i);
+    expect(text).toMatch(/property tests/i);
+  });
+
+  it("lists a regeneration command for every generated artifact class", () => {
+    for (const command of [
+      "node scripts/generate-capability-matrix.mjs",
+      "node scripts/generate-docs.mjs",
+      "node scripts/generate-pack-manifests.mjs",
+      "node dist/cli.js sync",
+    ]) {
+      expect(text, `CONTRIBUTING.md omits \`${command}\``).toContain(command);
+    }
+  });
+
+  it("carries the leak-gate note, by name and by script path", () => {
+    // The gate is a step a contributor will hit before any other, and the page
+    // is where they find out what it is. Both halves are asserted: the row in
+    // the gate table names the step, and the note names the script that runs.
+    expect(text, "CONTRIBUTING has no `Leak gate` row").toMatch(/Leak gate/);
+    expect(text).toContain("npm run gate");
+    expect(text).toContain("scripts/leak-gate.mjs");
+    expect(text, "CONTRIBUTING does not say what the gate refuses").toMatch(/reserved/i);
+  });
+});
