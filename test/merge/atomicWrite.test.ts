@@ -140,6 +140,43 @@ describe("locking toggles", () => {
 describe("atomicWriteFile", () => {
   const getDir = useTempDir("atomic-write");
 
+  /**
+   * How long the concurrent reader below stands aside between samples, as a
+   * multiple of the read it just made.
+   *
+   * Zero on POSIX, where the loop can hold the destination open at a ~100% duty
+   * cycle and the publish still lands: `rename(2)` is defined on the INODE and
+   * completes however many descriptors are open on the name it replaces.
+   * Windows replaces by NAME — `fs.rename` is `MoveFileExW` with
+   * `MOVEFILE_REPLACE_EXISTING`, which has to remove the existing directory
+   * entry, and a handle somebody else holds open refuses that with
+   * ERROR_ACCESS_DENIED (surfacing as `EPERM`). A reader that never lets go
+   * there starves the writer for its whole rename-retry budget and the write
+   * fails, which is what made this case a roughly one-run-in-four flake on the
+   * Windows leg while passing everywhere else.
+   *
+   * So on Windows the reader gives back eight times what it took, leaving the
+   * writer a window at every retry. The gap SCALES with the read rather than
+   * being a fixed sleep, so a slow runner buys a proportionally longer one and
+   * the free fraction stays at 8/9 whatever the disk does. Sampling stays dense
+   * and no assertion moves.
+   */
+  const READER_STANDOFF_FACTOR = process.platform === "win32" ? 8 : 0;
+
+  /** Floor under the scaled stand-off, so a sub-millisecond read still yields. */
+  const READER_MIN_STANDOFF_MS = 5;
+
+  /**
+   * Errnos a SAMPLE may hit on Windows at the instant the writer's `MoveFileExW`
+   * swaps the directory entry: the open can lose a sharing race against the
+   * replace and come back `EPERM`/`EBUSY` for that one attempt. A refused replace
+   * leaves the destination untouched, so the NAME never vanishes — `ENOENT` is
+   * not in this set and still throws, as does every other errno, on every
+   * platform. POSIX `rename(2)` never refuses an open, which is why the
+   * tolerance is win32-only.
+   */
+  const WINDOWS_MID_REPLACE_ERRNOS = new Set(["EPERM", "EBUSY"]);
+
   it("never exposes a partial file to a concurrent reader", async () => {
     const target = getDir().path("payload.md");
     // Different lengths so a torn write cannot coincidentally equal either side.
@@ -151,18 +188,47 @@ describe("atomicWriteFile", () => {
     // that flips it lives outside the loop body.
     const progress = { writing: true };
     const observations = new Set<string>();
+    let readerFailure: unknown;
     const reader = (async () => {
       while (progress.writing) {
-        const text = await readFile(target, "utf8");
-        observations.add(
-          text === before ? "before" : text === after ? "after" : `torn:${text.length}`,
-        );
+        const startedAt = performance.now();
+        let text: string | undefined;
+        try {
+          text = await readFile(target, "utf8");
+        } catch (err) {
+          // Skipped, never recorded: a sample that never opened the file saw no
+          // content, and content is the whole subject of this case.
+          if (READER_STANDOFF_FACTOR === 0) throw err;
+          if (!WINDOWS_MID_REPLACE_ERRNOS.has((err as NodeJS.ErrnoException).code ?? "")) throw err;
+        }
+        if (text !== undefined) {
+          observations.add(
+            text === before ? "before" : text === after ? "after" : `torn:${text.length}`,
+          );
+        }
+        if (READER_STANDOFF_FACTOR > 0) {
+          const standoff = Math.max(
+            READER_MIN_STANDOFF_MS,
+            (performance.now() - startedAt) * READER_STANDOFF_FACTOR,
+          );
+          await new Promise((wake) => setTimeout(wake, standoff));
+        }
       }
-    })();
+    })().catch((err: unknown) => {
+      readerFailure = err;
+    });
 
-    await atomicWriteFile(target, after);
-    progress.writing = false;
-    await reader;
+    try {
+      await atomicWriteFile(target, after);
+    } finally {
+      // Unconditional, because a writer that THREW used to leave this loop
+      // spinning past the end of the case and into the temp-dir cleanup, where
+      // it landed as an unhandled ENOENT rejection charged to whichever test
+      // happened to be running by then.
+      progress.writing = false;
+      await reader;
+    }
+    expect(readerFailure).toBeUndefined();
 
     expect([...observations].filter((seen) => seen.startsWith("torn:"))).toEqual([]);
     expect(observations.size).toBeGreaterThan(0);
