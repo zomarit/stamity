@@ -774,9 +774,80 @@ export interface AtomicWriteOptions {
   boundaryDir?: string;
 }
 
-/** Rename retries for transient Windows file-lock contention (EBUSY/EPERM),
- *  backed off at 50 × 2^attempt ms. */
-const MAX_RENAME_RETRIES = 4;
+/**
+ * Errnos a rename may lose to WITHOUT the write being wrong — someone else is
+ * holding the name for a moment. Every other errno is the write's own answer and
+ * is raised on the first attempt.
+ *
+ * `EACCES` is win32-only, and defensive. The two refusals actually seen there
+ * are `ERROR_ACCESS_DENIED` and `ERROR_SHARING_VIOLATION`, which libuv reports
+ * as `EPERM` and `EBUSY`; `EACCES` is the third code the same family of access
+ * refusals arrives under, and none of the three describes a durable condition on
+ * a name this writer created and owns. On POSIX `rename(2)` raises `EACCES` for
+ * a directory-permission problem that no amount of waiting clears, so retrying
+ * it there would only spend the budget before the same failure.
+ */
+const RENAME_RETRY_ERRNOS: ReadonlySet<string> =
+  process.platform === "win32"
+    ? new Set(["EBUSY", "EPERM", "EACCES"])
+    : new Set(["EBUSY", "EPERM"]);
+
+/**
+ * Waits between rename attempts, in ms. Length is the number of RETRIES; the
+ * first attempt is not on the schedule.
+ *
+ * POSIX keeps the original 50 × 2^attempt / 750 ms budget unchanged.
+ * `rename(2)` is defined on the INODE and never loses to a reader, so the only
+ * thing left to wait out is a filesystem stall, and a longer budget buys a
+ * slower failure rather than a landed write.
+ *
+ * win32 gets a wider one, because there the contention is structural rather
+ * than exceptional: `fs.rename` is `MoveFileExW` with
+ * `MOVEFILE_REPLACE_EXISTING`, which has to remove the destination's directory
+ * entry, and any handle opened without `FILE_SHARE_DELETE` refuses that — a
+ * concurrent reader, the indexer, or the on-access malware scanner that opens
+ * every freshly written file on a CI runner. Those holds are short but not
+ * sub-second: the concurrent-reader case took ~790 ms on the runs it PASSED —
+ * landing on the last of the four retries — and failed two later runs with
+ * `EPERM` having spent the 750 ms budget in full, which is a budget sized just
+ * under the wait rather than an unlucky test. Eight retries over 3750 ms of base
+ * delay outlast a scanner pass; the schedule flattens at 800 ms rather than
+ * doubling, to keep the ceiling inside ~4.7 s with jitter.
+ */
+const RENAME_RETRY_DELAYS_MS: readonly number[] =
+  process.platform === "win32" ? [50, 100, 200, 400, 600, 800, 800, 800] : [50, 100, 200, 400];
+
+/**
+ * Fraction of a scheduled wait added at random on top of it.
+ *
+ * Zero on POSIX, so that schedule stays exactly what it documents. On win32 two
+ * writers that collided once wait the identical interval and collide again on
+ * every retry; spreading each wait by up to a quarter breaks the lockstep. It is
+ * added, never subtracted, so the documented wait is a floor and the worst case
+ * is a known ceiling rather than an unbounded one.
+ */
+const RENAME_RETRY_JITTER = process.platform === "win32" ? 0.25 : 0;
+
+/**
+ * Longest a rename can spend on retries before giving up: every scheduled wait
+ * plus its maximum jitter. Derived rather than written down, so the two cannot
+ * drift. 750 ms on POSIX, 4687 ms on win32.
+ */
+export const RENAME_RETRY_CEILING_MS: number = RENAME_RETRY_DELAYS_MS.reduce(
+  (total, wait) => total + wait * (1 + RENAME_RETRY_JITTER),
+  0,
+);
+
+/** The wait before retry `attempt`, jittered per {@link RENAME_RETRY_JITTER}. */
+function renameRetryWaitMs(attempt: number): number | undefined {
+  const wait = RENAME_RETRY_DELAYS_MS[attempt];
+  if (wait === undefined) return undefined;
+  return wait + Math.random() * wait * RENAME_RETRY_JITTER;
+}
+
+/** Number of retries the platform's schedule allows, exposed so a test pins the
+ *  contract that is actually compiled in rather than a copy of it. */
+export const RENAME_RETRY_COUNT: number = RENAME_RETRY_DELAYS_MS.length;
 
 /**
  * Engine token in the temp-file name — `<basename>.tmp.<token><8hex>` — kept in
@@ -965,8 +1036,14 @@ export async function atomicWriteFileUnlocked(
         break;
       } catch (err) {
         const code = errnoCode(err);
-        if ((code === "EBUSY" || code === "EPERM") && attempt < MAX_RENAME_RETRIES) {
-          await new Promise((resolveWait) => setTimeout(resolveWait, 50 * 2 ** attempt));
+        const wait =
+          code !== undefined && RENAME_RETRY_ERRNOS.has(code)
+            ? renameRetryWaitMs(attempt)
+            : undefined;
+        // `undefined` covers both refusals — an errno that was never transient,
+        // and a transient one that has spent the platform's schedule.
+        if (wait !== undefined) {
+          await new Promise((resolveWait) => setTimeout(resolveWait, wait));
           continue;
         }
         throw err;

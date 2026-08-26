@@ -22,6 +22,8 @@ import {
   formatOrphanTmpSweepDiagnostic,
   isCrossProcessLockingEnabled,
   LOCK_RETRY_TOTAL_BACKOFF_MS,
+  RENAME_RETRY_CEILING_MS,
+  RENAME_RETRY_COUNT,
   resetCrossProcessLocking,
   resolveNonClobberingBakPath,
   sweepOrphanTmpFiles,
@@ -105,6 +107,61 @@ describe("LOCK_RETRY_TOTAL_BACKOFF_MS", () => {
   it("equals the sum of the documented 100/200/400/800/1500ms schedule", () => {
     expect(LOCK_RETRY_TOTAL_BACKOFF_MS).toBe(100 + 200 + 400 + 800 + 1500);
     expect(LOCK_RETRY_TOTAL_BACKOFF_MS).toBe(3000);
+  });
+});
+
+/**
+ * Re-imports the subject with `process.platform` reporting `platform`.
+ *
+ * The rename schedule is platform-split and resolved at module load, so a test
+ * that only read the host's half would leave the other half — the one the CI leg
+ * that needed it runs — unpinned on every machine that could run it. Redefining
+ * the property is what `node:process` allows and what the subject reads; it is
+ * restored, and the module registry reset, whatever the body does.
+ */
+async function importForPlatform(
+  platform: NodeJS.Platform,
+  run: (mod: typeof AtomicWriteApi) => void | Promise<void>,
+): Promise<void> {
+  const realPlatform = process.platform;
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    vi.resetModules();
+    await run(await import("../../src/merge/atomicWrite.ts"));
+  } finally {
+    Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
+    vi.resetModules();
+  }
+}
+
+describe("rename retry schedule", () => {
+  it("keeps POSIX at the four-retry, 750ms budget", async () => {
+    // `rename(2)` is defined on the INODE and never loses to a reader, so the
+    // only thing a longer budget buys here is a slower failure. 50+100+200+400.
+    await importForPlatform("linux", (mod) => {
+      expect(mod.RENAME_RETRY_COUNT).toBe(4);
+      expect(mod.RENAME_RETRY_CEILING_MS).toBe(750);
+    });
+  });
+
+  it("gives win32 a budget that outlasts a handle held on the destination", async () => {
+    // `MoveFileExW(MOVEFILE_REPLACE_EXISTING)` has to remove the destination's
+    // directory entry, and any handle opened without `FILE_SHARE_DELETE`
+    // refuses that — a concurrent reader, or the on-access scanner that opens
+    // every freshly written file on a CI runner. 750ms was spent in full there;
+    // seconds, not milliseconds, is the unit that outlasts such a hold.
+    await importForPlatform("win32", (mod) => {
+      expect(mod.RENAME_RETRY_COUNT).toBe(8);
+      expect(mod.RENAME_RETRY_CEILING_MS).toBeGreaterThan(3_000);
+      expect(mod.RENAME_RETRY_CEILING_MS).toBeLessThan(5_000);
+    });
+  });
+
+  it("matches the compiled constants on the host actually running", async () => {
+    await importForPlatform(process.platform, (mod) => {
+      expect(mod.RENAME_RETRY_COUNT).toBe(RENAME_RETRY_COUNT);
+      expect(mod.RENAME_RETRY_CEILING_MS).toBe(RENAME_RETRY_CEILING_MS);
+    });
   });
 });
 
@@ -1115,8 +1172,61 @@ describe("failure paths that need a stubbed filesystem", () => {
       code: "EPERM",
     });
 
-    // One initial attempt plus the four retries.
-    expect(attempts).toBe(5);
+    // One initial attempt plus every retry the platform's schedule allows —
+    // four on POSIX, eight on win32, where a rename can lose the destination
+    // entry to a handle held without `FILE_SHARE_DELETE`. Read off the compiled
+    // constant so the count and the schedule cannot drift apart.
+    expect(attempts).toBe(RENAME_RETRY_COUNT + 1);
+    expect(await readdir(dir.dir)).toEqual([]);
+  });
+
+  it("retries a rename refused with EACCES on win32, where the errno is a sharing refusal", async () => {
+    process.env.STAMITY_LOCK = "0";
+    const target = getDir().path("shared.md");
+    let attempts = 0;
+    const realPlatform = process.platform;
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    try {
+      const mod = await importWithFs({
+        rename: async (from: string, to: string) => {
+          attempts += 1;
+          if (attempts <= 2) throw errnoError("EACCES");
+          return realFsPromises.rename(from, to);
+        },
+      });
+
+      await mod.atomicWriteFile(target, "landed");
+    } finally {
+      Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
+    }
+
+    expect(attempts).toBe(3);
+    expect(await readFile(target, "utf8")).toBe("landed");
+  });
+
+  it("raises EACCES on the first attempt off win32, where waiting cannot clear it", async () => {
+    process.env.STAMITY_LOCK = "0";
+    const dir = getDir();
+    let attempts = 0;
+    const realPlatform = process.platform;
+    Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+    try {
+      const mod = await importWithFs({
+        rename: async () => {
+          attempts += 1;
+          throw errnoError("EACCES");
+        },
+      });
+
+      // POSIX `rename(2)` raises EACCES for a directory-permission problem that
+      // no wait resolves, so retrying would only spend the budget before the
+      // same failure. The write refuses immediately and leaves no temp file.
+      await expect(mod.atomicWriteFile(dir.path("denied.md"), "never")).rejects.toBeDefined();
+    } finally {
+      Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
+    }
+
+    expect(attempts).toBe(1);
     expect(await readdir(dir.dir)).toEqual([]);
   });
 
