@@ -111,6 +111,14 @@ function npmAudit() {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       maxBuffer: 64 * 1024 * 1024,
+      // On Windows `npm` is `npm.cmd`, a batch file, and since the
+      // CVE-2024-27980 fix (Node 18.20.2 / 20.12.2 onward) spawn refuses to
+      // launch one without a shell — it fails EINVAL. The catch below would
+      // read that as "npm audit could not be read" and the probe would report
+      // an unchecked dependency tree as a finding for the wrong reason. The
+      // argv here is a fixed literal with no metacharacter in it, so routing it
+      // through cmd.exe adds no quoting hazard. POSIX keeps the direct exec.
+      shell: process.platform === 'win32',
     })
     return JSON.parse(stdout)
   } catch (error) {

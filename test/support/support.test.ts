@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
 import { access, chmod, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { devNull } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
@@ -13,6 +12,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import * as buildConfigModule from "../../tsdown.config.mjs";
 import { buildChildEnv, makeCliFixture, spawnCollect, type CliFixture } from "./cliHarness.ts";
 import { treeDigest } from "./packFixtures.ts";
+import { NO_GIT_CONFIG } from "./repoFixtures.ts";
 import { makeTempDir, type TempDirHandle, useTempDir } from "./tempDir.ts";
 import { makeVolume, type VirtualVolume } from "./vfs.ts";
 
@@ -315,7 +315,7 @@ describe("cliHarness child env", () => {
       const env = buildChildEnv(fixture.home);
 
       expect(env["GIT_CONFIG_NOSYSTEM"]).toBe("1");
-      expect(env["GIT_CONFIG_GLOBAL"]).toBe(devNull);
+      expect(env["GIT_CONFIG_GLOBAL"]).toBe(NO_GIT_CONFIG);
       // HOME already moves, but on its own it only relocates the global file —
       // a fixture that writes into the pseudo-home would re-open that half.
       expect(env["HOME"]).toBe(fixture.home.home);

@@ -528,7 +528,9 @@ describe("readManifest / writeManifest", () => {
 
     await writeManifest(root, fullManifest(), { now: FIXED_NOW });
 
-    expect(manifestPath(root).endsWith(`${STATE_DIR}/manifest.json`)).toBe(true);
+    // Joined, not spelled with a literal "/": manifestPath() builds a NATIVE
+    // path, whose separator is `\` on Windows.
+    expect(manifestPath(root).endsWith(join(STATE_DIR, "manifest.json"))).toBe(true);
     expect(await readFile(manifestPath(root), "utf8")).toMatch(/\n$/);
   });
 

@@ -1,11 +1,10 @@
 import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { devNull } from "node:os";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeEach } from "vitest";
-import { carriedProcessEnv, seedGitRepo } from "./repoFixtures.ts";
+import { carriedProcessEnv, NO_GIT_CONFIG, seedGitRepo } from "./repoFixtures.ts";
 import { makeTempDir } from "./tempDir.ts";
 
 /**
@@ -28,12 +27,12 @@ import { makeTempDir } from "./tempDir.ts";
  *   - HOME, USERPROFILE, XDG_CONFIG_HOME, XDG_CACHE_HOME, XDG_STATE_HOME all
  *     point inside the fixture's pseudo-home.
  *   - git reads no machine state: GIT_CONFIG_NOSYSTEM=1 cuts /etc/gitconfig and
- *     GIT_CONFIG_GLOBAL=os.devNull cuts ~/.gitconfig, so a developer's signing
- *     key, hook template, alias, or `status.showUntrackedFiles` cannot change
- *     what a CLI run under this harness sees. Same pair repoFixtures.ts's
+ *     GIT_CONFIG_GLOBAL=NO_GIT_CONFIG cuts ~/.gitconfig, so a developer's
+ *     signing key, hook template, alias, or `status.showUntrackedFiles` cannot
+ *     change what a CLI run under this harness sees. Same pair repoFixtures.ts's
  *     seeder sets; test/cli/engine/gitStatus.test.ts spells the system half
- *     `GIT_CONFIG_SYSTEM=devNull`, which is the same cut by the other of git's
- *     two documented switches.
+ *     `GIT_CONFIG_SYSTEM=NO_GIT_CONFIG`, which is the same cut by the other of
+ *     git's two documented switches.
  *   - defaults: NO_COLOR=1, STAMITY_NO_UPDATE_CHECK=1, TERM=dumb, LC_ALL=C —
  *     each overridable per run (an `undefined` override deletes the key).
  *   - CI and NO_UPDATE_NOTIFIER are never carried.
@@ -105,7 +104,7 @@ export function buildChildEnv(
   // reading /etc/gitconfig, and a fixture that later writes into the
   // pseudo-home would re-open the global half.
   env["GIT_CONFIG_NOSYSTEM"] = "1";
-  env["GIT_CONFIG_GLOBAL"] = devNull;
+  env["GIT_CONFIG_GLOBAL"] = NO_GIT_CONFIG;
   env["TERM"] = "dumb";
   env["LC_ALL"] = "C";
   env["NO_COLOR"] = "1";

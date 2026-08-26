@@ -74,6 +74,20 @@ export function manifestPath(rootDir: string): string {
   return join(rootDir, STATE_DIR, MANIFEST_FILE);
 }
 
+/**
+ * The repo-relative POSIX spelling, for prose and for generated documentation.
+ *
+ * `manifestPath("")` cannot serve that purpose: `join` renders the platform's
+ * own separator, so a page generated on Windows says `.stamity\manifest.json`
+ * and a page generated anywhere else says `.stamity/manifest.json`. The
+ * generated pages are committed and byte-diffed, which makes a platform-shaped
+ * character in them a false diff on one OS and a stale-docs failure on the
+ * other. Every path this project writes into a document or a manifest is POSIX
+ * (`src/manifest/ledger.ts` refuses a backslash outright); this constant is
+ * that rule applied to the manifest's own location.
+ */
+export const MANIFEST_REPO_PATH = `${STATE_DIR}/${MANIFEST_FILE}`;
+
 // ── Migration ──────────────────────────────────────────────────────────────
 
 /**

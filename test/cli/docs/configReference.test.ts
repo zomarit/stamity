@@ -19,9 +19,10 @@ import {
   table,
 } from "../../../src/cli/docs/configReference.ts";
 import { REGENERATE_COMMAND } from "../../../src/cli/docs/referencePages.ts";
-import { collectManifestErrors, manifestPath } from "../../../src/manifest/manifest.ts";
+import { MANIFEST_REPO_PATH, collectManifestErrors } from "../../../src/manifest/manifest.ts";
 import { CLIENT_MODEL_PROJECTION } from "../../../src/roster/modelLadder.ts";
 import { EFFORT_LEVELS, TOOLS, type ModelClass } from "../../../src/types/core.ts";
+import { STATE_DIR } from "../../../src/types/markers.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 
 /**
@@ -313,7 +314,14 @@ describe("key coverage", () => {
   });
 
   it("names the manifest file the keys live in, derived from the engine's own path", () => {
-    expect(renderConfigReference()).toContain(manifestPath(""));
+    const page = renderConfigReference();
+
+    expect(page).toContain(MANIFEST_REPO_PATH);
+    // The page is committed and byte-diffed, so its separator may never be the
+    // platform's. `manifestPath("")` — what this line used to render — spells
+    // the same location `.stamity\manifest.json` on Windows, which makes one
+    // source render two documents and reports the committed one as stale.
+    expect(page).not.toContain(`${STATE_DIR}\\`);
   });
 
   it("points at the CLI reference for the verbs rather than restating them", () => {

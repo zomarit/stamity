@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
 import { mkdir } from "node:fs/promises";
-import { devNull } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
   parsePorcelainStatus,
@@ -9,6 +8,7 @@ import {
   readWorkingTreeStatus,
 } from "../../../src/cli/engine/gitStatus.ts";
 import type { GitRunner } from "../../../src/workspace/git.ts";
+import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -182,8 +182,10 @@ const gitAvailable = (() => {
  * around the calls that use it.
  */
 const ISOLATED_GIT_ENV = {
-  GIT_CONFIG_GLOBAL: devNull,
-  GIT_CONFIG_SYSTEM: devNull,
+  // Git for Windows also reads a ProgramData-level config that GIT_CONFIG_SYSTEM alone does not cut.
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
+  GIT_CONFIG_SYSTEM: NO_GIT_CONFIG,
 } as const;
 
 function git(cwd: string, args: readonly string[], extraEnv: Record<string, string> = {}): void {

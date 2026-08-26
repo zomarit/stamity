@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkPermissions } from "../../src/pack/permissions.ts";
 import {
@@ -1048,7 +1049,9 @@ describe("enumeratePackContent", () => {
     const classes: PackContentClass[] = files.map((file) => file.contentClass);
     expect(classes).toEqual(["agents", "rules", "hooks"]);
     expect(files[0]?.sizeBytes).toBe(Buffer.byteLength(AGENT_BODY, "utf8"));
-    expect(files[0]?.absPath.endsWith("agents/reviewer.md")).toBe(true);
+    // `relPath` above is the POSIX form the pack declares; `absPath` is a
+    // NATIVE path, so its tail is joined rather than spelled with a literal "/".
+    expect(files[0]?.absPath.endsWith(join("agents", "reviewer.md"))).toBe(true);
   });
 
   // FIXTURE CHANGED, justified: the skill is a DIRECTORY holding

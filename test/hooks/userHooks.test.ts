@@ -552,27 +552,34 @@ describe("directory handling", () => {
     expect(result.hooks).toHaveLength(1);
   });
 
-  it("reports an unreadable hook file and still loads its siblings", async () => {
-    const repo = getRepo();
-    await repo.seedFiles({
-      ...BASE_FILES,
-      [`${HOOKS_DIR}/a-unreadable.json`]: doc({ event: "stop", command: ["node", GUARD_SCRIPT] }),
-      [`${HOOKS_DIR}/b-healthy.json`]: doc({ event: "session_end", command: ["node", GUARD_SCRIPT] }),
-    });
-    await chmod(repo.path(".stamity", "hooks", "a-unreadable.json"), 0o000);
-    // Root ignores the mode bits, so the case simply cannot be constructed there.
-    if (process.getuid?.() === 0) return;
+  // POSIX-ONLY: the fixture is `chmod 000`, a POSIX permission-bit primitive.
+  // Windows carries no such bits — `fs.chmod` there only toggles the read-only
+  // attribute, which never denies a READ — so the unreadable file cannot be
+  // constructed and the case has no subject.
+  it.skipIf(process.platform === "win32")(
+    "reports an unreadable hook file and still loads its siblings",
+    async () => {
+      const repo = getRepo();
+      await repo.seedFiles({
+        ...BASE_FILES,
+        [`${HOOKS_DIR}/a-unreadable.json`]: doc({ event: "stop", command: ["node", GUARD_SCRIPT] }),
+        [`${HOOKS_DIR}/b-healthy.json`]: doc({ event: "session_end", command: ["node", GUARD_SCRIPT] }),
+      });
+      await chmod(repo.path(".stamity", "hooks", "a-unreadable.json"), 0o000);
+      // Root ignores the mode bits, so the case simply cannot be constructed there.
+      if (process.getuid?.() === 0) return;
 
-    const result = await readHookDefinitions(repo.path(".stamity", "hooks"));
+      const result = await readHookDefinitions(repo.path(".stamity", "hooks"));
 
-    // One file's defect costs itself: the read used to throw and abort the whole
-    // hook set, emission and validation both.
-    expect(result.hooks.map((hook) => hook.sourceFile)).toEqual([`${HOOKS_DIR}/b-healthy.json`]);
-    expect(result.errors).toHaveLength(1);
-    expect(result.errors[0]?.code).toBe("UNREADABLE_FILE");
-    expect(result.errors[0]?.file).toBe(`${HOOKS_DIR}/a-unreadable.json`);
-    expect(result.errors[0]?.message).toContain("Make it readable");
-  });
+      // One file's defect costs itself: the read used to throw and abort the whole
+      // hook set, emission and validation both.
+      expect(result.hooks.map((hook) => hook.sourceFile)).toEqual([`${HOOKS_DIR}/b-healthy.json`]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]?.code).toBe("UNREADABLE_FILE");
+      expect(result.errors[0]?.file).toBe(`${HOOKS_DIR}/a-unreadable.json`);
+      expect(result.errors[0]?.message).toContain("Make it readable");
+    },
+  );
 
   it("fails loudly when the hooks path is not a directory", async () => {
     const repo = getRepo();

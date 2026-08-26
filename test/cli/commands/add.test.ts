@@ -342,7 +342,8 @@ describe("add — preconditions", () => {
     const doc = parseDoc(result.stdout);
     expect(doc.ok).toBe(false);
     expect(errorOf(doc).code).toBe("CONFIG_ERROR");
-    expect(errorOf(doc).message).toContain("packs/missing");
+    // The message names the resolved directory, so its separator is native.
+    expect(errorOf(doc).message).toContain(join("packs", "missing"));
   });
 });
 
