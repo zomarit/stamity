@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "generatedBy": "1.0.0",
-  "createdAt": "2026-08-14T09:06:01.894Z",
-  "updatedAt": "2026-08-26T05:08:39.773Z",
+  "createdAt": "2026-08-26T06:32:43.732Z",
+  "updatedAt": "2026-08-26T06:32:43.732Z",
   "tools": [
     "claude"
   ],
@@ -449,8 +449,9 @@
       "adapter": "claude",
       "artifactId": "charter",
       "artifactType": "infra",
-      "contentHash": "cba784ea13376deed04e60e1794b3ffdb615095fdd4d6db1aa6480fc60dc2a39",
-      "path": "AGENTS.md"
+      "contentHash": "dd62e92c90332641323d9d6e04eee28b92cb2ad5ea1ef5f7644ada3ea2ef400a",
+      "path": "AGENTS.md",
+      "stampedVersion": "1.0.0"
     },
     {
       "adapter": "claude",
@@ -459,6 +460,16 @@
       "contentHash": "68bfb77a2fa6b9481f180307c4b4d70352d5062c8dfd0882b426aa664d1efa28",
       "path": "CLAUDE.md",
       "stampedVersion": "1.0.0"
+    }
+  ],
+  "importChoice": [
+    {
+      "mode": "supplement",
+      "path": "AGENTS.md"
+    },
+    {
+      "mode": "supplement",
+      "path": "CLAUDE.md"
     }
   ],
   "detected": {
