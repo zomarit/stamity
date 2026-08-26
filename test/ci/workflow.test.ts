@@ -33,6 +33,11 @@ import { evaluateWorkflowExpression, type ExpressionContext } from "./workflowEx
  *                 so dist/ exists for everything after it), the generate-and-diff triple, the
  *                 aggregator's needs and its result assertion, the concurrency grouping, and the
  *                 lane map that promises to name every lane this repository does not run.
+ *   docs-site.yml the build/deploy split: the build job holds nothing elevated, the deploy job
+ *                 holds `pages: write` and the OIDC token behind a condition that no push, no
+ *                 pull request and no unarmed dispatch can satisfy. That condition is EVALUATED
+ *                 against every trigger shape, not string-matched, for the reason release.yml's
+ *                 is (see ./workflowExpression.ts).
  *   nightly.yml   the demoted legs, and that nothing here is merge-blocking.
  *   pr-checks.yml the three pull-request-only gates — DCO, title shape, dual size budget — and
  *                 the aggregator that gives them one name a branch rule can bind.
@@ -88,7 +93,7 @@ interface WorkflowJob {
   readonly "timeout-minutes"?: number;
   readonly if?: string;
   readonly needs?: readonly string[] | string;
-  readonly environment?: string;
+  readonly environment?: string | { readonly name?: string; readonly url?: string };
   readonly permissions?: Readonly<Record<string, string>>;
   readonly outputs?: Readonly<Record<string, string>>;
   readonly strategy?: {
@@ -133,6 +138,7 @@ function workflowNamed(file: string): LoadedWorkflow {
 }
 
 const ci = workflowNamed("ci.yml");
+const docsSite = workflowNamed("docs-site.yml");
 const nightly = workflowNamed("nightly.yml");
 const prChecks = workflowNamed("pr-checks.yml");
 const release = workflowNamed("release.yml");
@@ -1225,6 +1231,184 @@ describe.skipIf(WINDOWS)("release.yml — the release proofs, executed", () => {
   });
 });
 
+// ── docs-site.yml ────────────────────────────────────────────────────────────
+
+/** A `workflow_dispatch` context for this workflow: main, and whatever the form supplied. */
+const docsDispatch = (inputs: Readonly<Record<string, unknown>>): ExpressionContext => ({
+  github: { event_name: "workflow_dispatch", ref: "refs/heads/main" },
+  inputs,
+});
+
+describe("docs-site.yml — builds on every change, deploys only when armed", () => {
+  const jobs = docsSite.workflow.jobs;
+  const build = jobOf(docsSite, "build");
+  const deploy = jobOf(docsSite, "deploy");
+
+  it("builds on pull requests and pushes, and takes a dispatch input to deploy", () => {
+    expect(triggersOf(docsSite.workflow).toSorted()).toEqual([
+      "pull_request",
+      "push",
+      "workflow_dispatch",
+    ]);
+    const triggers = (docsSite.workflow as unknown as Record<string, unknown>)["on"] as {
+      workflow_dispatch?: { inputs?: { deploy?: { type?: string; default?: boolean } } };
+    };
+    const input = triggers.workflow_dispatch?.inputs?.deploy;
+    // Boolean and DEFAULT FALSE: the form a maintainer opens must not arrive pre-armed.
+    expect(input?.type).toBe("boolean");
+    expect(input?.default).toBe(false);
+  });
+
+  it("runs on the pages the site renders, not only on the site that renders them", () => {
+    // The site reads the repository's own docs/ in place, so this workflow is the build gate on
+    // those pages too — a page that stops parsing, or a doc link that misses, fails HERE. Watching
+    // only website/** would let a docs/ change break the site with nothing red.
+    const on = (docsSite.workflow as unknown as Record<string, unknown>)["on"] as Record<
+      string,
+      { paths?: readonly string[] }
+    >;
+    for (const trigger of ["pull_request", "push"]) {
+      expect(on[trigger]?.paths, `${trigger} must be path-filtered`).toEqual(
+        expect.arrayContaining(["website/**", "docs/**", "README.md"]),
+      );
+    }
+  });
+
+  it("keeps the build job free of every elevated grant", () => {
+    expect(build.permissions).toEqual({ contents: "read" });
+    expect(build.if ?? "", "the build job runs on every trigger").toBe("");
+  });
+
+  it("deploys the bytes the build produced rather than building a second time", () => {
+    // A deploy job that rebuilt could publish something no check ever saw.
+    const steps = stepsOf(docsSite, "deploy");
+    expect(deploy.needs).toBe("build");
+    expect(steps.some((step) => (step.run ?? "").includes("npm run build"))).toBe(false);
+    expect(indexOf(steps, "Download the built site")).toBeGreaterThanOrEqual(0);
+    expect(stepOf(steps, "Download the built site").with?.["name"]).toBe("docs-site");
+    // Uploaded under the same name by the job that produced it.
+    expect(stepOf(stepsOf(docsSite, "build"), "Upload the built site").with?.["name"]).toBe(
+      "docs-site",
+    );
+  });
+
+  it("installs the site's dependencies with lifecycle scripts off", () => {
+    // The repository .npmrc carries ignore-scripts=true, and npm resolves a project .npmrc from
+    // the project root of the install — which is website/, not the repository root, once that
+    // directory has its own package.json. So the flag is spelled out or it does not apply.
+    expect(runOf(stepsOf(docsSite, "build"), "Install")).toContain("--ignore-scripts");
+  });
+
+  it("names the arming condition in the file, where whoever arms it will read it", () => {
+    // Pages is not enabled and the domain is not claimed. A deploy path whose preconditions live
+    // only in someone's memory is a deploy path that gets tried and fails, or worse, succeeds at
+    // a URL nobody meant to publish.
+    expect(docsSite.source).toContain("ARMING CONDITION");
+    expect(docsSite.source).toContain("stamity.dev");
+    expect(docsSite.source.toLowerCase()).toContain("not enabled");
+  });
+
+  describe("nothing but an armed dispatch can deploy", () => {
+    /** The condition this file must carry, character for character. */
+    const DEPLOY_CONDITION =
+      "github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true'";
+
+    const condition = (deploy.if ?? "").replace(/\s+/g, " ").trim();
+
+    const SHAPES: readonly {
+      readonly label: string;
+      readonly context: ExpressionContext;
+      readonly deploys: boolean;
+    }[] = [
+      {
+        label: "a push to main",
+        context: { github: { event_name: "push", ref: "refs/heads/main" } },
+        deploys: false,
+      },
+      {
+        label: "a pull request",
+        context: { github: { event_name: "pull_request", ref: "refs/pull/1/merge" } },
+        deploys: false,
+      },
+      { label: "the default dispatch (deploy false)", context: docsDispatch({ deploy: false }), deploys: false },
+      { label: "a dispatch that set deploy true", context: docsDispatch({ deploy: true }), deploys: true },
+      { label: "a dispatch whose deploy input went missing", context: docsDispatch({}), deploys: false },
+      { label: "a dispatch whose deploy input is empty", context: docsDispatch({ deploy: "" }), deploys: false },
+      {
+        label: "a dispatch with no inputs context at all",
+        context: { github: { event_name: "workflow_dispatch", ref: "refs/heads/main" } },
+        deploys: false,
+      },
+    ];
+
+    it("pins the deploy condition exactly, string compare and all", () => {
+      expect(condition, "the deploy job must be conditional").not.toBe("");
+      expect(condition).toBe(DEPLOY_CONDITION);
+    });
+
+    it("admits an explicit deploy=true dispatch, and nothing else", () => {
+      for (const shape of SHAPES) {
+        expect(evaluateWorkflowExpression(condition, shape.context), shape.label).toBe(
+          shape.deploys,
+        );
+      }
+      // Table guard: it has to contain both answers, or a constant condition would satisfy it.
+      expect(SHAPES.some((shape) => shape.deploys)).toBe(true);
+      expect(SHAPES.some((shape) => !shape.deploys)).toBe(true);
+    });
+
+    it("names the value that arms rather than excluding the one that does not", () => {
+      // The falsifiable half, and the direction it runs matters. This condition arms on ONE
+      // value, so an input that went missing casts to something that is not that value and the
+      // job does not start. The inverted spelling — exclude 'false', deploy on anything else —
+      // reads as equally strict and is not: an input that went missing, or arrived empty, is not
+      // 'false' either, so an empty dispatch DEPLOYS. Every shape below publishes under the
+      // inversion and none does under the shipped condition, so a revert to it fails here.
+      const inverted =
+        "github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) != 'false'";
+      const failOpen = [
+        "a dispatch whose deploy input went missing",
+        "a dispatch whose deploy input is empty",
+        "a dispatch with no inputs context at all",
+      ];
+      for (const label of failOpen) {
+        const shape = SHAPES.find((row) => row.label === label);
+        expect(shape, label).toBeDefined();
+        expect(evaluateWorkflowExpression(inverted, shape?.context ?? {}), label).toBe(true);
+        expect(evaluateWorkflowExpression(condition, shape?.context ?? {}), label).toBe(false);
+      }
+      // And the inversion is not simply always-true: it denies the default dispatch, which is
+      // what makes it a plausible enough mistake to guard against.
+      const defaulted = SHAPES.find((row) => row.label === "the default dispatch (deploy false)");
+      expect(evaluateWorkflowExpression(inverted, defaulted?.context ?? {})).toBe(false);
+    });
+
+    it("puts the deploy behind the environment where a protection rule can attach", () => {
+      // Same control as release.yml's `npm-publish`: the in-file condition answers "was a deploy
+      // requested", and the environment is where the platform-side approval attaches. `github-pages`
+      // is also the environment GitHub itself scopes a Pages deployment token to.
+      const environment = deploy.environment;
+      expect(typeof environment === "string" ? environment : environment?.name).toBe(
+        "github-pages",
+      );
+    });
+
+    it("holds the elevated grants to the deploy job alone", () => {
+      for (const [id, job] of Object.entries(jobs)) {
+        const grants = Object.keys(job.permissions ?? {}).toSorted();
+        expect(grants, `${id} must declare its own permissions`).not.toEqual([]);
+        if (id === "deploy") continue;
+        expect(job.permissions, `${id} must hold nothing but read`).toEqual({ contents: "read" });
+      }
+      expect(deploy.permissions).toEqual({
+        contents: "read",
+        pages: "write",
+        "id-token": "write",
+      });
+    });
+  });
+});
+
 // ── every workflow ───────────────────────────────────────────────────────────
 
 describe("every workflow — pins, privileges and referenced scripts", () => {
@@ -1235,10 +1419,16 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     // means a new file is covered on the commit that adds it rather than on the commit that
     // remembers to list it here.
     expect(WORKFLOW_FILES).toEqual(
-      expect.arrayContaining(["ci.yml", "nightly.yml", "pr-checks.yml", "release.yml"]),
+      expect.arrayContaining([
+        "ci.yml",
+        "docs-site.yml",
+        "nightly.yml",
+        "pr-checks.yml",
+        "release.yml",
+      ]),
     );
     // Regex-rot guard: a filter that matched nothing would satisfy every loop below vacuously.
-    expect(WORKFLOW_FILES.length).toBeGreaterThanOrEqual(4);
+    expect(WORKFLOW_FILES.length).toBeGreaterThanOrEqual(5);
     expect(ALL_WORKFLOWS.length).toBe(WORKFLOW_FILES.length);
     for (const { file, workflow } of ALL_WORKFLOWS) {
       expect(Object.keys(workflow.jobs ?? {}).length, `${file} parsed to no jobs`).toBeGreaterThan(
@@ -1254,11 +1444,17 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     expect(publishing.map(([file, job]) => `${file}:${job}`)).toEqual(["release.yml:publish"]);
   });
 
-  it("hands the OIDC grant to exactly one job in the repository", () => {
+  it("hands the OIDC grant to exactly the two jobs that exchange it for a deployment", () => {
+    // A CLOSED list, which is the property — not a count. Two jobs hold `id-token: write`:
+    // `release.yml:publish` exchanges it for npm's provenance attestation, and
+    // `docs-site.yml:deploy` exchanges it for a GitHub Pages deployment token. Both are gated by
+    // a `format()`-compared condition that fails closed, and the docs-site one is evaluated
+    // against every trigger shape below, so admitting it here does not widen what can reach it.
+    // A third holder is a decision that lands with a line in this list and a fence to match.
     const holders = ALL_JOBS.filter(([, , job]) =>
       Object.keys(job.permissions ?? {}).includes("id-token"),
     ).map(([file, id]) => `${file}:${id}`);
-    expect(holders).toEqual(["release.yml:publish"]);
+    expect(holders).toEqual(["docs-site.yml:deploy", "release.yml:publish"]);
   });
 
   it("stores no npm credential at step, job or workflow scope", () => {
@@ -1335,11 +1531,21 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     for (const [file, id, job] of ALL_JOBS) {
       expect(job.permissions, `${file}:${id} must declare its own permissions`).toBeDefined();
     }
-    // Exactly one job in the repository may write, and it is the one that creates the release.
+    // Two jobs in the repository may write, each behind its own fail-closed condition: the one
+    // that creates the release, and the one that publishes the docs site. Neither is reachable
+    // from a push, a pull request or an unarmed dispatch, and the conditions that make that true
+    // are evaluated — not read for substrings — in their own suites above.
     const writers = ALL_JOBS.filter(([, , job]) =>
       Object.values(job.permissions ?? {}).includes("write"),
     ).map(([file, id]) => `${file}:${id}`);
-    expect(writers).toEqual(["release.yml:publish"]);
+    expect(writers).toEqual(["docs-site.yml:deploy", "release.yml:publish"]);
+    // And neither of them can start on its own: a write grant behind a condition that is missing
+    // is a write grant on every trigger the workflow declares.
+    for (const holder of writers) {
+      const [file, id] = holder.split(":");
+      const job = ALL_JOBS.find(([f, i]) => f === file && i === id)?.[2];
+      expect(job?.if ?? "", `${holder} must be conditional`).not.toBe("");
+    }
   });
 
   it("references only scripts/*.mjs files that exist on disk", () => {
@@ -1395,24 +1601,46 @@ describe("dependabot.yml — the update policy behind the pins", () => {
     }[];
   };
 
-  it("covers both ecosystems weekly, and only the directories that exist", () => {
+  it("covers both ecosystems weekly, and every npm manifest in the tree", () => {
     expect(config.version).toBe(2);
-    expect(config.updates.map((entry) => entry["package-ecosystem"])).toEqual([
-      "npm",
-      "github-actions",
-    ]);
+    expect(
+      config.updates.map((entry) => `${entry["package-ecosystem"]} ${entry.directory}`),
+    ).toEqual(["npm /", "npm /website", "github-actions /"]);
     for (const entry of config.updates) {
       expect(entry.schedule.interval).toBe("weekly");
-      // `directory` scoping is exact, not recursive. There is one npm manifest in this tree, so
-      // there is one npm entry; a second manifest needs its own entry or it gets no PRs at all.
-      expect(entry.directory).toBe("/");
     }
   });
 
+  it("keeps the npm entries and the npm manifests in one-to-one correspondence", () => {
+    // `directory` scoping is EXACT, not recursive, so the root entry covers the root manifest and
+    // nothing under it. The property that matters is a bijection: a manifest with no entry gets
+    // no update PRs while the dashboard looks clean, and an entry with no manifest is a lane that
+    // silently does nothing. Both halves are asserted, off disk, rather than from a list here.
+    const declared = config.updates
+      .filter((entry) => entry["package-ecosystem"] === "npm")
+      .map((entry) => entry.directory)
+      .toSorted();
+    for (const directory of declared) {
+      expect(directory.startsWith("/"), `${directory} must be repo-absolute`).toBe(true);
+      const manifest = join(REPO_ROOT, directory.slice(1), "package.json");
+      expect(existsSync(manifest), `${directory} has no package.json`).toBe(true);
+    }
+    // The other direction: every package.json outside the vendor and build trees is declared.
+    const onDisk = ["/", "/website"].filter((directory) =>
+      existsSync(join(REPO_ROOT, directory.slice(1), "package.json")),
+    );
+    expect(declared).toEqual(onDisk.toSorted());
+  });
+
   it("splits production from development, because the two deserve different scrutiny", () => {
-    const npm = config.updates.find((entry) => entry["package-ecosystem"] === "npm");
-    expect(npm?.groups?.["production"]?.["dependency-type"]).toBe("production");
-    expect(npm?.groups?.["development"]?.["dependency-type"]).toBe("development");
+    // On EVERY npm entry, not just the first one found: the split is the review contract, and a
+    // second manifest that skipped it would deliver one ungrouped PR per package.
+    const npmEntries = config.updates.filter((entry) => entry["package-ecosystem"] === "npm");
+    expect(npmEntries.length).toBeGreaterThanOrEqual(2);
+    for (const npm of npmEntries) {
+      expect(npm.groups?.["production"]?.["dependency-type"], npm.directory).toBe("production");
+      expect(npm.groups?.["development"]?.["dependency-type"], npm.directory).toBe("development");
+    }
   });
 
   it("carries the pin-comment lesson where the person merging a bump will read it", () => {

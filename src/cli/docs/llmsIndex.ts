@@ -11,9 +11,12 @@
  * reference pages come from {@link REFERENCE_PAGES} and the two path
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
- * five hand-written root pages — README, CONTRIBUTING, SECURITY, GOVERNANCE,
- * CODE_OF_CONDUCT — and the charter are named literally, because nothing
- * generates them to be read from.
+ * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
+ * GOVERNANCE, CODE_OF_CONDUCT) and the four guides under `docs/` — and the
+ * charter are named literally, because nothing generates them to be read from.
+ * The guides are held to the same hand-page contract as the root five by
+ * `test/docsPages.test.ts`, which is what keeps a literal entry here from
+ * pointing at a page nobody can date.
  *
  * **Repo-relative, always.** Every target is a path inside this tree. No
  * absolute link is admissible and the renderer refuses one: this index is
@@ -133,6 +136,39 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Code of conduct",
         description:
           "the behaviour expected here, the two channels a report goes through, and the enforcement ladder.",
+        regenerateCommand: null,
+      },
+    ],
+  },
+  {
+    heading: "Guides",
+    entries: [
+      {
+        path: "docs/getting-started.md",
+        title: "Getting started",
+        description:
+          "prerequisites, what init asks and writes per client, the guided first change, and where state lives.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/migration.md",
+        title: "Migration",
+        description:
+          "moving a repository off the predecessor setup — the guided path, the manual path, and what does not transfer.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/packs-and-trust.md",
+        title: "Packs and trust",
+        description:
+          "what a pack is, the four-rung trust ladder and what is not armed, the org policy, and how to remove one.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/troubleshooting.md",
+        title: "Troubleshooting",
+        description:
+          "the exit model, every doctor row and its remedy, the common failures, and where to report one.",
         regenerateCommand: null,
       },
     ],

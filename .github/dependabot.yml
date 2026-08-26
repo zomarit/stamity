@@ -1,10 +1,13 @@
 # Dependabot — weekly update PRs for the two ecosystems this repository actually has.
 #
 # `directory` scoping is EXACT, not recursive: an entry for "/" covers the root manifest and
-# nothing else. There is one npm manifest in this tree today, so there is one npm entry. When a
-# second manifest lands (a docs site with its own package.json is the usual one), it needs its own
-# entry here or it silently receives no update PRs at all — which is how an advisory sits open for
-# a month while the dashboard looks clean.
+# nothing else. That is why there are TWO npm entries below rather than one. The second manifest
+# the note here used to anticipate has landed — `website/package.json`, the Docusaurus site — and
+# without its own entry it would silently receive no update PRs at all, which is how an advisory
+# sits open for a month while the dashboard looks clean. One entry per npm manifest, and the rule
+# for the next one is the same: add it here on the commit that adds the manifest.
+# test/ci/workflow.test.ts holds that rule by asserting every npm entry's directory has a
+# package.json in it, so a manifest without an entry, or an entry without a manifest, fails.
 version: 2
 
 updates:
@@ -23,6 +26,24 @@ updates:
     # Deterministic, rather than inferred from commit history. The repository uses Conventional
     # Commits, and dependabot's auto-detection reads recent commits to guess the prefix — a guess
     # that changes as history changes.
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+
+  # The docs site (`website/`). A separate npm project with its own lockfile: it ships nothing to
+  # users — `package.json` publishes `dist` only — so every bump here is a bump to what RENDERS
+  # the documentation, not to what runs on a consumer's machine. Same weekly cadence and the same
+  # production/development split, so a site bump is reviewed on the same terms as a root one.
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+    groups:
+      production:
+        dependency-type: production
+      development:
+        dependency-type: development
     commit-message:
       prefix: chore
       prefix-development: chore

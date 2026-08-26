@@ -1,21 +1,37 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { TRUST_TIERS } from "../src/pack/trust.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 
 /**
- * The gate on the three hand-written pages.
+ * The gate on the seven hand-written pages: three at the root, four guides
+ * under `docs/`.
  *
- * Everything else under `docs/` is generated and drift-tested against its
- * renderer; these three are typed by a human, so the only guard is this file.
+ * The rest of `docs/` is generated and drift-tested against its renderer; these
+ * seven are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
  * address — and re-runs the leak gate so a leaked reserved name fails here too,
  * not only in CI.
+ *
+ * The guides joined this bucket when they landed rather than getting a second,
+ * weaker suite of their own. A published page is a published page: the
+ * properties below are what make one checkable, and a guide exempt from them is
+ * a guide nobody can tell is stale. What they do NOT inherit are README's line
+ * budget and its opening shape, which are claims about one page rather than
+ * about the bucket.
+ *
+ * Link targets resolve against the page's OWN directory, not the repository
+ * root. `docs/troubleshooting.md` links its neighbour as `cli-reference.md`,
+ * which is how the page reads correctly in the tree and on the published site;
+ * resolving every target from the root would have declared each of those
+ * missing and pushed the guides toward root-absolute links the rule below
+ * refuses.
  *
  * The absolute-URL rule is an ALLOWLIST, not a ban. A published page has two
  * addresses it must be able to print — the advisory form and the issue tracker
@@ -28,7 +44,7 @@ import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all three pages because the hand bucket is
+ * Two properties are asserted on all seven pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -73,8 +89,25 @@ const CONTRIBUTING = "CONTRIBUTING.md";
 const GOVERNANCE = "GOVERNANCE.md";
 const CODE_OF_CONDUCT = "CODE_OF_CONDUCT.md";
 
-/** The three hand pages, by repo-relative path. */
+/** The three hand pages at the repository root, by repo-relative path. */
 const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
+
+const GETTING_STARTED = "docs/getting-started.md";
+const MIGRATION = "docs/migration.md";
+const PACKS_AND_TRUST = "docs/packs-and-trust.md";
+const TROUBLESHOOTING = "docs/troubleshooting.md";
+
+/**
+ * The four hand-written guides under `docs/`.
+ *
+ * Everything else in that directory is rendered from code and carries a
+ * "GENERATED FILE, rewrite it with X" header; these four are the only pages
+ * there a human types, which is exactly the line the hand bucket is drawn on.
+ */
+const GUIDES: readonly string[] = [GETTING_STARTED, MIGRATION, PACKS_AND_TRUST, TROUBLESHOOTING];
+
+/** Every hand-written page. The properties below are asserted on all of them. */
+const HAND_PAGES: readonly string[] = [...PAGES, ...GUIDES];
 
 /** README's hard budget, per the hand-page posture (≤150 lines). */
 const README_MAX_LINES = 150;
@@ -104,6 +137,23 @@ const RESERVED_TOKENS: readonly string[] = [
   ["hat", "ch3r"].join(""),
   ["nes", "tor"].join(""),
 ];
+
+/**
+ * The one (page, token) PAIR carved out of the rule above.
+ *
+ * The migration guide cannot be written without the predecessor's name: a
+ * reader arrives from that project, searches for that word, and a page that
+ * described the old setup in euphemisms is a page nobody finds. The carve-out
+ * is a pair rather than a page-level exemption, so that guide is still held to
+ * the other four reserved names and every other page is still held to all five.
+ *
+ * It is COUPLED to the leak gate rather than merely parallel to it — the same
+ * path is the gate's only `docs/` allowlist entry, asserted below — because two
+ * independent exemptions that both decide "which page is special" are two
+ * things that can drift into disagreeing.
+ */
+const PREDECESSOR_TOKEN = ["hat", "ch3r"].join("");
+const PREDECESSOR_NAME_PAGE = MIGRATION;
 
 /** Every absolute URL on a page, with sentence punctuation trimmed off the tail. */
 const ABSOLUTE_URLS = /[a-z][a-z0-9+.-]*:\/\/[^\s<>()[\]`"']+/gi;
@@ -152,6 +202,10 @@ const README_LINK_TARGETS: readonly string[] = [
   // and README keeps a row pointing at nothing, which is the failure this list is for.
   GOVERNANCE,
   CODE_OF_CONDUCT,
+  // The four guides joined the map at publication, for the same reason: a row
+  // is what makes a page reachable, and a guide the README does not name is a
+  // page only the index knows about.
+  ...GUIDES,
 ];
 
 /** The generated client-capability page — the mechanism README's surface prose must agree with. */
@@ -174,8 +228,28 @@ const read = (relPath: string): string => readFileSync(join(REPO_ROOT, relPath),
 
 const lines = (text: string): string[] => text.replace(/\n$/, "").split("\n");
 
+/**
+ * A page's own text, with a leading YAML frontmatter block dropped.
+ *
+ * Frontmatter is machine metadata addressed to the site generator, not part of the page a
+ * reader opens, so the head budget below must not be spent on it. `docs/migration.md` carries
+ * three lines of it — the `slug` that publishes the page under the predecessor's name, which is
+ * a URL the filename itself cannot carry — and counting those against the six-line head would
+ * hold that one page to a shorter header than its siblings for a reason the contract never made.
+ */
+const afterFrontmatter = (text: string): string =>
+  /^---\r?\n/.test(text) ? text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "") : text;
+
 const linkTargets = (text: string): string[] =>
   [...text.matchAll(MARKDOWN_LINK)].map((match) => match[1] ?? "");
+
+/** A relative target resolved from the linking page's own directory. */
+const resolveTarget = (page: string, target: string): string =>
+  join(REPO_ROOT, dirname(page), target);
+
+/** Fenced blocks on a page — the lines a reader copies and runs. */
+const fencedBlocks = (text: string): string[] =>
+  text.split("```").filter((_, index) => index % 2 === 1);
 
 /** Singular of a class noun read out of prose — every corpus class pluralizes with `s`. */
 const singular = (noun: string): string => (noun.endsWith("s") ? noun.slice(0, -1) : noun);
@@ -202,15 +276,15 @@ async function corpusCounts(): Promise<Map<string, number>> {
 }
 
 describe("hand pages", () => {
-  it("all three exist and carry real content", () => {
-    for (const page of PAGES) {
+  it("all seven exist and carry real content", () => {
+    for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
     }
   });
 
   it("links inside the tree, or inside this repository's own GitHub home", () => {
-    for (const page of PAGES) {
+    for (const page of HAND_PAGES) {
       const text = read(page);
 
       // Every absolute URL on the page is one of ours, path segment for path
@@ -232,6 +306,13 @@ describe("hand pages", () => {
         if (ALLOWED_URL.test(target)) continue;
         expect(target, `${page} link is not repo-relative`).not.toMatch(/^[a-z][a-z0-9+.-]*:/i);
         expect(target, `${page} link is root- or protocol-absolute`).not.toMatch(/^\//);
+        if (target.startsWith("#")) continue;
+        // Resolved from the LINKING page's directory, which is where a reader
+        // and the published site both resolve it from.
+        expect(
+          existsSync(resolveTarget(page, target)),
+          `${page} links missing ${target}`,
+        ).toBe(true);
       }
     }
   });
@@ -244,12 +325,14 @@ describe("hand pages", () => {
     expect(readme, "README does not name the installable package").toContain(SCOPED_PACKAGE);
     expect(readme, "README does not name the owner").toContain(OWNER);
 
-    // The negative half outlives the rename: these three pages are the public
-    // face, so a retired or predecessor name surfacing here is the leak that
-    // matters most. The leak gate below covers the tree; this covers the face.
-    for (const page of PAGES) {
+    // The negative half outlives the rename: these pages are the public face,
+    // so a retired or predecessor name surfacing here is the leak that matters
+    // most. The leak gate below covers the tree; this covers the face. One
+    // (page, token) pair is carved out and asserted live under "the guides".
+    for (const page of HAND_PAGES) {
       const text = read(page).toLowerCase();
       for (const token of RESERVED_TOKENS) {
+        if (page === PREDECESSOR_NAME_PAGE && token === PREDECESSOR_TOKEN) continue;
         expect(text.includes(token), `${page} names a reserved token`).toBe(false);
       }
     }
@@ -260,8 +343,8 @@ describe("hand pages", () => {
     // can falsify is a page nobody can tell is stale. The generated half of the
     // split implemented its own version of this — a "GENERATED FILE, rewrite it
     // with X" header — and the hand half shipped with neither.
-    for (const page of PAGES) {
-      const head = lines(read(page)).slice(0, 6).join("\n");
+    for (const page of HAND_PAGES) {
+      const head = lines(afterFrontmatter(read(page))).slice(0, 6).join("\n");
 
       expect(head, `${page} has no currency header`).toMatch(CURRENCY_HEADER);
       // Falsifiable, not aspirational: the trigger names a condition a reader can
@@ -661,5 +744,233 @@ describe("CONTRIBUTING.md", () => {
     expect(text).toContain("npm run gate");
     expect(text).toContain("scripts/leak-gate.mjs");
     expect(text, "CONTRIBUTING does not say what the gate refuses").toMatch(/reserved/i);
+  });
+});
+
+/**
+ * The four guides, held to the claims each one exists to make.
+ *
+ * The block above proves a guide is datable, linkable and leak-free. It cannot
+ * prove the page still SAYS the thing it was written to say, and every one of
+ * these four makes a claim about a mechanism that can move underneath it: the
+ * doctor's probe set, the trust ladder's rungs, whether signature verification
+ * is armed, and what the predecessor's own uninstall verb destroys. So each
+ * assertion below reads the mechanism rather than a second copy of it, the way
+ * the README corpus counts do.
+ */
+describe("the guides", () => {
+  it("carves the predecessor's name out for exactly one page, coupled to the leak gate", () => {
+    expect(RESERVED_TOKENS, "the carved-out token is not a reserved name at all").toContain(
+      PREDECESSOR_TOKEN,
+    );
+
+    // Asserted live, not left standing. A carve-out for a page that stopped
+    // using it is one nobody would notice going stale — and it would quietly
+    // license the next page that wants the exemption.
+    expect(
+      read(PREDECESSOR_NAME_PAGE).toLowerCase().includes(PREDECESSOR_TOKEN),
+      `${PREDECESSOR_NAME_PAGE} no longer names the predecessor — drop the carve-out`,
+    ).toBe(true);
+
+    // The other half of the coupling: the gate's allowlist is where the same
+    // decision lives for the tree-wide scan, and exactly one PUBLISHED page is
+    // on it. Everything else there is source or build output.
+    const gate = read("scripts/leak-gate.mjs");
+    const body = /const PREDECESSOR_ALLOWLIST = \[([^\]]*)\]/.exec(gate)?.[1];
+    expect(body, "the leak gate has no PREDECESSOR_ALLOWLIST to read").not.toBeUndefined();
+    const entries = [...(body ?? "").matchAll(/'([^']*)'/g)].map((match) => match[1] ?? "");
+    expect(
+      entries.filter((entry) => entry.startsWith("docs/")),
+      "the leak gate's docs allowlist is not exactly the one guide this suite exempts",
+    ).toEqual([PREDECESSOR_NAME_PAGE]);
+  });
+
+  it("is reachable: every guide is on the map and in the agent-native index", () => {
+    const readme = read(README);
+    const index = read("llms.txt");
+    for (const page of GUIDES) {
+      expect(readme, `README does not link ${page}`).toContain(`](${page})`);
+      expect(index, `llms.txt does not list ${page}`).toContain(`](${page})`);
+    }
+  });
+
+  it("getting started shows the install line and the whole command surface", () => {
+    const text = read(GETTING_STARTED);
+    expect(text, "the getting-started guide never shows the install command").toContain(
+      INSTALL_COMMAND,
+    );
+    for (const command of ["init", "sync", "check", "validate", "add", "config", "clean"]) {
+      expect(text, `the getting-started guide omits \`${command}\``).toContain(`\`${command}\``);
+    }
+    expect(text, "the getting-started guide does not say where state lives").toContain(".stamity/");
+  });
+
+  it("migration names both paths and cites the predecessor's own uninstall verb", () => {
+    const text = read(MIGRATION);
+    expect(text, "the migration guide does not show the guided path").toContain(INSTALL_COMMAND);
+    expect(
+      text,
+      "the migration guide does not cite the predecessor's own clean command",
+    ).toContain(`npx ${PREDECESSOR_TOKEN} clean`);
+  });
+
+  it("migration never puts the purge flag in a line a reader would copy", () => {
+    const text = read(MIGRATION);
+
+    // It must WARN about the flag: a migration guide that never mentions it
+    // leaves the reader to meet it in the predecessor's own help, where nothing
+    // says it destroys the two surfaces this migration reads.
+    expect(text, "the migration guide does not warn about the purge flag").toMatch(/--purge/);
+
+    // And it must never appear in a runnable block. That flag deletes the state
+    // directory the carry reads and the credentials it keeps, irreversibly and
+    // with the pre-clean snapshots going too — so a copy-pasteable line
+    // carrying it is the one defect this page cannot ship.
+    for (const block of fencedBlocks(text)) {
+      expect(block, "a runnable block in the migration guide carries --purge").not.toContain(
+        "--purge",
+      );
+    }
+  });
+
+  /**
+   * The two claims on the migration guide that no other gate can reach, pinned
+   * because each was written wrong twice before this page shipped.
+   *
+   * Path B once read "costs you nothing", while the uninstall it recommends
+   * deletes `hatch.json` — the one file the offered config defaults are read
+   * out of. And the closing step named an uninstall without naming either the
+   * flag it must not carry or the credential file that has to leave the tree
+   * ahead of it. Both are statements about the PREDECESSOR's behaviour, so
+   * nothing in this tree can derive them: a reader running the page is the only
+   * one who finds out, and by then the files are gone.
+   *
+   * Sectioned rather than page-wide, and ORDERED rather than merely present.
+   * A back-up named after the uninstall it protects is a back-up nobody takes
+   * in time, so "names both" is not the property being asserted — "names the
+   * back-up first" is.
+   */
+  it("migration pins the manifest loss to Path B and the ordered uninstall to the last step", () => {
+    const text = read(MIGRATION);
+    const section = (heading: string): string => {
+      const start = text.indexOf(heading);
+      expect(start, `the migration guide has no ${heading} section`).toBeGreaterThanOrEqual(0);
+      const next = text.indexOf("\n## ", start + heading.length);
+      return text.slice(start, next === -1 ? undefined : next);
+    };
+
+    // Path B has to name the FILE. "It costs you the config defaults" was true
+    // and unactionable: it never said what deletes them, so nobody read the
+    // manifest out before running the clean.
+    expect(
+      section("## Path B"),
+      "the Path B section never names the manifest a plain clean deletes",
+    ).toContain("hatch.json");
+
+    const lastStep = section("## Your last step");
+    const clean = `npx ${PREDECESSOR_TOKEN} clean`;
+
+    expect(lastStep, "the last step never names the predecessor's own uninstall").toContain(clean);
+    expect(
+      lastStep,
+      "the last step names the uninstall without excluding the flag that destroys the carry",
+    ).toContain("without `--purge`");
+
+    // And no occurrence of it in this section carries that flag — the prose
+    // above is worth nothing if a line below it shows the destructive form.
+    for (let at = lastStep.indexOf(clean); at !== -1; at = lastStep.indexOf(clean, at + 1)) {
+      expect(
+        lastStep.slice(at, at + clean.length + 40),
+        "the last step shows the uninstall carrying the flag that deletes the credentials",
+      ).not.toContain("--purge");
+    }
+
+    const backup = lastStep.indexOf(".env.mcp");
+    expect(backup, "the last step never names the credential file").toBeGreaterThanOrEqual(0);
+    expect(
+      backup,
+      "the last step orders the credential back-up after the uninstall that can take it",
+    ).toBeLessThan(lastStep.indexOf(clean));
+  });
+
+  it("packs names every rung the ladder actually ships", () => {
+    const text = read(PACKS_AND_TRUST);
+    for (const tier of TRUST_TIERS) {
+      expect(text, `the packs guide omits the \`${tier}\` tier`).toContain(tier);
+    }
+  });
+
+  it("packs calls verification unarmed for exactly as long as it is", () => {
+    // The mirror of the SECURITY.md call-graph gate, on the page a pack author
+    // reads first. While the unarmed stand-in is the ONLY verifier the module
+    // declares, the guide must say verification is not armed; the day a real
+    // one is declared beside it, this fails until the page is rewritten. A page
+    // that overstates a defence is the defect; one that understates a shipped
+    // one is the same defect facing the other way.
+    const trust = read("src/pack/trust.ts");
+    const declared = [...trust.matchAll(/export const (\w+): SigstoreVerifier\b/g)].map(
+      (match) => match[1] ?? "",
+    );
+    expect(declared, "no SigstoreVerifier is declared at all — this gate reads nothing").not.toEqual(
+      [],
+    );
+
+    const armed = declared.filter((name) => name !== "notYetArmedSigstoreVerifier");
+    const text = read(PACKS_AND_TRUST);
+    if (armed.length === 0) {
+      expect(text, "the packs guide does not disclose that verification is unarmed").toMatch(
+        /not armed/i,
+      );
+    } else {
+      expect(
+        text,
+        `${armed.join(", ")} is declared — the packs guide still calls verification unarmed`,
+      ).not.toMatch(/not armed/i);
+    }
+  });
+
+  it("troubleshooting documents the doctor rows check prints, and only those", () => {
+    // Read out of the command rather than listed here: the probes are local
+    // constants, so a new one lands with no export to notice and the page would
+    // have gone on describing eight of nine.
+    const source = read("src/cli/commands/check.ts");
+    const probes = new Set(
+      [...source.matchAll(/const id = "([a-z-]+)"/g)].map((match) => match[1] ?? ""),
+    );
+    expect(probes.size, "no doctor probe ids could be read out of check.ts").toBeGreaterThanOrEqual(
+      9,
+    );
+
+    // Read out of the doctor SECTION rather than the whole page: the exit-model
+    // table above it has a backticked first column too, and matching page-wide
+    // pulled its header cell in as a tenth probe.
+    const page = read(TROUBLESHOOTING);
+    const start = page.indexOf("## What `check` prints");
+    const end = page.indexOf("## Common failures");
+    expect(start, "the troubleshooting guide has no doctor section").toBeGreaterThanOrEqual(0);
+    expect(end, "the troubleshooting guide has no section after the doctor one").toBeGreaterThan(
+      start,
+    );
+
+    // Set equality both ways. A probe added and not documented fails, and so
+    // does a row for a probe that was removed — a remedy for a check that no
+    // longer runs is worse than no row, because a reader acts on it.
+    const documented = [...page.slice(start, end).matchAll(/^\| `([a-z-]+)` \|/gm)].map(
+      (match) => match[1] ?? "",
+    );
+    expect(documented.toSorted()).toEqual([...probes].toSorted());
+  });
+
+  it("troubleshooting sends a reporter to the two channels, and no third one", () => {
+    const text = read(TROUBLESHOOTING);
+    expect(text, "the troubleshooting guide names no issue tracker").toContain(
+      "https://github.com/zomarit/stamity/issues",
+    );
+    expect(text, "the troubleshooting guide names no private advisory form").toContain(
+      ADVISORY_URL,
+    );
+    expect(text, "the troubleshooting guide does not route security away from public issues").toMatch(
+      /do not open a public issue/i,
+    );
   });
 });

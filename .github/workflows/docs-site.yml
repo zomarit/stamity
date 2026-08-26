@@ -1,0 +1,167 @@
+# Docs site — build on every change, deploy only when someone arms it.
+#
+# ARMING CONDITION. Nothing here publishes anything today, and two facts outside this file are
+# why. GitHub Pages is NOT enabled on this repository, and `stamity.dev` — the domain
+# `website/static/CNAME` claims and `website/docusaurus.config.ts` declares as `url` — is NOT
+# registered. Until BOTH are true, a deploy would fail at `actions/configure-pages` or serve the
+# site at a URL nobody can reach. So the deploy job is reachable only from a `workflow_dispatch`
+# that explicitly sets `deploy` to true; merging to `main` builds and stops. Arming it is a
+# deliberate act taken after the domain is claimed and Pages is enabled with "GitHub Actions" as
+# its source — not a side effect of landing a documentation change.
+#
+# WHAT THE BUILD PROVES. The site renders the repository's own `docs/` directory in place; there
+# is no copy of any page under `website/`. So this workflow is also the gate on those pages: a
+# link that aims at a doc route and misses fails the Docusaurus build (`onBrokenLinks: 'throw'`),
+# and so does a page that stops parsing. That is why it runs on `docs/` and `README.md` changes
+# and not only on `website/` ones.
+#
+# Actions are pinned to full commit SHAs with a trailing comment naming the EXACT version the SHA
+# resolves to. Pins resolved 2026-08-26 with:
+#   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+# The pin policy, the least-privilege split and the deploy condition are drift-guarded by
+# test/ci/workflow.test.ts — edit both together.
+
+name: Docs site
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'docs/**'
+      - 'README.md'
+      - '.github/workflows/docs-site.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'docs/**'
+      - 'README.md'
+      - '.github/workflows/docs-site.yml'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Publish the built site to GitHub Pages. Requires Pages enabled and the domain claimed.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Grouped by event as well as ref, for the reason ci.yml states: superseding a run is only
+  # correct within one event stream. A push to `main` must not cancel a dispatch that is
+  # mid-deploy, and an armed dispatch must never be cancelled by anything.
+  group: docs-site-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    # A cold install of the site's tree plus a full Docusaurus build runs in about three minutes;
+    # 15 leaves room for a slow registry without letting a wedged step hold a runner for six hours.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Node 24, the LTS canonical this repository's toolchain lane already runs on. The site's
+      # own floor is lower (Docusaurus declares >=20), so this is the stricter of the two.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      # `--ignore-scripts` is spelled out here rather than inherited from the repository root.
+      # npm resolves a project `.npmrc` from the project root it computes for the install, and
+      # that root is `website/` once this directory has its own package.json — so the root
+      # `.npmrc` does NOT reach this install. Measured, not assumed: `npm config get
+      # ignore-scripts` answers `true` at the repository root and answered `false` here until
+      # `website/.npmrc` was added.
+      #
+      # That file now carries the same `ignore-scripts=true`, so this flag is the SECOND of two
+      # layers, and both are deliberate. The `.npmrc` covers the install CI does not run — a
+      # maintainer typing `npm install` in this directory. This flag covers the case the `.npmrc`
+      # cannot: a checkout where that file was dropped, renamed, or edited in the same change
+      # that dropped this flag. Neither is redundant with the other, and a reviewer removing
+      # either one should have to say which exposure they are accepting.
+      # test/ci/workflow.test.ts asserts this flag is on the line, so removing it fails there.
+      - name: Install
+        working-directory: website
+        run: npm ci --ignore-scripts
+
+      - name: Build
+        working-directory: website
+        run: npm run build
+
+      # Uploaded on every trigger, deploy or not, so a pull request can be inspected as bytes
+      # rather than as a passing check.
+      - name: Upload the built site
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docs-site
+          path: website/build
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    # The whole of the arming condition, and it fails closed. Two halves. The first denies every
+    # trigger that is not a dispatch, so no push and no pull request reaches this job at all. The
+    # second names the ONE value that arms — compared as a STRING through `format()`, the way
+    # release.yml compares its own, because GitHub casts operands of differing types to numbers
+    # and null, '' and false all reach 0.
+    #
+    # The direction matters, and it is the opposite of release.yml's. There the safe state is
+    # `true`, so a missing input had to be stopped from reading as the unsafe `false`. Here the
+    # safe state is `false`, so the trap is the INVERTED spelling — `format('{0}', inputs.deploy)
+    # != 'false'`, exclude the value that does not arm and deploy on anything else. Under that, a
+    # dispatch whose input went missing or arrived empty is not 'false' either, and it DEPLOYS.
+    # test/ci/workflow.test.ts evaluates both spellings against every trigger shape, so a rewrite
+    # into the inversion fails there rather than the first time someone opens the form.
+    if: github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true'
+    runs-on: ubuntu-latest
+    # Download, package, publish. No install and no build, so this is generous already.
+    timeout-minutes: 10
+    permissions:
+      # The only elevated grant in this file, and it is confined to the one job the condition
+      # above gates. `pages: write` publishes; `id-token: write` is what deploy-pages exchanges
+      # for its short-lived deployment token.
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Runs first so a repository with Pages still disabled fails HERE, with that as the error,
+      # rather than at the deploy step with a less specific one. It does not need to precede the
+      # build: it exists to set `baseUrl` for a project-page deployment, and this site is a
+      # custom-domain apex whose `baseUrl` is `/` in the committed config either way.
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      # The bytes the build job already produced, rather than a second build. A deploy that
+      # rebuilt could publish something the build check never saw.
+      - name: Download the built site
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: docs-site
+          path: site
+
+      - name: Package for Pages
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

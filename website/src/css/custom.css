@@ -1,0 +1,58 @@
+/*
+ * The whole of this site's styling.
+ *
+ * Two brand colours and one page layout. Everything else is Infima, the stylesheet the classic
+ * theme already ships: a theme fork here would be a maintenance surface with no reader benefit,
+ * and it would drift from the theme it forked on the first upgrade.
+ */
+
+:root {
+  --ifm-color-primary: #1f6f5c;
+  --ifm-color-primary-dark: #1c6453;
+  --ifm-color-primary-darker: #1a5e4e;
+  --ifm-color-primary-darkest: #154d40;
+  --ifm-color-primary-light: #227a65;
+  --ifm-color-primary-lighter: #24806a;
+  --ifm-color-primary-lightest: #299178;
+  --ifm-code-font-size: 95%;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #58c9a8;
+  --ifm-color-primary-dark: #43c19c;
+  --ifm-color-primary-darker: #39bc96;
+  --ifm-color-primary-darkest: #2e9b7b;
+  --ifm-color-primary-light: #6dd1b4;
+  --ifm-color-primary-lighter: #78d5ba;
+  --ifm-color-primary-lightest: #99e0cb;
+}
+
+.landing {
+  margin: 0 auto;
+  max-width: 42rem;
+  padding: 5rem 1rem 6rem;
+  text-align: center;
+}
+
+.landing__title {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.landing__pitch {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 1.15rem;
+  margin-bottom: 2rem;
+}
+
+.landing__install {
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.landing__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}

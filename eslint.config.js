@@ -131,7 +131,14 @@ export default [
     // linting them with this repo's source rules would couple shipped bytes to dev-lane
     // style preferences. It also mislabels deliberate sanitization: the hooks strip C0/DEL
     // from untrusted payloads, which reads to `no-control-regex` as a defect.
-    ignores: ["dist/**", "coverage/**", "node_modules/**", ".stamity/**"],
+    // `website/` is a separate npm project with its own toolchain: a Docusaurus site, React
+    // TSX, its own tsconfig and its own lockfile. It is stated here rather than left to accident:
+    // today the `files:` globs below already miss it, so this line changes nothing on its own —
+    // which is exactly why it is written down. The day one of those globs widens to `**/*.ts`,
+    // the site would be linted against rules built for the CLI's source, and the report would be
+    // a config neither project asked for. The mirror of this entry is `.oxlintrc.json`'s
+    // `ignorePatterns`, so both linters agree on what the tree contains.
+    ignores: ["dist/**", "coverage/**", "node_modules/**", ".stamity/**", "website/**"],
   },
   {
     ...js.configs.recommended,

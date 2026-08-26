@@ -1,0 +1,9 @@
+{
+  // Docusaurus ships the compiler options its own theme types need; extending them is the
+  // supported path and keeps this file to the two things that are local.
+  "extends": "@docusaurus/tsconfig",
+  "compilerOptions": {
+    "baseUrl": "."
+  },
+  "exclude": [".docusaurus", "build"]
+}

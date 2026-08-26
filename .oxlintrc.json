@@ -194,5 +194,5 @@
       }
     }
   ],
-  "ignorePatterns": ["dist", "coverage", "node_modules", ".stamity"]
+  "ignorePatterns": ["dist", "coverage", "node_modules", ".stamity", "website"]
 }

@@ -80,10 +80,15 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the typed manifest. |
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class, projected from artifact frontmatter. |
 | [`llms.txt`](llms.txt) | Generated: the agent-native index of every page in this repository. |
+| [`website/`](website/) | The Docusaurus site that renders the `docs/` pages above. It holds no page of its own. |
 | [`SECURITY.md`](SECURITY.md) | What the engine defends today, what it does not, and how to report a vulnerability. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The dev loop, the three test lanes, and how to regenerate derived files. |
 | [`GOVERNANCE.md`](GOVERNANCE.md) | Who decides, how a change lands, and what the private layer holds. |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and the two channels a report goes through. |
+| [`docs/getting-started.md`](docs/getting-started.md) | Prerequisites, what `init` asks and writes per client, and the guided first change. |
+| [`docs/migration.md`](docs/migration.md) | Moving a repository off the predecessor setup — both paths, and what does not transfer. |
+| [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
 
 Hook scripts are absent from that row because they are not corpus content: the three
 portable bodies are generated from `src/hooks/scripts.ts` for every selected client, and

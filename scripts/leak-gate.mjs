@@ -76,7 +76,20 @@ const INCLUDE_BUILD = argv.includes('--include-build')
  * dropped `src/dist/...`, `test/fixtures/coverage/...`, and `packs/ops/node_modules/...` —
  * tracked source under a directory that merely shares a name with a build output.
  */
-const SKIP_PREFIXES = ['.git/', 'node_modules/', 'dist/', 'coverage/']
+// The `website/` entries are not redundant with the bare ones above: matching is ROOT-RELATIVE,
+// which is the whole point of the anchoring note, so `node_modules/` does not cover
+// `website/node_modules/`. The docs site is a second npm project with its own vendor tree, its
+// own build output, and Docusaurus's incremental cache; none of the three is tracked, and
+// walking them costs minutes and finds nothing this gate is for.
+const SKIP_PREFIXES = [
+  '.git/',
+  'node_modules/',
+  'dist/',
+  'coverage/',
+  'website/node_modules/',
+  'website/build/',
+  'website/.docusaurus/',
+]
 const MAX_REPORTED_HITS = 50
 const MAX_REPORTED_SKIPS = 25
 const EXCERPT_LENGTH = 120
@@ -302,11 +315,17 @@ export function normalizeWithMap(text) {
 /**
  * Repo-relative paths allowed to mention the predecessor project name.
  *
- * Two source directories plus the bundled JS: the guided migration-detection module needs the
- * literal state-directory and marker strings to find them, and its tests need them to build
- * fixtures. Everywhere else the name is a build failure — downstream code consumes the detection
- * module's `PredecessorState` record instead of re-spelling the name. The migration doc joins this
- * list when it lands.
+ * Two source directories, one published page, and the bundled JS. The guided migration-detection
+ * module needs the literal state-directory and marker strings to find them, and its tests need
+ * them to build fixtures. Everywhere else the name is a build failure — downstream code consumes
+ * the detection module's `PredecessorState` record instead of re-spelling the name.
+ *
+ * `docs/migration.md` is the one published page on the list, and its FILENAME is name-free on
+ * purpose: the page carries the predecessor's name in its `slug` instead, so the URL a migrant
+ * searches for still resolves while the README, the getting-started guide, `llms.txt` and the
+ * index that generates it all link the page by a path that does not spell the name. Naming the
+ * FILE after the predecessor would push the name into those four and force four more entries onto
+ * this list — one of them generated output — which is the spread this rule exists to stop.
  *
  * The three bundled JS files are on the list because `--include-build` scans the packed artifact,
  * where the migration module is bundled into the entry/chunk JS — the same legitimate markers, one
@@ -322,7 +341,7 @@ export function normalizeWithMap(text) {
  * Entry forms: exact path, directory prefix (trailing '/'), or glob ('*' within a path segment,
  * '**' across segments) — but see the exact-paths note above before adding a glob.
  */
-const PREDECESSOR_ALLOWLIST = ['src/migration/', 'test/migration/', 'dist/cli.js', 'dist/index.js', 'dist/src.js']
+const PREDECESSOR_ALLOWLIST = ['src/migration/', 'test/migration/', 'docs/migration.md', 'dist/cli.js', 'dist/index.js', 'dist/src.js']
 
 /**
  * The two files that DEFINE credential shapes, and therefore carry example ones.
