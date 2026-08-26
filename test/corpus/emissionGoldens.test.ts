@@ -82,6 +82,14 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-08-26, the review-gate lock rewrite (windows leg, round 2). NOTHING
+ *     moved here, recorded so the two ledgers stay in step: the script that
+ *     changed is `stamity-review-gate.mjs`, claude adapter residue this suite
+ *     does not hold. Its three core scripts are byte-identical across the
+ *     refresh, which is the point -- a lock fix that had leaked into the
+ *     portable scripts would have moved them. The moved bytes are itemised in
+ *     the sibling ledger.
+ *
  *   - 2026-08-18, the model-ladder provenance rewrite (integration fixer round
  *     1). SUBSTITUTION moved on `commands/stamity-work.md` alone: the ladder
  *     section gained the paragraphs naming the agent file as the one place a
