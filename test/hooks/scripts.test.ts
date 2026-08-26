@@ -1082,6 +1082,78 @@ function reviewerStop(runId: string, verdict: string, confidence = "high"): stri
   });
 }
 
+/** How long the lock churner keeps handing the lock on — past the old flat budget. */
+const LOCK_CHURN_MS = 2_500;
+
+const LOCK_CHURN_PATH = "hooks/churn-lock.mjs";
+
+/**
+ * A second process that holds the counter's lock and keeps handing it to a new
+ * holder, with no gap a waiter could win by luck.
+ *
+ * `rename` replaces the lock's name in one step, so the file never stops
+ * existing and the only thing that moves is which holder owns it. That is
+ * exactly the shape a real queue of finishing reviewers presents, and it is the
+ * shape the flat attempt-count budget could not tell apart from a lock whose
+ * holder had died.
+ */
+const LOCK_CHURN_SCRIPT = [
+  'import { closeSync, openSync, renameSync, unlinkSync, writeSync } from "node:fs";',
+  "",
+  "const lock = process.argv[2];",
+  "const durationMs = Number(process.argv[3]);",
+  "",
+  "function pause(ms) {",
+  "  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);",
+  "}",
+  "",
+  "function hand(n) {",
+  '  const temp = lock + ".churn-" + n;',
+  "  try {",
+  '    const handle = openSync(temp, "wx", 0o600);',
+  "    writeSync(handle, String(n));",
+  "    closeSync(handle);",
+  "    // Retried for the same reason the gate retries its own: on Windows the",
+  "    // destination can be held for a few ms by the waiter's stat or by a",
+  "    // scanner, and a hand-off this fixture drops is a hand-off the gate",
+  "    // cannot observe.",
+  "    for (let attempt = 0; ; attempt += 1) {",
+  "      try {",
+  "        renameSync(temp, lock);",
+  "        return true;",
+  "      } catch (error) {",
+  "        if (attempt >= 4) throw error;",
+  "        pause(2);",
+  "      }",
+  "    }",
+  "  } catch {",
+  "    try {",
+  "      unlinkSync(temp);",
+  "    } catch {",
+  "      // Nothing landed; the next hand-off makes its own.",
+  "    }",
+  "    return false;",
+  "  }",
+  "}",
+  "",
+  "let handed = 0;",
+  "while (!hand(handed)) pause(5);",
+  'process.stdout.write("held\\n");',
+  "const until = Date.now() + durationMs;",
+  "while (Date.now() < until) {",
+  "  pause(10);",
+  "  handed += 1;",
+  "  hand(handed);",
+  "}",
+  "try {",
+  "  unlinkSync(lock);",
+  "} catch {",
+  "  // A stale sweep got there first, which is the same outcome.",
+  "}",
+  'process.stdout.write("released\\n");',
+  "",
+].join("\n");
+
 /** `run`, without blocking the event loop — the concurrent case needs real overlap. */
 function runAsync(file: string, cwd: string, input: string): Promise<RunResult> {
   return new Promise((settle) => {
@@ -1436,6 +1508,63 @@ describe("buildReviewGateScript", () => {
       (name) => name.includes(".tmp-") || name.endsWith(".lock"),
     );
     expect(residue).toEqual([]);
+  });
+
+  // The companion to the case above, and the one that does not depend on how
+  // fast this machine is. Thirty writers only lose a round when the queue
+  // outlasts the waiter's budget, so on a quick filesystem the herd above
+  // passes whether the wait is correct or not — it drifted from green to red on
+  // the Windows leg with no source change between the two runs. This drives the
+  // same defect deterministically: the lock is handed from holder to holder for
+  // longer than the old flat budget allowed, and the round still has to land.
+  it("waits out a counter lock that is changing hands, rather than giving up on a moving queue", async () => {
+    const gate = await placeGate();
+    await getRepo().seedFiles({ ".stamity/.keep": "" });
+    const lockPath = getRepo().path(REVIEW_GATE_STATE_FILE) + ".lock";
+    const churn = await place(LOCK_CHURN_PATH, LOCK_CHURN_SCRIPT);
+
+    // The lock is held before the gate starts, and never free until the churn
+    // ends: `rename` replaces the name in one step, so what a waiter observes is
+    // a new holder rather than a gap it could win by luck.
+    const churner = spawn(process.execPath, [churn, lockPath, String(LOCK_CHURN_MS)], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const finished = new Promise<void>((settle) => churner.on("close", () => settle()));
+    await new Promise<void>((settle, fail) => {
+      churner.stdout.setEncoding("utf8");
+      churner.stdout.on("data", (chunk: string) => {
+        if (chunk.includes("held")) settle();
+      });
+      churner.on("close", () => fail(new Error("the churner exited before it took the lock")));
+    });
+
+    const result = await runAsync(gate, getRepo().dir, reviewerStop("run-churn", "request-changes"));
+    await finished;
+
+    // The old wait was 50 attempts x a flat 20ms sleep. A queue that keeps the
+    // lock busy past that one second read as a lock nobody would ever release,
+    // and the round was dropped on a path that still exits 0 — an undercounted
+    // loop releases a run its review never approved.
+    expect(result.code).toBe(0);
+    expect(refusal(result)).toMatchObject({ blocked: false, reasonCode: "ROUND_RECORDED", round: 1 });
+    expect(readGateState().runs["run-churn"]?.rounds).toBe(1);
+    expect(existsSync(lockPath)).toBe(false);
+  });
+
+  it("retries the counter's rename on the two errnos a held destination raises", () => {
+    const body = buildReviewGateScript(GATE_OPTIONS);
+
+    // Asserted on the emitted text, because no POSIX filesystem can produce the
+    // failure: renaming over an open file is legal there. On Windows it is not
+    // — every invocation reads this counter before it decides, and an on-access
+    // scanner opens files without FILE_SHARE_DELETE, so the destination is held
+    // for a few ms at a time and MoveFileEx answers EBUSY/EPERM. Unretried that
+    // lands as STATE_UNWRITABLE: the round is reported to the operator and
+    // never stored, which is the same lost round the lock exists to prevent,
+    // reached by the other door.
+    expect(body).toContain('code !== "EBUSY" && code !== "EPERM"');
+    expect(body).toContain("RENAME_RETRIES");
+    expect(body).toContain("renameSync(temp, STATE_FILE);");
   });
 
   it("writes its temp file at an unguessable name and never through a planted link", async () => {

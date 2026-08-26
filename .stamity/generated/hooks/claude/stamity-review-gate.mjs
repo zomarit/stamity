@@ -67,9 +67,48 @@ const UNTRUSTED_CONFIDENCE = "low";
 const BLOCKING = true;
 const BLOCK_EXIT = 2;
 
-const LOCK_ATTEMPTS = 50;
-const LOCK_WAIT_MS = 20;
+/*
+ * Waiting for the counter's lock.
+ *
+ * The budget used to be 50 attempts x a flat 20 ms sleep — one second of wall
+ * clock, whatever was ahead in the queue. That conflates the two reasons a lock
+ * is not free. A holder AHEAD of this process in a queue is progress and must be
+ * waited out; the wait is bounded by the queue, not by a constant. A holder that
+ * died still holding it is not progress and no amount of waiting helps. One
+ * second bounded the first case at a number picked for the second, so thirty
+ * reviewers finishing together on a filesystem where each critical section costs
+ * more than ~33 ms (NTFS create+delete, an on-access scanner, a runner
+ * oversubscribed thirty ways) exhausted it before their turn came, and the round
+ * they were holding the lock to count was dropped on a path that still exits 0.
+ * Measured against the emitted script with the critical section padded to 40 ms:
+ * 27 of 30 rounds landed, the other three reported STATE_LOCKED and exited 0.
+ *
+ * So the wait watches for PROGRESS instead of counting ticks: every observed
+ * change of holder re-arms the idle window, and the process gives up only after
+ * LOCK_IDLE_POLLS consecutive looks that saw the same holder AND LOCK_IDLE_MS of
+ * wall clock with no hand-off. Both conditions, because either alone is wrong on
+ * a loaded machine — a process descheduled past the wall-clock window would
+ * otherwise give up having looked exactly once, which is the starvation case
+ * this is most likely to meet. LOCK_CEILING_MS bounds the whole wait regardless,
+ * so a pathological hand-off storm still terminates well inside any client's
+ * hook timeout.
+ */
+const LOCK_IDLE_MS = 1_000;
+const LOCK_IDLE_POLLS = 24;
+const LOCK_CEILING_MS = 10_000;
+const LOCK_WAIT_MIN_MS = 4;
+const LOCK_WAIT_MAX_MS = 24;
 const LOCK_STALE_MS = 30_000;
+
+/* Rename retries for transient Windows sharing violations, mirroring the
+ * engine's own writer: a concurrent reader of the counter (every invocation
+ * loads it before it decides) can hold a handle across this rename, and an
+ * on-access scanner opens files without FILE_SHARE_DELETE, so MoveFileEx comes
+ * back EBUSY/EPERM for a few ms at a time. Unretried, that lands as
+ * STATE_UNWRITABLE: the round is reported but never stored, which is the same
+ * lost round by a different route. */
+const RENAME_RETRIES = 4;
+const RENAME_BACKOFF_MS = 50;
 
 const NOW = Date.now();
 
@@ -253,24 +292,78 @@ function pause(ms) {
  * stale window belonged to a process that died holding it and is cleared; every
  * other failure gives up rather than forcing, because forcing a live lock is the
  * defect this exists to prevent.
+ *
+ * Who holds it is the progress signal, read as the (mtime, file index) pair the
+ * stat already fetched: both are set when the lock is created, so a pair that
+ * differs from the last look means the lock changed hands and the queue ahead of
+ * this process is draining. The directory is created once, before the loop,
+ * rather than on every attempt — under contention that syscall ran on every tick
+ * of every waiter, lengthening the poll cycle it was competing in.
  */
 function lock() {
-  for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
+  try {
+    mkdirSync(dirname(STATE_FILE), { recursive: true });
+  } catch {
+    return false;
+  }
+  const ceiling = Date.now() + LOCK_CEILING_MS;
+  let idleDeadline = Date.now() + LOCK_IDLE_MS;
+  let idlePolls = 0;
+  let holder = -1;
+  let holderNode = -1;
+  for (;;) {
     try {
-      mkdirSync(dirname(STATE_FILE), { recursive: true });
       closeSync(openSync(LOCK_FILE, FS.O_WRONLY | FS.O_CREAT | FS.O_EXCL | FS.O_NOFOLLOW, 0o600));
       return true;
     } catch (error) {
       if (!error || error.code !== "EEXIST") return false;
+    }
+
+    // Who holds it now, and since when. A stat that raises is a lock released
+    // between the open and the look, which is itself a hand-off. Identity is
+    // the pair, not the timestamp alone: mtime carries it on any filesystem
+    // that stamps sub-second, and the file index carries it on one that does
+    // not (exFAT stamps in whole seconds, and two holders inside one tick would
+    // otherwise read as one). Either half moving is a hand-off; if a filesystem
+    // supplies neither, this degrades to the flat budget it replaced and never
+    // below it.
+    let seen = -1;
+    let node = -1;
+    try {
+      const held = statSync(LOCK_FILE);
+      seen = held.mtimeMs;
+      node = Number(held.ino);
+    } catch {
+      seen = -1;
+      node = -1;
+    }
+    if (seen !== holder || node !== holderNode) {
+      holder = seen;
+      holderNode = node;
+      idleDeadline = Date.now() + LOCK_IDLE_MS;
+      idlePolls = 0;
+    } else {
+      idlePolls += 1;
+    }
+
+    // A holder older than the stale window died holding it. Clearing it is the
+    // only path that forces a lock, and it is gated on age for that reason.
+    if (seen !== -1 && Date.now() - seen > LOCK_STALE_MS) {
       try {
-        if (Date.now() - statSync(LOCK_FILE).mtimeMs > LOCK_STALE_MS) unlinkSync(LOCK_FILE);
+        unlinkSync(LOCK_FILE);
+        continue;
       } catch {
         // Another process cleared it first; the next attempt takes it.
       }
-      pause(LOCK_WAIT_MS);
     }
+
+    const now = Date.now();
+    if (now >= ceiling) return false;
+    if (idlePolls >= LOCK_IDLE_POLLS && now >= idleDeadline) return false;
+    // Jittered, so a herd woken by the same release does not re-collide on the
+    // same tick every round and starve its own tail.
+    pause(LOCK_WAIT_MIN_MS + Math.floor(Math.random() * (LOCK_WAIT_MAX_MS - LOCK_WAIT_MIN_MS + 1)));
   }
-  return false;
 }
 
 function unlock() {
@@ -306,7 +399,21 @@ function save(runs) {
     writeSync(handle, JSON.stringify({ schema: SCHEMA, runs: Object.fromEntries(kept) }));
     closeSync(handle);
     handle = -1;
-    renameSync(temp, STATE_FILE);
+    // The rename is retried on the two errnos Windows raises when something
+    // else holds a handle to the destination for a moment — a concurrent
+    // reader, or an on-access scanner that opened it without FILE_SHARE_DELETE.
+    // Every other failure is raised on the first try and reported by the catch
+    // below, because a write that cannot land is not worth holding a run for.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        renameSync(temp, STATE_FILE);
+        break;
+      } catch (error) {
+        const code = error === null || error === undefined ? "" : error.code;
+        if ((code !== "EBUSY" && code !== "EPERM") || attempt >= RENAME_RETRIES) throw error;
+        pause(RENAME_BACKOFF_MS * 2 ** attempt);
+      }
+    }
     return true;
   } catch {
     if (handle !== -1) {

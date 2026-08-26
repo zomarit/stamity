@@ -144,6 +144,31 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-08-26, the review-gate lock rewrite (windows leg, round 2). One
+  //     generated script moved and nothing else:
+  //
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       (19592 -> 24741 bytes) in the two claude-bearing selections. The
+  //       counter's lock stopped counting ticks and started watching for
+  //       progress: an observed change of holder re-arms the idle window, so a
+  //       queue of finishing reviewers is waited out rather than read as a lock
+  //       nobody will release, and the rename that stores the round is retried
+  //       on the two errnos a held destination raises. The flat 50 x 20ms
+  //       budget it replaces dropped rounds wherever a critical section cost
+  //       more than ~33ms -- reproduced at 27 of 30 writers, and the reason the
+  //       herd case in `test/hooks/scripts.test.ts` went green-to-red on the
+  //       windows leg with no source change between the two runs.
+  //     CHANGED `.stamity/manifest.json` in the same two selections, each at
+  //       UNCHANGED byte length (16215 claude / 54983 all-four) -- the
+  //       fixed-width sha256 ledger row for that one script, and nothing else.
+  //
+  //     What did NOT move, and would have surfaced here if the edit had
+  //     escaped its class: every other emitted path in both trees, and the
+  //     cursor, copilot and codex selections entire. The review gate is claude
+  //     adapter residue and no other client carries it, so a byte moving in one
+  //     of them would have meant the lock rewrite had reached a shared path it
+  //     has no business in.
+  //
   //   - 2026-08-18, the model-ladder provenance rewrite (integration fixer
   //     round 1). One corpus body moved and nothing else:
   //
