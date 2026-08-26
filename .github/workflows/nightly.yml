@@ -1,0 +1,210 @@
+# Nightly — the lanes that are worth running daily and are not worth blocking a merge on.
+#
+# Nothing in this file is merge-blocking. It has no aggregator and no job here is named in a
+# required status context: the point of the split is that `main` stays mergeable when a macOS
+# runner image changes under us or a Node release lands with a breaking change in a dependency.
+# What this file buys is EARLY NOTICE — the failure shows up in the nightly run list a day or a
+# week before it would have shown up in a release.
+#
+# Actions are pinned to full commit SHAs with a trailing comment naming the EXACT version the SHA
+# resolves to. Pins resolved 2026-08-26 with:
+#   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+#
+# Drift-guarded together with the other workflow files by test/ci/workflow.test.ts.
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # macOS is where a maintainer develops and where no merge-blocking leg runs. Demoted from the
+  # per-commit matrix rather than dropped: the failure mode it catches (a case-insensitive
+  # filesystem, a different `tmpdir` shape, BSD userland) is real but rare enough that paying for
+  # it on every push is the wrong trade.
+  macos-smoke:
+    name: macos smoke (node 24)
+    runs-on: macos-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Dogfood check
+        run: node dist/cli.js check
+
+      - name: Leak gate
+        run: npm run gate
+
+  # The next Node line, ahead of the day it becomes the one users are on. A failure here is a
+  # heads-up about a deprecation or a changed runtime default, not a defect in the change that
+  # happened to run last — which is exactly why it does not gate a merge.
+  node-next:
+    name: node next (26)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  # The end-to-end journey a user actually takes, run against the PACKED artifact in a repository
+  # that is not this one: pack, install the tarball, `init` for all four clients, `check` the tree
+  # it wrote, and assert the residue each client needs is on disk. `tarball-smoke` in ci.yml runs
+  # the same shape for ONE client set on the floor leg; this lane widens it to all four, which is
+  # the combination most likely to surface a per-adapter emission gap.
+  #
+  # The second half of this lane is ARMED AND NOT ENABLED, and the file says so rather than
+  # implying coverage that does not exist: driving a real headless target tool over the emitted
+  # setup needs an API credential this repository does not hold. The credential check below exits
+  # 0 with a notice when the secret is absent, so the lane is honest about which half ran.
+  headless-lane:
+    name: headless lane (scratch-repo dogfood; drive step armed, not enabled)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Pack -> install -> init -> check -> assert, in a throwaway tree. `--ignore-scripts` is
+      # passed explicitly because npm reads project config from the CWD's `.npmrc` and the
+      # throwaway project has none, so this repository's `ignore-scripts=true` does not reach it.
+      - name: Scratch-repo dogfood (all four clients)
+        run: |
+          set -euo pipefail
+          WORK="$(mktemp -d)"
+          npm pack --pack-destination "$WORK"
+          TARBALL="$(ls -1 "$WORK"/*.tgz | head -1)"
+          echo "Packed: $TARBALL"
+
+          CONSUMER="$WORK/consumer"
+          mkdir -p "$CONSUMER"
+          printf '{"name":"consumer","private":true,"version":"0.0.0"}\n' > "$CONSUMER/package.json"
+          ( cd "$CONSUMER" && npm install --no-audit --no-fund --ignore-scripts "$TARBALL" )
+
+          CLI="$CONSUMER/node_modules/.bin/stamity"
+          test -x "$CLI" || { echo "::error::the installed package exposes no stamity bin"; exit 1; }
+
+          TARGET="$WORK/target"
+          mkdir -p "$TARGET"
+          printf '{"name":"target","private":true,"version":"0.0.0"}\n' > "$TARGET/package.json"
+          cd "$TARGET"
+          "$CLI" init -y --tools claude,cursor,copilot,codex
+          "$CLI" check
+
+          # One marker per client plus the two portable artifacts. A client that emitted nothing
+          # is the failure this lane exists to catch, and `check` alone would not catch it: it
+          # verifies what the manifest SAYS was emitted against disk, so a client missing from
+          # both is self-consistent.
+          missing=""
+          for path in \
+            AGENTS.md \
+            .stamity/manifest.json \
+            CLAUDE.md \
+            .claude/settings.json \
+            .cursor/rules \
+            .cursor/hooks.json \
+            .github/instructions \
+            .github/agents \
+            .codex/config.toml \
+            .codex/agents
+          do
+            [ -e "$path" ] || missing="$missing $path"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Emitted residue missing::the four-client init produced no:$missing"
+            exit 1
+          fi
+          echo "Scratch-repo dogfood: init + check + residue present for claude, cursor, copilot, codex"
+
+      # Armed, not enabled. The secret is read into an env var rather than compared inside an
+      # `if:` expression so the absent case produces a NOTICE a reader can find, instead of a
+      # silently skipped step that looks the same as a step that passed.
+      - name: Headless drive credentials
+        id: creds
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Headless drive skipped::No API-key secret is configured for this repository, so the headless target-tool drive did not run. The scratch-repo dogfood above DID run and is the coverage this lane currently provides."
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      # The drive step itself. It is here so the wiring is reviewable and the gap is visible in
+      # the file rather than only in someone's head; what it does NOT yet have is the harness
+      # that drives a target tool over the emitted setup and scores the result. That harness is
+      # the eval-harness gap named in ci.yml's lane map, and until it exists this step reports
+      # loudly rather than pretending to measure something.
+      - name: Headless target-tool drive
+        if: steps.creds.outputs.enabled == 'true'
+        run: |
+          echo "::warning title=Headless drive not implemented::An API-key secret is configured, but the drive harness that runs a target tool over the emitted setup and scores the run does not exist yet. Nothing was measured. See the eval-harness entry in .github/workflows/ci.yml."
+          {
+            echo "### Headless drive: credential present, harness absent"
+            echo ""
+            echo "The credential gate passed and the drive step reached. No harness ran."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,79 @@
+name: Agent feedback
+description: Tell the maintainer what a generated agent, command, skill or rule got wrong or right
+title: "[Feedback] "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form is the corpus's only feedback channel from outside. What an agent recommends
+        comes from a file in `content/`, so a bad recommendation is a defect with an address —
+        and a good one is evidence to keep that file as it is. Both are worth filing.
+
+        Unattributed feedback cannot be acted on. Name one touchpoint, quote what it said, and
+        the change has somewhere to land.
+
+  - type: input
+    id: touchpoint
+    attributes:
+      label: Touchpoint
+      description: >-
+        The one agent, command, skill or rule this is about — `/stamity-plan`, the `reviewer`
+        agent, a named rule. "The setup generally" is not a touchpoint; pick the piece that
+        produced the behaviour.
+      placeholder: /stamity-work, reviewer, stamity-testing rule
+    validations:
+      required: true
+
+  - type: dropdown
+    id: verdict
+    attributes:
+      label: Verdict
+      description: What kind of feedback this is, so it can be triaged without being read twice.
+      options:
+        - Wrong — the recommendation was incorrect, harmful, or wasteful
+        - Right — it worked, keep it
+        - Suggestion — it works, but here is a change
+    validations:
+      required: true
+
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: What it recommended
+      description: >-
+        What the touchpoint actually said or did, quoted rather than summarised where you can.
+        Redact secrets and proprietary code — this issue is public.
+    validations:
+      required: true
+
+  - type: textarea
+    id: assessment
+    attributes:
+      label: What was wrong, or what was right
+      description: >-
+        For `Wrong` and `Suggestion`, the correct behaviour and why — an argument, a source, or
+        what you did instead. For `Right`, what it saved you, so the reason survives a rewrite
+        of that file.
+    validations:
+      required: true
+
+  - type: input
+    id: generated-file
+    attributes:
+      label: Generated file involved
+      description: >-
+        The path in your repository where the behaviour showed up — the charter, an adapter's
+        agent or rule file, a hook script. This is what maps the report back to the emitter.
+      placeholder: AGENTS.md, .claude/agents/stamity-reviewer.md, .claude/rules/stamity-testing.md
+    validations:
+      required: false
+
+  - type: input
+    id: client
+    attributes:
+      label: Client and version
+      description: Which coding client was running, and the output of `stamity --version`.
+      placeholder: Claude Code, 1.0.0
+    validations:
+      required: false

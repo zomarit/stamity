@@ -1,0 +1,230 @@
+# PR checks — the three gates that only exist on a pull request.
+#
+# WHY A SECOND FILE. ci.yml runs on push, pull_request, schedule and dispatch, and its aggregator
+# `all-ci-checks` is required on every one of them. The three checks below can only be answered
+# about a PULL REQUEST: two of them read the pull request itself (its commit list, its title), and
+# the third is a review prompt about a diff rather than a fact about `main`. Folding them into
+# ci.yml would mean either a job that is skipped on three of its four triggers — and a skipped
+# required check reads as green — or a required context that never reports on a push. So they get
+# their own file, their own aggregator, and their own required context.
+#
+# THE CONTEXT TO REQUIRE is `all-pr-checks`, this file's aggregator job. `pr-checks` is the name of
+# the workflow, and a branch rule binds check-run names rather than workflow names. GOVERNANCE.md
+# names both, and this is the second required context beside `all-ci-checks`.
+#
+# NO EGRESS POLICY HERE, deliberately and not by oversight. release.yml hardens its runners because
+# it holds a publish credential. ci.yml runs strictly MORE third-party code than this file does, on
+# this same event, without one — so an allowlist here would advertise a boundary the larger
+# neighbouring lane does not hold. When one is added it lands on both, measured against observed
+# traffic rather than guessed at twice.
+#
+# Actions are pinned to full commit SHAs with a trailing comment naming the EXACT version the SHA
+# resolves to. Pins resolved 2026-08-26 with:
+#   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+#
+# Drift-guarded with the other workflows by test/ci/workflow.test.ts, which loads every file in
+# this directory rather than a hard-coded list.
+
+name: PR checks
+
+on:
+  pull_request:
+    branches: [main]
+    # `edited` is here for the title check: editing a title fires `edited` and nothing else, so
+    # without it a corrected title never re-runs and the required context stays red on a pull
+    # request that is now fine. The cost is that a body edit re-runs the build job too, which is
+    # the cheaper mistake.
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. DCO ───────────────────────────────────────────────────────────────────
+  # Every commit in the pull request carries a `Signed-off-by:` trailer. That trailer is the
+  # Developer Certificate of Origin, and it is what lets the patch be taken under this
+  # repository's licence — which makes it the one box in the pull-request template that a person
+  # checking it by hand is the wrong mechanism for.
+  #
+  # The commit list comes from the API rather than from `git log base..head`: the API answers
+  # exactly which commits the pull request contains, while a range needs a base SHA that a
+  # force-push or a rebase of the base branch can make unreachable in the fetched history. No
+  # checkout at all, so this job runs nothing from the diff it is judging.
+  dco:
+    name: DCO sign-off
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Every commit carries a Signed-off-by trailer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # One row per commit: the sha, then whether any line of its message is a sign-off
+          # trailer. `--paginate` walks past the first page, so a long branch is not silently
+          # judged on its first thirty commits.
+          ROWS="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits" --paginate --jq '
+            .[] | [
+              .sha,
+              ((.commit.message | split("\n") | map(select(test("^Signed-off-by: .+ <.+>"))) | length) > 0)
+            ] | @tsv
+          ')"
+
+          TOTAL="$(printf '%s\n' "$ROWS" | grep -c . || true)"
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "::error title=DCO check could not run::The API listed no commits for pull request #$PR_NUMBER. A lookup that returned nothing and a pull request whose commits are all signed off are the same shape here and opposite facts, so this fails rather than reporting a pass."
+            exit 1
+          fi
+
+          # The commits endpoint lists at most 250 commits, and a truncated list is a PARTIAL
+          # answer that looks exactly like a complete one. Refuse it rather than report a pass on
+          # the part that fitted.
+          if [ "$TOTAL" -ge 250 ]; then
+            echo "::error title=DCO check is incomplete::The commits endpoint lists at most 250 commits and returned $TOTAL, so any commit past that was not checked. Split this pull request rather than merging on a partial answer."
+            exit 1
+          fi
+
+          UNSIGNED="$(printf '%s\n' "$ROWS" | awk -F'\t' '$2 == "false" { print $1 }')"
+
+          if [ -n "$UNSIGNED" ]; then
+            echo "Commits missing a Signed-off-by trailer:"
+            printf '%s\n' "$UNSIGNED" | while IFS= read -r SHA; do
+              [ -n "$SHA" ] || continue
+              echo "  $SHA"
+              echo "::error title=Missing DCO sign-off::Commit $SHA carries no Signed-off-by trailer."
+            done
+            {
+              echo "### DCO sign-off missing"
+              echo ""
+              echo "These commits carry no \`Signed-off-by:\` trailer:"
+              echo ""
+              printf '%s\n' "$UNSIGNED" | sed 's/^/- `/; s/$/`/'
+              echo ""
+              echo "Sign off every commit on the branch and force-push the amended history:"
+              echo ""
+              echo '```sh'
+              echo "git rebase --signoff origin/main"
+              echo '```'
+              echo ""
+              echo "One commit only: \`git commit --amend -s --no-edit\`. Configure it once with \`git config alias.ci 'commit -s'\` or pass \`-s\` every time."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "All $TOTAL commit(s) in this pull request carry a Signed-off-by trailer."
+
+  # ── 2. PR title ──────────────────────────────────────────────────────────────
+  # The title is read out into a release note, so it has to be a conventional-commit subject.
+  # Ten types, which is the set this repository actually authors plus the four that arrive on
+  # automated bumps and tooling changes.
+  #
+  # No checkout, no token, no network: the title is in the event payload. It reaches the shell
+  # through `env:` and never through a `${{ }}` interpolation inside the script body — an
+  # interpolation substitutes text BEFORE the shell parses it, and a title is the one value on a
+  # pull request that an outside contributor writes freely.
+  pr-title:
+    name: PR title (conventional commit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Title matches the conventional-commit subject shape
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          PATTERN='^(feat|fix|refactor|test|docs|chore|ci|perf|build|style)(\([a-z0-9-]+\))?!?: .+'
+
+          FIRST_LINE="$(printf '%s\n' "$TITLE" | head -n 1)"
+          if printf '%s\n' "$FIRST_LINE" | grep -Eq "$PATTERN"; then
+            echo "Title accepted: $FIRST_LINE"
+            exit 0
+          fi
+
+          echo "::error title=PR title is not a conventional-commit subject::\"$FIRST_LINE\" does not match $PATTERN"
+          {
+            echo "### PR title is not a conventional-commit subject"
+            echo ""
+            echo "Read: \`$FIRST_LINE\`"
+            echo ""
+            echo "Expected \`type(scope): message\`, where:"
+            echo ""
+            echo "- **type** is one of \`feat\` \`fix\` \`refactor\` \`test\` \`docs\` \`chore\` \`ci\` \`perf\` \`build\` \`style\`"
+            echo "- **scope** is optional, lower-case, and in parentheses — \`fix(cli): ...\`"
+            echo "- **!** before the colon marks a breaking change — \`feat(pack)!: ...\`"
+            echo "- the message after \`: \` is not empty"
+            echo ""
+            echo "The pattern this check applies, exactly: \`$PATTERN\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+  # ── 3. Dual size budget ──────────────────────────────────────────────────────
+  # The published download, measured on the diff that changes it. Two numbers, because `dist/`
+  # holds two things with unrelated growth curves — the bundled logic and the staged corpus — and
+  # one combined figure lets either hide inside the other.
+  #
+  # `npm run build` evaluates the same two budgets in its own `build:done` hook and would fail
+  # first on a violation. The step below is not decoration: it prints both totals and their
+  # headroom on every run, passing or failing, so a reviewer sees the trend rather than only the
+  # cliff — and it measures the tree that was actually produced, rather than trusting the build
+  # config to keep a hook a config edit could drop. The numbers and the classification are read
+  # from tsdown.config.mjs, so there is exactly one place they are declared.
+  size-budget:
+    name: dist size budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # `cache: npm` follows ci.yml rather than release.yml. release.yml refuses the cache because
+      # an Actions cache is writable from any branch and what that job produces is the SHIPPED
+      # tarball; nothing this job produces is published, so the same trade lands the other way.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      # `.npmrc` sets ignore-scripts=true and npm reads it from the working directory, so no
+      # dependency lifecycle script runs here either.
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Size budget (logic and corpus halves)
+        run: node scripts/size-budget.mjs
+
+  # ── The one stable context to require on a pull request ──────────────────────
+  # Same shape and same reason as ci.yml's `all-ci-checks`: `if: always()` so it still runs after a
+  # failed dependency, and an explicit assertion on each result, because `needs` alone treats a
+  # cancelled dependency as "did not succeed" and a skipped aggregator reads as green.
+  all-pr-checks:
+    name: all-pr-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    if: always()
+    needs: [dco, pr-title, size-budget]
+    steps:
+      - name: Report
+        run: |
+          echo "dco=${{ needs.dco.result }} pr-title=${{ needs.pr-title.result }} size-budget=${{ needs.size-budget.result }}"
+          test "${{ needs.dco.result }}" = "success"
+          test "${{ needs.pr-title.result }}" = "success"
+          test "${{ needs.size-budget.result }}" = "success"

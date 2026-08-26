@@ -1,0 +1,76 @@
+{
+  "name": "@zomarit/stamity",
+  "version": "1.0.0",
+  "description": "Generates a tool-agnostic agentic coding setup — charter, commands, agents, skills, rules, hooks, MCP wiring — for Claude Code, Cursor, GitHub Copilot and Codex from one canonical source.",
+  "keywords": [
+    "agentic",
+    "ai-coding",
+    "claude-code",
+    "cursor",
+    "copilot",
+    "codex",
+    "agents",
+    "cli",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "author": "masatovic.dev",
+  "homepage": "https://github.com/zomarit/stamity#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zomarit/stamity.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zomarit/stamity/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "bin": {
+    "stamity": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown --config-loader native",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint && eslint .",
+    "test": "vitest run",
+    "knip": "knip",
+    "gate": "node scripts/leak-gate.mjs",
+    "check": "npm run gate && npm run typecheck && npm run lint && npm run test && npm run build && npm run knip"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "p-limit": "^7.3.1",
+    "proper-lockfile": "^4.1.2",
+    "semver": "^7.8.5",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.2.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/semver": "^7.8.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.8.1",
+    "fast-check": "^4.9.0",
+    "globals": "^17.11.0",
+    "knip": "^6.32.2",
+    "memfs": "^4.68.1",
+    "oxlint": "1.80.0",
+    "tsdown": "^0.22.14",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

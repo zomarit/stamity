@@ -1,0 +1,574 @@
+# Release — the only path that publishes, split into a job that runs code and a job that holds
+# the credential.
+#
+# THE SPLIT. `gates` runs every third-party binary in the release path (the build, the suite, the
+# leak gate, the packed-artifact smoke) on the exact shipping commit, and holds NO OIDC token.
+# `publish` holds the npm trusted-publishing token and runs only npm, the GitHub CLI and three SHA-pinned actions
+# against a tarball whose SHA-256 it verifies against a job OUTPUT — a channel separate from the
+# artifact it verifies, because a digest carried inside the artifact it attests is circular.
+# A compromised devDependency therefore cannot mint a publish credential: the job it runs in
+# does not have one.
+#
+# THE REHEARSAL. `workflow_dispatch` takes a `dry_run` input that DEFAULTS TO TRUE. A dispatch
+# that leaves it alone runs every gate, packs the tarball, generates the SBOM and prints what it
+# would have published — and cannot publish. Three independent things enforce that, so no single
+# edit re-opens it:
+#   1. `publish` runs only on a `v*` tag push, or on a dispatch that set `dry_run` to literally
+#      false. An absent or empty input matches neither arm — see the condition on the job.
+#   2. `publish` re-asserts the same fact as its first step and fails closed.
+#   3. `npm publish` appears in exactly one job in this repository, and it is that one.
+#
+# THE DISPATCH PUBLISH ARM. A dispatch with `dry_run` set to false IS a real release, so it is
+# held to the same proofs as a tag push rather than trusted because a human clicked it: the
+# `gates` job requires the dispatched ref to be a `v*` TAG whose name equals the version
+# package.json declares, and requires that commit to be reachable from origin/main. Both run
+# before the pack step, so a dispatch from a branch — or from a tag naming another version —
+# fails this workflow before anything irreversible happens. A dry run skips those proofs because
+# it publishes nothing, and prints which ones it skipped and why rather than going quiet.
+# test/ci/workflow.test.ts evaluates both job conditions against every trigger shape and runs the
+# proof script itself against a scratch repository.
+#
+# Actions are pinned to full commit SHAs with a trailing comment naming the EXACT version the SHA
+# resolves to. Pins resolved 2026-08-26 with:
+#   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run every gate and pack the tarball without publishing'
+        type: boolean
+        default: true
+
+# Least privilege at workflow scope: `gates` inherits contents: read and nothing more. The publish
+# job elevates itself. Holding id-token off the workflow scope is what keeps the trusted-publishing
+# credential out of every job that runs third-party build code.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel a release mid-flight: `npm publish` is not reversible on a whim (npm blocks
+  # unpublish after 72 hours), so a half-cancelled release is worse than a queued one.
+  cancel-in-progress: false
+
+jobs:
+  # ── Job 1: gates + pack. No id-token, no publish credential. ────────────────
+  gates:
+    name: gates and pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      package_name: ${{ steps.resolve.outputs.package_name }}
+      tarball: ${{ steps.pack.outputs.tarball }}
+      tarball_sha256: ${{ steps.pack.outputs.tarball_sha256 }}
+      sbom_present: ${{ steps.sbom.outputs.sbom_present }}
+
+    steps:
+      # First step, before anything downloads or executes. `egress-policy: block` fails the job
+      # closed on any destination not listed below, which is the property that makes the rest of
+      # this job's third-party code safe to run: it can be compromised and still cannot phone
+      # anywhere. `disable-sudo` removes the runner's privilege-escalation path.
+      #
+      # Every entry maps to a step's egress; a missing entry fails the job closed rather than
+      # leaking. This job holds no token, so the OIDC and Sigstore hosts the publish job needs
+      # are deliberately absent here — they are not reachable from this job and must not be.
+      #   api.github.com, github.com    — the depth-0 checkout and the setup-node manifest
+      #   nodejs.org                    — the Node download setup-node performs
+      #   objects.githubusercontent.com — GitHub's object and manifest CDN
+      #   registry.npmjs.org            — npm ci, and the tarball smoke's consumer install
+      #   results-receiver.actions.githubusercontent.com,
+      #   *.blob.core.windows.net       — actions/upload-artifact's hand-off to the publish job
+      #
+      # On the first release run, compare this list against the harden-runner run insights
+      # (Recommended Policy) and narrow the blob wildcard to the observed subdomain if it proves
+      # broader than needed.
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: block
+          disable-sudo: true
+          allowed-endpoints: >
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            registry.npmjs.org:443
+            results-receiver.actions.githubusercontent.com:443
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history: the ancestry probe below runs `git merge-base --is-ancestor` against
+          # origin/main, and a depth-1 checkout has no main ref to resolve.
+          fetch-depth: 0
+
+      # Three proofs, answered before anything irreversible happens, on EVERY run that can
+      # publish — a `v*` tag push AND a dispatch that set `dry_run` to false:
+      #   1. the ref is a `v*` TAG;
+      #   2. the tag names the version package.json declares;
+      #   3. the tagged commit is reachable from origin/main.
+      # A `v*` tag pushed from any branch triggers this workflow, and the dispatch form offers
+      # every branch and tag in the repository. Without proof 3 a release could ship a commit
+      # that never reached `main`; without proof 2 the published version and the tag would
+      # disagree; without proof 1 a real-publish dispatch could ship an arbitrary branch tip with
+      # neither of the other two even applicable. A dispatch from a branch cannot satisfy proof 1
+      # at all, and that is the intent: a real publish comes from a tag or it does not happen.
+      #
+      # Which runs can publish is one fact with two spellings — the `publish` job's condition and
+      # the REQUIRE_PROOFS gate below — and they are written to admit exactly the same set. The
+      # lower-casing below is part of that: GitHub's `==` is case-insensitive on strings while
+      # `[ = ]` is not.
+      #
+      # Honesty boundary, because the guard lives inside the artifact it guards: a tag-triggered
+      # run executes the release.yml present AT THE TAGGED COMMIT. Someone with write access who
+      # tags a branch carrying a release.yml with this step deleted is not stopped by it. The
+      # durable closures are platform-side and are repository settings rather than file edits —
+      # a required reviewer on the `npm-publish` environment, a `v*` tag ruleset, and the
+      # job split in this file that keeps the token away from third-party code.
+      #
+      # On a DRY RUN the three proofs are skipped rather than waived, and the step prints which
+      # ones and why: a rehearsal publishes nothing, so there is nothing irreversible for them to
+      # gate, and the rehearsal has to stay runnable from a feature branch — which is where a
+      # release gets rehearsed, before any tag exists.
+      - name: Resolve version
+        id: resolve
+        env:
+          # Empty on a push, 'true' or 'false' on a dispatch. It reaches the shell through `env:`
+          # rather than a `${{ }}` interpolation in the body, like every other value in this file.
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          PKG_NAME="$(node -p "require('./package.json').name")"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+
+          DRY_RUN="$(printf '%s' "${DRY_RUN_INPUT:-}" | tr '[:upper:]' '[:lower:]')"
+
+          REQUIRE_PROOFS=false
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            REQUIRE_PROOFS=true
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$DRY_RUN" = "false" ]; then
+            REQUIRE_PROOFS=true
+          fi
+
+          if [ "$REQUIRE_PROOFS" = "true" ]; then
+            case "$GITHUB_REF" in
+              refs/tags/v*) ;;
+              *)
+                echo "::error::A run that can publish must come from a v* tag, and this one is on $GITHUB_REF. Push the tag, or dispatch from the tag itself. A dispatch from a branch is a rehearsal: leave dry_run true."
+                exit 1
+                ;;
+            esac
+
+            TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+            TAG_SHA="$(git rev-list -n 1 "$GITHUB_REF")"
+            echo "Tag $GITHUB_REF -> commit $TAG_SHA"
+
+            # Resolved from the remote-tracking ref the depth-0 checkout already fetched, not
+            # from a fresh `git fetch`: `persist-credentials: false` strips the auth header after
+            # checkout, so a follow-up fetch has no credential to authenticate with and must not
+            # be what this proof depends on. If the ref is missing, the checkout configuration
+            # changed under this step — say that rather than skipping the ancestry proof.
+            if ! git rev-parse --verify --quiet refs/remotes/origin/main >/dev/null; then
+              echo "::error::refs/remotes/origin/main is not present. The Checkout step must keep fetch-depth: 0, which fetches every branch into refs/remotes/origin/*. Refusing to release without the ancestry proof."
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$TAG_SHA" refs/remotes/origin/main; then
+              echo "::error::Tagged commit $TAG_SHA is not an ancestor of origin/main. Refusing to release."
+              exit 1
+            fi
+            echo "Tag ancestry verified: $TAG_SHA is reachable from origin/main"
+
+            if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+              echo "::error::Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)"
+              exit 1
+            fi
+            VERSION="$TAG_VERSION"
+            echo "Version validated against the tag: $VERSION"
+          else
+            VERSION="$PKG_VERSION"
+            echo "::notice title=Release rehearsal::Rehearsal on $GITHUB_REF. Nothing is published, so the three proofs a real run must pass were SKIPPED, not waived: (1) the ref is a v* tag; (2) the tag name equals v$PKG_VERSION, the version package.json declares; (3) the tagged commit is an ancestor of origin/main. A dispatch with dry_run set to false runs all three here and fails this job before the pack step if any does not hold."
+            echo "Rehearsal — proofs skipped, because this run publishes nothing:"
+            echo "  1. ref is a v* tag                          — this run is on $GITHUB_REF"
+            echo "  2. tag name equals the declared version     — would have to be v$PKG_VERSION"
+            echo "  3. tagged commit is an ancestor of origin/main"
+            echo "Version from package.json: $VERSION"
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "package_name=$PKG_NAME"
+          } >> "$GITHUB_OUTPUT"
+
+      # `cache: npm` is deliberately absent. Actions caches are writable from any branch, so
+      # restoring one into the environment that installs, builds and packs the shipped tarball
+      # would hand a cross-branch write a path into the release artifact. The ~20 seconds are
+      # not worth it here; ci.yml keeps the cache because nothing it produces ships.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      # The env var takes precedence over .npmrc in npm's config order, so the lifecycle-script
+      # deny holds even if a transitive Git dependency rewrites the project rc mid-install.
+      - name: Install
+        env:
+          NPM_CONFIG_IGNORE_SCRIPTS: 'true'
+        run: npm ci
+
+      - name: Verify lockfile is in sync
+        run: git diff --exit-code package-lock.json
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Leak gate
+        run: npm run gate
+
+      - name: Dogfood check
+        run: node dist/cli.js check
+
+      # The published shape, packed and installed into a project that is not this one. This is
+      # also the only place the leak gate sees the built payload: `dist/` is a skipped build
+      # directory in a repository scan and is the entire package in a publish.
+      - name: Tarball smoke (publish shape)
+        run: node scripts/tarball-smoke.mjs
+
+      # Pack the exact bytes the publish job will ship, and record their digest on the job-output
+      # channel. The publish job compares against that output, never against a file riding inside
+      # the artifact it is verifying.
+      - name: Pack tarball
+        id: pack
+        run: |
+          set -euo pipefail
+          TARBALL="$(npm pack --json --pack-destination . | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s)[0].filename))')"
+          test -f "$TARBALL"
+          SHA="$(sha256sum "$TARBALL" | awk '{print $1}')"
+          {
+            echo "tarball=$TARBALL"
+            echo "tarball_sha256=$SHA"
+          } >> "$GITHUB_OUTPUT"
+          echo "Packed: $TARBALL ($(wc -c < "$TARBALL") bytes)"
+          echo "SHA-256: $SHA"
+
+      # A CycloneDX component inventory of what actually ships. `--package-lock-only` reads the
+      # lockfile rather than the installed tree, and `--omit dev` scopes the document to the
+      # published dependency set — the same scope as the publish itself.
+      #
+      # Best-effort, and the file says which half of that is which: the SBOM is a FLOOR (a
+      # release should carry one) but it is generated by a toolchain feature that can change
+      # shape between npm releases, so a failure here warns and records `sbom_present=false`
+      # rather than failing the release closed. A missing SBOM is visible on the run and in the
+      # release body; it never silently downgrades to green.
+      - name: Generate SBOM (CycloneDX)
+        id: sbom
+        run: |
+          set -uo pipefail
+          if npm sbom --sbom-format cyclonedx --package-lock-only --omit dev > sbom.cdx.json 2> sbom.err; then
+            echo "sbom_present=true" >> "$GITHUB_OUTPUT"
+            echo "SBOM generated: $(wc -c < sbom.cdx.json) bytes"
+          else
+            rm -f sbom.cdx.json
+            echo "sbom_present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=SBOM not generated::npm sbom failed; this release will carry no component inventory. Output follows."
+            cat sbom.err || true
+          fi
+          rm -f sbom.err
+
+      # A deterministic release body, written here so the publish job needs no checkout and no
+      # generator. There is no CHANGELOG.md in this tree yet; when there is one, extract its
+      # section for this version HERE — ahead of the irreversible publish — rather than after it,
+      # so a missing section cannot leave npm published and the GitHub release never created.
+      #
+      # Every value reaches the shell through `env:` rather than a `${{ }}` interpolation inside
+      # the script body. The interpolated form substitutes text BEFORE the shell parses it, so a
+      # value carrying a quote or a backtick would be parsed as script — and these values come
+      # from package.json and from a pack step, which is close enough to attacker-influenced to
+      # be worth not doing.
+      - name: Compose release notes
+        env:
+          PACKAGE_NAME: ${{ steps.resolve.outputs.package_name }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+          TARBALL_SHA256: ${{ steps.pack.outputs.tarball_sha256 }}
+          SBOM_PRESENT: ${{ steps.sbom.outputs.sbom_present }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## $PACKAGE_NAME v$VERSION"
+            echo ""
+            echo "Built from \`$GITHUB_SHA\` by \`.github/workflows/release.yml\`."
+            echo ""
+            echo "| Artifact | SHA-256 |"
+            echo "| --- | --- |"
+            echo "| \`$TARBALL\` | \`$TARBALL_SHA256\` |"
+            echo ""
+            if [ "$SBOM_PRESENT" = "true" ]; then
+              echo "A CycloneDX SBOM (\`sbom.cdx.json\`) is attached to this release."
+            else
+              echo "**No SBOM is attached to this release** — generation failed during the run."
+            fi
+            echo ""
+            echo "Published to npm with provenance through GitHub OIDC trusted publishing."
+          } > release-notes.md
+          cat release-notes.md
+
+      # The privilege boundary. Nothing token-capable produced any of these files, and the
+      # publish job verifies the tarball's digest against this job's output before it ships it.
+      # One day of retention: the artifact only has to survive this run's hand-off.
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-dist
+          path: |
+            *.tgz
+            sbom.cdx.json
+            release-notes.md
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Job 2: publish. The only job with a credential, and the only job that ships. ──
+  #
+  # The condition, spelled out because it is the safety property of this file:
+  #   - a `v*` TAG push publishes (`inputs` is empty on a push, so no input is consulted);
+  #   - a dispatch publishes ONLY when dry_run was set to literally false;
+  #   - every other shape — the default dispatch, a dispatch whose input went missing, a branch
+  #     push, a schedule — matches neither arm.
+  #
+  # Why `format('{0}', inputs.dry_run) == 'false'` rather than `inputs.dry_run == false`. GitHub
+  # casts operands of differing types to numbers before comparing, and null, the empty string and
+  # false all cast to 0 — so `inputs.dry_run == false` is TRUE for an input that is ABSENT or
+  # empty, not only for one a human set to false. That is fail-OPEN in the one place this file
+  # cannot afford it. `format()` renders the value as a string first, so the comparison reads
+  # 'false' against 'false': an absent input renders as the empty string and matches nothing.
+  # (docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions, accessed
+  # 2026-08-26.) The input is declared `type: boolean` with `default: true` above, so the
+  # fail-open shape is unreachable today — this is the spelling that keeps it unreachable if that
+  # declaration is ever edited.
+  #
+  # The dispatch arm keys on dry_run alone, and does NOT re-test the ref here. The ref proofs
+  # belong to the `gates` job, which this job needs: a dispatch from a branch reaches this
+  # condition and never reaches this job, because gates failed before the pack step.
+  publish:
+    name: publish
+    needs: gates
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) == 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The single approval point. Configure required reviewers and a `v*` deployment tag policy on
+    # this environment in repository settings — that is the platform-side control the in-file
+    # ancestry probe cannot be.
+    environment: npm-publish
+    # The OIDC and release-write grants live here and nowhere else. No `attestations` grant: this
+    # workflow signs provenance through npm trusted publishing and does not run a separate
+    # attestation action.
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      # Belt and braces on the job condition above. If a future edit widens the `if:`, this fails
+      # the job before the credential is used for anything.
+      #
+      # It refuses every dispatch that is not a confirmed real run — dry_run true, and equally
+      # dry_run absent or empty — rather than only the literal `true` case. The narrower spelling
+      # would have let exactly the fail-open shape the job condition guards against walk past the
+      # backstop that exists to catch it.
+      #
+      # Deliberately ahead of the runner hardening below, which is otherwise the first step
+      # everywhere in this file: this step opens no socket and reads no file, so there is nothing
+      # for the egress policy to protect, and stopping a run that should not have started is worth
+      # more than the seconds the monitor would take to install first.
+      - name: Refuse a dispatch that is not a confirmed real run
+        if: github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) != 'false'
+        run: |
+          echo "::error::This dispatch did not set dry_run to false, and the publish job started anyway. The job condition has drifted. Failing closed."
+          exit 1
+
+      # Same fail-closed egress policy, on the job that holds the highest-value credential in the
+      # repository. Allowlist is the publish-capability subset plus the artifact download:
+      #   api.github.com, github.com    — setup-node manifest, `gh release create`
+      #   nodejs.org                    — the Node download setup-node performs
+      #   objects.githubusercontent.com — GitHub's object and manifest CDN
+      #   registry.npmjs.org            — the global npm upgrade and `npm publish`
+      #   token.actions.githubusercontent.com — the GitHub OIDC token (id-token: write)
+      #   fulcio.sigstore.dev, rekor.sigstore.dev, tuf-repo-cdn.sigstore.dev
+      #                                 — the provenance attestation npm publishes
+      #   uploads.github.com            — release asset upload
+      #   results-receiver.actions.githubusercontent.com,
+      #   *.blob.core.windows.net       — actions/download-artifact
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: block
+          disable-sudo: true
+          allowed-endpoints: >
+            *.blob.core.windows.net:443
+            api.github.com:443
+            fulcio.sigstore.dev:443
+            github.com:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            registry.npmjs.org:443
+            rekor.sigstore.dev:443
+            results-receiver.actions.githubusercontent.com:443
+            token.actions.githubusercontent.com:443
+            tuf-repo-cdn.sigstore.dev:443
+            uploads.github.com:443
+
+      # No `cache: npm` here either, and this job additionally holds the OIDC token.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm 11.5.1 or newer. The runner's bundled npm tracks the Node
+      # image and can lag, so upgrade and then ASSERT the floor rather than assuming the upgrade
+      # produced a version that clears it.
+      - name: Upgrade npm for trusted publishing
+        run: |
+          set -euo pipefail
+          npm install -g npm@12.0.2 # pinned exact (2026-08-26); bump deliberately, never float
+          NPM_VERSION="$(npm --version)"
+          MIN='11.5.1'
+          if [ "$(printf '%s\n%s\n' "$MIN" "$NPM_VERSION" | sort -V | head -1)" != "$MIN" ]; then
+            echo "::error::npm $NPM_VERSION is below the $MIN floor that OIDC trusted publishing requires."
+            exit 1
+          fi
+          echo "npm $NPM_VERSION clears the $MIN trusted-publishing floor"
+
+      # No checkout in this job. npm builds provenance from the Actions OIDC context and the run
+      # environment, not from a local .git tree, so the publish stays isolated from the source
+      # the gates ran against.
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-dist
+
+      # The expected digest comes from the gates job's output, a channel that never traveled
+      # inside the artifact under verification. An empty expected value fails closed too: a
+      # missing output must not read as a match.
+      - name: Verify tarball digest
+        env:
+          EXPECTED_SHA: ${{ needs.gates.outputs.tarball_sha256 }}
+          EXPECTED_TARBALL: ${{ needs.gates.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          TARBALL="$EXPECTED_TARBALL"
+          if [ -z "$TARBALL" ] || [ ! -f "$TARBALL" ]; then
+            echo "::error::The gates job packed '$EXPECTED_TARBALL' but the downloaded artifact does not carry it. Refusing to publish."
+            exit 1
+          fi
+          ACTUAL_SHA="$(sha256sum "$TARBALL" | awk '{print $1}')"
+          if [ -z "$EXPECTED_SHA" ] || [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::Tarball digest mismatch: gates output '$EXPECTED_SHA' vs downloaded '$ACTUAL_SHA'. Refusing to publish."
+            exit 1
+          fi
+          echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
+          echo "Digest verified against the gates job output: $TARBALL ($ACTUAL_SHA)"
+
+      # No token env, deliberately. Authentication is npm trusted publishing over the OIDC token
+      # this job's `id-token: write` grant mints, which is why no npm credential is stored in this
+      # repository at all. That requires a ONE-TIME maintainer setup on npmjs.com: on the package
+      # settings page, add a trusted publisher naming this repository, this workflow file
+      # (`.github/workflows/release.yml`) and the `npm-publish` environment. Until that entry
+      # exists the publish fails with an authentication error — which is the correct failure, not
+      # a reason to add a token.
+      #
+      # `--provenance` is explicit as a fallback for a local emergency publish; the trusted
+      # publisher entry is the attestation mechanism of record.
+      - name: Publish to npm with provenance
+        run: npm publish "./$TARBALL" --provenance --access public
+
+      # The tarball and the SBOM ride the release so a consumer can fetch the exact bytes and the
+      # component inventory without re-running anything. `gh` is preinstalled on the runner, so
+      # this needs no third-party action and no extra pin.
+      #
+      # `--verify-tag` and `--target` together close the mis-tagging gap. Without them
+      # `gh release create` CREATES a missing tag, and it creates it on the default branch's head
+      # — `gh release create --help`: "Target branch or full commit SHA (default [main branch])"
+      # — so a release could carry a `v$VERSION` tag pointing at whatever `main` happened to be
+      # when this step ran, while the tarball above came from the commit that was gated. Both
+      # publish arms now require a `v*` tag that already exists, so `--verify-tag` is the right
+      # posture: abort rather than invent one. `--target` names the gated commit for the case the
+      # API would otherwise pick a default.
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.gates.outputs.version }}
+        run: |
+          set -euo pipefail
+          ASSETS="$TARBALL"
+          if [ -f sbom.cdx.json ]; then
+            ASSETS="$ASSETS sbom.cdx.json"
+          fi
+          # shellcheck disable=SC2086
+          gh release create "v$VERSION" $ASSETS \
+            --title "v$VERSION" \
+            --notes-file release-notes.md \
+            --target "$GITHUB_SHA" \
+            --verify-tag
+
+  # ── Job 3: the rehearsal report. Runs instead of `publish`, never beside it. ──
+  # A dispatch is only useful if it tells you what a real run would have done, so this prints the
+  # exact artifact identity the publish job would have shipped.
+  #
+  # The condition is the exact complement of `publish`'s dispatch arm — `!= 'false'` against its
+  # `== 'false'` — so on a dispatch exactly one of the two jobs runs, whatever the input is. The
+  # earlier `inputs.dry_run == true` spelling left a hole between them: a dispatch whose input
+  # went missing published nothing (correct) and reported nothing (silent), which is the one
+  # outcome a rehearsal exists to prevent.
+  dry-run-summary:
+    name: dry run summary
+    needs: gates
+    if: github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Report what a real run would publish
+        env:
+          PACKAGE_NAME: ${{ needs.gates.outputs.package_name }}
+          VERSION: ${{ needs.gates.outputs.version }}
+          TARBALL: ${{ needs.gates.outputs.tarball }}
+          TARBALL_SHA256: ${{ needs.gates.outputs.tarball_sha256 }}
+          SBOM_PRESENT: ${{ needs.gates.outputs.sbom_present }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Dry run — nothing was published"
+            echo ""
+            echo "Every gate ran on this commit and the tarball was packed. A real run would have shipped:"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| package | \`$PACKAGE_NAME\` |"
+            echo "| version | \`$VERSION\` |"
+            echo "| tarball | \`$TARBALL\` |"
+            echo "| SHA-256 | \`$TARBALL_SHA256\` |"
+            echo "| SBOM attached | \`$SBOM_PRESENT\` |"
+            echo "| npm | \`publish --provenance --access public\` over OIDC trusted publishing |"
+            echo "| GitHub release | \`v$VERSION\`, with the tarball and the SBOM attached |"
+            echo ""
+            echo "The \`Resolve version\` step in the gates job lists the three release proofs this rehearsal skipped, and why."
+            echo ""
+            echo "To publish for real: push the tag \`v$VERSION\`, or dispatch this workflow FROM that tag with \`dry_run\` set to false. A real-publish dispatch from a branch fails in the gates job."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Dry run complete: $PACKAGE_NAME@$VERSION ($TARBALL, sha256 $TARBALL_SHA256, sbom=$SBOM_PRESENT)"

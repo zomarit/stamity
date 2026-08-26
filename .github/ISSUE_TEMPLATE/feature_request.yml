@@ -1,0 +1,66 @@
+name: Feature request
+description: Propose a capability, a flag, or a change to what the engine generates
+title: "[Feature] "
+labels: ["type: feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One field here is required that most trackers leave optional: **success criteria**. A
+        proposal without a measurable outcome cannot be verified once it ships, so it cannot be
+        told apart from one that half-worked. State the observable result and the request is
+        reviewable; leave it out and it is a wish.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What you were trying to do and what stopped you. Describe the situation, not the
+        solution — the proposal goes in the next field.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: >-
+        What you want the engine, the CLI or the corpus to do instead. Name the command, flag,
+        adapter or content class it would land in if you know.
+    validations:
+      required: true
+
+  - type: textarea
+    id: success-criteria
+    attributes:
+      label: Success criteria
+      description: >-
+        How a reviewer would know this works, stated as something observable: a command that
+        exits 0, a file that appears with named content, a prompt that stops being asked, a
+        number that moves. "It feels better" is not checkable; "`stamity check` exits 0 on a
+        repository with no lockfile" is.
+      placeholder: |
+        - Running `stamity <command> --<flag>` in a repository with X produces Y
+        - The generated `<path>` contains Z
+        - A run that previously failed with <exit code> now exits 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: >-
+        What you tried or rejected first, including doing nothing, a pack, or a local override.
+        A proposal that survives its own alternatives is a stronger one.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, prior art in other tools, the repository shape this matters for.
+    validations:
+      required: false

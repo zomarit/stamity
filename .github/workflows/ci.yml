@@ -1,0 +1,337 @@
+# CI — the merge-blocking gate for this repository.
+#
+# Actions are pinned to full commit SHAs with a trailing comment naming the EXACT version the
+# SHA resolves to. Pins resolved 2026-08-26 with:
+#   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+# Re-run the same command against the new tag when bumping a pin, and rewrite the comment to the
+# precise version — a coarse `# v4` comment that survives a major bump lies about the pinned code.
+#
+# Step order, the self-consistency gate, the aggregator, the per-leg step split and the pin policy
+# are drift-guarded by test/ci/workflow.test.ts — edit both together.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# LANE MAP — what runs, where it runs, and what it can block
+#
+# The rule this block exists to keep: a lane is named here or it does not exist, and a lane that
+# is NOT run is named too. An unnamed gap reads exactly like a decision, and a reader cannot tell
+# them apart.
+#
+# MERGE-BLOCKING (required through the `all-ci-checks` aggregator):
+#   - `check`, three legs. ubuntu on the declared engines floor (22.12.0) and on the LTS
+#     canonical (24), plus one windows leg on 24. Every leg installs, builds, runs the suite,
+#     re-proves the committed dogfood configs with the binary it just built, and runs the leak
+#     gate. The floor leg additionally packs and installs the tarball (`tarball-smoke`), because
+#     the published SHAPE is a different tree from the repository.
+#   - The aggregator itself. It is the ONE required status context THIS file exposes: the legs
+#     name themselves per leg, so a rule written against them binds names that rotate with the
+#     matrix.
+#   - `pr-checks` (.github/workflows/pr-checks.yml), on pull requests only, exposing a second
+#     required context `all-pr-checks`. It carries the three gates that can only be answered
+#     about a pull request — the DCO trailer on every commit, the conventional-commit title, and
+#     the dual dist size budget. They are not in this file because a job that is skipped on three
+#     of this workflow's four triggers would be a required check that reads as green.
+#
+# ADVISORY (reported, never required):
+#   - `supply-chain`: npm audit over declared dependencies, an OSV querybatch over every
+#     exact-pinned MCP catalog row, pin deprecation and staleness, and both currency dates.
+#   - `dependency-review` on pull requests: the incoming diff's new dependencies against the
+#     advisory database. Non-blocking for a reason named at the job.
+#
+# NOT RUN — and why:
+#   1. Secret scanning across HISTORY. The shape pass in `leak-gate` covers the working tree and,
+#      through `tarball-smoke`, the packed artifact. Scanning history needs a scanner allowlist
+#      for the placeholder credentials the corpus documents, which is a decision not yet made.
+#      GitHub push protection is a repository setting rather than a file edit and lands with it.
+#   2. Lockfile linting. It needs a registry policy first — which registries a resolved URL may
+#      point at, and what an integrity-less entry means. Without that policy the lint has no
+#      pass condition, so it would be a lane that always passes.
+#   3. Code scanning (CodeQL) and OpenSSF Scorecard. Both are as much repository-settings
+#      decisions as workflow files: CodeQL needs a language and query-suite choice, and Scorecard
+#      grades the settings surface — branch protection, the required-context set, the tag ruleset
+#      — which no file in this directory can set. They land with the settings pass that owns
+#      those, and grading a configuration mid-write would produce a number nobody should act on.
+#   4. The eval harness. Named last because it is the one gap with downstream dependents already
+#      written against it: the `obsolete_when` triggers across the corpus have nothing that fires
+#      them, the per-unit size defaults are unmeasured estimates rather than observed
+#      distributions, and the headline quality metric has no instrument behind it. All three read
+#      as calibrated today and are not. The nightly headless lane (.github/workflows/nightly.yml)
+#      is where that harness will attach; it is wired and credential-gated, not yet implemented.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  # Weekly, so pin currency is a standing duty rather than a side effect of pushing.
+  schedule:
+    - cron: '17 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  # The event name is part of the group on purpose. With one group across every trigger, a Monday
+  # schedule run and a push to `main` cancelled each other — including the blocking gate — and
+  # left a commit on `main` carrying a CANCELLED check rather than a passing one. Superseding a
+  # run is only correct within one event stream, and a pull_request run must never cancel the
+  # push run for the same ref.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check (${{ matrix.label }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    # 30, not the 15 this job carried while it was ubuntu-only: the windows leg installs, builds
+    # and runs the whole suite on the slowest runner image in the matrix, and a ceiling that a
+    # healthy run brushes against is a flake generator rather than a hang detector.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Three legs, each earning its place. `label` names the leg in the job title; the boolean
+        # flags below are the per-leg step split, declared here rather than repeated as
+        # `matrix.os == ... && matrix.node == ...` on every conditional step.
+        include:
+          # The declared engines floor, pinned exactly, so a newer-than-floor API fails here
+          # rather than in a user's install. It carries the publish-shape gate because what that
+          # gate proves is a RUNTIME claim: the published artifact installs and runs on the
+          # oldest Node this package claims to support.
+          - os: ubuntu-latest
+            node: '22.12.0'
+            label: floor
+            coverage: true
+            tarball_smoke: true
+          # The LTS canonical, and the one leg every toolchain step runs on: tsdown declares
+          # ^22.18.0 and eslint ^22.13.0, both above the declared floor, so running those four
+          # steps on the floor leg buys no coverage and buys the risk of a patch release
+          # reddening `main` from a Node its vendor never claimed.
+          - os: ubuntu-latest
+            node: '24'
+            label: lts
+            coverage: true
+            toolchain: true
+          # One windows leg, on the LTS canonical. Path separators, the absence of POSIX file
+          # modes, and CRLF are the three things a POSIX-only matrix cannot see; the suite
+          # already carries `skipIf(process.platform === "win32")` guards for the mode- and
+          # symlink-dependent cases, so what runs here is the portable majority of the suite
+          # plus the two runtime gates (`check`, the leak gate) that matter most to a Windows
+          # user.
+          - os: windows-latest
+            node: '24'
+            label: windows
+
+    steps:
+      # BEFORE checkout, and only on windows. Git's default `core.autocrlf=true` on Windows
+      # rewrites every LF to CRLF as it writes the working tree, and this repository has no
+      # .gitattributes to override it. Those rewritten bytes would break the two gates that
+      # compare bytes: `check` diffs regenerated output against the committed files, and the
+      # golden suites compare emitted content to fixtures on disk. The failure would be a
+      # line-ending artifact reported as a content drift — a false red that teaches the reader
+      # to distrust the gate. A step may precede `actions/checkout`; `git config --global`
+      # needs no repository.
+      - name: Pin line endings before checkout
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node ${{ matrix.node }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # `.npmrc` sets ignore-scripts=true and npm reads it from the working directory, so no
+      # dependency lifecycle script runs on any leg. Without it every transitive package's
+      # install hooks execute on the runner before a single gate has looked at anything.
+      - name: Install
+        run: npm ci
+
+      # Typecheck, Lint, Self-consistency and knip answer questions that do not depend on the
+      # Node version or the operating system. One leg each.
+      - name: Typecheck
+        if: matrix.toolchain
+        run: npm run typecheck
+
+      - name: Lint
+        if: matrix.toolchain
+        run: npm run lint
+
+      # Build precedes Test so the dist journey (test/cli/dogfoodDist.e2e.test.ts)
+      # always runs against the fresh build here and its local self-build fallback
+      # never fires in CI.
+      - name: Build
+        run: npm run build
+
+      # Coverage runs on the legs whose floors it can meet. vitest.config.ts holds the merge and
+      # emit core at 100% and those floors are BLOCKING; the windows leg skips the mode- and
+      # symlink-dependent cases under test/merge/ and test/mcp/ by platform guard, so a coverage
+      # run there would report a shortfall that is a property of the platform, not of the change.
+      # The floors are unchanged and still gate — on both ubuntu legs. Windows runs the same
+      # suite without the coverage instrument.
+      - name: Test with coverage floors
+        if: matrix.coverage
+        run: npm test -- --coverage
+
+      - name: Test
+        if: ${{ !matrix.coverage }}
+        run: npm test
+
+      # Every generated artifact class, regenerated and byte-diffed: the capability
+      # matrix, the CLI/config/reference/llms pages, and the catalog pins (verified
+      # in --check mode — this step writes nothing but regenerated tracked pages).
+      # The generators run on Node's own type stripping and need no build.
+      # `git diff --exit-code` ignores untracked files by design, so gitignored
+      # output (coverage/, dist/) cannot trip the gate — do not swap in
+      # `git status --porcelain`, which would.
+      - name: Self-consistency (generate-and-diff)
+        if: matrix.toolchain
+        run: >-
+          node scripts/generate-capability-matrix.mjs &&
+          node scripts/generate-docs.mjs &&
+          node scripts/generate-pack-manifests.mjs --check &&
+          git diff --exit-code
+
+      # The committed self-configs — AGENTS.md and the generated client trees — re-proven
+      # drift-clean by the binary this job just built. The living integration test. `check` reads
+      # the committed manifest at the repository root and needs no branch, so it runs on CI's
+      # detached HEAD as-is. Every leg: this is runtime verification of the shipped binary, which
+      # is exactly what the floor and windows legs exist to prove.
+      - name: Dogfood check
+        run: node dist/cli.js check
+
+      - name: Leak gate
+        run: npm run gate
+
+      # Engine floor calls for knip in CI, not only as a local script.
+      - name: Unused code and dependencies
+        if: matrix.toolchain
+        run: npm run knip
+
+      # The published SHAPE, not the repository's: pack the tarball, install it into a
+      # throwaway project, run the leak gate over the packed tree (the one tree the
+      # repository scan cannot see, because `dist/` is a skipped build directory here and is
+      # the whole payload there), then init + check. Every other step in this job resolves the
+      # corpus through `<packageRoot>/content` (the source checkout), which exists here and
+      # never exists for a user — so this is the only gate that can catch a build that forgot
+      # to stage `dist/content` and would publish a package whose first command exits
+      # CONFIG_ERROR.
+      - name: Tarball smoke (publish shape)
+        if: matrix.tarball_smoke
+        run: node scripts/tarball-smoke.mjs
+
+  # Currency, not integrity. The exact pins in the MCP catalog guarantee the bytes never
+  # change, which is precisely why something has to go and ask whether those bytes are still
+  # a good idea — a pinned version stays byte-identical on the day an advisory lands against
+  # it. Advisory-only and separated from `check` so a published CVE informs the maintainer
+  # without reddening a push to `main`, and scheduled so the answer does not depend on
+  # someone happening to push.
+  supply-chain:
+    name: supply-chain currency (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Published advisories against every exact-pinned catalog row (OSV), plus whether each
+      # pinned version is still published, has been deprecated upstream, or has fallen behind,
+      # plus whether either currency date has aged past its window. Findings are emitted as
+      # workflow annotations and into the step summary, so a non-blocking lane still reports
+      # somewhere a maintainer looks.
+      - name: Advisory and pin-currency check
+        run: node scripts/advisory-check.mjs
+
+  # What the incoming diff ADDS, which no other lane looks at: `supply-chain` audits the
+  # dependencies already declared on the branch it runs from, so a pull request that introduces a
+  # vulnerable package is only caught after it has landed. This job reads the diff itself.
+  #
+  # pull_request only — there is no diff to review on a push, a dispatch or a schedule.
+  #
+  # Advisory, and honestly so: the Dependency Review API this action calls is available on public
+  # repositories and on private repositories with GitHub Advanced Security enabled. On a private
+  # repository without it the call returns 403, which is a fact about the plan and not about the
+  # diff. `continue-on-error` keeps that fact off the merge path, and the follow-up step says out
+  # loud which of the two happened, so a skipped review is never mistaken for a clean one.
+  dependency-review:
+    name: dependency review (advisory)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Dependency review
+        id: review
+        continue-on-error: true
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+      # `continue-on-error` flips the step's CONCLUSION to success while leaving its OUTCOME at
+      # the real value, so this guard cannot fire on a genuine pass.
+      - name: Report review outcome
+        if: steps.review.outcome == 'failure'
+        run: |
+          echo "::warning title=Dependency review::The dependency review step did not pass. Either this diff adds a dependency with a high-severity advisory, or the Dependency Review API is unavailable for this repository (private without Advanced Security). Open the step log — the two look nothing alike there — before merging."
+          {
+            echo "### Dependency review did not pass"
+            echo ""
+            echo "Advisory lane: it does not block the merge."
+            echo "Read the step log to tell an advisory finding from a 403 on the Dependency Review API."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # One stable context name to require, whatever the matrix does.
+  #
+  # The jobs above name themselves per leg (`check (floor, node 22.12.0)`), so a required-status
+  # rule written against them binds context names that rotate the moment the matrix changes.
+  # This job's name does not move. It fails when anything it needs failed OR was cancelled —
+  # `needs` alone treats a cancelled dependency as "did not succeed" and would otherwise let a
+  # skipped aggregator read as green.
+  #
+  # `dependency-review` is deliberately NOT in `needs`: it is advisory, and it does not run at
+  # all outside a pull request, so requiring it would make every push wait on a job that will
+  # never report.
+  all-ci-checks:
+    name: all-ci-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    if: always()
+    needs: [check, supply-chain]
+    steps:
+      - name: Report
+        run: |
+          echo "check=${{ needs.check.result }} supply-chain=${{ needs.supply-chain.result }}"
+          # The advisory lane is non-blocking by design: it is reported, never required.
+          test "${{ needs.check.result }}" = "success"

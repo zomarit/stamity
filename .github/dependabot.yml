@@ -1,0 +1,51 @@
+# Dependabot — weekly update PRs for the two ecosystems this repository actually has.
+#
+# `directory` scoping is EXACT, not recursive: an entry for "/" covers the root manifest and
+# nothing else. There is one npm manifest in this tree today, so there is one npm entry. When a
+# second manifest lands (a docs site with its own package.json is the usual one), it needs its own
+# entry here or it silently receives no update PRs at all — which is how an advisory sits open for
+# a month while the dashboard looks clean.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Two grouped PRs a week instead of one per package. The split is along the line that matters
+    # when reviewing: a production bump changes what ships to users, a development bump changes
+    # only what gates it, and the two deserve different scrutiny even when the diff looks alike.
+    groups:
+      production:
+        dependency-type: production
+      development:
+        dependency-type: development
+    # Deterministic, rather than inferred from commit history. The repository uses Conventional
+    # Commits, and dependabot's auto-detection reads recent commits to guess the prefix — a guess
+    # that changes as history changes.
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+
+  # GitHub Actions are SHA-pinned with a trailing comment naming the exact version the SHA
+  # resolves to. THE LESSON THIS COMMENT EXISTS TO CARRY: dependabot rewrites the digest on a bump
+  # and mirrors the existing comment's GRANULARITY verbatim. A coarse `# v4` comment that gets
+  # bumped across a major stays `# v4` — the pin is now v6 and the comment says v4, so the file
+  # lies about the code it pins, and the lie is in the one place a reviewer looks to avoid reading
+  # a 40-character hex string. There is no dependabot config key that forces a precise comment.
+  #
+  # So: write every pin comment as the full `# vMAJOR.MINOR.PATCH`, and when merging an Actions
+  # PR, rewrite the comment to the precise version the new SHA resolves to. The backstop is
+  # test/ci/workflow.test.ts, which fails on a `uses:` that is not SHA-pinned or whose comment is
+  # not a full three-part version. That test cannot verify the SHA actually resolves to the
+  # version named — it runs offline — so the shape is enforced and the truth of the mapping is on
+  # the person merging. Re-resolve with:
+  #   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope

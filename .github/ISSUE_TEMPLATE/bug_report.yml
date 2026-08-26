@@ -1,0 +1,102 @@
+name: Bug report
+description: Something the CLI or a generated setup does wrong
+title: "[Bug] "
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every required field below is required because a report missing it costs a round-trip
+        before anyone can reproduce anything. Filled in, the first reply is usually a diagnosis
+        rather than a question.
+
+        Suspected vulnerability? Do not file it here. Use the private advisory form linked on
+        the New Issue page, and read `SECURITY.md` for what is in scope.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: What went wrong, in a sentence or two.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        Numbered steps from a known starting state, plus the output you saw. A scratch
+        repository is the easiest starting state to describe — this engine writes into the
+        repository it is run in.
+      placeholder: |
+        1. Run `npx @zomarit/stamity init` in a fresh repository
+        2. Answer the prompts as: ...
+        3. Run `npx @zomarit/stamity check`
+        4. It prints:
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: The behaviour you were expecting, and what made you expect it.
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 15.4, Ubuntu 24.04, Windows 11
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      description: >-
+        Output of `node --version`. The published runtime floor is 22.12; below it the CLI is
+        unsupported and the report is closed as such.
+      placeholder: v22.12.0
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: >-
+        Output of `stamity --version`, or `npx @zomarit/stamity --version` if you have no
+        installed copy.
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: clients
+    attributes:
+      label: Clients configured
+      description: >-
+        Which coding clients the setup was generated for. Select every one that applies — the
+        adapters differ, and so do their bugs.
+      multiple: true
+      options:
+        - Claude Code
+        - Cursor
+        - GitHub Copilot
+        - Codex
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: >-
+        Logs, the generated file involved, a link to a repository that reproduces it. Redact
+        secrets and anything proprietary — this issue is public.
+    validations:
+      required: false

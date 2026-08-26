@@ -1,0 +1,198 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "import", "oxc"],
+  "env": {
+    "es2024": true,
+    "node": true
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+  "rules": {
+    "no-console": "off",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "no-var": "error",
+    "prefer-const": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/consistent-type-imports": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/index", "**/index.ts", "**/index.js"],
+                "message": "No internal barrels — import the concrete file"
+              },
+              {
+                "group": ["**/cli", "**/cli.ts", "**/cli.js", "**/cli/**"],
+                "message": "the engine never imports the CLI"
+              },
+              {
+                "group": ["**/composition", "**/composition/**"],
+                "message": "only the entrypoints may import the composition root"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/types/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/index", "**/index.ts", "**/index.js"],
+                "message": "No internal barrels — import the concrete file"
+              },
+              {
+                "group": ["**/cli", "**/cli.ts", "**/cli.js", "**/cli/**"],
+                "message": "the engine never imports the CLI"
+              },
+              {
+                "group": [
+                  "**/adapters/**",
+                  "**/composition/**",
+                  "**/config/**",
+                  "**/content/**",
+                  "**/denyscan/**",
+                  "**/detect/**",
+                  "**/emit/**",
+                  "**/guard/**",
+                  "**/handoffs/**",
+                  "**/hooks/**",
+                  "**/learnings/**",
+                  "**/manifest/**",
+                  "**/mcp/**",
+                  "**/merge/**",
+                  "**/migration/**",
+                  "**/pack/**",
+                  "**/resilience/**",
+                  "**/roster/**",
+                  "**/shared/**",
+                  "**/tools/**",
+                  "**/workspace/**"
+                ],
+                "message": "src/types is a leaf: it imports nothing internal"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/config/**", "src/shared/**", "src/denyscan/**", "src/roster/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/index", "**/index.ts", "**/index.js"],
+                "message": "No internal barrels — import the concrete file"
+              },
+              {
+                "group": ["**/cli", "**/cli.ts", "**/cli.js", "**/cli/**"],
+                "message": "the engine never imports the CLI"
+              },
+              {
+                "group": [
+                  "**/adapters/**",
+                  "**/composition/**",
+                  "**/config/**",
+                  "**/content/**",
+                  "**/denyscan/**",
+                  "**/detect/**",
+                  "**/emit/**",
+                  "**/guard/**",
+                  "**/handoffs/**",
+                  "**/hooks/**",
+                  "**/learnings/**",
+                  "**/manifest/**",
+                  "**/mcp/**",
+                  "**/merge/**",
+                  "**/migration/**",
+                  "**/pack/**",
+                  "**/resilience/**",
+                  "**/roster/**",
+                  "**/shared/**",
+                  "**/tools/**",
+                  "**/workspace/**"
+                ],
+                "message": "wave-1 kernel utilities may import only src/types"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/composition/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/index", "**/index.ts", "**/index.js"],
+                "message": "No internal barrels — import the concrete file"
+              },
+              {
+                "group": ["**/cli", "**/cli.ts", "**/cli.js", "**/cli/**"],
+                "message": "the engine never imports the CLI"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/cli/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/composition", "**/composition/**"],
+                "message": "only the entrypoints may import the composition root — take it from src/cli.ts"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/cli.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/index.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli", "**/cli.ts", "**/cli.js", "**/cli/**"],
+                "message": "the engine never imports the CLI"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "ignorePatterns": ["dist", "coverage", "node_modules", ".stamity"]
+}

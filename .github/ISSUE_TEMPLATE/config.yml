@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/zomarit/stamity#readme
+    about: >-
+      The README, and from it the generated CLI reference, configuration reference and client
+      capability matrix. Most usage questions are answered there before a form is needed.
+  - name: Report a security vulnerability (private)
+    url: https://github.com/zomarit/stamity/security/advisories/new
+    about: >-
+      A suspected vulnerability never goes in a public issue. This form is private between you
+      and the maintainer; SECURITY.md states what is in scope and what happens next.
