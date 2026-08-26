@@ -149,12 +149,13 @@ interface PackFixture {
  *
  * Fixture change with the wave-0 trust ladder (not a test weakening): the
  * previous fixture declared `signing: { method: "npm-provenance" }`, which
- * passed the old declaration-only gate. The ladder recognizes only "sigstore"
- * and ships a refusing not-yet-armed verifier, so a signed-AND-installable
- * pack cannot be constructed in tests. The default fixture is therefore
- * unsigned (tier pinned-unsigned) and install tests pass --allow-untrusted
- * explicitly, keeping every original install assertion intact while the real
- * tier resolution runs.
+ * passed the old declaration-only gate. The ladder recognizes only "sigstore",
+ * and constructing a signed-AND-installable pack now needs a real Sigstore
+ * bundle over the pack's aggregate content SHA — the armed verifier checks it
+ * against the live trust root, so no fixture in this suite can produce one. The
+ * default fixture is therefore unsigned (tier pinned-unsigned) and install
+ * tests pass --allow-untrusted explicitly, keeping every original install
+ * assertion intact while the real tier resolution runs.
  */
 async function seedPack(fixture: PackFixture = {}): Promise<Record<string, string>> {
   const project = getProject();
@@ -918,10 +919,41 @@ describe("add — trust gates", () => {
     expect(result.stdout).toContain("pinned-unsigned");
   });
 
-  it("refuses a declared signature this build cannot verify, even under the waiver", async () => {
+  it("refuses a sigstore claim that pins no signer, before any verifier runs", async () => {
+    // Without a pin the certificate policy is empty, so any Sigstore identity
+    // satisfies the claim — and the pack would resolve `publisher-signed`,
+    // print green, and install with nothing on the command line to show for it.
+    // Refused at manifest ingress, so the tier is never resolved.
     await initProject();
     await seedPack({
-      signing: { method: "sigstore", signer: "acme", bundlePath: "bundle.sigstore.json" },
+      signing: { method: "sigstore", bundlePath: "bundle.sigstore.json" },
+      extras: {
+        "package.json": '{ "name": "@acme/ops" }',
+        "bundle.sigstore.json": "{}",
+      },
+    });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).not.toBe(0);
+    const doc = parseDoc(result.stdout);
+    expect(errorOf(doc).code).toBe("VALIDATION_ERROR");
+    expect(errorOf(doc).message).toContain("signer");
+    // No plan and no tier: the refusal happens while the manifest is being
+    // read, so nothing downstream ever resolved a rung for this pack.
+    expect(doc["planned"]).toBeUndefined();
+    expect(doc["trustTier"]).toBeUndefined();
+    expect(await pathExists(getProject().path(PACK_DIR))).toBe(false);
+  });
+
+  it("refuses a declared signature whose bundle does not verify, even under the waiver", async () => {
+    await initProject();
+    await seedPack({
+      signing: {
+        method: "sigstore",
+        signer: "https://token.actions.githubusercontent.com releases@zomarit.dev",
+        bundlePath: "bundle.sigstore.json",
+      },
       extras: {
         "package.json": '{ "name": "@acme/ops" }',
         "bundle.sigstore.json": "{}",
@@ -934,7 +966,13 @@ describe("add — trust gates", () => {
     expect(result.code).toBe(1);
     const doc = parseDoc(result.stdout);
     expect(errorOf(doc).code).toBe("INTEGRITY_ERROR");
-    expect(errorOf(doc).message).toContain("cannot verify Sigstore bundles yet");
+    // ASSERTION RE-POINTED, not weakened. It used to match "cannot verify
+    // Sigstore bundles yet" — the stand-in verifier's wording, which the armed
+    // default retired. What replaces it is stronger: the refusal must come from
+    // a verifier that CHECKED (an evaluated refusal is never waivable by a
+    // catalog pin), so the stand-in's phrase must now be ABSENT from it.
+    expect(errorOf(doc).message).toContain("publisher-signed claim refused");
+    expect(errorOf(doc).message).not.toContain("no armed Sigstore verifier");
     expect(await pathExists(getProject().path(PACK_DIR))).toBe(false);
   });
 

@@ -80,6 +80,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the typed manifest. |
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class, projected from artifact frontmatter. |
 | [`llms.txt`](llms.txt) | Generated: the agent-native index of every page in this repository. |
+| [`plugin.json`](plugin.json) | Generated: the plugin surfaces — this Agent Plugins manifest, [`.claude-plugin/`](.claude-plugin/) and [`.cursor-plugin/`](.cursor-plugin/). |
 | [`website/`](website/) | The Docusaurus site that renders the `docs/` pages above. It holds no page of its own. |
 | [`SECURITY.md`](SECURITY.md) | What the engine defends today, what it does not, and how to report a vulnerability. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The dev loop, the three test lanes, and how to regenerate derived files. |
@@ -94,13 +95,15 @@ Hook scripts are absent from that row because they are not corpus content: the t
 portable bodies are generated from `src/hooks/scripts.ts` for every selected client, and
 Claude Code takes a fourth — the review gate — from its own adapter.
 
-Five rows above are marked Generated, and they come from two different generators: the
-capability matrix from `node scripts/generate-capability-matrix.mjs`, and the other four —
+Six rows above are marked Generated, and they come from three different generators: the
+capability matrix from `node scripts/generate-capability-matrix.mjs`; the four docs pages —
 `docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` — from
-`node scripts/generate-docs.mjs`. CONTRIBUTING.md's regeneration table is the one home for
-that split. Each generator's own suite existence-checks the paths it lists; this page's test
-resolves every link target and holds the corpus counts above to what the content catalog
-indexes. Every link on this page is repo-relative — the docs are read from the tree.
+`node scripts/generate-docs.mjs`; and the plugin surfaces from
+`node scripts/generate-plugin-manifests.mjs`. CONTRIBUTING.md's regeneration table is the
+one home for that split. Each generator's own suite existence-checks the paths it lists;
+this page's test resolves every link target and holds the corpus counts above to what the
+content catalog indexes. Every link on this page is repo-relative — the docs are read from
+the tree.
 
 ## Tests
 

@@ -93,9 +93,11 @@ npx @zomarit/stamity init
 ```
 
 **What a plain `clean` removes.** hatch3r's adapter outputs **and its manifest**,
-`.hatch3r/hatch.json`. It **keeps** the rest of `.hatch3r/` — learnings, handoffs,
-overrides, snapshots, customizations — along with `.env.mcp`. Add `--dry-run` to preview,
-`--yes` to skip its prompt.
+`.hatch3r/hatch.json` — plus three more of its own outputs: `.worktreeinclude`, the
+`.hatch3r-archive/` directory, and any `.bak` file it left beside a file it sweeps. It
+**keeps** the rest of `.hatch3r/` — learnings, handoffs, overrides, snapshots,
+customizations — along with `.env.mcp`. Add `--dry-run` to preview, `--yes` to skip its
+prompt.
 
 How it decides which files are "its adapter outputs" matters, because it is not by name. It
 walks whole directories — `.claude/`, `.cursor/`, and `.github/instructions/`,
@@ -149,7 +151,7 @@ is fine. If either half of that is not true, take Path A.
 | Learnings | re-persisted through stamity's store, so each one passes the current write gates on the way in |
 | `.env.mcp` | left in place, bytes unchanged, mode tightened to owner-only where it was loose, and gitignored |
 | Config choices | read out of `hatch.json` as *defaults offered at init* — **Path A only**: a plain `clean` removes that manifest |
-| Your own content | anything outside a managed block survives the strip byte for byte |
+| Your own content | anything outside a managed block survives the strip byte for byte — **Path A only**: on Path B what survives is hatch3r's own trim of it, not the byte-for-byte span |
 
 | Starts fresh | Why |
 |---|---|
@@ -198,10 +200,14 @@ own directory, so a machine run that just stripped blocks never does it silently
 ## Your last step
 
 A finished migration leaves hatch3r on disk and still live. Init carries learnings and
-credentials and strips the old managed blocks; it removes nothing else — and the agents,
-slash commands, rules and CI workflows hatch3r emitted never carried a block, so nothing in
-the strip ever saw them. The panel init prints at the end says exactly that, names the
-predecessor paths it can see, and hands the removal back to you: it is hatch3r's own
+credentials and strips the old managed blocks; it removes nothing else. Every file hatch3r
+emitted does carry a `HATCH3R` block — that is not what spares them. What spares them is the
+strip's input list: it opens the six instruction surfaces named under Path A and nothing else,
+so hatch3r's agents, skills, slash commands, hook scripts and CI workflow are never read. The
+one overlap is `.cursor/rules/`, which IS on that list: a Cursor migration strips each of
+hatch3r's rule files there down to its frontmatter, counts it among the stripped files, and
+leaves the stub for the uninstall below. The panel init prints at the end says the same, names
+the predecessor paths it can see, and hands the removal back to you: it is hatch3r's own
 uninstall, run by you. The order is one-way.
 
 1. **Migrate, then look at what came across.** `npx @zomarit/stamity check`, the learnings
@@ -216,8 +222,9 @@ uninstall, run by you. The order is one-way.
    npx hatch3r clean
    ```
 
-   It removes hatch3r's adapter outputs and its manifest, `.hatch3r/hatch.json`, and keeps
-   the rest of `.hatch3r/`. What it does **not** remove is anything this engine already
+   It removes hatch3r's adapter outputs and its manifest, `.hatch3r/hatch.json` — along with
+   its `.worktreeinclude`, its `.hatch3r-archive/` and any `.bak` beside a swept file — and
+   keeps the rest of `.hatch3r/`. What it does **not** remove is anything this engine already
    handled: the old managed blocks are gone from your instruction files, stripped at init,
    and the learnings and credentials it carried are now this setup's. Its live run ends by
    offering to reinitialize hatch3r, with **yes** as the default — answer no. Each workspace
@@ -234,17 +241,21 @@ the same paths: a Claude-tool migration puts its rules, agents, commands and ski
 walk described under Path B. They carry `STAMITY:BEGIN` / `STAMITY:END` markers, which
 hatch3r's block detector does not recognize, so it reads them as unmarked and deletes them.
 Run `npx hatch3r clean --dry-run` first and read the "Would remove" list against that. What
-comes back afterwards is every generated file — `check` lists each one as `missing` by path
-and `sync` writes it back from the corpus. What does not come back is your own prose outside
-a managed block, such as the text you keep in `CLAUDE.md` above this setup's block: it is in
-no ownership ledger and no corpus, so nothing can regenerate it. Move that out of the tree
-first, or skip the sweep and remove the leftovers by hand with `git rm`.
+comes back afterwards is every generated file — `check` counts all of them and lists the first
+20 by path, then `… and N more`, and `sync` writes every one back from the corpus. What does
+not come back is your own prose outside a managed block: the text you keep in `CLAUDE.md`
+above this setup's block, and the same text in `.github/copilot-instructions.md` if you
+migrated Copilot — both are on the exact-file sweep list above, and after the strip took the
+`HATCH3R` block out of them there is nothing left that hatch3r recognizes, so each is deleted
+whole. That prose is in no ownership ledger and no corpus, so nothing can regenerate it.
+Commit the repository before you run the sweep, so that prose is recoverable from git — or
+move it out of the tree, or skip the sweep and remove the leftovers by hand with `git rm`.
 
 One file on that list is worth losing on purpose. If hatch3r's `.claude/settings.json` was
 already there at init, this engine refused to claim it — the file is in no ownership ledger
-and carries no markers, so init left it untouched and said so in a warning — which means
-hatch3r's hooks are still the ones wired up. Removing that file and running `sync` is what
-installs this setup's.
+and carries no markers, so init left it untouched, said so in a warning, and named it on the
+panel's own list of what was left in place — which means hatch3r's hooks are still the ones
+wired up. Removing that file and running `sync` is what installs this setup's.
 
 In a monorepo, check each workspace package. Init reports every package that carried its
 own state directory, but the carry reads one state directory — the root's. Packages

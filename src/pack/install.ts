@@ -54,7 +54,7 @@ import {
   RECEIPT_FILE,
 } from "./receipt.ts";
 import {
-  notYetArmedSigstoreVerifier,
+  armedSigstoreVerifier,
   resolveTrustTier,
   verifyPublisherSignedClaim,
   type CatalogPin,
@@ -216,7 +216,13 @@ export interface PlanPackInstallOptions {
   allowUntrusted?: boolean;
   /** Catalog pin for the spec, when the source came out of a curated catalog. */
   catalogPin?: CatalogPin;
-  /** Signature verifier seam; defaults to the not-yet-armed refusing verifier. */
+  /**
+   * Signature verifier seam. Defaults to `./trust.ts` →
+   * `armedSigstoreVerifier`, the official Sigstore client — unconditionally,
+   * with no environment sniff and no fallback: a build that cannot load the
+   * client REFUSES a declared claim rather than downgrading to a verdict a
+   * catalog pin could waive.
+   */
   sigstoreVerifier?: SigstoreVerifier;
 }
 
@@ -465,17 +471,26 @@ function applyOrgPolicy(
  * ABSENCE of a trust basis, not for a failed check.
  *
  * The pin is handed to that call rather than consulted after it, and that
- * ordering is the fix. This build ships no armed Sigstore verifier, so
- * every declared claim came back unverifiable and refused the install — which
- * ran BEFORE the catalog pin's tier was honoured and made a pack that declares
- * signing strictly worse off than the same pack declaring nothing. A verified
- * pin at a catalog-granted tier now satisfies trust for an UNEVALUABLE claim
- * (and for nothing else); a claim that was evaluated and failed still refuses.
+ * ordering is the fix. While no armed verifier shipped, every declared claim
+ * came back unverifiable and refused the install — which ran BEFORE the catalog
+ * pin's tier was honoured and made a pack that declares signing strictly worse
+ * off than the same pack declaring nothing. A verified pin at a catalog-granted
+ * tier satisfies trust for an UNEVALUABLE claim (and for nothing else); a claim
+ * that was evaluated and failed still refuses. The default verifier is armed
+ * now, so the unevaluable case reaches here only through an injected verifier
+ * that reports it — the ordering stays because the rule does.
  *
  * Without a declaration, a pin whose tier already carries trust (`scanned` /
  * `curator-verified`) is the trust basis; only a pack with neither — tier
  * `pinned-unsigned` — falls through to the original declaration gate and its
  * explicit operator waiver.
+ *
+ * This gate runs BEFORE `enumeratePackContent`, deliberately: a pack whose
+ * signature does not hold is refused before a byte of its content is walked.
+ * The declared bundle is the one pack file that read touches outside the walk,
+ * so it does not inherit the walk's symlink refusal or its footprint bound —
+ * `./trust.ts` → `readSigstoreBundle` applies both to the bundle itself, which
+ * is why the ordering is a fail-closed choice rather than a containment gap.
  */
 async function runSigningGate(
   packRoot: string,
@@ -487,7 +502,7 @@ async function runSigningGate(
     return verifyPublisherSignedClaim(
       manifest,
       packRoot,
-      opts.sigstoreVerifier ?? notYetArmedSigstoreVerifier,
+      opts.sigstoreVerifier ?? armedSigstoreVerifier,
       // Only a pin the ladder already VERIFIED reaches here as a granted tier
       // (`./trust.ts` → `resolveTrustTier` refuses a mismatch outright), so
       // passing it is passing verified evidence, not a claim.

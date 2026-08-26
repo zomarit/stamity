@@ -1059,16 +1059,64 @@ describe("planPackInstall org policy gate", () => {
 
 describe("planPackInstall sigstore seam", () => {
   const BUNDLE_TEXT = '{ "kind": "fake-sigstore-bundle" }\n';
+  /**
+   * A well-formed `signing.signer`: issuer, one space, certificate identity.
+   * Every fixture below carries one because a `sigstore` claim without a
+   * pinnable signer no longer reaches this seam at all — `readPackManifest`
+   * refuses it, which is the case immediately below.
+   */
+  const SIGNER = "https://token.actions.githubusercontent.com releases@zomarit.dev";
   /** Sigstore declaration with its detached bundle shipped at the pack root. */
   const sigstoreFixture = {
     manifest: {
-      signing: { method: "sigstore", signer: "acme", bundlePath: "bundle.sigstore.json" },
+      signing: { method: "sigstore", signer: SIGNER, bundlePath: "bundle.sigstore.json" },
     },
     extras: {
       "package.json": '{ "name": "@acme/ops" }',
       "bundle.sigstore.json": BUNDLE_TEXT,
     },
   };
+
+  it("never reaches publisher-signed from a claim that pins no signer", async () => {
+    // The whole install path, not just the reader: a pack declaring
+    // `{method: "sigstore", bundlePath}` and nothing else would otherwise
+    // verify against ANY Fulcio identity, resolve `publisher-signed`, and
+    // install with no waiver on the command line. It is refused at ingress, so
+    // no tier is resolved and no verifier is consulted.
+    await seedPack({
+      manifest: { signing: { method: "sigstore", bundlePath: "bundle.sigstore.json" } },
+      extras: {
+        "package.json": '{ "name": "@acme/ops" }',
+        "bundle.sigstore.json": BUNDLE_TEXT,
+      },
+    });
+    const verifier: SigstoreVerifier = {
+      verify: () => Promise.reject(new Error("the verifier was consulted")),
+    };
+
+    const error = await expectRejection(
+      () => plan({ allowUntrusted: true, sigstoreVerifier: verifier }),
+      "VALIDATION_ERROR",
+    );
+    expect(error.message).toContain("signer");
+    expect(error.message).not.toContain("publisher-signed claim refused");
+  });
+
+  it("refuses a sigstore claim whose signer names no verifiable identity", async () => {
+    await seedPack({
+      manifest: {
+        signing: { method: "sigstore", signer: "acme", bundlePath: "bundle.sigstore.json" },
+      },
+      extras: {
+        "package.json": '{ "name": "@acme/ops" }',
+        "bundle.sigstore.json": BUNDLE_TEXT,
+      },
+    });
+
+    const error = await expectRejection(() => plan({ allowUntrusted: true }), "VALIDATION_ERROR");
+    expect(error.message).toContain('"acme"');
+    expect(error.message).toContain("<oidc-issuer> <certificate-identity>");
+  });
 
   it("refuses a claimed signature the not-armed verifier cannot verify, waiver or not", async () => {
     await seedPack(sigstoreFixture);
@@ -1080,7 +1128,7 @@ describe("planPackInstall sigstore seam", () => {
   });
 
   it("refuses a sigstore declaration that ships no bundle to verify", async () => {
-    await seedPack({ manifest: { signing: { method: "sigstore", signer: "acme" } } });
+    await seedPack({ manifest: { signing: { method: "sigstore", signer: SIGNER } } });
 
     const error = await expectRejection(() => plan({ allowUntrusted: true }), "INTEGRITY_ERROR");
     expect(error.message).toContain("bundlePath");
@@ -1106,7 +1154,7 @@ describe("planPackInstall sigstore seam", () => {
 
     expect(result.trustTier).toBe("publisher-signed");
     expect(result.checks.signing).toBe("pass");
-    expect(seen.signer).toBe("acme");
+    expect(seen.signer).toBe(SIGNER);
     expect(Buffer.from(seen.bundleBytes ?? []).toString("utf8")).toBe(BUNDLE_TEXT);
     expect(seen.aggregateSha).toBe(
       computeAggregateContentSha(

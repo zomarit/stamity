@@ -161,7 +161,7 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         path: "docs/packs-and-trust.md",
         title: "Packs and trust",
         description:
-          "what a pack is, the four-rung trust ladder and what is not armed, the org policy, and how to remove one.",
+          "what a pack is, the four-rung trust ladder, what a verified signature does and does not prove, the org policy, and how to remove one.",
         regenerateCommand: null,
       },
       {

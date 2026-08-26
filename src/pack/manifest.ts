@@ -391,12 +391,65 @@ const PACK_MANIFEST_FIELDS = [
 const SIGNING_FIELDS = ["method", "signer", "bundlePath"] as const;
 
 /**
+ * The one signing method the trust ladder verifies cryptographically, named
+ * here rather than in `./trust.ts` because ingress is the layer that has to
+ * know it: a `sigstore` claim carries requirements no other method does (see
+ * {@link readSigning}). `./trust.ts` builds its `SIGNING_METHODS` list from
+ * this constant, so the two cannot name different strings.
+ */
+export const SIGSTORE_SIGNING_METHOD = "sigstore";
+
+/**
+ * The `signing.signer` grammar, as one sentence an operator can act on. Shared
+ * with `./sigstoreVerifier.ts`, which turns a signer into the certificate pin —
+ * one spelling of the rule, quoted by both the gate that refuses a bad one at
+ * ingress and the gate that refuses it again at verification time.
+ */
+export const SIGNER_GRAMMAR =
+  '`signing.signer` must read "<oidc-issuer> <certificate-identity>": the OIDC issuer URL, ' +
+  "one space, then the identity in the certificate's subject alternative name " +
+  "(an email address or a URI). Neither field may contain a space.";
+
+/** The declared signer, split into the two fields a certificate is pinned on. */
+export interface SignerPin {
+  issuer: string;
+  identity: string;
+}
+
+/**
+ * Parse `signing.signer` into the issuer/identity pair, or `null` when it does
+ * not fit the grammar.
+ *
+ * A single space is the separator because neither field can contain one — an
+ * OIDC issuer is a URL and a SAN is an email or a URI — so the split is
+ * unambiguous with no escaping rule to get wrong.
+ *
+ * Both callers REFUSE on `null` rather than falling back to an unpinned
+ * verification, and that is the whole point of returning it: a declaration
+ * nobody can turn into a pin must not verify as though the pack had declared no
+ * signer at all, which would let any Fulcio identity satisfy a claim that names
+ * one.
+ */
+export function parseSignerPin(signer: string): SignerPin | null {
+  const parts = signer.split(" ");
+  if (parts.length !== 2) return null;
+  const [issuer, identity] = parts;
+  if (issuer === undefined || identity === undefined) return null;
+  if (issuer === "" || identity === "") return null;
+  return { issuer, identity };
+}
+
+/**
  * A pack's signing declaration. `method` stays an open string at this layer:
  * this gate verifies that a pack CLAIMS a signing method and that its content
  * matches its integrity map. Method-specific cryptographic verification
  * arrives with the trust-tier ladder, against this same declaration —
  * `bundlePath` is its input, pointing at a Sigstore detached bundle shipped
  * inside the pack directory.
+ *
+ * `signer` is optional in the TYPE because a method that is not `sigstore`
+ * neither needs nor has one; for `sigstore` it is REQUIRED, and
+ * {@link readSigning} refuses the declaration without it.
  */
 export interface PackSigning {
   method: string;
@@ -649,6 +702,32 @@ function readSigning(raw: Record<string, unknown>): PackSigning | undefined {
     });
   }
   const signer = requireString(value, "signer", { source, optional: true });
+  // A `sigstore` claim is the one declaration that RAISES a pack's trust tier,
+  // so it is the one that must name WHO signed. Without a pin the certificate
+  // policy is empty and any Fulcio identity — anyone with a GitHub or Google
+  // account — satisfies the claim, and the pack still resolves
+  // `publisher-signed` with no operator waiver anywhere on the path. Refusing
+  // at ingress means no later stage ever sees an unpinnable claim; the verifier
+  // refuses one again (`./sigstoreVerifier.ts`), which is defence in depth
+  // rather than a duplicate: this gate covers packs read from disk, that one
+  // covers every caller of the seam.
+  if (method === SIGSTORE_SIGNING_METHOD) {
+    if (signer === undefined) {
+      throw new EngineError(
+        `${source}: \`method\` "${SIGSTORE_SIGNING_METHOD}" requires a \`signer\`. An unpinned ` +
+          `signature claim is satisfied by ANY Sigstore identity, so it is refused rather than ` +
+          `resolved as publisher-signed. ${SIGNER_GRAMMAR}`,
+        { code: "VALIDATION_ERROR" },
+      );
+    }
+    if (parseSignerPin(signer) === null) {
+      throw new EngineError(
+        `${source}: \`signer\` ${JSON.stringify(signer)} names no verifiable identity. ` +
+          `${SIGNER_GRAMMAR} A signer that cannot be pinned is refused rather than ignored.`,
+        { code: "VALIDATION_ERROR" },
+      );
+    }
+  }
   const bundlePath = requireString(value, "bundlePath", { source, optional: true });
   if (bundlePath !== undefined) assertSafePackRelPath(bundlePath, "`signing.bundlePath`");
   return {

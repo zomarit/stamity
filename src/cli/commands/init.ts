@@ -2,6 +2,7 @@
 // so commander's Option class is a load-time dependency, not a run-time one.
 import { isAbsolute, join, relative, sep } from "node:path";
 import { Option, type Command } from "commander";
+import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
 import { suggestStackPacks } from "../../detect/stackSupport.ts";
 import { readManifest } from "../../manifest/manifest.ts";
 import {
@@ -471,8 +472,13 @@ function renderDryRun(
  * state directory, its overrides, each workspace package holding state of its
  * own, and every marked file the strip refused (a broken block pair, an
  * unreadable file). What it cannot enumerate is the larger class the finding is
- * about: predecessor-emitted agent bodies, slash commands and CI workflows
- * carry no managed block, so nothing in the strip's input list ever sees them.
+ * about: the agent bodies, slash commands, hook scripts and CI workflows the
+ * predecessor emitted. Those are not block-free — the predecessor wraps every
+ * file it emits in its own block — they are simply never opened: the strip's
+ * input list is `../../migration/detect.ts::PREDECESSOR_MARKED_FILE_CANDIDATES`,
+ * six instruction surfaces, and an emitted agent or workflow is not one of them.
+ * (The one overlap is `.cursor/rules/`, whose per-rule files ARE candidates, so
+ * a Cursor migration strips those down to their frontmatter and counts them.)
  * Naming the floor is what stops the report claiming a completed move;
  * enumerating the rest is the predecessor's own uninstall, which is what the
  * panel's line points at — by scope, and without inventing that tool's verbs
@@ -481,25 +487,64 @@ function renderDryRun(
  * `state.packagesWithState` is in the list for the monorepo case: a workspace
  * package holding its own predecessor state is a separate scope, reached by
  * nothing an operator runs at the root.
+ *
+ * {@link unownedSettings} is the one entry read off THIS run's write report
+ * rather than off detection, and it is the only residue path with a remedy this
+ * engine owns — see that helper.
  */
 function migrationResidue(
   rootDir: string,
   state: PredecessorState,
   carry: CarryReport,
+  report: InitApplyReport,
 ): MigrationResidue {
   const stateDir = state.stateDirPath;
-  const paths = [
+  const settings = unownedSettings(rootDir, report);
+  const found = [
     ...(stateDir === null ? [] : [stateDir]),
     ...(state.overridesDir === null ? [] : [state.overridesDir]),
     ...state.packagesWithState,
     ...carry.strips.filter((row) => row.action === "unchanged").map((row) => row.path),
   ];
+  // Repo-relative, like every other path this command prints: a detection field
+  // that happens to be absolute would put the operator's machine layout in the
+  // middle of a line they are meant to read at a glance. The settings document
+  // is appended LAST and is already repo-relative — it is the one entry that
+  // comes from the write report rather than from the scan.
+  const paths = found.map((path) => repoRelative(rootDir, path));
   return {
-    // Repo-relative, like every other path this command prints: a detection
-    // field that happens to be absolute would put the operator's machine
-    // layout in the middle of a line they are meant to read at a glance.
-    paths: paths.map((path) => repoRelative(rootDir, path)),
+    paths: settings === null ? paths : [...paths, settings],
+    ...(settings === null ? {} : { unownedSettingsPath: settings }),
   };
+}
+
+/**
+ * The repo-relative path of the client settings document this run planned and
+ * then refused to claim, or `null` when it claimed every path it planned.
+ *
+ * Detection never sees this file: it is not a marked instruction surface and it
+ * is not under the predecessor's state directory, so every earlier residue
+ * report omitted it — while `../../merge/safeWrite.ts` was skipping it on every
+ * guided migration for exactly the reason that makes it worth naming. The
+ * predecessor emits this same path as unwrapped JSON, so it carries no block of
+ * anyone's; the writer therefore cannot prove ownership, leaves it untouched,
+ * and this setup's hook and permission wiring never lands, so whatever that
+ * document already wired is what still fires. The panel's remedy
+ * line is conditional on it actually being the predecessor's, because that is
+ * the half this run cannot verify — what it CAN verify is that the file predates
+ * the run and that the run did not write it.
+ *
+ * Read off `wrote` rather than re-probed off disk: the writer's own disposition
+ * is the fact, and a second `stat` here would answer a different question (the
+ * file exists) than the one the line makes a claim about (this run did not
+ * write it). A run that does not target that client plans no such row at all,
+ * so the check is self-limiting rather than gated on the tool list.
+ */
+function unownedSettings(rootDir: string, report: InitApplyReport): string | null {
+  const skipped = report.wrote.some(
+    (row) => row.action === "skipped" && repoRelative(rootDir, row.path) === CLAUDE_SETTINGS_PATH,
+  );
+  return skipped ? CLAUDE_SETTINGS_PATH : null;
 }
 
 /** Repo-relative POSIX form; an already-relative path passes through unchanged. */
@@ -666,7 +711,9 @@ export const initCommand: CommandModule = {
     const effective = effectiveView(settled, defaults);
     const mcpServers = defaults?.mcpServers ?? [];
     const residue =
-      migrating !== null && carry !== null ? migrationResidue(rootDir, migrating, carry) : undefined;
+      migrating !== null && carry !== null
+        ? migrationResidue(rootDir, migrating, carry, report)
+        : undefined;
 
     const notes: string[] = [];
     // FIRST, and on every non-git run whether or not anyone was asked: the

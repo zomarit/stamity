@@ -407,6 +407,64 @@ describe("validatePackManifest", () => {
     expect(blankMethod.message).toContain("method");
   });
 
+  it("refuses a sigstore claim that names no signer", () => {
+    // The rung an unpinned claim would otherwise reach. `sigstore` is the one
+    // method the trust ladder verifies cryptographically, and the verification
+    // pins WHO signed from this field alone — with none, the certificate policy
+    // is empty and any Fulcio identity (anyone with a GitHub or Google account)
+    // satisfies the claim, while the pack still resolves `publisher-signed`
+    // with no operator waiver anywhere on the path. So the declaration is
+    // refused at ingress, not verified unpinned.
+    const error = expectEngineError(
+      () =>
+        validatePackManifest({
+          name: "ops",
+          version: "1.0.0",
+          integrity: {},
+          signing: { method: "sigstore", bundlePath: "pack.sigstore.json" },
+        }),
+      "VALIDATION_ERROR",
+    );
+
+    expect(error.message).toContain("signer");
+    expect(error.message).toContain("<oidc-issuer> <certificate-identity>");
+  });
+
+  it("refuses a sigstore signer that does not fit the pin grammar", () => {
+    // A signer nobody can turn into a pin must not be accepted and then
+    // ignored — that is the unpinned case wearing a name.
+    for (const signer of ["acme", "", " ", "a\tb", "a b c"]) {
+      const error = expectEngineError(
+        () =>
+          validatePackManifest({
+            name: "ops",
+            version: "1.0.0",
+            integrity: {},
+            signing: { method: "sigstore", signer, bundlePath: "pack.sigstore.json" },
+          }),
+        "VALIDATION_ERROR",
+      );
+      expect(error.message, JSON.stringify(signer)).toContain("signer");
+    }
+  });
+
+  it("accepts a sigstore claim whose signer names an issuer and an identity", () => {
+    const manifest = validatePackManifest({
+      name: "ops",
+      version: "1.0.0",
+      integrity: { "pack.sigstore.json": "a".repeat(64) },
+      signing: {
+        method: "sigstore",
+        signer: "https://token.actions.githubusercontent.com releases@zomarit.dev",
+        bundlePath: "pack.sigstore.json",
+      },
+    });
+
+    expect(manifest.signing?.signer).toBe(
+      "https://token.actions.githubusercontent.com releases@zomarit.dev",
+    );
+  });
+
   it("accepts signing.bundlePath alongside pack-root bundle metadata in integrity", () => {
     const manifest = validatePackManifest({
       name: "ops",

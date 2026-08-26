@@ -22,7 +22,7 @@ hand-written or corpus source. Nothing here links outside this tree.
 
 - [Getting started](docs/getting-started.md): prerequisites, what init asks and writes per client, the guided first change, and where state lives.
 - [Migration](docs/migration.md): moving a repository off the predecessor setup — the guided path, the manual path, and what does not transfer.
-- [Packs and trust](docs/packs-and-trust.md): what a pack is, the four-rung trust ladder and what is not armed, the org policy, and how to remove one.
+- [Packs and trust](docs/packs-and-trust.md): what a pack is, the four-rung trust ladder, what a verified signature does and does not prove, the org policy, and how to remove one.
 - [Troubleshooting](docs/troubleshooting.md): the exit model, every doctor row and its remedy, the common failures, and where to report one.
 
 ## Generated reference

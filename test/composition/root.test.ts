@@ -237,6 +237,7 @@ describe("createEngine", () => {
       "permissions",
       "projection",
       "receipt",
+      "sigstoreVerifier",
       "trust",
       "verifyInstalled",
     ]);

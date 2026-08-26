@@ -57,7 +57,8 @@ one below is asserted to exist by `test/docsPages.test.ts`.
 
 | Actor | Vector | Control | Where | Residual |
 |---|---|---|---|---|
-| Pack author | Publishing content that hashes to something other than what was reviewed | Four-tier trust ladder, pinned-or-refuse: content off the catalog pin is refused, never quietly downgraded | `src/pack/trust.ts::resolveTrustTier` | Signature verification is not armed — see below |
+| Pack author | Publishing content that hashes to something other than what was reviewed | Four-tier trust ladder, pinned-or-refuse: content off the catalog pin is refused, never quietly downgraded | `src/pack/trust.ts::resolveTrustTier` | A pin is only as good as the catalog that issued it, and nothing here attests the catalog |
+| Pack author | Declaring a signature nothing checks | A declared `sigstore` claim is verified before any write: `signing.signer` is REQUIRED (a claim that pins no identity is refused at ingress, never verified against an empty policy), and the detached bundle must carry a signature over the pack's length-framed aggregate content hash, chain to the Sigstore trust root, and match that signer's identity and issuer exactly. A failed check refuses the install, and `--allow-untrusted` does not reach it | `src/pack/trust.ts::verifyPublisherSignedClaim`, `src/pack/sigstoreVerifier.ts::verifySigstoreBundle`, `src/pack/trust.ts::sigstoreSignedPayload` | Verification says WHO signed, never that they were entitled to publish — see below |
 | Pack author | Running code at install time | Per-file SHA-256 integrity map is required, not optional, and every npm lifecycle script name is banned outright, so installing never runs pack-authored code | `src/pack/manifest.ts::validatePackManifest`, `src/pack/manifest.ts::BANNED_LIFECYCLE_SCRIPTS` | Nothing stops code that runs LATER — see "Hook and MCP execution" |
 | Pack author | Writing outside the pack's own directory | Every pack-relative path is checked before it is joined — no absolute paths, no `..` escape | `src/pack/permissions.ts::assertSafePackRelPath` | — |
 | Pack author | Claiming a small footprint and shipping a large one | The `permissions` block is strictly validated at ingress and a malformed declaration fails the load | `src/pack/permissions.ts::readPermissions` | The block is DISCLOSURE, not a sandbox: nothing cross-checks it against the files and nothing refuses an install for exceeding it |
@@ -72,10 +73,22 @@ one below is asserted to exist by `test/docsPages.test.ts`.
 
 ## Network and data handling
 
-The engine performs no network I/O while it works. Nothing is uploaded, no telemetry or
-analytics is collected, and every byte the CLI produces lands in the repository you ran it in.
+The engine performs no network I/O while it works, with the one exception named next. Nothing
+is uploaded, no telemetry or analytics is collected, and every byte the CLI produces lands in
+the repository you ran it in.
 
-One code path is network-capable and it is not part of any command's work: the startup update
+**Verifying a signed pack is the exception.** Installing a pack that declares
+`signing.method: "sigstore"` fetches the Sigstore project's trust root over TUF before the
+bundle is checked (`src/pack/sigstoreVerifier.ts::verifySigstoreBundle`; the mirror is the
+client's default, named in that file). It is the only network access any command's work
+performs, and it happens only then: `init`, `sync`, `check`, and every install of a pack that
+declares no signature do not even load the client — and no first-party pack declares one. The
+exchange fetches signed metadata and sends nothing about you or the repository; the metadata is
+cached under your user cache directory (`src/pack/sigstoreVerifier.ts::sigstoreCachePath`),
+never inside the repository being installed into. A host that cannot reach the mirror gets a
+refusal, not a pass.
+
+One further code path is network-capable and it is not part of any command's work: the startup update
 notice asks the public npm registry whether a version newer than the running one exists
 (`src/cli/notice/updateNotice.ts`). It sends the package name and nothing else, is bounded by
 a 1.5-second timeout, caches its answer for a day, fails silently, and never rewrites an
@@ -120,10 +133,18 @@ that depends on one says so where it depends on it.
   PACK supplies lands there, never under `.stamity/generated/`. An MCP server definition
   likewise becomes a launcher your editor spawns at start-up. Read all four, and read the
   `runs on this machine` block `stamity add` prints before accepting a pack.
-- **Signature verification.** No Sigstore verifier ships in this build, so a
-  publisher-signed claim is refused rather than trusted
-  (`src/pack/trust.ts::notYetArmedSigstoreVerifier`). The tier exists on the ladder; the
-  verifier is not armed.
+- **Who a signature names.** A verified bundle proves that an identity signed exactly these
+  bytes. It does not prove that identity was entitled to publish this pack: the pin comes from
+  the pack's own `signing.signer`, so a pack naming its own author verifies whoever that is.
+  There is no authorization model, no publisher registry, and no revocation list beyond what
+  the Sigstore trust root itself carries. Read a `publisher-signed` tier as an attributable
+  signature, not as an endorsement.
+- **Verification without the network.** The trust root is fetched at verification time, so a
+  host that cannot reach the mirror cannot check a signature. That path refuses rather than
+  passing, which is the safe direction — and it does mean an offline machine cannot install a
+  signed pack at all. `src/pack/trust.ts::notYetArmedSigstoreVerifier` is the honest stand-in
+  for a caller that injects a verifier which cannot judge; nothing selects it on its own, and a
+  build whose `sigstore` dependency is broken refuses too.
 - **A second, in-process tool check.** One thing stands between a running agent and a tool
   call, and it is the guard script your client runs. `src/tools/allowlist.ts::checkToolAccess`
   — the in-process check the emitted policy document is pre-sanitized to agree with — has no
@@ -165,7 +186,7 @@ Three gaps, tracked as work rather than accepted as risk:
 
 | Gap | Why it is deferred |
 |---|---|
-| Arm the Sigstore verifier | The ladder tier exists and refuses; arming needs a verifier dependency and a key-policy decision |
+| Ship the author-side signing step | The verifier is armed and the payload is specified, but nothing in this package produces a bundle: signing a pack is a manual step against `src/pack/trust.ts::sigstoreSignedPayload`, so the rung is checkable and not yet exercised by anything published here |
 | Write the standards mapping above | Needs version-pinned catalogue reads against a final client set |
 | Narrow the release runner's egress allowlists | Both release jobs block egress against a hand-written allowlist. It is a first pass reasoned from what each step contacts rather than from observed traffic — the wildcard covering the artifact hand-off between the two jobs especially — and the run insights from the first release are what narrow it |
 

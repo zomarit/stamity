@@ -61,6 +61,7 @@ import * as packManifest from "../pack/manifest.ts";
 import * as packInstall from "../pack/install.ts";
 import * as packPermissions from "../pack/permissions.ts";
 import * as packTrust from "../pack/trust.ts";
+import * as packSigstoreVerifier from "../pack/sigstoreVerifier.ts";
 import * as packOrgPolicy from "../pack/orgPolicy.ts";
 import * as packReceipt from "../pack/receipt.ts";
 import * as packProjection from "../pack/projection.ts";
@@ -156,7 +157,7 @@ export interface EngineRegistry {
     readonly secretScan: typeof secretScan;
   };
   /**
-   * The pack lane, whole. Eight of these ten leaves were on disk and reachable
+   * The pack lane, whole. Eight of these leaves were on disk and reachable
    * from the CLI while this group named only two, which is the shape the
    * derived completeness check in `test/composition/root.test.ts` now refuses:
    * a module the CLI reaches by its own import path and the registry does not
@@ -168,6 +169,7 @@ export interface EngineRegistry {
     readonly install: typeof packInstall;
     readonly permissions: typeof packPermissions;
     readonly trust: typeof packTrust;
+    readonly sigstoreVerifier: typeof packSigstoreVerifier;
     readonly orgPolicy: typeof packOrgPolicy;
     readonly receipt: typeof packReceipt;
     readonly projection: typeof packProjection;
@@ -286,6 +288,7 @@ export function createEngine(): EngineRegistry {
       install: packInstall,
       permissions: packPermissions,
       trust: packTrust,
+      sigstoreVerifier: packSigstoreVerifier,
       orgPolicy: packOrgPolicy,
       receipt: packReceipt,
       projection: packProjection,

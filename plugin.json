@@ -1,0 +1,28 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "stamity",
+  "version": "1.0.0",
+  "description": "Generates a tool-agnostic agentic coding setup — charter, commands, agents, skills, rules, hooks, MCP wiring — for Claude Code, Cursor, GitHub Copilot and Codex from one canonical source.",
+  "author": {
+    "name": "Zomarit"
+  },
+  "homepage": "https://github.com/zomarit/stamity",
+  "repository": "https://github.com/zomarit/stamity",
+  "license": "MIT",
+  "keywords": [
+    "agentic",
+    "ai-coding",
+    "claude-code",
+    "cursor",
+    "copilot",
+    "codex",
+    "agents",
+    "cli",
+    "developer-tools"
+  ],
+  "extensions": {
+    "com.github.zomarit.stamity": {
+      "contentRoot": "./content"
+    }
+  }
+}

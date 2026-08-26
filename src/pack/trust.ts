@@ -1,8 +1,16 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { lstat, open } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { EngineError } from "../types/errors.ts";
-import { assertSafePackRelPath, type PackManifest, type PackSigning } from "./manifest.ts";
+import {
+  assertSafePackRelPath,
+  SIGSTORE_SIGNING_METHOD,
+  type PackManifest,
+  type PackSigning,
+} from "./manifest.ts";
+import { verifySigstoreBundle } from "./sigstoreVerifier.ts";
 
 /**
  * Trust ladder: tier resolution and the method-specific verification seam.
@@ -16,13 +24,17 @@ import { assertSafePackRelPath, type PackManifest, type PackSigning } from "./ma
  *     content SHA. Content that hashes to anything else is refused, never
  *     downgraded — a mismatch means the pack is not the thing that was pinned.
  *   - **Claims are not evidence.** A signing declaration raises the CLAIMED
- *     tier only; the claim holds only when its detached bundle verifies. This
- *     build ships no Sigstore verifier ({@link notYetArmedSigstoreVerifier}),
- *     so every publisher-signed claim is refused with the way out named,
- *     rather than waved through on declaration alone.
+ *     tier only; the claim holds only when its detached bundle verifies
+ *     against {@link sigstoreSignedPayload} — never on declaration alone.
+ *     {@link armedSigstoreVerifier} is what does the verifying, and it is the
+ *     default every install runs through; {@link notYetArmedSigstoreVerifier}
+ *     survives as the honest stand-in a caller may inject deliberately, and
+ *     nothing selects it on its own.
  *
- * Pure functions throughout; the one I/O surface is
- * {@link readSigstoreBundle}, which loads a declared bundle from disk.
+ * Pure functions except two: {@link readSigstoreBundle} loads a declared bundle
+ * from disk, and {@link armedSigstoreVerifier} reaches the Sigstore TUF mirror
+ * for the trust root it verifies against (`./sigstoreVerifier.ts` states the
+ * egress and the lazy load that keeps every other command clear of it).
  */
 
 /**
@@ -56,13 +68,16 @@ export function trustTierRank(tier: TrustTier): number {
  * somewhere else. A method outside this list never resolves as
  * publisher-signed.
  */
-export const SIGNING_METHODS: readonly string[] = ["sigstore"];
+export const SIGNING_METHODS: readonly string[] = [SIGSTORE_SIGNING_METHOD];
 
 /**
- * The signing declaration as the trust layer reads it: the manifest shape plus
- * the pack-relative path of the detached Sigstore bundle. The manifest schema
- * itself does not accept `bundlePath` yet — it joins `pack.json` when the
- * verifier is armed — so this type is the seam's forward declaration.
+ * The signing declaration as the trust layer reads it.
+ *
+ * Once a forward declaration, now an alias that re-states the field this layer
+ * consumes: `./manifest.ts` → {@link PackSigning} accepts and path-checks
+ * `bundlePath` at ingress, so the widening this type existed to perform has
+ * nothing left to widen. Kept as the name the trust surface and its callers
+ * spell, rather than churning every signature to say `PackSigning`.
  */
 export interface TrustSigning extends PackSigning {
   /** Pack-relative path to the detached Sigstore bundle JSON at the pack root. */
@@ -105,8 +120,12 @@ export interface SigstoreVerdict {
 
 /**
  * Method-specific verification seam. `verify` judges one detached bundle
- * against the aggregate content SHA it must be signed over, optionally
- * requiring the declared signer identity. Implementations report a verdict;
+ * against the aggregate content SHA it must be signed over, and against the
+ * identity the pack's `signing.signer` declares — required, not optional: a
+ * `sigstore` claim that pins nobody is refused at ingress (`./manifest.ts`) and
+ * refused again here. The parameter is optional in the SIGNATURE only so the
+ * armed implementation can refuse a caller that omits it rather than verify
+ * against an empty policy. Implementations report a verdict;
  * translating a refusal into an install-stopping error is the caller's job
  * ({@link verifyPublisherSignedClaim}).
  */
@@ -115,21 +134,25 @@ export interface SigstoreVerifier {
 }
 
 /**
- * The verifier this build ships: it cannot evaluate a publisher-signed claim,
- * because no Sigstore implementation is armed behind the seam, and an
- * unverifiable claim is never assumed true.
+ * The stand-in for a path with no verifier behind it: it cannot evaluate a
+ * publisher-signed claim, and an unverifiable claim is never assumed true.
  *
- * It reports `unarmed`, so the caller can tell "this build could not check"
- * from "this build checked and the signature is wrong". The reason names the
- * one way forward that exists — a catalog-pinned source — and deliberately
- * does NOT name `--allow-untrusted`: that flag waives the ABSENCE of a trust
- * basis, so it has no effect on a declared claim and recommending it sent
- * operators to a flag that changes nothing.
+ * It reports `unarmed`, so the caller can tell "nothing could check this" from
+ * "something checked and the signature is wrong". The reason names the one way
+ * forward that exists — a catalog-pinned source — and deliberately does NOT
+ * name `--allow-untrusted`: that flag waives the ABSENCE of a trust basis, so
+ * it has no effect on a declared claim and recommending it sent operators to a
+ * flag that changes nothing.
  *
- * That correction asked for exactly one edit to this string — drop the flag
- * that does not apply. The opening clause is therefore kept verbatim from
- * before it: it is the phrase operators and downstream assertions match on, and
- * rewording it would have broken a consumer contract no finding asked to move.
+ * **No longer the default.** {@link armedSigstoreVerifier} is what
+ * `./install.ts` runs, so nothing selects this verifier on its own — reaching
+ * it takes an explicit `sigstoreVerifier` injection. Its opening clause moved
+ * with that change and the move is the point: the string used to open "this
+ * build cannot verify Sigstore bundles yet", which was the phrase downstream
+ * assertions matched on and is now false of the build. A refusal that misstates
+ * why it refused is worse than one whose wording drifted, so the claim narrowed
+ * to the path it is true of. The fragment "no armed Sigstore verifier" is
+ * unchanged, and so is the refusal itself.
  */
 export const notYetArmedSigstoreVerifier: SigstoreVerifier = {
   verify: () =>
@@ -137,10 +160,35 @@ export const notYetArmedSigstoreVerifier: SigstoreVerifier = {
       verified: false,
       unarmed: true,
       reason:
-        "this build cannot verify Sigstore bundles yet — no armed Sigstore verifier sits behind the seam — " +
+        "no armed Sigstore verifier sits behind the seam on this path, " +
         "so the publisher-signed claim is refused rather than assumed. " +
         "Install from a catalog-pinned source — a verified pin is an independent trust basis this gate honours.",
     }),
+};
+
+/**
+ * The verifier every install runs through: the official `sigstore` client,
+ * judging the declared bundle against {@link sigstoreSignedPayload} and against
+ * the exact identity the pack's `signing.signer` names. A claim reaching it
+ * with no signer is refused, never verified unpinned.
+ *
+ * A thin binding on purpose. What it adds over `./sigstoreVerifier.ts` is the
+ * one thing that belongs to the trust contract rather than to the client: the
+ * payload. The seam is handed an aggregate content SHA, and turning that SHA
+ * into the bytes a publisher signed is this module's rule, so it is applied
+ * here and nowhere else.
+ *
+ * It never reports `unarmed` — every verdict it returns is an evaluation, so
+ * none of them is waivable by a catalog pin. See
+ * {@link verifyPublisherSignedClaim} for why that distinction is load-bearing.
+ */
+export const armedSigstoreVerifier: SigstoreVerifier = {
+  verify: (bundleBytes, aggregateSha, signer) =>
+    verifySigstoreBundle(
+      bundleBytes,
+      sigstoreSignedPayload(aggregateSha),
+      signer === undefined ? {} : { signer },
+    ),
 };
 
 // ── Aggregate content SHA ──────────────────────────────────────
@@ -195,6 +243,29 @@ export function computeAggregateContentSha(integrity: Record<string, string>): s
     hash.update(frameField(relPath) + frameField(digest.toLowerCase()), "utf8");
   }
   return hash.digest("hex");
+}
+
+/**
+ * The exact bytes a pack publisher signs: the aggregate content SHA
+ * ({@link computeAggregateContentSha}), lower-cased and length-framed —
+ * `64:<hex>` in UTF-8.
+ *
+ * This function IS the signing contract. A signature verifies only against
+ * these bytes, so an author producing a bundle must sign this serialization and
+ * not the bare hex; a helper that emits it is a separate piece of work, and
+ * until one ships this docblock is the specification an author works from.
+ *
+ * Length-framed for the same reason the map entries above are, and reusing the
+ * same {@link frameField} so there is one framing rule in this module rather
+ * than two that can drift. Signing the bare hex would work today — a SHA-256
+ * hex string is fixed-width, so nothing can be prefix-confused with it — but it
+ * would leave the payload format depending on that width for its unambiguity,
+ * and the day a second field joins the payload the framing would have to be
+ * retrofitted onto signatures already issued. Lower-cased for the reason the
+ * digests are: two spellings of one hash must not be two different payloads.
+ */
+export function sigstoreSignedPayload(aggregateSha: string): Buffer {
+  return Buffer.from(frameField(aggregateSha.toLowerCase()), "utf8");
 }
 
 // ── Tier resolution ────────────────────────────────────────────
@@ -282,10 +353,52 @@ export function resolveTrustTier(manifest: PackManifest, pin?: CatalogPin): Reso
 // ── Sigstore bundle I/O + claim verification ───────────────────
 
 /**
+ * Largest detached bundle this gate will read: 1 MiB.
+ *
+ * A Sigstore bundle is single-digit KB — a certificate, a signature and a
+ * transparency-log entry — so the cap is three orders of magnitude of headroom
+ * and still bounds what a hostile pack can make the process allocate. It exists
+ * because the bundle is the one pack file read OUTSIDE the content walk: that
+ * walk bounds the pack footprint (`./manifest.ts`), but it descends only the
+ * class directories, and a `bundlePath` sits at the pack root.
+ */
+export const MAX_SIGSTORE_BUNDLE_BYTES = 1024 * 1024;
+
+/**
+ * `O_NOFOLLOW` where the platform has it, 0 where it does not (it is POSIX-only;
+ * Windows omits it). Read through an index signature because `@types/node`
+ * declares the constant as always present, which is true of the type and not of
+ * every host. Where it is 0 the `lstat` refusal below is the whole guard, which
+ * is the same guard every platform gets — this flag only closes the window
+ * between that check and the open.
+ */
+const O_NOFOLLOW: number =
+  (fsConstants as unknown as Record<string, number | undefined>)["O_NOFOLLOW"] ?? 0;
+
+/**
  * Read a declared detached Sigstore bundle from the pack. The path is held to
  * the same containment rules as every other pack-relative path, and a declared
  * bundle that is missing is an integrity refusal — the pack does not match its
  * own signing declaration — not a bare filesystem error.
+ *
+ * **Why the guards live here rather than in call order.** This read runs BEFORE
+ * `./install.ts` enumerates pack content, and it stays there: refusing a bad
+ * signature before reading a byte of the pack's content is the fail-closed
+ * order, and moving the call later would not bring the bundle under the walk's
+ * guards anyway — the walk descends the content classes, and a `bundlePath` at
+ * the pack root is outside all of them. So the two rules the walk applies to
+ * every other pack file are applied here directly:
+ *
+ *   - **Regular files only.** `lstat` first and without following, so a symlink
+ *     (which could address any file on the host), a FIFO or a device node is
+ *     refused before anything opens it. The order is load-bearing: opening a
+ *     FIFO for reading BLOCKS until a writer appears, so a check made after the
+ *     open would never run. `O_NOFOLLOW` then closes the window between the
+ *     check and the open, and the post-open `fstat` re-checks both facts
+ *     against the descriptor actually opened rather than the path.
+ *   - **Bounded.** {@link MAX_SIGSTORE_BUNDLE_BYTES}, refused rather than
+ *     truncated, so a multi-gigabyte "bundle" is a refusal and not an
+ *     out-of-memory crash.
  */
 export async function readSigstoreBundle(packRoot: string, bundlePath: string): Promise<Buffer> {
   assertSafePackRelPath(bundlePath, "`signing.bundlePath`");
@@ -297,21 +410,53 @@ export async function readSigstoreBundle(packRoot: string, bundlePath: string): 
       { code: "VALIDATION_ERROR" },
     );
   }
+
+  const notRegular = (): EngineError =>
+    new EngineError(
+      `Pack signing declares a Sigstore bundle at ${JSON.stringify(bundlePath)}, but that path is not a regular file. ` +
+        `Symlinks can address files outside the pack, and a pipe or device node has no end; either way the pack does ` +
+        `not match its signing declaration.`,
+      { code: "INTEGRITY_ERROR" },
+    );
+
+  const tooLarge = (size: number): EngineError =>
+    new EngineError(
+      `Pack signing declares a Sigstore bundle at ${JSON.stringify(bundlePath)} of ${String(size)} bytes, over the ` +
+        `${String(MAX_SIGSTORE_BUNDLE_BYTES)}-byte limit. A detached bundle is a few kilobytes; this one is refused unread.`,
+      { code: "INTEGRITY_ERROR" },
+    );
+
+  let handle: FileHandle | undefined;
   try {
-    return await readFile(absPath);
+    const link = await lstat(absPath);
+    if (!link.isFile()) throw notRegular();
+    if (link.size > MAX_SIGSTORE_BUNDLE_BYTES) throw tooLarge(link.size);
+
+    handle = await open(absPath, fsConstants.O_RDONLY | O_NOFOLLOW);
+    const opened = await handle.stat();
+    if (!opened.isFile()) throw notRegular();
+    if (opened.size > MAX_SIGSTORE_BUNDLE_BYTES) throw tooLarge(opened.size);
+
+    return await handle.readFile();
   } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code === "ENOENT") {
+    if (cause instanceof EngineError) throw cause;
+    const code = (cause as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
       throw new EngineError(
         `Pack signing declares a Sigstore bundle at ${JSON.stringify(bundlePath)} but the pack ships no such file. ` +
           `The pack does not match its signing declaration; re-obtain it from the author.`,
         { code: "INTEGRITY_ERROR", cause },
       );
     }
-    const code = (cause as NodeJS.ErrnoException).code;
+    // What `O_NOFOLLOW` reports when the path became a symlink between the
+    // `lstat` and the open — the same refusal, reached the racy way.
+    if (code === "ELOOP" || code === "EMLINK") throw notRegular();
     throw new EngineError(
       `Cannot read Sigstore bundle ${absPath}: ${code ?? (cause instanceof Error ? cause.message : String(cause))}.`,
       { code: "FS_ERROR", cause },
     );
+  } finally {
+    await handle?.close();
   }
 }
 
@@ -328,10 +473,14 @@ const CATALOG_GRANTED_TIERS: ReadonlySet<TrustTier> = new Set<TrustTier>([
  * bundle file, and a verifier that CHECKED and refused each stop the install;
  * only an armed verifier returning `verified: true` passes.
  *
- * `opts.catalogPinTier` is the one thing that can stand in for a claim this
- * build cannot evaluate, and it stands in for nothing else. When the
- * verdict is {@link SigstoreVerdict.unarmed} — no implementation behind the
- * seam, so the claim was never judged — and a catalog pin already verified
+ * `opts.catalogPinTier` is the one thing that can stand in for a claim nothing
+ * could evaluate, and it stands in for nothing else. Since
+ * {@link armedSigstoreVerifier} became the default that is a narrow path — no
+ * verdict it returns is `unarmed` — but the rule is unchanged rather than
+ * retired, because the seam still accepts an injected verifier that cannot
+ * judge. When the verdict is {@link SigstoreVerdict.unarmed} — no
+ * implementation behind the seam, so the claim was never judged — and a
+ * catalog pin already verified
  * this pack's exact aggregate content SHA at a catalog-granted tier, the pin
  * IS the trust basis and the gate reports `"n/a"`. Without that pin the claim
  * still refuses.

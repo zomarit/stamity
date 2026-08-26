@@ -1,13 +1,19 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { symlink, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { createEngine } from "../../src/composition/root.ts";
 import type { PackManifest } from "../../src/pack/manifest.ts";
 import {
+  MAX_SIGSTORE_BUNDLE_BYTES,
   SIGNING_METHODS,
   TRUST_TIERS,
+  armedSigstoreVerifier,
   computeAggregateContentSha,
   notYetArmedSigstoreVerifier,
   readSigstoreBundle,
   resolveTrustTier,
+  sigstoreSignedPayload,
   trustTierRank,
   verifyPublisherSignedClaim,
   type CatalogPin,
@@ -30,10 +36,18 @@ const INTEGRITY: Record<string, string> = {
   "rules/naming.md": digest("name things for what they are"),
 };
 
-/** A sigstore declaration typed through the trust layer's forward declaration. */
+/**
+ * A well-formed `signing.signer`: OIDC issuer, one space, certificate identity.
+ * Spelled out because `./manifest.ts` refuses a `sigstore` claim without one —
+ * a fixture that could not survive ingress would model a pack that cannot
+ * exist.
+ */
+const SIGNER = "https://token.actions.githubusercontent.com releases@zomarit.dev";
+
+/** A sigstore declaration, typed through the trust layer's own signing type. */
 const SIGSTORE: TrustSigning = {
   method: "sigstore",
-  signer: "acme",
+  signer: SIGNER,
   bundlePath: "pack.sigstore.json",
 };
 
@@ -267,6 +281,83 @@ describe("notYetArmedSigstoreVerifier", () => {
   });
 });
 
+describe("armedSigstoreVerifier", () => {
+  /** A bundle whose media type clears the local shape gate. */
+  const BUNDLE = Buffer.from(
+    JSON.stringify({ mediaType: "application/vnd.dev.sigstore.bundle.v0.3+json" }),
+    "utf8",
+  );
+  const SHA = computeAggregateContentSha(INTEGRITY);
+
+  it("is what the install path defaults to, with no branch that can pick the stand-in", () => {
+    // Read out of the wiring site rather than restated here: the default is one
+    // expression in one file, and asserting the file says it is what makes
+    // "the armed verifier is wired unconditionally" checkable. The second half
+    // is the load-bearing one — a build that could fall back to the unarmed
+    // stand-in when the dependency misbehaves would turn a broken install of
+    // `sigstore` into a switch that makes declared signatures pin-waivable.
+    const source = readFileSync(new URL("../../src/pack/install.ts", import.meta.url), "utf8");
+    expect(source).toContain("opts.sigstoreVerifier ?? armedSigstoreVerifier");
+    expect(source, "the install path can still reach the unarmed stand-in").not.toContain(
+      "notYetArmedSigstoreVerifier",
+    );
+  });
+
+  it("is the same object the composition root wires, not a second instance", () => {
+    expect(createEngine().pack.trust.armedSigstoreVerifier).toBe(armedSigstoreVerifier);
+  });
+
+  it("hands the client the length-framed payload, which is not the bare hex", () => {
+    // The contract the seam's aggregate SHA is turned into. Asserted here
+    // because it is what a pack author has to sign: signing the hex string
+    // itself produces a bundle this verifier refuses.
+    expect(sigstoreSignedPayload(SHA).toString("utf8")).toBe(`${SHA.length}:${SHA}`);
+    expect(sigstoreSignedPayload(SHA).toString("utf8")).not.toBe(SHA);
+  });
+
+  it("EVALUATES every claim: its refusals are never pin-waivable", async () => {
+    const verdict = await armedSigstoreVerifier.verify(Buffer.from("not a bundle"), SHA);
+
+    expect(verdict.verified).toBe(false);
+    // No `unarmed`, and that is the whole difference from the stand-in above:
+    // `verifyPublisherSignedClaim` substitutes a catalog pin for an unarmed
+    // verdict and for nothing else.
+    expect(verdict.unarmed).toBeUndefined();
+  });
+
+  it("forwards the declared signer, so one that names no identity refuses", async () => {
+    const verdict = await armedSigstoreVerifier.verify(BUNDLE, SHA, "acme");
+
+    expect(verdict.verified).toBe(false);
+    expect(verdict.reason).toContain("signing.signer");
+  });
+
+  it("makes a declared claim non-waivable, catalog pin or not", async () => {
+    // The ladder property arming buys: while nothing could evaluate a claim, a
+    // verified pin stood in for it (the case above). An armed refusal is
+    // evidence that the signature and the content disagree, and no pin —
+    // however good — substitutes for that.
+    const pack = getPack();
+    await pack.seedFiles({ "pack.sigstore.json": "{}" });
+    const signed = manifest({ signing: SIGSTORE });
+
+    await Promise.all(
+      (["curator-verified", "scanned", undefined] as const).map((pinTier) =>
+        expectRejection(
+          () =>
+            verifyPublisherSignedClaim(
+              signed,
+              pack.dir,
+              armedSigstoreVerifier,
+              pinTier === undefined ? {} : { catalogPinTier: pinTier },
+            ),
+          "INTEGRITY_ERROR",
+        ),
+      ),
+    );
+  });
+});
+
 describe("readSigstoreBundle", () => {
   it("returns the declared bundle's bytes", async () => {
     const pack = getPack();
@@ -288,6 +379,51 @@ describe("readSigstoreBundle", () => {
   it("refuses a traversing bundlePath before touching the filesystem", async () => {
     const pack = getPack();
     await expectRejection(() => readSigstoreBundle(pack.dir, "../outside.json"), "VALIDATION_ERROR");
+  });
+
+  it("refuses a bundlePath that is a symlink, whatever it points at", async () => {
+    // The bundle is the one pack file read OUTSIDE `enumeratePackContent`, so
+    // it inherits none of that walk's guards — and the walk refuses symlinks
+    // because they address files outside the pack. A pack shipping
+    // `bundle.json -> /etc/passwd` (or `-> /dev/zero`) would otherwise be read
+    // through, and the ~10 bytes a JSON parse failure quotes back would be that
+    // file's. Refused before anything opens it, which also keeps a FIFO from
+    // blocking the read forever.
+    const pack = getPack();
+    await pack.seedFiles({ "real.json": "{}" });
+    await symlink(pack.path("real.json"), pack.path("pack.sigstore.json"));
+
+    const error = await expectRejection(
+      () => readSigstoreBundle(pack.dir, "pack.sigstore.json"),
+      "INTEGRITY_ERROR",
+    );
+    expect(error.message).toContain("not a regular file");
+  });
+
+  it("refuses a bundle over the size cap, naming the limit, without reading it", async () => {
+    // A detached bundle is single-digit KB. An unbounded read of a declared
+    // path is a pack author's lever on the operator's memory, so the cap is a
+    // refusal rather than a truncation: half a bundle is not a bundle.
+    const pack = getPack();
+    await pack.seedFiles({ "pack.sigstore.json": "" });
+    await writeFile(pack.path("pack.sigstore.json"), Buffer.alloc(MAX_SIGSTORE_BUNDLE_BYTES + 1, 0x61));
+
+    const error = await expectRejection(
+      () => readSigstoreBundle(pack.dir, "pack.sigstore.json"),
+      "INTEGRITY_ERROR",
+    );
+    expect(error.message).toContain(String(MAX_SIGSTORE_BUNDLE_BYTES));
+  });
+
+  it("reads a bundle sitting exactly on the cap", async () => {
+    // The boundary is inclusive, asserted so a later tightening of the
+    // comparison shows up here rather than as a mysterious refusal in the field.
+    const pack = getPack();
+    await pack.seedFiles({ "pack.sigstore.json": "" });
+    await writeFile(pack.path("pack.sigstore.json"), Buffer.alloc(MAX_SIGSTORE_BUNDLE_BYTES, 0x61));
+
+    const bytes = await readSigstoreBundle(pack.dir, "pack.sigstore.json");
+    expect(bytes.byteLength).toBe(MAX_SIGSTORE_BUNDLE_BYTES);
   });
 });
 
@@ -422,6 +558,6 @@ describe("verifyPublisherSignedClaim", () => {
     );
     expect(seen.bytes).toBe(bundleJson);
     expect(seen.sha).toBe(computeAggregateContentSha(INTEGRITY));
-    expect(seen.signer).toBe("acme");
+    expect(seen.signer).toBe(SIGNER);
   });
 });

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "stamity",
+  "version": "1.0.0",
+  "description": "Generates a tool-agnostic agentic coding setup — charter, commands, agents, skills, rules, hooks, MCP wiring — for Claude Code, Cursor, GitHub Copilot and Codex from one canonical source.",
+  "author": {
+    "name": "Zomarit"
+  },
+  "homepage": "https://github.com/zomarit/stamity",
+  "repository": "https://github.com/zomarit/stamity",
+  "license": "MIT",
+  "keywords": [
+    "agentic",
+    "ai-coding",
+    "claude-code",
+    "cursor",
+    "copilot",
+    "codex",
+    "agents",
+    "cli",
+    "developer-tools"
+  ],
+  "agents": [
+    "./content/agents/stamity-creator.md",
+    "./content/agents/stamity-design-quality.md",
+    "./content/agents/stamity-fixer.md",
+    "./content/agents/stamity-implementer.md",
+    "./content/agents/stamity-performance.md",
+    "./content/agents/stamity-researcher.md",
+    "./content/agents/stamity-reviewer.md",
+    "./content/agents/stamity-security.md",
+    "./content/agents/stamity-spec-author.md",
+    "./content/agents/stamity-test-runner.md"
+  ],
+  "commands": "./content/commands/",
+  "skills": "./content/skills/"
+}

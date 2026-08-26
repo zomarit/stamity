@@ -3,6 +3,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { CLAUDE_SETTINGS_PATH } from "../../../src/adapters/claude.ts";
 import { initCommand } from "../../../src/cli/commands/init.ts";
 import { planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { runCli, type CommandIo } from "../../../src/cli/kit/program.ts";
@@ -99,6 +100,14 @@ const PRED_MANIFEST = `${JSON.stringify(
   2,
 )}\n`;
 
+/**
+ * The predecessor's own `.claude/settings.json`: plain JSON, wrapped in no
+ * block by anyone — that client takes no comment syntax, so neither engine can
+ * mark it. That is exactly why the writer refuses to claim it and why the file
+ * needs naming: whatever it wires is what still fires after the migration.
+ */
+const PRED_SETTINGS = `${JSON.stringify({ hooks: { SessionStart: [] } }, null, 2)}\n`;
+
 /** An instruction file with user prose around one stamped managed block. */
 const MARKED_DOC = [
   "# Project notes",
@@ -138,6 +147,7 @@ async function seedPredecessorRepo(
     markedClaudeFile?: boolean;
     agentsFile?: boolean;
     blockOnlyFile?: boolean;
+    claudeSettings?: boolean;
   },
   sub = "repo",
 ): Promise<string> {
@@ -148,6 +158,7 @@ async function seedPredecessorRepo(
   if (opts?.markedClaudeFile === true) files[`${sub}/CLAUDE.md`] = MARKED_DOC;
   if (opts?.agentsFile === true) files[`${sub}/AGENTS.md`] = "# my agent notes\n";
   if (opts?.blockOnlyFile === true) files[`${sub}/GEMINI.md`] = BLOCK_ONLY_DOC;
+  if (opts?.claudeSettings === true) files[`${sub}/${CLAUDE_SETTINGS_PATH}`] = PRED_SETTINGS;
   await getTemp().seedFiles(files);
   return makeRepo(sub);
 }
@@ -941,6 +952,77 @@ describe("init --dry-run", () => {
     expect(result.stdout).toContain("Copy it somewhere outside the repo first");
     // And the residue survives the run it is reported after.
     expect(existsSync(join(root, PRED_STATE_DIR))).toBe(true);
+  });
+
+  it("names the settings document on the dry-run preview too, off the predicted disposition", async () => {
+    // The preview is where an operator decides whether to allow the run, so it
+    // has to carry the same residue the panel will. Under --dry-run nothing is
+    // written and the disposition comes from the writer's predictor, so this
+    // pins the preview to the predictor rather than to a real skip.
+    const root = await seedPredecessorRepo({ markedClaudeFile: true, claudeSettings: true });
+
+    const result = await runInit(root, ["--dry-run", "-y", "--migrate", "full"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("one of those paths is live wiring");
+    expect(result.stdout).toContain(CLAUDE_SETTINGS_PATH);
+    // A preview writes nothing — including into the file it just named.
+    expect(await readFile(join(root, ...CLAUDE_SETTINGS_PATH.split("/")), "utf8")).toBe(
+      PRED_SETTINGS,
+    );
+    expect(existsSync(join(root, STATE_DIR))).toBe(false);
+  });
+
+  it("names the settings document it refused to claim among the residue, with the remedy", async () => {
+    // The residue list was built from DETECTION alone, and detection never sees
+    // this file: it is not one of the six marked instruction surfaces and it
+    // does not live under the predecessor's state directory. So the one path
+    // whose consequence is live — the hook and permission wiring that actually
+    // fires — was the one path the report omitted, on every guided migration
+    // where the predecessor's copy was already on disk.
+    const root = await seedPredecessorRepo({ markedClaudeFile: true, claudeSettings: true });
+    const settingsPath = join(root, ...CLAUDE_SETTINGS_PATH.split("/"));
+
+    const result = await runInit(root, ["-y", "--migrate", "full"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("one of those paths is live wiring");
+    expect(result.stdout).toContain(CLAUDE_SETTINGS_PATH);
+    expect(result.stdout).toContain("remove it and run `stamity sync`");
+    // The premise of that line, proven against the tree: the run did not write
+    // this file. A byte moving here would make the sentence false.
+    expect(await readFile(settingsPath, "utf8")).toBe(PRED_SETTINGS);
+  });
+
+  it("omits the settings remedy when this run claimed every path it planned", async () => {
+    // Same migration without the collision: the file is this engine's from the
+    // first write, so there is nothing to hand back and no line to print.
+    const root = await seedPredecessorRepo({ markedClaudeFile: true });
+
+    const result = await runInit(root, ["-y", "--migrate", "full"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("left in place:");
+    expect(result.stdout).not.toContain("live wiring");
+  });
+
+  it("warns that the predecessor's uninstall reaches this setup's own generated files", async () => {
+    // The residue line hands removal back to the predecessor's uninstall; this
+    // is what that costs. The sweep is by directory, this setup writes into the
+    // same directories, and the recovery split is what a reader has to act on:
+    // generated files come back through `sync`, prose outside a managed block
+    // does not come back at all.
+    const root = await seedPredecessorRepo({ markedClaudeFile: true });
+
+    const result = await runInit(root, ["-y", "--migrate", "full"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("by DIRECTORY rather than by name");
+    expect(result.stdout).toContain("takes THIS setup's generated files with it");
+    expect(result.stdout).toContain("commit this repo before you run it");
+    expect(result.stdout).toContain("offering to reinstall the old setup, decline");
+    // The no-invented-verbs rule holds on the new clause too.
+    expect(result.stdout).not.toMatch(/--dry-run|--purge/);
   });
 
   it("names the deletion on the panel too, and the real run performs it", async () => {

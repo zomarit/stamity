@@ -75,10 +75,15 @@ export interface InitPanelInput {
  * `.env.mcp`, and it strips managed blocks out of six known instruction files
  * ({@link CarryReport.strips}). It removes nothing else — not the predecessor's
  * state directory, not its overrides, not the agent bodies, slash commands or
- * CI workflows it emitted, none of which carry a managed block to strip. The
- * report used to end at the strip tally, so a real migrant read "migrated:" as
- * a completed move while two agent corpora, duplicate slash commands and a
- * predecessor workflow that still runs on push stayed exactly where they were.
+ * CI workflows it emitted. Those are NOT block-free, which is what an earlier
+ * draft of this comment claimed: the predecessor wraps every file it emits in
+ * its own block. They survive because of the strip's INPUT LIST, not the file
+ * contents — `../../../migration/detect.ts::PREDECESSOR_MARKED_FILE_CANDIDATES`
+ * opens six instruction surfaces and nothing else, so an emitted agent body or
+ * workflow is never read in the first place. The report used to end at the
+ * strip tally, so a real migrant read "migrated:" as a completed move while two
+ * agent corpora, duplicate slash commands and a predecessor workflow that still
+ * runs on push stayed exactly where they were.
  *
  * This is the count that makes the report stop overstating. It is a floor, not
  * a census — the paths the detection pass already knows about — and the panel
@@ -87,6 +92,22 @@ export interface InitPanelInput {
 export interface MigrationResidue {
   /** Repo-relative paths known to remain, in reading order. */
   paths: readonly string[];
+  /**
+   * The client settings document this run planned but refused to claim, when
+   * there is one — it is also the last entry of {@link paths}.
+   *
+   * It rides its own field because it is the one residue path with a REMEDY
+   * this engine can state: the others are the predecessor's to remove, while
+   * this one is a file the writer skipped (`../../../merge/safeWrite.ts`: no
+   * ownership ledger row, no `STAMITY:BEGIN`/`END` markers), so the hook and
+   * permission wiring that document holds is whatever was there before this run
+   * — and removing it and re-syncing is what installs this setup's.
+   *
+   * Named rather than inferred from the warning stream: a skipped write already
+   * prints a generic collision warning, and a reader had no way to tell that
+   * THIS collision means the previous setup's hooks are the ones that fire.
+   */
+  unownedSettingsPath?: string;
 }
 
 /**
@@ -369,6 +390,20 @@ export function migrationLines(carry: CarryReport, residue?: MigrationResidue): 
  * holding predecessor state is not reached by anything run at the root), and —
  * when a credential file was carried — the back-up step to take BEFORE any
  * uninstall runs.
+ *
+ * The second line is the other half of pointing at that uninstall, and pointing
+ * without it was the gap: the predecessor decides what to remove by DIRECTORY
+ * rather than by name, and this setup emits into the same directories at the
+ * same paths. So the uninstall this panel recommends deletes this setup's own
+ * generated files — its markers are not in that tool's marker set, so they read
+ * as unmarked — and a panel that recommends a sweep has to say what the sweep
+ * costs. Two of the three consequences are recoverable and one is not, which is
+ * the ordering: preview it, `sync` restores what is generated, and a commit is
+ * the only thing that restores prose the corpus cannot regenerate.
+ *
+ * Still no predecessor verbs, for the reason above: the preview mode and the
+ * end-of-run offer are named as behaviours to look for, conditionally, never as
+ * a flag or a subcommand this run did not observe.
  */
 function residueLines(residue: MigrationResidue | undefined, carry: CarryReport): string[] {
   if (residue === undefined || residue.paths.length === 0) return [];
@@ -380,7 +415,22 @@ function residueLines(residue: MigrationResidue | undefined, carry: CarryReport)
       `paths above but not that tool's verbs, so it names none — and each listed directory is a ` +
       `separate scope, so a workspace package holding its own state needs its own run. Then ` +
       `re-run \`stamity check\`.`,
+    `  eyes open on that uninstall: it finds what to remove by DIRECTORY rather than by name, ` +
+      `and this setup writes into the same directories at the same paths — so it takes THIS ` +
+      `setup's generated files with it. Run it in its own preview mode first, if it has one, and ` +
+      `read the list. Generated files come back afterwards: \`stamity check\` names each one and ` +
+      `\`stamity sync\` writes it back from the corpus. Your own prose outside a managed block ` +
+      `does not come back — nothing can regenerate it — so commit this repo before you run it. ` +
+      `And if it finishes by offering to reinstall the old setup, decline.`,
   ];
+  if (residue.unownedSettingsPath !== undefined) {
+    lines.push(
+      `  one of those paths is live wiring: ${residue.unownedSettingsPath} was already here, so ` +
+        `this run refused to claim it and installed none of its own hook or permission settings ` +
+        `there — whatever that file wires is what still fires. If it is the previous setup's ` +
+        `rather than yours, remove it and run \`stamity sync\` to get this setup's.`,
+    );
+  }
   if (carry.envMcpCarried) {
     lines.push(
       `  before any of that: ${ENV_MCP_FILE} at the repo root is now THIS setup's credential ` +

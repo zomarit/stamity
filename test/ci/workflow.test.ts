@@ -314,6 +314,9 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(run).toContain("node scripts/generate-docs.mjs");
     // Pack manifests run in --check mode in CI: verify-only, writes nothing.
     expect(run).toContain("node scripts/generate-pack-manifests.mjs --check");
+    // The four plugin/marketplace surfaces, same posture: a drifted manifest
+    // fails with the regeneration command rather than being rewritten by CI.
+    expect(run).toContain("node scripts/generate-plugin-manifests.mjs --check");
     expect(run).toContain("git diff --exit-code");
     // `git diff --exit-code` ignores untracked files by design (gitignored coverage/ and dist/
     // output must not trip the gate); porcelain would not.

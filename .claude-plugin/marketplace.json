@@ -1,0 +1,52 @@
+{
+  "name": "stamity",
+  "owner": {
+    "name": "Zomarit",
+    "url": "https://github.com/zomarit"
+  },
+  "description": "Generates a tool-agnostic agentic coding setup — charter, commands, agents, skills, rules, hooks, MCP wiring — for Claude Code, Cursor, GitHub Copilot and Codex from one canonical source.",
+  "version": "1.0.0",
+  "plugins": [
+    {
+      "name": "stamity",
+      "source": {
+        "source": "npm",
+        "package": "@zomarit/stamity",
+        "version": "1.0.0"
+      },
+      "description": "Generates a tool-agnostic agentic coding setup — charter, commands, agents, skills, rules, hooks, MCP wiring — for Claude Code, Cursor, GitHub Copilot and Codex from one canonical source.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Zomarit"
+      },
+      "homepage": "https://github.com/zomarit/stamity",
+      "repository": "https://github.com/zomarit/stamity",
+      "license": "MIT",
+      "keywords": [
+        "agentic",
+        "ai-coding",
+        "claude-code",
+        "cursor",
+        "copilot",
+        "codex",
+        "agents",
+        "cli",
+        "developer-tools"
+      ],
+      "agents": [
+        "./dist/content/agents/stamity-creator.md",
+        "./dist/content/agents/stamity-design-quality.md",
+        "./dist/content/agents/stamity-fixer.md",
+        "./dist/content/agents/stamity-implementer.md",
+        "./dist/content/agents/stamity-performance.md",
+        "./dist/content/agents/stamity-researcher.md",
+        "./dist/content/agents/stamity-reviewer.md",
+        "./dist/content/agents/stamity-security.md",
+        "./dist/content/agents/stamity-spec-author.md",
+        "./dist/content/agents/stamity-test-runner.md"
+      ],
+      "commands": "./dist/content/commands/",
+      "skills": "./dist/content/skills/"
+    }
+  ]
+}

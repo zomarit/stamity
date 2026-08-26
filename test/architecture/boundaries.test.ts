@@ -374,6 +374,13 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // The trust ladder and the org policy both read the validated pack manifest
   // and nothing of each other — siblings, not a chain.
   "src/pack/trust.ts": { unit: "p5-trust-ladder", wave: 6 },
+  // Same unit as the ladder, deliberately: the two hold one contract between
+  // them. The ladder imports the verifier at runtime and the verifier imports
+  // the ladder's verdict type back, and a same-unit pair is how the map says
+  // "these two layer against each other" without a waiver. Rule 3 still covers
+  // the risk — the type edge is exempt from the cycle check, the runtime edge
+  // runs one way, and a runtime import added in the other direction fails there.
+  "src/pack/sigstoreVerifier.ts": { unit: "p5-trust-ladder", wave: 6 },
   "src/pack/orgPolicy.ts": { unit: "p5-org-policy", wave: 6 },
   // wave 7 — pack-install leaves over the trust ladder
   "src/pack/receipt.ts": { unit: "p5-install-pipeline", wave: 7 },

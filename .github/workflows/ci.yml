@@ -190,8 +190,9 @@ jobs:
         run: npm test
 
       # Every generated artifact class, regenerated and byte-diffed: the capability
-      # matrix, the CLI/config/reference/llms pages, and the catalog pins (verified
-      # in --check mode — this step writes nothing but regenerated tracked pages).
+      # matrix, the CLI/config/reference/llms pages, the catalog pins, and the four
+      # plugin/marketplace manifests (the last two verified in --check mode — this
+      # step writes nothing but regenerated tracked pages).
       # The generators run on Node's own type stripping and need no build.
       # `git diff --exit-code` ignores untracked files by design, so gitignored
       # output (coverage/, dist/) cannot trip the gate — do not swap in
@@ -202,6 +203,7 @@ jobs:
           node scripts/generate-capability-matrix.mjs &&
           node scripts/generate-docs.mjs &&
           node scripts/generate-pack-manifests.mjs --check &&
+          node scripts/generate-plugin-manifests.mjs --check &&
           git diff --exit-code
 
       # The committed self-configs — AGENTS.md and the generated client trees — re-proven

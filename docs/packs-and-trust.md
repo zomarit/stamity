@@ -1,6 +1,7 @@
 <!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-26). -->
-<!-- Re-open when: a trust tier is added or removed, the Sigstore verifier is armed, or the
-     org policy grammar changes. `test/docsPages.test.ts` holds this page to the hand-page
+<!-- Re-open when: a trust tier is added or removed, the signed payload or the
+     `signing.signer` grammar or requirement changes, the bundle bound changes, the shipped
+     signature verifier is replaced, or the org policy grammar changes. `test/docsPages.test.ts` holds this page to the hand-page
      contract; `src/pack/trust.ts` is the ladder's source of truth and `../SECURITY.md` is the
      one home for what the engine defends. -->
 
@@ -63,31 +64,61 @@ re-install alike, which is what keeps the update path from being the way around 
 **Claims are not evidence.** A signing declaration raises the *claimed* tier only. The
 claim holds when its detached bundle verifies, and not before.
 
-## Signature verification is not armed
+## What a publisher-signed claim is checked against
 
-Say this plainly, because the tier exists and the check does not: **this build ships no
-Sigstore verifier.** The seam is there and the implementation behind it reports `unarmed`
-rather than a verdict, so a publisher-signed claim is **refused**, not trusted and not
-waved through on the declaration alone.
+The check is armed. A pack that declares `signing.method: "sigstore"` names a detached
+bundle it ships (`signing.bundlePath`), and the install runs that bundle through the
+official Sigstore client before anything is written.
 
-The distinction the unarmed report preserves is between "this build could not check" and
-"this build checked and the signature is wrong" — those are different facts and the
-refusal says which one it is. The way forward it names is a catalog-pinned source.
+What a pass means, exactly: the signature covers the pack's aggregate content hash, the
+signing certificate chains to a Fulcio root in the Sigstore trust root, the signature is on
+a transparency log and the certificate on a certificate-transparency log, and the
+certificate carries the identity the pack declares. A failure at any step is a **refusal**,
+never a downgrade to a lower rung.
 
-Note what does *not* help here: `--allow-untrusted` waives the **absence** of a trust
-basis, so it has no effect on a declared signing claim. No flag reaches it: a pack that
-claims a signature this build cannot verify stays refused whatever you pass on the command
-line.
+What a pass does *not* mean is that the signer was entitled to publish the pack. The pin is
+the pack's own declaration, so a pack naming its own author verifies whoever that is. The
+tier tells you who signed; deciding whether that is the right answer is yours.
 
-One thing does reach it, and it is not a flag — the catalog pin the refusal already names.
-When the same pack also arrives through a pin that **verified**, at a rung the catalog's
-own work backs (`scanned` or `curator-verified`), the unverifiable claim is recorded as
-`n/a` instead of refused and the install proceeds on the pin. That is the whole point of
-reporting `unarmed` rather than a verdict: unevaluable is not false, and the pin has
-already named these exact bytes. Neither weaker case stands in — a pin whose content
-hashes to something else is refused before this gate by pinned-or-refuse, and a
-`pinned-unsigned` pin carries no catalog work to lend. No first-party pack declares
-`signing`, so today this is a path the ladder defines rather than one you will meet.
+**What gets signed.** Not the pack directory and not the bare hash: the aggregate content
+hash, lower-cased and length-framed as `64:<hex>` in UTF-8
+(`src/pack/trust.ts::sigstoreSignedPayload`). An author signing anything else produces a
+bundle this gate refuses. There is no signing helper in this package yet — producing the
+bundle is the author's step, against that serialization.
+
+**Declaring a signer is mandatory.** `signing.signer` reads
+`"<oidc-issuer> <certificate-identity>"` — the OIDC issuer, one space, then the identity in
+the certificate's subject alternative name. Neither half may contain a space, which is what
+makes the split unambiguous. It is **required** for `signing.method: "sigstore"`, and a
+signer that does not parse is refused rather than ignored. Both refusals are the same rule:
+a claim that pins nobody is satisfied by *any* Sigstore identity — anyone who can sign
+anything — and would still put the pack on the `publisher-signed` rung with no waiver
+anywhere on the command line. A pack that names no verifiable signer is refused when its
+`pack.json` is read, before any tier is resolved.
+
+**The bundle itself is bounded.** The declared `bundlePath` must be a regular file inside
+the pack — never a symlink, a pipe or a device node — and at most 1 MiB. Real bundles are a
+few kilobytes; the limit refuses rather than truncates, because half a bundle is not a
+bundle.
+
+**This is the one thing in the CLI that reaches the network.** Verifying a signed pack
+fetches the Sigstore trust root over TUF; the transparency-log proofs travel inside the
+bundle. `init`, `sync`, `check`, and installing any pack that declares no signature contact
+nothing — the client is not even loaded. The trust metadata is cached under your user cache
+directory, never inside the repository. [`SECURITY.md`](../SECURITY.md) states the same
+boundary as a control.
+
+**A verified claim is not waivable, and neither is a failed one.** `--allow-untrusted`
+waives the **absence** of a trust basis, so it has no effect on a declared signing claim:
+no flag on the command line reaches it. A catalog pin does not reach a failed check either.
+The ladder still has one narrow substitution — when a verifier reports that it could not
+EVALUATE a claim at all, a pin that verified at a rung the catalog's own work backs
+(`scanned` or `curator-verified`) stands in and the gate records `n/a`. The shipped
+verifier never reports that: it evaluates, so its refusals stay refusals. The rule survives
+for a caller that injects a verifier which cannot judge.
+
+No first-party pack declares `signing` — each rests on its catalog pin — so today this is a
+path the ladder defines rather than one you will meet.
 
 ## `--allow-untrusted`
 

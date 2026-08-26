@@ -449,6 +449,65 @@ describe("renderInitPanel — migration summary", () => {
     expect(output).toContain("it removes nothing else");
   });
 
+  it("warns that the predecessor's own uninstall takes THIS setup's generated files with it", () => {
+    // The line above points an operator at that uninstall, and pointing was the
+    // gap: the predecessor decides what to remove by DIRECTORY, this setup
+    // emits into those same directories, and its markers are not in that tool's
+    // marker set — so the sweep this panel recommends deletes this setup's own
+    // output. A recommendation printed without its consequence is the one line
+    // here that can cost a user files.
+    const output = renderInitPanel(
+      panelInput({ carry: carryFixture(), residue: { paths: ["/repo/.prior"] } }),
+    );
+
+    expect(output).toContain("by DIRECTORY rather than by name");
+    expect(output).toContain("takes THIS setup's generated files with it");
+    // The three consequences in the order they have to be acted on: look before,
+    // regenerate after, and the one thing no regeneration reaches — which is why
+    // the commit instruction is stated rather than left implied.
+    expect(output).toContain("preview mode first");
+    expect(output).toContain("`stamity sync` writes it back from the corpus");
+    expect(output).toContain("commit this repo before you run it");
+    expect(output).toContain("offering to reinstall the old setup, decline");
+    // Same discipline the residue line established: no predecessor verb is
+    // invented. The preview mode and the end-of-run offer are named as
+    // behaviours to look for, conditionally — never as a flag or a subcommand
+    // this run never observed.
+    expect(output).not.toMatch(/--dry-run|--purge|--yes/);
+  });
+
+  it("names the settings document this run refused to claim, with the remedy", () => {
+    // Detection never sees this file: it is not a marked instruction surface and
+    // not under the predecessor's state directory, so it was missing from a
+    // residue list whose whole job is to stop the report overstating the move.
+    // The consequence is what earns it a line — the hooks that actually fire are
+    // still the previous setup's, and nothing else on this panel says so.
+    const output = renderInitPanel(
+      panelInput({
+        carry: carryFixture(),
+        residue: {
+          paths: ["/repo/.prior", ".claude/settings.json"],
+          unownedSettingsPath: ".claude/settings.json",
+        },
+      }),
+    );
+
+    expect(output).toContain("left in place: 2 predecessor path(s)");
+    expect(output).toContain("one of those paths is live wiring: .claude/settings.json");
+    expect(output).toContain("installed none of its own hook or permission settings");
+    expect(output).toContain("remove it and run `stamity sync`");
+    // The half this run cannot verify stays conditional: it knows the file
+    // predates the run and that the run did not write it, not who authored it.
+    expect(output).toContain("If it is the previous setup's rather than yours");
+  });
+
+  it("prints no settings remedy when this run claimed every path it planned", () => {
+    const output = renderInitPanel(
+      panelInput({ carry: carryFixture(), residue: { paths: ["/repo/.prior"] } }),
+    );
+    expect(output).not.toContain("live wiring");
+  });
+
   it("names the credential file as a back-up-first step when one was carried", () => {
     // The carry adopts `.env.mcp` where it stands — no copy — so any
     // predecessor uninstall that removes credentials removes the live tokens
