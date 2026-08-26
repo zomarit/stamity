@@ -44,7 +44,7 @@
  */
 
 import { KEY_SPECS, type ConfigKeySpec } from "../commands/config.ts";
-import { manifestPath } from "../../manifest/manifest.ts";
+import { MANIFEST_REPO_PATH } from "../../manifest/manifest.ts";
 import { TOOLS } from "../../types/core.ts";
 import { MANIFEST_VERSION, type SetupManifest } from "../../types/manifest.ts";
 import { EngineError } from "../../types/errors.ts";
@@ -177,7 +177,7 @@ export function renderConfigReferenceFrom(specs: readonly ConfigKeySpec[]): stri
     `The registry is the whole surface: \`config set\` refuses any key not listed here by name,`,
     `so a key absent from this table cannot be written even if the manifest would accept it.`,
     "",
-    `Values live in \`${manifestPath("")}\`. Editing that file by hand is not the supported`,
+    `Values live in \`${MANIFEST_REPO_PATH}\`. Editing that file by hand is not the supported`,
     `path — \`config set\` validates the result against the manifest schema before it writes,`,
     `and prints the same refusal the writer would have produced.`,
     "",

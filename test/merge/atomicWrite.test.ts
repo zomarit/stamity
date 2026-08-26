@@ -193,19 +193,27 @@ describe("atomicWriteFile", () => {
     expect(await readdir(dir.path("nested", "deep"))).toEqual(["out.md"]);
   });
 
-  it("carries an explicit mode through the rename", async () => {
-    const dir = getDir();
-    const executable = dir.path("hook.sh");
-    const plain = dir.path("plain.md");
+  // POSIX-ONLY: the subject is the POSIX execute bit (S_IXUSR/S_IXGRP/S_IXOTH),
+  // which Windows does not carry — its `stat` maps only the read-only attribute
+  // into `st_mode`, so `mode & 0o111` is 0 for every file and neither half of
+  // this case can be observed. The "existing-file mode preservation" block
+  // below is skipped there for the same reason.
+  it.skipIf(process.platform === "win32")(
+    "carries an explicit mode through the rename",
+    async () => {
+      const dir = getDir();
+      const executable = dir.path("hook.sh");
+      const plain = dir.path("plain.md");
 
-    await atomicWriteFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-    await atomicWriteFile(plain, "text");
+      await atomicWriteFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      await atomicWriteFile(plain, "text");
 
-    // Asserted as "some execute bit is set" rather than an exact mode, because
-    // the process umask masks the requested bits.
-    expect((await stat(executable)).mode & 0o111).not.toBe(0);
-    expect((await stat(plain)).mode & 0o111).toBe(0);
-  });
+      // Asserted as "some execute bit is set" rather than an exact mode, because
+      // the process umask masks the requested bits.
+      expect((await stat(executable)).mode & 0o111).not.toBe(0);
+      expect((await stat(plain)).mode & 0o111).toBe(0);
+    },
+  );
 
   /**
    * Temp+rename publishes a NEW inode, so every rewrite used to land the

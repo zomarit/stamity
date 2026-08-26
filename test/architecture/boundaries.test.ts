@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -767,6 +768,33 @@ afterAll(() => {
   rmSync(probeRoot, { recursive: true, force: true });
 });
 
+/**
+ * oxlint's own JS entry, resolved from its package manifest and run through
+ * `process.execPath`.
+ *
+ * NOT `node_modules/.bin/oxlint`. That name is a shell shim, and on Windows the
+ * shim is `oxlint.cmd` — a batch file. Since the CVE-2024-27980 fix (Node
+ * 18.20.2 / 20.12.2 and every line after) `child_process.spawn` refuses to
+ * launch a `.cmd`/`.bat` without `shell: true`, so spawning it fails EINVAL
+ * before oxlint ever starts. Handing the batch file to a shell instead would
+ * put cmd.exe's own quoting rules between this probe and its argv. The shim's
+ * whole body is `node <pkg>/bin/oxlint`, so calling that directly is the same
+ * invocation with no interpreter in the middle — one code path on every
+ * platform, and no shell.
+ */
+const OXLINT_ENTRY = ((): string => {
+  const require = createRequire(import.meta.url);
+  const manifestPath = require.resolve("oxlint/package.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    bin?: string | Record<string, string>;
+  };
+  const relative = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.["oxlint"];
+  if (relative === undefined) {
+    throw new Error(`${manifestPath} declares no "oxlint" bin entry to run`);
+  }
+  return path.join(path.dirname(manifestPath), relative);
+})();
+
 function lintProbe(seed: Readonly<Record<string, string>>): string {
   rmSync(path.join(probeRoot, "src"), { recursive: true, force: true });
   writeFileSync(path.join(probeRoot, ".oxlintrc.json"), readFileSync(OXLINT_CONFIG_PATH, "utf8"));
@@ -775,20 +803,18 @@ function lintProbe(seed: Readonly<Record<string, string>>): string {
     mkdirSync(path.dirname(absolute), { recursive: true });
     writeFileSync(absolute, contents);
   }
-  const binary = path.join(
-    REPO_ROOT,
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "oxlint.cmd" : "oxlint",
-  );
   // Pin the reporter: oxlint auto-selects `--format=github` under a GitHub Actions runner, and
   // since oxlint 1.79.0 that annotation format drops the per-pattern custom `message` (it survives
   // only in the `default` reporter's `help:` field). Without this the message assertions below pass
   // locally (default reporter) but fail in CI (github reporter). `default` keeps the invocation
   // deterministic across environments; the assertions are unchanged.
-  const result = spawnSync(binary, ["--format=default"], { cwd: probeRoot, encoding: "utf8", shell: false });
+  const result = spawnSync(process.execPath, [OXLINT_ENTRY, "--format=default"], {
+    cwd: probeRoot,
+    encoding: "utf8",
+    shell: false,
+  });
   if (result.error !== undefined) {
-    throw new Error(`could not run ${binary}: ${result.error.message}`);
+    throw new Error(`could not run ${OXLINT_ENTRY}: ${result.error.message}`);
   }
   return `${result.stdout}${result.stderr}`;
 }

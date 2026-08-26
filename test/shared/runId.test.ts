@@ -1,5 +1,5 @@
 import type * as NodeFs from "node:fs";
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve, sep } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EngineError } from "../../src/types/errors.ts";
 import { findPackageRoot } from "../../src/shared/paths.ts";
@@ -131,9 +131,14 @@ describe("findPackageRoot", () => {
 
     try {
       const { findPackageRoot: probe } = await import("../../src/shared/paths.ts");
+      // Built from the platform's own root: the walk resolves its argument, so
+      // "/deep/nested/start" comes back out of a Windows resolve() as
+      // "D:\deep\nested\start" and the literal POSIX spelling is not in the
+      // message. `resolve(sep, ...)` names the same directory on both.
+      const start = resolve(sep, "deep", "nested", "start");
       let thrown: unknown;
       try {
-        probe("/deep/nested/start");
+        probe(start);
       } catch (error) {
         thrown = error;
       }
@@ -144,7 +149,7 @@ describe("findPackageRoot", () => {
       expect(error?.name).toBe("EngineError");
       expect(error.code).toBe("FS_ERROR");
       expect(error.exitCode).toBe(1);
-      expect(error.message).toContain("/deep/nested/start");
+      expect(error.message).toContain(start);
 
       // Pins that the stub is what produced the throw: a directory that really
       // does hold a package.json is rejected too while the probe reports nothing.

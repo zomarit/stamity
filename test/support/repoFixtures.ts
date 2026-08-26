@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { appendFile } from "node:fs/promises";
-import { devNull } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
@@ -25,6 +24,24 @@ const FIXTURE_EPOCH_SECONDS = 1767225600;
 const DEFAULT_AUTHORS: readonly { name: string; email: string }[] = [
   { name: "Fixture One", email: "one@fixture.invalid" },
 ];
+
+/**
+ * The value git documents for "read no configuration at this level", used for
+ * `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` alike: git-config(1) ENVIRONMENT
+ * says each "can be set to `/dev/null` to skip reading configuration files of
+ * the respective level".
+ *
+ * The literal string, NOT `os.devNull`. On Windows that property is the device
+ * path `\\.\nul`, which is not the spelling git knows: its config sequence
+ * calls `access()` on the path first, gets EINVAL rather than ENOENT, and dies
+ * — `fatal: unable to access '\\.\nul': Invalid argument` — before any
+ * command runs. `/dev/null` is safe on both platforms because both of its
+ * outcomes are the same outcome: git for Windows maps the name onto the `nul`
+ * device and reads it empty, and any git that does not simply fails to find a
+ * file at that path, which `access_or_die` classifies as a missing config and
+ * skips. On POSIX the value is byte-identical to `os.devNull`.
+ */
+export const NO_GIT_CONFIG = "/dev/null";
 
 /** Env vars the platform's process machinery needs to launch child binaries at all.
  *  Everything else is withheld — fixtures build their child env fresh. */
@@ -56,7 +73,7 @@ export function carriedProcessEnv(): Record<string, string> {
  * given seed map. Single-shot: call once per directory.
  *
  * Isolation: system and global git config are cut off (`GIT_CONFIG_NOSYSTEM`,
- * `GIT_CONFIG_GLOBAL=os.devNull`, `HOME` pointed at `dir`), so user-level
+ * `GIT_CONFIG_GLOBAL=/dev/null`, `HOME` pointed at `dir`), so user-level
  * signing, hooks, and templates cannot leak in. Identity comes solely from the
  * per-commit `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env.
  *
@@ -154,7 +171,7 @@ function gitEnv(dir: string): Record<string, string> {
   env["HOME"] = dir;
   env["USERPROFILE"] = dir;
   env["GIT_CONFIG_NOSYSTEM"] = "1";
-  env["GIT_CONFIG_GLOBAL"] = devNull;
+  env["GIT_CONFIG_GLOBAL"] = NO_GIT_CONFIG;
   env["GIT_TERMINAL_PROMPT"] = "0";
   env["LC_ALL"] = "C";
   return env;

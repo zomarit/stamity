@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 // @ts-expect-error — the probe is a plain .mjs script with no type declarations, and stays that
@@ -1481,7 +1481,7 @@ describe("advisory-check — OSV lookup over the pinned catalog", () => {
       "@upstash/context7-mcp@2.1.1": [],
       "mcp-remote@0.1.16": ["GHSA-xxxx-yyyy-zzzz"],
     });
-  });
+  }, 60_000); // a real `npm audit` through cmd.exe on the Windows leg can exceed the 20 s default
 
   it.each([
     ["network error", () => Promise.reject(new Error("getaddrinfo ENOTFOUND"))],
@@ -1530,12 +1530,17 @@ describe("advisory-check — reporting", () => {
   function runWithFailingFetch(): { stdout: string; status: number; summary: string } {
     const preload = join(work, "no-network.mjs");
     writeFileSync(preload, "globalThis.fetch = () => Promise.reject(new Error('offline'))\n");
+    // `--import` takes a module SPECIFIER, not a path: a bare absolute path is
+    // resolved as a URL, so on Windows `C:\...` parses as scheme `c:` and Node
+    // refuses it (ERR_UNSUPPORTED_ESM_URL_SCHEME) before the probe starts. The
+    // file URL is the one spelling every platform resolves the same way.
+    const preloadSpecifier = pathToFileURL(preload).href;
     const summaryPath = join(work, "summary.md");
     writeFileSync(summaryPath, "");
     try {
       const stdout = execFileSync(
         process.execPath,
-        ["--import", preload, join(REPO_ROOT, "scripts", "advisory-check.mjs")],
+        ["--import", preloadSpecifier, join(REPO_ROOT, "scripts", "advisory-check.mjs")],
         {
           cwd: REPO_ROOT,
           encoding: "utf8",

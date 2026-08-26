@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Command } from "commander";
 import { afterAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
@@ -206,7 +206,10 @@ describe("introspection safety", () => {
       const probe = join(workspace, "probe.mjs");
       writeFileSync(
         probe,
-        `await import(${JSON.stringify(CLI_ENTRY_PATH)});\n` +
+        // The file URL, not the raw path: `import()` resolves its argument as a
+        // URL, so a Windows absolute path parses as scheme `c:` and throws
+        // ERR_UNSUPPORTED_ESM_URL_SCHEME instead of loading the entry.
+        `await import(${JSON.stringify(pathToFileURL(CLI_ENTRY_PATH).href)});\n` +
           `process.stdout.write("imported:" + String(process.exitCode));\n`,
         "utf-8",
       );

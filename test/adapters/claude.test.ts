@@ -1064,46 +1064,80 @@ describe("hook argv joining", () => {
     return { settings: settingsOf(rows), raw: byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content, core };
   }
 
-  it("renders every quote-forcing element so a POSIX shell re-splits the line into the declared argv", async () => {
-    const argv = ["node", ".stamity/hooks/run.mjs", ...QUOTING_TABLE.map((row) => row.element)];
+  /** The line the adapter emits for `argv`, as the client's `command` field. */
+  async function joinedCommand(argv: readonly string[]): Promise<string> {
     const { settings } = await settingsFromHooks({
-      hooks: [{ event: "session_start", command: argv }],
+      hooks: [{ event: "session_start", command: [...argv] }],
     });
-
     // Last SessionStart entry is the user row — the two core scripts precede it.
-    const command = settings.hooks["SessionStart"]?.at(-1)?.hooks[0]?.command ?? "";
-    const words = reSplit(command);
+    return settings.hooks["SessionStart"]?.at(-1)?.hooks[0]?.command ?? "";
+  }
 
-    // Row by row, so a failure names the character that broke: the element
-    // survives the shell, and this is the rendering that carried it.
-    for (const [index, row] of QUOTING_TABLE.entries()) {
-      expect(words[index + 2], row.label).toBe(row.element);
+  it("renders every quote-forcing element in the POSIX single-quoted form", async () => {
+    const argv = ["node", ".stamity/hooks/run.mjs", ...QUOTING_TABLE.map((row) => row.element)];
+
+    const command = await joinedCommand(argv);
+
+    // Row by row, so a failure names the character that broke.
+    for (const row of QUOTING_TABLE) {
       expect(command, row.label).toContain(row.quoted);
     }
-    // And nothing else moved: no word gained, none lost, none re-ordered. The
-    // empty element is what a `toContain` check cannot see on its own — it is a
-    // line of zero length in the middle of the list.
-    expect(words).toEqual(argv);
+    // The whole line, exactly: a `toContain` per row cannot see an element that
+    // was dropped, duplicated or re-ordered, and the empty element is invisible
+    // to it entirely.
+    expect(command).toBe(
+      `node .stamity/hooks/run.mjs ${QUOTING_TABLE.map((row) => row.quoted).join(" ")}`,
+    );
   });
+
+  // POSIX-ONLY: the criterion is field splitting by /bin/sh (POSIX.1-2017 XCU
+  // §2.6.5), a primitive Windows has no equivalent of — cmd.exe and PowerShell
+  // parse a different grammar, so re-splitting there would answer a different
+  // question. The rendering itself is asserted above on every platform.
+  it.skipIf(process.platform === "win32")(
+    "renders it so a POSIX shell re-splits the line into the declared argv",
+    async () => {
+      const argv = ["node", ".stamity/hooks/run.mjs", ...QUOTING_TABLE.map((row) => row.element)];
+
+      const words = reSplit(await joinedCommand(argv));
+
+      // Row by row, so a failure names the character that broke: the element
+      // survives the shell, and this is the rendering that carried it.
+      for (const [index, row] of QUOTING_TABLE.entries()) {
+        expect(words[index + 2], row.label).toBe(row.element);
+      }
+      // And nothing else moved: no word gained, none lost, none re-ordered. The
+      // empty element is what a `toContain` check cannot see on its own — it is
+      // a line of zero length in the middle of the list.
+      expect(words).toEqual(argv);
+    },
+  );
 
   it("hands an expansion character to the client as the element, not as what a shell would make of it", async () => {
     const argv = ["node", ".stamity/hooks/run.mjs", "$STAMITY_FIXTURE_VAR"];
-    const { settings } = await settingsFromHooks({
-      hooks: [{ event: "session_start", command: argv }],
-    });
-    const command = settings.hooks["SessionStart"]?.at(-1)?.hooks[0]?.command ?? "";
 
     // `$` is outside the shell-safe set, so the element is quoted rather than
     // written bare — which is what the predecessor did with it, having asked
     // only about whitespace and quotes.
-    expect(command).toBe("node .stamity/hooks/run.mjs '$STAMITY_FIXTURE_VAR'");
-    // A shell with the variable actually SET is the non-degenerate input: if the
-    // quoting were wrong the element would come back as the value, and an empty
-    // environment would hide that behind an empty string.
-    expect(
-      reSplit(command, { ...process.env, STAMITY_FIXTURE_VAR: "expanded-by-the-shell" }),
-    ).toEqual(argv);
+    expect(await joinedCommand(argv)).toBe("node .stamity/hooks/run.mjs '$STAMITY_FIXTURE_VAR'");
   });
+
+  // POSIX-ONLY: same /bin/sh field-splitting primitive as above, with the
+  // variable actually SET — the non-degenerate input. If the quoting were wrong
+  // the element would come back as the value, and an empty environment would
+  // hide that behind an empty string.
+  it.skipIf(process.platform === "win32")(
+    "keeps the expansion character unexpanded through a shell that defines the variable",
+    async () => {
+      const argv = ["node", ".stamity/hooks/run.mjs", "$STAMITY_FIXTURE_VAR"];
+
+      const command = await joinedCommand(argv);
+
+      expect(
+        reSplit(command, { ...process.env, STAMITY_FIXTURE_VAR: "expanded-by-the-shell" }),
+      ).toEqual(argv);
+    },
+  );
 
   it("states the join's real guarantee in the source, and never the retired boundary claim", () => {
     const source = readFileSync(ADAPTER_SOURCE, "utf8");
