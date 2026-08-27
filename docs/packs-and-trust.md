@@ -77,8 +77,12 @@ certificate carries the identity the pack declares. A failure at any step is a *
 never a downgrade to a lower rung.
 
 What a pass does *not* mean is that the signer was entitled to publish the pack. The pin is
-the pack's own declaration, so a pack naming its own author verifies whoever that is. The
-tier tells you who signed; deciding whether that is the right answer is yours.
+the pack's own declaration, so a pack naming its own author verifies whoever that is. So the
+name is the thing to read, and `stamity add` prints it while you can still act on it: the
+trust line of a verified pack states the certificate identity and the issuer that vouched
+for it — `publisher-signed — … bundle verified: signed by <identity> via <issuer>` — and the
+install receipt records the same sentence. Deciding whether that name is the right one is
+yours; the install will not decide it for you.
 
 **What gets signed.** Not the pack directory and not the bare hash: the aggregate content
 hash, lower-cased and length-framed as `64:<hex>` in UTF-8

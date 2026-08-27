@@ -428,10 +428,15 @@ describe("readSigstoreBundle", () => {
 });
 
 describe("verifyPublisherSignedClaim", () => {
+  // TEST CHANGED, justified: the gate returns the VERDICT now, not a collapsed
+  // string, so the outcome is read off `outcome`. Strengthened rather than
+  // re-pointed: `toEqual` pins the WHOLE object, which is what asserts that an
+  // "n/a" carries no `verifiedBasis` — nothing was proved here, so naming an
+  // identity would be an invention.
   it("reports n/a for a manifest with no signing declaration — nothing claimed, nothing waived", async () => {
     await expect(
       verifyPublisherSignedClaim(manifest(), getPack().dir, notYetArmedSigstoreVerifier),
-    ).resolves.toBe("n/a");
+    ).resolves.toEqual({ outcome: "n/a" });
   });
 
   // TEST CHANGED, justified: the message assertions follow the
@@ -464,11 +469,13 @@ describe("verifyPublisherSignedClaim", () => {
     const pin = pinFor(INTEGRITY, "curator-verified");
     expect(resolveTrustTier(signed, pin).tier).toBe("curator-verified");
 
+    // Whole-object equality again: a claim NOTHING could evaluate must not
+    // report a verified basis, or the pin's stand-in would print as a signature.
     await expect(
       verifyPublisherSignedClaim(signed, pack.dir, notYetArmedSigstoreVerifier, {
         catalogPinTier: "curator-verified",
       }),
-    ).resolves.toBe("n/a");
+    ).resolves.toEqual({ outcome: "n/a" });
     // Without the pin the same claim is still refused — the pin is the only
     // thing that stands in, and only for a claim nothing could evaluate.
     await expectRejection(
@@ -549,13 +556,16 @@ describe("verifyPublisherSignedClaim", () => {
         seen.bytes = Buffer.from(bundleBytes).toString("utf8");
         seen.sha = aggregateSha;
         if (signer !== undefined) seen.signer = signer;
-        return Promise.resolve({ verified: true, reason: "bundle verified" });
+        return Promise.resolve({ verified: true, reason: "bundle verified: signed by nobody" });
       },
     };
 
-    await expect(verifyPublisherSignedClaim(manifest({ signing: SIGSTORE }), pack.dir, armed)).resolves.toBe(
-      "pass",
-    );
+    // The verdict's reason rides back with the pass, verbatim: it is the one
+    // channel the verified IDENTITY has to the operator, and the gate used to
+    // drop it on the floor by collapsing every pass to the string "pass".
+    await expect(
+      verifyPublisherSignedClaim(manifest({ signing: SIGSTORE }), pack.dir, armed),
+    ).resolves.toEqual({ outcome: "pass", verifiedBasis: "bundle verified: signed by nobody" });
     expect(seen.bytes).toBe(bundleJson);
     expect(seen.sha).toBe(computeAggregateContentSha(INTEGRITY));
     expect(seen.signer).toBe(SIGNER);

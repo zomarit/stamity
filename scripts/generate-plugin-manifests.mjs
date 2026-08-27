@@ -163,10 +163,13 @@ for (let i = 0; i < args.length; i += 1) {
 
 // ── Pinned publisher facts ───────────────────────────────────────
 //
-// The display name is the ONE string here that no machine-readable file in the
-// tree carries: package.json's `author` is the maintainer, and a plugin surface
-// names the publisher. It is checked against the repository owner slug below,
-// so a repository move fails the run rather than shipping the old publisher.
+// The display name, pinned rather than read. package.json's `author` now holds
+// the same name, and that is precisely why this constant is not derived from
+// it: `author` is a free-text npm field, so reading it would let one edit there
+// silently rename the publisher on all four plugin surfaces at once. Pinned
+// here, the name is cross-checked against the repository owner slug below, so a
+// repository move — or a drifted pin — fails the run instead of shipping a
+// publisher nobody chose.
 
 const PUBLISHER = 'Zomarit'
 

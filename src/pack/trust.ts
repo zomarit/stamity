@@ -283,6 +283,45 @@ function assertKnownSigningMethod(method: string): void {
 const shortSha = (sha: string): string => `${sha.slice(0, 12)}…`;
 
 /**
+ * The clause a tier basis carries while a declared signature has not been
+ * judged yet.
+ *
+ * {@link resolveTrustTier} runs BEFORE the signature gate — it costs no read,
+ * which is what lets the org policy be evaluated on the source kind the pin
+ * decides — so every basis it builds for a pack that declares signing ends
+ * here, with the claim still open. It is a trailing suffix in both branches on
+ * purpose: {@link settleSignatureClause} swaps it for what the verifier
+ * actually proved, and a clause buried mid-sentence could not be swapped
+ * without rewriting the sentence around it.
+ */
+const PENDING_SIGNATURE_CLAUSE =
+  "; the declared signature claim must still verify against its bundle";
+
+/**
+ * The tier basis with its pending-signature clause replaced by the verifier's
+ * own account of what it proved.
+ *
+ * This is how the verified signer reaches the operator. The verdict names the
+ * identity and the issuer, that string is built and sanitized in
+ * `./sigstoreVerifier.ts`, and until it was carried here it died inside the
+ * gate: the install plan recorded `"pass"` and printed a basis that still said
+ * the claim "must still verify", so `stamity add` told an operator a signature
+ * was pending at the moment it had just been proved, and never told them WHO
+ * signed. Everything the tier resolution settled — the aggregate content SHA,
+ * a catalog pin standing beside the signature — is kept; only the open clause
+ * is replaced.
+ *
+ * A basis with no pending clause (nothing declared) is returned with the
+ * verified account appended, so this is safe to apply to any basis.
+ */
+export function settleSignatureClause(basis: string, verifiedBasis: string): string {
+  const settled = basis.endsWith(PENDING_SIGNATURE_CLAUSE)
+    ? basis.slice(0, -PENDING_SIGNATURE_CLAUSE.length)
+    : basis;
+  return `${settled}; ${verifiedBasis}`;
+}
+
+/**
  * Resolve the tier a pack's evidence supports.
  *
  * Order of authority:
@@ -323,9 +362,7 @@ export function resolveTrustTier(manifest: PackManifest, pin?: CatalogPin): Reso
         tier: pin.tier,
         basis:
           `catalog pin verified: aggregate content SHA ${shortSha(aggregateSha)} matches and the catalog grants "${pin.tier}"` +
-          (signing === undefined
-            ? ""
-            : `; the declared "${signing.method}" signature claim must still verify against its bundle`),
+          (signing === undefined ? "" : PENDING_SIGNATURE_CLAUSE),
       };
     }
   }
@@ -334,9 +371,9 @@ export function resolveTrustTier(manifest: PackManifest, pin?: CatalogPin): Reso
     return {
       tier: "publisher-signed",
       basis:
-        `signing.method "${signing.method}" claims publisher-signed over aggregate content SHA ${shortSha(aggregateSha)}; ` +
-        `the claim holds only when the detached bundle verifies` +
-        (pin === undefined ? "" : ` (catalog pin SHA verified; its "${pin.tier}" grant adds no higher rung)`),
+        `signing.method "${signing.method}" claims publisher-signed over aggregate content SHA ${shortSha(aggregateSha)}` +
+        (pin === undefined ? "" : ` (catalog pin SHA verified; its "${pin.tier}" grant adds no higher rung)`) +
+        PENDING_SIGNATURE_CLAUSE,
     };
   }
 
@@ -467,6 +504,26 @@ const CATALOG_GRANTED_TIERS: ReadonlySet<TrustTier> = new Set<TrustTier>([
 ]);
 
 /**
+ * What {@link verifyPublisherSignedClaim} reports: the gate row, and — for a
+ * claim that verified — the verifier's own account of what it proved.
+ */
+export interface PublisherSignedOutcome {
+  /** The gate row the install plan records: a verified claim, or nothing claimed. */
+  outcome: "pass" | "n/a";
+  /**
+   * The verifier's own account of what it proved — "bundle verified: signed by
+   * <identity> via <issuer>", already sanitized for a terminal by
+   * `./sigstoreVerifier.ts` — carried verbatim for a claim that PASSED.
+   *
+   * Absent on `"n/a"`, and that is the honest shape rather than an empty
+   * string: `"n/a"` means nothing was proved (no declaration, or a claim
+   * nothing could evaluate standing on a catalog pin), so there is no identity
+   * to name and no sentence to print.
+   */
+  verifiedBasis?: string;
+}
+
+/**
  * Verify a manifest's publisher-signed claim through the seam. No signing
  * declaration means no claim — `"n/a"`, nothing waived. A claim is judged
  * fail-closed at every step: unknown method, missing `bundlePath`, missing
@@ -491,15 +548,23 @@ const CATALOG_GRANTED_TIERS: ReadonlySet<TrustTier> = new Set<TrustTier>([
  * A verdict that is not `unarmed` is a real verification failure and is never
  * substituted for — a wrong signature over pinned content means the two
  * pieces of evidence disagree, which is a refusal on its own.
+ *
+ * **The verdict is returned, not collapsed.** A pass carries
+ * {@link PublisherSignedOutcome.verifiedBasis} — the verifier's own sentence
+ * naming the identity and the issuer it pinned. This function used to reduce
+ * the whole verdict to the string `"pass"`, which is how the one fact an
+ * operator is installing ON — who signed this pack — never reached them: the
+ * plan printed a trust basis composed before the verification ran. The caller
+ * settles it into the plan's basis ({@link settleSignatureClause}).
  */
 export async function verifyPublisherSignedClaim(
   manifest: PackManifest,
   packRoot: string,
   verifier: SigstoreVerifier,
   opts: { catalogPinTier?: TrustTier } = {},
-): Promise<"pass" | "n/a"> {
+): Promise<PublisherSignedOutcome> {
   const signing = manifest.signing;
-  if (signing === undefined) return "n/a";
+  if (signing === undefined) return { outcome: "n/a" };
   assertKnownSigningMethod(signing.method);
 
   // The manifest schema does not carry `bundlePath` until the seam is armed;
@@ -516,12 +581,15 @@ export async function verifyPublisherSignedClaim(
   const bundleBytes = await readSigstoreBundle(packRoot, bundlePath);
   const aggregateSha = computeAggregateContentSha(manifest.integrity);
   const verdict = await verifier.verify(bundleBytes, aggregateSha, signing.signer);
-  if (verdict.verified) return "pass";
+  // The reason travels with the pass. It is the verifier's own words about the
+  // certificate it pinned, so nothing here re-derives, re-formats or re-sanitizes
+  // an identity — this layer would only be a second place for the two to drift.
+  if (verdict.verified) return { outcome: "pass", verifiedBasis: verdict.reason };
 
   const pinTier = opts.catalogPinTier;
   if (verdict.unarmed === true && pinTier !== undefined && CATALOG_GRANTED_TIERS.has(pinTier)) {
     // Unevaluable, not false — and the pin already named these exact bytes.
-    return "n/a";
+    return { outcome: "n/a" };
   }
   throw new EngineError(`Pack "${manifest.name}" publisher-signed claim refused: ${verdict.reason}`, {
     code: "INTEGRITY_ERROR",

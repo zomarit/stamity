@@ -20,12 +20,18 @@ import { useTempDir } from "../../support/tempDir.ts";
  * actually consumed — and installs into `.stamity/packs/…`, which never
  * overlaps its source.
  *
- * The ONE mocked seam is the curated catalog (`src/pack/curated.ts`). Its data
- * — which entries exist, their pins, their bundled roots — is the same-wave
- * catalog unit's own tested surface; mocking it here pins the CONTRACT this
- * command consumes (id lookup -> bundled root + pin pass-through) while every
- * engine gate the pin feeds (aggregate-SHA verification, tier resolution, the
- * full install) still runs for real against temp-dir packs.
+ * Two seams are mocked, both of them OUTSIDE the code under test. The curated
+ * catalog (`src/pack/curated.ts`): its data — which entries exist, their pins,
+ * their bundled roots — is the same-wave catalog unit's own tested surface, so
+ * mocking it here pins the CONTRACT this command consumes (id lookup -> bundled
+ * root + pin pass-through) while every engine gate the pin feeds (aggregate-SHA
+ * verification, tier resolution, the full install) still runs for real against
+ * temp-dir packs. And the third-party `sigstore` client, whose `verify` reaches
+ * a TUF mirror and demands a real Fulcio-issued certificate — neither of which a
+ * temp-dir fixture can produce. Only the client call is replaced: bundle
+ * parsing, signer pinning, the identity re-check, the claim gate and the plan's
+ * own composition all run for real, which is what makes the printed identity
+ * below the engine's answer rather than the fixture's.
  */
 
 const catalogSeam = vi.hoisted(() => ({
@@ -43,6 +49,26 @@ const catalogSeam = vi.hoisted(() => ({
   bundledRoots: new Map<string, string>(),
 }));
 
+/**
+ * The staged certificate the stubbed client returns, or `null`. Null throws by
+ * name rather than passing: a case that reaches the client without staging one
+ * has a bug, and a silent pass would hide it.
+ */
+const sigstoreSeam = vi.hoisted(() => ({
+  signer: null as null | {
+    identity: { subjectAlternativeName: string; extensions: { issuer: string } };
+  },
+}));
+
+vi.mock("sigstore", () => ({
+  verify: () => {
+    if (sigstoreSeam.signer === null) {
+      throw new Error("the Sigstore client was called with no certificate staged");
+    }
+    return Promise.resolve(sigstoreSeam.signer);
+  },
+}));
+
 vi.mock("../../../src/pack/curated.ts", () => ({
   lookupCatalogEntry: (id: string) => catalogSeam.entries.get(id),
   resolveBundledPackRoot: (id: string): string => {
@@ -57,6 +83,7 @@ const getProject = useTempDir("cli-add");
 beforeEach(() => {
   catalogSeam.entries.clear();
   catalogSeam.bundledRoots.clear();
+  sigstoreSeam.signer = null;
 });
 
 const PACK_SPEC = "./packs/ops";
@@ -974,6 +1001,89 @@ describe("add — trust gates", () => {
     expect(errorOf(doc).message).toContain("publisher-signed claim refused");
     expect(errorOf(doc).message).not.toContain("no armed Sigstore verifier");
     expect(await pathExists(getProject().path(PACK_DIR))).toBe(false);
+  });
+
+  /**
+   * What the operator learns from a signature that HELD.
+   *
+   * `publisher-signed` is the one tier whose meaning is a name: the rung says a
+   * publisher signed these exact bytes, and the only question that follows is
+   * WHICH publisher. The engine knew — the verdict names the certificate
+   * identity and the issuer that vouched for it — and printed none of it: the
+   * gate collapsed the verdict to "pass" and the trust line still carried the
+   * sentence the ladder composed before the verification ran. So the run that
+   * proved the signature told the operator it had yet to be checked.
+   *
+   * The stub returns the certificate the pack's own `signing.signer` declares,
+   * which is the only certificate that can pass: `verifySigstoreBundle`
+   * re-compares the returned SAN and issuer against the declared pin by exact
+   * string equality after the client returns, so a fixture that staged anyone
+   * else would be refused rather than printed.
+   */
+  const SIGSTORE_ISSUER = "https://token.actions.githubusercontent.com";
+  const SIGSTORE_IDENTITY = "releases@zomarit.dev";
+  /** Minimal bundle: enough for the media-type gate the client never sees past. */
+  const SIGSTORE_BUNDLE =
+    '{ "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json" }\n';
+
+  async function seedSignedPack(): Promise<void> {
+    await seedPack({
+      signing: {
+        method: "sigstore",
+        signer: `${SIGSTORE_ISSUER} ${SIGSTORE_IDENTITY}`,
+        bundlePath: "bundle.sigstore.json",
+      },
+      extras: {
+        "package.json": '{ "name": "@acme/ops" }',
+        "bundle.sigstore.json": SIGSTORE_BUNDLE,
+      },
+    });
+    sigstoreSeam.signer = {
+      identity: {
+        subjectAlternativeName: SIGSTORE_IDENTITY,
+        extensions: { issuer: SIGSTORE_ISSUER },
+      },
+    };
+  }
+
+  it("prints WHO signed a publisher-signed pack, not the claim that preceded the check", async () => {
+    await initProject();
+    await seedSignedPack();
+
+    // No waiver in the argv: a verified signature IS the trust basis, which is
+    // the whole reason an operator would prefer a signed pack.
+    const result = await run([PACK_SPEC]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("publisher-signed");
+    expect(result.stdout).toContain(SIGSTORE_IDENTITY);
+    expect(result.stdout).toContain(SIGSTORE_ISSUER);
+    // The half that regressed: the pre-verification claim text must be absent.
+    // A trust line carrying both would tell the operator, on one line, that the
+    // signature verified and that it has yet to verify.
+    expect(result.stdout).not.toContain("must still verify");
+    expect(await pathExists(getProject().path(PACK_DIR, "agents", "reviewer.md"))).toBe(true);
+  });
+
+  it("carries the same identity into the --json payload and the install receipt", async () => {
+    await initProject();
+    await seedSignedPack();
+
+    const result = await run([PACK_SPEC, "--json"]);
+
+    expect(result.code).toBe(0);
+    const doc = parseDoc(result.stdout);
+    expect(doc.trustTier).toBe("publisher-signed");
+    expect(checksOf(doc).signing).toBe("pass");
+    expect(String(doc.tierBasis)).toContain(SIGSTORE_IDENTITY);
+    expect(String(doc.tierBasis)).not.toContain("must still verify");
+
+    // The receipt outlives the terminal, so the identity the install rested on
+    // has to survive into it — a CI log is not a provenance record.
+    const receipt = JSON.parse(
+      await readFile(getProject().path(RECEIPT_PATH), "utf8"),
+    ) as Record<string, unknown>;
+    expect(String(receipt.tierBasis)).toContain(SIGSTORE_IDENTITY);
   });
 
   it("refuses a pack declaring a banned lifecycle script, before any write", async () => {

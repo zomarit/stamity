@@ -201,6 +201,11 @@ async function expectRejection(
   return error;
 }
 
+/** A verifier that attests every bundle, reporting `reason` as its verdict. */
+const attesting = (reason: string): SigstoreVerifier => ({
+  verify: async () => ({ verified: true, reason }),
+});
+
 /** Plans against the seeded pack; defaults to the seeded catalog pin as the trust basis. */
 const plan = async (opts?: PlanPackInstallOptions): Promise<PackInstallPlan> =>
   planPackInstall(getProject().dir, PACK_SPEC, opts ?? { catalogPin: seededPin });
@@ -1163,6 +1168,78 @@ describe("planPackInstall sigstore seam", () => {
         ),
       ),
     );
+  });
+
+  /**
+   * The verified signer, from the seam to the operator.
+   *
+   * The gate had every fact and published none of them: a verdict names the
+   * certificate identity and the issuer that vouched for it, and collapsing it
+   * to `"pass"` left `tierBasis` holding the sentence the ladder composed
+   * BEFORE any verification ran — "the declared signature claim must still
+   * verify against its bundle". So the one surface that says what a pack's
+   * trust rests on told an operator the check was pending at the moment it had
+   * just succeeded, and never named who signed. These cases pin both halves:
+   * the identity arrives, and the pending clause is gone.
+   */
+  const VERIFIED_REASON =
+    "bundle verified: signed by releases@zomarit.dev via https://token.actions.githubusercontent.com";
+
+  it("states WHO signed in the tier basis once the claim verifies", async () => {
+    await seedPack(sigstoreFixture);
+
+    const result = await plan({ sigstoreVerifier: attesting(VERIFIED_REASON) });
+
+    expect(result.trustTier).toBe("publisher-signed");
+    expect(result.checks.signing).toBe("pass");
+    expect(result.tierBasis).toContain("releases@zomarit.dev");
+    expect(result.tierBasis).toContain("https://token.actions.githubusercontent.com");
+    // The claim is settled, so the sentence saying it is not must be gone —
+    // a basis carrying both would be self-contradicting on the same line.
+    expect(result.tierBasis).not.toContain("must still verify");
+    // Settled, not replaced: the aggregate SHA the signature covers is still
+    // named, so the basis remains a complete account of the rung.
+    expect(result.tierBasis).toContain("aggregate content SHA");
+  });
+
+  it("keeps the catalog pin's evidence beside the signature it verified", async () => {
+    await seedPack(sigstoreFixture);
+
+    // Pin AND signature: two independent pieces of evidence, and the basis has
+    // to keep both. The pin decides the rung (curator-verified outranks
+    // publisher-signed), and the signature still says who signed the bytes.
+    const result = await plan({
+      catalogPin: seededPin,
+      sigstoreVerifier: attesting(VERIFIED_REASON),
+    });
+
+    expect(result.trustTier).toBe("curator-verified");
+    expect(result.tierBasis).toContain("catalog pin verified");
+    expect(result.tierBasis).toContain("releases@zomarit.dev");
+    expect(result.tierBasis).not.toContain("must still verify");
+  });
+
+  it("leaves the basis alone when nothing was signed — no identity is invented", async () => {
+    await seedPack();
+
+    const result = await plan({ allowUntrusted: true, sigstoreVerifier: attesting("unused") });
+
+    expect(result.checks.signing).toBe("n/a");
+    expect(result.tierBasis).toContain("--allow-untrusted");
+    expect(result.tierBasis).not.toContain("signed by");
+  });
+
+  it("records the verified identity in the install receipt, not the pending claim", async () => {
+    await seedPack(sigstoreFixture);
+    const installPlan = await plan({ sigstoreVerifier: attesting(VERIFIED_REASON) });
+
+    await apply(installPlan, projectManifest());
+
+    // The receipt is the provenance record an operator reads months later, so
+    // the identity the install actually rested on has to be in it.
+    const receipt = await readReceipt();
+    expect(receipt.tierBasis).toContain("releases@zomarit.dev");
+    expect(receipt.tierBasis).not.toContain("must still verify");
   });
 
   it("surfaces the verifier's reason when it rejects the signature", async () => {

@@ -56,8 +56,10 @@ import {
 import {
   armedSigstoreVerifier,
   resolveTrustTier,
+  settleSignatureClause,
   verifyPublisherSignedClaim,
   type CatalogPin,
+  type PublisherSignedOutcome,
   type SigstoreVerifier,
   type TrustTier,
 } from "./trust.ts";
@@ -188,7 +190,19 @@ export interface PackInstallPlan {
   checks: Record<string, "pass" | "n/a">;
   /** Resolved trust tier (`./trust.ts` ladder). */
   trustTier: TrustTier;
-  /** Human-readable basis for the tier (catalog pin / signature / waiver). */
+  /**
+   * Human-readable basis for the tier (catalog pin / signature / waiver), as
+   * every operator-facing surface states it: the `add` trust row, the `--json`
+   * payload, and the persisted install receipt all read this one string.
+   *
+   * For a pack whose declared signature VERIFIED, it names the identity and the
+   * issuer the certificate was pinned on rather than the pending-claim clause
+   * the ladder composes before the gate runs (`./trust.ts` →
+   * `settleSignatureClause`). That substitution is the point: the tier says
+   * `publisher-signed`, and an operator installing on that word needs the
+   * answer to "signed by whom" at install time, not a sentence saying the
+   * signature has yet to be checked.
+   */
   tierBasis: string;
   /** Org policy outcome; always `allow` on a returned plan — a deny throws. */
   policy: OrgPolicyDecision;
@@ -462,7 +476,9 @@ function applyOrgPolicy(
 }
 
 /**
- * Tier-aware signing gate.
+ * Tier-aware signing gate. Returns the gate row AND, for a verified claim, the
+ * verifier's own account of what it proved — see
+ * {@link PackInstallPlan.tierBasis} for where that lands.
  *
  * A declared signature is checked, never waived: the claim routes through
  * `./trust.ts::verifyPublisherSignedClaim` (bundle read + injected verifier
@@ -497,9 +513,9 @@ async function runSigningGate(
   manifest: PackManifest,
   tier: TrustTier,
   opts: PlanPackInstallOptions,
-): Promise<"pass" | "n/a"> {
+): Promise<PublisherSignedOutcome> {
   if (manifest.signing !== undefined) {
-    return verifyPublisherSignedClaim(
+    return await verifyPublisherSignedClaim(
       manifest,
       packRoot,
       opts.sigstoreVerifier ?? armedSigstoreVerifier,
@@ -511,9 +527,11 @@ async function runSigningGate(
   }
   if (tier === "scanned" || tier === "curator-verified") {
     // The catalog pin is the trust basis; there is no declaration to verify.
-    return "n/a";
+    return { outcome: "n/a" };
   }
-  return verifySigningDeclaration(manifest, opts.allowUntrusted === true);
+  // No declaration to verify, so no identity to report: the waiver path yields
+  // the gate row alone, and the tier basis stays the one the ladder resolved.
+  return { outcome: verifySigningDeclaration(manifest, opts.allowUntrusted === true) };
 }
 
 /**
@@ -979,7 +997,12 @@ export async function planPackInstall(
   const policy = applyOrgPolicy(identity, policySourceKind(source, tier), orgPolicy);
   checks.orgPolicy = orgPolicy === null ? "n/a" : "pass";
 
-  checks.signing = await runSigningGate(source.packRoot, packManifest, tier, opts);
+  // The gate returns the VERDICT, not just its row: a verified publisher-signed
+  // claim carries the identity and issuer the certificate was pinned on, which
+  // is what `tierBasis` then states in place of the clause the ladder wrote
+  // before any verification had run.
+  const signature = await runSigningGate(source.packRoot, packManifest, tier, opts);
+  checks.signing = signature.outcome;
 
   checks.lifecycleScripts = await checkLifecycleScripts(source.packRoot);
   const files = await enumeratePackContent(source.packRoot);
@@ -1031,7 +1054,10 @@ export async function planPackInstall(
     collisions,
     checks,
     trustTier: tier,
-    tierBasis: basis,
+    tierBasis:
+      signature.verifiedBasis === undefined
+        ? basis
+        : settleSignatureClause(basis, signature.verifiedBasis),
     policy,
     tokensByPath,
     totalTokens,

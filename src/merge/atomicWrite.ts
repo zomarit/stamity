@@ -60,7 +60,11 @@ import { mapFsErrno } from "./fsErrors.ts";
  *    Callers holding a boundary pass `boundaryDir` and the resolved landing
  *    directory must sit inside it; callers without one still get the local rule
  *    that no symlinked directory component may resolve out of the directory
- *    holding it.
+ *    holding it. The check answers with a RESOLVED landing or not at all: a
+ *    component it could not `lstat` refuses the write rather than being read as
+ *    absent, because an absent component ends the walk legitimately while an
+ *    unreadable one leaves the rest of the path resolved by spelling alone —
+ *    and a lexical landing sits inside any boundary ({@link probeComponent}).
  *
  * Measure 4 is not opt-in, and that is deliberate: it is the only one of the
  * four that a pre-existing link is visible to. Callers that own a boundary
@@ -344,7 +348,7 @@ async function acquireWriteLockImpl(
     // every write to this target burns the full retry budget before failing as a
     // stale lock, blaming a file that is not what the message says it is. Name
     // the real cause instead; a lock name is never legitimately a link.
-    if ((await probeComponent(lockfilePath))?.isLink === true) {
+    if ((await probeComponent(lockfilePath, filePath))?.isLink === true) {
       throw new EngineError(
         `Refusing to take the write lock for ${filePath}: ${lockfilePath} is a symbolic link. ` +
           `The lock is a directory this process creates and removes, so a link standing in its ` +
@@ -496,8 +500,9 @@ function pathRedirectedByLink(filePath: string, linkPath: string, target: string
 
 /** `realpath`, or `null` when the path cannot be resolved (missing, or a
  *  component that cannot be inspected). Callers fall through to the component
- *  walk, which re-reads the same path and lets the real errno surface from the
- *  write itself rather than guessing at it here. */
+ *  walk, which re-reads the same path — and the walk itself refuses on any
+ *  refusal that is not "absent", so a component this function could not resolve
+ *  is never quietly treated as one that is not there. */
 async function realpathOrNull(path: string): Promise<string | null> {
   try {
     return await realpath(path);
@@ -506,13 +511,75 @@ async function realpathOrNull(path: string): Promise<string | null> {
   }
 }
 
-/** `lstat` reduced to the one fact the walk needs, or `null` when the component
- *  is not there (or not inspectable) — the signal to stop descending. */
-async function probeComponent(path: string): Promise<{ isLink: boolean } | null> {
+/**
+ * The two errnos that mean "there is nothing here to descend into", and the
+ * only two the walk may read as the end of the existing path.
+ *
+ * `ENOENT` is the component itself being absent. `ENOTDIR` is the absent-parent
+ * form of the same fact: a component earlier on the path is a regular file, so
+ * everything below it is absent by construction and no `mkdir -p` can build it.
+ * Neither can hide a symbolic link — a link that exists answers `lstat`, and a
+ * DANGLING one answers it too, because `lstat` does not follow.
+ */
+const COMPONENT_ABSENT_ERRNOS = new Set(["ENOENT", "ENOTDIR"]);
+
+/**
+ * A path this writer had to inspect, whose `lstat` was refused for a reason
+ * other than absence.
+ *
+ * Fail-closed, and the reason is the whole point of the check that calls it:
+ * both probe sites ask one question — "is a symbolic link standing here" — and
+ * an unanswered question is not a "no". Reading a refusal as absence ends the
+ * containment walk early, finishes the remainder of the path LEXICALLY, and
+ * hands {@link assertWriteTargetContained} a landing directory that was never
+ * resolved — which then compares inside `boundaryDir` and clears a write whose
+ * real landing is outside it. One refused `lstat` was enough to reproduce that
+ * escape, so the refusal errno is now the answer rather than a shrug.
+ *
+ * Worded for both sites: `component` is a directory on the write path when the
+ * walk raises it, and the lockfile sibling when the acquire does. The errno is
+ * named because it is what separates the causes an operator can act on, and the
+ * actionable sentence comes from the shared write-side errno vocabulary
+ * ({@link mapFsErrno}) so a permission or mount failure is stated in the same
+ * words every other write failure states it in.
+ */
+function pathComponentUninspectable(
+  filePath: string,
+  component: string,
+  err: unknown,
+): EngineError {
+  const code = errnoCode(err);
+  const actionable = mapFsErrno(err, filePath);
+  return new EngineError(
+    `Refusing to write ${filePath}: the path ${component} could not be inspected` +
+      `${code === undefined ? "" : ` (${code})`}, so whether a symbolic link stands in its place ` +
+      `is unknown. Reading that refusal as "nothing is there" would resolve the rest of the write ` +
+      `path by its spelling alone and clear a write that lands somewhere else. ` +
+      (actionable === null ? "" : `${actionable.message} `) +
+      `Nothing was written; restore access to ${component} and re-run.`,
+    { code: "FS_ERROR", cause: err },
+  );
+}
+
+/**
+ * `lstat` reduced to the one fact the walk needs, or `null` when the component
+ * is absent — the signal to stop descending.
+ *
+ * Absent means exactly {@link COMPONENT_ABSENT_ERRNOS}. Every other errno is a
+ * question the filesystem refused to answer, and it REFUSES the write
+ * ({@link pathComponentUninspectable}) rather than resolving to `null`, which
+ * the walk cannot tell from "not there".
+ */
+async function probeComponent(
+  path: string,
+  filePath: string,
+): Promise<{ isLink: boolean } | null> {
   try {
     return { isLink: (await lstat(path)).isSymbolicLink() };
-  } catch {
-    return null;
+  } catch (err) {
+    const code = errnoCode(err);
+    if (code !== undefined && COMPONENT_ABSENT_ERRNOS.has(code)) return null;
+    throw pathComponentUninspectable(filePath, path, err);
   }
 }
 
@@ -549,6 +616,15 @@ function pathWalkPlan(dir: string): { root: string; names: string[] } {
  * The walk stops at the first component that does not exist: nothing below it
  * exists either, and `mkdir -p` will build the remainder under the resolved
  * directory reached so far — which is what the returned path names.
+ *
+ * ABSENT is the only reason it stops. A component whose `lstat` is refused for
+ * any other reason throws ({@link probeComponent}), because the alternative is
+ * the escape this walk exists to prevent: stopping on an unanswered question
+ * finishes the path by its spelling, and a lexical landing sits inside
+ * `boundaryDir` whatever the link that was never inspected points at. The
+ * refusal reaches every caller of {@link assertWriteTargetContained} — the
+ * lock acquire, `safeWriteFile`, the `.bak` sibling, the failure log — as the
+ * same `FS_ERROR` a detected escape raises, so no path materialises anything.
  */
 async function resolveWriteLanding(
   parentDir: string,
@@ -561,7 +637,7 @@ async function resolveWriteLanding(
   let real = plan.root;
   for (const name of plan.names) {
     const next = join(lexical, name);
-    const info = await probeComponent(next);
+    const info = await probeComponent(next, filePath);
     if (info === null) break;
     if (info.isLink) {
       const target = await resolveLinkTarget(next, real);

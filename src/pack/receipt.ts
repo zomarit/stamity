@@ -100,7 +100,13 @@ export interface PackReceipt {
   /** Where the pack came from: resolved source kind + the operator's spec. */
   source: { kind: PackSourceKind; spec: string };
   trustTier: TrustTier;
-  /** Human-readable basis for the tier (catalog pin / signature / waiver). */
+  /**
+   * Human-readable basis for the tier, copied from the plan
+   * (`./install.ts` → {@link PackInstallPlan.tierBasis}). For a verified
+   * publisher-signed pack it names WHO signed and which issuer vouched for
+   * them, so the receipt is a provenance record of the identity the install
+   * actually rested on rather than of a claim that was still open.
+   */
   tierBasis: string;
   /** Gate name -> outcome, exactly as the plan ran them. */
   checks: Record<string, "pass" | "n/a">;
