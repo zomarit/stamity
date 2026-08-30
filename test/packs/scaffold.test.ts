@@ -74,8 +74,12 @@ const URL_ALLOWLIST: readonly string[] = ["rfc-editor.org", "owasp.org", "w3.org
 
 const URL_PATTERN = /https?:\/\/[^\s<>()"'\]]+/gi;
 const SUBSTITUTION_TOKEN = /\$\{STAMITY:[A-Z_]+\}/g;
-const COMMAND_MENTION = /\/stamity-([a-z0-9][a-z0-9-]*)/g;
-const BARE_MENTION = /(?<![/A-Za-z0-9_-])stamity-([a-z0-9][a-z0-9-]*)/g;
+// Both prefixes, deliberately: core commands and skills are `st-<id>` and
+// pack-own artifacts stay `stamity-<id>`, so a guard anchored on one prefix is
+// blind to half the surface it exists to check. The captured group is the bare
+// id either way, which is what frontmatter declares.
+const COMMAND_MENTION = /\/(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
+const BARE_MENTION = /(?<![/A-Za-z0-9_-])(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
 
 /** The neutral verify seam every generator reads its gate criteria from. */
 const VERIFY_SEAM = /\.stamity\/verify\/[a-z-]+-<sha>\.json/;
@@ -505,7 +509,10 @@ describe("scaffold pack — generator contract", () => {
       if (!VERIFY_SEAM.test(body)) {
         problems.push(`${file.relPath}: no .stamity/verify/<axis>-<sha>.json evidence input`);
       }
-      if (!/stamity-verify/.test(body)) {
+      // Contract change: the verify skill is core, and core ids now carry the
+      // `st-` prefix. `stamity-verify` no longer names anything shipped, so
+      // matching it would pass a body that routes users to a dead id.
+      if (!/st-verify/.test(body)) {
         problems.push(`${file.relPath}: does not name the core verify skill as the producer`);
       }
       if (!/does not define one/.test(body)) {
@@ -554,7 +561,9 @@ describe("scaffold pack — generator contract", () => {
     const body = bodyOf(await packFiles, "design-system-create");
 
     expect(body).toMatch(/\.stamity\/design-system-inventory\.md/);
-    expect(body).toMatch(/stamity-design-system-detect/);
+    // Contract change: the detect skill is core, so its live id is
+    // `st-design-system-detect`.
+    expect(body).toMatch(/st-design-system-detect/);
     expect(body).toMatch(/performs no detection of its own/);
     // Verdict routing is consumed, not re-derived.
     for (const verdict of ["reuse", "extend", "create", "blocked"]) {
@@ -656,7 +665,7 @@ describe("scaffold pack — generator contract", () => {
     // Non-degenerate on the producing side: the six really are rows of the core
     // reliability axis, so the citation resolves rather than naming inventions.
     const reference = (await corpusFiles).find(
-      (file) => file.relPath === "skills/stamity-verify/references/reliability.md",
+      (file) => file.relPath === "skills/st-verify/references/reliability.md",
     );
     expect(reference, "the reliability axis reference is missing").toBeDefined();
     for (const id of SLO_CHECK_IDS) {
@@ -732,12 +741,12 @@ describe("scaffold pack — reference hygiene", () => {
       const prose = stripFencedBlocks(file.parsed.body);
       for (const match of prose.matchAll(COMMAND_MENTION)) {
         if (!commandIds.has(match[1] ?? "")) {
-          problems.push(`${file.relPath}: /stamity-${match[1]} resolves to no shipped command`);
+          problems.push(`${file.relPath}: ${match[0]} resolves to no shipped command`);
         }
       }
       for (const match of prose.matchAll(BARE_MENTION)) {
         if (!known.has(match[1] ?? "")) {
-          problems.push(`${file.relPath}: mentions stamity-${match[1]}, which nothing answers to`);
+          problems.push(`${file.relPath}: mentions ${match[0]}, which nothing answers to`);
         }
       }
       for (const match of file.raw.matchAll(SUBSTITUTION_TOKEN)) {
@@ -864,7 +873,15 @@ describe("scaffold pack — anti-shadowing", () => {
           );
           continue;
         }
-        if (score >= OVERLAP_DECLARE_AT && !entry.body.includes(`stamity-${other.id}`)) {
+        // The escape hatch accepts either live prefix, because the neighbour set spans both
+        // namespaces: a core command or skill is named `st-<id>` and a pack-own artifact is
+        // named `stamity-<id>`. Anchored on `stamity-` alone this clause could never be
+        // satisfied for a core neighbour — the declaration it demands would cite an id that
+        // no longer exists — so a legitimate declared overlap with core would read as
+        // shadowing and there would be no wording that cleared it.
+        const declared =
+          entry.body.includes(`st-${other.id}`) || entry.body.includes(`stamity-${other.id}`);
+        if (score >= OVERLAP_DECLARE_AT && !declared) {
           problems.push(
             `${entry.relPath}: description overlaps ${other.id} at ${score.toFixed(2)} ` +
               `without naming it — an undeclared overlap is shadowing`,

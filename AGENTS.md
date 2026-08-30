@@ -55,19 +55,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- `/stamity-spec` — create or maintain the project spec under `docs/specs/`;
+- `/st-spec` — create or maintain the project spec under `docs/specs/`;
   greenfield and brownfield auto-detected.
-- `/stamity-plan` — route an intent (feature, bug, refactor, migration, test,
+- `/st-plan` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- `/stamity-work` — execute planned work end to end; closes with the QA human
+- `/st-work` — execute planned work end to end; closes with the QA human
   checkpoint.
-- `/stamity-board` — work a task board: chat, a referenced file, or a linked
+- `/st-board` — work a task board: chat, a referenced file, or a linked
   platform board.
-- `/stamity-ask` — read-only codebase Q&A; writes nothing.
-- `/stamity-debug` — reproduce, root-cause, and fix a defect.
-- `/stamity-quick` — Tier-1 small-change lane; gates still run.
-- `/stamity-rework` — apply structured feedback to agent-implemented work.
-- `/stamity-pr-resolve` — resolve pull-request review comments.
+- `/st-ask` — read-only codebase Q&A; writes nothing.
+- `/st-debug` — reproduce, root-cause, and fix a defect.
+- `/st-quick` — Tier-1 small-change lane; gates still run.
+- `/st-rework` — apply structured feedback to agent-implemented work.
+- `/st-pr-resolve` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -145,19 +145,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- `/stamity-spec` — create or maintain the project spec under `docs/specs/`;
+- `/st-spec` — create or maintain the project spec under `docs/specs/`;
   greenfield and brownfield auto-detected.
-- `/stamity-plan` — route an intent (feature, bug, refactor, migration, test,
+- `/st-plan` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- `/stamity-work` — execute planned work end to end; closes with the QA human
+- `/st-work` — execute planned work end to end; closes with the QA human
   checkpoint.
-- `/stamity-board` — work a task board: chat, a referenced file, or a linked
+- `/st-board` — work a task board: chat, a referenced file, or a linked
   platform board.
-- `/stamity-ask` — read-only codebase Q&A; writes nothing.
-- `/stamity-debug` — reproduce, root-cause, and fix a defect.
-- `/stamity-quick` — Tier-1 small-change lane; gates still run.
-- `/stamity-rework` — apply structured feedback to agent-implemented work.
-- `/stamity-pr-resolve` — resolve pull-request review comments.
+- `/st-ask` — read-only codebase Q&A; writes nothing.
+- `/st-debug` — reproduce, root-cause, and fix a defect.
+- `/st-quick` — Tier-1 small-change lane; gates still run.
+- `/st-rework` — apply structured feedback to agent-implemented work.
+- `/st-pr-resolve` — resolve pull-request review comments.
 
 ## Conditional layer
 

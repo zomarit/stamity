@@ -18,8 +18,8 @@ Seven keys: six required, one defaulted. A spawn missing a required key is under
 return `BLOCKED_AMBIGUITY` naming the missing keys instead of inferring a subject.
 
 `handoff_to` is the defaulted one, and the reason is what the spawning flows actually send.
-Of the commands that enumerate the brief, `/stamity-ask` names all seven while `/stamity-work`
-and `/stamity-spec` stop at the tool tier. Blocking on a key most real spawns never carry
+Of the commands that enumerate the brief, `/st-ask` names all seven while `/st-work`
+and `/st-spec` stop at the tool tier. Blocking on a key most real spawns never carry
 would turn the ambiguity gate into a gate on the flows themselves, so the default is written
 down here instead of being inferred per spawn.
 

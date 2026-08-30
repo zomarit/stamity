@@ -24,6 +24,7 @@ import {
   type Tool,
 } from "../../types/core.ts";
 import { readHistoryFacts, readWorkingTreeStatus } from "../engine/gitStatus.ts";
+import { bannerBlock } from "../kit/banner.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import {
@@ -744,6 +745,18 @@ export const initCommand: CommandModule = {
       renderDryRun(ctx, report, carry, residue, notes, git.available);
     } else {
       for (const note of notes) ctx.io.out(`${note}\n`);
+      // The mark, once, on the one surface that is a first screen for a person.
+      // It gates itself: `""` on a non-TTY or a `--json` run, so nothing here
+      // needs a second condition, and `""` writes zero bytes rather than a
+      // blank line. The color decision travels from the funnel because
+      // `--no-color` is parsed on the root program and cannot be read here.
+      const welcome = bannerBlock({
+        stdoutIsTTY: ctx.terminal.stdoutIsTTY,
+        machineReadable: ctx.json,
+        env: ctx.app.runtime.env,
+        noColorFlag: !ctx.colorEnabled,
+      });
+      if (welcome !== "") ctx.io.out(`${welcome}\n`);
       ctx.io.out(
         renderInitPanel({
           decisions: effective,

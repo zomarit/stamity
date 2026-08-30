@@ -54,7 +54,7 @@ import {
  */
 const MODEL_CLASSES: readonly string[] = ["frontier", "advanced", "standard", "economy"];
 
-/** The nine touchpoints: every `/stamity-*` mention in these bodies must resolve to one. */
+/** The nine touchpoints: every `/st-*` mention in these bodies must resolve to one. */
 const COMMAND_IDS: readonly string[] = [
   "spec",
   "plan",
@@ -253,12 +253,12 @@ describe("specialist agents — body budget and write-path hygiene", () => {
 
   it.each(SPECIALISTS)("$id mentions only touchpoints that exist", async (agent) => {
     const file = await load(agent.relPath);
-    const mentioned = [...file.parsed.body.matchAll(/\/stamity-([a-z][a-z-]*)/g)].map(
+    const mentioned = [...file.parsed.body.matchAll(/\/st-([a-z][a-z-]*)/g)].map(
       (match) => match[1],
     );
 
     for (const id of new Set(mentioned)) {
-      expect(COMMAND_IDS, `${file.relPath}: /stamity-${id} is not a touchpoint`).toContain(id);
+      expect(COMMAND_IDS, `${file.relPath}: /st-${id} is not a touchpoint`).toContain(id);
     }
   });
 

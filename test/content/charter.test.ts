@@ -36,15 +36,15 @@ const CHARTER_FILE = join(CORPUS_ROOT, "charter", "stamity-charter.md");
 
 /** The nine SDLC touchpoints the charter must index, one line each. */
 const TOUCHPOINT_COMMANDS = [
-  "/stamity-spec",
-  "/stamity-plan",
-  "/stamity-work",
-  "/stamity-board",
-  "/stamity-ask",
-  "/stamity-debug",
-  "/stamity-quick",
-  "/stamity-rework",
-  "/stamity-pr-resolve",
+  "/st-spec",
+  "/st-plan",
+  "/st-work",
+  "/st-board",
+  "/st-ask",
+  "/st-debug",
+  "/st-quick",
+  "/st-rework",
+  "/st-pr-resolve",
 ] as const;
 
 /** The four charter sections, in mandated order. */
@@ -58,7 +58,7 @@ const URL_OR_DOMAIN = /https?:\/\/|www\./i;
 
 /**
  * Occurrences of a command name as a whole name: the lookahead keeps
- * `/stamity-work` from also counting inside a longer `/stamity-work-*` spelling.
+ * `/st-work` from also counting inside a longer `/stamity-work-*` spelling.
  */
 function countOccurrences(text: string, name: string): number {
   return [...text.matchAll(new RegExp(`${name}(?![\\w-])`, "g"))].length;
@@ -277,7 +277,7 @@ describe("corpus charter", () => {
   });
 
   it("states the ONE carve-out inside invariant 7 rather than leaving it to a command", async () => {
-    // `/stamity-quick` declared a Tier-1 inline carve-out and credited
+    // `/st-quick` declared a Tier-1 inline carve-out and credited
     // this file with granting it, while invariant 7 read exceptionless. A
     // session holding only the always-on slice classified quick's designed
     // behaviour as a protocol violation.
@@ -338,7 +338,7 @@ describe("corpus charter", () => {
     // names three, so the always-on file was the only surface over-promising.
     const { body } = await readCharterTemplate(CORPUS_ROOT);
     const touchpoints = sectionOf(body, "Touchpoints");
-    const boardLine = touchpoints.slice(touchpoints.indexOf("`/stamity-board`"));
+    const boardLine = touchpoints.slice(touchpoints.indexOf("`/st-board`"));
 
     expect(boardLine).not.toMatch(/auto-found/i);
     expect(boardLine).toMatch(/chat, a referenced file, or a linked\s+platform board/i);
@@ -348,7 +348,7 @@ describe("corpus charter", () => {
     // The other half of the quick-command carve-out. Two files, one statement: the
     // charter grants the exception and the command points at it, so a reader
     // holding either one reaches the same rule.
-    const quick = await readFile(join(CORPUS_ROOT, "commands", "stamity-quick.md"), "utf8");
+    const quick = await readFile(join(CORPUS_ROOT, "commands", "st-quick.md"), "utf8");
 
     expect(quick).toMatch(/Charter invariant 7 names one carve-out/i);
     // The old self-grant is gone: quick no longer declares the exception itself.

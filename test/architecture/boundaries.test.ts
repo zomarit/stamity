@@ -409,6 +409,7 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/kit/output.ts": { unit: "p2-01", wave: 13 },
   "src/cli/kit/prompts.ts": { unit: "p2-01", wave: 13 },
   "src/cli/kit/program.ts": { unit: "p2-01", wave: 13 },
+  "src/cli/kit/banner.ts": { unit: "p2-01", wave: 13 },
   "src/cli/engine/emission.ts": { unit: "p2-03", wave: 13 },
   "src/cli/engine/gitStatus.ts": { unit: "p2-03", wave: 13 },
   "src/migration/detect.ts": { unit: "p2-04", wave: 13 },

@@ -487,7 +487,7 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
 
     // Corpus content still emits beside the pack's, through the same surfaces.
     expect(rows.get(".claude/rules/stamity-base.md")).toBeDefined();
-    expect(rows.get(".github/prompts/stamity-ship.prompt.md")).toBeDefined();
+    expect(rows.get(".github/prompts/st-ship.prompt.md")).toBeDefined();
   });
 
   it("keeps installed = selected without widening the corpus selection", async () => {

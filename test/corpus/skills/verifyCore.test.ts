@@ -50,7 +50,7 @@ import {
  */
 
 /** Corpus-relative path of the dispatch body. */
-const SKILL_PATH = "skills/stamity-verify/SKILL.md";
+const SKILL_PATH = "skills/st-verify/SKILL.md";
 
 /** The axes this unit authors references for. */
 const OWNED_AXES = ["ui", "ux", "security", "reliability", "testability"] as const;
@@ -182,7 +182,7 @@ const VENDOR_OR_MODEL_NAMES =
  * tokens out to re-assert the ban would itself be a gate violation.
  */
 
-/** The nine SDLC touchpoints; a `/stamity-*` mention outside this set is a dangling reference. */
+/** The nine SDLC touchpoints; a `/st-*` mention outside this set is a dangling reference. */
 const COMMAND_CENSUS: readonly string[] = [
   "spec",
   "plan",
@@ -197,7 +197,7 @@ const COMMAND_CENSUS: readonly string[] = [
 
 /** Corpus-relative path of one axis reference. */
 function referencePath(axis: string): string {
-  return `skills/stamity-verify/references/${axis}.md`;
+  return `skills/st-verify/references/${axis}.md`;
 }
 
 /** Read-once cache: every case reads through here, so a missing file fails by path. */
@@ -511,7 +511,7 @@ describe("verify skill — emission", () => {
     // Non-degenerate: every shipped skill, and the verify references among them.
     expect(rows.length).toBeGreaterThan(PROJECTED_SKILL_IDS.length);
     expect(rows.map((row) => row.path)).toContain(
-      ".agents/skills/stamity-verify/references/testability.md",
+      ".agents/skills/st-verify/references/testability.md",
     );
 
     const leaking = rows.filter((row) => row.content.includes("${STAMITY:")).map((row) => row.path);
@@ -805,8 +805,8 @@ describe("verify skill — register and gates", () => {
   it.each([...OWNED_FILES])("%s references only touchpoints that exist", async (relPath) => {
     const body = (await load(relPath)).parsed.body;
 
-    for (const match of body.matchAll(/\/stamity-([a-z-]+[a-z])/g)) {
-      expect(COMMAND_CENSUS, `/stamity-${match[1]} is not a touchpoint`).toContain(match[1]);
+    for (const match of body.matchAll(/\/st-([a-z-]+[a-z])/g)) {
+      expect(COMMAND_CENSUS, `/st-${match[1]} is not a touchpoint`).toContain(match[1]);
     }
   });
 });

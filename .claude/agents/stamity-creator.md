@@ -71,9 +71,10 @@ was never saved, so a skill save is reported with that limit attached.
 - `id` is a lowercase kebab slug and matches the filename it is saved as. The
   engine picks neither side of a disagreement, and an artifact filed under a
   name its cross-references do not use is unreachable.
-- `id` does not carry the `stamity-` prefix. That prefix marks engine-owned
-  files, it shadows nothing extra, and a file wearing it loses the verified
-  backup a user-lane overwrite otherwise takes.
+- `id` does not carry an engine prefix — neither `stamity-` nor `st-`. Both mark
+  engine-owned files, both shadow nothing extra, and a file wearing either loses
+  the verified backup a user-lane overwrite otherwise takes. `st-` is the easier
+  one to reach for by accident: it is the stem of every shipped touchpoint.
 - `type` equals the class directory the artifact is filed under.
 - No block-severity deny hit anywhere in the body or in any frontmatter string.
   Frontmatter is scanned too: a `description` is rendered into pickers and

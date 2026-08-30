@@ -484,6 +484,76 @@ describe("sweepReclaimCandidates — deletion and directory pruning", () => {
     expect(await snapshot(root)).toEqual({});
   });
 
+  // The invocable surfaces (commands, skills) are emitted under `st-`, the
+  // rest of the corpus under `stamity-`. The ownership gate reads a NAME, not
+  // a class, so it has to admit both spellings: a `.claude/commands/st-work.md`
+  // the engine just minted is exactly as engine-owned as the
+  // `stamity-work.md` it replaced, and a gate that knows only the old prefix
+  // turns every new emission into an orphan nothing may delete.
+  it("deletes a command file carrying the invocable prefix", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({
+      "repo/.claude/commands/st-work.md": managedWhole("engine command"),
+    });
+
+    const report = await sweepReclaimCandidates([candidate(".claude/commands/st-work.md")], {
+      rootDir: root,
+      consent: true,
+    });
+
+    expect(onlyEntry(report).action).toBe("deleted");
+    expect(await snapshot(root)).toEqual({});
+  });
+
+  // The upgrade path, end to end. A repo installed before the invocable
+  // surfaces moved to `st-` holds `.claude/commands/stamity-work.md` and
+  // `.agents/skills/stamity-verify/`; the next sync emits the `st-` spellings
+  // and the ledger hands the old paths back under `path-renamed`. If the gate
+  // did not still admit the OLD prefix, every upgraded repo would keep both
+  // spellings side by side — nine duplicated touchpoints, and a user picking
+  // the dead one from the picker.
+  it("retires the previous spelling of a renamed command and skill", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({
+      "repo/.claude/commands/stamity-work.md": managedWhole("engine command"),
+      "repo/.agents/skills/stamity-verify/SKILL.md": managedWhole("engine skill"),
+      "repo/.agents/skills/stamity-verify/references/ui.md": "# UI\n\nengine reference body\n",
+    });
+
+    const report = await sweepReclaimCandidates(
+      [
+        candidate(".claude/commands/stamity-work.md", "path-renamed", "claude"),
+        candidate(".agents/skills/stamity-verify/SKILL.md", "path-renamed", "claude"),
+        candidate(".agents/skills/stamity-verify/references/ui.md", "path-renamed", "claude"),
+      ],
+      { rootDir: root, consent: true },
+    );
+
+    expect(report).toMatchObject({ deletedCount: 3, strippedCount: 0, skippedCount: 0 });
+    expect(await snapshot(root)).toEqual({});
+  });
+
+  // The container half of the same claim: a projected skill's `references/*.md`
+  // carry no prefix of their own, so the marker has to be read off the
+  // `st-verify/` directory the engine minted under `skills/`.
+  it("deletes a skill reference nested below an invocable-prefixed directory", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({
+      "repo/.agents/skills/st-verify/references/ui.md": "# UI\n\nengine reference body\n",
+    });
+
+    const report = await sweepReclaimCandidates(
+      [candidate(".agents/skills/st-verify/references/ui.md")],
+      { rootDir: root, consent: true },
+    );
+
+    expect(onlyEntry(report).action).toBe("deleted");
+    expect(await snapshot(root)).toEqual({});
+  });
+
   it("still refuses a nested file when no ancestor carries the marker", async () => {
     const temp = tempDir();
     const root = temp.path("repo");

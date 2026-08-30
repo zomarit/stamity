@@ -27,7 +27,7 @@ import {
 const EMISSION_ENGINE_VERSION = "0.0.0-test";
 
 /**
- * The three light touchpoints — `/stamity-ask`, `/stamity-debug`, `/stamity-quick` — as a
+ * The three light touchpoints — `/st-ask`, `/st-debug`, `/st-quick` — as a
  * contract over their shipped bodies.
  *
  * What this suite binds, and why each check exists rather than being left to prose review:
@@ -39,7 +39,7 @@ const EMISSION_ENGINE_VERSION = "0.0.0-test";
  *   - **The guardrails ARE the command.** For these three, the body text is the mechanism:
  *     a read-only refusal, a root-cause gate, a size threshold. Deleting the sentence
  *     deletes the behavior, so the sentences are asserted.
- *   - **Escalation.** All three end at a user-gated switch naming `/stamity-work`, carrying
+ *   - **Escalation.** All three end at a user-gated switch naming `/st-work`, carrying
  *     evidence rather than restarting the investigation.
  *   - **Quick's content branch, and the agent on the other end of it.** Quick is where a
  *     Tier-1 request to author one of the repo's own artifacts is delegated to `creator`
@@ -73,7 +73,7 @@ async function agentIds(): Promise<string[]> {
     .map((file) => String(frontmatterField(file.parsed, "id")));
 }
 
-/** The nine touchpoints: every `/stamity-*` mention in these bodies must resolve to one. */
+/** The nine touchpoints: every `/st-*` mention in these bodies must resolve to one. */
 const COMMAND_IDS: readonly string[] = [
   "spec",
   "plan",
@@ -106,14 +106,14 @@ interface LightCommand {
 const TRIO: readonly LightCommand[] = [
   {
     id: "ask",
-    relPath: "commands/stamity-ask.md",
+    relPath: "commands/st-ask.md",
     tags: ["planning"],
     spawns: ["researcher"],
     readonly: true,
   },
   {
     id: "debug",
-    relPath: "commands/stamity-debug.md",
+    relPath: "commands/st-debug.md",
     tags: ["implementation"],
     // TEST CHANGE, justified: debug's spawn set widened by one. The shipped body now
     // routes every repo gate it names — the `stamity check` probe and the step-6
@@ -125,7 +125,7 @@ const TRIO: readonly LightCommand[] = [
   },
   {
     id: "quick",
-    relPath: "commands/stamity-quick.md",
+    relPath: "commands/st-quick.md",
     tags: ["implementation"],
     // TEST CHANGE, justified: quick's spawn set widened by one. `creator` was the only
     // agent in the census no command spawned, which left the save gates it owns with no
@@ -155,7 +155,7 @@ function flow(file: CorpusFile): string {
 const getEmissionRoot = useTempDir("light-trio-emission");
 
 /**
- * The `/stamity-ask` file each client's adapter actually writes, with its
+ * The `/st-ask` file each client's adapter actually writes, with its
  * frontmatter parsed.
  *
  * Runs the real emission path — `buildCoreEmissionPlan` plus every registered
@@ -261,9 +261,9 @@ describe("light trio — frontmatter contract", () => {
   });
 
   it("declares readonly only on ask, where read-only is the contract", async () => {
-    const ask = await load("commands/stamity-ask.md");
-    const debug = await load("commands/stamity-debug.md");
-    const quick = await load("commands/stamity-quick.md");
+    const ask = await load("commands/st-ask.md");
+    const debug = await load("commands/st-debug.md");
+    const quick = await load("commands/st-quick.md");
 
     expect(frontmatterField(ask.parsed, "readonly")).toBe(true);
     // A write-capable command declaring `readonly` would mislead the emission layer; a
@@ -283,13 +283,13 @@ describe("light trio — body budget and write-path hygiene", () => {
 
   it.each(TRIO)("$id mentions only touchpoints that exist", async (command) => {
     const file = await load(command.relPath);
-    const mentioned = [...file.parsed.body.matchAll(/\/stamity-([a-z][a-z-]*)/g)].map(
+    const mentioned = [...file.parsed.body.matchAll(/\/st-([a-z][a-z-]*)/g)].map(
       (match) => match[1],
     );
 
     expect(mentioned.length).toBeGreaterThan(0);
     for (const id of new Set(mentioned)) {
-      expect(COMMAND_IDS, `${file.relPath}: /stamity-${id} is not a touchpoint`).toContain(id);
+      expect(COMMAND_IDS, `${file.relPath}: /st-${id} is not a touchpoint`).toContain(id);
     }
   });
 });
@@ -299,7 +299,7 @@ describe("light trio — escalation", () => {
     const file = await load(command.relPath);
     const escalation = section(file, "Escalation");
 
-    expect(escalation).toContain("/stamity-work");
+    expect(escalation).toContain("/st-work");
     expect(escalation).toMatch(/never automatic/i);
     // Evidence carried as an artifact rather than a re-investigation.
     expect(escalation).toMatch(/evidence carried|evidence that carries/i);
@@ -308,12 +308,12 @@ describe("light trio — escalation", () => {
 
 describe("ask — read-only is a frontmatter contract", () => {
   it("refuses a mid-answer change request inline and states the escalation line", async () => {
-    const file = await load("commands/stamity-ask.md");
+    const file = await load("commands/st-ask.md");
     const text = flow(file);
 
     // Edge case: "...and fix it while you are at it" arriving inside a read-only run.
     expect(text).toMatch(/fix it while you are at it/i);
-    expect(text).toContain("Switch to `/stamity-work` to apply");
+    expect(text).toContain("Switch to `/st-work` to apply");
     expect(text).toMatch(/read-only is a contract, not a tone/i);
     // The refusal holds for the cases most likely to erode it.
     expect(text).toMatch(/one-line edits/i);
@@ -321,7 +321,7 @@ describe("ask — read-only is a frontmatter contract", () => {
   });
 
   it("binds the guarantee to the researcher-only spawn set and the two enumerated lists", async () => {
-    const file = await load("commands/stamity-ask.md");
+    const file = await load("commands/st-ask.md");
     const contract = section(file, "Read-only contract").replace(/\s+/g, " ");
 
     // TEST CHANGE, justified: this case pinned
@@ -363,11 +363,11 @@ describe("ask — read-only is a frontmatter contract", () => {
     }
 
     // The corpus side of the same fact: the key is declared and stays declared.
-    expect(frontmatterField((await load("commands/stamity-ask.md")).parsed, "readonly")).toBe(true);
+    expect(frontmatterField((await load("commands/st-ask.md")).parsed, "readonly")).toBe(true);
   });
 
   it("states the citation rule, confidence ratings, and a context budget", async () => {
-    const text = flow(await load("commands/stamity-ask.md"));
+    const text = flow(await load("commands/st-ask.md"));
 
     expect(text).toMatch(/every claim cites `path:line`/i);
     expect(text).toMatch(/cannot be cited is deleted/i);
@@ -386,7 +386,7 @@ describe("ask — read-only is a frontmatter contract", () => {
   });
 
   it("names the four output blocks including the blocked table", async () => {
-    const output = section(await load("commands/stamity-ask.md"), "Output").replace(/\s+/g, " ");
+    const output = section(await load("commands/st-ask.md"), "Output").replace(/\s+/g, " ");
 
     expect(output).toMatch(/\*\*Answer\*\*/);
     expect(output).toMatch(/\*\*Unanswerable\*\*/);
@@ -400,7 +400,7 @@ describe("ask — read-only is a frontmatter contract", () => {
 
 describe("debug — hard gates before any fix", () => {
   it("orders root cause and a failing test ahead of the fix step", async () => {
-    const file = await load("commands/stamity-debug.md");
+    const file = await load("commands/st-debug.md");
     const body = file.parsed.body;
 
     const rootCause = body.indexOf("root-cause-before-fix");
@@ -414,15 +414,15 @@ describe("debug — hard gates before any fix", () => {
   });
 
   it("routes the fix through the work pipeline instead of a private one", async () => {
-    const text = flow(await load("commands/stamity-debug.md"));
+    const text = flow(await load("commands/st-debug.md"));
 
-    expect(text).toMatch(/the diagnosis and the failing test become the plan handed to `\/stamity-work`/i);
+    expect(text).toMatch(/the diagnosis and the failing test become the plan handed to `\/st-work`/i);
     expect(text).toMatch(/no private fix pipeline/i);
     expect(text).toMatch(/an edit applied inside debug is a contract breach/i);
   });
 
   it("stalls at reproduction with BLOCKED_DEPENDENCY rather than guessing a fix", async () => {
-    const text = flow(await load("commands/stamity-debug.md"));
+    const text = flow(await load("commands/st-debug.md"));
 
     // Edge case: the user cannot reproduce — the loop stops, nothing speculative ships.
     expect(text).toMatch(/no reproduction, no fix/i);
@@ -432,7 +432,7 @@ describe("debug — hard gates before any fix", () => {
   });
 
   it("cleans instrumentation to zero residue on every exit path", async () => {
-    const text = flow(await load("commands/stamity-debug.md"));
+    const text = flow(await load("commands/st-debug.md"));
 
     // Edge case: an aborted or escalated run must not leave instrumentation behind.
     expect(text).toMatch(/cleanup runs on every exit/i);
@@ -444,15 +444,15 @@ describe("debug — hard gates before any fix", () => {
   });
 
   it("ends the fix loop after three failed fixes and questions the design", async () => {
-    const text = flow(await load("commands/stamity-debug.md"));
+    const text = flow(await load("commands/st-debug.md"));
 
     expect(text).toMatch(/three failed fixes/i);
     expect(text).toMatch(/a fourth attempt against the same design is not debugging/i);
-    expect(flow(await load("commands/stamity-debug.md"))).toContain("/stamity-plan");
+    expect(flow(await load("commands/st-debug.md"))).toContain("/st-plan");
   });
 
   it("auto-detects the target with one probe table", async () => {
-    const probes = section(await load("commands/stamity-debug.md"), "Target detection").replace(
+    const probes = section(await load("commands/st-debug.md"), "Target detection").replace(
       /\s+/g,
       " ",
     );
@@ -466,7 +466,7 @@ describe("debug — hard gates before any fix", () => {
   });
 
   it("keeps --diagnose report-only while still cleaning up", async () => {
-    const text = flow(await load("commands/stamity-debug.md"));
+    const text = flow(await load("commands/st-debug.md"));
 
     expect(text).toMatch(/`--diagnose` \(report only\)/i);
     expect(text).toMatch(/steps 6 and 7 do not run\. step 8 does/i);
@@ -475,7 +475,7 @@ describe("debug — hard gates before any fix", () => {
 
 describe("quick — the guardrails are the command", () => {
   it("states the literal thresholds and refuses hard above them", async () => {
-    const text = flow(await load("commands/stamity-quick.md"));
+    const text = flow(await load("commands/st-quick.md"));
 
     expect(text).toContain(">5 files");
     expect(text).toContain("~200 lines");
@@ -485,7 +485,7 @@ describe("quick — the guardrails are the command", () => {
   });
 
   it("refuses a security-sensitive item regardless of its size", async () => {
-    const text = flow(await load("commands/stamity-quick.md"));
+    const text = flow(await load("commands/st-quick.md"));
 
     // Edge case: a one-character edit under auth or credential handling.
     expect(text).toMatch(/security-sensitive row has no size floor/i);
@@ -495,7 +495,7 @@ describe("quick — the guardrails are the command", () => {
   });
 
   it("re-escalates mid-run without silently finishing or dropping the remainder", async () => {
-    const text = flow(await load("commands/stamity-quick.md"));
+    const text = flow(await load("commands/st-quick.md"));
 
     // Edge case: item 3 of 5 crosses a threshold after the batch has started.
     expect(text).toMatch(/mid-run re-escalation/i);
@@ -508,7 +508,7 @@ describe("quick — the guardrails are the command", () => {
   });
 
   it("runs the full gate in the test-runner and never turns it off", async () => {
-    const text = flow(await load("commands/stamity-quick.md"));
+    const text = flow(await load("commands/st-quick.md"));
 
     expect(text).toContain("${STAMITY:VERIFY_GATE_ALL}");
     expect(text).toContain("Spawn `test-runner`");
@@ -518,11 +518,11 @@ describe("quick — the guardrails are the command", () => {
   });
 
   it("fixes the commit prefix and differs from work by contract", async () => {
-    const text = flow(await load("commands/stamity-quick.md"));
+    const text = flow(await load("commands/st-quick.md"));
 
     expect(text).toMatch(/message prefix is fixed: `quick:`/i);
     expect(text).toMatch(/`quick: <N> small changes`/);
-    expect(text).toMatch(/differs from `\/stamity-work` by contract/i);
+    expect(text).toMatch(/differs from `\/st-work` by contract/i);
     expect(text).toMatch(/no board source, no issue or PR state, no phase state/i);
     // Tier-1 inline edits are the declared carve-out; verification still delegates.
     expect(text).toMatch(/tier-1 edits apply inline\. verification does not/i);
@@ -543,7 +543,7 @@ const HOUSE_STYLE_FM = [
 ].join("\n");
 
 const CREATOR = "agents/stamity-creator.md";
-const QUICK = "commands/stamity-quick.md";
+const QUICK = "commands/st-quick.md";
 
 /** The kinds one check reported, in report order. */
 const kinds = (violations: readonly { kind: string }[]): string[] =>
@@ -572,7 +572,7 @@ describe("quick — the repo-owned content branch", () => {
     expect(items).toMatch(/count against the file and size thresholds/i);
     expect(items).toMatch(/runs once over the batch/i);
     expect(items).toMatch(/is not Tier 1/i);
-    expect(items).toContain("/stamity-work");
+    expect(items).toContain("/st-work");
   });
 
   it("adds the branch as one section and leaves quick's shape otherwise alone", async () => {

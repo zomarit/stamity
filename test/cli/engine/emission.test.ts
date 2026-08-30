@@ -497,8 +497,8 @@ describe("override content layer", () => {
     // shipped skill's id. The second is the sharper failure — a repo that
     // believes it replaced a skill silently keeps running the shipped body.
     await repo.seedFiles({
-      ".stamity/overrides/skills/stamity-house-drill/SKILL.md": overrideSkill("house-drill"),
-      [`.stamity/overrides/skills/stamity-${SHADOWED_SKILL_ID}/SKILL.md`]:
+      ".stamity/overrides/skills/st-house-drill/SKILL.md": overrideSkill("house-drill"),
+      [`.stamity/overrides/skills/st-${SHADOWED_SKILL_ID}/SKILL.md`]:
         overrideSkill(SHADOWED_SKILL_ID),
     });
 
@@ -533,7 +533,7 @@ describe("override content layer", () => {
     // The shadowed one emits — with the SHIPPED body, which is the gap's
     // user-visible shape rather than an absence anyone would notice.
     const projected = rows.filter((row) =>
-      row.path.startsWith(`.agents/skills/stamity-${SHADOWED_SKILL_ID}/`),
+      row.path.startsWith(`.agents/skills/st-${SHADOWED_SKILL_ID}/`),
     );
     expect(projected.length).toBeGreaterThan(0);
     expect(projected.every((row) => !row.content.includes(USER_MARKER))).toBe(true);

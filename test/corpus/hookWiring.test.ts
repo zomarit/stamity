@@ -365,9 +365,9 @@ describe("the work-scoped review gate beside the core set", () => {
   });
 
   it("states the cap the work command's ladder states, and the band the engine clamps to", async () => {
-    const work = (await walkAllMarkdown()).find((file) => file.relPath === "commands/stamity-work.md");
+    const work = (await walkAllMarkdown()).find((file) => file.relPath === "commands/st-work.md");
 
-    expect(work, "commands/stamity-work.md").toBeDefined();
+    expect(work, "commands/st-work.md").toBeDefined();
     // Three surfaces, one number: the prose an agent follows, the engine
     // constant, and the generated script an operator reads.
     expect(work?.raw).toMatch(new RegExp(`\\b${DEFAULT_MAX_REVIEW_ITERATIONS} rounds\\b`));

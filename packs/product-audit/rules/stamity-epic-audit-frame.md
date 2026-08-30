@@ -60,7 +60,7 @@ query rather than by memory.
 
 ## Board sync
 
-The board primitive lives in `/stamity-board`, and this block is the wrapper
+The board primitive lives in `/st-board`, and this block is the wrapper
 around it — not a second definition of it.
 
 1. Create the epic, record its identifier, then create and link each sub-issue

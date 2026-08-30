@@ -638,19 +638,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -1091,7 +1091,7 @@ Codex reads at most 32768 bytes (32 KiB) of instruction text, and this setup sha
   "CLAUDE.md": "<!-- STAMITY:BEGIN v1.0.0-golden -->
 @AGENTS.md
 
-Skills for this setup are markdown procedures under \`.claude/skills/\`. Claude Code reads them from there: it loads one when the work matches its description, and you can invoke any of them directly by name — \`/stamity-onboard\`, for example.
+Skills for this setup are markdown procedures under \`.claude/skills/\`. Claude Code reads them from there: it loads one when the work matches its description, and you can invoke any of them directly by name — \`/st-onboard\`, for example.
 <!-- STAMITY:END -->
 ",
   "packages/alpha/AGENTS.md": "
@@ -1151,19 +1151,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -1241,19 +1241,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -1279,43 +1279,43 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four tree digest 1`] = `
 {
-  ".agents/skills/stamity-browser-evidence/SKILL.md": "9970d7c458c4f25977e3b51532ecf5fd04760457659b3c899ba2c3dd0aec0eaf 7229 bytes",
-  ".agents/skills/stamity-dep-audit/SKILL.md": "c8413081a9b039fc6d159667c56fa8e46ab2d52d967bf43940432287afe3b464 5545 bytes",
-  ".agents/skills/stamity-design-system-detect/SKILL.md": "5322281041e354ab132da4828a7900bb32e57a7cfb6a4b40a71c2be62a3eb333 6847 bytes",
-  ".agents/skills/stamity-handoff/SKILL.md": "98115f555fab5af462561fd1a571faae5c3c3974b25f3b6c3c2a006e7fbaf6ad 10686 bytes",
-  ".agents/skills/stamity-learn/SKILL.md": "2aa90a09b5ed89a69aa328c8b46c103b674ab029306690d682c5419adc60a19f 5894 bytes",
-  ".agents/skills/stamity-onboard/SKILL.md": "da90de88da033a514132aec0ca4d2e7683bd3ae041d380c0f7660fe5f4868828 9064 bytes",
-  ".agents/skills/stamity-qa/SKILL.md": "39d5549ec799d8df3ca9fd4b3aa8cf0cd4fd4e21b85e39fe63850e18207e0148 5833 bytes",
-  ".agents/skills/stamity-verify/SKILL.md": "571e89dfe53a84c4bb68248aa902b1407372f1501451345334d4171c6b7c1c2f 6658 bytes",
-  ".agents/skills/stamity-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".agents/skills/stamity-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
-  ".agents/skills/stamity-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
-  ".agents/skills/stamity-verify/references/product-spec.md": "31a8754b71b2e77609fd65219d5e56728da43e7a684b093d1044aa8723c43836 3084 bytes",
-  ".agents/skills/stamity-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
-  ".agents/skills/stamity-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
-  ".agents/skills/stamity-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
-  ".agents/skills/stamity-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
-  ".agents/skills/stamity-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
-  ".agents/skills/stamity-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
-  ".claude/agents/stamity-creator.md": "f4d43587d7b36d5f47b5e8adf47e368fbaa471707c68e15a25c7ae50f90001b0 9659 bytes",
+  ".agents/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+  ".agents/skills/st-dep-audit/SKILL.md": "019dfd2df9c3d8eaffa55744cc83bed51afa6f8e045f9987f7e8bbcc8172fccf 5525 bytes",
+  ".agents/skills/st-design-system-detect/SKILL.md": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+  ".agents/skills/st-handoff/SKILL.md": "63f192628d00f36dae837691adb87f3ac1d2d769e549ebc518bf7a55d0363148 10681 bytes",
+  ".agents/skills/st-learn/SKILL.md": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+  ".agents/skills/st-onboard/SKILL.md": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+  ".agents/skills/st-qa/SKILL.md": "8b91f27c07a436047e5672bde678e6cdd4894ede20ba0cc2a78253c1f0cd8444 5828 bytes",
+  ".agents/skills/st-verify/SKILL.md": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+  ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
+  ".agents/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".agents/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
+  ".agents/skills/st-verify/references/product-spec.md": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+  ".agents/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
+  ".agents/skills/st-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
+  ".agents/skills/st-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
+  ".agents/skills/st-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
+  ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
+  ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
+  ".claude/agents/stamity-creator.md": "42f97e00fbada1127f2d216f4a1efd1ce51a549e1ccaa8ba617b3cd6127f8706 9780 bytes",
   ".claude/agents/stamity-design-quality.md": "800264c792aa7f68ab7873f209977b636c656b7f85fd37298cacce7d8bee2809 7677 bytes",
   ".claude/agents/stamity-fixer.md": "e07245c31b51e0d7e1607add300132de80ee5ea04bce2951adc1213ac7750fbb 6138 bytes",
   ".claude/agents/stamity-implementer.md": "c398a6b7438dc4c335828b06446159890f7a8fb4a12623eb029a1e7d42a17f83 5159 bytes",
   ".claude/agents/stamity-performance.md": "c943de70bcf68d3da6b862a5e4ef371336dfe92a2bdd45f57b6e5e3d2bfcc087 8004 bytes",
-  ".claude/agents/stamity-researcher.md": "e5076d501569dccbef24c21b6723bfd676704a201185af5df9e2393136cbed27 7380 bytes",
+  ".claude/agents/stamity-researcher.md": "0938d483dcdf57eb5050735f8060cd2ab1265c93921ab7352755f51026e5755a 7365 bytes",
   ".claude/agents/stamity-reviewer.md": "a04a23695c92ecbf176e72938178adfdfa2888d0af3cce81e653fb3ed679ffad 9985 bytes",
   ".claude/agents/stamity-security.md": "c9b70589b551a2d5bdf3ff19cf17b6f2bb77f20df5cbe2b037dd27d73273ee39 7555 bytes",
-  ".claude/agents/stamity-spec-author.md": "7ba480dc9a5e011bf25f0ec783ff8b85fc5e1693e12d7314d89983ac3ab4c2f9 8302 bytes",
+  ".claude/agents/stamity-spec-author.md": "8e7942d51c0a2e0f782c28a4c9483c4fb23ad45acedaeb3089eda6bf9c4fd8a6 8277 bytes",
   ".claude/agents/stamity-test-runner.md": "6948e5079e30e3ce50b8e317591158120e132fba0a4f051ed6f2334540d1bc69 5672 bytes",
-  ".claude/commands/stamity-ask.md": "748e57b138412c2aaa64c834d6ece669b070d816c6f137f3a080a3148d018436 6526 bytes",
-  ".claude/commands/stamity-board.md": "1b65530c7fc32a9c24ea5583a6f948726040f15ae7812fad570644f1f5137bca 21274 bytes",
-  ".claude/commands/stamity-debug.md": "f48c132eefd1d6ea6eae61f59d3cb178dfec2a47cd2f434a41867553658adb4d 11017 bytes",
-  ".claude/commands/stamity-plan.md": "de6329bdd2dac0b348d04c5437f614a9b5560eeeb25e43abfbf7a556529214e1 21063 bytes",
-  ".claude/commands/stamity-pr-resolve.md": "f150cafd7215df4f4ab17b34aa4c6d3ace61e2b05cf3ec69fa57073483bf8d0d 19050 bytes",
-  ".claude/commands/stamity-quick.md": "df14d072a20443d9b5f90d0dcf3d156ee5e3264a3c4884f0417dfb8ea2f96b8a 7011 bytes",
-  ".claude/commands/stamity-rework.md": "deabc0fd749e37a1442ed9fe9cf25d7bf5edc7609b135708e3d3a55778444667 15983 bytes",
-  ".claude/commands/stamity-spec.md": "37d980536278e7fa2c663cb8a7a0ff3c7004047e28c6a2254c23756fa4aad43d 15002 bytes",
-  ".claude/commands/stamity-work.md": "e688d7919dc3028ba57f731cd2e943a45c44cf4630c18fb247e043b7c8b2c77c 19732 bytes",
+  ".claude/commands/st-ask.md": "e8e9572612cbd8a374cb0cb0ba59739229a2e05135fe1a652deef06a525834ed 6491 bytes",
+  ".claude/commands/st-board.md": "a1964320623ad4a0d91ba596b0ffccf93e9b107bc4738538f25481851fb68081 21219 bytes",
+  ".claude/commands/st-debug.md": "68e66cbb6e89443301fdfde561c6c987f0de3bf32fcf050a8acfdab199adc4f7 10962 bytes",
+  ".claude/commands/st-plan.md": "ed2559b9052a473b7422249aa39db90dc4d49d38f5aec3006c2a8a320b92ea09 20978 bytes",
+  ".claude/commands/st-pr-resolve.md": "cd0cd9d338e6a971a03ea4d6cf5afc1c1d855b2a16e62ea2bcbadad8f6db828e 19000 bytes",
+  ".claude/commands/st-quick.md": "65d2a8201779cdfe68ecc028d250b1bfc12d33ce8e7686be1da6e6280343df38 6956 bytes",
+  ".claude/commands/st-rework.md": "dc8c95cd97b0799fac1dffe0fa869f74693b52e99aee4af54d3bc5088650983c 15898 bytes",
+  ".claude/commands/st-spec.md": "5de878e04baed36442172c2a2ecf56d3fdb35f3aba0b67f4f9985ea0098ee743 14987 bytes",
+  ".claude/commands/st-work.md": "78adf2158e042aee1334b5b2a119f5bab766ede35fd0a5d7bf69e9c5555d6fd3 19702 bytes",
   ".claude/rules/stamity-ai-evals.md": "06a295e597264103790775e4dd9da5f36f38e1c454c96b005b5264d4c22d3a2a 3844 bytes",
   ".claude/rules/stamity-api-versioning.md": "4e013575676dee4fec4a84ef4c07c06ad8ea19cafb233a5429f295e2ba5c564d 4852 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
@@ -1329,45 +1329,45 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".claude/rules/stamity-testing.md": "bf7500ade30993447b616d498feb7d26b034c18c7db149854460781226088064 4176 bytes",
   ".claude/rules/stamity-ui-states.md": "05a9372861cbfbe588494d72ce28492c1954f06c0db3ce11b1b29ef9d2d89b3e 4405 bytes",
   ".claude/settings.json": "a2cf9e1a0347a337cae332ba2d5543329e657a39ac33842b0b25ab2e2f934713 1603 bytes",
-  ".claude/skills/stamity-browser-evidence/SKILL.md": "9970d7c458c4f25977e3b51532ecf5fd04760457659b3c899ba2c3dd0aec0eaf 7229 bytes",
-  ".claude/skills/stamity-dep-audit/SKILL.md": "c8413081a9b039fc6d159667c56fa8e46ab2d52d967bf43940432287afe3b464 5545 bytes",
-  ".claude/skills/stamity-design-system-detect/SKILL.md": "5322281041e354ab132da4828a7900bb32e57a7cfb6a4b40a71c2be62a3eb333 6847 bytes",
-  ".claude/skills/stamity-handoff/SKILL.md": "98115f555fab5af462561fd1a571faae5c3c3974b25f3b6c3c2a006e7fbaf6ad 10686 bytes",
-  ".claude/skills/stamity-learn/SKILL.md": "2aa90a09b5ed89a69aa328c8b46c103b674ab029306690d682c5419adc60a19f 5894 bytes",
-  ".claude/skills/stamity-onboard/SKILL.md": "da90de88da033a514132aec0ca4d2e7683bd3ae041d380c0f7660fe5f4868828 9064 bytes",
-  ".claude/skills/stamity-qa/SKILL.md": "39d5549ec799d8df3ca9fd4b3aa8cf0cd4fd4e21b85e39fe63850e18207e0148 5833 bytes",
-  ".claude/skills/stamity-verify/SKILL.md": "571e89dfe53a84c4bb68248aa902b1407372f1501451345334d4171c6b7c1c2f 6658 bytes",
-  ".claude/skills/stamity-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".claude/skills/stamity-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
-  ".claude/skills/stamity-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
-  ".claude/skills/stamity-verify/references/product-spec.md": "31a8754b71b2e77609fd65219d5e56728da43e7a684b093d1044aa8723c43836 3084 bytes",
-  ".claude/skills/stamity-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
-  ".claude/skills/stamity-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
-  ".claude/skills/stamity-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
-  ".claude/skills/stamity-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
-  ".claude/skills/stamity-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
-  ".claude/skills/stamity-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
-  ".codex/agents/stamity-creator.toml": "0ca498cabb5acdc0927b5ec862c8871e9d04d7fb0f092ce465e33b1cc2cfc3f0 10111 bytes",
+  ".claude/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+  ".claude/skills/st-dep-audit/SKILL.md": "019dfd2df9c3d8eaffa55744cc83bed51afa6f8e045f9987f7e8bbcc8172fccf 5525 bytes",
+  ".claude/skills/st-design-system-detect/SKILL.md": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+  ".claude/skills/st-handoff/SKILL.md": "63f192628d00f36dae837691adb87f3ac1d2d769e549ebc518bf7a55d0363148 10681 bytes",
+  ".claude/skills/st-learn/SKILL.md": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+  ".claude/skills/st-onboard/SKILL.md": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+  ".claude/skills/st-qa/SKILL.md": "8b91f27c07a436047e5672bde678e6cdd4894ede20ba0cc2a78253c1f0cd8444 5828 bytes",
+  ".claude/skills/st-verify/SKILL.md": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+  ".claude/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
+  ".claude/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".claude/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
+  ".claude/skills/st-verify/references/product-spec.md": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+  ".claude/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
+  ".claude/skills/st-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
+  ".claude/skills/st-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
+  ".claude/skills/st-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
+  ".claude/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
+  ".claude/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
+  ".codex/agents/stamity-creator.toml": "23b48bd6c3ba3c3c00a3a48f7fb3d754b8851f16b88a262d46f0000c98eab055 10232 bytes",
   ".codex/agents/stamity-design-quality.toml": "157fbd1524308fc1740ec88250cd4200d3ecdeb748589949d88c47f22ad7fd26 8132 bytes",
   ".codex/agents/stamity-fixer.toml": "0d4aaba1dbc60fc18f5b3a4293c2ea4b3138846e738c34f77edab1cb94f09f7f 6588 bytes",
   ".codex/agents/stamity-implementer.toml": "897b69d55548065e02fa7aea49b02860ca90eefc3913a6697bf52b30e6b6b9b1 5617 bytes",
   ".codex/agents/stamity-performance.toml": "1a377d1d777607d58c25fcb4f31c03b3e9dabf937ba7498b8d8b67ad8e3a2158 8454 bytes",
-  ".codex/agents/stamity-researcher.toml": "b0a8959d0b81746e1bc88f6485c76b042b37be7e5865adedaef16c72c7fdb088 7829 bytes",
+  ".codex/agents/stamity-researcher.toml": "1a8e48161f2be750207a9278e558ad4c4c003406e308718ef306fc1225aeee8a 7814 bytes",
   ".codex/agents/stamity-reviewer.toml": "cf008740f95fc4d613db58483bc0c024115da5499be84fe3854de615025b2003 10434 bytes",
   ".codex/agents/stamity-security.toml": "b706029cf5b3b730c252cb398759af6790d660bae9a7e462217a945030d808de 8004 bytes",
-  ".codex/agents/stamity-spec-author.toml": "c69e1653cb870087dc995c52b643b95b31440414c55fa3a4a760b74198ac502c 8760 bytes",
+  ".codex/agents/stamity-spec-author.toml": "6f1687ff4a678f0241d80c594f27a00df4d0d757d68f54b9194d2a6e66090430 8735 bytes",
   ".codex/agents/stamity-test-runner.toml": "0068453bff3c647a4180e9704c44d586d543f03edf456fdaaaa433c3bfa2d890 6135 bytes",
   ".codex/config.toml": "981a2f3712cf66b87b723c6780b3268f9d9600e7acfac58f10ee4fddd47a7d49 1490 bytes",
   ".codex/hooks.json": "353aa95f9d99f6966e2d74bbbf94c743327a7518a96cc5d0518c52f6951a2d3c 1770 bytes",
-  ".cursor/agents/stamity-creator.md": "8b1e7e69e584322ecc0eca1b4d0ac0b16f443345a8f4058c4c9ab63cdd075e28 9544 bytes",
+  ".cursor/agents/stamity-creator.md": "3f49bdd55e78f73c70cf325f9d38de0708510ef32c385e09796adee1dc080c3e 9665 bytes",
   ".cursor/agents/stamity-design-quality.md": "a7279ade07b6b08cc5848614630ecfa29491b84d80151670b8365a02bc10d089 7601 bytes",
   ".cursor/agents/stamity-fixer.md": "ce9922531f5adc46f691c5e2e15a0b520f28aaee43985d2d656bbeaf6e8014c4 6007 bytes",
   ".cursor/agents/stamity-implementer.md": "35a6eee21ebed0f073072102ccae1c3926288b1e117b6ced325f4cf3e9ad7296 5026 bytes",
   ".cursor/agents/stamity-performance.md": "2f10d7c2f6a648f27d316ef913ac91afa0a81b826e548467e2e561131b4fdcfd 7927 bytes",
-  ".cursor/agents/stamity-researcher.md": "875aeb7a878dec1db6e07335ef96385d1132ca149128dc48fb06541970ec49a9 7283 bytes",
+  ".cursor/agents/stamity-researcher.md": "0219a2ed1f211afca72bc98bea25038f1677c3586e983c99eabf6303857d6d05 7268 bytes",
   ".cursor/agents/stamity-reviewer.md": "75e53b3ca9b0f3df0264ef74cf1d502d6b3b697aa560eebd7ca2f9b8e4d7bf26 9915 bytes",
   ".cursor/agents/stamity-security.md": "6817395074d753a68b2c655923c5691d110b7a0147de135abbe2fe533c1d0583 7485 bytes",
-  ".cursor/agents/stamity-spec-author.md": "5adc903322fce8c77ca57e878ab77efe609db234d7f719ba0c6d6670be8bd00b 8187 bytes",
+  ".cursor/agents/stamity-spec-author.md": "2b93c6c39aa69de52abec08b49be6e769f43f1dfc6b9c8806368929d4345a74a 8162 bytes",
   ".cursor/agents/stamity-test-runner.md": "861a18d45503e95f2022bc577ea4feefbcfb246a9b993ec889b6fbbfceb17c8d 5566 bytes",
   ".cursor/hooks.json": "94a0b9af7ddd482f70d942f0ffa1da52bf2fdc4ca46127bf26ccd1204097f8a7 794 bytes",
   ".cursor/hooks/mcp-guard.mjs": "6d3f766e24cefc51e0d0d7303bbc1a8a7357ca8821969889173e02bd54c0a060 7022 bytes",
@@ -1385,24 +1385,24 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".cursor/rules/stamity-security-patterns.mdc": "003c872c5805f3896776bc878e25789e52e76491433761cfcfbdc127e8134275 6164 bytes",
   ".cursor/rules/stamity-testing.mdc": "6be05910f96dcd7872779263f35ba66c8928ed3c0b32931a057353d2e7b4bf11 4180 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "254c519142a94c77a78210feaedec26ac3faedc448cf825a4821646b14644e1d 4403 bytes",
-  ".cursor/skills/stamity-ask/SKILL.md": "b46616992a58030cf284950aa21a2b867c5a49d79ed24a77d259d9d17d612bbc 6575 bytes",
-  ".cursor/skills/stamity-board/SKILL.md": "ec2bf3c6d340a9ac1fb4d5c348d048456992e25077d3acd76d31840cd361c17f 21325 bytes",
-  ".cursor/skills/stamity-debug/SKILL.md": "17beb677091745408b00927e3f3d2a12076937876027fce9323cd8b09e34a39a 11066 bytes",
-  ".cursor/skills/stamity-plan/SKILL.md": "86f027459cfa9a83762b887a061002dc36f99fbed60c52dae0388deb94a9a321 21111 bytes",
-  ".cursor/skills/stamity-pr-resolve/SKILL.md": "c1c1ec2ec35cd073a4eebd0db55d1323d0c86a1c40adb102a558df2819f1a592 19106 bytes",
-  ".cursor/skills/stamity-quick/SKILL.md": "ac6a3f5d4cfac9ba98b7d3181625cd42fc6ba0dea1aff6c3b38859f43556b4eb 7060 bytes",
-  ".cursor/skills/stamity-rework/SKILL.md": "ba3390da509d12be92786c995efba568686e3f579389e20e181ad21b11358ad0 16035 bytes",
-  ".cursor/skills/stamity-spec/SKILL.md": "a076411971dab5710ef2a843475cf39a6cdfee1aa61fbb920f125235de93f7e7 15052 bytes",
-  ".cursor/skills/stamity-work/SKILL.md": "74c5c64710faba332f87898d9c8150358bbfb3ce4602a9616a5f83e444c55ad8 19782 bytes",
-  ".github/agents/stamity-creator.agent.md": "2c3d9053bc7510ba8bb15d28a62cc0a8dec43c0ea58c15b62592e7455f568210 9625 bytes",
+  ".cursor/skills/st-ask/SKILL.md": "9cea2f4fc1b0ac3aa5a18d3d5c474ff328c94663e6d454b8e1cc8258cb709ae4 6535 bytes",
+  ".cursor/skills/st-board/SKILL.md": "be822afd3f25ec34951cc8c12b8cc614f01323bd21484ebbb4e660aca3ed5fa2 21265 bytes",
+  ".cursor/skills/st-debug/SKILL.md": "3b365790bd50ddc4c7dbefd4ede9b63d37d717c83d10a592ee1b7a92377b948d 11006 bytes",
+  ".cursor/skills/st-plan/SKILL.md": "8c743087d1da9213a6417f0ffd397d46a82ae7b5d0c4ef5a8c4e9823509de818 21021 bytes",
+  ".cursor/skills/st-pr-resolve/SKILL.md": "ea0c5aecd62919f77eee06e72577aa5546db807f127fc359bae612cbf5c16b68 19051 bytes",
+  ".cursor/skills/st-quick/SKILL.md": "e05f46074979ae5ab416ac56c003e1880851cd224a235351e42eecbdb7e66e8d 7000 bytes",
+  ".cursor/skills/st-rework/SKILL.md": "6eb8bf5c361687d65c9d42ad1a7563629ed11ad014ef76677fd9cc6042b81e6a 15945 bytes",
+  ".cursor/skills/st-spec/SKILL.md": "f2c923d42a639cd2f75eadc3c594a0ae460f47de89b6ec974236dc39688f4c00 15032 bytes",
+  ".cursor/skills/st-work/SKILL.md": "f35a0ceeac2cf80c1e1c3e1063af922089c251d0f5d395f749169106c9eb0e96 19747 bytes",
+  ".github/agents/stamity-creator.agent.md": "917bf41a8e85fa879d8216bd1c4039117965df6205fb3fbb6d16a543c7850a06 9746 bytes",
   ".github/agents/stamity-design-quality.agent.md": "731c9871e74feb52fe8899a13cd0ff187c3122e513ce50628582645f37b12a5e 7666 bytes",
   ".github/agents/stamity-fixer.agent.md": "00ec0c786990feb73be1cdeea693cf98f147a33959b7b60f27f31f2638138f1e 6097 bytes",
   ".github/agents/stamity-implementer.agent.md": "89ad43ffd9e35d67610fcfa55223d148e4e40b62a6ee59bc9dc8dfa535677ecb 5122 bytes",
   ".github/agents/stamity-performance.agent.md": "08731e5b93dbe14988404e2c045cbe31f777b26bed03ff6aa75b4743d4abcd1f 7989 bytes",
-  ".github/agents/stamity-researcher.agent.md": "9a99be1865ead38f4cbd2dee924aa521417ad5f83841029dec2ebc3cbe620fb5 7351 bytes",
+  ".github/agents/stamity-researcher.agent.md": "4e23810049c91e4ab5ff331d9c06c30165faec409546218613b4432c9ddb5e28 7336 bytes",
   ".github/agents/stamity-reviewer.agent.md": "e24f2e561e6d05043e41b451a93bee84b2e00030c04d6d916b9d2a76d7291af0 9974 bytes",
   ".github/agents/stamity-security.agent.md": "edb193fea28b238215eadc63eae65895c14cfe2328f4bf55d675cf0588c7ab44 7544 bytes",
-  ".github/agents/stamity-spec-author.agent.md": "4415ae5687cdd86709221f6727f5ab98afb5840b04e0ac8537bf8694efe3b9a2 8272 bytes",
+  ".github/agents/stamity-spec-author.agent.md": "e21cd70749e2d5c8d0abbf3bf86d5cfce7c39783cda63d71065deb2da0beda1e 8247 bytes",
   ".github/agents/stamity-test-runner.agent.md": "d8102e7d848adb5d26c127fff63171c22e9019edc726ab95b3b03f5b2cb41b46 5654 bytes",
   ".github/instructions/stamity-ai-evals.instructions.md": "9501fc7af00b41eb3c34eef537e5b0924bcce6eb98ce31ddcc2919a0d84e79d9 3858 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "3ae6a0a1470d45770fab0cc1c2b940eac3e264002163b9085f013cdae375c249 4840 bytes",
@@ -1416,15 +1416,15 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".github/instructions/stamity-security-patterns.instructions.md": "20ab3bff0f4f44fd3a269a927f09f95bfc622a8961e29da96cc68f250197390c 6149 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2ead3fd125db409a91b79ef51da9c1620a4b72c5dc0d211ea77af500d2b6624e 4167 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "cf79d11ac6bbc29c5ab16186067261dabbfb92ad414d706000c9424851fbe953 4390 bytes",
-  ".github/prompts/stamity-ask.prompt.md": "748e57b138412c2aaa64c834d6ece669b070d816c6f137f3a080a3148d018436 6526 bytes",
-  ".github/prompts/stamity-board.prompt.md": "1b65530c7fc32a9c24ea5583a6f948726040f15ae7812fad570644f1f5137bca 21274 bytes",
-  ".github/prompts/stamity-debug.prompt.md": "f48c132eefd1d6ea6eae61f59d3cb178dfec2a47cd2f434a41867553658adb4d 11017 bytes",
-  ".github/prompts/stamity-plan.prompt.md": "de6329bdd2dac0b348d04c5437f614a9b5560eeeb25e43abfbf7a556529214e1 21063 bytes",
-  ".github/prompts/stamity-pr-resolve.prompt.md": "f150cafd7215df4f4ab17b34aa4c6d3ace61e2b05cf3ec69fa57073483bf8d0d 19050 bytes",
-  ".github/prompts/stamity-quick.prompt.md": "df14d072a20443d9b5f90d0dcf3d156ee5e3264a3c4884f0417dfb8ea2f96b8a 7011 bytes",
-  ".github/prompts/stamity-rework.prompt.md": "deabc0fd749e37a1442ed9fe9cf25d7bf5edc7609b135708e3d3a55778444667 15983 bytes",
-  ".github/prompts/stamity-spec.prompt.md": "37d980536278e7fa2c663cb8a7a0ff3c7004047e28c6a2254c23756fa4aad43d 15002 bytes",
-  ".github/prompts/stamity-work.prompt.md": "e688d7919dc3028ba57f731cd2e943a45c44cf4630c18fb247e043b7c8b2c77c 19732 bytes",
+  ".github/prompts/st-ask.prompt.md": "e8e9572612cbd8a374cb0cb0ba59739229a2e05135fe1a652deef06a525834ed 6491 bytes",
+  ".github/prompts/st-board.prompt.md": "a1964320623ad4a0d91ba596b0ffccf93e9b107bc4738538f25481851fb68081 21219 bytes",
+  ".github/prompts/st-debug.prompt.md": "68e66cbb6e89443301fdfde561c6c987f0de3bf32fcf050a8acfdab199adc4f7 10962 bytes",
+  ".github/prompts/st-plan.prompt.md": "ed2559b9052a473b7422249aa39db90dc4d49d38f5aec3006c2a8a320b92ea09 20978 bytes",
+  ".github/prompts/st-pr-resolve.prompt.md": "cd0cd9d338e6a971a03ea4d6cf5afc1c1d855b2a16e62ea2bcbadad8f6db828e 19000 bytes",
+  ".github/prompts/st-quick.prompt.md": "65d2a8201779cdfe68ecc028d250b1bfc12d33ce8e7686be1da6e6280343df38 6956 bytes",
+  ".github/prompts/st-rework.prompt.md": "dc8c95cd97b0799fac1dffe0fa869f74693b52e99aee4af54d3bc5088650983c 15898 bytes",
+  ".github/prompts/st-spec.prompt.md": "5de878e04baed36442172c2a2ecf56d3fdb35f3aba0b67f4f9985ea0098ee743 14987 bytes",
+  ".github/prompts/st-work.prompt.md": "78adf2158e042aee1334b5b2a119f5bab766ede35fd0a5d7bf69e9c5555d6fd3 19702 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".github/workflows/copilot-setup-steps.yml": "ecbfbddf199468b9cb2bad4e811b6d1b9eef4d810dfb64267a9ec3f4edc4fc9f 881 bytes",
   ".gitignore": "f8fbe8e8b09bc960be56387909425a4db0d79570de16d3fad0629c041839d681 9 bytes",
@@ -1447,17 +1447,17 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "80bc66890bcac8871cd0d3ba657112922e4367b625ab1948294effce5797312d 54983 bytes",
+  ".stamity/manifest.json": "e581811124c92f10922a637e936c54e16db0234089d274024464a8106fd8429c 54488 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "d288f0ac45d900e21d6ae683349c0a784c0398e2cf93fe206c81fed29816d274 32406 bytes",
-  "CLAUDE.md": "98c6b9f2b9de409e001a3088548c3a92bf6937c2a8c521e46dac41af5408a13f 313 bytes",
+  "AGENTS.md": "7a3423912d10efc85366c0ec403a1ce979f6f6929cb16624c35fadc35194b82b 32361 bytes",
+  "CLAUDE.md": "f5bb9ab771f54ed41eaa7ce3aefc96044f33f76184b50a05a1b91b69132c3540 308 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "65675d797b0378a4029b3d7391beaf4ce7f9f3750dfe096ebe374af34a04de39 4449 bytes",
+  "packages/alpha/AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "65675d797b0378a4029b3d7391beaf4ce7f9f3750dfe096ebe374af34a04de39 4449 bytes",
+  "packages/beta/AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -1626,19 +1626,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -1662,7 +1662,7 @@ so this index is all that ships — ask there for the outcome in plain words and
   "CLAUDE.md": "<!-- STAMITY:BEGIN v1.0.0-golden -->
 @AGENTS.md
 
-Skills for this setup are markdown procedures under \`.claude/skills/\`. Claude Code reads them from there: it loads one when the work matches its description, and you can invoke any of them directly by name — \`/stamity-onboard\`, for example.
+Skills for this setup are markdown procedures under \`.claude/skills/\`. Claude Code reads them from there: it loads one when the work matches its description, and you can invoke any of them directly by name — \`/st-onboard\`, for example.
 <!-- STAMITY:END -->
 ",
 }
@@ -1670,25 +1670,25 @@ Skills for this setup are markdown procedures under \`.claude/skills/\`. Claude 
 
 exports[`emitted tree for 'claude' > matches the tree digest golden > claude tree digest 1`] = `
 {
-  ".claude/agents/stamity-creator.md": "f4d43587d7b36d5f47b5e8adf47e368fbaa471707c68e15a25c7ae50f90001b0 9659 bytes",
+  ".claude/agents/stamity-creator.md": "42f97e00fbada1127f2d216f4a1efd1ce51a549e1ccaa8ba617b3cd6127f8706 9780 bytes",
   ".claude/agents/stamity-design-quality.md": "800264c792aa7f68ab7873f209977b636c656b7f85fd37298cacce7d8bee2809 7677 bytes",
   ".claude/agents/stamity-fixer.md": "e07245c31b51e0d7e1607add300132de80ee5ea04bce2951adc1213ac7750fbb 6138 bytes",
   ".claude/agents/stamity-implementer.md": "c398a6b7438dc4c335828b06446159890f7a8fb4a12623eb029a1e7d42a17f83 5159 bytes",
   ".claude/agents/stamity-performance.md": "c943de70bcf68d3da6b862a5e4ef371336dfe92a2bdd45f57b6e5e3d2bfcc087 8004 bytes",
-  ".claude/agents/stamity-researcher.md": "e5076d501569dccbef24c21b6723bfd676704a201185af5df9e2393136cbed27 7380 bytes",
+  ".claude/agents/stamity-researcher.md": "0938d483dcdf57eb5050735f8060cd2ab1265c93921ab7352755f51026e5755a 7365 bytes",
   ".claude/agents/stamity-reviewer.md": "a04a23695c92ecbf176e72938178adfdfa2888d0af3cce81e653fb3ed679ffad 9985 bytes",
   ".claude/agents/stamity-security.md": "c9b70589b551a2d5bdf3ff19cf17b6f2bb77f20df5cbe2b037dd27d73273ee39 7555 bytes",
-  ".claude/agents/stamity-spec-author.md": "7ba480dc9a5e011bf25f0ec783ff8b85fc5e1693e12d7314d89983ac3ab4c2f9 8302 bytes",
+  ".claude/agents/stamity-spec-author.md": "8e7942d51c0a2e0f782c28a4c9483c4fb23ad45acedaeb3089eda6bf9c4fd8a6 8277 bytes",
   ".claude/agents/stamity-test-runner.md": "6948e5079e30e3ce50b8e317591158120e132fba0a4f051ed6f2334540d1bc69 5672 bytes",
-  ".claude/commands/stamity-ask.md": "748e57b138412c2aaa64c834d6ece669b070d816c6f137f3a080a3148d018436 6526 bytes",
-  ".claude/commands/stamity-board.md": "1b65530c7fc32a9c24ea5583a6f948726040f15ae7812fad570644f1f5137bca 21274 bytes",
-  ".claude/commands/stamity-debug.md": "f48c132eefd1d6ea6eae61f59d3cb178dfec2a47cd2f434a41867553658adb4d 11017 bytes",
-  ".claude/commands/stamity-plan.md": "de6329bdd2dac0b348d04c5437f614a9b5560eeeb25e43abfbf7a556529214e1 21063 bytes",
-  ".claude/commands/stamity-pr-resolve.md": "f150cafd7215df4f4ab17b34aa4c6d3ace61e2b05cf3ec69fa57073483bf8d0d 19050 bytes",
-  ".claude/commands/stamity-quick.md": "df14d072a20443d9b5f90d0dcf3d156ee5e3264a3c4884f0417dfb8ea2f96b8a 7011 bytes",
-  ".claude/commands/stamity-rework.md": "deabc0fd749e37a1442ed9fe9cf25d7bf5edc7609b135708e3d3a55778444667 15983 bytes",
-  ".claude/commands/stamity-spec.md": "37d980536278e7fa2c663cb8a7a0ff3c7004047e28c6a2254c23756fa4aad43d 15002 bytes",
-  ".claude/commands/stamity-work.md": "e688d7919dc3028ba57f731cd2e943a45c44cf4630c18fb247e043b7c8b2c77c 19732 bytes",
+  ".claude/commands/st-ask.md": "e8e9572612cbd8a374cb0cb0ba59739229a2e05135fe1a652deef06a525834ed 6491 bytes",
+  ".claude/commands/st-board.md": "a1964320623ad4a0d91ba596b0ffccf93e9b107bc4738538f25481851fb68081 21219 bytes",
+  ".claude/commands/st-debug.md": "68e66cbb6e89443301fdfde561c6c987f0de3bf32fcf050a8acfdab199adc4f7 10962 bytes",
+  ".claude/commands/st-plan.md": "ed2559b9052a473b7422249aa39db90dc4d49d38f5aec3006c2a8a320b92ea09 20978 bytes",
+  ".claude/commands/st-pr-resolve.md": "cd0cd9d338e6a971a03ea4d6cf5afc1c1d855b2a16e62ea2bcbadad8f6db828e 19000 bytes",
+  ".claude/commands/st-quick.md": "65d2a8201779cdfe68ecc028d250b1bfc12d33ce8e7686be1da6e6280343df38 6956 bytes",
+  ".claude/commands/st-rework.md": "dc8c95cd97b0799fac1dffe0fa869f74693b52e99aee4af54d3bc5088650983c 15898 bytes",
+  ".claude/commands/st-spec.md": "5de878e04baed36442172c2a2ecf56d3fdb35f3aba0b67f4f9985ea0098ee743 14987 bytes",
+  ".claude/commands/st-work.md": "78adf2158e042aee1334b5b2a119f5bab766ede35fd0a5d7bf69e9c5555d6fd3 19702 bytes",
   ".claude/rules/stamity-ai-evals.md": "06a295e597264103790775e4dd9da5f36f38e1c454c96b005b5264d4c22d3a2a 3844 bytes",
   ".claude/rules/stamity-api-versioning.md": "4e013575676dee4fec4a84ef4c07c06ad8ea19cafb233a5429f295e2ba5c564d 4852 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
@@ -1702,24 +1702,24 @@ exports[`emitted tree for 'claude' > matches the tree digest golden > claude tre
   ".claude/rules/stamity-testing.md": "bf7500ade30993447b616d498feb7d26b034c18c7db149854460781226088064 4176 bytes",
   ".claude/rules/stamity-ui-states.md": "05a9372861cbfbe588494d72ce28492c1954f06c0db3ce11b1b29ef9d2d89b3e 4405 bytes",
   ".claude/settings.json": "a2cf9e1a0347a337cae332ba2d5543329e657a39ac33842b0b25ab2e2f934713 1603 bytes",
-  ".claude/skills/stamity-browser-evidence/SKILL.md": "9970d7c458c4f25977e3b51532ecf5fd04760457659b3c899ba2c3dd0aec0eaf 7229 bytes",
-  ".claude/skills/stamity-dep-audit/SKILL.md": "c8413081a9b039fc6d159667c56fa8e46ab2d52d967bf43940432287afe3b464 5545 bytes",
-  ".claude/skills/stamity-design-system-detect/SKILL.md": "5322281041e354ab132da4828a7900bb32e57a7cfb6a4b40a71c2be62a3eb333 6847 bytes",
-  ".claude/skills/stamity-handoff/SKILL.md": "98115f555fab5af462561fd1a571faae5c3c3974b25f3b6c3c2a006e7fbaf6ad 10686 bytes",
-  ".claude/skills/stamity-learn/SKILL.md": "2aa90a09b5ed89a69aa328c8b46c103b674ab029306690d682c5419adc60a19f 5894 bytes",
-  ".claude/skills/stamity-onboard/SKILL.md": "da90de88da033a514132aec0ca4d2e7683bd3ae041d380c0f7660fe5f4868828 9064 bytes",
-  ".claude/skills/stamity-qa/SKILL.md": "39d5549ec799d8df3ca9fd4b3aa8cf0cd4fd4e21b85e39fe63850e18207e0148 5833 bytes",
-  ".claude/skills/stamity-verify/SKILL.md": "571e89dfe53a84c4bb68248aa902b1407372f1501451345334d4171c6b7c1c2f 6658 bytes",
-  ".claude/skills/stamity-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".claude/skills/stamity-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
-  ".claude/skills/stamity-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
-  ".claude/skills/stamity-verify/references/product-spec.md": "31a8754b71b2e77609fd65219d5e56728da43e7a684b093d1044aa8723c43836 3084 bytes",
-  ".claude/skills/stamity-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
-  ".claude/skills/stamity-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
-  ".claude/skills/stamity-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
-  ".claude/skills/stamity-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
-  ".claude/skills/stamity-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
-  ".claude/skills/stamity-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
+  ".claude/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+  ".claude/skills/st-dep-audit/SKILL.md": "019dfd2df9c3d8eaffa55744cc83bed51afa6f8e045f9987f7e8bbcc8172fccf 5525 bytes",
+  ".claude/skills/st-design-system-detect/SKILL.md": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+  ".claude/skills/st-handoff/SKILL.md": "63f192628d00f36dae837691adb87f3ac1d2d769e549ebc518bf7a55d0363148 10681 bytes",
+  ".claude/skills/st-learn/SKILL.md": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+  ".claude/skills/st-onboard/SKILL.md": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+  ".claude/skills/st-qa/SKILL.md": "8b91f27c07a436047e5672bde678e6cdd4894ede20ba0cc2a78253c1f0cd8444 5828 bytes",
+  ".claude/skills/st-verify/SKILL.md": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+  ".claude/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
+  ".claude/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".claude/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
+  ".claude/skills/st-verify/references/product-spec.md": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+  ".claude/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
+  ".claude/skills/st-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
+  ".claude/skills/st-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
+  ".claude/skills/st-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
+  ".claude/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
+  ".claude/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "f8fbe8e8b09bc960be56387909425a4db0d79570de16d3fad0629c041839d681 9 bytes",
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
@@ -1732,9 +1732,9 @@ exports[`emitted tree for 'claude' > matches the tree digest golden > claude tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ddafd120013b6dd9473342c47a31e5363a2c42ce72cd755265f72c3fe81557e5 16215 bytes",
-  "AGENTS.md": "65675d797b0378a4029b3d7391beaf4ce7f9f3750dfe096ebe374af34a04de39 4449 bytes",
-  "CLAUDE.md": "98c6b9f2b9de409e001a3088548c3a92bf6937c2a8c521e46dac41af5408a13f 313 bytes",
+  ".stamity/manifest.json": "a5f8b3dfd0621b24caf6fe38d4ad754d6b8fb29ae45e6d339345a00812a93e78 16080 bytes",
+  "AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
+  "CLAUDE.md": "f5bb9ab771f54ed41eaa7ce3aefc96044f33f76184b50a05a1b91b69132c3540 308 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -1886,19 +1886,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -2393,19 +2393,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -2483,19 +2483,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -2521,33 +2521,33 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 exports[`emitted tree for 'codex' > matches the tree digest golden > codex tree digest 1`] = `
 {
-  ".agents/skills/stamity-browser-evidence/SKILL.md": "9970d7c458c4f25977e3b51532ecf5fd04760457659b3c899ba2c3dd0aec0eaf 7229 bytes",
-  ".agents/skills/stamity-dep-audit/SKILL.md": "c8413081a9b039fc6d159667c56fa8e46ab2d52d967bf43940432287afe3b464 5545 bytes",
-  ".agents/skills/stamity-design-system-detect/SKILL.md": "5322281041e354ab132da4828a7900bb32e57a7cfb6a4b40a71c2be62a3eb333 6847 bytes",
-  ".agents/skills/stamity-handoff/SKILL.md": "98115f555fab5af462561fd1a571faae5c3c3974b25f3b6c3c2a006e7fbaf6ad 10686 bytes",
-  ".agents/skills/stamity-learn/SKILL.md": "2aa90a09b5ed89a69aa328c8b46c103b674ab029306690d682c5419adc60a19f 5894 bytes",
-  ".agents/skills/stamity-onboard/SKILL.md": "da90de88da033a514132aec0ca4d2e7683bd3ae041d380c0f7660fe5f4868828 9064 bytes",
-  ".agents/skills/stamity-qa/SKILL.md": "39d5549ec799d8df3ca9fd4b3aa8cf0cd4fd4e21b85e39fe63850e18207e0148 5833 bytes",
-  ".agents/skills/stamity-verify/SKILL.md": "571e89dfe53a84c4bb68248aa902b1407372f1501451345334d4171c6b7c1c2f 6658 bytes",
-  ".agents/skills/stamity-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".agents/skills/stamity-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
-  ".agents/skills/stamity-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
-  ".agents/skills/stamity-verify/references/product-spec.md": "31a8754b71b2e77609fd65219d5e56728da43e7a684b093d1044aa8723c43836 3084 bytes",
-  ".agents/skills/stamity-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
-  ".agents/skills/stamity-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
-  ".agents/skills/stamity-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
-  ".agents/skills/stamity-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
-  ".agents/skills/stamity-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
-  ".agents/skills/stamity-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
-  ".codex/agents/stamity-creator.toml": "0ca498cabb5acdc0927b5ec862c8871e9d04d7fb0f092ce465e33b1cc2cfc3f0 10111 bytes",
+  ".agents/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+  ".agents/skills/st-dep-audit/SKILL.md": "019dfd2df9c3d8eaffa55744cc83bed51afa6f8e045f9987f7e8bbcc8172fccf 5525 bytes",
+  ".agents/skills/st-design-system-detect/SKILL.md": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+  ".agents/skills/st-handoff/SKILL.md": "63f192628d00f36dae837691adb87f3ac1d2d769e549ebc518bf7a55d0363148 10681 bytes",
+  ".agents/skills/st-learn/SKILL.md": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+  ".agents/skills/st-onboard/SKILL.md": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+  ".agents/skills/st-qa/SKILL.md": "8b91f27c07a436047e5672bde678e6cdd4894ede20ba0cc2a78253c1f0cd8444 5828 bytes",
+  ".agents/skills/st-verify/SKILL.md": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+  ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
+  ".agents/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".agents/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
+  ".agents/skills/st-verify/references/product-spec.md": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+  ".agents/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
+  ".agents/skills/st-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
+  ".agents/skills/st-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
+  ".agents/skills/st-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
+  ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
+  ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
+  ".codex/agents/stamity-creator.toml": "23b48bd6c3ba3c3c00a3a48f7fb3d754b8851f16b88a262d46f0000c98eab055 10232 bytes",
   ".codex/agents/stamity-design-quality.toml": "157fbd1524308fc1740ec88250cd4200d3ecdeb748589949d88c47f22ad7fd26 8132 bytes",
   ".codex/agents/stamity-fixer.toml": "0d4aaba1dbc60fc18f5b3a4293c2ea4b3138846e738c34f77edab1cb94f09f7f 6588 bytes",
   ".codex/agents/stamity-implementer.toml": "897b69d55548065e02fa7aea49b02860ca90eefc3913a6697bf52b30e6b6b9b1 5617 bytes",
   ".codex/agents/stamity-performance.toml": "1a377d1d777607d58c25fcb4f31c03b3e9dabf937ba7498b8d8b67ad8e3a2158 8454 bytes",
-  ".codex/agents/stamity-researcher.toml": "b0a8959d0b81746e1bc88f6485c76b042b37be7e5865adedaef16c72c7fdb088 7829 bytes",
+  ".codex/agents/stamity-researcher.toml": "1a8e48161f2be750207a9278e558ad4c4c003406e308718ef306fc1225aeee8a 7814 bytes",
   ".codex/agents/stamity-reviewer.toml": "cf008740f95fc4d613db58483bc0c024115da5499be84fe3854de615025b2003 10434 bytes",
   ".codex/agents/stamity-security.toml": "b706029cf5b3b730c252cb398759af6790d660bae9a7e462217a945030d808de 8004 bytes",
-  ".codex/agents/stamity-spec-author.toml": "c69e1653cb870087dc995c52b643b95b31440414c55fa3a4a760b74198ac502c 8760 bytes",
+  ".codex/agents/stamity-spec-author.toml": "6f1687ff4a678f0241d80c594f27a00df4d0d757d68f54b9194d2a6e66090430 8735 bytes",
   ".codex/agents/stamity-test-runner.toml": "0068453bff3c647a4180e9704c44d586d543f03edf456fdaaaa433c3bfa2d890 6135 bytes",
   ".codex/config.toml": "981a2f3712cf66b87b723c6780b3268f9d9600e7acfac58f10ee4fddd47a7d49 1490 bytes",
   ".codex/hooks.json": "353aa95f9d99f6966e2d74bbbf94c743327a7518a96cc5d0518c52f6951a2d3c 1770 bytes",
@@ -2561,14 +2561,14 @@ exports[`emitted tree for 'codex' > matches the tree digest golden > codex tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "33576b66edb149842bb5f4fa7be8c9a6b58566802590ec2c51bc4e87c5ed13f7 10900 bytes",
-  "AGENTS.md": "d288f0ac45d900e21d6ae683349c0a784c0398e2cf93fe206c81fed29816d274 32406 bytes",
+  ".stamity/manifest.json": "133354279d145e69c1084ded44a7f2147f1226c2c35b97820f3b27d21e05aaba 10810 bytes",
+  "AGENTS.md": "7a3423912d10efc85366c0ec403a1ce979f6f6929cb16624c35fadc35194b82b 32361 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "65675d797b0378a4029b3d7391beaf4ce7f9f3750dfe096ebe374af34a04de39 4449 bytes",
+  "packages/alpha/AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "65675d797b0378a4029b3d7391beaf4ce7f9f3750dfe096ebe374af34a04de39 4449 bytes",
+  "packages/beta/AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -2705,19 +2705,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -2743,33 +2743,33 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot tree digest 1`] = `
 {
-  ".agents/skills/stamity-browser-evidence/SKILL.md": "9970d7c458c4f25977e3b51532ecf5fd04760457659b3c899ba2c3dd0aec0eaf 7229 bytes",
-  ".agents/skills/stamity-dep-audit/SKILL.md": "c8413081a9b039fc6d159667c56fa8e46ab2d52d967bf43940432287afe3b464 5545 bytes",
-  ".agents/skills/stamity-design-system-detect/SKILL.md": "5322281041e354ab132da4828a7900bb32e57a7cfb6a4b40a71c2be62a3eb333 6847 bytes",
-  ".agents/skills/stamity-handoff/SKILL.md": "98115f555fab5af462561fd1a571faae5c3c3974b25f3b6c3c2a006e7fbaf6ad 10686 bytes",
-  ".agents/skills/stamity-learn/SKILL.md": "2aa90a09b5ed89a69aa328c8b46c103b674ab029306690d682c5419adc60a19f 5894 bytes",
-  ".agents/skills/stamity-onboard/SKILL.md": "da90de88da033a514132aec0ca4d2e7683bd3ae041d380c0f7660fe5f4868828 9064 bytes",
-  ".agents/skills/stamity-qa/SKILL.md": "39d5549ec799d8df3ca9fd4b3aa8cf0cd4fd4e21b85e39fe63850e18207e0148 5833 bytes",
-  ".agents/skills/stamity-verify/SKILL.md": "571e89dfe53a84c4bb68248aa902b1407372f1501451345334d4171c6b7c1c2f 6658 bytes",
-  ".agents/skills/stamity-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".agents/skills/stamity-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
-  ".agents/skills/stamity-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
-  ".agents/skills/stamity-verify/references/product-spec.md": "31a8754b71b2e77609fd65219d5e56728da43e7a684b093d1044aa8723c43836 3084 bytes",
-  ".agents/skills/stamity-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
-  ".agents/skills/stamity-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
-  ".agents/skills/stamity-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
-  ".agents/skills/stamity-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
-  ".agents/skills/stamity-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
-  ".agents/skills/stamity-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
-  ".github/agents/stamity-creator.agent.md": "2c3d9053bc7510ba8bb15d28a62cc0a8dec43c0ea58c15b62592e7455f568210 9625 bytes",
+  ".agents/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+  ".agents/skills/st-dep-audit/SKILL.md": "019dfd2df9c3d8eaffa55744cc83bed51afa6f8e045f9987f7e8bbcc8172fccf 5525 bytes",
+  ".agents/skills/st-design-system-detect/SKILL.md": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+  ".agents/skills/st-handoff/SKILL.md": "63f192628d00f36dae837691adb87f3ac1d2d769e549ebc518bf7a55d0363148 10681 bytes",
+  ".agents/skills/st-learn/SKILL.md": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+  ".agents/skills/st-onboard/SKILL.md": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+  ".agents/skills/st-qa/SKILL.md": "8b91f27c07a436047e5672bde678e6cdd4894ede20ba0cc2a78253c1f0cd8444 5828 bytes",
+  ".agents/skills/st-verify/SKILL.md": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+  ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
+  ".agents/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".agents/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
+  ".agents/skills/st-verify/references/product-spec.md": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+  ".agents/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
+  ".agents/skills/st-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
+  ".agents/skills/st-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
+  ".agents/skills/st-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
+  ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
+  ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
+  ".github/agents/stamity-creator.agent.md": "917bf41a8e85fa879d8216bd1c4039117965df6205fb3fbb6d16a543c7850a06 9746 bytes",
   ".github/agents/stamity-design-quality.agent.md": "731c9871e74feb52fe8899a13cd0ff187c3122e513ce50628582645f37b12a5e 7666 bytes",
   ".github/agents/stamity-fixer.agent.md": "00ec0c786990feb73be1cdeea693cf98f147a33959b7b60f27f31f2638138f1e 6097 bytes",
   ".github/agents/stamity-implementer.agent.md": "89ad43ffd9e35d67610fcfa55223d148e4e40b62a6ee59bc9dc8dfa535677ecb 5122 bytes",
   ".github/agents/stamity-performance.agent.md": "08731e5b93dbe14988404e2c045cbe31f777b26bed03ff6aa75b4743d4abcd1f 7989 bytes",
-  ".github/agents/stamity-researcher.agent.md": "9a99be1865ead38f4cbd2dee924aa521417ad5f83841029dec2ebc3cbe620fb5 7351 bytes",
+  ".github/agents/stamity-researcher.agent.md": "4e23810049c91e4ab5ff331d9c06c30165faec409546218613b4432c9ddb5e28 7336 bytes",
   ".github/agents/stamity-reviewer.agent.md": "e24f2e561e6d05043e41b451a93bee84b2e00030c04d6d916b9d2a76d7291af0 9974 bytes",
   ".github/agents/stamity-security.agent.md": "edb193fea28b238215eadc63eae65895c14cfe2328f4bf55d675cf0588c7ab44 7544 bytes",
-  ".github/agents/stamity-spec-author.agent.md": "4415ae5687cdd86709221f6727f5ab98afb5840b04e0ac8537bf8694efe3b9a2 8272 bytes",
+  ".github/agents/stamity-spec-author.agent.md": "e21cd70749e2d5c8d0abbf3bf86d5cfce7c39783cda63d71065deb2da0beda1e 8247 bytes",
   ".github/agents/stamity-test-runner.agent.md": "d8102e7d848adb5d26c127fff63171c22e9019edc726ab95b3b03f5b2cb41b46 5654 bytes",
   ".github/instructions/stamity-ai-evals.instructions.md": "9501fc7af00b41eb3c34eef537e5b0924bcce6eb98ce31ddcc2919a0d84e79d9 3858 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "3ae6a0a1470d45770fab0cc1c2b940eac3e264002163b9085f013cdae375c249 4840 bytes",
@@ -2783,15 +2783,15 @@ exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot t
   ".github/instructions/stamity-security-patterns.instructions.md": "20ab3bff0f4f44fd3a269a927f09f95bfc622a8961e29da96cc68f250197390c 6149 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2ead3fd125db409a91b79ef51da9c1620a4b72c5dc0d211ea77af500d2b6624e 4167 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "cf79d11ac6bbc29c5ab16186067261dabbfb92ad414d706000c9424851fbe953 4390 bytes",
-  ".github/prompts/stamity-ask.prompt.md": "748e57b138412c2aaa64c834d6ece669b070d816c6f137f3a080a3148d018436 6526 bytes",
-  ".github/prompts/stamity-board.prompt.md": "1b65530c7fc32a9c24ea5583a6f948726040f15ae7812fad570644f1f5137bca 21274 bytes",
-  ".github/prompts/stamity-debug.prompt.md": "f48c132eefd1d6ea6eae61f59d3cb178dfec2a47cd2f434a41867553658adb4d 11017 bytes",
-  ".github/prompts/stamity-plan.prompt.md": "de6329bdd2dac0b348d04c5437f614a9b5560eeeb25e43abfbf7a556529214e1 21063 bytes",
-  ".github/prompts/stamity-pr-resolve.prompt.md": "f150cafd7215df4f4ab17b34aa4c6d3ace61e2b05cf3ec69fa57073483bf8d0d 19050 bytes",
-  ".github/prompts/stamity-quick.prompt.md": "df14d072a20443d9b5f90d0dcf3d156ee5e3264a3c4884f0417dfb8ea2f96b8a 7011 bytes",
-  ".github/prompts/stamity-rework.prompt.md": "deabc0fd749e37a1442ed9fe9cf25d7bf5edc7609b135708e3d3a55778444667 15983 bytes",
-  ".github/prompts/stamity-spec.prompt.md": "37d980536278e7fa2c663cb8a7a0ff3c7004047e28c6a2254c23756fa4aad43d 15002 bytes",
-  ".github/prompts/stamity-work.prompt.md": "e688d7919dc3028ba57f731cd2e943a45c44cf4630c18fb247e043b7c8b2c77c 19732 bytes",
+  ".github/prompts/st-ask.prompt.md": "e8e9572612cbd8a374cb0cb0ba59739229a2e05135fe1a652deef06a525834ed 6491 bytes",
+  ".github/prompts/st-board.prompt.md": "a1964320623ad4a0d91ba596b0ffccf93e9b107bc4738538f25481851fb68081 21219 bytes",
+  ".github/prompts/st-debug.prompt.md": "68e66cbb6e89443301fdfde561c6c987f0de3bf32fcf050a8acfdab199adc4f7 10962 bytes",
+  ".github/prompts/st-plan.prompt.md": "ed2559b9052a473b7422249aa39db90dc4d49d38f5aec3006c2a8a320b92ea09 20978 bytes",
+  ".github/prompts/st-pr-resolve.prompt.md": "cd0cd9d338e6a971a03ea4d6cf5afc1c1d855b2a16e62ea2bcbadad8f6db828e 19000 bytes",
+  ".github/prompts/st-quick.prompt.md": "65d2a8201779cdfe68ecc028d250b1bfc12d33ce8e7686be1da6e6280343df38 6956 bytes",
+  ".github/prompts/st-rework.prompt.md": "dc8c95cd97b0799fac1dffe0fa869f74693b52e99aee4af54d3bc5088650983c 15898 bytes",
+  ".github/prompts/st-spec.prompt.md": "5de878e04baed36442172c2a2ecf56d3fdb35f3aba0b67f4f9985ea0098ee743 14987 bytes",
+  ".github/prompts/st-work.prompt.md": "78adf2158e042aee1334b5b2a119f5bab766ede35fd0a5d7bf69e9c5555d6fd3 19702 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".github/workflows/copilot-setup-steps.yml": "ecbfbddf199468b9cb2bad4e811b6d1b9eef4d810dfb64267a9ec3f4edc4fc9f 881 bytes",
   ".gitignore": "f8fbe8e8b09bc960be56387909425a4db0d79570de16d3fad0629c041839d681 9 bytes",
@@ -2803,10 +2803,10 @@ exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "d9aa21e8dcb6c62dff84c3ae2e220f4ca6535ad9df08ef9ca8b6e7dc75e528ec 16375 bytes",
+  ".stamity/manifest.json": "40c437f65a83c475bb1679ac12e0592b5ec4079b1ef2d412fc87c25a65c3a643 16240 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "65675d797b0378a4029b3d7391beaf4ce7f9f3750dfe096ebe374af34a04de39 4449 bytes",
+  "AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -3211,19 +3211,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -3249,33 +3249,33 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 exports[`emitted tree for 'cursor' > matches the tree digest golden > cursor tree digest 1`] = `
 {
-  ".agents/skills/stamity-browser-evidence/SKILL.md": "9970d7c458c4f25977e3b51532ecf5fd04760457659b3c899ba2c3dd0aec0eaf 7229 bytes",
-  ".agents/skills/stamity-dep-audit/SKILL.md": "c8413081a9b039fc6d159667c56fa8e46ab2d52d967bf43940432287afe3b464 5545 bytes",
-  ".agents/skills/stamity-design-system-detect/SKILL.md": "5322281041e354ab132da4828a7900bb32e57a7cfb6a4b40a71c2be62a3eb333 6847 bytes",
-  ".agents/skills/stamity-handoff/SKILL.md": "98115f555fab5af462561fd1a571faae5c3c3974b25f3b6c3c2a006e7fbaf6ad 10686 bytes",
-  ".agents/skills/stamity-learn/SKILL.md": "2aa90a09b5ed89a69aa328c8b46c103b674ab029306690d682c5419adc60a19f 5894 bytes",
-  ".agents/skills/stamity-onboard/SKILL.md": "da90de88da033a514132aec0ca4d2e7683bd3ae041d380c0f7660fe5f4868828 9064 bytes",
-  ".agents/skills/stamity-qa/SKILL.md": "39d5549ec799d8df3ca9fd4b3aa8cf0cd4fd4e21b85e39fe63850e18207e0148 5833 bytes",
-  ".agents/skills/stamity-verify/SKILL.md": "571e89dfe53a84c4bb68248aa902b1407372f1501451345334d4171c6b7c1c2f 6658 bytes",
-  ".agents/skills/stamity-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
-  ".agents/skills/stamity-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
-  ".agents/skills/stamity-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
-  ".agents/skills/stamity-verify/references/product-spec.md": "31a8754b71b2e77609fd65219d5e56728da43e7a684b093d1044aa8723c43836 3084 bytes",
-  ".agents/skills/stamity-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
-  ".agents/skills/stamity-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
-  ".agents/skills/stamity-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
-  ".agents/skills/stamity-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
-  ".agents/skills/stamity-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
-  ".agents/skills/stamity-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
-  ".cursor/agents/stamity-creator.md": "8b1e7e69e584322ecc0eca1b4d0ac0b16f443345a8f4058c4c9ab63cdd075e28 9544 bytes",
+  ".agents/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+  ".agents/skills/st-dep-audit/SKILL.md": "019dfd2df9c3d8eaffa55744cc83bed51afa6f8e045f9987f7e8bbcc8172fccf 5525 bytes",
+  ".agents/skills/st-design-system-detect/SKILL.md": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+  ".agents/skills/st-handoff/SKILL.md": "63f192628d00f36dae837691adb87f3ac1d2d769e549ebc518bf7a55d0363148 10681 bytes",
+  ".agents/skills/st-learn/SKILL.md": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+  ".agents/skills/st-onboard/SKILL.md": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+  ".agents/skills/st-qa/SKILL.md": "8b91f27c07a436047e5672bde678e6cdd4894ede20ba0cc2a78253c1f0cd8444 5828 bytes",
+  ".agents/skills/st-verify/SKILL.md": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+  ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
+  ".agents/skills/st-verify/references/maintainability.md": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8 3125 bytes",
+  ".agents/skills/st-verify/references/performance.md": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf 5096 bytes",
+  ".agents/skills/st-verify/references/product-spec.md": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+  ".agents/skills/st-verify/references/reliability.md": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979 5783 bytes",
+  ".agents/skills/st-verify/references/scalability.md": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d 3297 bytes",
+  ".agents/skills/st-verify/references/security.md": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6 5596 bytes",
+  ".agents/skills/st-verify/references/testability.md": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867 4111 bytes",
+  ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
+  ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
+  ".cursor/agents/stamity-creator.md": "3f49bdd55e78f73c70cf325f9d38de0708510ef32c385e09796adee1dc080c3e 9665 bytes",
   ".cursor/agents/stamity-design-quality.md": "a7279ade07b6b08cc5848614630ecfa29491b84d80151670b8365a02bc10d089 7601 bytes",
   ".cursor/agents/stamity-fixer.md": "ce9922531f5adc46f691c5e2e15a0b520f28aaee43985d2d656bbeaf6e8014c4 6007 bytes",
   ".cursor/agents/stamity-implementer.md": "35a6eee21ebed0f073072102ccae1c3926288b1e117b6ced325f4cf3e9ad7296 5026 bytes",
   ".cursor/agents/stamity-performance.md": "2f10d7c2f6a648f27d316ef913ac91afa0a81b826e548467e2e561131b4fdcfd 7927 bytes",
-  ".cursor/agents/stamity-researcher.md": "875aeb7a878dec1db6e07335ef96385d1132ca149128dc48fb06541970ec49a9 7283 bytes",
+  ".cursor/agents/stamity-researcher.md": "0219a2ed1f211afca72bc98bea25038f1677c3586e983c99eabf6303857d6d05 7268 bytes",
   ".cursor/agents/stamity-reviewer.md": "75e53b3ca9b0f3df0264ef74cf1d502d6b3b697aa560eebd7ca2f9b8e4d7bf26 9915 bytes",
   ".cursor/agents/stamity-security.md": "6817395074d753a68b2c655923c5691d110b7a0147de135abbe2fe533c1d0583 7485 bytes",
-  ".cursor/agents/stamity-spec-author.md": "5adc903322fce8c77ca57e878ab77efe609db234d7f719ba0c6d6670be8bd00b 8187 bytes",
+  ".cursor/agents/stamity-spec-author.md": "2b93c6c39aa69de52abec08b49be6e769f43f1dfc6b9c8806368929d4345a74a 8162 bytes",
   ".cursor/agents/stamity-test-runner.md": "861a18d45503e95f2022bc577ea4feefbcfb246a9b993ec889b6fbbfceb17c8d 5566 bytes",
   ".cursor/hooks.json": "94a0b9af7ddd482f70d942f0ffa1da52bf2fdc4ca46127bf26ccd1204097f8a7 794 bytes",
   ".cursor/hooks/mcp-guard.mjs": "6d3f766e24cefc51e0d0d7303bbc1a8a7357ca8821969889173e02bd54c0a060 7022 bytes",
@@ -3293,15 +3293,15 @@ exports[`emitted tree for 'cursor' > matches the tree digest golden > cursor tre
   ".cursor/rules/stamity-security-patterns.mdc": "003c872c5805f3896776bc878e25789e52e76491433761cfcfbdc127e8134275 6164 bytes",
   ".cursor/rules/stamity-testing.mdc": "6be05910f96dcd7872779263f35ba66c8928ed3c0b32931a057353d2e7b4bf11 4180 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "254c519142a94c77a78210feaedec26ac3faedc448cf825a4821646b14644e1d 4403 bytes",
-  ".cursor/skills/stamity-ask/SKILL.md": "b46616992a58030cf284950aa21a2b867c5a49d79ed24a77d259d9d17d612bbc 6575 bytes",
-  ".cursor/skills/stamity-board/SKILL.md": "ec2bf3c6d340a9ac1fb4d5c348d048456992e25077d3acd76d31840cd361c17f 21325 bytes",
-  ".cursor/skills/stamity-debug/SKILL.md": "17beb677091745408b00927e3f3d2a12076937876027fce9323cd8b09e34a39a 11066 bytes",
-  ".cursor/skills/stamity-plan/SKILL.md": "86f027459cfa9a83762b887a061002dc36f99fbed60c52dae0388deb94a9a321 21111 bytes",
-  ".cursor/skills/stamity-pr-resolve/SKILL.md": "c1c1ec2ec35cd073a4eebd0db55d1323d0c86a1c40adb102a558df2819f1a592 19106 bytes",
-  ".cursor/skills/stamity-quick/SKILL.md": "ac6a3f5d4cfac9ba98b7d3181625cd42fc6ba0dea1aff6c3b38859f43556b4eb 7060 bytes",
-  ".cursor/skills/stamity-rework/SKILL.md": "ba3390da509d12be92786c995efba568686e3f579389e20e181ad21b11358ad0 16035 bytes",
-  ".cursor/skills/stamity-spec/SKILL.md": "a076411971dab5710ef2a843475cf39a6cdfee1aa61fbb920f125235de93f7e7 15052 bytes",
-  ".cursor/skills/stamity-work/SKILL.md": "74c5c64710faba332f87898d9c8150358bbfb3ce4602a9616a5f83e444c55ad8 19782 bytes",
+  ".cursor/skills/st-ask/SKILL.md": "9cea2f4fc1b0ac3aa5a18d3d5c474ff328c94663e6d454b8e1cc8258cb709ae4 6535 bytes",
+  ".cursor/skills/st-board/SKILL.md": "be822afd3f25ec34951cc8c12b8cc614f01323bd21484ebbb4e660aca3ed5fa2 21265 bytes",
+  ".cursor/skills/st-debug/SKILL.md": "3b365790bd50ddc4c7dbefd4ede9b63d37d717c83d10a592ee1b7a92377b948d 11006 bytes",
+  ".cursor/skills/st-plan/SKILL.md": "8c743087d1da9213a6417f0ffd397d46a82ae7b5d0c4ef5a8c4e9823509de818 21021 bytes",
+  ".cursor/skills/st-pr-resolve/SKILL.md": "ea0c5aecd62919f77eee06e72577aa5546db807f127fc359bae612cbf5c16b68 19051 bytes",
+  ".cursor/skills/st-quick/SKILL.md": "e05f46074979ae5ab416ac56c003e1880851cd224a235351e42eecbdb7e66e8d 7000 bytes",
+  ".cursor/skills/st-rework/SKILL.md": "6eb8bf5c361687d65c9d42ad1a7563629ed11ad014ef76677fd9cc6042b81e6a 15945 bytes",
+  ".cursor/skills/st-spec/SKILL.md": "f2c923d42a639cd2f75eadc3c594a0ae460f47de89b6ec974236dc39688f4c00 15032 bytes",
+  ".cursor/skills/st-work/SKILL.md": "f35a0ceeac2cf80c1e1c3e1063af922089c251d0f5d395f749169106c9eb0e96 19747 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "f8fbe8e8b09bc960be56387909425a4db0d79570de16d3fad0629c041839d681 9 bytes",
   ".stamity/generated/agent-tool-policies.json": "617ddda0eae6052e0bf6d5df88a8ec4a80af8b27e2bbabc02f5e0ff9dceb24b8 3871 bytes",
@@ -3312,8 +3312,8 @@ exports[`emitted tree for 'cursor' > matches the tree digest golden > cursor tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "7fa1096b55aa54ee7485a6a3f13eca73c1e61ab2aea13da84b4b26916121ccfb 16224 bytes",
-  "AGENTS.md": "65675d797b0378a4029b3d7391beaf4ce7f9f3750dfe096ebe374af34a04de39 4449 bytes",
+  ".stamity/manifest.json": "0ed27c47352889bd338e19f4c0538851599bade92d238e3ca88ceb56ca1d39e6 16089 bytes",
+  "AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

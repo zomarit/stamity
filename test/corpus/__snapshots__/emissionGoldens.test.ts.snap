@@ -12,15 +12,15 @@ exports[`emission goldens — catalog > indexes the corpus to sorted, collision-
   "agent:security -> agents/stamity-security.md",
   "agent:spec-author -> agents/stamity-spec-author.md",
   "agent:test-runner -> agents/stamity-test-runner.md",
-  "command:cmd-ask -> commands/stamity-ask.md",
-  "command:cmd-board -> commands/stamity-board.md",
-  "command:cmd-debug -> commands/stamity-debug.md",
-  "command:cmd-plan -> commands/stamity-plan.md",
-  "command:cmd-pr-resolve -> commands/stamity-pr-resolve.md",
-  "command:cmd-quick -> commands/stamity-quick.md",
-  "command:cmd-rework -> commands/stamity-rework.md",
-  "command:cmd-spec -> commands/stamity-spec.md",
-  "command:cmd-work -> commands/stamity-work.md",
+  "command:cmd-ask -> commands/st-ask.md",
+  "command:cmd-board -> commands/st-board.md",
+  "command:cmd-debug -> commands/st-debug.md",
+  "command:cmd-plan -> commands/st-plan.md",
+  "command:cmd-pr-resolve -> commands/st-pr-resolve.md",
+  "command:cmd-quick -> commands/st-quick.md",
+  "command:cmd-rework -> commands/st-rework.md",
+  "command:cmd-spec -> commands/st-spec.md",
+  "command:cmd-work -> commands/st-work.md",
   "rule:ai-evals -> rules/stamity-ai-evals.md",
   "rule:api-versioning -> rules/stamity-api-versioning.md",
   "rule:contract-census -> rules/stamity-contract-census.md",
@@ -33,14 +33,14 @@ exports[`emission goldens — catalog > indexes the corpus to sorted, collision-
   "rule:security-patterns -> rules/stamity-security-patterns.md",
   "rule:testing -> rules/stamity-testing.md",
   "rule:ui-states -> rules/stamity-ui-states.md",
-  "skill:browser-evidence -> skills/stamity-browser-evidence/SKILL.md",
-  "skill:dep-audit -> skills/stamity-dep-audit/SKILL.md",
-  "skill:design-system-detect -> skills/stamity-design-system-detect/SKILL.md",
-  "skill:handoff -> skills/stamity-handoff/SKILL.md",
-  "skill:learn -> skills/stamity-learn/SKILL.md",
-  "skill:onboard -> skills/stamity-onboard/SKILL.md",
-  "skill:qa -> skills/stamity-qa/SKILL.md",
-  "skill:verify -> skills/stamity-verify/SKILL.md",
+  "skill:browser-evidence -> skills/st-browser-evidence/SKILL.md",
+  "skill:dep-audit -> skills/st-dep-audit/SKILL.md",
+  "skill:design-system-detect -> skills/st-design-system-detect/SKILL.md",
+  "skill:handoff -> skills/st-handoff/SKILL.md",
+  "skill:learn -> skills/st-learn/SKILL.md",
+  "skill:onboard -> skills/st-onboard/SKILL.md",
+  "skill:qa -> skills/st-qa/SKILL.md",
+  "skill:verify -> skills/st-verify/SKILL.md",
 ]
 `;
 
@@ -3199,19 +3199,19 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/stamity-spec\` — create or maintain the project spec under \`docs/specs/\`;
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/stamity-plan\` — route an intent (feature, bug, refactor, migration, test,
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
   roadmap) into a persisted plan.
-- \`/stamity-work\` — execute planned work end to end; closes with the QA human
+- \`/st-work\` — execute planned work end to end; closes with the QA human
   checkpoint.
-- \`/stamity-board\` — work a task board: chat, a referenced file, or a linked
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked
   platform board.
-- \`/stamity-ask\` — read-only codebase Q&A; writes nothing.
-- \`/stamity-debug\` — reproduce, root-cause, and fix a defect.
-- \`/stamity-quick\` — Tier-1 small-change lane; gates still run.
-- \`/stamity-rework\` — apply structured feedback to agent-implemented work.
-- \`/stamity-pr-resolve\` — resolve pull-request review comments.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
 
 ## Conditional layer
 
@@ -3234,9 +3234,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 "
 `;
 
-exports[`emission goldens — substitution > matches the committed goldens for the detected-fixture outputs > commands/stamity-work.md 1`] = `
+exports[`emission goldens — substitution > matches the committed goldens for the detected-fixture outputs > commands/st-work.md 1`] = `
 "
-# /stamity-work
+# /st-work
 
 Execute one change end to end. Five phases — Frame, Understand, Plan, Build,
 Prove — closing with a QA human checkpoint and a machine-readable proof block.
@@ -3261,7 +3261,7 @@ Seconds, not ceremony. In order:
 4. **Deferral inbox.** Read the deferral inbox and surface every item whose
    paths overlap the files this change will touch. Present overlapping items as
    fold-in candidates; the operator decides. This read is guaranteed on every
-   run — \`/stamity-board\`'s \`## Deferral inbox\` section owns the reader census
+   run — \`/st-board\`'s \`## Deferral inbox\` section owns the reader census
    and names this phase in it; the count lives there, not here.
 
 ## Phase 1 — Understand
@@ -3279,12 +3279,12 @@ silently dropped.
 
 - **Plan-artifact intake.** This phase plans in-flow — session-scoped, executed
   on approval, persisted nowhere; the reviewable plan artifact on disk belongs
-  to \`/stamity-plan\`. Discovery is a glob plus a rule, not a guess: read
+  to \`/st-plan\`. Discovery is a glob plus a rule, not a guess: read
   \`docs/plans/*.md\`, keep the artifacts whose head \`intent:\` and Context cover
   this request, and take the newest \`stamp:\`. Two artifacts still matching
   after that is one ambiguity-gate question, never a pick. Nothing found is a
   normal outcome — this phase plans in-flow and says so.
-- **Freshness guard.** \`/stamity-plan\` owns the intake contract; its
+- **Freshness guard.** \`/st-plan\` owns the intake contract; its
   \`## Plan artifact shape\` section and the freshness guard stated beside it are
   the contract of record, and this phase applies them rather than restating
   them. Two head keys are read and no others: \`stamp:\` and \`reads:\`. On a
@@ -3461,7 +3461,7 @@ every row closes as fixed, deferred with rationale, or rejected with reasoning.
 
 Both persist under the state directory, in \`.stamity/runs/\` — one record per run
 carrying the fields above, with that run's ledger rows beside it. That is the
-baseline \`/stamity-rework\` reads and the directory \`/stamity-pr-resolve\` appends
+baseline \`/st-rework\` reads and the directory \`/st-pr-resolve\` appends
 its own record to; a record already written is read-only to every later run.
 
 ### Side effects

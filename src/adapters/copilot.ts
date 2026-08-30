@@ -20,7 +20,7 @@
  *    `model:` only where an operator pinned one.
  * 3. **Commands → `.github/prompts/*.prompt.md`.** The nine touchpoints, in
  *    the prompt-file shape Copilot's picker reads: a file emitted as
- *    `stamity-<id>.prompt.md` is invoked as `/stamity-<id>`, which is the route
+ *    `st-<id>.prompt.md` is invoked as `/st-<id>`, which is the route
  *    the charter's touchpoint list already tells the user about.
  * 4. **`.github/workflows/copilot-setup-steps.yml`.** The one workflow whose
  *    job name the coding agent runs before it starts work.
@@ -107,7 +107,7 @@ import {
 import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import { CONTENT_PREFIX } from "../types/markers.ts";
+import { contentPrefixFor } from "../types/markers.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ const AGENTS_DIR = ".github/agents";
  * Prompt files — Copilot's picker surface for the touchpoint commands.
  *
  * Exported because the init panel names it: this client's ready-steps used to
- * offer `@workspace` alone while nine `/stamity-*` prompt files sat installed
+ * offer `@workspace` alone while nine `/st-*` prompt files sat installed
  * and unmentioned, so the panel reads the directory from here rather than
  * spelling a second copy that can drift (`../cli/commands/init/panel.ts`).
  */
@@ -221,7 +221,7 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
       name: "command-surface",
       value:
         `native — the nine touchpoints ship as prompt files in ${PROMPTS_DIR}/, invoked as ` +
-        `/stamity-<id>; the format's \`agent\` and \`tools\` keys stay unemitted (per-prompt ` +
+        `/st-<id>; the format's \`agent\` and \`tools\` keys stay unemitted (per-prompt ` +
         `restrictions this engine cannot answer), \`model\` follows an operator pin`,
     },
     {
@@ -471,7 +471,7 @@ export function buildAgentFile(
 }
 
 /**
- * One touchpoint command as a prompt file, reachable as `/stamity-<id>` — the
+ * One touchpoint command as a prompt file, reachable as `/st-<id>` — the
  * picker names a prompt by its filename unless the file overrides it, and the
  * emitted stem is the same one the charter's touchpoint list tells users about.
  *
@@ -689,17 +689,21 @@ function declaredGlobs(item: CatalogItem): string[] {
 
 /**
  * The emitted filename stem and, for agents, the runtime id: the artifact's id
- * with the catalog's command namespacing removed and the `stamity-` filename
- * prefix restored. Copilot addresses an agent by the name in its path, and the
- * tool-policy roster keys on that same prefixed form, so the two agree by
+ * with the catalog's command namespacing removed and the filename prefix its
+ * class earns restored. Copilot addresses an agent by the name in its path, and
+ * the tool-policy roster keys on that same prefixed form, so the two agree by
  * construction.
+ *
+ * {@link contentPrefixFor} owns which prefix that is — `st-` for the invocable
+ * commands, `stamity-` for agents, rules and anything a pack supplied.
  */
 function emittedId(item: CatalogItem): string {
   const bare =
     item.type === "command" && item.id.startsWith(COMMAND_ID_PREFIX)
       ? item.id.slice(COMMAND_ID_PREFIX.length)
       : item.id;
-  return bare.startsWith(CONTENT_PREFIX) ? bare : `${CONTENT_PREFIX}${bare}`;
+  const prefix = contentPrefixFor(item);
+  return bare.startsWith(prefix) ? bare : `${prefix}${bare}`;
 }
 
 /** Ledger attribution — every row this adapter returns is owned by `copilot`. */

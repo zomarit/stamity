@@ -184,10 +184,18 @@ describe("filenameSlug", () => {
   it("derives the id a path implies: prefix stripped, SKILL.md addressed by its directory", () => {
     expect(filenameSlug("agents/stamity-planner.md")).toBe("planner");
     expect(filenameSlug("charter/stamity-charter.md")).toBe("charter");
+    // Both engine prefixes come off: the corpus names skills and commands under
+    // `st-` and agents and rules under `stamity-`, and a walk reads a filename
+    // before it has settled the class, so one rule has to cover both. The old
+    // spelling still strips because an upgraded repo holds files under it.
+    expect(filenameSlug("skills/st-verify/SKILL.md")).toBe("verify");
+    expect(filenameSlug("skills/st-verify/references/axis-security.md")).toBe("axis-security");
+    expect(filenameSlug("commands/st-pr-resolve.md")).toBe("pr-resolve");
     expect(filenameSlug("skills/stamity-verify/SKILL.md")).toBe("verify");
-    expect(filenameSlug("skills/stamity-verify/references/axis-security.md")).toBe("axis-security");
     // No prefix is a convention miss, not a slug transform — the name stands.
+    // `standup` opens with the same two letters as `st-` and is untouched.
     expect(filenameSlug("rules/scope.md")).toBe("scope");
+    expect(filenameSlug("rules/standup.md")).toBe("standup");
   });
 });
 

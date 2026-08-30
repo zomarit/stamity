@@ -91,7 +91,7 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  *     the sibling ledger.
  *
  *   - 2026-08-18, the model-ladder provenance rewrite (integration fixer round
- *     1). SUBSTITUTION moved on `commands/stamity-work.md` alone: the ladder
+ *     1). SUBSTITUTION moved on `commands/st-work.md` alone: the ladder
  *     section gained the paragraphs naming the agent file as the one place a
  *     role's class is declared, the table as a restatement that decides
  *     nothing, the omit-rather-than-guess rule for a class no client resolves,
@@ -110,7 +110,7 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  *     renamed or dropped. POLICY DOCUMENT gained the matching read-only rows
  *     (the specialist tier plus grant resolution), taking the roster from
  *     seven to ten. SUBSTITUTION moved on TWO bodies:
- *       `commands/stamity-work.md` — the specialist pass, the
+ *       `commands/st-work.md` — the specialist pass, the
  *         review-gate paragraph, the round-4 cap wording and the
  *         reworked model-class table;
  *       `charter/stamity-charter.md` — the `## Conditional layer`
@@ -122,7 +122,7 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  *     goldens did not move at all.
  *
  *     LEDGER CORRECTION, kept in place: this row previously said SUBSTITUTION
- *     moved "on `commands/stamity-work.md` alone" and that "the charter and
+ *     moved "on `commands/st-work.md` alone" and that "the charter and
  *     test-runner bodies did not move". The charter body did move, in this same
  *     commit, and its own golden here carries the diff. The sibling ledger in
  *     `test/emit/crossClientGoldens.test.ts` carried the matching error and is
@@ -164,7 +164,7 @@ const GATES: VerificationGateSet = {
 /** The three corpus bodies the substitution goldens resolve. */
 const SUBSTITUTION_TARGETS = [
   "charter/stamity-charter.md",
-  "commands/stamity-work.md",
+  "commands/st-work.md",
   "agents/stamity-test-runner.md",
 ] as const;
 

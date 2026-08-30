@@ -38,7 +38,7 @@
   "integrity": {
     "agents/stamity-devops.md": "36a418a9f02d6a5fb88077ca4f50c0693caddf52e8f8398c881523321043c660",
     "agents/stamity-incident-responder.md": "e307dbf3edbf21b5cc44a766b33cdfb1a20c2ab14031360079c1affeb5abed89",
-    "commands/stamity-incident-response.md": "4aeebfdf2c1f44ca86a43a4229595af81aadf4498a160c3ce038e501c863147d",
+    "commands/stamity-incident-response.md": "75108e32ffaf6576555796e3c04888cdf688cbadc7c709bb3c1118464f42f92e",
     "commands/stamity-release.md": "38458ccb6a6c8f89313c531a105ea2935fc32021da3047b17fcdffa30e55d8c3",
     "skills/stamity-ci-pipeline/SKILL.md": "98f4e09c664f0af53ba72468496afc638c69e3108bc2f073472c720930eb8fcb",
     "skills/stamity-containerize/SKILL.md": "f4d30400fb29eafe928103239969a92ba337e52ba38b4b7a7cb86a8ec39c78a1",

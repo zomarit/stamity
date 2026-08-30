@@ -1,7 +1,7 @@
 ---
 slug: /migration-from-hatch3r
 ---
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
 <!-- Re-open when: the predecessor's own `clean` semantics change, or what `src/migration/`
      detects, carries or strips changes. `test/docsPages.test.ts` holds this page to the
      hand-page contract; `src/migration/detect.ts` and `src/migration/carry.ts` are the code

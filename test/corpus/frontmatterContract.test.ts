@@ -320,11 +320,11 @@ describe("frontmatter contract — defect detection", () => {
   it("accepts a fully-valid artifact of every class shape, id derived per layout", () => {
     const files = [
       corpusFileOf("charter/stamity-charter.md", valid.charter),
-      corpusFileOf("skills/stamity-verify/SKILL.md", valid.skill),
-      corpusFileOf("skills/stamity-verify/references/axis-security.md", valid.reference),
+      corpusFileOf("skills/st-verify/SKILL.md", valid.skill),
+      corpusFileOf("skills/st-verify/references/axis-security.md", valid.reference),
       corpusFileOf("rules/stamity-scope.md", valid.rule),
       corpusFileOf("agents/stamity-planner.md", valid.agent),
-      corpusFileOf("commands/stamity-work.md", valid.command),
+      corpusFileOf("commands/st-work.md", valid.command),
     ];
 
     expect(files.flatMap(contractViolations)).toEqual([]);
@@ -417,7 +417,7 @@ describe("frontmatter contract — defect detection", () => {
   ])("flags %s", (_defect, description, expected) => {
     const violations = contractViolations(
       corpusFileOf(
-        "skills/stamity-verify/SKILL.md",
+        "skills/st-verify/SKILL.md",
         // Quoted: these fixtures carry colons, which YAML would otherwise read
         // as a nested mapping before the contract ever sees the string.
         valid.skill.replace(/^description: .*$/m, `description: ${JSON.stringify(description)}`),
@@ -426,7 +426,7 @@ describe("frontmatter contract — defect detection", () => {
 
     expect(violations).toHaveLength(1);
     expect(violations[0]).toMatch(expected);
-    expect(violations[0]).toContain("skills/stamity-verify/SKILL.md");
+    expect(violations[0]).toContain("skills/st-verify/SKILL.md");
   });
 
   it("holds a reference file to the shared contract but not to the trigger form", () => {
@@ -434,7 +434,7 @@ describe("frontmatter contract — defect detection", () => {
     // ever matches a task against them, so an imperative, clause-free
     // description is correct there and a failure here would be a false one.
     const reference = corpusFileOf(
-      "skills/stamity-verify/references/axis-security.md",
+      "skills/st-verify/references/axis-security.md",
       valid.reference,
     );
 

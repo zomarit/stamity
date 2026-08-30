@@ -4,7 +4,11 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ReclaimCandidate } from "../manifest/ledger.ts";
 import type { CoOwnedReducer } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
-import { CONTENT_PREFIX, STATE_DIR } from "../types/markers.ts";
+import {
+  ENGINE_CONTENT_PREFIXES,
+  STATE_DIR,
+  carriesEngineContentPrefix,
+} from "../types/markers.ts";
 import {
   atomicWriteFile,
   isSharedRegularFile,
@@ -35,7 +39,7 @@ import { splitAtManagedBlock } from "./managedBlocks.ts";
  *    an authorisation to delete — hand-editing the manifest must not become a
  *    delete primitive aimed anywhere on the machine.
  * 2. **Ownership marker.** Any ONE of three proofs clears this gate. (a) The
- *    basename carries {@link CONTENT_PREFIX} (optionally behind a two-digit
+ *    basename carries one of {@link ENGINE_CONTENT_PREFIXES} (optionally behind a two-digit
  *    ordering prefix), or the file sits inside an engine-minted SKILL directory
  *    (`…/skills/<prefix><name>/…`) — the one layout whose contents are not
  *    individually prefixed, so its marker lives on the container. No other
@@ -249,11 +253,26 @@ function ledgerKey(path: string): string {
   return path.startsWith("./") ? path.slice(2) : path;
 }
 
-/** True when a basename is one the engine mints, with or without an ordering prefix. */
+/**
+ * True when a basename is one the engine mints, with or without an ordering
+ * prefix.
+ *
+ * Reads the whole {@link ENGINE_CONTENT_PREFIXES} set, not one constant. The
+ * engine mints commands and skills under `st-` and everything else under
+ * `stamity-`, and an ownership gate that knows only one of them is wrong in
+ * both directions: it refuses to reclaim a `st-work.md` it wrote itself, and —
+ * on a repo upgraded across the split — it cannot retire the `stamity-work.md`
+ * that emission replaced. Both spellings are engine names; the class they
+ * belong to is not this gate's question.
+ */
 function carriesEnginePrefix(name: string): boolean {
   const bare = ORDERING_PREFIX_PATTERN.test(name) ? name.slice(3) : name;
-  return bare.startsWith(CONTENT_PREFIX);
+  return carriesEngineContentPrefix(bare);
 }
+
+/** The engine's minted prefixes as an operator-readable list, for a refusal that
+ *  names what it looked for rather than one arbitrary half of it. */
+const ENGINE_PREFIX_LIST = ENGINE_CONTENT_PREFIXES.map((prefix) => `\`${prefix}\``).join(" or ");
 
 /** The one directory segment under which the emitters mint prefixed CONTAINERS
  *  rather than prefixed files — `.agents/skills/`, `.claude/skills/`,
@@ -286,7 +305,7 @@ function isEngineNamedPath(path: string): boolean {
  * container rather than on the file.
  *
  * A projected skill is a single artifact spread over a DIRECTORY the engine
- * mints (`.agents/skills/stamity-verify/`): `SKILL.md` beside it, `references/*.md`
+ * mints (`.agents/skills/st-verify/`): `SKILL.md` beside it, `references/*.md`
  * one level deeper, none of them individually prefixed. Reading the marker off
  * the file alone makes depth decide reclaimability, which is why an uninstall
  * once deleted a skill's `SKILL.md` and left its own reference files orphaned.
@@ -523,7 +542,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   if (!engineNamed && !prefixedAncestor && !hashProvable && !ctx.trusted.has(path)) {
     return skip(
       "skipped-unsafe-path",
-      `\`${basename(path)}\` carries no \`${CONTENT_PREFIX}\` ownership marker on itself or on an engine-minted skill directory above it, records no content hash admissible for its location, and is not on the trusted allowlist, so the engine cannot claim to have written it.`,
+      `\`${basename(path)}\` carries no ${ENGINE_PREFIX_LIST} ownership marker on itself or on an engine-minted skill directory above it, records no content hash admissible for its location, and is not on the trusted allowlist, so the engine cannot claim to have written it.`,
     );
   }
 
@@ -678,7 +697,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     return skip(
       "skipped-user-content",
       prefixedAncestor
-        ? `\`${basename(path)}\` sits under a directory carrying the \`${CONTENT_PREFIX}\` prefix, but its own name does not and it holds no managed block, so what the engine can claim to have minted is the directory, not this file.`
+        ? `\`${basename(path)}\` sits under a directory carrying an engine prefix (${ENGINE_PREFIX_LIST}), but its own name does not and it holds no managed block, so what the engine can claim to have minted is the directory, not this file.`
         : "Trusted shared file with no managed block to strip. The engine never deletes a co-owned file wholesale, so its engine-written entries are left to the class-specific filter.",
     );
   }

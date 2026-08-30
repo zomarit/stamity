@@ -1,31 +1,158 @@
 /*
- * The whole of this site's styling.
+ * The whole of this site's styling: one brand palette expressed as Infima tokens, and one page
+ * layout.
  *
- * Two brand colours and one page layout. Everything else is Infima, the stylesheet the classic
- * theme already ships: a theme fork here would be a maintenance surface with no reader benefit,
- * and it would drift from the theme it forked on the first upgrade.
+ * Still not a theme fork. Every rule below either sets a variable Infima already reads or styles
+ * the landing page's own classes — there is no restyled component, no overridden theme selector,
+ * and nothing here to re-reconcile on an Infima upgrade. What grew is the token set, because the
+ * palette is now the product's rather than the starter's: three colours (violet #6B24FF, ink
+ * #09090C, paper #F6F6F8) taken from the marks in `static/img/`, so the navbar wordmark and the
+ * page it sits on are cut from the same three values.
+ *
+ * CONTRAST IS COMPUTED, NOT EYEBALLED. Every foreground/background pair this file creates clears
+ * WCAG AA for body text (4.5:1); the pairs and their measured ratios are named in the comments
+ * beside the values that produce them. The brand violet passes AA on paper as-is (6.12:1), so
+ * light mode ships the mark's own hue unaltered. On ink it is 3.15:1 and fails, so dark mode
+ * lightens it — the hue and saturation are held, only lightness moves, which is why the two modes
+ * read as one brand rather than two.
+ *
+ * WHY `html[data-theme='dark']` AND NOT `[data-theme='dark']`. Infima declares its dark tokens on
+ * `html[data-theme='dark']`, which outranks a bare attribute selector on specificity — later
+ * source order does not rescue it. The starter's `[data-theme='dark']` block worked only because
+ * it set primary shades Infima's dark block never mentions; the moment a background or a content
+ * colour is overridden that way it is silently discarded. Matching the selector exactly is what
+ * puts these declarations in the same specificity bucket, where being loaded after Infima wins.
  */
 
 :root {
-  --ifm-color-primary: #1f6f5c;
-  --ifm-color-primary-dark: #1c6453;
-  --ifm-color-primary-darker: #1a5e4e;
-  --ifm-color-primary-darkest: #154d40;
-  --ifm-color-primary-light: #227a65;
-  --ifm-color-primary-lighter: #24806a;
-  --ifm-color-primary-lightest: #299178;
+  /*
+   * The mark's own violet, unmodified: 6.12:1 on the paper below and 6.32:1 on white, so it is
+   * legible as link text without being nudged off brand. The scale steps lightness by ±3/±5/±9,
+   * which is what Infima's own generator does; `dark`/`darker` back the button hover and active
+   * states, where the label stays white (6.86:1 and 7.19:1).
+   */
+  --ifm-color-primary: #6b24ff;
+  --ifm-color-primary-dark: #6115ff;
+  --ifm-color-primary-darker: #5a0aff;
+  --ifm-color-primary-darkest: #4f00f5;
+  --ifm-color-primary-light: #7533ff;
+  --ifm-color-primary-lighter: #7c3eff;
+  --ifm-color-primary-lightest: #8a52ff;
+
+  /*
+   * Admonitions and badges read these two rather than the scale above, so leaving them at
+   * Infima's defaults would have left every `:::note` tinted the starter's blue on a violet site.
+   * 12.10:1.
+   */
+  --ifm-color-primary-contrast-background: #f0e9ff;
+  --ifm-color-primary-contrast-foreground: #2e0a80;
+
+  /* Paper, and the raised surface that sits on it — cards, dropdowns, the mobile sidebar. */
+  --ifm-background-color: #fbfbfd;
+  --ifm-background-surface-color: #ffffff;
+
+  /* Ink at 19.24:1; the secondary tone is held at 7.13:1 so muted text stays readable, not faint. */
+  --ifm-color-content: #09090c;
+  --ifm-color-content-secondary: #55555f;
+  --ifm-heading-color: #09090c;
+
+  /* Hover backgrounds carry a trace of the brand instead of a neutral grey wash. */
+  --ifm-hover-overlay: rgb(107 36 255 / 6%);
+
+  /* Hairlines: borders, rules, the table grid and the table-of-contents spine. */
+  --ifm-toc-border-color: #e4e3ec;
+  --ifm-table-border-color: #e4e3ec;
+  --ifm-hr-background-color: #e4e3ec;
+  --ifm-blockquote-border-color: #d9d7e6;
+
+  /* Code sits on a violet-tinted paper rather than a neutral grey. Ink on it is 17.71:1. */
+  --ifm-code-background: #f2f1f7;
   --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgb(107 36 255 / 10%);
+
+  /* White on the primary is 6.32:1, so the primary button's label clears AA at every state. */
+  --ifm-button-color: #ffffff;
+
+  /* Hover darkens rather than fades: 6.64:1, up from the resting 6.12:1. */
+  --ifm-link-hover-color: var(--ifm-color-primary-dark);
+
+  /*
+   * The navbar is the same paper as the page, separated by a hairline rather than a shadow —
+   * `--ifm-navbar-shadow` is the only hook Infima gives for that edge, so the rule is expressed
+   * as a zero-blur shadow.
+   */
+  --ifm-navbar-background-color: #fbfbfd;
+  --ifm-navbar-shadow: 0 1px 0 0 #e4e3ec;
 }
 
-[data-theme='dark'] {
-  --ifm-color-primary: #58c9a8;
-  --ifm-color-primary-dark: #43c19c;
-  --ifm-color-primary-darker: #39bc96;
-  --ifm-color-primary-darkest: #2e9b7b;
-  --ifm-color-primary-light: #6dd1b4;
-  --ifm-color-primary-lighter: #78d5ba;
-  --ifm-color-primary-lightest: #99e0cb;
+html[data-theme='dark'] {
+  /*
+   * Same hue (259°), same saturation (100%), lightness raised from 57% to 75%. That is the whole
+   * difference: 6.75:1 on the ink background and 6.33:1 on the raised surface, against 3.15:1 for
+   * the unmodified brand violet, which is the pair this mode exists to fix.
+   */
+  --ifm-color-primary: #a77fff;
+  --ifm-color-primary-dark: #9c70ff;
+  --ifm-color-primary-darker: #9566ff;
+  --ifm-color-primary-darkest: #8751ff;
+  --ifm-color-primary-light: #b28eff;
+  --ifm-color-primary-lighter: #b999ff;
+  --ifm-color-primary-lightest: #c7adff;
+
+  --ifm-color-primary-contrast-background: #1b1030;
+  --ifm-color-primary-contrast-foreground: #d9c9ff;
+
+  /* Ink, and one step up from it. Infima's own dark ground is #1b1b1d — a neutral this replaces. */
+  --ifm-background-color: #09090c;
+  --ifm-background-surface-color: #121218;
+
+  /* Paper as text: 18.42:1 on ink, 17.29:1 on the surface. Secondary holds 8.29:1 / 7.78:1. */
+  --ifm-color-content: #f6f6f8;
+  --ifm-color-content-secondary: #a6a6b6;
+  --ifm-heading-color: #ffffff;
+
+  --ifm-hover-overlay: rgb(167 127 255 / 12%);
+
+  --ifm-toc-border-color: #26262f;
+  --ifm-table-border-color: #26262f;
+  --ifm-hr-background-color: #26262f;
+  --ifm-blockquote-border-color: #2f2f3b;
+
+  --ifm-code-background: #17171f;
+  --docusaurus-highlighted-code-line-bg: rgb(167 127 255 / 14%);
+
+  /*
+   * Inverted from light mode, and it has to be: white on this violet is 2.95:1 and fails, ink on
+   * it is 6.75:1. A lightened accent needs a dark label, which is the half of the swap that gets
+   * forgotten.
+   */
+  --ifm-button-color: #09090c;
+
+  /* Hover lightens here, because darkening toward the ground is what removes contrast. 7.77:1. */
+  --ifm-link-hover-color: var(--ifm-color-primary-light);
+
+  --ifm-navbar-background-color: #09090c;
+  --ifm-navbar-shadow: 0 1px 0 0 #26262f;
 }
+
+/*
+ * The footer is ink in BOTH modes — it is the base of the page, and the wordmark's own ground.
+ * Infima's `.footer--dark` defaults it to a slate blue (#303846) and, worse, leaves the link hover
+ * at `var(--ifm-color-primary)`: in light mode that resolves to the deep violet, which on ink is
+ * 3.15:1 and fails. Pinning the hover to the light violet fixes the one pair the theme's own
+ * defaults get wrong, and fixes it identically in both modes.
+ */
+.footer--dark {
+  --ifm-footer-background-color: #09090c;
+  --ifm-footer-color: #c2c2ce; /* 11.27:1 */
+  --ifm-footer-link-color: #dcdce6; /* 14.61:1 */
+  --ifm-footer-link-hover-color: #a77fff; /* 6.75:1 */
+  --ifm-footer-title-color: #f6f6f8; /* 18.42:1 */
+}
+
+/*
+ * The landing page. Its markup is in `src/pages/index.tsx`; these are the only rules that style it.
+ */
 
 .landing {
   margin: 0 auto;
@@ -34,18 +161,44 @@
   text-align: center;
 }
 
+/*
+ * The mark above the title, as a background rather than an image element: it repeats what the
+ * heading directly below already says, so it is decoration, and decoration a screen reader is not
+ * asked to read. The ink cut and the near-white cut are the same drawing, so the swap is the
+ * file, not a filter.
+ */
+.landing::before {
+  background-image: url('/img/mark.svg');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  content: '';
+  display: block;
+  height: 3.5rem;
+  margin: 0 auto 2rem;
+  width: 4.2rem;
+}
+
+html[data-theme='dark'] .landing::before {
+  background-image: url('/img/mark-dark.svg');
+}
+
 .landing__title {
+  color: var(--ifm-heading-color);
   font-size: 3rem;
+  /* The wordmark is drawn tight; the heading under it should not read looser than the logo above. */
+  letter-spacing: -0.02em;
   margin-bottom: 0.5rem;
 }
 
 .landing__pitch {
-  color: var(--ifm-color-emphasis-700);
+  color: var(--ifm-color-content-secondary);
   font-size: 1.15rem;
   margin-bottom: 2rem;
 }
 
 .landing__install {
+  border: 1px solid var(--ifm-toc-border-color);
   margin-bottom: 2rem;
   text-align: left;
 }

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Generates a tool-agnostic agentic coding setup — charter, commands, agents, skills, rules, hooks, MCP wiring — for Claude Code, Cursor, GitHub Copilot and Codex from one canonical source.",
   "author": {
-    "name": "Zomarit"
+    "name": "zomarit"
   },
   "homepage": "https://github.com/zomarit/stamity",
   "repository": "https://github.com/zomarit/stamity",

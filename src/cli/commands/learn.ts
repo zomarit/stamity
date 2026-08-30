@@ -11,7 +11,7 @@ import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.t
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 
 /**
- * `stamity learn capture` — the engine write path behind the /stamity-learn
+ * `stamity learn capture` — the engine write path behind the /st-learn
  * touchpoint, and the CLI's one hidden verb.
  *
  * It is plumbing: generated agent content shells out to it, humans rarely type

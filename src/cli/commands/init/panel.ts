@@ -142,13 +142,13 @@ function claudeSteps(): readonly string[] {
   if (CLAUDE_SKILLS_DIR === "") {
     return [
       open,
-      `inside Claude Code, type: /stamity-work — the touchpoint commands are installed in ${CLAUDE_COMMANDS_DIR}/ (no skills directory was emitted for this client)`,
+      `inside Claude Code, type: /st-work — the touchpoint commands are installed in ${CLAUDE_COMMANDS_DIR}/ (no skills directory was emitted for this client)`,
     ];
   }
   return [
     open,
     `the nine touchpoint commands are installed in ${CLAUDE_COMMANDS_DIR}/`,
-    `start here — inside Claude Code, type: /stamity-onboard, the guided first change at ${CLAUDE_SKILLS_DIR}/stamity-onboard/SKILL.md`,
+    `start here — inside Claude Code, type: /st-onboard, the guided first change at ${CLAUDE_SKILLS_DIR}/st-onboard/SKILL.md`,
   ];
 }
 
@@ -167,10 +167,10 @@ function codexSteps(): readonly string[] {
   if (CODEX_COMMANDS_DIR === null) {
     return [
       open,
-      `then ask in plain words: run the stamity-onboard workflow from ${SKILLS_PROJECTION_DIR}/`,
+      `then ask in plain words: run the st-onboard workflow from ${SKILLS_PROJECTION_DIR}/`,
     ];
   }
-  return [open, `then type: /stamity-onboard — installed in ${CODEX_COMMANDS_DIR}/`];
+  return [open, `then type: /st-onboard — installed in ${CODEX_COMMANDS_DIR}/`];
 }
 
 /**
@@ -178,11 +178,11 @@ function codexSteps(): readonly string[] {
  * adapters themselves read when deciding whether a client needs a native copy
  * of the skills projection.
  *
- * `cursor` is absent from that table, so `stamity-onboard` exists at
+ * `cursor` is absent from that table, so `st-onboard` exists at
  * {@link SKILLS_PROJECTION_DIR} and nowhere else on this client. Its
  * `.cursor/skills/` root is NOT a second home for it: the client folded slash
  * commands into skills, so that directory receives the nine touchpoint COMMAND
- * bodies only. `stamity-onboard` is a SKILL, which means a `/stamity-onboard`
+ * bodies only. `st-onboard` is a SKILL, which means a `/st-onboard`
  * spelling here would name an invocation no emitted file answers — so the row
  * asks for the workflow by path instead, the same fallback {@link codexSteps}
  * takes. This client declares `readsAgentsSkillsDir: true`, so the path it
@@ -196,8 +196,8 @@ function cursorSteps(): readonly string[] {
   const nativeSkills = NATIVE_SKILL_DIRS.cursor;
   const onboard =
     nativeSkills === undefined
-      ? `in the chat, ask in plain words: run the stamity-onboard workflow from ${SKILLS_PROJECTION_DIR}/`
-      : `in the chat, type: /stamity-onboard, the guided first change at ${nativeSkills}/stamity-onboard/SKILL.md`;
+      ? `in the chat, ask in plain words: run the st-onboard workflow from ${SKILLS_PROJECTION_DIR}/`
+      : `in the chat, type: /st-onboard, the guided first change at ${nativeSkills}/st-onboard/SKILL.md`;
   return [open, ...commandSurfaceStep(CURSOR_COMMANDS_DIR, "/<id>"), onboard];
 }
 
@@ -223,7 +223,7 @@ function commandSurfaceStep(dir: string | null, invocation: string): string[] {
 
 /**
  * Per-tool first-workflow steps, in the TARGET TOOL'S OWN syntax. The first
- * action is always ONE in-agent instruction reaching the `stamity-onboard`
+ * action is always ONE in-agent instruction reaching the `st-onboard`
  * touchpoint — the guided first change, not a document generator.
  *
  * The spelling per client is whatever that client can actually resolve, not a
@@ -241,8 +241,8 @@ const NEXT_STEPS: Record<Tool, readonly string[]> = {
   cursor: cursorSteps(),
   copilot: [
     "open VS Code Copilot chat in this repo",
-    ...commandSurfaceStep(COPILOT_PROMPTS_DIR, "/stamity-<id>"),
-    "in the chat, type: @workspace run the stamity-onboard workflow",
+    ...commandSurfaceStep(COPILOT_PROMPTS_DIR, "/st-<id>"),
+    "in the chat, type: @workspace run the st-onboard workflow",
   ],
   codex: codexSteps(),
 };

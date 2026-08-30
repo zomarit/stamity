@@ -151,15 +151,15 @@ describe("nextStepsForTool", () => {
       expect(steps.every((step) => step.trim() !== "")).toBe(true);
       // Numbered-READY: the panel numbers them, so no step brings its own number.
       expect(steps.every((step) => !/^\d+[.)]/.test(step))).toBe(true);
-      expect(steps.some((step) => step.includes("stamity-onboard"))).toBe(true);
+      expect(steps.some((step) => step.includes("st-onboard"))).toBe(true);
     }
   });
 
   it("speaks each target tool's own syntax", () => {
     expect(nextStepsForTool("claude").join("\n")).toContain("claude");
-    expect(nextStepsForTool("claude").join("\n")).toContain("/stamity-onboard");
+    expect(nextStepsForTool("claude").join("\n")).toContain("/st-onboard");
     expect(nextStepsForTool("cursor").join("\n")).toContain("Cursor");
-    // Changed from `/stamity-onboard`: this client's own syntax for reaching a
+    // Changed from `/st-onboard`: this client's own syntax for reaching a
     // skill is a chat request, not a slash command — nothing emits a skill
     // where Cursor resolves `/name` from. The derived case below is the proof.
     expect(nextStepsForTool("cursor").join("\n")).toContain("in the chat");
@@ -170,15 +170,15 @@ describe("nextStepsForTool", () => {
   it("names the claude surfaces its adapter actually emits, not a spelling this module invented", () => {
     const steps = nextStepsForTool("claude").join("\n");
 
-    // The client folded custom commands into skills, so `/stamity-onboard`
+    // The client folded custom commands into skills, so `/st-onboard`
     // resolves from the skill file the adapter re-targets into its native
     // project-skills directory. Both directories are read off the adapter.
     expect(CLAUDE_SKILLS_DIR, "the adapter lost its native skills location").not.toBe("");
-    expect(steps).toContain(`${CLAUDE_SKILLS_DIR}/stamity-onboard/SKILL.md`);
+    expect(steps).toContain(`${CLAUDE_SKILLS_DIR}/st-onboard/SKILL.md`);
     expect(steps).toContain(`${CLAUDE_COMMANDS_DIR}/`);
     // Piped-run stdout completeness (test/cli/flows.e2e.test.ts) reads the
     // panel's final line, which is this row: keep the path at its end.
-    expect(nextStepsForTool("claude").at(-1)).toMatch(/stamity-onboard\/SKILL\.md$/);
+    expect(nextStepsForTool("claude").at(-1)).toMatch(/st-onboard\/SKILL\.md$/);
   });
 
   it("falls back to a resolvable codex spelling while that client documents no command directory", () => {
@@ -188,17 +188,17 @@ describe("nextStepsForTool", () => {
       // No repo-committed command surface exists on this client, so the row
       // points at the vendor-neutral skills tree it does read.
       expect(steps).toContain(SKILLS_PROJECTION_DIR);
-      expect(steps).not.toContain("/stamity-onboard");
+      expect(steps).not.toContain("/st-onboard");
     } else {
       expect(steps).toContain(CODEX_COMMANDS_DIR);
-      expect(steps).toContain("/stamity-onboard");
+      expect(steps).toContain("/st-onboard");
     }
   });
 
   it("falls back to a resolvable cursor spelling while that client gets no native skills copy", () => {
     const steps = nextStepsForTool("cursor").join("\n");
 
-    // Replaces a pinned literal pair (`in the chat, type: /stamity-onboard`),
+    // Replaces a pinned literal pair (`in the chat, type: /st-onboard`),
     // which pinned a DEAD spelling: `.cursor/skills/` takes the nine touchpoint
     // COMMAND bodies only — the adapter's writer for it iterates
     // `admitted("command")` — and `cursor` is absent from NATIVE_SKILL_DIRS, so
@@ -207,15 +207,15 @@ describe("nextStepsForTool", () => {
     // panel ever prints a slash invocation with no emitted file behind it.
     if (NATIVE_SKILL_DIRS.cursor === undefined) {
       expect(steps).toContain(SKILLS_PROJECTION_DIR);
-      expect(steps).not.toContain("/stamity-onboard");
+      expect(steps).not.toContain("/st-onboard");
     } else {
-      expect(steps).toContain(`${NATIVE_SKILL_DIRS.cursor}/stamity-onboard/SKILL.md`);
-      expect(steps).toContain("/stamity-onboard");
+      expect(steps).toContain(`${NATIVE_SKILL_DIRS.cursor}/st-onboard/SKILL.md`);
+      expect(steps).toContain("/st-onboard");
     }
 
     // A command directory is never a home for a skill, whichever branch ran.
     if (CURSOR_COMMANDS_DIR !== null) {
-      expect(steps).not.toContain(`${CURSOR_COMMANDS_DIR}/stamity-onboard`);
+      expect(steps).not.toContain(`${CURSOR_COMMANDS_DIR}/st-onboard`);
     }
   });
 
@@ -231,8 +231,8 @@ describe("nextStepsForTool", () => {
     // writes it, so it cannot drift from the emission.
     expect(nextStepsForTool("copilot")).toEqual([
       "open VS Code Copilot chat in this repo",
-      `the nine touchpoint commands are installed in ${COPILOT_PROMPTS_DIR}/ — invoke one as /stamity-<id>`,
-      "in the chat, type: @workspace run the stamity-onboard workflow",
+      `the nine touchpoint commands are installed in ${COPILOT_PROMPTS_DIR}/ — invoke one as /st-<id>`,
+      "in the chat, type: @workspace run the st-onboard workflow",
     ]);
   });
 
@@ -673,7 +673,7 @@ describe("renderInitPanel — next steps", () => {
     expect(output).toContain("next steps:");
     expect(output).toContain("  1. ");
     expect(output).toContain("  2. ");
-    expect(output).toContain("stamity-onboard");
+    expect(output).toContain("st-onboard");
   });
 
   it("prints one named block per tool when several are targeted", () => {

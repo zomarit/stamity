@@ -73,7 +73,7 @@ describe("the full lifecycle journey", () => {
     expect(init.stdout).toContain("next steps:");
     // Piped-run stdout completeness: the panel's LAST line arrived intact,
     // which is the observable proof of the no-process.exit() discipline.
-    expect(init.stdout.trimEnd().endsWith("stamity-onboard/SKILL.md")).toBe(true);
+    expect(init.stdout.trimEnd().endsWith("st-onboard/SKILL.md")).toBe(true);
 
     // ── the real corpus reached the manifest: every class carries picks ───
     const manifestPath = join(fixture.repoDir, ".stamity", "manifest.json");

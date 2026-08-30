@@ -104,8 +104,17 @@ export type {
 export type { StackSupportTier } from "./detect/stackSupport.ts";
 
 // ---- Managed-block markers & repo state ----
-export { CONTENT_PREFIX, STATE_DIR, getMarkersForPath } from "./types/markers.ts";
-export type { ManagedBlockMarkers } from "./types/markers.ts";
+export {
+  CONTENT_PREFIX,
+  ENGINE_CONTENT_PREFIXES,
+  INVOCABLE_CONTENT_PREFIX,
+  STATE_DIR,
+  carriesEngineContentPrefix,
+  contentPrefixFor,
+  getMarkersForPath,
+  stripEngineContentPrefix,
+} from "./types/markers.ts";
+export type { ContentPrefixSubject, ManagedBlockMarkers } from "./types/markers.ts";
 
 // ---- Feature-module public types ----
 export type { HookParseError, HookParseErrorCode, UserHookDefinition } from "./hooks/userHooks.ts";

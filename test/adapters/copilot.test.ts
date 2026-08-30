@@ -605,7 +605,7 @@ describe("commands → .github/prompts", () => {
 
     const prompts = pathsOf(plan).filter((path) => path.startsWith(".github/prompts/"));
     expect(prompts.toSorted()).toEqual(
-      CORPUS_COMMAND_IDS.map((id) => `.github/prompts/stamity-${id}.prompt.md`).toSorted(),
+      CORPUS_COMMAND_IDS.map((id) => `.github/prompts/st-${id}.prompt.md`).toSorted(),
     );
     // Flat by construction: a nested board/rework/shared tree is the retired shape.
     expect(prompts.some((path) => path.slice(".github/prompts/".length).includes("/"))).toBe(false);
@@ -615,11 +615,11 @@ describe("commands → .github/prompts", () => {
     const plan = await planResidue({ languages: ["typescript"] });
 
     for (const id of CORPUS_COMMAND_IDS) {
-      const row = rowAt(plan, `.github/prompts/stamity-${id}.prompt.md`);
+      const row = rowAt(plan, `.github/prompts/st-${id}.prompt.md`);
 
       // Reachability: the picker names a prompt by its filename, so the emitted
       // stem IS the `/stamity-<id>` route the charter's touchpoint list gives.
-      expect(row.path).toBe(`.github/prompts/stamity-${id}.prompt.md`);
+      expect(row.path).toBe(`.github/prompts/st-${id}.prompt.md`);
       expect(row.owner).toEqual({
         adapter: "copilot",
         artifactId: `cmd-${id}`,
@@ -653,7 +653,7 @@ describe("commands → .github/prompts", () => {
       asIs,
     );
 
-    expect(output.path).toBe(".github/prompts/stamity-work.prompt.md");
+    expect(output.path).toBe(".github/prompts/st-work.prompt.md");
     expect(frontmatterLines(output.content)).toEqual(['description: "Execute a change end to end."']);
     expect(output.content.endsWith("Body text.\n")).toBe(true);
     // The ledger keeps the catalog's own id, which is what the selection record holds.
@@ -723,7 +723,7 @@ describe("body substitution", () => {
       contentRoot: temp.path("corpus"),
       languages: ["typescript"],
     });
-    const prompt = rowAt(plan, ".github/prompts/stamity-probe.prompt.md");
+    const prompt = rowAt(plan, ".github/prompts/st-probe.prompt.md");
 
     expect(prompt.content).not.toContain("${STAMITY:");
     expect(prompt.content).toContain("npm run test");
@@ -962,7 +962,7 @@ describe("hooks", () => {
 
   it("declares the command surface and the effort omission as capability rows", () => {
     expect(capOf("command-surface")).toContain(".github/prompts/");
-    expect(capOf("command-surface")).toContain("/stamity-<id>");
+    expect(capOf("command-surface")).toContain("/st-<id>");
     expect(capOf("effort-axis")).toContain("omitted");
     expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("model:");
     expect(COPILOT_DIALECT_FACTS.ruleShape).toContain("patterns comma-separated");

@@ -733,8 +733,12 @@ describe("ops pack — fail-closed release boundary", () => {
 });
 
 describe("ops pack — cross-references resolve", () => {
-  const COMMAND_MENTION = /\/stamity-([a-z0-9][a-z0-9-]*)/g;
-  const BARE_MENTION = /(?<![/A-Za-z0-9_-])stamity-([a-z0-9][a-z0-9-]*)/g;
+  // Both prefixes, deliberately: core commands and skills are `st-<id>` and
+  // pack-own artifacts stay `stamity-<id>`, so a guard anchored on one prefix
+  // is blind to half the surface it exists to check. The captured group is the
+  // bare id either way, which is what frontmatter declares.
+  const COMMAND_MENTION = /\/(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
+  const BARE_MENTION = /(?<![/A-Za-z0-9_-])(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
   const SUBSTITUTION_TOKEN = /\$\{STAMITY:[A-Z_]+\}/g;
   const URL = /https?:\/\/\S+/g;
 
@@ -755,13 +759,13 @@ describe("ops pack — cross-references resolve", () => {
       for (const match of file.parsed.body.matchAll(COMMAND_MENTION)) {
         const slug = match[1] ?? "";
         if (!coreCommandIds.has(slug) && !packCommandIds.has(slug)) {
-          problems.push(`${file.relPath}: /stamity-${slug} resolves to no shipped command`);
+          problems.push(`${file.relPath}: ${match[0]} resolves to no shipped command`);
         }
       }
       for (const match of file.parsed.body.matchAll(BARE_MENTION)) {
         const slug = match[1] ?? "";
         if (!coreIds.has(slug) && !packIds.has(slug)) {
-          problems.push(`${file.relPath}: stamity-${slug} answers to no shipped artifact`);
+          problems.push(`${file.relPath}: ${match[0]} answers to no shipped artifact`);
         }
       }
     }
@@ -773,7 +777,10 @@ describe("ops pack — cross-references resolve", () => {
     const [files, index] = await Promise.all([packFiles, loadCorpusIndex(CORPUS_ROOT)]);
     const command = files.find((file) => file.relPath === "commands/stamity-incident-response.md");
 
-    expect(command?.parsed.body).toMatch(/`stamity-handoff`/);
+    // Contract change: core command and skill ids carry the `st-` prefix; only
+    // pack-own ids still spell out `stamity-`. The handoff skill is core, so the
+    // live id this body must cite is `st-handoff`.
+    expect(command?.parsed.body).toMatch(/`st-handoff`/);
     expect(index.items.some((item) => item.type === "skill" && item.id === "handoff")).toBe(true);
   });
 

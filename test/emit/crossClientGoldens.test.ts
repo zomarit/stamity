@@ -172,11 +172,11 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   //   - 2026-08-18, the model-ladder provenance rewrite (integration fixer
   //     round 1). One corpus body moved and nothing else:
   //
-  //     CHANGED `stamity-work` in each of the three dialects that carry it —
-  //       `.claude/commands/stamity-work.md` and
-  //       `.github/prompts/stamity-work.prompt.md` (14379 → 15534, ONE digest
+  //     CHANGED `st-work` in each of the three dialects that carry it —
+  //       `.claude/commands/st-work.md` and
+  //       `.github/prompts/st-work.prompt.md` (14379 → 15534, ONE digest
   //       shared by the pair, so that render stays dialect-independent) and
-  //       `.cursor/skills/stamity-work/SKILL.md` (14428 → 15583). The body says
+  //       `.cursor/skills/st-work/SKILL.md` (14428 → 15583). The body says
   //       where a role's class is DECLARED (the agent file), that the ladder
   //       table restates rather than decides it, that an unresolvable class
   //       omits the key instead of guessing, and which two placements are the
@@ -191,7 +191,7 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   //     What did NOT move, and would have surfaced here if the edit had
   //     escaped its class: the entire `codex` selection, tree and manifest
   //     both. Codex emits no command dialect at all, so it holds zero
-  //     `stamity-work` paths. Nor did the override-layer fix in the same round
+  //     `st-work` paths. Nor did the override-layer fix in the same round
   //     (`residueContext` now rebuilds the content spec with all three parts,
   //     `src/emit/planner.ts`) move a byte here — these fixtures install no
   //     pack and seed no override tree, so that rebuild never runs in them;
@@ -233,12 +233,12 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   //       key and moved only where the BODY moved, which is the cross-check
   //       that this was a frontmatter change and not a quiet body rewrite.
   //     CHANGED eight corpus bodies, once per client dialect each:
-  //       `stamity-onboard` (5958 → 8798), `stamity-verify` (5325 → 5971),
-  //       `stamity-work`, `stamity-board` and `stamity-spec`, `stamity-quick` and
+  //       `st-onboard` (5958 → 8798), `st-verify` (5325 → 5971),
+  //       `st-work`, `st-board` and `st-spec`, `st-quick` and
   //       `stamity-creator` (7045 → 9852), `stamity-fixer` (5375 → 5647), and the
   //       `stamity-security-patterns` rule (6065 → 6161).
   //     CHANGED `CLAUDE.md` (306 → 310) — the bridge now names
-  //       `.claude/skills/` and direct `/stamity-onboard` invocation instead of
+  //       `.claude/skills/` and direct `/st-onboard` invocation instead of
   //       telling the reader to open a path by hand.
   //     CHANGED `AGENTS.md` (30546 → 28693) in the codex-bearing selections.
   //       The 32 KiB drop list is risk-ordered now — critical kept longest,

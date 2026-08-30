@@ -13,7 +13,7 @@ spawns: [researcher, reviewer]
 Assesses the product as it stands at one commit, and turns the result into work
 someone else picks up. **This command assesses; it never modifies product
 code.** Its only outputs are board items and a report file. Every fix routes to
-`/stamity-work`; a finding that questions the design routes to `/stamity-plan`.
+`/st-work`; a finding that questions the design routes to `/st-plan`.
 
 ## Axes
 
@@ -33,7 +33,7 @@ not read produces a verdict from the wrong evidence.
 
 Dependency advisories are deliberately not a cross-cutting assessment. That
 criterion is the `sec-dep-advisories` row of the security artifact this run
-already reads, and the `stamity-dep-audit` skill owns the standalone pass. A
+already reads, and the `st-dep-audit` skill owns the standalone pass. A
 second derivation here would be the no-second-copy rule broken by the command
 that states it.
 
@@ -48,7 +48,7 @@ stay in, because they are what a per-module pass cannot see.
 
 ## Evidence — the verify seam
 
-Findings rest on the artifacts the `stamity-verify` skill writes, one per axis
+Findings rest on the artifacts the `st-verify` skill writes, one per axis
 per commit:
 
 ```
@@ -62,7 +62,7 @@ sha, `-dirty` suffixed on an unclean worktree. Intake, per required axis:
    rows (`id`, `kind`, `status`, `evidence`) and `summary` — never to the
    prose of the skill that wrote it.
 2. **Missing or stale is not a fallback.** An artifact whose `<sha>` is not the
-   current HEAD short sha is stale. Absent or stale, run the `stamity-verify`
+   current HEAD short sha is stale. Absent or stale, run the `st-verify`
    skill for that axis and use what it writes. This command owns no second copy
    of the checks and derives none inline: an assessment that invents its own
    criteria is unreproducible, and the next run would disagree with it for
@@ -134,7 +134,7 @@ is not emitted — it goes back to step 4.
 | `severity` | `Critical` · `Warning` · `Minor` — the core reviewer's scale, unchanged |
 | `confidence` | high · medium · low, with the basis in one clause |
 | `evidence` | `path:line`, a verify check id, or the detection fact |
-| `route` | `/stamity-work` for a change · `/stamity-plan` when the design is the finding |
+| `route` | `/st-work` for a change · `/st-plan` when the design is the finding |
 
 ## Output modes
 
@@ -156,7 +156,7 @@ board is a repo state, not an error, and it never blocks an assessment:
 The report carries the same sections the epic would have carried: scope, the
 evidence table, findings by module with the full findings contract per row, the
 cross-cutting sections, and the unexamined-area list. Linking a board later
-(`/stamity-board setup`) makes the next run emit an epic; the report is not
+(`/st-board setup`) makes the next run emit an epic; the report is not
 migrated retroactively.
 
 ## Assesses, never modifies
@@ -168,11 +168,11 @@ The boundary, stated as rules rather than intent:
 - **Write set.** Board items and `.stamity/audits/<axis>-<sha>.md`. No source
   file, no configuration, no dependency manifest, no lockfile — not even a
   formatting change, and not even when the fix is one obvious line.
-- **Refresh set.** Running `stamity-verify` for a missing axis writes
+- **Refresh set.** Running `st-verify` for a missing axis writes
   `.stamity/verify/<axis>-<sha>.json`. That artifact is evidence, and it is the
   one write outside the audit output.
 - **Routing.** A finding that is trivially fixable is still a finding. It
-  leaves as a board item or a report row, and `/stamity-work` applies it under
+  leaves as a board item or a report row, and `/st-work` applies it under
   its own gates.
 
 An assessment that fixes what it finds cannot report what it found: the tree it
@@ -183,7 +183,7 @@ measured no longer exists, and its own evidence stops reproducing.
 | Situation | Behaviour |
 |---|---|
 | No axis named | Ask once, options `security` · `health` · `all`, default `all` |
-| Verify artifact absent or stale for a required axis | Run `stamity-verify` for that axis, then continue |
+| Verify artifact absent or stale for a required axis | Run `st-verify` for that axis, then continue |
 | Module taxonomy resolves to nothing | Stop and ask for the module set; do not assess an invented one |
 | A named module's directory does not exist | Report it as a taxonomy defect and continue with the rest |
 | Open epic already carries this axis | Ask: abort · supersede · open alongside |

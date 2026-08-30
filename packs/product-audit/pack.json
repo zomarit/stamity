@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "description": "Point-in-time whole-product assessment — opens board epics or reports; assesses, never modifies.",
   "integrity": {
-    "commands/stamity-benchmark.md": "9a6ea76181d93f3221e379177b941d1a5275acc3ef4c8042b9e5d11bd57a1b03",
-    "commands/stamity-product-audit.md": "ea2c9d03b7c04ee8b8ab1842e815e38e6fc908a90f56fe624aba2e800224a32f",
-    "rules/stamity-epic-audit-frame.md": "ac848c276d31ec14c9906234d27927f0a296a34139e4c2cc5aca307833a4d6c9",
-    "skills/stamity-perf-audit/SKILL.md": "7e191c375cc28804c2a3518aec29d80cc7764468d765355fc1fc9ebe56d8a0d1"
+    "commands/stamity-benchmark.md": "3362bf6c8a922918a1b7785bfcc3506b43629686ad98cfd3035db71d8205bc1d",
+    "commands/stamity-product-audit.md": "261576912cd7d44added12b176ba7811614135938f6a4366f529d3066dd677bc",
+    "rules/stamity-epic-audit-frame.md": "92163a1a0f5b9ecc7456dc2128c3f69cdc8dc3339f665fbff46a9e99a19a3d65",
+    "skills/stamity-perf-audit/SKILL.md": "57e8a6392af3e7563a0eaae975719cf0d4b1efde26c19329c5c60ae97dbb8980"
   },
   "permissions": {
     "toolFootprint": [

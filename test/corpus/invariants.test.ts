@@ -78,9 +78,9 @@ const RULE_SCOPE_POLICY: readonly string[] = ["agent-requested", "conditional"];
 const URL_ALLOWLIST: readonly string[] = ["rfc-editor.org", "owasp.org", "w3.org"];
 
 /** The verify skill's axis-reference directory — the 40..100 band binds these files. */
-const VERIFY_REFERENCES_PREFIX = "skills/stamity-verify/references/";
+const VERIFY_REFERENCES_PREFIX = "skills/st-verify/references/";
 
-const WORK_RELATIVE_PATH = "commands/stamity-work.md";
+const WORK_RELATIVE_PATH = "commands/st-work.md";
 
 /** The sentence shape the work body states its review-loop cap in. */
 const WORK_CAP_STATEMENT = /Iteration cap: (\d+) rounds by default/;
@@ -185,12 +185,12 @@ interface VendorTokenAllowance {
  */
 const VENDOR_TOKEN_ALLOWANCES: readonly VendorTokenAllowance[] = [
   {
-    relPath: "skills/stamity-handoff/SKILL.md",
+    relPath: "skills/st-handoff/SKILL.md",
     tokens: ["claude", "cursor", "copilot", "codex"],
     why: "adapter-facing: the row enumerates the legal values of the handoff record's `fromTool`/`toTool` fields, which the engine writes and reads. The field cannot be documented without its values, and no sentence there instructs the model.",
   },
   {
-    relPath: "skills/stamity-verify/references/scalability.md",
+    relPath: "skills/st-verify/references/scalability.md",
     tokens: ["cursor"],
     why: "homograph: a pagination cursor in the `scale-unbounded-read` check, not the client. The token family is matched on the word, so the English word needs the same declaration a real client mention would.",
   },
@@ -600,7 +600,7 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
   it("pins the codex cross-client byte cost against the committed golden", () => {
     // Selecting codex rewrites the SHARED root AGENTS.md, so every co-selected
     // client inherits the rules appendix — a 7.3x file for a repo that added
-    // codex beside claude (32_406 / 4_449, the two constants asserted below).
+    // codex beside claude (32_361 / 4_404, the two constants asserted below).
     // Those constants are a TRIPWIRE, not a published figure: this suite is
     // their only consumer, so when the golden is refreshed and the number
     // moves, the constants move with it or this fails. Nothing renders them to
@@ -1219,10 +1219,20 @@ describe("invariant 12 — tags: non-empty, never a ctx: primary", () => {
 });
 
 describe("invariant 13 — cross-references resolve: commands, tokens, mentions", () => {
-  const COMMAND_MENTION = /\/stamity-([a-z0-9][a-z0-9-]*)/g;
+  /**
+   * Both regexes are anchored on the prefixes the engine ACTUALLY emits, and
+   * that is the whole load they carry. A guard still looking for
+   * `/stamity-<slug>` after the invocable surfaces moved to `st-` would match
+   * nothing in the corpus and report zero violations forever — passing not
+   * because every reference resolves but because it stopped reading. Widen
+   * these the day a prefix is added, or this suite goes quietly blind.
+   */
+  const COMMAND_MENTION = /\/st-([a-z0-9][a-z0-9-]*)/g;
   const SUBSTITUTION_TOKEN = /\$\{STAMITY:[A-Z_]+\}/g;
-  /** Bare artifact mentions; the lookbehind keeps `/stamity-…` and mid-token hits out. */
-  const BARE_MENTION = /(?<![/A-Za-z0-9_-])stamity-([a-z0-9][a-z0-9-]*)/g;
+  /** Bare artifact mentions under either engine prefix — `stamity-` for agents
+   *  and rules, `st-` for commands and skills. The lookbehind keeps the slashed
+   *  command spelling and mid-token hits out. */
+  const BARE_MENTION = /(?<![/A-Za-z0-9_-])(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
 
   function violations(files: readonly CorpusFile[]): string[] {
     const problems: string[] = [];
@@ -1239,7 +1249,7 @@ describe("invariant 13 — cross-references resolve: commands, tokens, mentions"
       for (const match of prose.matchAll(COMMAND_MENTION)) {
         const slug = match[1] ?? "";
         if (!commandIds.has(slug)) {
-          problems.push(`${file.relPath}: /stamity-${slug} does not resolve to a shipped command`);
+          problems.push(`${file.relPath}: /st-${slug} does not resolve to a shipped command`);
         }
       }
 
@@ -1257,7 +1267,7 @@ describe("invariant 13 — cross-references resolve: commands, tokens, mentions"
           const slug = match[1] ?? "";
           if (!knownIds.has(slug)) {
             problems.push(
-              `${file.relPath}: mentions stamity-${slug}, which no shipped artifact answers to`,
+              `${file.relPath}: mentions ${match[0]}, which no shipped artifact answers to`,
             );
           }
         }
@@ -1272,23 +1282,23 @@ describe("invariant 13 — cross-references resolve: commands, tokens, mentions"
 
   it("fixture: a dangling command mention is flagged in prose but ignored inside a fence", () => {
     const command = corpusFileOf(
-      "commands/stamity-real.md",
+      "commands/st-real.md",
       doc([...head("real", "command"), "spawns: [worker]"], "Flow."),
     );
     const dangling = corpusFileOf(
       "agents/stamity-talker.md",
-      doc(head("talker", "agent"), "Run /stamity-ghost when done. /stamity-real is fine."),
+      doc(head("talker", "agent"), "Run /st-ghost when done. /st-real is fine."),
     );
     const fenced = corpusFileOf(
       "agents/stamity-quoter.md",
       doc(
         head("quoter", "agent"),
-        lines("```", "/stamity-ghost — a hypothetical example", "```", "Prose after."),
+        lines("```", "/st-ghost — a hypothetical example", "```", "Prose after."),
       ),
     );
 
     expect(violations([command, dangling, fenced])).toEqual([
-      expect.stringMatching(/stamity-talker\.md: \/stamity-ghost does not resolve/),
+      expect.stringMatching(/stamity-talker\.md: \/st-ghost does not resolve/),
     ]);
   });
 
@@ -1304,17 +1314,17 @@ describe("invariant 13 — cross-references resolve: commands, tokens, mentions"
   });
 
   it("fixture: a command body naming an unshipped artifact is flagged", () => {
-    const skill = corpusFileOf("skills/stamity-known/SKILL.md", doc(head("known", "skill"), "Procedure."));
+    const skill = corpusFileOf("skills/st-known/SKILL.md", doc(head("known", "skill"), "Procedure."));
     const command = corpusFileOf(
-      "commands/stamity-caller.md",
+      "commands/st-caller.md",
       doc(
         [...head("caller", "command"), "spawns: [worker]"],
-        "Use the `stamity-known` skill, then the `stamity-unknown` skill.",
+        "Use the `st-known` skill, then the `st-unknown` skill.",
       ),
     );
 
     expect(violations([skill, command])).toEqual([
-      expect.stringMatching(/stamity-caller\.md: mentions stamity-unknown, which no shipped artifact/),
+      expect.stringMatching(/st-caller\.md: mentions st-unknown, which no shipped artifact/),
     ]);
   });
 });
@@ -1585,7 +1595,7 @@ describe("invariant 17 — the Model-Independence Contract, over every shipped m
     expect(violations([allowedFile])).toEqual([]);
     expect(violations([elsewhere])).toHaveLength(allowance.tokens.length);
     expect(violations([extraToken])).toEqual([
-      expect.stringMatching(/stamity-handoff\/SKILL\.md: names "sonnet"/),
+      expect.stringMatching(/st-handoff\/SKILL\.md: names "sonnet"/),
     ]);
   });
 

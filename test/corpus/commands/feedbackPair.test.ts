@@ -16,7 +16,7 @@ import {
 } from "../harness.ts";
 
 /**
- * The feedback pair — `/stamity-rework` and `/stamity-pr-resolve` — checked as
+ * The feedback pair — `/st-rework` and `/st-pr-resolve` — checked as
  * shipped artifacts: frontmatter contract, the class rules a command carries
  * (one load class, a non-empty `spawns` roster), and the behavioral clauses
  * whose absence would silently change what the command does in a user's repo.
@@ -55,9 +55,9 @@ const GATE_TOKEN = /\$\{STAMITY:VERIFY_GATE_[A-Z]+\}/;
 
 /** The three flows whose gate runs moved into a `test-runner` spawn. */
 const GATE_RUNNING_COMMANDS: readonly string[] = [
-  "commands/stamity-pr-resolve.md",
-  "commands/stamity-spec.md",
-  "commands/stamity-debug.md",
+  "commands/st-pr-resolve.md",
+  "commands/st-spec.md",
+  "commands/st-debug.md",
 ];
 
 /** Terminal states a pr-resolve triage row may route to. */
@@ -81,7 +81,7 @@ const AGENT_CENSUS: readonly string[] = [
   "creator",
 ];
 
-/** Every command a body may reference as `/stamity-<id>`. */
+/** Every command a body may reference as `/st-<id>`. */
 const COMMAND_CENSUS: readonly string[] = [
   "spec",
   "plan",
@@ -94,8 +94,8 @@ const COMMAND_CENSUS: readonly string[] = [
   "pr-resolve",
 ];
 
-const REWORK = "commands/stamity-rework.md";
-const PR_RESOLVE = "commands/stamity-pr-resolve.md";
+const REWORK = "commands/st-rework.md";
+const PR_RESOLVE = "commands/st-pr-resolve.md";
 
 /**
  * Declared spawn roster per artifact — the command discriminator made explicit.
@@ -267,7 +267,7 @@ describe("feedback pair — corpus invariants", () => {
   });
 
   it.each([REWORK, PR_RESOLVE])("%s references only commands that exist", (relPath) => {
-    const mentions = [...artifact(relPath).parsed.body.matchAll(/\/stamity-([a-z][a-z-]*)/g)].map(
+    const mentions = [...artifact(relPath).parsed.body.matchAll(/\/st-([a-z][a-z-]*)/g)].map(
       (match) => match[1] ?? "",
     );
 
@@ -358,8 +358,8 @@ describe("rework — leftover scan and routing", () => {
     expect(routing).toMatch(/\bDEFER\b/);
     expect(routing).toContain(".stamity/inbox.md");
     // The inbox is read, not just written: both readers are named where the rows land.
-    expect(routing).toMatch(/\/stamity-board/);
-    expect(routing).toMatch(/\/stamity-work/);
+    expect(routing).toMatch(/\/st-board/);
+    expect(routing).toMatch(/\/st-work/);
   });
 
   it("routes every (severity, scope) pair — the table is total over its own scan", () => {
@@ -439,7 +439,7 @@ describe("rework — validation and handoff", () => {
     expect(handoff).toMatch(/plan-lint/i);
     expect(handoff).toMatch(/acceptance criterion/i);
     expect(handoff).toMatch(/execute now \(default\)/i);
-    expect(handoff).toMatch(/\/stamity-work/);
+    expect(handoff).toMatch(/\/st-work/);
     // The gate is plan's, cited rather than redefined: the same name carried four
     // unlabelled checks here, one of them changed, and no labelled result at close.
     expect(handoff).toMatch(/`L1`[^.]*`L2`[^.]*`L3`/);
@@ -456,7 +456,7 @@ describe("rework — validation and handoff", () => {
     // defaulted to execute-now — so a low-confidence unit was silently promoted by
     // the default it was supposed to stop.
     expect(validation).toContain("[NEEDS CLARIFICATION]");
-    expect(validation).toMatch(/blocks handoff to `\/stamity-work`/);
+    expect(validation).toMatch(/blocks handoff to `\/st-work`/);
     expect(validation).toMatch(/marking nothing reads is a note, not a gate/i);
     expect(handoff).toMatch(/has no execute-now default/i);
     expect(handoff).toMatch(/handoff stays blocked until\s*the last marker clears/i);
@@ -468,7 +468,7 @@ describe("rework — validation and handoff", () => {
     // `spec-author`'s declared capability is read plus edit and each of its modes
     // writes files, so an unconstrained spawn could land a `docs/specs/` write
     // inside a phase this command declares read-only.
-    expect(validation).toMatch(/draft-only, as it is in\s*`\/stamity-plan`/);
+    expect(validation).toMatch(/draft-only, as it is in\s*`\/st-plan`/);
     expect(validation).toMatch(/opens no file under\s*`docs\/specs\/`/);
     expect(validation).toMatch(/Truth changes at the merge gate/i);
   });
@@ -509,9 +509,9 @@ describe("rework — validation and handoff", () => {
   it("states the three-way routing rule once", () => {
     const rule = clause(artifact(REWORK).parsed.body, "## Routing rule");
 
-    expect(rule).toMatch(/\/stamity-rework/);
-    expect(rule).toMatch(/\/stamity-debug/);
-    expect(rule).toMatch(/\/stamity-pr-resolve/);
+    expect(rule).toMatch(/\/st-rework/);
+    expect(rule).toMatch(/\/st-debug/);
+    expect(rule).toMatch(/\/st-pr-resolve/);
   });
 });
 
@@ -669,7 +669,7 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     expect(triage).toMatch(/accept \(default\)/i);
     // A Critical the user defers reuses rework's protocol rather than a second copy.
     expect(triage).toMatch(/critical deferral protocol/i);
-    expect(triage).toContain("/stamity-rework");
+    expect(triage).toContain("/st-rework");
   });
 
   it("gives every triage row a terminal state phase 5 can answer", () => {
@@ -711,7 +711,7 @@ describe("pr-resolve — triage, fixes, and replies", () => {
   it("routes non-mechanical fixes through the work pipeline behind runner-verified gates", () => {
     const fix = clause(artifact(PR_RESOLVE).parsed.body, "## 4. Fix");
 
-    expect(fix).toMatch(/\/stamity-work/);
+    expect(fix).toMatch(/\/st-work/);
     expect(fix).toContain("${STAMITY:VERIFY_GATE_ALL}");
     expect(fix).toMatch(/attempted-and-blocked|blocked/i);
     // The gate result is evidence, not an exit code, and it is produced outside
@@ -725,7 +725,7 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     // The fixer's scope rule ledgers Minor findings, so Minor never enters its lane.
     expect(fix).toMatch(/`Critical` or `Warning` finding whose fix is one file/i);
     expect(clause(artifact(PR_RESOLVE).parsed.body, "## 3. Triage ask")).toMatch(
-      /FIX through `\/stamity-work` — the `fixer`'s scope rule ledgers `Minor`/,
+      /FIX through `\/st-work` — the `fixer`'s scope rule ledgers `Minor`/,
     );
   });
 
@@ -734,11 +734,11 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     const replies = clause(body, "## 5. Replies");
     const preflight = clause(body, "## Pre-flight");
 
-    // UPDATED (was `/stamity-pr-resolve \(confidence/`): the signature gained the
+    // UPDATED (was `/st-pr-resolve \(confidence/`): the signature gained the
     // round ordinal. The attempt cap counted signature LINES, and replies post one
     // per thread, so a round answering three findings read as three attempts and a
     // second round was refused as a fourth. The cap now counts distinct ordinals.
-    expect(replies).toMatch(/— stamity-pr-resolve \(round: <n>, confidence: high \| medium \| low\)/);
+    expect(replies).toMatch(/— st-pr-resolve \(round: <n>, confidence: high \| medium \| low\)/);
     expect(replies).toMatch(/counting reply lines instead would read a round answering three findings as three attempts/i);
     expect(preflight).toMatch(/distinct round ordinals/i);
     expect(preflight).toMatch(/carrying no ordinal is a legacy reply and counts as round 1/i);
@@ -889,7 +889,7 @@ describe("corpus sweep — a body that names a gate token declares the runner th
 
     // Edge case on the debug side: its hard gate 3 bans a private fix pipeline, so
     // the added role has to be report-only or the roster contradicts the gate.
-    const debug = commands.find((file) => file.relPath === "commands/stamity-debug.md");
+    const debug = commands.find((file) => file.relPath === "commands/st-debug.md");
     expect(debug?.parsed.body.replace(/\s+/g, " ")).toMatch(
       /runner reports and nothing else — it applies no edit and proposes no patch, so adding it opens no second fix path/i,
     );

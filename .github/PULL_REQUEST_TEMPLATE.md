@@ -38,7 +38,7 @@ a path you deliberately did not take, a follow-up you are leaving open.
 
 One maintainer merges here, with **0 required approvals** — the mechanical review is CI, across
 two required contexts (`all-ci-checks` on every event, `all-pr-checks` on pull requests) — and an
-external pull request also gets a read through this project's own `/stamity-pr-resolve` command.
+external pull request also gets a read through this project's own `/st-pr-resolve` command.
 If that review is wrong, say so in the thread: a weak review is a defect in the corpus, and it
 gets fixed there. `GOVERNANCE.md` at the repository root describes how a change lands;
 `CONTRIBUTING.md` describes the loop. Both are named rather than linked — this text becomes a

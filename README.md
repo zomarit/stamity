@@ -1,11 +1,11 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
 <!-- Re-open when: the corpus counts, the seven-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives all three from the content
      catalog and the generated capability matrix and fails here first. -->
 
 # stamity
 
-stamity, by Zomarit, is an ESM-only TypeScript CLI that generates agentic coding setups — a
+stamity, by zomarit, is an ESM-only TypeScript CLI that generates agentic coding setups — a
 charter, commands, agents, skills, rules, hooks and MCP wiring — for Claude Code, Cursor,
 GitHub Copilot and Codex from one canonical source model.
 
@@ -18,8 +18,8 @@ npx @zomarit/stamity init
 `init` reads the repository, asks what it cannot infer, and writes the setup plus a manifest
 that every later command works from. Node `>= 22.12` is the only prerequisite: nothing is
 installed globally, and the engine contacts no service to do its work. The package is
-`@zomarit/stamity` and the binary it installs is `stamity`, so an installed copy runs as
-`stamity sync`.
+`@zomarit/stamity` and it installs two names for the same binary — `stamity` and the short
+alias `st` — so an installed copy runs as `stamity sync` or `st sync`.
 
 ## How it works
 
@@ -123,4 +123,4 @@ Regenerate those paths instead of editing them by hand.
 
 ## License
 
-MIT © Zomarit. See [LICENSE](LICENSE).
+MIT © zomarit. See [LICENSE](LICENSE).
