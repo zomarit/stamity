@@ -16,7 +16,7 @@ starts from what the repo already has, delegates every write, and gates what cam
 ## Input: the design-system inventory
 
 The run starts from `.stamity/design-system-inventory.md`, the artifact the core
-`stamity-design-system-detect` skill writes. This command performs no detection of its own
+`st-design-system-detect` skill writes. This command performs no detection of its own
 and holds no probe list: absent inventory, or one whose recorded commit sits far behind
 the current head, means run that skill first and re-enter with the fresh file. Its
 verdict routes the run.
@@ -63,7 +63,7 @@ records no canonical token source at all. This gate reads `create` and nothing e
    operator verbatim and the system is reported not-merge-ready. The cap is fail-closed —
    this loop has no third round and no operator flag that adds one.
 5. **The floor is the repo's, not this command's.** Gate criteria are the ui and ux axes
-   of the `stamity-verify` skill, read from `.stamity/verify/ui-<sha>.json` and
+   of the `st-verify` skill, read from `.stamity/verify/ui-<sha>.json` and
    `.stamity/verify/ux-<sha>.json`, where `<sha>` carries the producer's `-dirty` suffix
    whenever the worktree is unclean. The run reads the artifacts for the CURRENT key: a
    clean-tree artifact does not answer for a dirty tree, and the gate runs after the

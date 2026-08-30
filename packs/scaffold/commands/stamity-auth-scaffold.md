@@ -28,7 +28,7 @@ itself.
    the operator verbatim and the scaffold is reported not-merge-ready. The cap is
    fail-closed — this loop has no third round and no operator flag that adds one.
 5. **The floor is the repo's, not this command's.** Gate criteria are the security axis of
-   the `stamity-verify` skill, read from `.stamity/verify/security-<sha>.json`, where
+   the `st-verify` skill, read from `.stamity/verify/security-<sha>.json`, where
    `<sha>` carries the producer's `-dirty` suffix whenever the worktree is unclean. The
    run reads the artifact for the CURRENT key: a clean-tree artifact does not answer for a
    dirty tree, and the gate runs after the implementer has written, so the tree is unclean

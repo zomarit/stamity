@@ -329,7 +329,14 @@ jobs:
 
       # The privilege boundary. Nothing token-capable produced any of these files, and the
       # publish job verifies the tarball's digest against this job's output before it ships it.
-      # One day of retention: the artifact only has to survive this run's hand-off.
+      #
+      # Seven days of retention, because the hand-off is not machine-paced: `publish` sits behind
+      # the `npm-publish` environment's required-reviewer gate, so the artifact has to outlive a
+      # HUMAN approval, not just this run. One day did not — a v1.0.0 publish failed on
+      # 2026-08-30 when the approval landed after the artifact had expired and the download step
+      # had nothing to fetch. Seven days covers a reviewer who approves the next working day, or
+      # over a weekend, and changes nothing about the trust boundary: the digest the publish job
+      # verifies still travels on the `gates` job's outputs, never inside the artifact.
       - name: Upload release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -339,7 +346,7 @@ jobs:
             sbom.cdx.json
             release-notes.md
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   # ── Job 2: publish. The only job with a credential, and the only job that ships. ──
   #

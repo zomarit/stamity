@@ -146,7 +146,7 @@ export interface ProjectSkillsOptions {
 /**
  * Project every selected skill into `.agents/skills/<dir>/…`.
  *
- * `<dir>` is the catalog directory name as authored (`stamity-verify`, prefix
+ * `<dir>` is the catalog directory name as authored (`st-verify`, prefix
  * included) — the projection preserves the corpus's own naming so a skill's
  * internal relative links and its dispatch-table paths survive unchanged.
  *

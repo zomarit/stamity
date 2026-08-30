@@ -10,7 +10,7 @@ import {
 } from "../harness.ts";
 
 /**
- * The `/stamity-board` artifact's own suite. Corpus-wide shape (identity head,
+ * The `/st-board` artifact's own suite. Corpus-wide shape (identity head,
  * load enum, deny cleanliness across every file) is the frontmatter-contract
  * and invariant suites' job; this one binds the design decisions that are
  * specific to THIS command and would otherwise erode silently:
@@ -26,22 +26,22 @@ import {
  */
 
 /** Corpus-relative path of the artifact under test. */
-const ARTIFACT_PATH = "commands/stamity-board.md";
+const ARTIFACT_PATH = "commands/st-board.md";
 
 /** Command-body cap for the touchpoint class (resolved SoT silence). */
 const BODY_LINE_CAP = 500;
 
-/** The nine touchpoints. A `/stamity-*` mention outside this set is a dangling reference. */
+/** The nine touchpoints. A `/st-*` mention outside this set is a dangling reference. */
 const TOUCHPOINTS: ReadonlySet<string> = new Set([
-  "/stamity-spec",
-  "/stamity-plan",
-  "/stamity-work",
-  "/stamity-board",
-  "/stamity-ask",
-  "/stamity-debug",
-  "/stamity-quick",
-  "/stamity-rework",
-  "/stamity-pr-resolve",
+  "/st-spec",
+  "/st-plan",
+  "/st-work",
+  "/st-board",
+  "/st-ask",
+  "/st-debug",
+  "/st-quick",
+  "/st-rework",
+  "/st-pr-resolve",
 ]);
 
 /** The `##` skeleton the SoT design fixes, in order. */
@@ -179,7 +179,7 @@ function eventTable(progressSection: string): MarkdownTable {
   return found;
 }
 
-describe("stamity-board — frontmatter", () => {
+describe("st-board — frontmatter", () => {
   it("declares the command identity, load class, and deletion trigger", async () => {
     const file = await board();
 
@@ -204,7 +204,7 @@ describe("stamity-board — frontmatter", () => {
   });
 });
 
-describe("stamity-board — body budget and safety", () => {
+describe("st-board — body budget and safety", () => {
   it("stays within the command body cap", async () => {
     const file = await board();
 
@@ -222,16 +222,16 @@ describe("stamity-board — body budget and safety", () => {
   });
 
   it("references only touchpoints that exist", async () => {
-    const mentioned = new Set((await board()).parsed.body.match(/\/stamity-[a-z-]+/g) ?? []);
+    const mentioned = new Set((await board()).parsed.body.match(/\/st-[a-z-]+/g) ?? []);
 
     expect([...mentioned].filter((name) => !TOUCHPOINTS.has(name))).toEqual([]);
     // The handoff target is the point of the pickup mode; assert it is present
     // rather than merely permitted.
-    expect(mentioned.has("/stamity-work")).toBe(true);
+    expect(mentioned.has("/st-work")).toBe(true);
   });
 });
 
-describe("stamity-board — section skeleton", () => {
+describe("st-board — section skeleton", () => {
   it("carries the SoT sections in order", async () => {
     expect([...sections((await board()).parsed.body, "##").keys()]).toEqual(SECTION_SKELETON);
   });
@@ -248,7 +248,7 @@ describe("stamity-board — section skeleton", () => {
   });
 });
 
-describe("stamity-board — write-back contract", () => {
+describe("st-board — write-back contract", () => {
   it("enumerates exactly four channels, in contract order", async () => {
     const text = section((await board()).parsed.body, "Write-back contract");
     const enumerated = [...text.matchAll(/^(\d+)\.\s+\*\*(.+?)\*\*/gm)];
@@ -267,7 +267,7 @@ describe("stamity-board — write-back contract", () => {
 
   it("scopes the PR-thread reply to the pr-resolve touchpoint", async () => {
     expect(flat(section((await board()).parsed.body, "Write-back contract"))).toMatch(
-      /PR-thread reply\*\* — .*`\/stamity-pr-resolve` only/,
+      /PR-thread reply\*\* — .*`\/st-pr-resolve` only/,
     );
   });
 
@@ -318,7 +318,7 @@ describe("stamity-board — write-back contract", () => {
   });
 });
 
-describe("stamity-board — platform reference table", () => {
+describe("st-board — platform reference table", () => {
   it("holds exactly one platform table in the whole body", async () => {
     const body = (await board()).parsed.body;
     const platformTables = tables(body).filter((table) =>
@@ -408,7 +408,7 @@ describe("stamity-board — platform reference table", () => {
   });
 });
 
-describe("stamity-board — board/work boundary", () => {
+describe("st-board — board/work boundary", () => {
   it("states that the board hands off rather than executes", async () => {
     const body = (await board()).parsed.body;
     const preamble = flat(body.slice(0, body.indexOf("## Modes")));
@@ -434,7 +434,7 @@ describe("stamity-board — board/work boundary", () => {
 
     expect(pickup).toMatch(/Readiness gate — one pass, no loop/);
     expect(pickup).toMatch(/reports gaps; it does not fix them/);
-    expect(pickup).toMatch(/Hand off to `\/stamity-work`/);
+    expect(pickup).toMatch(/Hand off to `\/st-work`/);
     expect(pickup).toMatch(/acceptance criteria verbatim/);
   });
 
@@ -532,7 +532,7 @@ describe("stamity-board — board/work boundary", () => {
   });
 });
 
-describe("stamity-board — sources, signals, and the inbox", () => {
+describe("st-board — sources, signals, and the inbox", () => {
   it("keeps the source authoritative and splits status from content truth", async () => {
     const text = flat(section((await board()).parsed.body, "Sources and authority"));
 
@@ -557,7 +557,7 @@ describe("stamity-board — sources, signals, and the inbox", () => {
 
   it("fixes the deferral inbox at one path and counts its readers as the corpus has them", async () => {
     // CHANGED TEST: the reader clause said "both mandatory" and named
-    // two, while `/stamity-plan`'s shared intake reads the inbox as its step 4 —
+    // two, while `/st-plan`'s shared intake reads the inbox as its step 4 —
     // three readers, not two. The behaviour that moved is the census itself, so
     // the assertion moves with it and the count is now derived from the corpus
     // instead of restated, which is what made the old number able to go stale.
@@ -566,7 +566,7 @@ describe("stamity-board — sources, signals, and the inbox", () => {
 
     expect(inbox).toContain(".stamity/inbox.md");
     expect(inbox).toMatch(/Readers, three, all mandatory:.*`fill` triages the inbox on every run/);
-    for (const reader of ["/stamity-work", "/stamity-plan"]) {
+    for (const reader of ["/st-work", "/st-plan"]) {
       expect(inbox, `${reader} reads the inbox and must be named`).toContain(reader);
     }
 
@@ -582,7 +582,7 @@ describe("stamity-board — sources, signals, and the inbox", () => {
       .map((file) => file.relPath);
     expect(writers.length).toBe(4);
     expect(inbox).toMatch(/Writers, four:/);
-    for (const writer of ["/stamity-rework", "/stamity-pr-resolve", "/stamity-plan", "dep-audit"]) {
+    for (const writer of ["/st-rework", "/st-pr-resolve", "/st-plan", "dep-audit"]) {
       expect(inbox, `${writer} writes to the inbox and must be named`).toContain(writer);
     }
 
@@ -621,7 +621,7 @@ describe("stamity-board — sources, signals, and the inbox", () => {
       expect(text).toContain(token);
     }
     expect(text).toMatch(/`writes` — every write-back channel used/);
-    expect(text).toMatch(/`handoff` — the payload passed to `\/stamity-work`/);
+    expect(text).toMatch(/`handoff` — the payload passed to `\/st-work`/);
   });
 
   it("closes with a next step derived from the run's own state", async () => {
@@ -635,7 +635,7 @@ describe("stamity-board — sources, signals, and the inbox", () => {
   });
 });
 
-describe("stamity-board — durable state and authorization", () => {
+describe("st-board — durable state and authorization", () => {
   it("says the source link is session-carried at all three pointers", async () => {
     const modes = section((await board()).parsed.body, "Modes");
     const setup = flat(section(modes, "setup — wiring", "###"));
@@ -709,7 +709,7 @@ describe("stamity-board — durable state and authorization", () => {
   });
 });
 
-describe("stamity-board — edge cases", () => {
+describe("st-board — edge cases", () => {
   it("falls back to chat intake when nothing is linked, and invents no backlog file", async () => {
     const fill = flat(
       section(section((await board()).parsed.body, "Modes"), "fill — intake to items", "###"),

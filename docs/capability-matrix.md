@@ -109,7 +109,7 @@ Declared caps:
 |---|---|
 | `agent-prompt-chars` | 30000 |
 | `charter-budget` | ~2 pages; AGENTS.md is native, so no mirror is emitted |
-| `command-surface` | native — the nine touchpoints ship as prompt files in .github/prompts/, invoked as /stamity-<id>; the format's `agent` and `tools` keys stay unemitted (per-prompt restrictions this engine cannot answer), `model` follows an operator pin |
+| `command-surface` | native — the nine touchpoints ship as prompt files in .github/prompts/, invoked as /st-<id>; the format's `agent` and `tools` keys stay unemitted (per-prompt restrictions this engine cannot answer), `model` follows an operator pin |
 | `effort-axis` | omitted — this surface publishes no effort key and no model-value parameter, the one documented omission of the reasoning-effort axis |
 | `hook-enforcement` | fail-open — blocking exit code: none; no hook config emitted v1 |
 | `deny-gate` | VS Code PreToolUse `permissionDecision: "deny"` is Preview — emitted when it reaches GA |

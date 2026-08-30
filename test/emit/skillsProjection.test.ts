@@ -23,7 +23,7 @@ import { makeVolume } from "../support/vfs.ts";
  * Two lanes, matching the module's two responsibilities:
  *
  * - The REAL bundled corpus proves the projection over what actually ships —
- *   the shipped skill set, `stamity-verify`'s references subtree, path discipline.
+ *   the shipped skill set, `st-verify`'s references subtree, path discipline.
  * - The virtual-fs lane states corpus shapes as literals — token substitution,
  *   verbatim references, collisions, floor survival — without staging disk
  *   fixtures.
@@ -52,7 +52,7 @@ const ALL_SKILL_IDS = [
   "verify",
 ] as const;
 
-/** The `stamity-verify` directory: SKILL.md plus its ten axis references. */
+/** The `st-verify` directory: SKILL.md plus its ten axis references. */
 const VERIFY_FILES = [
   "SKILL.md",
   "references/enhancability.md",
@@ -103,15 +103,15 @@ async function projectFixture(
 // ── Real bundled corpus ──────────────────────────────────────────
 
 describe("projectSkills over the bundled corpus", () => {
-  it("projects all 8 skills under .agents/skills, stamity-verify with its full references subtree, path-sorted", async () => {
+  it("projects all 8 skills under .agents/skills, st-verify with its full references subtree, path-sorted", async () => {
     const rows = await projectSkills(contextOf(ALL_SKILL_IDS));
     const paths = pathsOf(rows);
 
     const dirs = new Set(paths.map((path) => path.split("/")[2]));
-    expect([...dirs].toSorted()).toEqual(ALL_SKILL_IDS.map((id) => `stamity-${id}`));
+    expect([...dirs].toSorted()).toEqual(ALL_SKILL_IDS.map((id) => `st-${id}`));
 
-    expect(paths.filter((path) => path.startsWith(`${SKILLS_PROJECTION_DIR}/stamity-verify/`))).toEqual(
-      VERIFY_FILES.map((file) => `${SKILLS_PROJECTION_DIR}/stamity-verify/${file}`),
+    expect(paths.filter((path) => path.startsWith(`${SKILLS_PROJECTION_DIR}/st-verify/`))).toEqual(
+      VERIFY_FILES.map((file) => `${SKILLS_PROJECTION_DIR}/st-verify/${file}`),
     );
 
     // One deterministic order: sorted by path, duplicates impossible.
@@ -123,7 +123,7 @@ describe("projectSkills over the bundled corpus", () => {
     const rows = await projectSkills(contextOf(["handoff", "verify"]));
     const dirs = new Set(pathsOf(rows).map((path) => path.split("/")[2]));
 
-    expect([...dirs].toSorted()).toEqual(["stamity-handoff", "stamity-verify"]);
+    expect([...dirs].toSorted()).toEqual(["st-handoff", "st-verify"]);
     // handoff ships its SKILL.md alone; verify ships its full 11-file subtree.
     expect(rows).toHaveLength(1 + VERIFY_FILES.length);
   });
@@ -137,7 +137,7 @@ describe("projectSkills over the bundled corpus", () => {
       expect(row.path.startsWith("/"), row.path).toBe(false);
       expect(row.path.split("/").includes(".."), row.path).toBe(false);
       expect(row.artifactType).toBe("skill");
-      expect(`stamity-${row.artifactId}`).toBe(row.path.split("/")[2]);
+      expect(`st-${row.artifactId}`).toBe(row.path.split("/")[2]);
     }
   });
 
@@ -211,7 +211,7 @@ describe("projectSkills transforms", () => {
   it("renders the neutral ask-user platform table exactly once per marker occurrence", async () => {
     const rows = await projectFixture(
       {
-        "skills/stamity-ask/SKILL.md": artifact(
+        "skills/st-ask/SKILL.md": artifact(
           "id: ask\ntype: skill\ndescription: Fixture.\ntags: [review]",
           `Before asking:\n\n${PLATFORM_TOOL_MARKER}\n\nThen stop.\n`,
         ),
@@ -440,7 +440,7 @@ describe("retargetProjection", () => {
     const source = await projectSkills(contextOf(ALL_SKILL_IDS));
     const native = retargetProjection(source, NATIVE_DIR);
 
-    // Non-degenerate: 8 skills, and `stamity-verify` alone contributes 11 rows.
+    // Non-degenerate: 8 skills, and `st-verify` alone contributes 11 rows.
     expect(source.length).toBeGreaterThan(ALL_SKILL_IDS.length);
     expect(native).toHaveLength(source.length);
 
@@ -460,7 +460,7 @@ describe("retargetProjection", () => {
     const byPath = new Map(native.map((row) => [row.path, row.content]));
 
     expect(pathsOf(native)).toEqual(
-      VERIFY_FILES.map((file) => `${NATIVE_DIR}/stamity-verify/${file}`),
+      VERIFY_FILES.map((file) => `${NATIVE_DIR}/st-verify/${file}`),
     );
     for (const row of source) {
       expect(byPath.get(`${NATIVE_DIR}/${suffixOf(row)}`), row.path).toBe(row.content);

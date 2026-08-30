@@ -17,7 +17,7 @@
  * exactly one place: that agent artifact's own `model_class:` frontmatter.
  * That declaration is what the engine projects onto every client, so it is
  * what binds. The rows below restate it for the resolvers, and
- * `content/commands/stamity-work.md` restates it once more under "Model ladder"
+ * `content/commands/st-work.md` restates it once more under "Model ladder"
  * for the agent that checks a role's class after substitution —
  * post-substitution class verification stays a protocol check, so
  * the shipped text is what the checking agent reads. Neither restatement
@@ -35,7 +35,7 @@
  *
  * ONE FLOW PLACEMENT IS NOT RECORDED HERE, and a reader has to know which.
  * The review loop's round-4 rule — a fresh fixer on a stronger model class,
- * stated in `content/agents/stamity-fixer.md` and `content/commands/stamity-work.md`
+ * stated in `content/agents/stamity-fixer.md` and `content/commands/st-work.md`
  * — names no class, and no row below places `fixer` above `standard`. So an
  * agent verifying a role's class against this table after substitution will not
  * find the round-4 class in it, and nothing here resolves a value for it: that
@@ -50,7 +50,7 @@
  * default — an honest unknown — where a guessed value would be a fabricated
  * sizing decision that outranks the operator and expires without warning. Both
  * shipped alias tables already carried this rule in their own words; it is
- * stated once here, for all four clients. `content/commands/stamity-work.md`
+ * stated once here, for all four clients. `content/commands/st-work.md`
  * states it once more where it introduces the ladder table — the only shipped
  * prose telling a reader where a class GOES — and a third anchor in the
  * provenance case holds that text to this behaviour: a paragraph promising the

@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, or a
      verb joins or leaves the command surface. `test/docsPages.test.ts` holds this page to the
      hand-page contract, and `docs/cli-reference.md` plus `docs/capability-matrix.md` are the
@@ -65,9 +65,9 @@ Then each client gets what it cannot read without help. The short version:
 
 | Client | Entry point | Touchpoint commands | Hooks | Skills |
 |---|---|---|---|---|
-| Claude Code | managed import block in `CLAUDE.md` | `.claude/commands/` — `/stamity-<id>` | `.claude/settings.json` | copied to `.claude/skills/` |
+| Claude Code | managed import block in `CLAUDE.md` | `.claude/commands/` — `/st-<id>` | `.claude/settings.json` | copied to `.claude/skills/` |
 | Cursor | `AGENTS.md`, read natively | `.cursor/skills/` | `.cursor/hooks.json` | read from `.agents/skills/` |
-| Copilot | `AGENTS.md`, read natively | `.github/prompts/` — `/stamity-<id>` | none emitted | read from `.agents/skills/` |
+| Copilot | `AGENTS.md`, read natively | `.github/prompts/` — `/st-<id>` | none emitted | read from `.agents/skills/` |
 | Codex | `AGENTS.md`, read natively | none — no repo-level command home | `.codex/hooks.json` | read from `.agents/skills/` |
 
 Agents, rules and MCP documents land per client too, each in that client's own dialect.
@@ -84,13 +84,13 @@ of what is not done. It never ends on a claim.
 
 How you reach it depends on the client, and init prints the right line for yours:
 
-- **Claude Code** — type `/stamity-onboard`.
-- **Cursor** — ask in plain words: run the stamity-onboard workflow from `.agents/skills/`.
-- **Copilot** — in chat: `@workspace run the stamity-onboard workflow`.
-- **Codex** — ask in plain words: run the stamity-onboard workflow from `.agents/skills/`.
+- **Claude Code** — type `/st-onboard`.
+- **Cursor** — ask in plain words: run the st-onboard workflow from `.agents/skills/`.
+- **Copilot** — in chat: `@workspace run the st-onboard workflow`.
+- **Codex** — ask in plain words: run the st-onboard workflow from `.agents/skills/`.
 
 Cursor, Copilot and Codex get a plain-words line rather than a slash command because
-`stamity-onboard` is a skill, and only Claude Code turns a project skill into a `/name`
+`st-onboard` is a skill, and only Claude Code turns a project skill into a `/name`
 invocation. Asking for it by name reaches a file that is genuinely on disk.
 
 ## The seven verbs

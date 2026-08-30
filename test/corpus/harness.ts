@@ -8,7 +8,7 @@ import {
   type ParsedFrontmatter,
 } from "../../src/content/frontmatter.ts";
 import { scanForDeniedPatterns } from "../../src/denyscan/denyScan.ts";
-import { CONTENT_PREFIX } from "../../src/types/markers.ts";
+import { stripEngineContentPrefix } from "../../src/types/markers.ts";
 
 /**
  * Shared harness for the corpus test suites. Every corpus test imports its
@@ -132,15 +132,16 @@ export function corpusFileOf(relPath: string, raw: string): CorpusFile {
 /**
  * The artifact id a corpus path implies, per the catalog's slug rules: a
  * `SKILL.md` is addressed by its directory, every other file by its basename,
- * and the `stamity-` filename prefix is a namespacing convention, not identity,
- * so it comes off before comparison with the declared id.
+ * and the engine's filename prefixes — `stamity-` on agents and rules, `st-` on
+ * commands and skills — are a namespacing convention, not identity, so whichever
+ * one is present comes off before comparison with the declared id.
  */
 export function filenameSlug(relPath: string): string {
   const segments = relPath.split("/");
   const name = segments.at(-1) ?? "";
   const base =
     name === SKILL_FILE ? (segments.at(-2) ?? "") : name.slice(0, -ARTIFACT_EXTENSION.length);
-  return base.startsWith(CONTENT_PREFIX) ? base.slice(CONTENT_PREFIX.length) : base;
+  return stripEngineContentPrefix(base);
 }
 
 /**

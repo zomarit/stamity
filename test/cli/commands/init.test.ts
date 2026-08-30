@@ -741,7 +741,7 @@ describe("init --json", () => {
     expect((doc["report"] as Record<string, unknown>)["dryRun"]).toBe(false);
     const nextSteps = doc["nextSteps"] as string[];
     expect(nextSteps.length).toBeGreaterThan(0);
-    expect(nextSteps.some((step) => step.includes("stamity-onboard"))).toBe(true);
+    expect(nextSteps.some((step) => step.includes("st-onboard"))).toBe(true);
   });
 
   it("keeps the panel out of JSON mode even when a stack suggestion would print", async () => {

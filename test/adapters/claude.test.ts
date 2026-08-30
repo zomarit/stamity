@@ -376,7 +376,7 @@ describe("claude residue over the real corpus", () => {
     const corpusBytes = (relative: string): string =>
       readFileSync(`${CONTENT_ROOT}/skills/${relative}`, "utf8");
 
-    const relative = "stamity-verify/references/testability.md";
+    const relative = "st-verify/references/testability.md";
     const native = byPath(rows).get(`${CLAUDE_SKILLS_DIR}/${relative}`);
     const source = projected(relative);
 
@@ -400,7 +400,7 @@ describe("claude residue over the real corpus", () => {
     // Non-vacuous: the projection DOES render what sits at `SKILL.md`, so
     // "copied verbatim" above is a distinction the projection draws, not an
     // artefact of a corpus with nothing left to substitute.
-    const rendered = "stamity-onboard/SKILL.md";
+    const rendered = "st-onboard/SKILL.md";
     expect(projected(rendered), rendered).toBeDefined();
     expect(corpusBytes(rendered)).toMatch(/\$\{STAMITY:[A-Z_]+\}/);
     expect(projected(rendered)).not.toBe(corpusBytes(rendered));
@@ -438,7 +438,7 @@ describe("claude residue over the real corpus", () => {
       // command by its FILE NAME, so the namespace is stripped and the content
       // prefix restored.
       const bare = item.id.replace(/^cmd-/, "");
-      const row = byPath(rows).get(`${CLAUDE_COMMANDS_DIR}/stamity-${bare}.md`);
+      const row = byPath(rows).get(`${CLAUDE_COMMANDS_DIR}/st-${bare}.md`);
       expect(row, item.id).toBeDefined();
       expect(row!.owner).toEqual({
         adapter: "claude",
@@ -456,7 +456,7 @@ describe("claude residue over the real corpus", () => {
 
     // The gate tokens resolve through the same renderer the agents use: the
     // work command's ladder names runnable commands, not template variables.
-    const work = byPath(rows).get(`${CLAUDE_COMMANDS_DIR}/stamity-work.md`);
+    const work = byPath(rows).get(`${CLAUDE_COMMANDS_DIR}/st-work.md`);
     expect(work).toBeDefined();
     expect(work!.content).not.toMatch(/\$\{STAMITY:/);
     expect(work!.content).toContain("npm run test");
@@ -951,7 +951,7 @@ describe("fixture corpus edges", () => {
 
   it("resolves both token families in a command body, through the shared renderer", async () => {
     const rows = await fixturePlan();
-    const row = byPath(rows).get(`${CLAUDE_COMMANDS_DIR}/stamity-tokens.md`);
+    const row = byPath(rows).get(`${CLAUDE_COMMANDS_DIR}/st-tokens.md`);
     expect(row).toBeDefined();
 
     // A repo token and a gate token, both resolved to the values this repo's

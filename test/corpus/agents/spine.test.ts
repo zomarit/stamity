@@ -100,17 +100,17 @@ const BRIEF_ENUMERATION_SITES: readonly {
   suppliesHandoff: boolean;
 }[] = [
   {
-    relPath: "commands/stamity-ask.md",
+    relPath: "commands/st-ask.md",
     enumeration: /Each researcher brief carries:([^.]*)\./,
     suppliesHandoff: true,
   },
   {
-    relPath: "commands/stamity-work.md",
+    relPath: "commands/st-work.md",
     enumeration: /Every brief carries([^.]*)\./,
     suppliesHandoff: false,
   },
   {
-    relPath: "commands/stamity-spec.md",
+    relPath: "commands/st-spec.md",
     enumeration: /\| `researcher` \|[^|]*\|([^|]*)\|/,
     suppliesHandoff: false,
   },
@@ -320,7 +320,7 @@ describe("researcher — one brief-driven definition", () => {
     // The schema declared seven keys and returned BLOCKED_AMBIGUITY on any omission, while
     // two of the three commands that enumerate a brief stop at the tool tier — so a
     // well-formed spawn from either one was contractually under-specified. The schema now
-    // splits the six they all supply from the one only `/stamity-ask` sends, and this case
+    // splits the six they all supply from the one only `/st-ask` sends, and this case
     // holds that split to the commands rather than to a number written twice.
     const schema = section(await load("agents/stamity-researcher.md"), "Brief schema");
     const rows = tableRows(schema);
@@ -380,7 +380,7 @@ describe("researcher — one brief-driven definition", () => {
     }
 
     // The demand is real, which is what makes the mapping load-bearing rather than decorative.
-    const consumers = ["commands/stamity-pr-resolve.md", "commands/stamity-rework.md"];
+    const consumers = ["commands/st-pr-resolve.md", "commands/st-rework.md"];
     const demands = await Promise.all(
       consumers.map(async (relPath) => ({ relPath, text: flow(await load(relPath)) })),
     );

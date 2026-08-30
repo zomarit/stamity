@@ -16,7 +16,7 @@ import {
 } from "../harness.ts";
 
 /**
- * `/stamity-spec` — the spec touchpoint's corpus contract.
+ * `/st-spec` — the spec touchpoint's corpus contract.
  *
  * Three things bind here, and only here, at file granularity: the frontmatter
  * head and its command discriminator (a command orchestrates at least one
@@ -33,7 +33,7 @@ import {
  */
 
 /** Corpus-relative path of the artifact under test. */
-const COMMAND_PATH = "commands/stamity-spec.md";
+const COMMAND_PATH = "commands/st-spec.md";
 
 /** Body-line cap for a command artifact. */
 const COMMAND_BODY_MAX_LINES = 500;
@@ -49,7 +49,7 @@ const AGENT_CENSUS: readonly string[] = [
   "creator",
 ];
 
-/** The nine SDLC touchpoints; a `/stamity-*` mention outside this set is a dangling reference. */
+/** The nine SDLC touchpoints; a `/st-*` mention outside this set is a dangling reference. */
 const COMMAND_CENSUS: readonly string[] = [
   "spec",
   "plan",
@@ -64,7 +64,7 @@ const COMMAND_CENSUS: readonly string[] = [
 
 /** Mandated section skeleton, as an ordered subsequence of the `#`/`##` headings. */
 const SKELETON: readonly string[] = [
-  "# /stamity-spec",
+  "# /st-spec",
   "## Mode dispatch",
   "## Greenfield vs brownfield detection",
   "## Artifact model",
@@ -124,7 +124,7 @@ function headings(body: string): string[] {
   return [...body.matchAll(/^#{1,2} .+$/gm)].map((match) => match[0].trim());
 }
 
-describe("/stamity-spec — frontmatter contract", () => {
+describe("/st-spec — frontmatter contract", () => {
   it("declares the command identity head, on-demand load class, and deletion trigger", async () => {
     const file = await artifact;
     const field = (name: string): unknown => frontmatterField(file.parsed, name);
@@ -161,7 +161,7 @@ describe("/stamity-spec — frontmatter contract", () => {
   });
 });
 
-describe("/stamity-spec — body skeleton", () => {
+describe("/st-spec — body skeleton", () => {
   it("carries the mandated sections in order", async () => {
     const found = headings((await artifact).parsed.body);
 
@@ -172,11 +172,11 @@ describe("/stamity-spec — body skeleton", () => {
       expect(at, `missing or out of order: "${heading}" in ${found.join(" | ")}`).toBeGreaterThan(-1);
       cursor = at + 1;
     }
-    expect(found[0]).toBe("# /stamity-spec");
+    expect(found[0]).toBe("# /st-spec");
   });
 });
 
-describe("/stamity-spec — design decisions carried as text", () => {
+describe("/st-spec — design decisions carried as text", () => {
   it("emits a mode-chosen line with its evidence clause", async () => {
     const text = await prose();
 
@@ -250,7 +250,7 @@ describe("/stamity-spec — design decisions carried as text", () => {
     expect(text).toContain("Deliverable Manifest");
     expect(text).toContain("manifest wins");
     expect(text).toContain("[NEEDS CLARIFICATION]");
-    expect(text).toMatch(/a spec carrying one is not handed to `?\/stamity-work/i);
+    expect(text).toMatch(/a spec carrying one is not handed to `?\/st-work/i);
     // Deltas live in the plan artifact and merge into truth at work's Prove side effect.
     expect(text).toMatch(/`ADDED`, `MODIFIED`, `REMOVED`/);
     expect(text).toContain("Same-delivery mandate");
@@ -309,7 +309,7 @@ describe("/stamity-spec — design decisions carried as text", () => {
   });
 });
 
-describe("/stamity-spec — edge cases the design names", () => {
+describe("/st-spec — edge cases the design names", () => {
   it("bounds the greenfield interview to one round and marks what stays open", async () => {
     const text = await prose();
 
@@ -384,7 +384,7 @@ describe("/stamity-spec — edge cases the design names", () => {
   });
 });
 
-describe("/stamity-spec — register and gates", () => {
+describe("/st-spec — register and gates", () => {
   it("stays within the command body cap and passes the write-path deny scan", async () => {
     const file = await artifact;
 
@@ -418,10 +418,10 @@ describe("/stamity-spec — register and gates", () => {
   it("references only touchpoints that exist", async () => {
     const body = (await artifact).parsed.body;
 
-    const mentions = [...body.matchAll(/\/stamity-([a-z-]+[a-z])/g)].map((match) => match[1]);
+    const mentions = [...body.matchAll(/\/st-([a-z-]+[a-z])/g)].map((match) => match[1]);
     expect(mentions.length).toBeGreaterThan(0);
     for (const mention of mentions) {
-      expect(COMMAND_CENSUS, `/stamity-${mention} is not a touchpoint`).toContain(mention);
+      expect(COMMAND_CENSUS, `/st-${mention} is not a touchpoint`).toContain(mention);
     }
   });
 });

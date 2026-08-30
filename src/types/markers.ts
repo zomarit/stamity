@@ -145,5 +145,96 @@ export function parseMarkerVersion(line: string): string | null {
  */
 export const STATE_DIR = ".stamity";
 
-/** Filename prefix on generated content artifacts (e.g. `stamity-implementer.md`). */
+/**
+ * Filename prefix on generated content artifacts the operator does not type:
+ * agents, rules, hook scripts, carried learnings (`stamity-implementer.md`).
+ *
+ * Also the engine's ownership marker wherever a name — rather than a recorded
+ * hash — is what proves the engine wrote a file. Read that half through
+ * {@link ENGINE_CONTENT_PREFIXES} / {@link carriesEngineContentPrefix}, never
+ * through this constant alone: since the invocable surfaces moved to
+ * {@link INVOCABLE_CONTENT_PREFIX}, a gate comparing against this one value
+ * answers `false` for every command and skill the engine itself just minted.
+ */
 export const CONTENT_PREFIX = "stamity-";
+
+/**
+ * Filename prefix on the surfaces an operator INVOKES by name — commands
+ * (`/st-work`) and skills (`.agents/skills/st-verify/`).
+ *
+ * Split out of {@link CONTENT_PREFIX} rather than replacing it, because the two
+ * halves answer to different audiences. A command id is typed after a slash a
+ * dozen times a day and pays for every character; an agent id, a rule filename
+ * and the ownership marker are read by machines and by the merge layer, where a
+ * rename is an unreclaimable-orphan bug in every already-installed repo. So the
+ * short prefix lands on the typed half only, and the marker half holds still.
+ *
+ * Pack-supplied artifacts are the documented exception: they keep
+ * {@link CONTENT_PREFIX} whatever their class, because their filenames are
+ * hashed into a signed `pack.json` manifest that this cut does not re-sign.
+ * {@link contentPrefixFor} is the one place that rule is written down.
+ */
+export const INVOCABLE_CONTENT_PREFIX = "st-";
+
+/**
+ * Every prefix the engine mints filenames under, newest first.
+ *
+ * The ownership gate in `../merge/reclaim.ts` and the reserved-id gate in
+ * `../content/userContent.ts` both answer "did the engine name this?" and must
+ * accept the whole set: a repo upgraded across the split holds emissions under
+ * both spellings at once, and the sweep that retires the old one has to
+ * recognise it. No prefix is ever removed from this list — an entry dropped
+ * here is a file the engine can no longer claim, and the sweep leaves it behind
+ * forever.
+ *
+ * The two entries are mutually non-prefixing (`stamity-` does not start with
+ * `st-`, and vice versa), so membership tests need no ordering care.
+ */
+export const ENGINE_CONTENT_PREFIXES: readonly string[] = [
+  CONTENT_PREFIX,
+  INVOCABLE_CONTENT_PREFIX,
+];
+
+/**
+ * The subject {@link contentPrefixFor} rules on: a content class, plus whether
+ * an installed pack supplied the artifact.
+ *
+ * Structural on purpose — this module is a zero-import leaf, and a `CatalogItem`
+ * or a `CanonicalFile` satisfies it as-is.
+ */
+export interface ContentPrefixSubject {
+  /** Content class (`"command"`, `"skill"`, `"agent"`, `"rule"`). */
+  readonly type: string;
+  /** Present when an installed pack supplied the artifact; absent for the corpus. */
+  readonly provenance?: { readonly pack: string };
+}
+
+/**
+ * The filename prefix one artifact's emission carries.
+ *
+ * One rule, one home: every emitter that restores the prefix to a bare
+ * frontmatter id calls this, so the typed command, the file on disk, the
+ * charter's touchpoint spelling and the ownership gate cannot drift apart by
+ * each re-deciding the question locally.
+ */
+export function contentPrefixFor(artifact: ContentPrefixSubject): string {
+  if (artifact.provenance !== undefined) return CONTENT_PREFIX;
+  return artifact.type === "command" || artifact.type === "skill"
+    ? INVOCABLE_CONTENT_PREFIX
+    : CONTENT_PREFIX;
+}
+
+/** True when `name` opens with any prefix the engine mints filenames under. */
+export function carriesEngineContentPrefix(name: string): boolean {
+  return ENGINE_CONTENT_PREFIXES.some((prefix) => name.startsWith(prefix));
+}
+
+/**
+ * `name` with its engine filename prefix removed; returned unchanged when it
+ * carries none. The prefix is a namespacing convention on the file, never part
+ * of the artifact's identity, so this is what turns a filename into an id.
+ */
+export function stripEngineContentPrefix(name: string): string {
+  const prefix = ENGINE_CONTENT_PREFIXES.find((candidate) => name.startsWith(candidate));
+  return prefix === undefined ? name : name.slice(prefix.length);
+}

@@ -82,7 +82,7 @@ function corpusAgentClasses(): { readonly classes: ReadonlyMap<string, string>; 
 
 /** The work command as shipped — the body the parity cases below read. */
 function shippedWorkBody(): string {
-  return readFileSync(new URL("content/commands/stamity-work.md", REPO_ROOT), "utf8");
+  return readFileSync(new URL("content/commands/st-work.md", REPO_ROOT), "utf8");
 }
 
 /**
@@ -214,7 +214,7 @@ describe("MODEL_LADDER", () => {
 });
 
 /**
- * The third surface: the table `content/commands/stamity-work.md` ships under
+ * The third surface: the table `content/commands/st-work.md` ships under
  * "Model ladder". A role's class is declared in that agent's `model_class:`
  * frontmatter, this array restates it for the resolvers, and that table
  * restates it for the agent verifying a class after substitution — so the

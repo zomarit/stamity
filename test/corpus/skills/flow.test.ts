@@ -119,7 +119,7 @@ interface FlowSkill {
 const SKILLS: readonly FlowSkill[] = [
   {
     id: "onboard",
-    relPath: "skills/stamity-onboard/SKILL.md",
+    relPath: "skills/st-onboard/SKILL.md",
     tags: ["planning"],
     cap: SKILL_BODY_CAP,
     // Trigger domain: the first run in a repo that was just set up. The
@@ -129,21 +129,21 @@ const SKILLS: readonly FlowSkill[] = [
   },
   {
     id: "handoff",
-    relPath: "skills/stamity-handoff/SKILL.md",
+    relPath: "skills/st-handoff/SKILL.md",
     tags: ["orchestration"],
     cap: SKILL_BODY_CAP,
     keyword: /handoff/i,
   },
   {
     id: "qa",
-    relPath: "skills/stamity-qa/SKILL.md",
+    relPath: "skills/st-qa/SKILL.md",
     tags: ["review"],
     cap: THIN_BODY_CAP,
     keyword: /\bQA\b/,
   },
   {
     id: "learn",
-    relPath: "skills/stamity-learn/SKILL.md",
+    relPath: "skills/st-learn/SKILL.md",
     tags: ["maintenance"],
     cap: THIN_BODY_CAP,
     keyword: /learning/i,
@@ -162,22 +162,22 @@ const SKILLS: readonly FlowSkill[] = [
  * compete for one trigger, and the loser is silently never invoked.
  */
 const TRIGGER_DOMAINS: readonly { id: string; relPath: string; phrase: RegExp }[] = [
-  { id: "onboard", relPath: "skills/stamity-onboard/SKILL.md", phrase: /first proven change/i },
-  { id: "handoff", relPath: "skills/stamity-handoff/SKILL.md", phrase: /handoff/i },
-  { id: "qa", relPath: "skills/stamity-qa/SKILL.md", phrase: /walk-through/i },
-  { id: "verify", relPath: "skills/stamity-verify/SKILL.md", phrase: /content-quality axis/i },
+  { id: "onboard", relPath: "skills/st-onboard/SKILL.md", phrase: /first proven change/i },
+  { id: "handoff", relPath: "skills/st-handoff/SKILL.md", phrase: /handoff/i },
+  { id: "qa", relPath: "skills/st-qa/SKILL.md", phrase: /walk-through/i },
+  { id: "verify", relPath: "skills/st-verify/SKILL.md", phrase: /content-quality axis/i },
   {
     id: "browser-evidence",
-    relPath: "skills/stamity-browser-evidence/SKILL.md",
+    relPath: "skills/st-browser-evidence/SKILL.md",
     phrase: /browser/i,
   },
   {
     id: "design-system-detect",
-    relPath: "skills/stamity-design-system-detect/SKILL.md",
+    relPath: "skills/st-design-system-detect/SKILL.md",
     phrase: /design system/i,
   },
-  { id: "dep-audit", relPath: "skills/stamity-dep-audit/SKILL.md", phrase: /dependency audit/i },
-  { id: "learn", relPath: "skills/stamity-learn/SKILL.md", phrase: /learnings/i },
+  { id: "dep-audit", relPath: "skills/st-dep-audit/SKILL.md", phrase: /dependency audit/i },
+  { id: "learn", relPath: "skills/st-learn/SKILL.md", phrase: /learnings/i },
 ];
 
 /**
@@ -348,7 +348,7 @@ function phaseSections(file: CorpusFile): { heading: string; body: string }[] {
 }
 
 describe("onboard — the guided first workflow", () => {
-  const ONBOARD = "skills/stamity-onboard/SKILL.md";
+  const ONBOARD = "skills/st-onboard/SKILL.md";
 
   it("no longer carries the one-shot generator disclaimer it replaced", async () => {
     const text = flow(await load(ONBOARD));
@@ -427,8 +427,8 @@ describe("onboard — the guided first workflow", () => {
     // A skill that spawns is a command by the corpus's own discriminator, so
     // the refusal is stated and the escape hatch is a real touchpoint.
     expect(text).toMatch(/\*\*This skill spawns nothing\.\*\*/);
-    expect(text).toContain("/stamity-work");
-    expect(text).toContain("/stamity-quick");
+    expect(text).toContain("/st-work");
+    expect(text).toContain("/st-quick");
     expect(text).toMatch(/is a command wearing a skill's frontmatter/i);
   });
 
@@ -439,23 +439,23 @@ describe("onboard — the guided first workflow", () => {
 
     // The charter is rendered whole with no managed block and the quick lane
     // has no charter remit, so "corrections reach the charter through
-    // /stamity-quick" pointed at an edit the next sync overwrites.
-    expect(text).not.toMatch(/Corrections reach the charter later through `\/stamity-quick`/i);
+    // /st-quick" pointed at an edit the next sync overwrites.
+    expect(text).not.toMatch(/Corrections reach the charter later through `\/st-quick`/i);
     expect(text).toMatch(/rendered whole from detection and carries no hand-editable block/i);
     expect(text).toMatch(/re-running detection — `stamity init` or `stamity sync`/);
     expect(text).toContain("`stamity config`");
     expect(text).toMatch(/overwritten on the next sync/i);
 
-    // `/stamity-quick` survives only where it is a real lane — the clock's drop
+    // `/st-quick` survives only where it is a real lane — the clock's drop
     // order and phase 4's lane table — and nowhere as a charter-edit route.
-    const quickLines = body.split("\n").filter((line) => line.includes("/stamity-quick"));
+    const quickLines = body.split("\n").filter((line) => line.includes("/st-quick"));
     expect(quickLines).toHaveLength(2);
     for (const line of quickLines) {
-      expect(line, "a /stamity-quick mention outside the lane tables").toMatch(/^\|/);
+      expect(line, "a /st-quick mention outside the lane tables").toMatch(/^\|/);
       expect(line).not.toMatch(/charter/i);
     }
     const lane = body.slice(body.indexOf("## Phase 4"), body.indexOf("## Phase 5"));
-    expect(lane).toContain("/stamity-quick");
+    expect(lane).toContain("/st-quick");
   });
 
   it("demotes the onboarding guide to an optional by-product instead of dropping it", async () => {
@@ -482,15 +482,15 @@ describe("onboard — the guided first workflow", () => {
     // body is the doc-versus-reality class, arriving through a substitution.
     const afterMarker = body.slice(body.indexOf(PLATFORM_TOOL_MARKER));
     expect(afterMarker).toMatch(/plain-text fallback/i);
-    // Every `/stamity-*` in the body is a touchpoint COMMAND. The skill's own id
+    // Every `/st-*` in the body is a touchpoint COMMAND. The skill's own id
     // is not one, so it never spells itself as a slash command in prose.
-    expect(body).not.toMatch(/\/stamity-onboard/);
+    expect(body).not.toMatch(/\/st-onboard/);
   });
 });
 
 describe("handoff — five modes over the engine's store", () => {
   it("names all five modes as their own sections", async () => {
-    const file = await load("skills/stamity-handoff/SKILL.md");
+    const file = await load("skills/st-handoff/SKILL.md");
     const present = headings(file);
 
     for (const mode of ["prepare", "resume", "list", "complete", "prune"]) {
@@ -499,7 +499,7 @@ describe("handoff — five modes over the engine's store", () => {
   });
 
   it("uses the store's field names and its full status vocabulary", async () => {
-    const text = flow(await load("skills/stamity-handoff/SKILL.md"));
+    const text = flow(await load("skills/st-handoff/SKILL.md"));
 
     // Field names are the interoperability contract: the session-start index
     // reads these keys, so a body that renames one describes a file nothing lists.
@@ -512,16 +512,16 @@ describe("handoff — five modes over the engine's store", () => {
   });
 
   it("requires the engine's eight body sections", async () => {
-    const body = (await load("skills/stamity-handoff/SKILL.md")).parsed.body;
+    const body = (await load("skills/st-handoff/SKILL.md")).parsed.body;
 
     for (const section of REQUIRED_BODY_SECTIONS) {
       expect(body, `section "${section}" missing from the template`).toContain(`## ${section}`);
     }
-    expect(flow(await load("skills/stamity-handoff/SKILL.md"))).toMatch(/All eight are required/i);
+    expect(flow(await load("skills/st-handoff/SKILL.md"))).toMatch(/All eight are required/i);
   });
 
   it("states caps and windows in lockstep with the engine constants", async () => {
-    const text = flow(await load("skills/stamity-handoff/SKILL.md"));
+    const text = flow(await load("skills/st-handoff/SKILL.md"));
 
     expect(text).toContain(`${MAX_HANDOFF_BODY_BYTES / 1024} KB`);
     expect(text).toContain(`${MAX_SUMMARY_LENGTH} characters`);
@@ -534,7 +534,7 @@ describe("handoff — five modes over the engine's store", () => {
   });
 
   it("surfaces resumed state as user-tier data that cannot instruct", async () => {
-    const text = flow(await load("skills/stamity-handoff/SKILL.md"));
+    const text = flow(await load("skills/st-handoff/SKILL.md"));
 
     expect(text).toContain("user-tier");
     expect(text).toMatch(/A resumed handoff is \*\*data\*\*/i);
@@ -545,7 +545,7 @@ describe("handoff — five modes over the engine's store", () => {
   });
 
   it("diffs the recorded ref at resume and reports drift without touching the tree", async () => {
-    const text = flow(await load("skills/stamity-handoff/SKILL.md"));
+    const text = flow(await load("skills/st-handoff/SKILL.md"));
 
     expect(text).toMatch(/`gitRef` is recorded at prepare and diffed at resume/i);
     expect(text).toContain("git rev-parse --short HEAD");
@@ -555,7 +555,7 @@ describe("handoff — five modes over the engine's store", () => {
   });
 
   it("downgrades to a read-only surface when the recorded branch is gone", async () => {
-    const text = flow(await load("skills/stamity-handoff/SKILL.md"));
+    const text = flow(await load("skills/st-handoff/SKILL.md"));
 
     // Edge case: the branch was deleted or squash-merged out from under the handoff.
     expect(text).toMatch(/recorded branch is gone \(deleted, squash-merged\)/i);
@@ -566,7 +566,7 @@ describe("handoff — five modes over the engine's store", () => {
   });
 
   it("refuses an expired entry and offers the sweep instead", async () => {
-    const text = flow(await load("skills/stamity-handoff/SKILL.md"));
+    const text = flow(await load("skills/st-handoff/SKILL.md"));
 
     // Edge case: expiry is the engine's contract, honored rather than re-decided.
     expect(text).toMatch(/Past `expires`, `resume` refuses/i);
@@ -576,7 +576,7 @@ describe("handoff — five modes over the engine's store", () => {
   });
 
   it("names the closed tool vocabulary the engine validates fromTool and toTool against", async () => {
-    const text = flow(await load("skills/stamity-handoff/SKILL.md"));
+    const text = flow(await load("skills/st-handoff/SKILL.md"));
 
     // The head table left both fields as prose ("the client that wrote it") in
     // a document that says the shape must match exactly because the reader is
@@ -588,7 +588,7 @@ describe("handoff — five modes over the engine's store", () => {
   });
 
   it("states the digest span the engine covers, at both sites", async () => {
-    const text = flow(await load("skills/stamity-handoff/SKILL.md"));
+    const text = flow(await load("skills/st-handoff/SKILL.md"));
 
     // The skill said the digest covered the trimmed body; the engine digests
     // the summary AND the body. Every handoff written to the old wording
@@ -661,7 +661,7 @@ describe("handoff — five modes over the engine's store", () => {
   });
 
   it("carries the trigger heuristics as counted signals, not a percentage", async () => {
-    const file = await load("skills/stamity-handoff/SKILL.md");
+    const file = await load("skills/st-handoff/SKILL.md");
     const text = flow(file);
 
     expect(headings(file)).toContain("When to prepare");
@@ -680,7 +680,7 @@ describe("handoff — five modes over the engine's store", () => {
 
 describe("qa — the human checkpoint", () => {
   it("derives rows from diff triggers and fixes the six-column shape", async () => {
-    const text = flow(await load("skills/stamity-qa/SKILL.md"));
+    const text = flow(await load("skills/st-qa/SKILL.md"));
 
     expect(text).toMatch(/a user-visible surface changed/i);
     expect(text).toMatch(/error, fallback, retry, or timeout path changed/i);
@@ -699,7 +699,7 @@ describe("qa — the human checkpoint", () => {
   });
 
   it("derives the duration its sort and session split are computed from", async () => {
-    const text = flow(await load("skills/stamity-qa/SKILL.md"));
+    const text = flow(await load("skills/st-qa/SKILL.md"));
 
     // The derivation rule is what makes the column reproducible between two
     // people building the same table.
@@ -710,7 +710,7 @@ describe("qa — the human checkpoint", () => {
   });
 
   it("binds the browser seam by path and puts the capture before the walk", async () => {
-    const text = flow(await load("skills/stamity-qa/SKILL.md"));
+    const text = flow(await load("skills/st-qa/SKILL.md"));
 
     // The two skills were each written as the other's prerequisite and the seam
     // was unbound: qa named "a browser-evidence capture" with no path, so a row
@@ -722,7 +722,7 @@ describe("qa — the human checkpoint", () => {
   });
 
   it("points a green gate at the test source, since a passing run carries no excerpt", async () => {
-    const text = flow(await load("skills/stamity-qa/SKILL.md"));
+    const text = flow(await load("skills/st-qa/SKILL.md"));
 
     // The auto-prove table demanded "the assertion it covers" from an artifact
     // whose excerpt is empty on pass, so every functional row failed the
@@ -734,7 +734,7 @@ describe("qa — the human checkpoint", () => {
   });
 
   it("auto-proves only against evidence that already exists", async () => {
-    const text = flow(await load("skills/stamity-qa/SKILL.md"));
+    const text = flow(await load("skills/st-qa/SKILL.md"));
 
     expect(text).toMatch(/only by an artifact that already exists for this change/i);
     expect(text).toContain(".stamity/verify/");
@@ -745,7 +745,7 @@ describe("qa — the human checkpoint", () => {
   });
 
   it("keeps the sign-off mandatory even when every row auto-proved", async () => {
-    const text = flow(await load("skills/stamity-qa/SKILL.md"));
+    const text = flow(await load("skills/st-qa/SKILL.md"));
 
     // Edge case: a fully machine-proven table is exactly when a person is skipped.
     expect(text).toMatch(/Required on every run, including the run where every row auto-proved/i);
@@ -757,7 +757,7 @@ describe("qa — the human checkpoint", () => {
   });
 
   it("hands four facts back to the run that called it", async () => {
-    const text = flow(await load("skills/stamity-qa/SKILL.md"));
+    const text = flow(await load("skills/st-qa/SKILL.md"));
 
     expect(text).toMatch(/Return four facts to the caller/i);
     expect(text).toMatch(/rows derived, rows auto-proven with their pointers/i);
@@ -767,7 +767,7 @@ describe("qa — the human checkpoint", () => {
 
 describe("learn — the thin capture lane", () => {
   it("routes every write through the CLI and names the engine's required sections", async () => {
-    const text = flow(await load("skills/stamity-learn/SKILL.md"));
+    const text = flow(await load("skills/st-learn/SKILL.md"));
 
     expect(text).toContain("stamity learn capture");
     expect(text).toMatch(/The CLI is the write path, and the only one/i);
@@ -781,7 +781,7 @@ describe("learn — the thin capture lane", () => {
   });
 
   it("carries capture judgment and no copy of the schema", async () => {
-    const file = await load("skills/stamity-learn/SKILL.md");
+    const file = await load("skills/st-learn/SKILL.md");
     const body = file.parsed.body;
     const text = flow(file);
 
@@ -803,7 +803,7 @@ describe("learn — the thin capture lane", () => {
   });
 
   it("covers the two refusals an established repo actually hits", async () => {
-    const file = await load("skills/stamity-learn/SKILL.md");
+    const file = await load("skills/st-learn/SKILL.md");
     const text = flow(file);
 
     // The list covered four content defects and omitted the two the store
@@ -822,7 +822,7 @@ describe("learn — the thin capture lane", () => {
   });
 
   it("recovers a broken digest by retire-and-recapture, the only route the engine has", async () => {
-    const file = await load("skills/stamity-learn/SKILL.md");
+    const file = await load("skills/st-learn/SKILL.md");
     const text = flow(file);
 
     // Nothing recomputes a stamp on an edited file and capture only appends, so
@@ -837,7 +837,7 @@ describe("learn — the thin capture lane", () => {
   });
 
   it("answers a refused capture with a redaction, never a bypass", async () => {
-    const text = flow(await load("skills/stamity-learn/SKILL.md"));
+    const text = flow(await load("skills/st-learn/SKILL.md"));
 
     // Edge case: the body carries a credential-shaped string and the gate refuses it.
     expect(text).toMatch(/The gate refuses a credential-shaped literal/i);

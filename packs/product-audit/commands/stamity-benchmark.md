@@ -12,7 +12,7 @@ spawns: [researcher, reviewer]
 
 Measures, compares, and reports. **This command assesses; it never modifies
 product code.** It writes measurements and a report under `.stamity/`, and an
-optimization it recommends is applied by `/stamity-work`, never here — a run that
+optimization it recommends is applied by `/st-work`, never here — a run that
 tunes the code it is measuring has no baseline left to compare against. The one
 operation that would rewrite tracked files, switching to another ref to measure
 it, is printed for the operator to run rather than performed here: that is what
@@ -84,7 +84,7 @@ to commit or stash and re-run.
 ## Budgets — the verify seam
 
 Thresholds are not this command's to invent. The performance budgets the
-project declares are carried by the performance axis of the `stamity-verify`
+project declares are carried by the performance axis of the `st-verify`
 skill, in its artifact for the current commit:
 
 ```
@@ -92,7 +92,7 @@ skill, in its artifact for the current commit:
 ```
 
 Read it when it exists for the current key and bind to its `checks[]` rows.
-When it is absent or stale, run the `stamity-verify` skill with
+When it is absent or stale, run the `st-verify` skill with
 `axis=performance` first.
 
 What decides whether this run has budgets is the **`perf-budget-declared` row's
@@ -181,9 +181,9 @@ findings leave this command:
   measured at — which is why that field is stored rather than inferred, and why
   a baseline predating it produces the range as `unavailable` instead of a
   guess.
-- The fix routes to `/stamity-work`. A structural regression — an algorithmic
+- The fix routes to `/st-work`. A structural regression — an algorithmic
   class change, a dependency that costs what it costs — routes to
-  `/stamity-plan`.
+  `/st-plan`.
 - A per-module profiling pass, when the regression's cause is not visible from
   the diff, is the `stamity-perf-audit` skill's subject, not this command's.
 
@@ -210,7 +210,7 @@ exists to raise into an open question.
 |---|---|
 | No suite found | Propose one from the researcher's hot-path brief and stop |
 | Baseline absent | Run, report measurements, offer promotion; emit no verdicts |
-| Performance verify artifact absent or stale | Run `stamity-verify` with `axis=performance`, then read `perf-budget-declared` |
+| Performance verify artifact absent or stale | Run `st-verify` with `axis=performance`, then read `perf-budget-declared` |
 | `perf-budget-declared` is not `pass` | Report with no budget verdict and say so in the header; emit no budget-keyed row |
 | The baseline is a git ref | Ask, clean tree or dirty: print the switch-and-re-run sequence · use the stored baseline · abort |
 | Promotion requested for a `-dirty` key | Refuse; name the key and the commit-or-stash step that makes it promotable |

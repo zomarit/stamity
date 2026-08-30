@@ -689,7 +689,7 @@ describe("the verify seam — evidence comes from .stamity/verify/, never from a
     const core = await coreFiles;
     const shippedAxes = new Set(
       core
-        .filter((file) => file.relPath.startsWith("skills/stamity-verify/references/"))
+        .filter((file) => file.relPath.startsWith("skills/st-verify/references/"))
         .map((file) => declaredId(file)),
     );
     const body = (await packFile("commands/stamity-product-audit.md")).parsed.body;
@@ -716,9 +716,12 @@ describe("the verify seam — evidence comes from .stamity/verify/, never from a
     const benchmark = flow((await packFile("commands/stamity-benchmark.md")).parsed.body);
 
     // The graceful path: run the producer, then continue.
-    expect(audit).toMatch(/absent or stale, run the `stamity-verify` skill/i);
+    // Contract change: the verify skill is core, and core ids now carry the
+    // `st-` prefix, so `st-verify` is the id a pack body must route users to.
+    // Pack-own ids are unaffected and still spell out `stamity-`.
+    expect(audit).toMatch(/absent or stale, run the `st-verify` skill/i);
     expect(audit).toMatch(/derives none inline/i);
-    expect(benchmark).toMatch(/absent or stale, run the `stamity-verify` skill/i);
+    expect(benchmark).toMatch(/absent or stale, run the `st-verify` skill/i);
     expect(benchmark).toMatch(/axis=performance/);
 
     // Every evidence path the pack names belongs to the neutral family; a
@@ -790,7 +793,9 @@ describe("assesses, never modifies", () => {
 
     expect(audit).toContain(".stamity/audits/<axis>-<sha>.md");
     expect(audit).toMatch(/No source file, no configuration/i);
-    expect(audit).toMatch(/routes to `\/stamity-work`/);
+    // Contract change: `/stamity-work` renamed to `/st-work`; the old spelling
+    // is no longer invocable, so routing prose that keeps it is a dead link.
+    expect(audit).toMatch(/routes to `\/st-work`/);
   });
 
   it("fixture: a command missing the clause, and one spawning a fixer, are flagged", () => {
@@ -940,9 +945,13 @@ describe("trigger domains stay disjoint", () => {
 });
 
 describe("no dangling references", () => {
-  const COMMAND_MENTION = /\/stamity-([a-z0-9][a-z0-9-]*)/g;
-  /** Bare artifact mentions; the lookbehind keeps `/stamity-…` and mid-token hits out. */
-  const BARE_MENTION = /(?<![/A-Za-z0-9_-])stamity-([a-z0-9][a-z0-9-]*)/g;
+  // Both prefixes, deliberately: core commands and skills are `st-<id>` and
+  // pack-own artifacts stay `stamity-<id>`, so a guard anchored on one prefix
+  // is blind to half the surface it exists to check. The captured group is the
+  // bare id either way, which is what frontmatter declares.
+  const COMMAND_MENTION = /\/(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
+  /** Bare artifact mentions; the lookbehind keeps `/st-…` and mid-token hits out. */
+  const BARE_MENTION = /(?<![/A-Za-z0-9_-])(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
 
   function predecessorViolations(files: readonly { relPath: string; raw: string }[]): string[] {
     const problems: string[] = [];
@@ -984,12 +993,12 @@ describe("no dangling references", () => {
     for (const file of pack) {
       for (const match of file.parsed.body.matchAll(COMMAND_MENTION)) {
         if (!commandIds.has(match[1] ?? "")) {
-          problems.push(`${file.relPath}: /stamity-${match[1]} does not resolve to a command`);
+          problems.push(`${file.relPath}: ${match[0]} does not resolve to a command`);
         }
       }
       for (const match of file.parsed.body.matchAll(BARE_MENTION)) {
         if (!knownIds.has(match[1] ?? "")) {
-          problems.push(`${file.relPath}: mentions stamity-${match[1]}, which nothing answers to`);
+          problems.push(`${file.relPath}: mentions ${match[0]}, which nothing answers to`);
         }
       }
     }

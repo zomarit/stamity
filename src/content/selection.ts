@@ -37,9 +37,9 @@
  * - **`floor:spine`** — the five agents every command flow routes through:
  *   researcher, implementer, reviewer, fixer, test-runner. The line is drawn at
  *   "a shipped command delegates to it and has no alternative path": deselect
- *   the reviewer and `/stamity-work` still runs, but its review phase silently
+ *   the reviewer and `/st-work` still runs, but its review phase silently
  *   becomes a no-op, which is worse than a missing command. `spec-author` and
- *   `creator` sit outside — they serve specific workflows (`/stamity-spec`,
+ *   `creator` sit outside — they serve specific workflows (`/st-spec`,
  *   scaffolding), so a setup that does not use those workflows can legitimately
  *   drop them.
  * - **`floor:security`** — the rules whose removal changes what the generated

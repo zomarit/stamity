@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   CONTENT_PREFIX,
+  ENGINE_CONTENT_PREFIXES,
+  INVOCABLE_CONTENT_PREFIX,
   MANAGED_BLOCK_VARIANTS,
   STATE_DIR,
   canHostManagedBlock,
+  carriesEngineContentPrefix,
+  contentPrefixFor,
   getMarkersForPath,
   parseMarkerVersion,
   stampMarkerVersion,
+  stripEngineContentPrefix,
   type ManagedBlockMarkers,
 } from "../../src/types/markers.ts";
 
@@ -166,8 +171,66 @@ describe("stampMarkerVersion / parseMarkerVersion", () => {
 });
 
 describe("state constants", () => {
-  it("pins the state dir and content prefix", () => {
+  it("pins the state dir and both content prefixes", () => {
     expect(STATE_DIR).toBe(".stamity");
     expect(CONTENT_PREFIX).toBe("stamity-");
+    expect(INVOCABLE_CONTENT_PREFIX).toBe("st-");
+  });
+
+  // The ownership gate and the reserved-id gate both read this list, and both
+  // are wrong if it shrinks: a prefix dropped here is a file the engine can no
+  // longer claim to have written, which the reclaim sweep then leaves on disk
+  // forever. Order is asserted only to keep the refusal message's wording
+  // stable.
+  it("carries every prefix the engine mints filenames under", () => {
+    expect(ENGINE_CONTENT_PREFIXES).toEqual([CONTENT_PREFIX, INVOCABLE_CONTENT_PREFIX]);
+  });
+
+  // The two prefixes must not prefix each other, or stripping one could eat
+  // part of the other's slug.
+  it("keeps the two prefixes mutually non-prefixing", () => {
+    expect(CONTENT_PREFIX.startsWith(INVOCABLE_CONTENT_PREFIX)).toBe(false);
+    expect(INVOCABLE_CONTENT_PREFIX.startsWith(CONTENT_PREFIX)).toBe(false);
+  });
+});
+
+describe("contentPrefixFor", () => {
+  // The split's whole point: the surfaces an operator TYPES take the short
+  // prefix, and the ones only machines read keep the long one. A rename of the
+  // latter is an unreclaimable-orphan bug in every already-installed repo.
+  it("gives the invocable classes the short prefix", () => {
+    expect(contentPrefixFor({ type: "command" })).toBe(INVOCABLE_CONTENT_PREFIX);
+    expect(contentPrefixFor({ type: "skill" })).toBe(INVOCABLE_CONTENT_PREFIX);
+  });
+
+  it("keeps agents and rules on the long prefix", () => {
+    expect(contentPrefixFor({ type: "agent" })).toBe(CONTENT_PREFIX);
+    expect(contentPrefixFor({ type: "rule" })).toBe(CONTENT_PREFIX);
+  });
+
+  // A pack's filenames are hashed into a signed `pack.json` this engine does
+  // not re-sign, so provenance outranks class: a pack command stays
+  // `stamity-release`, and the mixed surface that produces is deliberate.
+  it("keeps a pack-supplied artifact on the long prefix whatever its class", () => {
+    const supplied = { pack: "@acme/ops" };
+    expect(contentPrefixFor({ type: "command", provenance: supplied })).toBe(CONTENT_PREFIX);
+    expect(contentPrefixFor({ type: "skill", provenance: supplied })).toBe(CONTENT_PREFIX);
+  });
+});
+
+describe("engine prefix recognition", () => {
+  it("recognises both spellings and nothing else", () => {
+    expect(carriesEngineContentPrefix("stamity-implementer")).toBe(true);
+    expect(carriesEngineContentPrefix("st-work")).toBe(true);
+    expect(carriesEngineContentPrefix("review-gate")).toBe(false);
+    expect(carriesEngineContentPrefix("standup-notes")).toBe(false);
+  });
+
+  it("strips whichever prefix is present, and only the prefix", () => {
+    expect(stripEngineContentPrefix("stamity-spec-author")).toBe("spec-author");
+    expect(stripEngineContentPrefix("st-pr-resolve")).toBe("pr-resolve");
+    // Not a prefix, however much it looks like one at a glance.
+    expect(stripEngineContentPrefix("standup-notes")).toBe("standup-notes");
+    expect(stripEngineContentPrefix("review-gate")).toBe("review-gate");
   });
 });

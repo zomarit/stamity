@@ -163,14 +163,14 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * the previous wording already had once. Until then, a golden refresh that
  * moves the cost is a two-line edit HERE and nowhere else.
  */
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 32_406;
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 32_361;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
  * Same tripwire, and the same open disclosure, as
  * {@link ALWAYS_ON_SHARED_BYTES_WITH_CODEX}.
  */
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 4_449;
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 4_404;
 
 /**
  * The composite always-on line count one client pays for a plan: the charter,

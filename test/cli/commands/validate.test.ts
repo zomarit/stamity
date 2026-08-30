@@ -656,8 +656,8 @@ describe("validate — shadowing", () => {
     expect(human.code).toBe(0);
     expect(human.stdout).toContain("shadowing");
     // The claim it must NOT make, and the one it must.
-    expect(human.stdout).not.toContain("replaces skills/stamity-qa/SKILL.md");
-    expect(human.stdout).toContain("takes the id of skills/stamity-qa/SKILL.md");
+    expect(human.stdout).not.toContain("replaces skills/st-qa/SKILL.md");
+    expect(human.stdout).toContain("takes the id of skills/st-qa/SKILL.md");
     expect(human.stdout).toContain("the bundled skill body is still what ships");
 
     const { doc } = await runJson(repo.dir);
@@ -666,7 +666,7 @@ describe("validate — shadowing", () => {
         type: "skill",
         id: "qa",
         path: ".stamity/overrides/skills/qa/SKILL.md",
-        replaced: ["skills/stamity-qa/SKILL.md"],
+        replaced: ["skills/st-qa/SKILL.md"],
         emits: false,
       },
     ]);

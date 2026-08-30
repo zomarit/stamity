@@ -1,6 +1,7 @@
 import { Command, CommanderError } from "commander";
 import { createApp, createEngine } from "../../index.ts";
 import type { App, Clock, EngineRegistry } from "../../index.ts";
+import { bannerBlock } from "./banner.ts";
 import {
   detectTerminalFacts,
   makePalette,
@@ -71,6 +72,15 @@ export interface CliContext {
   readonly promptIo: PromptIo;
   readonly terminal: TerminalFacts;
   readonly palette: Palette;
+  /**
+   * The program-level color decision (`--no-color` > NO_COLOR > FORCE_COLOR >
+   * TTY), resolved once in the funnel below. `palette` already bakes it in, so
+   * a command that only paints text never needs this — it exists for a command
+   * that hands the decision to a renderer resolving color for itself
+   * (`../kit/banner.ts`), which otherwise cannot see a flag parsed on the root
+   * program and would paint over a reader's `--no-color`.
+   */
+  readonly colorEnabled: boolean;
   readonly spinner: Spinner;
   readonly json: boolean;
   readonly yes: boolean;
@@ -185,6 +195,28 @@ export async function runCli(
       writeErr: (s) => io.err(s),
     });
 
+  // The wordmark, above the root help only. `beforeAll` is inherited by every
+  // subcommand, so the callback checks that the help being rendered is the
+  // program's own: `stamity sync --help` answers a question about one verb and
+  // gets no branding, and neither does help written to stderr beside a usage
+  // error, where the mark would sit on top of the diagnostic.
+  //
+  // Everything else the gate needs is already decided elsewhere: `bannerBlock`
+  // suppresses the mark on a non-TTY stdout and on a `--json` run, and resolves
+  // color through the same precedence every command uses. Commander drops a
+  // falsy result, so a suppressed banner writes nothing at all — not a blank
+  // line. It emits through `configureOutput.writeOut`, the same stream the help
+  // text itself takes.
+  program.addHelpText("beforeAll", (context) => {
+    if (context.command !== program || context.error) return "";
+    return bannerBlock({
+      stdoutIsTTY: terminal.stdoutIsTTY,
+      machineReadable: argv.includes("--json"),
+      env,
+      noColorFlag: program.opts<{ color?: boolean }>().color === false,
+    });
+  });
+
   // The funnel's result channel: commander actions cannot return values through
   // parseAsync, so the executed action records its exit code here.
   let commandExit: 0 | 1 = 0;
@@ -222,13 +254,12 @@ export async function runCli(
       // confirmation anywhere in the invocation.
       const yes = local["yes"] === true;
       const dryRun = local["dryRun"] === true;
-      const palette = makePalette(
-        resolveColorEnabled({
-          noColorFlag: program.opts<{ color?: boolean }>().color === false,
-          env,
-          stdoutIsTTY: terminal.stdoutIsTTY,
-        }),
-      );
+      const colorEnabled = resolveColorEnabled({
+        noColorFlag: program.opts<{ color?: boolean }>().color === false,
+        env,
+        stdoutIsTTY: terminal.stdoutIsTTY,
+      });
+      const palette = makePalette(colorEnabled);
       const rawOut = io.out.bind(io);
       const commandIo: CommandIo = {
         out: json
@@ -249,6 +280,7 @@ export async function runCli(
         promptIo,
         terminal,
         palette,
+        colorEnabled,
         spinner,
         json,
         yes,

@@ -112,10 +112,28 @@ const HAND_PAGES: readonly string[] = [...PAGES, ...GUIDES];
 /** README's hard budget, per the hand-page posture (≤150 lines). */
 const README_MAX_LINES = 150;
 
-/** The product, its installable package, and the owner the pages name. */
+/**
+ * The product, its installable package, and the owner the pages name.
+ *
+ * The owner is lowercase, and it is asserted that way rather than case-insensitively: the brand is
+ * written `zomarit` in running prose the way `npm` is, so a capitalised one on a published page is
+ * the drift this catches, not a spelling this should tolerate.
+ */
 const PRODUCT = "stamity";
 const SCOPED_PACKAGE = "@zomarit/stamity";
-const OWNER = "Zomarit";
+const OWNER = "zomarit";
+
+/**
+ * The prefix every user-invocable command and skill is emitted under.
+ *
+ * It used to be derivable — the product name plus a hyphen — and the pages were checked that way.
+ * The 1.0.0 re-cut broke that derivation on purpose: commands and skills moved to `st-` while the
+ * agents, the rules, the state directory and the package all kept `stamity-`, so the two are now
+ * different strings and a page that names a touchpoint has to be held to THIS one. Deriving it
+ * from `PRODUCT` again would pass on `/stamity-pr-resolve`, which is no longer a command anyone
+ * can invoke.
+ */
+const COMMAND_PREFIX = "st-";
 
 /** The install line a first-time reader runs — README's opening must show it. */
 const INSTALL_COMMAND = `npx ${SCOPED_PACKAGE} init`;
@@ -178,7 +196,22 @@ const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
  * has instead, and both name a point a reader can go and check.
  */
 const CURRENCY_HEADER =
-  /<!--\s*HAND-WRITTEN PAGE — verified against the tree at (?:commit [0-9a-f]{7,40}|the \d+\.\d+\.\d+ release cut \(\d{4}-\d{2}-\d{2}\))\./;
+  /<!--\s*HAND-WRITTEN PAGE — verified against the tree at (?:commit [0-9a-f]{7,40}|the \d+\.\d+\.\d+ release cut \((\d{4}-\d{2}-\d{2})\))\./;
+
+/**
+ * The date this cut re-verified the hand bucket against.
+ *
+ * `CURRENCY_HEADER` proves a page carries a date. It cannot prove the date is THIS one, and a page
+ * rewritten under an unmoved date is exactly the false attestation the header exists to prevent —
+ * so the shape check alone let a re-cut ship seven pages all still claiming the previous cut.
+ *
+ * It is deliberately NOT required of every page. A page nobody re-read this cut keeps the date it
+ * was actually verified on; moving it in sympathy manufactures the same false attestation from the
+ * other direction. What is required is the pair below: the bucket's NEWEST date is this constant,
+ * so the constant has to move on the next cut or the assertion fails, and no page claims a
+ * verification later than the cut it shipped in.
+ */
+const RELEASE_CUT_DATE = "2026-08-30";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -352,6 +385,31 @@ describe("hand pages", () => {
       expect(head, `${page} publishes no re-open trigger`).toMatch(/Re-open when:/);
       expect(head, `${page}'s re-open trigger names no check`).toMatch(/test\/docsPages\.test\.ts/);
     }
+  });
+
+  it("dates the bucket at this cut, and no page later than it", () => {
+    // The half of the currency header the shape check cannot reach. See RELEASE_CUT_DATE for why
+    // the pin is "the newest date is this one" rather than "every page carries this one".
+    const dated = HAND_PAGES.map((page) => {
+      const head = lines(afterFrontmatter(read(page))).slice(0, 6).join("\n");
+      return [page, CURRENCY_HEADER.exec(head)?.[1]] as const;
+    }).filter((entry): entry is readonly [string, string] => entry[1] !== undefined);
+
+    expect(dated.length, "no hand page states a release-cut date to check").toBeGreaterThan(0);
+
+    for (const [page, date] of dated) {
+      // ISO-8601 sorts lexicographically, which is most of why the header carries that shape.
+      expect(
+        date <= RELEASE_CUT_DATE,
+        `${page} attests to ${date}, later than the ${RELEASE_CUT_DATE} cut it ships in`,
+      ).toBe(true);
+    }
+
+    expect(
+      dated.map(([, date]) => date).toSorted().at(-1),
+      `no hand page was re-verified at the ${RELEASE_CUT_DATE} cut — move the banner date on the ` +
+        `pages this cut rewrote, or move RELEASE_CUT_DATE to the cut that actually happened`,
+    ).toBe(RELEASE_CUT_DATE);
   });
 
   it("passes the leak gate", () => {
@@ -706,9 +764,10 @@ describe("CONTRIBUTING.md", () => {
       /0 required approvals/,
     );
     expect(text, "CONTRIBUTING does not say CI gates the merge").toMatch(/CI/);
-    // Dogfood-as-review: the setup this repo emits is the setup that reviews it.
+    // Dogfood-as-review: the setup this repo emits is the setup that reviews it. Held to
+    // COMMAND_PREFIX rather than to PRODUCT — see that constant for why the two stopped agreeing.
     expect(text, "CONTRIBUTING names no review path for an external PR").toContain(
-      `/${PRODUCT}-pr-resolve`,
+      `/${COMMAND_PREFIX}pr-resolve`,
     );
     expect(text, "CONTRIBUTING omits the DCO sign-off").toContain("git commit -s");
     expect(text).toMatch(/DCO/);

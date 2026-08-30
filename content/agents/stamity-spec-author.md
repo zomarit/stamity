@@ -32,11 +32,11 @@ written on greenfield evidence rules is how unverified prose enters truth.
 role hand over two pieces of work no row above describes. Both ride an existing
 mode; neither is a fifth mode, and neither is a two-mode brief:
 
-- **Spec-delta merge** — `/stamity-work`'s Prove phase and `/stamity-spec sync`
+- **Spec-delta merge** — `/st-work`'s Prove phase and `/st-spec sync`
   hand over a change's `ADDED`/`MODIFIED`/`REMOVED` delta to merge into an
   existing spec file. It runs as brownfield: the evidence is the landed change,
   cited at `file:line`, and the writing rules below govern the merge.
-- **Plan-artifact draft** — `/stamity-plan` and `/stamity-rework`'s validation
+- **Plan-artifact draft** — `/st-plan` and `/st-rework`'s validation
   pass ask for a spec-delta section drafted INTO the plan artifact, opening no
   file under `docs/specs/`. The named mode's evidence rules still bind; what
   changes is the target, and a draft that opens a spec file has left its
@@ -69,7 +69,7 @@ machine-checkable carries a `judgment:` tag naming the role that decides.
 question inside a spec. A marker names the question and the options considered;
 it is placed at the requirement it blocks. Inventing a plausible answer to
 close a marker is the defect this construct exists to prevent, and a spec
-carrying one is not handed to `/stamity-work`.
+carrying one is not handed to `/st-work`.
 
 **Typed reference pointers.** Prose points at the artifact that carries the real
 contract instead of restating it.

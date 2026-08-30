@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
 <!-- Re-open when: a trust tier is added or removed, the signed payload or the
      `signing.signer` grammar or requirement changes, the bundle bound changes, the shipped
      signature verifier is replaced, or the org policy grammar changes. `test/docsPages.test.ts` holds this page to the hand-page

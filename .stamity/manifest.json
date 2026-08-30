@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.0.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-08-26T06:32:43.732Z",
+  "updatedAt": "2026-08-30T21:30:14.220Z",
   "tools": [
     "claude"
   ],
@@ -64,7 +64,7 @@
       "adapter": "claude",
       "artifactId": "creator",
       "artifactType": "agent",
-      "contentHash": "f4d43587d7b36d5f47b5e8adf47e368fbaa471707c68e15a25c7ae50f90001b0",
+      "contentHash": "42f97e00fbada1127f2d216f4a1efd1ce51a549e1ccaa8ba617b3cd6127f8706",
       "path": ".claude/agents/stamity-creator.md"
     },
     {
@@ -99,7 +99,7 @@
       "adapter": "claude",
       "artifactId": "researcher",
       "artifactType": "agent",
-      "contentHash": "e5076d501569dccbef24c21b6723bfd676704a201185af5df9e2393136cbed27",
+      "contentHash": "0938d483dcdf57eb5050735f8060cd2ab1265c93921ab7352755f51026e5755a",
       "path": ".claude/agents/stamity-researcher.md"
     },
     {
@@ -120,7 +120,7 @@
       "adapter": "claude",
       "artifactId": "spec-author",
       "artifactType": "agent",
-      "contentHash": "7ba480dc9a5e011bf25f0ec783ff8b85fc5e1693e12d7314d89983ac3ab4c2f9",
+      "contentHash": "8e7942d51c0a2e0f782c28a4c9483c4fb23ad45acedaeb3089eda6bf9c4fd8a6",
       "path": ".claude/agents/stamity-spec-author.md"
     },
     {
@@ -134,64 +134,64 @@
       "adapter": "claude",
       "artifactId": "cmd-ask",
       "artifactType": "command",
-      "contentHash": "748e57b138412c2aaa64c834d6ece669b070d816c6f137f3a080a3148d018436",
-      "path": ".claude/commands/stamity-ask.md"
+      "contentHash": "e8e9572612cbd8a374cb0cb0ba59739229a2e05135fe1a652deef06a525834ed",
+      "path": ".claude/commands/st-ask.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "1b65530c7fc32a9c24ea5583a6f948726040f15ae7812fad570644f1f5137bca",
-      "path": ".claude/commands/stamity-board.md"
+      "contentHash": "a1964320623ad4a0d91ba596b0ffccf93e9b107bc4738538f25481851fb68081",
+      "path": ".claude/commands/st-board.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "ce3de83199d4a407fd292a024b6a88cca46d735d17f4e5a6d0c47517732f1099",
-      "path": ".claude/commands/stamity-debug.md"
+      "contentHash": "c996b617c286c9d82ccde655eb92bea46f47995afc4d9d98b5d7b79dde2217c0",
+      "path": ".claude/commands/st-debug.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "de6329bdd2dac0b348d04c5437f614a9b5560eeeb25e43abfbf7a556529214e1",
-      "path": ".claude/commands/stamity-plan.md"
+      "contentHash": "ed2559b9052a473b7422249aa39db90dc4d49d38f5aec3006c2a8a320b92ea09",
+      "path": ".claude/commands/st-plan.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "e9ef204132dcd141e14192628b78485e44b0380fc1bf9d47526dee5cc9beab9e",
-      "path": ".claude/commands/stamity-pr-resolve.md"
+      "contentHash": "d5289faf2c137b89dedf64a22c1b2ed1df80dbce5304ff6a0008e7d60a6f59d2",
+      "path": ".claude/commands/st-pr-resolve.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "153383fc8efb44e1e6fe28a1efd26089c4bf177e88a279e8d5273fd8d71bd148",
-      "path": ".claude/commands/stamity-quick.md"
+      "contentHash": "36c9d5dd096eccf92e48d20c1636313b93b16f86df31cbbfad7886f6aa9ac7eb",
+      "path": ".claude/commands/st-quick.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "b9de196f699b87756aa1a78bd35570811ac615f77129fcd5271c8c1e21e9d692",
-      "path": ".claude/commands/stamity-rework.md"
+      "contentHash": "496959d16c080acdf8dd421dc0835d421e496b95aeff2a825bd89fcf59f3e61f",
+      "path": ".claude/commands/st-rework.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-spec",
       "artifactType": "command",
-      "contentHash": "0c5ea5a6ba178fd5f1a8c1bdbad2307404558494d06464016c767a8cd2edd41c",
-      "path": ".claude/commands/stamity-spec.md"
+      "contentHash": "43df803612a82e9cdccff33bbc009fd95fb752c9c47ad016231f9387b95c82f0",
+      "path": ".claude/commands/st-spec.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "bbc77c50014d743649c9475bc51c9f10a939056be723ca2a6ce4c0a714c400f1",
-      "path": ".claude/commands/stamity-work.md"
+      "contentHash": "887ad65f73a503da0ed6abb0e47f18a43b3475ed71b2a848e48cd97fed337f37",
+      "path": ".claude/commands/st-work.md"
     },
     {
       "adapter": "claude",
@@ -288,127 +288,127 @@
       "adapter": "claude",
       "artifactId": "browser-evidence",
       "artifactType": "skill",
-      "contentHash": "9970d7c458c4f25977e3b51532ecf5fd04760457659b3c899ba2c3dd0aec0eaf",
-      "path": ".claude/skills/stamity-browser-evidence/SKILL.md"
+      "contentHash": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3",
+      "path": ".claude/skills/st-browser-evidence/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "dep-audit",
       "artifactType": "skill",
-      "contentHash": "c8413081a9b039fc6d159667c56fa8e46ab2d52d967bf43940432287afe3b464",
-      "path": ".claude/skills/stamity-dep-audit/SKILL.md"
+      "contentHash": "019dfd2df9c3d8eaffa55744cc83bed51afa6f8e045f9987f7e8bbcc8172fccf",
+      "path": ".claude/skills/st-dep-audit/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "design-system-detect",
       "artifactType": "skill",
-      "contentHash": "5322281041e354ab132da4828a7900bb32e57a7cfb6a4b40a71c2be62a3eb333",
-      "path": ".claude/skills/stamity-design-system-detect/SKILL.md"
+      "contentHash": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52",
+      "path": ".claude/skills/st-design-system-detect/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "handoff",
       "artifactType": "skill",
-      "contentHash": "98115f555fab5af462561fd1a571faae5c3c3974b25f3b6c3c2a006e7fbaf6ad",
-      "path": ".claude/skills/stamity-handoff/SKILL.md"
+      "contentHash": "63f192628d00f36dae837691adb87f3ac1d2d769e549ebc518bf7a55d0363148",
+      "path": ".claude/skills/st-handoff/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "learn",
       "artifactType": "skill",
-      "contentHash": "2aa90a09b5ed89a69aa328c8b46c103b674ab029306690d682c5419adc60a19f",
-      "path": ".claude/skills/stamity-learn/SKILL.md"
+      "contentHash": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5",
+      "path": ".claude/skills/st-learn/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "onboard",
       "artifactType": "skill",
-      "contentHash": "2e0d68791517855a5ce77c497b8fa4ed7dbbfcc4df32fee1cb6e4b54b3787b1d",
-      "path": ".claude/skills/stamity-onboard/SKILL.md"
+      "contentHash": "3310ef9e87b0298992c5cf7297d5c5816b3b96124fd21f9190763fe75fcf9c42",
+      "path": ".claude/skills/st-onboard/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "qa",
       "artifactType": "skill",
-      "contentHash": "39d5549ec799d8df3ca9fd4b3aa8cf0cd4fd4e21b85e39fe63850e18207e0148",
-      "path": ".claude/skills/stamity-qa/SKILL.md"
+      "contentHash": "8b91f27c07a436047e5672bde678e6cdd4894ede20ba0cc2a78253c1f0cd8444",
+      "path": ".claude/skills/st-qa/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "571e89dfe53a84c4bb68248aa902b1407372f1501451345334d4171c6b7c1c2f",
-      "path": ".claude/skills/stamity-verify/SKILL.md"
+      "contentHash": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb",
+      "path": ".claude/skills/st-verify/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
       "contentHash": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f",
-      "path": ".claude/skills/stamity-verify/references/enhancability.md"
+      "path": ".claude/skills/st-verify/references/enhancability.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
       "contentHash": "1c55bbc628e7dd81c593b6f0a11519b1f54b0b23b0fd24518652e9917437b8b8",
-      "path": ".claude/skills/stamity-verify/references/maintainability.md"
+      "path": ".claude/skills/st-verify/references/maintainability.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
       "contentHash": "9259bd84e7edea7b500b4208a75989318491278184ae4bee3427f8a6194da1bf",
-      "path": ".claude/skills/stamity-verify/references/performance.md"
+      "path": ".claude/skills/st-verify/references/performance.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "31a8754b71b2e77609fd65219d5e56728da43e7a684b093d1044aa8723c43836",
-      "path": ".claude/skills/stamity-verify/references/product-spec.md"
+      "contentHash": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd",
+      "path": ".claude/skills/st-verify/references/product-spec.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
       "contentHash": "1196b9341815aebc68577bc145d2e4f51895a1f47cf655b32b1e1ebe9bc3d979",
-      "path": ".claude/skills/stamity-verify/references/reliability.md"
+      "path": ".claude/skills/st-verify/references/reliability.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
       "contentHash": "a105edb8db134eda643deb1873a98ab42f98bce03c6b163b38807cc6cee73b1d",
-      "path": ".claude/skills/stamity-verify/references/scalability.md"
+      "path": ".claude/skills/st-verify/references/scalability.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
       "contentHash": "daf9429a08a2605a5e2513a3e8e0aaaa1fbcfb2d9e4a838b656c5f708f2569a6",
-      "path": ".claude/skills/stamity-verify/references/security.md"
+      "path": ".claude/skills/st-verify/references/security.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
       "contentHash": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867",
-      "path": ".claude/skills/stamity-verify/references/testability.md"
+      "path": ".claude/skills/st-verify/references/testability.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
       "contentHash": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1",
-      "path": ".claude/skills/stamity-verify/references/ui.md"
+      "path": ".claude/skills/st-verify/references/ui.md"
     },
     {
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
       "contentHash": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21",
-      "path": ".claude/skills/stamity-verify/references/ux.md"
+      "path": ".claude/skills/st-verify/references/ux.md"
     },
     {
       "adapter": "claude",
@@ -449,7 +449,7 @@
       "adapter": "claude",
       "artifactId": "charter",
       "artifactType": "infra",
-      "contentHash": "dd62e92c90332641323d9d6e04eee28b92cb2ad5ea1ef5f7644ada3ea2ef400a",
+      "contentHash": "d804ff81342ac0533125db8dc9c4a7efd115b29bf5ab003654e6b1d552f5d6e5",
       "path": "AGENTS.md",
       "stampedVersion": "1.0.0"
     },
@@ -457,7 +457,7 @@
       "adapter": "claude",
       "artifactId": "claude-md-bridge",
       "artifactType": "infra",
-      "contentHash": "68bfb77a2fa6b9481f180307c4b4d70352d5062c8dfd0882b426aa664d1efa28",
+      "contentHash": "e76c1cfecb8da11957f2706b934635e630c0081a4503972d9ce5756ae7677375",
       "path": "CLAUDE.md",
       "stampedVersion": "1.0.0"
     }

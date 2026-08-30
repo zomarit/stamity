@@ -14,7 +14,7 @@ import {
 } from "../denyscan/denyScan.ts";
 import { safeWriteFile } from "../merge/safeWrite.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../types/content.ts";
-import { CONTENT_PREFIX, STATE_DIR } from "../types/markers.ts";
+import { ENGINE_CONTENT_PREFIXES, STATE_DIR } from "../types/markers.ts";
 import { parseFrontmatter } from "./frontmatter.ts";
 
 /**
@@ -834,13 +834,18 @@ function describeViolation(violation: ContentBodyViolation): string {
  * save time rather than in {@link validateUserArtifact}: an artifact already on
  * disk is past the point where either one could help it.
  *
- * The prefix rule is the less obvious of the two. {@link CONTENT_PREFIX} names
- * the generated corpus, and the merge layer reads it off a basename as proof the
- * engine owns the file — ownership that skips the verified `.bak` a user-lane
- * overwrite otherwise takes, so re-saving such an artifact would destroy the
- * only copy of the previous version. It also does not do what an author reaches
- * for it to do: the corpus strips the prefix when it derives ids, so a prefixed
- * user id shadows nothing.
+ * The prefix rule is the less obvious of the two. {@link ENGINE_CONTENT_PREFIXES}
+ * names the generated corpus — `stamity-` for agents, rules and hook scripts,
+ * `st-` for the invocable commands and skills — and the merge layer reads either
+ * off a basename as proof the engine owns the file. That ownership skips the
+ * verified `.bak` a user-lane overwrite otherwise takes, so re-saving such an
+ * artifact would destroy the only copy of the previous version. It also does not
+ * do what an author reaches for it to do: the corpus strips the prefix when it
+ * derives ids, so a prefixed user id shadows nothing.
+ *
+ * BOTH prefixes are reserved, and the short one is the one that now matters
+ * most: `st-work` is a plausible thing for an author to type, and it is the
+ * exact name of a shipped touchpoint's emitted file.
  */
 function saveIdDefect(id: string): string | undefined {
   if (!SLUG_PATTERN.test(id)) {
@@ -849,11 +854,12 @@ function saveIdDefect(id: string): string | undefined {
       `single hyphens (for example \`review-gate\`) — the id becomes the file name.`
     );
   }
-  if (id.startsWith(CONTENT_PREFIX)) {
+  const reserved = ENGINE_CONTENT_PREFIXES.find((prefix) => id.startsWith(prefix));
+  if (reserved !== undefined) {
     return (
-      `Artifact id ${JSON.stringify(id)} starts with \`${CONTENT_PREFIX}\`, which names the ` +
+      `Artifact id ${JSON.stringify(id)} starts with \`${reserved}\`, which names the ` +
       `generated corpus: a file called that reads as engine-owned and would be overwritten ` +
-      `without a backup. Save it as ${JSON.stringify(id.slice(CONTENT_PREFIX.length))} — an id ` +
+      `without a backup. Save it as ${JSON.stringify(id.slice(reserved.length))} — an id ` +
       `that matches a bundled artifact already overrides it, prefix and all.`
     );
   }

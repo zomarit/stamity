@@ -496,7 +496,7 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       const syncAfterInstall = await fixture.run(["sync"]);
       expect(syncAfterInstall.code, syncAfterInstall.stderr).toBe(0);
       const projectedSkill = repoPath(fixture, ".claude/skills/stamity-ci-pipeline/SKILL.md");
-      const corpusSkill = repoPath(fixture, ".claude/skills/stamity-qa/SKILL.md");
+      const corpusSkill = repoPath(fixture, ".claude/skills/st-qa/SKILL.md");
       expect(await exists(repoPath(fixture, ".agents/skills"))).toBe(false);
       expect(await exists(projectedSkill), "pack skill projected after install+sync").toBe(true);
       expect(await exists(corpusSkill), "corpus skill present").toBe(true);

@@ -109,7 +109,7 @@ import {
 } from "../tools/translator.ts";
 import type { AdapterOutput } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
-import { CONTENT_PREFIX } from "../types/markers.ts";
+import { CONTENT_PREFIX, contentPrefixFor } from "../types/markers.ts";
 
 // ── Layout ───────────────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ export const CURSOR_AGENTS_DIR = ".cursor/agents";
  * Emitting into a directory no current page names would be an invented path;
  * emitting a skill that declines model invocation is the vendor's own answer
  * to "where does a project slash command live now", and it keeps the charter's
- * `/stamity-<id>` touchpoint spelling literally true on this client.
+ * `/st-<id>` touchpoint spelling literally true on this client.
  *
  * The core's `.agents/skills/` projection is the SKILL class and is untouched
  * by this: disjoint CONTENT (skill bodies there, touchpoint command bodies
@@ -525,22 +525,33 @@ export const cursorResiduePlanner: ResiduePlanner = {
   },
 };
 
-/** `reviewer` → `stamity-reviewer`: the runtime, wire-visible form of an id. */
+/**
+ * `reviewer` → `stamity-reviewer`: the runtime, wire-visible form of an AGENT or
+ * RULE id, the two classes that keep the long prefix. Commands go through
+ * {@link commandName}, which asks {@link contentPrefixFor} instead — an id the
+ * operator types is not the same contract as one the spawn guard matches.
+ */
 function prefixedId(id: string): string {
   return `${CONTENT_PREFIX}${id}`;
 }
 
 /**
- * `cmd-work` → `stamity-work`: the catalog's command namespacing removed, the
- * runtime prefix restored. It is the emitted directory name AND the skill's
- * `name`, which is what the operator types after the slash — so the charter's
- * `/stamity-work` touchpoint spelling and the file on disk agree by
- * construction rather than by convention.
+ * `cmd-work` → `st-work`: the catalog's command namespacing removed, the runtime
+ * prefix restored. It is the emitted directory name AND the skill's `name`,
+ * which is what the operator types after the slash — so the charter's
+ * `/st-work` touchpoint spelling and the file on disk agree by construction
+ * rather than by convention.
+ *
+ * The prefix comes from {@link contentPrefixFor} rather than {@link prefixedId},
+ * because this is the typed half of the surface: a corpus command takes `st-`,
+ * while a command an installed pack supplied keeps `stamity-` (its filename is
+ * hashed into a signed manifest this engine does not re-sign).
  */
 function commandName(item: CatalogItem): string {
-  return prefixedId(
-    item.id.startsWith(COMMAND_ID_PREFIX) ? item.id.slice(COMMAND_ID_PREFIX.length) : item.id,
-  );
+  const bare = item.id.startsWith(COMMAND_ID_PREFIX)
+    ? item.id.slice(COMMAND_ID_PREFIX.length)
+    : item.id;
+  return `${contentPrefixFor(item)}${bare}`;
 }
 
 // ── Rules ────────────────────────────────────────────────────────

@@ -129,7 +129,7 @@ describe("dist-binary dogfood journey (node dist/cli.js, pseudo-home)", () => {
       expect(init.stdout).toContain("stamity is ready.");
       // Ready-panel tail intact: the LAST line of the panel arrived through a
       // piped stream — stdout completeness through the real bin.
-      expect(init.stdout.trimEnd().endsWith("stamity-onboard/SKILL.md")).toBe(true);
+      expect(init.stdout.trimEnd().endsWith("st-onboard/SKILL.md")).toBe(true);
 
       expect(await exists(join(fixture.repoDir, "AGENTS.md"))).toBe(true);
       const manifestPath = join(fixture.repoDir, ...MANIFEST_REL.split("/"));

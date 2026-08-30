@@ -10,7 +10,7 @@ obsolete_when: profilers attribute budget violations to source locations well en
 # Performance audit
 
 A point-in-time investigation of one slow surface. It measures, attributes, and
-plans; the change itself goes through `/stamity-work`, which delegates it and
+plans; the change itself goes through `/st-work`, which delegates it and
 proves it against the repo's gates.
 
 ## Quick Start
@@ -105,16 +105,16 @@ it contributes. Each is a hypothesis until the after-measurement lands.
 An approach that trades a documented behaviour for speed — dropping a
 validation, weakening a security check, ignoring reduced-motion preferences —
 is not in scope here. It is a product decision, and it routes to
-`/stamity-plan`.
+`/st-plan`.
 
 ## Step 5 — Hand off
 
 The deliverable is the plan plus the measurement recipe. It leaves as:
 
-- a `/stamity-work` handoff, when the entries are a change someone can apply
+- a `/st-work` handoff, when the entries are a change someone can apply
   now, with the before-measurements attached so the after-measurements are
   comparable;
-- a `/stamity-plan` intent, when the plan implies an architectural change;
+- a `/st-plan` intent, when the plan implies an architectural change;
 - rows in a wider assessment report, when this run was invoked as part of one.
 
 The audit does not apply the optimizations itself. Applying and measuring in

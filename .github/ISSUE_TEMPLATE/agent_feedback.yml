@@ -18,10 +18,10 @@ body:
     attributes:
       label: Touchpoint
       description: >-
-        The one agent, command, skill or rule this is about — `/stamity-plan`, the `reviewer`
+        The one agent, command, skill or rule this is about — `/st-plan`, the `reviewer`
         agent, a named rule. "The setup generally" is not a touchpoint; pick the piece that
         produced the behaviour.
-      placeholder: /stamity-work, reviewer, stamity-testing rule
+      placeholder: /st-work, reviewer, stamity-testing rule
     validations:
       required: true
 

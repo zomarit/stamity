@@ -17,7 +17,7 @@
  * - `test/corpus/agents/specialists.test.ts` — each specialist agent body's
  *   `## Trigger` section against its row, both directions, so neither a pattern
  *   added here nor one left behind in a prompt passes as agreement.
- * - `test/corpus/commands/work.test.ts` — the `/stamity-work` specialist pass
+ * - `test/corpus/commands/work.test.ts` — the `/st-work` specialist pass
  *   names every id here and copies none of the patterns.
  * - `test/corpus/rules/security.test.ts` — the security floor's hand-off names
  *   a specialist this table actually carries.

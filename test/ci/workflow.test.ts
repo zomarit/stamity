@@ -925,6 +925,22 @@ describe("release.yml — the only publishing path", () => {
     );
   });
 
+  it("keeps the release artifact alive across a human approval, not just across the run", () => {
+    // `publish` sits behind the `npm-publish` environment's required-reviewer gate, so this
+    // artifact has to outlive a HUMAN approval rather than the run that produced it. At
+    // `retention-days: 1` it did not: a v1.0.0 publish failed on 2026-08-30 when the approval
+    // landed after the artifact had expired and `Download release artifacts` had nothing to
+    // fetch. Seven days covers a reviewer who approves the next working day, or over a weekend.
+    // Pinned as a number, because a value that drifts back down fails the release LATE — in the
+    // publish job, after the gates are green and the tag is already pushed.
+    const upload = stepOf(gatesSteps, "Upload release artifacts");
+    expect(upload.with?.["name"]).toBe("release-dist");
+    expect(upload.with?.["retention-days"]).toBe(7);
+    // The consumer the retention exists for, named here so a rename on either side cannot
+    // orphan the download while both steps still read as present.
+    expect(stepOf(publishSteps, "Download release artifacts").with?.["name"]).toBe("release-dist");
+  });
+
   it("generates the SBOM best-effort and records which way it went", () => {
     const sbom = runOf(gatesSteps, "Generate SBOM (CycloneDX)");
     expect(sbom).toContain("npm sbom --sbom-format cyclonedx --package-lock-only");

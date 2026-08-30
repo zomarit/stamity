@@ -136,7 +136,7 @@ import {
 } from "../tools/translator.ts";
 import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
-import { CONTENT_PREFIX } from "../types/markers.ts";
+import { contentPrefixFor } from "../types/markers.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -507,7 +507,7 @@ function buildClaudeMd(engineVersion: string): AdapterOutput {
       ? []
       : [
           "",
-          `Skills for this setup are markdown procedures under \`${CLAUDE_SKILLS_DIR}/\`. Claude Code reads them from there: it loads one when the work matches its description, and you can invoke any of them directly by name — \`/stamity-onboard\`, for example.`,
+          `Skills for this setup are markdown procedures under \`${CLAUDE_SKILLS_DIR}/\`. Claude Code reads them from there: it loads one when the work matches its description, and you can invoke any of them directly by name — \`/st-onboard\`, for example.`,
         ]),
   ].join("\n");
   return {
@@ -819,18 +819,25 @@ function mcpRow(emission: McpEmission): AdapterOutput {
 
 /**
  * The emitted filename stem and, for agents, the runtime id: the artifact's id
- * with the catalog's command namespacing removed and the `stamity-` filename
- * prefix restored. A command is invoked by its file name, and the tool-policy
- * roster keys on the same prefixed form as an agent's frontmatter `name:`, so
- * the typed command, the emitted `name:`, and the guard's governed namespace
- * all agree by construction.
+ * with the catalog's command namespacing removed and the filename prefix its
+ * class earns restored. A command is invoked by its file name, and the
+ * tool-policy roster keys on the same prefixed form as an agent's frontmatter
+ * `name:`, so the typed command, the emitted `name:`, and the guard's governed
+ * namespace all agree by construction.
+ *
+ * Which prefix that is belongs to {@link contentPrefixFor}, not to this
+ * function: a command lands on `st-`, an agent or a rule on `stamity-`, and a
+ * pack-supplied artifact keeps `stamity-` whatever its class. Deciding it here
+ * is how the four adapters drift out of agreement with each other and with the
+ * ownership gate.
  */
 function emittedId(item: CatalogItem): string {
   const bare =
     item.type === "command" && item.id.startsWith(COMMAND_ID_PREFIX)
       ? item.id.slice(COMMAND_ID_PREFIX.length)
       : item.id;
-  return bare.startsWith(CONTENT_PREFIX) ? bare : `${CONTENT_PREFIX}${bare}`;
+  const prefix = contentPrefixFor(item);
+  return bare.startsWith(prefix) ? bare : `${prefix}${bare}`;
 }
 
 /** Ledger attribution — every row this adapter returns is owned by `claude`. */

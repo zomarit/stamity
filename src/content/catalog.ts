@@ -7,7 +7,7 @@ import { requireEnum, requireString, requireStringArray } from "../config/parse.
 import { CONTENT_CLASSES, type ContentClass, type RulePrecedence } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import { CONTENT_PREFIX } from "../types/markers.ts";
+import { stripEngineContentPrefix } from "../types/markers.ts";
 import { resolveBundledContentRoot } from "./contentRoot.ts";
 import { extractToolsFrontmatter, parseFrontmatter } from "./frontmatter.ts";
 // Type-only: the skipped-entry vocabulary has one home, and it is the module
@@ -883,10 +883,13 @@ function basename(name: string): string {
 }
 
 /**
- * The id a filename implies. The `stamity-` prefix is a filename convention that
- * namespaces generated files inside a user's repo; it is not part of the
- * artifact's identity, so it comes off before the comparison with the declared
- * id.
+ * The id a filename implies. The engine's filename prefixes — `stamity-` on
+ * agents and rules, `st-` on commands and skills — are a convention that
+ * namespaces generated files inside a user's repo; neither is part of the
+ * artifact's identity, so whichever one is present comes off before the
+ * comparison with the declared id. Both are stripped by ONE rule rather than by
+ * a class switch: a filename is walked before its class is settled, and the two
+ * prefixes are reserved against user ids either way.
  *
  * Exported because the id a file implies is not this walk's private business:
  * the pack install-time collision gate has to derive the ids a pack WOULD
@@ -895,5 +898,5 @@ function basename(name: string): string {
  * `catalogIdOf`). One rule, one home.
  */
 export function slugOf(name: string): string {
-  return name.startsWith(CONTENT_PREFIX) ? name.slice(CONTENT_PREFIX.length) : name;
+  return stripEngineContentPrefix(name);
 }

@@ -82,6 +82,31 @@
 // `sync`, not through the plugin. And `content/charter/` is not a plugin
 // component class anywhere, so the charter is absent from all four manifests.
 //
+// ONE BRAND ASSET, ONE SURFACE, AND IT IS NOT CALLED `icon`. The repository
+// ships `assets/logo.svg`, and the obvious field name for it is documented by
+// NONE of the four schemas. Checked one at a time, against each manifest's own
+// declared schema (all accessed 2026-08-30):
+//
+//   .claude-plugin/plugin.json      no `icon`, no `logo`. The schemastore
+//     schema this file names in its own `$schema` is `additionalProperties:
+//     false`, so either key makes the manifest fail the schema it declares.
+//   .claude-plugin/marketplace.json no `icon`, no `logo` — neither at the
+//     marketplace root nor on a `plugins[]` entry. A free-form `metadata`
+//     object exists, but Claude Code states it does not read it, so putting the
+//     asset there would be decoration, not a surface.
+//   plugin.json                     no `icon`, no `logo`, and Agent Plugins
+//     1.0.0 is `additionalProperties: false` as well.
+//   .cursor-plugin/plugin.json      `logo` — "relative path to a logo file in
+//     the repo (e.g. `assets/logo.svg`), or an absolute URL", resolved to a raw
+//     content URL at the repository and commit. This is the only surface that
+//     documents a field for the asset, so it is the only one that carries it.
+//
+// The value therefore carries NO `./` prefix: that rooting is the component-path
+// contract, and Cursor's own example for this field spells it bare. The file's
+// presence is checked before anything is rendered, because a logo path that
+// resolves to nothing is a 404 on every plugin listing rather than a local
+// annoyance.
+//
 // TWO TREES, TWO COMPONENT PATHS. The git checkout keeps the corpus at
 // `content/`; the published npm tarball keeps it at `dist/content/`, because
 // `package.json`'s `files` allowlist ships `dist` alone. The marketplace entry
@@ -103,7 +128,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -171,10 +196,27 @@ for (let i = 0; i < args.length; i += 1) {
 // repository move — or a drifted pin — fails the run instead of shipping a
 // publisher nobody chose.
 
-const PUBLISHER = 'Zomarit'
+const PUBLISHER = 'zomarit'
 
 /** Reverse-domain namespace for the Agent Plugins `extensions` key. */
 const EXTENSION_HOST = 'com.github'
+
+/**
+ * The brand asset, repo-relative and unprefixed — see ONE BRAND ASSET in this
+ * file's header for which schema documents the field, which does not, and why
+ * the spelling is `logo` rather than `icon`.
+ */
+const LOGO_PATH = 'assets/logo.svg'
+
+if (!existsSync(resolve(ROOT, LOGO_PATH))) {
+  fail(
+    `The brand asset ${LOGO_PATH} is not in the tree, so .cursor-plugin/plugin.json would ` +
+      'declare a logo nothing resolves. Cursor turns a relative logo path into a raw content ' +
+      'URL at the published repository and commit, so an asset that is missing — or present but ' +
+      'uncommitted — is a 404 on the listing rather than a broken local path. Commit the file ' +
+      'at that path, or remove the field from the Cursor manifest below.',
+  )
+}
 
 // ── package.json projection ──────────────────────────────────────
 
@@ -417,7 +459,11 @@ const marketplace = {
   ],
 }
 
-/** Cursor: the only surface of the three that can address the corpus's rules. */
+/**
+ * Cursor: the only surface of the three that can address the corpus's rules,
+ * and the only one of the four whose schema documents a field for the brand
+ * asset (`logo`, not `icon` — see ONE BRAND ASSET in this file's header).
+ */
 const cursorPlugin = {
   name: pluginName,
   version,
@@ -427,6 +473,7 @@ const cursorPlugin = {
   repository,
   license,
   keywords,
+  logo: LOGO_PATH,
   agents: checkoutPath('agent'),
   commands: checkoutPath('command'),
   rules: checkoutPath('rule'),

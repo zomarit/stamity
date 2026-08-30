@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or
      loses a regeneration command, or either Node floor moves. `test/docsPages.test.ts` asserts
      the gate steps and the regeneration commands against this page. -->
@@ -11,7 +11,7 @@ in CI on every pull request, and a merge needs all of them green.
 One person maintains this repository, and the branch protection says so candidly —
 **0 required approvals**. A rubber-stamp approval from the only maintainer would add a click and
 no scrutiny, so the review that counts is mechanical — the gate — plus a read. External pull
-requests get that read through the product's own review command, `/stamity-pr-resolve`: the
+requests get that read through the product's own review command, `/st-pr-resolve`: the
 setup this repository generates is the setup used to review changes to it. If that command
 reviews your PR badly, say so in the thread — a weak review is a defect in the corpus, and it
 gets fixed there rather than worked around.

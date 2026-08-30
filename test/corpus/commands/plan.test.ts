@@ -17,7 +17,7 @@ import {
 } from "../harness.ts";
 
 /**
- * `/stamity-plan` — the intent-routing planner, one command absorbing the
+ * `/st-plan` — the intent-routing planner, one command absorbing the
  * predecessor's seven plan-family commands. The suite binds what the design
  * fixes rather than how the prose reads: the command-class frontmatter contract
  * (through the shared harness, so a contract change lands in one place), the
@@ -34,7 +34,7 @@ import {
  */
 
 /** The artifact under test, addressed by its corpus-relative path. */
-const RELATIVE_PATH = "commands/stamity-plan.md";
+const RELATIVE_PATH = "commands/st-plan.md";
 
 /** Command body cap (plan-family units share the 500-line command ceiling). */
 const BODY_MAX_LINES = 500;
@@ -100,7 +100,7 @@ beforeAll(async () => {
   plan = corpusFileOf(RELATIVE_PATH, await readFile(join(CORPUS_ROOT, RELATIVE_PATH), "utf8"));
 });
 
-describe("/stamity-plan — frontmatter contract", () => {
+describe("/st-plan — frontmatter contract", () => {
   it("declares a bare id agreeing with its filename, the command type, and a planning primary tag", () => {
     expect(frontmatterField(plan.parsed, "id")).toBe("plan");
     expect(frontmatterField(plan.parsed, "id")).toBe(filenameSlug(RELATIVE_PATH));
@@ -143,7 +143,7 @@ describe("/stamity-plan — frontmatter contract", () => {
   });
 });
 
-describe("/stamity-plan — corpus invariants", () => {
+describe("/st-plan — corpus invariants", () => {
   it("stays within the command body cap", () => {
     expect(() => assertLineCap(plan, BODY_MAX_LINES)).not.toThrow();
   });
@@ -163,7 +163,7 @@ describe("/stamity-plan — corpus invariants", () => {
   });
 });
 
-describe("/stamity-plan — boundary against work", () => {
+describe("/st-plan — boundary against work", () => {
   it("separates the persisted artifact from work's in-flow, session-scoped Plan phase", () => {
     const boundary = sectionOf(plan.parsed.body, "## Boundary vs work");
 
@@ -171,7 +171,7 @@ describe("/stamity-plan — boundary against work", () => {
     expect(boundary).toMatch(phrase("session-scoped"));
     expect(boundary).toMatch(phrase("persisted"));
     expect(boundary).toContain("docs/plans/");
-    expect(boundary).toContain("/stamity-work");
+    expect(boundary).toContain("/st-work");
   });
 
   it("states the freshness guard work applies when it consumes a persisted plan", () => {
@@ -226,11 +226,11 @@ describe("/stamity-plan — boundary against work", () => {
 
     expect(boundary).toMatch(phrase("the run ends at the artifact"));
     expect(returns).toMatch(phrase("not automatic"));
-    expect(returns).toContain("/stamity-work docs/plans/<file>");
+    expect(returns).toContain("/st-work docs/plans/<file>");
   });
 });
 
-describe("/stamity-plan — intent routing", () => {
+describe("/st-plan — intent routing", () => {
   it("carries all six intent sections exactly once, in routing order", () => {
     const body = plan.parsed.body;
 
@@ -284,7 +284,7 @@ describe("/stamity-plan — intent routing", () => {
   });
 });
 
-describe("/stamity-plan — intent sections", () => {
+describe("/st-plan — intent sections", () => {
   it("feature: probes dimensions, aligns to conventions, and points model work at the evals rule", () => {
     const feature = sectionOf(plan.parsed.body, "## Feature");
 
@@ -301,8 +301,8 @@ describe("/stamity-plan — intent sections", () => {
 
     expect(bug).toMatch(phrase("report, do not fix"));
     expect(bug).toMatch(phrase("changes no product file"));
-    expect(bug).toContain("/stamity-debug");
-    expect(bug).toContain("/stamity-work");
+    expect(bug).toContain("/st-debug");
+    expect(bug).toContain("/st-work");
   });
 
   it("bug: ranks hypotheses with disconfirming observations and names an introduction window", () => {
@@ -362,10 +362,10 @@ describe("/stamity-plan — intent sections", () => {
     expect(roadmap).toMatch(phrase("stage-adaptive prioritization"));
   });
 
-  it("roadmap: hands the persisted artifact to /stamity-board fill as a referenced-file source", () => {
+  it("roadmap: hands the persisted artifact to /st-board fill as a referenced-file source", () => {
     const roadmap = sectionOf(plan.parsed.body, "## Roadmap");
 
-    expect(roadmap).toContain("/stamity-board fill");
+    expect(roadmap).toContain("/st-board fill");
     expect(roadmap).toMatch(phrase("referenced-file source"));
     // Board owns status; the repo-side file owns content — and plan writes neither board item.
     expect(roadmap).toMatch(phrase("the board owns status"));
@@ -401,7 +401,7 @@ describe("/stamity-plan — intent sections", () => {
   });
 });
 
-describe("/stamity-plan — plan-lint gate", () => {
+describe("/st-plan — plan-lint gate", () => {
   it("names the three checks verbatim as one deterministic pass on every intent", () => {
     const gate = sectionOf(plan.parsed.body, "## Plan-lint gate");
 
@@ -432,7 +432,7 @@ describe("/stamity-plan — plan-lint gate", () => {
   });
 });
 
-describe("/stamity-plan — plan artifact shape", () => {
+describe("/st-plan — plan artifact shape", () => {
   it("fixes the path, the freshness stamp, and the reads set in the artifact head", () => {
     const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
 
@@ -501,10 +501,10 @@ describe("/stamity-plan — plan artifact shape", () => {
   });
 });
 
-describe("/stamity-plan — side effects", () => {
+describe("/st-plan — side effects", () => {
   it("declares the two side effects the learn skill already promises on this side", async () => {
     const effects = sectionOf(plan.parsed.body, "## Side effects");
-    const learn = await readFile(join(CORPUS_ROOT, "skills/stamity-learn/SKILL.md"), "utf8");
+    const learn = await readFile(join(CORPUS_ROOT, "skills/st-learn/SKILL.md"), "utf8");
 
     // The learn skill tells the operator that work AND plan capture
     // their own learnings, while this command had no Side effects section and
@@ -529,7 +529,7 @@ describe("/stamity-plan — side effects", () => {
   });
 });
 
-describe("/stamity-plan — return contract", () => {
+describe("/st-plan — return contract", () => {
   it("closes on one of the four terminal states with severity-graded risks", () => {
     const returns = sectionOf(plan.parsed.body, "## Return contract");
     const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
@@ -556,7 +556,7 @@ describe("/stamity-plan — return contract", () => {
     const returns = sectionOf(plan.parsed.body, "## Return contract");
 
     expect(returns).toContain(".stamity/inbox.md");
-    expect(returns).toContain("/stamity-board fill --source docs/plans/<file>");
+    expect(returns).toContain("/st-board fill --source docs/plans/<file>");
   });
 
   it("derives the next step from this run's own state rather than a fixed menu", () => {
@@ -571,15 +571,15 @@ describe("/stamity-plan — return contract", () => {
     expect(returns).toMatch(phrase("One action, named, with the state that chose it"));
   });
 
-  it("passes /stamity-board no flag that board does not define", async () => {
+  it("passes /st-board no flag that board does not define", async () => {
     const returns = sectionOf(plan.parsed.body, "## Return contract");
-    const boardBody = await readFile(join(CORPUS_ROOT, "commands/stamity-board.md"), "utf8");
+    const boardBody = await readFile(join(CORPUS_ROOT, "commands/st-board.md"), "utf8");
 
     // `--source` had exactly one occurrence in the whole corpus — this
     // invocation — while board documented intake as prose with no flag grammar.
     // Every flag handed to another touchpoint has to be defined by that
     // touchpoint, or the instruction is unrunnable.
-    const flags = [...returns.matchAll(/\/stamity-board[^\n`]*?(--[a-z][a-z-]*)/g)].map(
+    const flags = [...returns.matchAll(/\/st-board[^\n`]*?(--[a-z][a-z-]*)/g)].map(
       (match) => match[1] ?? "",
     );
     expect(flags).toContain("--source");

@@ -37,7 +37,7 @@ import {
  * caps) run against the raw body.
  */
 
-/** The nine touchpoints: every `/stamity-*` mention in these bodies must resolve to one. */
+/** The nine touchpoints: every `/st-*` mention in these bodies must resolve to one. */
 const COMMAND_IDS: readonly string[] = [
   "spec",
   "plan",
@@ -82,27 +82,27 @@ interface AxisReference {
 const REFERENCES: readonly AxisReference[] = [
   {
     id: "scalability",
-    relPath: "skills/stamity-verify/references/scalability.md",
+    relPath: "skills/st-verify/references/scalability.md",
     prefix: "scale-",
   },
   {
     id: "performance",
-    relPath: "skills/stamity-verify/references/performance.md",
+    relPath: "skills/st-verify/references/performance.md",
     prefix: "perf-",
   },
   {
     id: "maintainability",
-    relPath: "skills/stamity-verify/references/maintainability.md",
+    relPath: "skills/st-verify/references/maintainability.md",
     prefix: "maint-",
   },
   {
     id: "enhancability",
-    relPath: "skills/stamity-verify/references/enhancability.md",
+    relPath: "skills/st-verify/references/enhancability.md",
     prefix: "enh-",
   },
   {
     id: "product-spec",
-    relPath: "skills/stamity-verify/references/product-spec.md",
+    relPath: "skills/st-verify/references/product-spec.md",
     prefix: "spec-",
   },
 ];
@@ -122,19 +122,19 @@ interface ToolSkill {
 const SKILLS: readonly ToolSkill[] = [
   {
     id: "browser-evidence",
-    relPath: "skills/stamity-browser-evidence/SKILL.md",
+    relPath: "skills/st-browser-evidence/SKILL.md",
     tags: ["review"],
     distinctive: ["browser", "screenshot", "accessibility"],
   },
   {
     id: "design-system-detect",
-    relPath: "skills/stamity-design-system-detect/SKILL.md",
+    relPath: "skills/st-design-system-detect/SKILL.md",
     tags: ["maintenance"],
     distinctive: ["design", "tokens", "theming", "inventory"],
   },
   {
     id: "dep-audit",
-    relPath: "skills/stamity-dep-audit/SKILL.md",
+    relPath: "skills/st-dep-audit/SKILL.md",
     tags: ["maintenance", "devops"],
     distinctive: ["dependency", "advisories", "licenses"],
   },
@@ -148,7 +148,7 @@ const SKILLS: readonly ToolSkill[] = [
  */
 const VERIFY_DISTINCTIVE: readonly string[] = ["axis", "gate", "judgment"];
 
-const VERIFY_SKILL_PATH = "skills/stamity-verify/SKILL.md";
+const VERIFY_SKILL_PATH = "skills/st-verify/SKILL.md";
 
 /** One walk for the whole suite; the corpus does not change under it. */
 const corpus = walkAllMarkdown();
@@ -295,12 +295,12 @@ describe("tool skills — contract and anatomy", () => {
 
   it.each(SKILLS)("$id mentions only touchpoints that exist", async (skill) => {
     const file = await load(skill.relPath);
-    const mentioned = [...file.parsed.body.matchAll(/\/stamity-([a-z][a-z-]*)/g)].map(
+    const mentioned = [...file.parsed.body.matchAll(/\/st-([a-z][a-z-]*)/g)].map(
       (match) => match[1],
     );
 
     for (const id of new Set(mentioned)) {
-      expect(COMMAND_IDS, `${file.relPath}: /stamity-${id} is not a touchpoint`).toContain(id);
+      expect(COMMAND_IDS, `${file.relPath}: /st-${id} is not a touchpoint`).toContain(id);
     }
   });
 });
@@ -346,7 +346,7 @@ describe("tool skills — anti-shadowing on the trigger surface", () => {
 
 describe("performance axis — advisory unless budgets", () => {
   it("states the advisory posture and what makes a finding fail", async () => {
-    const text = flow(await load("skills/stamity-verify/references/performance.md"));
+    const text = flow(await load("skills/st-verify/references/performance.md"));
 
     expect(text).toMatch(/advisory unless budgets/i);
     expect(text).toMatch(/recorded as evidence, never a merge block/i);
@@ -354,7 +354,7 @@ describe("performance axis — advisory unless budgets", () => {
   });
 
   it("names the absent budget classes when the repo declares none", async () => {
-    const text = flow(await load("skills/stamity-verify/references/performance.md"));
+    const text = flow(await load("skills/st-verify/references/performance.md"));
 
     // Edge case: zero declared budgets — every row advisory, and the artifact
     // records which budget classes were missing rather than reporting a pass.
@@ -366,7 +366,7 @@ describe("performance axis — advisory unless budgets", () => {
 
   it("gates the axis on the budget-declaration check", async () => {
     const runnable = section(
-      await load("skills/stamity-verify/references/performance.md"),
+      await load("skills/st-verify/references/performance.md"),
       "Runnable checks",
     ).replace(/\s+/g, " ");
 
@@ -375,7 +375,7 @@ describe("performance axis — advisory unless budgets", () => {
   });
 
   it("keeps the gating row from disabling itself under the zero-budget rule", async () => {
-    const file = await load("skills/stamity-verify/references/performance.md");
+    const file = await load("skills/st-verify/references/performance.md");
     const text = flow(file);
 
     // "With zero declared budgets every row below reports `skipped`" swept the
@@ -393,7 +393,7 @@ describe("performance axis — advisory unless budgets", () => {
   });
 
   it("gives every performance row an explicit zero-budget disposition", async () => {
-    const file = await load("skills/stamity-verify/references/performance.md");
+    const file = await load("skills/st-verify/references/performance.md");
     const runnableText = section(file, "Runnable checks");
     const judgmentText = section(file, "Judgment checks");
 
@@ -417,7 +417,7 @@ describe("performance axis — advisory unless budgets", () => {
   });
 
   it("reserves skipped for an expected check and not-applicable for an absent subject", async () => {
-    const text = flow(await load("skills/stamity-verify/references/performance.md"));
+    const text = flow(await load("skills/st-verify/references/performance.md"));
 
     // The skill's own definitions: `skipped` is a check that was expected to run
     // and could not; an absent subject is `not-applicable` with the detection
@@ -432,7 +432,7 @@ describe("performance axis — advisory unless budgets", () => {
 
 describe("enhancability axis — the migrations floor it gates", () => {
   it("names all four phases the migrations rule names, and one reversal per phase", async () => {
-    const axis = await load("skills/stamity-verify/references/enhancability.md");
+    const axis = await load("skills/st-verify/references/enhancability.md");
     const rule = await load("rules/stamity-migrations.md");
     const migrationRow =
       section(axis, "Runnable checks")
@@ -461,7 +461,7 @@ describe("enhancability axis — the migrations floor it gates", () => {
 
 describe("product-spec axis — spec tree as the subject", () => {
   it("binds its checks to the spec tree of record", async () => {
-    const file = await load("skills/stamity-verify/references/product-spec.md");
+    const file = await load("skills/st-verify/references/product-spec.md");
     const text = flow(file);
 
     expect(text).toContain("docs/specs/");
@@ -471,12 +471,12 @@ describe("product-spec axis — spec tree as the subject", () => {
   });
 
   it("reports a missing spec tree as not-applicable, not as a failure", async () => {
-    const text = flow(await load("skills/stamity-verify/references/product-spec.md"));
+    const text = flow(await load("skills/st-verify/references/product-spec.md"));
 
     // Edge case: no docs/specs/ at all — a starting condition, and the next step
     // is the spec touchpoint rather than a finding against this change.
     expect(text).toMatch(/a repo with no `docs\/specs\/` directory reports every row below as not-applicable/i);
-    expect(text).toContain("/stamity-spec");
+    expect(text).toContain("/st-spec");
     expect(text).toContain("`create`");
     expect(text).toMatch(/a starting condition, not a failure of this axis/i);
   });
@@ -484,7 +484,7 @@ describe("product-spec axis — spec tree as the subject", () => {
 
 describe("browser-evidence — harness, not gate", () => {
   it("stops and reports on a missing harness without an install instruction", async () => {
-    const file = await load("skills/stamity-browser-evidence/SKILL.md");
+    const file = await load("skills/st-browser-evidence/SKILL.md");
     const text = flow(file);
 
     expect(text).toMatch(/a missing harness stops the run/i);
@@ -499,7 +499,7 @@ describe("browser-evidence — harness, not gate", () => {
   });
 
   it("gives every preflight probe a disposition and records a blocked one in the bundle", async () => {
-    const file = await load("skills/stamity-browser-evidence/SKILL.md");
+    const file = await load("skills/st-browser-evidence/SKILL.md");
     const preflight = section(file, "Step 1 — Preflight");
     const rows = preflight
       .split("\n")
@@ -537,7 +537,7 @@ describe("browser-evidence — harness, not gate", () => {
   });
 
   it("derives scenarios from acceptance criteria and refuses unanchored ones", async () => {
-    const text = flow(await load("skills/stamity-browser-evidence/SKILL.md"));
+    const text = flow(await load("skills/st-browser-evidence/SKILL.md"));
 
     expect(text).toContain("docs/specs/");
     expect(text).toMatch(/one scenario per given\/when\/then criterion/i);
@@ -546,7 +546,7 @@ describe("browser-evidence — harness, not gate", () => {
   });
 
   it("reads failures only and keeps bulk output on disk", async () => {
-    const text = flow(await load("skills/stamity-browser-evidence/SKILL.md"));
+    const text = flow(await load("skills/st-browser-evidence/SKILL.md"));
 
     expect(text).toMatch(/run against the built artifact rather than a development server/i);
     expect(text).toMatch(/on a pass, read the summary count and nothing else/i);
@@ -554,7 +554,7 @@ describe("browser-evidence — harness, not gate", () => {
   });
 
   it("reports a repo with no web surface as not-applicable, never a fabricated capture", async () => {
-    const file = await load("skills/stamity-browser-evidence/SKILL.md");
+    const file = await load("skills/st-browser-evidence/SKILL.md");
     const text = flow(file);
 
     // Edge case: nothing to drive. The probes are the evidence, and the bundle is
@@ -570,7 +570,7 @@ describe("browser-evidence — harness, not gate", () => {
 
   it("writes one sha-keyed bundle and hands interpretation back", async () => {
     const output = section(
-      await load("skills/stamity-browser-evidence/SKILL.md"),
+      await load("skills/st-browser-evidence/SKILL.md"),
       "Output artifact",
     ).replace(/\s+/g, " ");
 
@@ -578,7 +578,7 @@ describe("browser-evidence — harness, not gate", () => {
     expect(output).toMatch(/`-dirty` suffix on an unclean worktree/i);
     expect(output).toContain("`probes[]`");
     expect(output).toMatch(/two runs on one sha overwrite the same path/i);
-    expect(flow(await load("skills/stamity-browser-evidence/SKILL.md"))).toMatch(
+    expect(flow(await load("skills/st-browser-evidence/SKILL.md"))).toMatch(
       /a harness, not a gate/i,
     );
   });
@@ -586,7 +586,7 @@ describe("browser-evidence — harness, not gate", () => {
 
 describe("design-system-detect — detection only", () => {
   it("declares itself read-only and refuses generation", async () => {
-    const text = flow(await load("skills/stamity-design-system-detect/SKILL.md"));
+    const text = flow(await load("skills/st-design-system-detect/SKILL.md"));
 
     expect(text).toMatch(/read-only detection/i);
     expect(text).toMatch(/it writes no tokens, no components, and no themes/i);
@@ -595,7 +595,7 @@ describe("design-system-detect — detection only", () => {
 
   it("lists three competing token sources, flags the conflict, and picks none", async () => {
     const conflict = section(
-      await load("skills/stamity-design-system-detect/SKILL.md"),
+      await load("skills/st-design-system-detect/SKILL.md"),
       "Competing token sources",
     ).replace(/\s+/g, " ");
 
@@ -608,7 +608,7 @@ describe("design-system-detect — detection only", () => {
   });
 
   it("states one overlap-count rule instead of two answers for the multi-source case", async () => {
-    const file = await load("skills/stamity-design-system-detect/SKILL.md");
+    const file = await load("skills/st-design-system-detect/SKILL.md");
     const conflict = section(file, "Competing token sources").replace(/\s+/g, " ");
     const step2 = section(file, "Step 2 — Token source").replace(/\s+/g, " ");
 
@@ -628,7 +628,7 @@ describe("design-system-detect — detection only", () => {
   });
 
   it("lists the blocked verdict in the Step 5 table, not only seventeen lines later", async () => {
-    const file = await load("skills/stamity-design-system-detect/SKILL.md");
+    const file = await load("skills/st-design-system-detect/SKILL.md");
     const verdicts = section(file, "Step 5 — Emit the inventory")
       .split("\n")
       .filter((line) => line.startsWith("|"))
@@ -644,7 +644,7 @@ describe("design-system-detect — detection only", () => {
   });
 
   it("separates a negative probe from an absent probe", async () => {
-    const text = flow(await load("skills/stamity-design-system-detect/SKILL.md"));
+    const text = flow(await load("skills/st-design-system-detect/SKILL.md"));
 
     expect(text).toMatch(/no dependency manifest does not mean no design system/i);
     expect(text).toMatch(/looked and found nothing.*did not look/i);
@@ -652,7 +652,7 @@ describe("design-system-detect — detection only", () => {
 
   it("emits one regenerated inventory at a stable path with a verdict", async () => {
     const output = section(
-      await load("skills/stamity-design-system-detect/SKILL.md"),
+      await load("skills/st-design-system-detect/SKILL.md"),
       "Output artifact",
     ).replace(/\s+/g, " ");
 
@@ -665,16 +665,16 @@ describe("design-system-detect — detection only", () => {
 
 describe("dep-audit — report-only", () => {
   it("states report-only and routes action to the work touchpoint", async () => {
-    const text = flow(await load("skills/stamity-dep-audit/SKILL.md"));
+    const text = flow(await load("skills/st-dep-audit/SKILL.md"));
 
     expect(text).toMatch(/report-only\. it reads the dependency graph and reports risk/i);
     expect(text).toMatch(/it edits no manifest, no lockfile, and no source file/i);
-    expect(text).toContain("/stamity-work");
+    expect(text).toContain("/st-work");
     expect(text).toMatch(/a dependency change is a code change/i);
   });
 
   it("audits the lockfile rather than the declared ranges", async () => {
-    const text = flow(await load("skills/stamity-dep-audit/SKILL.md"));
+    const text = flow(await load("skills/st-dep-audit/SKILL.md"));
 
     expect(text).toMatch(/the lockfile is the subject/i);
     expect(text).toMatch(/shortest path from a direct dependency/i);
@@ -682,7 +682,7 @@ describe("dep-audit — report-only", () => {
   });
 
   it("reports an unreachable advisory source as a gap, not a clean scan", async () => {
-    const text = flow(await load("skills/stamity-dep-audit/SKILL.md"));
+    const text = flow(await load("skills/st-dep-audit/SKILL.md"));
 
     // Edge case: a source that could not be queried. Marking the run partial is
     // what keeps an unrun scan from reading as a clean one.
@@ -692,7 +692,7 @@ describe("dep-audit — report-only", () => {
   });
 
   it("classifies update risk and hands breaking-change detail to research", async () => {
-    const text = flow(await load("skills/stamity-dep-audit/SKILL.md"));
+    const text = flow(await load("skills/st-dep-audit/SKILL.md"));
 
     for (const klass of ["patch", "minor", "major", "pinned-back", "unmaintained"]) {
       expect(text).toContain(`| ${klass} |`);
@@ -702,14 +702,14 @@ describe("dep-audit — report-only", () => {
   });
 
   it("flags licences without deciding policy", async () => {
-    const licences = section(await load("skills/stamity-dep-audit/SKILL.md"), "Step 3 — Licences");
+    const licences = section(await load("skills/st-dep-audit/SKILL.md"), "Step 3 — Licences");
 
     expect(licences).toMatch(/packages declaring no licence at all/i);
     expect(licences).toMatch(/the skill flags; the operator decides/i);
   });
 
   it("flags only the licence classes a report-only run can populate", async () => {
-    const file = await load("skills/stamity-dep-audit/SKILL.md");
+    const file = await load("skills/st-dep-audit/SKILL.md");
     const licences = section(file, "Step 3 — Licences");
     const classes = licences
       .split("\n")

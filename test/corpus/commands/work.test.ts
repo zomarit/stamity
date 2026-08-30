@@ -20,7 +20,7 @@ import {
 } from "../harness.ts";
 
 /**
- * Corpus invariants for `/stamity-work`, the core workflow command. The suite
+ * Corpus invariants for `/st-work`, the core workflow command. The suite
  * binds the shipped artifact to its design contract: the frontmatter head and
  * spawn roster, the phase skeleton, the engine-lockstepped review-loop cap,
  * the dispatch-contract clauses, the verbatim testing-philosophy anchors, and
@@ -33,7 +33,7 @@ import {
  * prose phrases, so re-wrapping a paragraph is not a false failure.
  */
 
-const REL_PATH = "commands/stamity-work.md";
+const REL_PATH = "commands/st-work.md";
 
 /**
  * The work-pipeline slice of the agent roster — the only roles `spawns:` may name.
@@ -67,7 +67,7 @@ const BODY_LINE_CAP = 500;
 
 /** The section skeleton, in reading order; extra subheadings may appear between rows. */
 const SKELETON = [
-  "# /stamity-work",
+  "# /st-work",
   "## Phase 0 — Frame",
   "## Phase 1 — Understand",
   "## Phase 2 — Plan",
@@ -86,10 +86,10 @@ const SKELETON = [
 ] as const;
 
 /** The plan artifact: owner of the intake contract this command cites. */
-const PLAN_PATH = "commands/stamity-plan.md";
+const PLAN_PATH = "commands/st-plan.md";
 
 /** The board command: owner of the deferral-inbox census this command cites. */
-const BOARD_PATH = "commands/stamity-board.md";
+const BOARD_PATH = "commands/st-board.md";
 
 /** The census rule the Phase 2 → Phase 3 step runs. */
 const CENSUS_RULE_PATH = "rules/stamity-contract-census.md";
@@ -152,7 +152,7 @@ function collapse(text: string): string {
  */
 function planHeadKeys(planBody: string): string[] {
   const shape = planBody.split(/^(?=## )/m).find((block) => block.startsWith("## Plan artifact shape\n"));
-  if (shape === undefined) throw new Error("stamity-plan.md ships no `## Plan artifact shape`");
+  if (shape === undefined) throw new Error("st-plan.md ships no `## Plan artifact shape`");
   const fence = /```[^\n]*\n([\s\S]*?)```/.exec(shape)?.[1];
   if (fence === undefined) throw new Error("`## Plan artifact shape` ships no head fence");
   return [...fence.matchAll(/^([a-z][a-z0-9_]*):/gm)].map((match) => match[1] ?? "");
@@ -240,7 +240,7 @@ function ladderViolations(dials: string): string[] {
   return problems;
 }
 
-describe("/stamity-work — frontmatter contract", () => {
+describe("/st-work — frontmatter contract", () => {
   it("carries the command identity head", async () => {
     const file = await workFile;
     expect(frontmatterField(file.parsed, "id")).toBe("work");
@@ -294,7 +294,7 @@ describe("/stamity-work — frontmatter contract", () => {
   });
 });
 
-describe("/stamity-work — body skeleton", () => {
+describe("/st-work — body skeleton", () => {
   it("keeps every skeleton heading present, once, in order", async () => {
     const headings = (await body())
       .split("\n")
@@ -316,7 +316,7 @@ describe("/stamity-work — body skeleton", () => {
   });
 });
 
-describe("/stamity-work — Frame and Plan", () => {
+describe("/st-work — Frame and Plan", () => {
   it("reads the deferral inbox at Frame and surfaces touched-file overlap", async () => {
     const frame = collapse(section(await body(), "## Phase 0 — Frame"));
     expect(frame).toContain("deferral inbox");
@@ -334,13 +334,13 @@ describe("/stamity-work — Frame and Plan", () => {
     // spell no number. A citation cannot go stale against its owner; a restated
     // count can, and did — Frame said two readers while the census said three.
     expect(frame).toContain("`## Deferral inbox`");
-    expect(frame).toContain("/stamity-board");
+    expect(frame).toContain("/st-board");
     expect(boardBody).toMatch(/^## Deferral inbox$/m);
 
     // The cross-file half: the citation only holds while the cited census names
-    // this reader. Board dropping `/stamity-work` from it fails here, not in a
+    // this reader. Board dropping `/st-work` from it fails here, not in a
     // reader's head six months later.
-    expect(collapse(section(boardBody, "## Deferral inbox"))).toContain("`/stamity-work`");
+    expect(collapse(section(boardBody, "## Deferral inbox"))).toContain("`/st-work`");
 
     // No count on this side, in any phase — `reader` has one subject in this
     // artifact, so the scan is whole-body; the writer half is Frame-scoped
@@ -376,7 +376,7 @@ describe("/stamity-work — Frame and Plan", () => {
     // review file for it.
     expect(plan).toContain("plans in-flow");
     expect(plan).toContain("persisted nowhere");
-    expect(plan).toContain("belongs to `/stamity-plan`");
+    expect(plan).toContain("belongs to `/st-plan`");
   });
 
   it("gives plan-artifact discovery a glob and a selection rule", async () => {
@@ -453,7 +453,7 @@ describe("/stamity-work — Frame and Plan", () => {
   });
 });
 
-describe("/stamity-work — contract census", () => {
+describe("/st-work — contract census", () => {
   it("sits at the Phase 2 → Phase 3 boundary", async () => {
     const headings = (await body())
       .split("\n")
@@ -525,7 +525,7 @@ describe("/stamity-work — contract census", () => {
   });
 });
 
-describe("/stamity-work — Prove", () => {
+describe("/st-work — Prove", () => {
   it("requires structured gate results from a dedicated test-runner", async () => {
     const gates = collapse(section(await body(), "### Gates"));
     expect(gates).toContain("test-runner");
@@ -639,8 +639,8 @@ describe("/stamity-work — Prove", () => {
     // The resumability pillar had no stated location, so the two
     // cross-referencing touchpoints pointed at nothing.
     expect(proof).toContain(".stamity/runs/");
-    expect(proof).toContain("/stamity-rework");
-    expect(proof).toContain("/stamity-pr-resolve");
+    expect(proof).toContain("/st-rework");
+    expect(proof).toContain("/st-pr-resolve");
     expect(proof).toContain("read-only to every later run");
   });
 
@@ -738,7 +738,7 @@ describe("/stamity-work — Prove", () => {
   });
 });
 
-describe("/stamity-work — dispatch contract", () => {
+describe("/st-work — dispatch contract", () => {
   it("carries the three parallel-safety conditions and single-writer synthesis", async () => {
     const dispatch = collapse(section(await body(), "## Dispatch contract"));
     expect(dispatch).toContain("read-only or disjoint writes");
@@ -779,7 +779,7 @@ describe("/stamity-work — dispatch contract", () => {
   });
 });
 
-describe("/stamity-work — dials", () => {
+describe("/st-work — dials", () => {
   it("states what light intensity skips, not only what deep adds", async () => {
     const dials = section(await body(), "## Dials");
     const lightRow = dials.split("\n").find((line) => line.startsWith("| light"));
@@ -847,7 +847,7 @@ describe("/stamity-work — dials", () => {
   });
 });
 
-describe("/stamity-work — testing philosophy and return contract", () => {
+describe("/st-work — testing philosophy and return contract", () => {
   it("ships the testing-philosophy blockquote with its verbatim anchors", async () => {
     const raw = section(await body(), "## Testing philosophy");
     // Byte-level anchors per the design contract — raw matching, no collapse.

@@ -53,8 +53,8 @@ const P = {
   reviewer: ".cursor/agents/stamity-reviewer.md",
   implementer: ".cursor/agents/stamity-implementer.md",
   drifter: ".cursor/agents/stamity-drifter.md",
-  workCommand: `${CURSOR_COMMANDS_DIR ?? "<none>"}/stamity-work/SKILL.md`,
-  askCommand: `${CURSOR_COMMANDS_DIR ?? "<none>"}/stamity-ask/SKILL.md`,
+  workCommand: `${CURSOR_COMMANDS_DIR ?? "<none>"}/st-work/SKILL.md`,
+  askCommand: `${CURSOR_COMMANDS_DIR ?? "<none>"}/st-ask/SKILL.md`,
   hooksConfig: ".cursor/hooks.json",
   mcpConfig: ".cursor/mcp.json",
   agentsMd: "AGENTS.md",
@@ -165,12 +165,12 @@ const WORK_COMMAND = artifact(
     "description: Execute a change end to end.",
     "tags: [orchestration]",
   ],
-  "# /stamity-work\n\nRun ${STAMITY:VERIFY_GATE_ALL} before the QA checkpoint.",
+  "# /st-work\n\nRun ${STAMITY:VERIFY_GATE_ALL} before the QA checkpoint.",
 );
 
 const ASK_COMMAND = artifact(
   ["id: ask", "type: command", "description: Read-only codebase Q&A.", "tags: [orchestration]"],
-  "# /stamity-ask\n\nAnswers, writes nothing.",
+  "# /st-ask\n\nAnswers, writes nothing.",
 );
 
 const BASE_CORPUS: Record<string, string> = {
@@ -180,8 +180,8 @@ const BASE_CORPUS: Record<string, string> = {
   "corpus/agents/stamity-reviewer.md": REVIEWER_AGENT,
   "corpus/agents/stamity-implementer.md": IMPLEMENTER_AGENT,
   "corpus/agents/stamity-drifter.md": DRIFTER_AGENT,
-  "corpus/commands/stamity-work.md": WORK_COMMAND,
-  "corpus/commands/stamity-ask.md": ASK_COMMAND,
+  "corpus/commands/st-work.md": WORK_COMMAND,
+  "corpus/commands/st-ask.md": ASK_COMMAND,
 };
 
 /** Seeds the fixture corpus (plus any extra files) and returns its root. */
@@ -710,14 +710,14 @@ describe("touchpoint commands", () => {
     const work = contentAt(plan, P.workCommand);
     expect(work.split("\n").slice(0, 5)).toEqual([
       "---",
-      "name: stamity-work",
+      "name: st-work",
       "description: Execute a change end to end.",
       // The key that makes the file a command: included when the operator types
       // the slash form, never pulled in by the agent on its own judgement.
       "disable-model-invocation: true",
       "---",
     ]);
-    expect(work).toContain("# /stamity-work");
+    expect(work).toContain("# /st-work");
     // Same substitution pipeline as rules and agents — a leaked token would
     // ship a broken template variable where a runnable command belongs.
     expect(work).not.toContain("${STAMITY:");
@@ -734,7 +734,7 @@ describe("touchpoint commands", () => {
 
   it("carries no frontmatter key this client does not read", () => {
     const item = itemOf({ type: "command", id: "cmd-quick", description: "Small-change lane." });
-    const emitted = buildCursorCommand(item, "stamity-quick", "# /stamity-quick\n");
+    const emitted = buildCursorCommand(item, "st-quick", "# /st-quick\n");
 
     const front = emitted.split("---")[1] ?? "";
     expect(front.trim().split("\n").map((line) => line.split(":")[0])).toEqual([
@@ -1317,7 +1317,7 @@ describe("emitted plan", () => {
     expect(commandRows).toHaveLength(CURSOR_COMMANDS_DIR === null ? 0 : 9);
     if (CURSOR_COMMANDS_DIR !== null) {
       for (const id of ["spec", "plan", "work", "board", "ask", "debug", "quick", "rework", "pr-resolve"]) {
-        expect(paths, id).toContain(`${CURSOR_COMMANDS_DIR}/stamity-${id}/SKILL.md`);
+        expect(paths, id).toContain(`${CURSOR_COMMANDS_DIR}/st-${id}/SKILL.md`);
       }
     }
 

@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
 <!-- Re-open when: a gate named under Landing rules is added, renamed or removed in
      `.github/workflows/`, the required-approval count changes, or the private layer's scope
      changes. `test/docsPages.test.ts` resolves the link README makes to this page;
@@ -6,7 +6,7 @@
 
 # Governance
 
-> Last updated: 2026-08-26
+> Last updated: 2026-08-30
 
 How this project is run and how a change lands. Contribution mechanics — the loop, the test lanes,
 regeneration — are in [CONTRIBUTING.md](CONTRIBUTING.md); the product, in
@@ -49,7 +49,7 @@ A pull request merges when all of these hold.
    of Origin: it is what lets the patch be taken under this repository's MIT licence.
 3. **Conventional-commit PR title** — `type(scope): message`. A release note is read out of it.
 4. **A maintainer read.** External pull requests get theirs through this project's own
-   `/stamity-pr-resolve` command: the setup this repository generates reviews changes to it. A
+   `/st-pr-resolve` command: the setup this repository generates reviews changes to it. A
    review that lands badly is a defect in the corpus and is fixed there.
 
 Rules 2 and 3 are the second required context, `all-pr-checks` (`pr-checks.yml`, pull requests

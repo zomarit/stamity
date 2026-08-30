@@ -466,7 +466,7 @@ describe("testing — behaviour assertions and the gating-test clause", () => {
     expect(item).toMatch(/carries an inline reason/i);
     expect(item).toMatch(/changed test files as part\s*of the diff/i);
     expect(item).not.toMatch(/see |per the |as stated in|refer to/i);
-    expect(item).not.toMatch(/\/stamity-\w+/);
+    expect(item).not.toMatch(/\/st-\w+/);
   });
 
   it("keeps mocks justified and determinism injected", async () => {

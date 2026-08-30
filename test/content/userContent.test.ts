@@ -229,6 +229,22 @@ describe("saveUserContent", () => {
     await expect(discover()).resolves.toEqual([]);
   });
 
+  it("refuses an id wearing the invocable-surface prefix", async () => {
+    // The short prefix is the one an author is likely to reach for by accident:
+    // `st-work` is a plausible name for a personal artifact AND the exact stem
+    // of a shipped touchpoint's emitted file. Reserving only `stamity-` would
+    // let a user artifact land on a name the merge layer reads as engine-owned
+    // and overwrites without the verified `.bak` the user lane depends on.
+    const result = await save("agent", "st-work", CLEAN_AGENT);
+
+    expect(result.saved).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(joined(result.errors)).toContain("generated corpus");
+    // The remedy names the prefix that actually matched, not the other one.
+    expect(joined(result.errors)).toContain('"work"');
+    await expect(discover()).resolves.toEqual([]);
+  });
+
   it("refuses an artifact missing required frontmatter, naming every field", async () => {
     const result = await save("agent", "reviewer", doc("id: reviewer\ntype: agent", BODY));
 

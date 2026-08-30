@@ -569,6 +569,15 @@ function mapPredecessorLearning(
  * this engine's, then reduced to the bare kebab slug the store's name gate
  * requires. `null` when nothing usable survives — a name made entirely of
  * separators has no slug to give.
+ *
+ * {@link CONTENT_PREFIX} is the right half of the split here, and stays right
+ * as long as this function's input stays what it is. A learning note is not an
+ * invocable surface — nobody types it after a slash — so it takes the prefix
+ * agents, rules and hook scripts take, not the `st-` one commands and skills
+ * moved to. The day this carry widens past `.hatch3r/learnings/` to a
+ * predecessor's commands or skills, that class goes through
+ * `contentPrefixFor` instead of landing on this constant by inheritance.
+ * `PREDECESSOR_CONTENT_PREFIX` is a foreign product's spelling and never moves.
  */
 function carriedLearningName(sourceName: string): string | null {
   const stem = sourceName.endsWith(".md") ? sourceName.slice(0, -".md".length) : sourceName;

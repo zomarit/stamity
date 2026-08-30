@@ -12,6 +12,13 @@ website/.docusaurus/
 .env.*
 !.env.example
 
+# Root-level session scratch. The leak gate walks tracked AND
+# untracked-but-not-ignored files (scripts/leak-gate.mjs, `listFromGit`), so a local
+# note holding names the gate reserves keeps every run red until the path leaves that
+# set — and the same entry is what keeps it out of a `git add -A`. Anchored to the root
+# so a tracked `docs/temp.md` would still be scanned and still be committable.
+/temp.md
+
 .DS_Store
 ._*
 .Spotlight-V100

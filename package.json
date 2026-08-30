@@ -14,7 +14,7 @@
     "developer-tools"
   ],
   "license": "MIT",
-  "author": "Zomarit",
+  "author": "zomarit",
   "homepage": "https://github.com/zomarit/stamity#readme",
   "repository": {
     "type": "git",
@@ -28,7 +28,8 @@
     "node": ">=22.12"
   },
   "bin": {
-    "stamity": "./dist/cli.js"
+    "stamity": "./dist/cli.js",
+    "st": "./dist/cli.js"
   },
   "exports": {
     ".": "./dist/index.js",

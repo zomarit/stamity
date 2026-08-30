@@ -36,6 +36,14 @@ const config: Config = {
   tagline:
     'Agentic coding setups for Claude Code, Cursor, GitHub Copilot and Codex, from one canonical source.',
 
+  // The brand marks are in `website/static/img/`, copied byte-for-byte from `assets/stamity/`,
+  // which is where they are drawn and where the plugin manifests and the README read them from.
+  // Docusaurus can only serve what is under `static/`, so the copy is structural rather than a
+  // choice — the thing to know is which direction it flows: a mark is re-cut in `assets/stamity/`
+  // and copied here, never edited here. `static/` is served from the site root, so every reference
+  // below is `/img/<file>`.
+  favicon: 'img/favicon.svg',
+
   // The deploy target. Not claimed yet — see the header note and the workflow's arming condition.
   url: 'https://stamity.dev',
   baseUrl: '/',
@@ -114,12 +122,28 @@ const config: Config = {
   ],
 
   themeConfig: {
+    // The card a link to this site unfurls as, in a chat client or a social post. 1280×640, the
+    // 2:1 ratio every unfurler crops to, so nothing important is cut. Docusaurus emits it as both
+    // `og:image` and `twitter:image` on every page, which is why it is set once here rather than
+    // per page. Light only, deliberately: the unfurl has no way to read the reader's theme.
+    image: 'img/social-card.png',
     colorMode: {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'stamity',
+      // The logo REPLACES the title rather than sitting beside it. The wordmark already spells the
+      // product, so a `title` here would render the name twice — "stamity stamity" — which is what
+      // a text title plus a wordmark logo always does. `alt` carries the name for a reader who
+      // never sees the image; `srcDark` swaps in the near-white cut so the ink mark is not
+      // invisible on the dark ground.
+      logo: {
+        alt: 'stamity',
+        src: 'img/wordmark.svg',
+        srcDark: 'img/wordmark-dark.svg',
+        width: 116,
+        height: 31,
+      },
       items: [
         {type: 'docSidebar', sidebarId: 'docsSidebar', position: 'left', label: 'Docs'},
         {href: REPO_URL, label: 'GitHub', position: 'right'},
@@ -127,7 +151,7 @@ const config: Config = {
     },
     footer: {
       style: 'dark',
-      copyright: '© Zomarit · MIT',
+      copyright: '© zomarit · MIT',
     },
     prism: {
       theme: prismThemes.github,
