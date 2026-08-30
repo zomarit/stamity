@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "generatedBy": "1.0.0",
+  "generatedBy": "1.0.1",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-08-30T21:30:14.220Z",
+  "updatedAt": "2026-08-30T23:19:31.794Z",
   "tools": [
     "claude"
   ],
@@ -449,17 +449,17 @@
       "adapter": "claude",
       "artifactId": "charter",
       "artifactType": "infra",
-      "contentHash": "d804ff81342ac0533125db8dc9c4a7efd115b29bf5ab003654e6b1d552f5d6e5",
+      "contentHash": "6464d6b4a4eca87ee86d7da4dcf51b17df2108a451a12889a72c16d4ed443317",
       "path": "AGENTS.md",
-      "stampedVersion": "1.0.0"
+      "stampedVersion": "1.0.1"
     },
     {
       "adapter": "claude",
       "artifactId": "claude-md-bridge",
       "artifactType": "infra",
-      "contentHash": "e76c1cfecb8da11957f2706b934635e630c0081a4503972d9ce5756ae7677375",
+      "contentHash": "9e8c8dccd12b4146b86c401bd4a81d1db35600f6913ef774f036a4e8341662d8",
       "path": "CLAUDE.md",
-      "stampedVersion": "1.0.0"
+      "stampedVersion": "1.0.1"
     }
   ],
   "importChoice": [

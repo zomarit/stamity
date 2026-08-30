@@ -1,0 +1,6 @@
+name: stamity
+version: 1.0.1
+description: Generates a tool-agnostic agentic coding setup — charter, commands, agents, skills, rules, hooks, MCP wiring — for Claude Code, Cursor, GitHub Copilot and Codex from one canonical source.
+author: zomarit
+license: MIT
+type: hybrid

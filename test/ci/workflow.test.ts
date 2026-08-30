@@ -317,6 +317,11 @@ describe("ci.yml — the merge-blocking gate", () => {
     // The four plugin/marketplace surfaces, same posture: a drifted manifest
     // fails with the regeneration command rather than being rewritten by CI.
     expect(run).toContain("node scripts/generate-plugin-manifests.mjs --check");
+    // The fifth published surface — `apm.yml` and the `.apm/` primitive tree —
+    // rides the same step and the same verify-only posture. It is the one whose
+    // FILE SET follows the corpus, so a retired artifact has to fail here
+    // rather than linger as a primitive nothing regenerates.
+    expect(run).toContain("node scripts/generate-apm-package.mjs --check");
     expect(run).toContain("git diff --exit-code");
     // `git diff --exit-code` ignores untracked files by design (gitignored coverage/ and dist/
     // output must not trip the gate); porcelain would not.

@@ -91,6 +91,7 @@ at the next regeneration.
 | `docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` | `node scripts/generate-docs.mjs` |
 | `packs/*/pack.json` integrity maps, `src/pack/catalogPins.ts` | `node scripts/generate-pack-manifests.mjs` (`--check` verifies and writes nothing) |
 | `.claude-plugin/`, `.cursor-plugin/plugin.json`, `plugin.json` | `node scripts/generate-plugin-manifests.mjs` (`--check` verifies and writes nothing) |
+| `apm.yml`, `.apm/` | `node scripts/generate-apm-package.mjs` (`--check` verifies and writes nothing) |
 | `AGENTS.md`, `.agents/`, `.claude/`, `.stamity/generated/` | `npm run build && node dist/cli.js sync` |
 
 The last row is this repository's own setup — it runs its own output. `node dist/cli.js
