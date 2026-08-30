@@ -190,8 +190,9 @@ jobs:
         run: npm test
 
       # Every generated artifact class, regenerated and byte-diffed: the capability
-      # matrix, the CLI/config/reference/llms pages, the catalog pins, and the four
-      # plugin/marketplace manifests (the last two verified in --check mode — this
+      # matrix, the CLI/config/reference/llms pages, the catalog pins, the four
+      # plugin/marketplace manifests, and the APM package — `apm.yml` plus the whole
+      # `.apm/` primitive tree (the last three verified in --check mode — this
       # step writes nothing but regenerated tracked pages).
       # The generators run on Node's own type stripping and need no build.
       # `git diff --exit-code` ignores untracked files by design, so gitignored
@@ -204,6 +205,7 @@ jobs:
           node scripts/generate-docs.mjs &&
           node scripts/generate-pack-manifests.mjs --check &&
           node scripts/generate-plugin-manifests.mjs --check &&
+          node scripts/generate-apm-package.mjs --check &&
           git diff --exit-code
 
       # The committed self-configs — AGENTS.md and the generated client trees — re-proven
