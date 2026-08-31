@@ -2,7 +2,7 @@
 title: Customization
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit ce0b6c7. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0b84e3b. -->
 <!-- Re-open when: a save gate is added or removed, a content class joins or leaves the
      override tree, a merge verb joins the overlay layer, a class gains or loses overlay
      support, or patch-or-replace exclusivity changes. `test/docsPages.test.ts` holds this
