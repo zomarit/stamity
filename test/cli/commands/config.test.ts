@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import {
   CONFIG_KEYS,
@@ -8,6 +9,7 @@ import {
   setConfigValue,
 } from "../../../src/cli/commands/config.ts";
 import { CliFailure } from "../../../src/cli/kit/output.ts";
+import { runCli, type CommandIo } from "../../../src/cli/kit/program.ts";
 import { readManifest } from "../../../src/manifest/manifest.ts";
 import { getSourceEnvMcpCommand } from "../../../src/mcp/env.ts";
 import { resolveModelValue } from "../../../src/roster/modelLadder.ts";
@@ -21,6 +23,7 @@ import { CONTENT_CLASSES, type ContentSelection } from "../../../src/types/conte
 import { MANIFEST_FILE, MANIFEST_VERSION, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { runInProcess } from "../../support/inProcess.ts";
+import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 
 /**
@@ -83,6 +86,72 @@ function run(
   args: readonly string[],
 ): ReturnType<typeof runInProcess> {
   return runInProcess([configCommand], ["config", ...args], { cwd: handle.dir });
+}
+
+/**
+ * The same funnel with somebody on the other end: a TTY stdin and the answers
+ * they would type.
+ *
+ * This is the picker's TYPED path — `runInProcess`'s stdin is a PassThrough
+ * with no `setRawMode`, which is exactly the input the kit's menu probe
+ * refuses — so every case here reads the numbered list. The two raw-menu cases
+ * build their own stdin below.
+ */
+function runInteractive(
+  handle: TempDirHandle,
+  args: readonly string[],
+  stdinLines: readonly string[],
+): ReturnType<typeof runInProcess> {
+  return runInProcess([configCommand], ["config", ...args], {
+    cwd: handle.dir,
+    stdinLines,
+    tty: { stdin: true },
+  });
+}
+
+/** The 1-based row a key occupies in the picker, read off the registry order. */
+function keyRow(key: string): string {
+  return String(CONFIG_KEYS.indexOf(key) + 1);
+}
+
+/**
+ * Starts bare `config` against a stdin the raw-menu probe accepts, and hands
+ * back the running promise, the live transcript and the stream to press keys
+ * into. Command output and prompt output share one transcript, as they share
+ * one stdout in production.
+ */
+function startConfigOnMenuTty(
+  handle: TempDirHandle,
+  argv: readonly string[] = [],
+): { run: Promise<number>; input: MenuTtyInput; transcript: () => string } {
+  const chunks: string[] = [];
+  const io: CommandIo = {
+    out: (text) => {
+      chunks.push(text);
+    },
+    err: (text) => {
+      chunks.push(text);
+    },
+  };
+  const input = new MenuTtyInput();
+  const promptOut = new Writable({
+    write(chunk: Buffer | string, _encoding, callback) {
+      chunks.push(String(chunk));
+      callback();
+    },
+  }) as Writable & { isTTY?: boolean };
+  // The menu writes cursor escapes, so it draws only where the OUTPUT is a
+  // terminal too — the second half of the kit's capability probe.
+  promptOut.isTTY = true;
+
+  const running = runCli(["config", ...argv], [configCommand], {
+    cwd: handle.dir,
+    env: {},
+    io,
+    promptIo: { input, output: promptOut },
+    terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY: true },
+  });
+  return { run: running, input, transcript: () => chunks.join("") };
 }
 
 /** The single JSON document a `--json` run is allowed to write to stdout. */
@@ -186,6 +255,31 @@ describe("config list", () => {
     expect(rowFor(result.stdout, "learnings.maxCount")).toMatch(/150\s+\(default\)/);
   });
 
+  it("strips control bytes from a manifest-derived value before it reaches the terminal (W3, second sink)", async () => {
+    // `model.standard` is shape-checked only (non-empty, one line — embedded
+    // \r/\n are the ONE thing the schema itself refuses) and passed through
+    // verbatim otherwise, so an ESC/OSC sequence in a pinned model id survives
+    // to `getConfigValue`/`resolvePin` unmodified. `runList` prints that value
+    // straight to the terminal with no menu frame around it at all — the
+    // second sink for the same hazard the raw menu's `sanitizeLabel` already
+    // closes, and the one this case proves closed too.
+    const handle = tempDir();
+    const esc = String.fromCharCode(27);
+    const bel = String.fromCharCode(7);
+    const hostile = `vendor-x${esc}]0;pwned${bel}-1`;
+    await seedManifest(handle, { models: { pins: { standard: hostile } } });
+
+    const result = await run(handle, []);
+
+    expect(result.code).toBe(0);
+    const row = rowFor(result.stdout, "model.standard");
+    expect(row).not.toContain(esc);
+    expect(row).not.toContain(bel);
+    expect(row).toContain("vendor-x");
+    expect(row).toContain("pwned");
+    expect(row).toContain("-1");
+  });
+
   it("emits exactly one JSON document carrying every key row", async () => {
     const handle = tempDir();
     await seedManifest(handle);
@@ -197,6 +291,231 @@ describe("config list", () => {
     expect(doc["ok"]).toBe(true);
     expect(doc["command"]).toBe("config");
     expect(doc["keys"]).toHaveLength(CONFIG_KEYS.length);
+  });
+});
+
+/**
+ * Bare `stamity config` — the picker, and the scriptability floor under it.
+ *
+ * Decision 6 gives the config surface ONE interactive rendering, on the one
+ * invocation that names no action: bare `config` on an interactive terminal
+ * offers a navigable list of the keys and applies one change through the same
+ * path `set` uses. Every other run of it — a pipe, CI, `-y`, `--json`, an
+ * explicit `config list` — is the list it always was, which is the property the
+ * first two cases pin byte for byte.
+ */
+describe("config — the bare picker", () => {
+  it("prints the list byte-identically when nothing interactive is attached", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude", "cursor"], maturityTier: "scaleup" });
+
+    const bare = await run(handle, []);
+    const listed = await run(handle, ["list"]);
+
+    expect(bare.code).toBe(0);
+    expect(bare.stdout).toBe(listed.stdout);
+    expect(bare.stdout).not.toContain("Which setting?");
+  });
+
+  it("takes the list on a terminal under -y, so a script that asked for silence gets it", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { maturityTier: "scaleup" });
+
+    const yes = await runInteractive(handle, ["-y"], []);
+    const listed = await run(handle, ["list"]);
+
+    expect(yes.code).toBe(0);
+    expect(yes.stdout).toBe(listed.stdout);
+  });
+
+  it("emits one JSON document and no prompt on a terminal under --json", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const result = await runInteractive(handle, ["--json"], []);
+
+    expect(result.code).toBe(0);
+    const doc = singleDoc(result.stdout);
+    expect(doc["ok"]).toBe(true);
+    expect(doc["keys"]).toHaveLength(CONFIG_KEYS.length);
+  });
+
+  it("picks a key off the list, picks a value from its vocabulary, and applies it", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    // Row 1 is "(keep unchanged)" (F4): row 2 is now the first real choice
+    // (`solo`), row 3 `team`. Was "2" before that row was prepended, and this
+    // answer moved one row down rather than the assertion below changing.
+    const result = await runInteractive(handle, [], [keyRow("maturityTier"), "3"]);
+
+    expect(result.code).toBe(0);
+    // The menu IS the list: every key row carries the resolved value and the
+    // (set)/(default) marker `config list` prints for it.
+    expect(result.stdout).toMatch(/maturityTier\s+solo\s+\(default\)/);
+    // ...and the confirmation is `set`'s own, run-sync reminder included.
+    expect(result.stdout).toContain("set maturityTier: solo -> team");
+    expect(result.stdout).toContain("next: run stamity sync to apply");
+    expect((await readManifest(handle.dir))?.maturityTier).toBe("team");
+  });
+
+  it("declines through the (keep unchanged) row: Enter-Enter off bare config leaves the manifest untouched (F4)", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+    const before = await manifestBytes(handle);
+
+    // Row 1 of the key menu (`tools`), blank answer -> Enter accepts the
+    // default row there too. Row 1 of the VALUE menu is the new
+    // "(keep unchanged)" row and is also the default: two blank answers must
+    // decline the whole picker rather than landing on `platform`'s (or any
+    // key's) first real choice, the way Enter-Enter used to.
+    const result = await runInteractive(handle, [], [keyRow("platform"), ""]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("no value chosen — platform is unchanged.");
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("shows the key's hint and takes a typed value for a free-form key", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const result = await runInteractive(handle, [], [keyRow("model.standard"), "vendor-x-1"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("a model id your client accepts");
+    expect(result.stdout).toContain("set model.standard:");
+    expect((await readManifest(handle.dir))?.models?.pins?.standard).toBe("vendor-x-1");
+  });
+
+  it("writes nothing when the value prompt comes back empty", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+    const before = await manifestBytes(handle);
+
+    const result = await runInteractive(handle, [], [keyRow("hooks.userHooksDir"), ""]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("no value chosen — hooks.userHooksDir is unchanged");
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("opens the tools checkbox on the current set", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude"] });
+
+    // Blank answer: the typed multi-select returns its defaults verbatim, so
+    // the bracket IS the preselection — row 1, the one tool the manifest names.
+    const result = await runInteractive(handle, [], [keyRow("tools"), ""]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("comma-separated [1]");
+    expect(result.stdout).toContain("tools is already");
+    expect((await readManifest(handle.dir))?.tools).toEqual(["claude"]);
+  });
+
+  it("previews through the picker and writes nothing under --dry-run", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+    const before = await manifestBytes(handle);
+
+    // Row 3 selects `team` now that row 1 is "(keep unchanged)" (F4).
+    const result = await runInteractive(handle, ["--dry-run"], [keyRow("maturityTier"), "3"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("would set maturityTier: solo -> team");
+    expect(result.stdout).toContain("next: re-run without --dry-run to apply");
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("arrows to a key, arrows to a value, and persists what the cursor landed on", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+    const { run: running, input, transcript } = startConfigOnMenuTty(handle);
+
+    await waitForOutput(transcript, "> tools", "the key menu");
+    input.write(MENU_KEYS.down);
+    await waitForOutput(transcript, "> platform", "the cursor on platform");
+    input.write(MENU_KEYS.down);
+    await waitForOutput(transcript, "> maturityTier", "the cursor on maturityTier");
+    input.write(MENU_KEYS.enter);
+    // Row 1 of the value menu is "(keep unchanged)" (F4) and opens as the
+    // default, so `solo` — the persisted default before this change — is now
+    // one arrow down rather than the opening row.
+    await waitForOutput(transcript, "> (keep unchanged)", "the maturityTier value menu");
+    input.write(MENU_KEYS.down);
+    await waitForOutput(transcript, "> solo", "the cursor on solo");
+    input.write(MENU_KEYS.down);
+    await waitForOutput(transcript, "> team", "the cursor on team");
+    input.write(MENU_KEYS.enter);
+
+    expect(await running).toBe(0);
+    expect((await readManifest(handle.dir))?.maturityTier).toBe("team");
+    expect(transcript()).toContain("set maturityTier: solo -> team");
+  });
+
+  it("toggles a box on the tools menu and writes the set the boxes say", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude"] });
+    const { run: running, input, transcript } = startConfigOnMenuTty(handle);
+
+    await waitForOutput(transcript, "> tools", "the key menu");
+    input.write(MENU_KEYS.enter);
+    // Preselected from the manifest, not from a default: the box under the
+    // cursor is already ticked and the others are not.
+    await waitForOutput(transcript, "> [x] claude", "the tools checkbox on the current set");
+    expect(transcript()).toContain("[ ] cursor");
+    input.write(MENU_KEYS.down);
+    await waitForOutput(transcript, "> [ ] cursor", "the cursor on the cursor row");
+    input.write(MENU_KEYS.space);
+    await waitForOutput(transcript, "> [x] cursor", "the toggled box");
+    input.write(MENU_KEYS.enter);
+
+    expect(await running).toBe(0);
+    expect((await readManifest(handle.dir))?.tools).toEqual(["claude", "cursor"]);
+    expect(transcript()).toContain("set tools:");
+  });
+
+  it("re-reads the manifest before applying, so a concurrent write between the key and value prompts survives (SW3)", async () => {
+    // The interleave is driven by the test, not by real concurrency: the key
+    // menu is answered, and BEFORE the value prompt is answered a second write
+    // lands on disk directly — standing in for a concurrent `stamity sync` or a
+    // second `config set` racing this picker. `runPicker` reads the manifest
+    // once, up front, to render the key list and the value menu; unfixed, the
+    // write below would apply the chosen key against that stale snapshot and
+    // silently revert the concurrent write when it persists.
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude"], maturityTier: "solo" });
+    const { run: running, input, transcript } = startConfigOnMenuTty(handle);
+
+    await waitForOutput(transcript, "> tools", "the key menu");
+    input.write(MENU_KEYS.down);
+    await waitForOutput(transcript, "> platform", "the cursor on platform");
+    input.write(MENU_KEYS.down);
+    await waitForOutput(transcript, "> maturityTier", "the cursor on maturityTier");
+    input.write(MENU_KEYS.enter);
+    await waitForOutput(transcript, "> (keep unchanged)", "the maturityTier value menu");
+
+    // The concurrent write: a field this run never touches, changed on disk
+    // while the operator is still looking at the value menu.
+    await seedManifest(handle, {
+      tools: ["claude"],
+      maturityTier: "solo",
+      communicationStyle: "technical",
+    });
+
+    input.write(MENU_KEYS.down);
+    await waitForOutput(transcript, "> solo", "the cursor on solo");
+    input.write(MENU_KEYS.down);
+    await waitForOutput(transcript, "> team", "the cursor on team");
+    input.write(MENU_KEYS.enter);
+
+    expect(await running).toBe(0);
+    const after = await readManifest(handle.dir);
+    expect(after?.maturityTier).toBe("team");
+    // The concurrent field survived instead of being reverted to whatever the
+    // snapshot at the start of the interaction held for it.
+    expect(after?.communicationStyle).toBe("technical");
   });
 });
 

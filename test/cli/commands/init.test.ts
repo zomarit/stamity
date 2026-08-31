@@ -15,6 +15,7 @@ import {
 import { readManifest } from "../../../src/manifest/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { runInProcess, type InProcessResult } from "../../support/inProcess.ts";
+import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -42,12 +43,15 @@ import { useTempDir } from "../../support/tempDir.ts";
  * literal never appears in these bytes. The fixtures only need the two spellings
  * the detection module scans for: the state-directory name and the marker token.
  *
- * Question counting: every question the prompt kit writes ends its ask with
- * `]: ` (textInput renders `[default]: `, selectOne renders `[n]: `), and no
- * other init output — panel, notes, dry-run report, JSON envelope, failure
- * rendering — contains that suffix. Counting it in the transcript therefore IS
- * the structural prompt count, a spy on the prompt output without reaching into
- * the kit.
+ * Question counting: every TYPED question the prompt kit writes ends its ask
+ * with `]: ` (selectOne renders `[n]: `, selectMany `[1,3]: `), and no other
+ * init output — panel, notes, dry-run report, JSON envelope, failure rendering
+ * — contains that suffix. Counting it in the transcript therefore IS the
+ * structural prompt count, a spy on the prompt output without reaching into the
+ * kit. It counts the typed path only, which is every run in this suite bar one:
+ * the harness stdin is a PassThrough with no `setRawMode`, so the kit's menu
+ * probe refuses it and the numbered list is what renders. The one case that
+ * drives the menu builds its own stdin and counts frames instead.
  */
 
 const getTemp = useTempDir("init-cmd");
@@ -193,6 +197,61 @@ function countQuestions(stdout: string): number {
  */
 function countConfirmations(stdout: string): number {
   return stdout.split(/\[[Yy]\/[Nn]\] /).length - 1;
+}
+
+/* ── raw-mode menu harness ─────────────────────────────────────────── */
+
+/**
+ * The stdin double, the key bytes and the frame poll all come from
+ * `test/support/menuTty.ts` — one home for the raw-menu fixture, shared with
+ * the kit's own suite and the config picker's, so no copy of it can drift from
+ * what the probe is actually tested against.
+ */
+const KEY_SPACE = MENU_KEYS.space;
+const KEY_DOWN = MENU_KEYS.down;
+const KEY_ENTER = MENU_KEYS.enter;
+
+/**
+ * Starts `init` against a stdin the menu probe accepts, and hands back the
+ * running promise, the live transcript and the stream to press keys into.
+ *
+ * `runInit`'s harness cannot be reused: its stdin is a plain PassThrough with
+ * no `setRawMode`, which is exactly the input the probe rejects — that is what
+ * makes every other case in this file a typed-path case.
+ */
+function startInitOnMenuTty(root: string): {
+  run: Promise<number>;
+  input: MenuTtyInput;
+  transcript: () => string;
+} {
+  const chunks: string[] = [];
+  const io: CommandIo = {
+    out: (text) => {
+      chunks.push(text);
+    },
+    err: (text) => {
+      chunks.push(text);
+    },
+  };
+  const input = new MenuTtyInput();
+  const promptOut = new Writable({
+    write(chunk: Buffer | string, _encoding, callback) {
+      chunks.push(String(chunk));
+      callback();
+    },
+  }) as Writable & { isTTY?: boolean };
+  // The menu writes cursor escapes, so it draws only where the OUTPUT is a
+  // terminal too — the second half of the kit's capability probe.
+  promptOut.isTTY = true;
+
+  const run = runCli(["init"], [initCommand], {
+    cwd: root,
+    env: {},
+    io,
+    promptIo: { input, output: promptOut },
+    terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY: true },
+  });
+  return { run, input, transcript: () => chunks.join("") };
 }
 
 function parseSingleDoc(stdout: string): Record<string, unknown> {
@@ -421,6 +480,39 @@ describe("init — existing-config moment (import variant)", () => {
     const manifest = await readManifest(root);
     expect(manifest?.importChoice).toEqual([{ path: "AGENTS.md", mode: "skip" }]);
     expect(manifest?.ledger.some((row) => row.path === "AGENTS.md")).toBe(false);
+  });
+
+  it("on a menu-capable terminal the import question is an arrow menu, and the row picked binds", async () => {
+    // The other half of the prompt rework: init's single-choice questions are
+    // menus wherever the streams can carry one, which they inherit from the kit
+    // rather than build here. Non-degenerate on purpose — the row this run
+    // moves to is NOT the bracketed default, so a menu that ignored the arrow
+    // key would land on `supplement` and fail every assertion below.
+    await getTemp().seedFiles({ "repo/AGENTS.md": "# my agent notes\n" });
+    const root = await makeRepo();
+    const { run, input, transcript } = startInitOnMenuTty(root);
+
+    // Question 1, the tools checkboxes: accept the preselected default.
+    await waitForOutput(transcript, "> [x] claude", "the tools menu");
+    input.write(KEY_ENTER);
+    // Question 2, the import moment, rendered as rows rather than a numbered
+    // list — and with no `Choose 1-3 [1]: ` line anywhere.
+    await waitForOutput(transcript, "> supplement", "the import menu");
+    input.write(KEY_DOWN);
+    await waitForOutput(transcript, "> replace", "the import menu on the replace row");
+    input.write(KEY_ENTER);
+    await waitForOutput(transcript, "Continue?", "the no-repository confirmation");
+    input.write("\n");
+
+    expect(await run).toBe(0);
+    expect(transcript()).toContain("Existing agent config found (AGENTS.md). Import it?");
+    expect(transcript()).not.toContain("Choose 1-3");
+    expect(transcript()).toContain("AGENTS.md was replaced");
+    // Executed and recorded, not merely rendered.
+    expect((await readManifest(root))?.importChoice).toEqual([
+      { path: "AGENTS.md", mode: "replace" },
+    ]);
+    await expect(readFile(join(root, "AGENTS.md.bak"), "utf8")).resolves.toBe("# my agent notes\n");
   });
 
   // ── Two detected files: one question, every path decided ───────────
@@ -1158,28 +1250,108 @@ describe("init — prompt ceiling", () => {
   });
 });
 
-// ── Invalid tools answer ───────────────────────────────────────────
+// ── The tools question (checkbox multi-select) ─────────────────────
 
-describe("init — invalid tools answer", () => {
-  it("re-asks once with the valid list, then falls back to the default — never a crash", async () => {
+/**
+ * The tools question is a CHECKBOX MULTI-SELECT: a menu of boxes on a terminal
+ * that can carry one, and the kit's numbered comma-separated list — the same
+ * shape every other init question falls back to — everywhere else. It used to
+ * be a free-text prompt that asked for tool NAMES in a comma-separated list,
+ * which is what the moved cases below used to pin.
+ *
+ * What did NOT move, and is pinned by the cases above rather than here: the
+ * question COUNT and its gating (one question, only on a zero-evidence
+ * default), the `--tools` flag, and every non-interactive transcript.
+ */
+describe("init — the tools question", () => {
+  it("re-asks once on an unusable answer, then keeps the default — never a crash", async () => {
     const root = await makeRepo();
 
     const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["bogus", "nope"] });
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("valid tools: claude, cursor, copilot, codex");
-    expect(result.stdout).toContain("using the default (claude)");
+    // TEST CHANGE, justified (decision 6, init half): the tolerance is
+    // unchanged — one re-ask, then the default, never a crash — but it is the
+    // prompt kit's now rather than init's, so the correction it prints names
+    // the row NUMBERS rather than the tool names a free-text answer took.
+    expect(result.stdout).toContain("not a valid choice: bogus");
+    expect(result.stdout).toContain("enter numbers 1-4 separated by commas");
+    expect(result.stdout).toContain("keeping the defaults (1)");
     expect((await readManifest(root))?.tools).toEqual(["claude"]);
   });
 
   it("a corrected second answer wins", async () => {
     const root = await makeRepo();
 
-    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["bogus", "codex"] });
+    // TEST CHANGE, justified (decision 6, init half): the correction is a row
+    // number now, not the tool's name — `codex` is row 4. The invariant the
+    // case exists for is untouched: the SECOND answer is the one that binds.
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["bogus", "4"] });
 
     expect(result.code).toBe(0);
     expect((await readManifest(root))?.tools).toEqual(["codex"]);
     expect(result.stdout).toContain("type: codex");
+  });
+
+  it("the typed fallback numbers every tool and records exactly the set that was picked", async () => {
+    const root = await makeRepo();
+
+    // Two of the four rows, and neither pair member is the bracketed default
+    // alone: a run that ignored the answer and kept `[claude]` fails here.
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["1,4"] });
+
+    expect(result.code).toBe(0);
+    // Asked ONCE — a usable answer is never re-asked. Counted off the ask
+    // itself rather than through `countQuestions`, which cannot be used on a
+    // run that selects codex: the panel's `warning: touchpoints [codex]: …` row
+    // carries the same `]: ` suffix the counter keys on. That collision
+    // predates this unit (it is the panel's wording plus the counter's
+    // heuristic) and is left alone here.
+    expect(result.stdout.split("Choose 1-4, comma-separated").length - 1).toBe(1);
+    expect(result.stdout).toContain("Which tools?");
+    expect(result.stdout).toContain("  1) claude — Claude Code");
+    expect(result.stdout).toContain("  4) codex — Codex CLI");
+    expect(result.stdout).toContain("Choose 1-4, comma-separated [1]: ");
+    // Recorded on the manifest AND carried into the panel's per-tool steps.
+    expect((await readManifest(root))?.tools).toEqual(["claude", "codex"]);
+    expect(result.stdout).toContain("next steps (claude):");
+    expect(result.stdout).toContain("next steps (codex):");
+  });
+
+  it("non-interactive: nothing is asked and the decision keeps its `default` source", async () => {
+    // The null return is load-bearing beyond the transcript: it leaves the
+    // detected decision at `default` precedence, which is what lets a migrated
+    // manifest's tools win later. An answered run promotes it to `flag`.
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["--json"], { ttyStdin: true });
+
+    expect(result.code).toBe(0);
+    expect(countQuestions(result.stdout)).toBe(0);
+    const decisions = parseSingleDoc(result.stdout)["decisions"] as Record<string, unknown>;
+    expect(decisions["tools"]).toEqual(["claude"]);
+    expect(decisions["toolsSource"]).toBe("default");
+  });
+
+  it("clearing every checkbox falls back to the default tool, with a note saying so", async () => {
+    // The empty set is a legitimate answer to the kit's multi-select and is
+    // returned as `[]`. Init cannot proceed with zero tools, so it is the one
+    // caller that reinterprets it — and says out loud that it did.
+    const root = await makeRepo();
+    const { run, input, transcript } = startInitOnMenuTty(root);
+
+    // The first frame carries the default row preselected and under the cursor.
+    await waitForOutput(transcript, "> [x] claude", "the tools menu");
+    input.write(KEY_SPACE);
+    await waitForOutput(transcript, "> [ ] claude", "the cleared checkbox");
+    input.write(KEY_ENTER);
+    // Then the no-repository confirmation this scratch root earns.
+    await waitForOutput(transcript, "Continue?", "the no-repository confirmation");
+    input.write("\n");
+
+    expect(await run).toBe(0);
+    expect(transcript()).toContain("no tool selected — using the default (claude)");
+    expect((await readManifest(root))?.tools).toEqual(["claude"]);
   });
 });
 

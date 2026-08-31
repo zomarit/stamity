@@ -18,7 +18,6 @@ import {
   DEFAULT_IMPORT_MODE,
   IMPORT_MODES,
   TOOLS,
-  VALID_TOOLS,
   type ImportMode,
   type MaturityTier,
   type Tool,
@@ -31,8 +30,8 @@ import {
   closePrompts,
   confirm,
   promptGate,
+  selectMany,
   selectOne,
-  textInput,
   type PromptGate,
   type PromptIo,
 } from "../kit/prompts.ts";
@@ -112,7 +111,34 @@ const DEFAULT_TOOL: Tool = "claude";
 const MIGRATE_MODES = ["full", "skip"] as const;
 type MigrateMode = (typeof MIGRATE_MODES)[number];
 
-const TOOLS_QUESTION = `Which tools? (comma-separated: ${TOOLS.join(", ")})`;
+const TOOLS_QUESTION = "Which tools?";
+
+/**
+ * The product name behind each tool id, for the menu rows.
+ *
+ * `Record<Tool, string>` rather than a lookup with a fallback: a tool added to
+ * `TOOLS` with no label here fails the build, which is the only way a choice
+ * list stays complete without anybody remembering to check it.
+ */
+const TOOL_LABELS: Readonly<Record<Tool, string>> = {
+  claude: "Claude Code",
+  cursor: "Cursor",
+  copilot: "GitHub Copilot",
+  codex: "Codex CLI",
+};
+
+/**
+ * The rows the tools question offers, in `TOOLS` order.
+ *
+ * Each label leads with the ID rather than the product name alone, because the
+ * id is what `--tools` takes and what the panel and the manifest echo back: an
+ * operator who picks a row and later wants the same set unattended can read the
+ * flag value straight off the menu.
+ */
+const TOOL_CHOICES: readonly { value: Tool; label: string }[] = TOOLS.map((tool) => ({
+  value: tool,
+  label: `${tool} — ${TOOL_LABELS[tool]}`,
+}));
 
 // ── Flag reading ───────────────────────────────────────────────
 
@@ -146,41 +172,42 @@ function readOverrides(opts: Record<string, unknown>): InitOverrides {
 
 // ── Prompt 1: tools confirm ────────────────────────────────────
 
-/** The typed answer as tools, with whatever did not parse listed by name. */
-function parseToolsAnswer(raw: string): { tools: Tool[]; unknown: string[] } {
-  const names = splitCsv(raw);
-  const unknown = names.filter((name) => !VALID_TOOLS.has(name));
-  return { tools: TOOLS.filter((tool) => names.includes(tool)), unknown };
-}
-
 /**
- * Ask the tools question. An answer that names an unknown tool is re-asked
- * ONCE with the valid list shown (mirroring the select prompts' tolerance —
- * never a crash); a second bad answer falls back to the default.
+ * Ask the tools question, as a checkbox multi-select over every valid tool with
+ * the default one preselected.
+ *
+ * The kit owns the input METHOD and its tolerance: boxes toggled with space on
+ * a terminal that can carry a menu, its numbered comma-separated list — one
+ * re-ask on an unusable answer, then the defaults, never a crash — everywhere
+ * else. The question used to take tool NAMES as free text, which asked the
+ * operator to know the id vocabulary before being shown it and made a typo the
+ * common case the re-ask existed for.
  *
  * Returns `null` when the gate is non-interactive — the caller keeps the
  * detected decision untouched so downstream precedence (predecessor defaults)
- * still applies. An interactive completion — typed or confirmed with Enter —
- * is an explicit user choice and is returned even when it equals the default.
+ * still applies. Any interactive completion, Enter on the untouched default
+ * included, is an explicit user choice and is returned even when it equals the
+ * default.
+ *
+ * The EMPTY set is the one answer this caller does not take at face value.
+ * `selectMany` returns it faithfully — every box cleared is a real answer to
+ * the question asked — but a setup targeting no tool emits nothing at all, so
+ * it is read back as the default and the substitution is printed rather than
+ * made silently.
  */
-async function askTools(gate: PromptGate, promptIo: PromptIo, ctx: CliContext): Promise<Tool[] | null> {
+async function askTools(
+  gate: PromptGate,
+  promptIo: PromptIo,
+  ctx: CliContext,
+): Promise<Tool[] | null> {
   if (!gate.interactive) return null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- a re-ask can only follow the answer it corrects
-    const raw = await textInput(gate, promptIo, {
-      question: TOOLS_QUESTION,
-      defaultValue: DEFAULT_TOOL,
-    });
-    const { tools, unknown } = parseToolsAnswer(raw);
-    if (unknown.length === 0 && tools.length > 0) return tools;
-    if (attempt === 0) {
-      ctx.io.out(
-        `unknown tool${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")} — ` +
-          `valid tools: ${TOOLS.join(", ")}\n`,
-      );
-    }
-  }
-  ctx.io.out(`still not a valid tool list — using the default (${DEFAULT_TOOL})\n`);
+  const picked = await selectMany<Tool>(gate, promptIo, {
+    question: TOOLS_QUESTION,
+    choices: TOOL_CHOICES,
+    defaultValues: [DEFAULT_TOOL],
+  });
+  if (picked.length > 0) return picked;
+  ctx.io.out(`no tool selected — using the default (${DEFAULT_TOOL})\n`);
   return [DEFAULT_TOOL];
 }
 
@@ -618,6 +645,7 @@ export const initCommand: CommandModule = {
       stdinIsTTY: ctx.terminal.stdinIsTTY,
       yes: ctx.yes,
       json: ctx.json,
+      env: ctx.app.runtime.env,
     });
 
     // PROMPT 1 — tools confirm. Only a zero-evidence default is worth a

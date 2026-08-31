@@ -167,7 +167,7 @@ Writes to the repository, so `--dry-run` previews the change without making it.
 
 | Argument | What it is |
 |---|---|
-| `[subcommand]` | list \| get \| set \| detect \| mcp |
+| `[subcommand]` | list \| get \| set \| detect \| mcp — omit on a terminal for the interactive picker |
 | `[key]` | config key, or the mcp action (list \| add \| remove) |
 | `[value]` | new value, or the MCP server id |
 
