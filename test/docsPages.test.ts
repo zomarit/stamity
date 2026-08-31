@@ -8,11 +8,11 @@ import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 
 /**
- * The gate on the nine hand-written pages: three at the root, six guides
+ * The gate on the ten hand-written pages: three at the root, seven guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * nine are typed by a human, so the only guard is this file.
+ * ten are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -44,7 +44,7 @@ import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all nine pages because the hand bucket is
+ * Two properties are asserted on all ten pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -94,19 +94,20 @@ const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
 
 // Declared in path order, which is not the order GUIDES reads in: this block is a lookup and
 // the array below is the sidebar's sequence, so the customization guide sits first here and
-// third there.
+// fourth there, and the workspaces guide last here and fifth there.
 const CUSTOMIZATION = "docs/customization.md";
 const GETTING_STARTED = "docs/getting-started.md";
 const MIGRATION = "docs/migration.md";
 const PACKS_AND_TRUST = "docs/packs-and-trust.md";
 const TROUBLESHOOTING = "docs/troubleshooting.md";
 const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
+const WORKSPACES = "docs/workspaces.md";
 
 /**
- * The six hand-written guides under `docs/`.
+ * The seven hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these six are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these seven are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  */
 const GUIDES: readonly string[] = [
@@ -114,6 +115,7 @@ const GUIDES: readonly string[] = [
   MIGRATION,
   WORKING_WITH_STAMITY,
   CUSTOMIZATION,
+  WORKSPACES,
   PACKS_AND_TRUST,
   TROUBLESHOOTING,
 ];
@@ -295,7 +297,7 @@ const lines = (text: string): string[] => text.replace(/\n$/, "").split("\n");
  * three lines of it — the `slug` that publishes the page under the predecessor's name, which is
  * a URL the filename itself cannot carry — and counting those against the six-line head would
  * hold that one page to a shorter header than its siblings for a reason the contract never made.
- * The three other `docs/` guides carry frontmatter too, a two-line `title:` block Docusaurus
+ * The six other `docs/` guides carry frontmatter too, a two-line `title:` block Docusaurus
  * reads for the sidebar label and the document title; "every sidebar-listed hand page declares
  * its H1 as its title" below is what holds that block to the page it labels.
  */
@@ -338,10 +340,11 @@ async function corpusCounts(): Promise<Map<string, number>> {
 }
 
 describe("hand pages", () => {
-  // Renamed twice as the bucket grew — "all seven" when the workflow guide joined, "all eight"
-  // when the customization guide did: the name states the membership count, and the loop below
-  // is unchanged through both and still runs over every member.
-  it("all nine exist and carry real content", () => {
+  // Renamed on each growth of the bucket — "all seven" when the workflow guide joined, "all
+  // eight" when the customization guide did, "all nine" when the workspaces guide did: the name
+  // states the membership count, and the loop below is unchanged through all of them and still
+  // runs over every member.
+  it("all ten exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -537,9 +540,26 @@ describe("README", () => {
     expect(lines(read(README)).length).toBeLessThanOrEqual(README_MAX_LINES);
   });
 
-  it("states the command surface — seven verbs plus the plumbing verb", () => {
+  // Renamed when the workspace verb joined the advertised surface — "seven verbs" until then:
+  // the name states the count, and the array below is what the assertion actually reads.
+  //
+  // This is the SECOND hand-maintained copy of the surface, the getting-started case below
+  // holding the first. Both are literal lists rather than derivations from `COMMANDS`, so a verb
+  // that joins the CLI and not these two arrays leaves both pages understating the surface with
+  // nothing failing — which is exactly how README went on saying "seven verbs" while `workspace`
+  // shipped. A verb lands in `src/cli.ts` and in both arrays, in that order.
+  it("states the command surface — eight verbs plus the plumbing verb", () => {
     const text = read(README);
-    for (const command of ["init", "sync", "check", "validate", "add", "config", "clean"]) {
+    for (const command of [
+      "init",
+      "sync",
+      "check",
+      "validate",
+      "add",
+      "config",
+      "workspace",
+      "clean",
+    ]) {
       expect(text, `README omits \`${command}\``).toContain(`\`${command}\``);
     }
     expect(text).toContain("`learn`");
@@ -896,21 +916,24 @@ describe("CONTRIBUTING.md", () => {
  *
  * The block above proves a guide is datable, linkable and leak-free. It cannot
  * prove the page still SAYS the thing it was written to say, and four of these
- * six make a claim about a mechanism that can move underneath it: the doctor's
+ * seven make a claim about a mechanism that can move underneath it: the doctor's
  * probe set, the trust ladder's rungs, whether signature verification is armed,
  * and what the predecessor's own uninstall verb destroys. So each assertion
  * below reads the mechanism rather than a second copy of it, the way the README
  * corpus counts do.
  *
- * Two guides have no bespoke case here yet, for different reasons. The workflow
- * guide narrates which touchpoint to open and what each writes, which `AGENTS.md`
- * owns rather than any symbol this file can read — a case pinning it to the
- * touchpoint index belongs with whichever change makes that index readable. The
- * customization guide is the opposite shape: what it claims IS readable — the
- * override tree's four class paths, the strict/advisory split and the per-class
- * line thresholds, all owned by `src/content/userContent.ts` — so its gap is a
- * case nobody has written, not a claim nothing can reach. Both are held to the
- * bucket-wide contract above and to their own re-open triggers meanwhile.
+ * Three guides have no bespoke case here yet, for two different reasons. The
+ * workflow guide narrates which touchpoint to open and what each writes, which
+ * `AGENTS.md` owns rather than any symbol this file can read — a case pinning it
+ * to the touchpoint index belongs with whichever change makes that index
+ * readable. The customization and workspaces guides are the opposite shape: what
+ * they claim IS readable — the override tree's four class paths, the strict/
+ * advisory split and the per-class line thresholds from
+ * `src/content/userContent.ts`; the workspace subcommand set, the status row
+ * states and the three-field bridge from `src/cli/commands/workspace.ts` and
+ * `src/workspace/` — so their gap is a case nobody has written, not a claim
+ * nothing can reach. All three are held to the bucket-wide contract above and to
+ * their own re-open triggers meanwhile.
  */
 describe("the guides", () => {
   it("carves the predecessor's name out for exactly one page, coupled to the leak gate", () => {
@@ -967,7 +990,20 @@ describe("the guides", () => {
     expect(text, "the getting-started guide never shows the install command").toContain(
       INSTALL_COMMAND,
     );
-    for (const command of ["init", "sync", "check", "validate", "add", "config", "clean"]) {
+    // Hand-maintained, in the order `src/cli.ts` advertises, and it is the DRIVER: a verb joins
+    // the surface here first and the page is then obliged to name it, which is what made
+    // `workspace` a required word on that page rather than an optional one. The plumbing verb is
+    // deliberately absent — `learn` is not something a reader types.
+    for (const command of [
+      "init",
+      "sync",
+      "check",
+      "validate",
+      "add",
+      "config",
+      "workspace",
+      "clean",
+    ]) {
       expect(text, `the getting-started guide omits \`${command}\``).toContain(`\`${command}\``);
     }
     expect(text, "the getting-started guide does not say where state lives").toContain(".stamity/");

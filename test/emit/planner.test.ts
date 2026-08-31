@@ -985,6 +985,11 @@ function initOptions(rootDir: string, tools: Tool[]): InitApplyOptions {
     existingConfigPaths: [],
     detected: { languages: [], linters: [], testFrameworks: [], ciProviders: [] },
     repoInfo: emptyInfo(rootDir),
+    // FIXTURE RECONCILIATION (workspace init hook): `InitDecisions` gained the
+    // workspace probe's result, which `applyInit` and the planner both ignore.
+    // The fixture carries the no-workspace-here answer; no assertion moves.
+    workspaceCandidates: [],
+    workspaceSource: "standalone",
   };
   return {
     rootDir,

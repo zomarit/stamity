@@ -139,6 +139,12 @@ function decisionsFor(rootDir: string, overrides: Partial<InitDecisions> = {}): 
     existingConfigPaths: [],
     detected: { languages: [], linters: [], testFrameworks: [], ciProviders: [] },
     repoInfo: emptyInfo(rootDir),
+    // FIXTURE RECONCILIATION (workspace init hook): `InitDecisions` gained the
+    // workspace probe's result. No case in this suite is about it — `applyInit`
+    // reads neither field — so the fixture carries the probe's own
+    // no-workspace-here answer and every assertion here is unchanged.
+    workspaceCandidates: [],
+    workspaceSource: "standalone",
     ...overrides,
   };
 }

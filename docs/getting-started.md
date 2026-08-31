@@ -100,17 +100,18 @@ Cursor, Copilot and Codex get a plain-words line rather than a slash command bec
 `st-onboard` is a skill, and only Claude Code turns a project skill into a `/name`
 invocation. Asking for it by name reaches a file that is genuinely on disk.
 
-## The seven verbs
+## The eight verbs
 
-`init` · `sync` · `check` · `validate` · `add` · `config` · `clean`
+`init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `clean`
 
 `init` sets a repo up. `sync` regenerates every managed file from the manifest — run it
 after any config change, because `config` edits state and never regenerates output.
 `check` diagnoses and gates. `validate` checks content this repository authored. `add`
-installs a pack once its trust gates pass. `config` reads and changes the setup. `clean`
-removes all of it.
+installs a pack once its trust gates pass. `config` reads and changes the setup.
+`workspace` puts one policy over many repositories — see [workspaces](workspaces.md).
+`clean` removes all of it.
 
-There is an eighth, `learn`, which agents call to record a learning through the engine's
+There is a ninth, `learn`, which agents call to record a learning through the engine's
 write gates. It is plumbing, not something you type. The gates exist because a learning is
 text that re-enters an agent's context on a later session: anything with write access to
 the repository can author a file that is read back into a prompt, which makes a note a
