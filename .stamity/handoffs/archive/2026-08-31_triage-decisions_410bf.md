@@ -1,12 +1,12 @@
 ---
 id: 2026-08-31_triage-decisions_410bf
-status: in-progress
+status: archived
 created: 2026-08-31T10:02:28Z
 expires: 2026-09-30T10:02:28Z
-summary: Locked triage decisions for 20 findings. Batch A executed 2026-08-31 (gates green, review approved; QA sign-off + migration-title re-decision with operator). Next: docs pass, CLI UX, 4 engine lanes.
+summary: All 20 triage decisions executed 2026-08-31 to 09-01 (Batches A-E, 11 commits, suite 5707 to 6162 green). Residuals operator-only: decision 16 arming (checklist ready), decision 18 (deferred).
 fromTool: claude
 gitRef: public-main@0982f6c
-integrity: sha256:d91acedd0448ce3390743ed38cc5ac0f8d29654d6373e29e42ce0a20e2150e96
+integrity: sha256:dcb86636b90a1353cd83e386c953d03f7efa775cb513023239df523b8becae1d
 ---
 
 ## Problem
@@ -118,52 +118,64 @@ docs/migration.md:169-182).
 
 ## Work Remaining
 
-Batch A executed 2026-08-31 (uncommitted on public-main): /st-quick batch (decisions 2, 10a)
-plus /st-work run 2026-08-31_batch-a-remainder (decisions 1, 3, 4, 7, 13) — gates green at
-5709 passed, review approved round 2 (high/0.86); full record and findings ledger under
-.stamity/runs/2026-08-31_batch-a-remainder/. Open on Batch A: the human QA sign-off, and the
-design-lens finding that docs/migration.md's document title/og:title emits as "migration"
-(operator declined the title rider; the lens argues title is orthogonal to the declined
-sidebar row — operator re-decision pending, ledger row prove/13). Riders 10b and 10c moved
-to Batch B; note getting-started's "Where state lives" already says "Commit it", shrinking
-10b to naming the per-client trees.
+EXECUTED IN FULL 2026-08-31 → 2026-09-01, committed to public-main (11 commits, 0982f6c..HEAD).
+Every agent-executable decision is landed and gate-verified; the two residuals below are the
+operator-only items the handoff itself flagged. Batch-by-batch:
 
-Remaining batches:
-- Batch B (docs pass): decisions 8, 9, riders 10b/10c.
-- Batch C (CLI UX): decisions 5, 6.
-- Batch D (engine lanes, each own spec/plan): 11 skill-override emission; 12 overlay layers;
-  14 workspace surface; 15 worktree lane (reference repo in operator-session memory).
-- Batch E (operator + release): 16 controls checklist at next release window; 17 CHANGELOG
-  bootstrap.
+- Batch A (decisions 1, 2, 3, 4, 7, 10a, 13) — 37bd456. Quick lane + /st-work; the
+  migration-title question resolved to its declared default (decline stands, reversible).
+- Batch B (decisions 8, 9-lifecycle-guide, riders 10b/10c) — 772a446. The "Working with
+  stamity" guide; four review rounds. (Decision 9's two feature pages moved to their coupled
+  engine lanes by recorded sequencing — customization to D11, workspaces to D14.)
+- Batch C (decisions 5, 6) — 5aacecd. Raw-mode arrow/checkbox menus; four review rounds
+  hardening the terminal/credential/TOCTOU surface.
+- Batch D specs — ce0b6c7 (overlays, workspace, worktree; 50 REQs).
+- Batch D lane 11 (skill-override emission + decision-9 customization page) — 424ce62.
+- Batch D lane 12 (overlay layers) — 0b84e3b. Four review rounds; a silent-wrong Critical
+  (patched skills shipped the unpatched body) caught by review.
+- Batch D lane 14 (workspace surface + decision-9 workspaces page) — f5a451b.
+- Batch D lane 15 (managed worktree lane) — e79570c. Frontier + security lenses; a policy
+  that could author away its own credential gate, and a receipt that could delete the main
+  tree's secrets, both closed.
+- Batch E (decisions 16-checklist, 17) — be21daa. CHANGELOG + fail-closed release extraction;
+  the decision-16 checklist prepared.
+
+Suite grew 5707 → 6162 tests, green at every commit. Every batch carries its full audit trail
+under .stamity/runs/. Two learnings captured this session (dogfood-sync, surface-pins) plus
+the leak-gate one.
 
 ## Blockers
 
-- Decision 16 needs the operator's GitHub/npm platform access; agents can only prepare the
-  checklist.
-- Otherwise: none. (Former blocker on decision 15 is resolved — the reference repo is
-  recorded in operator-session memory; see decision 15.)
+Only the two the handoff always reserved for the operator:
+- Decision 16 — PLATFORM ARMING. The checklist is prepared (.github/release-controls-checklist.md);
+  arming the npm-publish reviewer, the v* tag ruleset, and the npm trusted-publisher entry needs
+  GitHub/npm access an agent does not have. The SECURITY.md "not in force" → "in force" flip is
+  drafted in the checklist and reserved for after the operator confirms arming.
+- Decision 18 — eval harness: DEFERRED entirely by the operator at triage. Untouched by design.
 
 ## Next Steps
 
-1. Operator: sign the Batch A QA checkpoint (walk-through in run record) and answer the
-   migration-title question (ledger prove/13); commit Batch A when satisfied.
-2. Batch B docs pass via /st-work (spec-author lane), updating getting-started handoffs;
-   carries riders 10b/10c and the reference-page intro prose gap (ledger prove/22).
-3. Batch C via /st-plan → /st-work; amend the config.ts prompt-budget contract text.
-4. Batch D: run /st-spec for each lane; for 15, study the reference repo recorded in
-   operator-session memory before drafting.
-5. Batch E: generate the release-controls checklist for the operator; bootstrap CHANGELOG.md.
+Operator-only, none agent-closable:
+1. Walk the Batch A QA rows if desired (copy button, dark favicon, terminal banner) — all
+   otherwise auto-proven; the run records carry the checkpoints.
+2. Arm the three release controls per .github/release-controls-checklist.md, then make the
+   drafted SECURITY.md wording flip (re-reading test/docsPages.test.ts's "Publishing this
+   package" assertion, as the checklist notes).
+3. Push public-main when ready (this session committed locally only; nothing was pushed).
+4. Decision 18 (eval harness) remains deferred until the operator un-defers it.
 
 ## Build & Test Status
 
 | Gate | Result | Note |
 |---|---|---|
-| Lint (npm run lint) | pass (exit 0) | oxlint + eslint, post-Batch-A authoritative run 2026-08-31 |
+| Lint (npm run lint) | pass (exit 0) | oxlint + eslint, final run at be21daa (2026-09-01) |
 | Typecheck (npm run typecheck) | pass (exit 0) | tsc --noEmit |
-| Tests (npm run test) | pass (exit 0) | 162 files, 5709 passed, 1 skipped — +2 over baseline (title pin, override regression case) |
+| Tests (npm run test) | pass (exit 0) | 168 files, 6162 passed, 1 skipped (Windows-only release proof) |
+| Leak gate (npm run gate) | pass (0 hits) | 592 files, predecessor rule active |
 
-Post-Batch-A state verified by a dedicated runner; a caution for later sessions: the leak
-gate scans .stamity/ state files (see .stamity/learnings/leak-gate-scans-stamity-state-files.md).
+Final state verified by dedicated runners at each lane commit; a caution for later sessions:
+the leak gate scans .stamity/ state files (see
+.stamity/learnings/leak-gate-scans-stamity-state-files.md).
 
 ## File Manifest
 
