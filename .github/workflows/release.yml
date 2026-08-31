@@ -290,15 +290,20 @@ jobs:
           rm -f sbom.err
 
       # A deterministic release body, written here so the publish job needs no checkout and no
-      # generator. There is no CHANGELOG.md in this tree yet; when there is one, extract its
-      # section for this version HERE — ahead of the irreversible publish — rather than after it,
-      # so a missing section cannot leave npm published and the GitHub release never created.
+      # generator. CHANGELOG.md now exists (Keep a Changelog format, `## [x.y.z] - YYYY-MM-DD`
+      # headings), so this step extracts the section for THIS version HERE — ahead of the
+      # irreversible publish — rather than after it, so a missing section cannot leave npm
+      # published and the GitHub release never created. The extraction is FAIL-CLOSED: a version
+      # with no matching section fails this step before the pack is ever handed to the publish
+      # job. That is the reading the boundary demands — a release that cannot describe itself does
+      # not ship.
       #
       # Every value reaches the shell through `env:` rather than a `${{ }}` interpolation inside
       # the script body. The interpolated form substitutes text BEFORE the shell parses it, so a
       # value carrying a quote or a backtick would be parsed as script — and these values come
       # from package.json and from a pack step, which is close enough to attacker-influenced to
-      # be worth not doing.
+      # be worth not doing. VERSION reaches the awk program below through `-v` from the shell's own
+      # env, never through a `${{ }}` interpolation.
       - name: Compose release notes
         env:
           PACKAGE_NAME: ${{ steps.resolve.outputs.package_name }}
@@ -308,10 +313,44 @@ jobs:
           SBOM_PRESENT: ${{ steps.sbom.outputs.sbom_present }}
         run: |
           set -euo pipefail
+
+          # Extract the CHANGELOG section for this exact version. The heading is `## [VERSION] …`;
+          # awk starts printing after the matching heading and stops at the next `## [` heading —
+          # or, for the last section, at the Keep-a-Changelog link-reference footer (`[x]: url`) —
+          # so it yields that section's body and no other. A `## [1.0.1]` target never matches a
+          # `## [1.0.10]` heading, because the bracketed target ends in `]`. `found` gates the
+          # fail-closed exit; a whitespace-only body is treated as missing too.
+          if [ ! -f CHANGELOG.md ]; then
+            echo "::error title=No changelog::CHANGELOG.md is missing. A release must carry a changelog section for its version before it publishes."
+            exit 1
+          fi
+          CHANGELOG_SECTION="$(
+            awk -v target="## [$VERSION]" '
+              index($0, "## [") == 1 {
+                if (substr($0, 1, length(target)) == target) { printing = 1; found = 1; next }
+                if (printing) { printing = 0 }
+              }
+              printing && /^\[[^][]+\]:[ \t]/ { printing = 0 }
+              printing { print }
+              END { if (!found) exit 3 }
+            ' CHANGELOG.md
+          )" || {
+            echo "::error title=No changelog section::CHANGELOG.md has no \"## [$VERSION]\" section. Add the section for this version before releasing — a release that cannot describe itself does not ship."
+            exit 1
+          }
+          if [ -z "$(printf '%s' "$CHANGELOG_SECTION" | tr -d '[:space:]')" ]; then
+            echo "::error title=Empty changelog section::CHANGELOG.md has a \"## [$VERSION]\" heading but no entries under it. Fill the section before releasing."
+            exit 1
+          fi
+
           {
             echo "## $PACKAGE_NAME v$VERSION"
             echo ""
             echo "Built from \`$GITHUB_SHA\` by \`.github/workflows/release.yml\`."
+            echo ""
+            echo "### Changes"
+            echo ""
+            echo "$CHANGELOG_SECTION"
             echo ""
             echo "| Artifact | SHA-256 |"
             echo "| --- | --- |"
