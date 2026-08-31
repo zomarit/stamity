@@ -153,6 +153,30 @@ describe("command coverage", () => {
     }
   });
 
+  it("claims no write LOCATION for a mutating command, because it cannot know one", () => {
+    // The sentence used to read "Writes to the repository", printed on every
+    // mutating section. `worktree setup` materializes into the farm — outside
+    // this repository — and `workspace sync` rewrites member repositories, so
+    // the page asserted a destination that was wrong for both.
+    expect(page).not.toContain("Writes to the repository");
+
+    // Non-degenerate: there are mutating commands, and each one gets the
+    // location-free sentence. Asserting only the absence above would pass on a
+    // page that had lost the sentence entirely.
+    const mutating = COMMANDS.filter((command) => command.mutating);
+    expect(mutating.length).toBeGreaterThan(1);
+    for (const command of mutating) {
+      const section = page.split(`## \`stamity ${command.name}\``)[1] ?? "";
+      expect(section, `${command.name} lost its write posture`).toContain(
+        "Writes when it runs, so `--dry-run` previews the change without making it.",
+      );
+    }
+    for (const command of COMMANDS.filter((c) => !c.mutating)) {
+      const section = page.split(`## \`stamity ${command.name}\``)[1] ?? "";
+      expect(section, `${command.name} is not mutating`).toContain("Reads only.");
+    }
+  });
+
   it("renders a closed choice set beside the flag that declares it", () => {
     // `--confidence` is the one flag carrying both choices and a default.
     expect(page).toContain("one of `low`, `medium`, `high`");
@@ -299,29 +323,58 @@ describe("the restated kit contract", () => {
     expect(renderCliReference()).toContain("A failure is always status `1`");
   });
 
-  it("labels a code the type declares that no code path in this build throws", () => {
-    // The preamble tells CI authors to branch on `error.code`, and
-    // `NETWORK_ERROR` sat in the table looking exactly like the rows around it
-    // while nothing can produce it — the only outbound call is documented as
-    // never throwing. A branch on it can never be taken, so the page says so.
+  /**
+   * This case previously asserted the OPPOSITE: that the page carried
+   * "Reserved, never thrown: `NETWORK_ERROR`" and that no file in `src`
+   * produced the code. Its file-list assertion was written to fire the moment
+   * a producer appeared, and the worktree lane's branch-plan fetch
+   * (`src/worktree/git.ts`) is that producer — so the old expectation was not
+   * weakened to make a change pass, it was CASHED: the page's negative claim
+   * became false and the note came off the page. The firing property is kept,
+   * pointed the other way — a SECOND producer still fails this case, which is
+   * what forces the table row (which names one producer) to be re-read.
+   */
+  it("names the live producer of NETWORK_ERROR instead of calling it reserved", () => {
     const page = renderCliReference();
 
-    expect(page).toContain("Reserved, never thrown: `NETWORK_ERROR`");
-    expect(page).toContain("no code path in this build produces");
-    // The claim is checkable, so check it: no throw site anywhere in src/.
-    const sources = execFileSync("git", ["grep", "-l", "NETWORK_ERROR", "--", "src"], {
+    // The retired note, in both of its spellings.
+    expect(page).not.toContain("Reserved, never thrown");
+    expect(page).not.toContain("no code path in this build produces");
+
+    // The row is a positive claim now, so it has to name what throws it.
+    const row = tableRows(page).find((line) => cells(line)[0] === "`NETWORK_ERROR`") ?? "";
+    expect(row).toContain("worktree setup");
+    expect(row).toContain("origin");
+    // ...and it has to keep the distinction the classifier actually draws:
+    // `classifyFetchFailure` sends a missing ref to `create`, not to a failure.
+    expect(row).toContain("a remote with no such branch is not this");
+
+    // The claim is checkable, so check it. `--untracked` is deliberate: it makes
+    // the census a property of the SOURCE TREE rather than of git's index, so
+    // the answer is the same whether `src/worktree/` is committed, staged with
+    // `git add -N`, or still untracked in a working copy. Ignored paths stay
+    // excluded (no `--no-exclude-standard`), so `node_modules` is not searched.
+    const sources = execFileSync("git", ["grep", "-l", "--untracked", "NETWORK_ERROR", "--", "src"], {
       cwd: REPO_ROOT,
       encoding: "utf-8",
     })
       .split("\n")
       .filter((line) => line !== "");
-    // Only the declaration, the doc table, and the transient classifier — never
-    // a `throw new EngineError(..., { code: "NETWORK_ERROR" })`.
+    // The declaration, this page's own table, the transient classifier — and
+    // the worktree pair: `git.ts` throws it, `setup.ts` documents the escape.
+    // A sixth file means a second producer: name it in the row above, or here.
     expect(sources.toSorted()).toEqual([
       "src/cli/docs/cliReference.ts",
       "src/resilience/failureClass.ts",
       "src/types/errors.ts",
+      "src/worktree/git.ts",
+      "src/worktree/setup.ts",
     ]);
+    // And the producer is a THROW, not a mention: the row would be false if
+    // `git.ts` only named the code in prose.
+    expect(readFileSync(join(REPO_ROOT, "src/worktree/git.ts"), "utf-8")).toContain(
+      `code: "NETWORK_ERROR"`,
+    );
   });
 
   it("re-words the lock-timeout row so `retryable` is not a claim the CLI does not keep", () => {

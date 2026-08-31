@@ -35,7 +35,8 @@ else. Those three are the lane.
 
 ### The promise, and where it is written down
 
-`docs/working-with-stamity.md:113-134` is a published section titled "Two
+`docs/working-with-stamity.md:113-134`, as that page stood BEFORE this change,
+was a published section titled "Two
 changes at once". It states, in the present tense, that "there is no managed
 parallel lane yet", teaches plain `git worktree` as the interim path, names
 `.env.mcp` as "the one file that does not follow", and closes: "A managed
@@ -44,7 +45,7 @@ feature. Until it ships, plain `git worktree` is the path, and this section
 becomes a pointer once it does."
 
 That page carries a machine-enforced re-open trigger naming this exact event
-(`docs/working-with-stamity.md:5-9`: "Re-open when: … the managed worktree lane
+(`docs/working-with-stamity.md:5-9` as it then stood: "Re-open when: … the managed worktree lane
 ships"), and the page is held to the hand-page contract by
 `test/docsPages.test.ts`. So the lane is not a new promise; it is an outstanding
 one with a documented closing condition.
@@ -219,6 +220,18 @@ is overridable by the `farmDir` key of the include manifest (REQ-WORKTREE-003),
 resolved relative to the repo root. A `farmDir` that resolves inside the repo
 root is refused, naming the resolved path.
 
+**The repo root every subcommand resolves against is the MAIN checkout, derived
+from the git common dir — not `--show-toplevel`.** Run from inside a linked
+worktree, `git rev-parse --show-toplevel` answers with *that* worktree, so a
+farm resolved from it would be a second farm nested beside the first, and
+`cleanup --all` would sweep a set that does not contain the worktree the
+operator is standing in. `resolveLane` therefore takes
+`git rev-parse --git-common-dir` — one per clone, the same absolute path from
+every linked worktree — and reads the repo root back off it, falling back to the
+top level only for a layout whose common dir is not named `.git`
+(`src/cli/commands/worktree.ts:100-136`, `src/worktree/git.ts:488-502`). One
+lane, one farm, one policy file, whichever checkout the verb is invoked from.
+
 **Rationale.** Three separate mechanisms in this tree walk the repository
 recursively and none of them knows about a second checkout inside it: the orphan
 temp-file sweep, whose skip list is a fixed set that unlinks matching files it
@@ -233,7 +246,7 @@ which is the machinery invariant 1 exists to avoid. The default's leading dot
 also keeps the farm out of the workspace scan at the parent level, which skips
 dot-directories at every level by construction (`src/workspace/detect.ts:125`,
 documented `src/workspace/detect.ts:101-104`). The published documentation
-already teaches a sibling layout (`docs/working-with-stamity.md:118-120`), so the
+already teaches a sibling layout (`docs/working-with-stamity.md:122-125`), so the
 default is where a reader is already looking.
 
 **Dropped.** An in-repo `.worktrees/` farm, the reference implementation's
@@ -266,6 +279,26 @@ Rules, all of them refusals rather than resolutions:
 - `path` is a **literal repo-relative POSIX path** naming a file or a directory.
   A glob metacharacter (`*`, `?`, `[`, `{`) is refused, naming the character. An
   absolute path, a `..` segment, or a backslash is refused.
+- **A path carrying a control character is refused.** A newline or a NUL inside
+  a declared path makes every message that quotes it unreadable and every
+  NUL-delimited git invocation that carries it ambiguous, so the character is
+  the defect rather than an escaping problem downstream. The refusing pattern is
+  written as escapes rather than as literals in the source, because a literal
+  control character would make that file binary to every tool that reads it, the
+  leak gate's own walk included (`src/worktree/policy.ts:137-143`,
+  `src/worktree/policy.ts:332-334`).
+- **A single trailing slash is normalized away, not refused.** `node_modules/`
+  and `node_modules` address one directory, and reducing them to one spelling is
+  what makes the contested-path refusal below true of SPELLINGS rather than only
+  of byte-identical strings — otherwise two rows could claim one path and pass
+  (`src/worktree/policy.ts:309-354`). A path that is empty after normalization
+  is refused.
+- **An unknown key is refused, at both levels.** The document declares only
+  `version`, `farmDir`, `entries`, `overrides`; a row declares only `path`,
+  `strategy`, `secret`, `reason`. Ignoring an unknown key is indistinguishable
+  from honouring it to the author who typed it, and `entry` for `entries` is the
+  typo this catches — the whole policy would silently become the built-in
+  defaults (`src/worktree/policy.ts:198-207`, `src/worktree/policy.ts:267-273`).
 - `strategy` is one of `copy`, `symlink`, `skip`. A directory entry's strategy
   applies to its whole subtree.
 - **Resolution is longest-prefix over `entries` ∪ `overrides`.** Declaration
@@ -277,8 +310,29 @@ Rules, all of them refusals rather than resolutions:
   materializing it would leave the new worktree dirty at creation. Both
   conditions are answered by one `git check-ignore` / `git ls-files` pass over
   the resolved set, and the message names the path and which condition it failed.
+- **Both admissibility refusals apply to MATERIALIZING rows only.** A `skip` row
+  is exempt, and so is a row whose own path is owned by a deeper rule — the
+  checked set is exactly the paths whose longest-prefix answer is themselves
+  (`src/worktree/policy.ts:405-416`). The carve-out is not a convenience: a
+  `skip` row writes nothing, so it can neither be supplied twice by the checkout
+  nor dirty the new worktree, and without the exemption the verb would refuse on
+  its own built-in defaults in any repository that COMMITS `node_modules` —
+  which is a supported choice, and one this lane has no business overruling
+  (`src/worktree/policy.ts:418-428`). A refusal on a built-in row also names a
+  next step the operator can take: there is no file to edit, so it says to write
+  `.stamity/worktree.json` with a `skip` row rather than pointing at a row that
+  does not exist (`src/worktree/policy.ts:436-442`).
 - An absent `.stamity/worktree.json` means the built-in defaults of
   REQ-WORKTREE-004 apply. It is not an error.
+
+**Where each refusal lands is part of the contract.** Everything above that is a
+property of the DOCUMENT — JSON syntax, unknown keys, `version`, glob and
+control characters, trailing slashes, a contested path — is decided by
+`parseWorktreePolicy` when the file is read. The two admissibility rules need
+git's answer about a path, so they run later, when `setup` resolves its plan
+(`src/worktree/setup.ts:288-304`). The acceptance criteria below say which of
+the two moments each refusal belongs to, because a criterion that asserts the
+wrong one passes for the wrong reason.
 
 **Rationale.** This is the study's first FIX, taken at the root rather than
 patched. The reference's file was a gitignore-style pattern list whose strategy
@@ -383,6 +437,39 @@ existing name at the syscall, never with a check-then-write:
 - Parent directories are created before the entry, and the destination is
   containment-checked against the worktree root before anything is written,
   through the substrate's own check (`src/merge/atomicWrite.ts:694-718`).
+- **A `copy` row naming a directory is expanded to its files before anything is
+  written**, and each file is placed and digested on its own
+  (`src/worktree/materialize.ts:118-152`, `src/worktree/materialize.ts:159-188`).
+  A single receipt row for a directory would carry no digest, and
+  REQ-WORKTREE-007's gate would then have to keep the whole tree as
+  unverifiable — the expansion is what makes a directory row invertible at all.
+  The walk honours the same longest-prefix carve-outs the policy resolved, so a
+  `skip` override under a copied directory is not copied; the carve-out arrives
+  as an injected predicate rather than as a second read of the policy document,
+  so there is no second resolution path to drift. A directory every one of whose
+  paths is skipped produces one `skipped` row saying exactly that, rather than
+  an empty result the report would have nothing to say about.
+- **A source that is not present is `absent`, not a failure**, for both
+  strategies (`src/worktree/materialize.ts:232-244`,
+  `src/worktree/materialize.ts:271-294`). The default policy names `.env.mcp`,
+  and a repository that has never configured an MCP server does not have one;
+  that is a fact about the request, not a fault, so it cannot be allowed to
+  make the run `partial` (REQ-WORKTREE-011). For a `symlink` the check is on the
+  SOURCE and it is deliberate: `symlink(2)` will happily create a link to a path
+  that does not exist, and a dangling link in a fresh worktree would report as
+  `materialized` and work for nobody.
+- **A destination that already exists still produces a receipt row.** The skip
+  leaves the destination's bytes untouched and records the digest and mode of
+  what is THERE (`src/worktree/materialize.ts:329-362`,
+  `src/worktree/materialize.ts:418-435`). A re-run's receipt replaces its
+  predecessor, so a skipped row that recorded nothing would silently drop the
+  only teardown authority over a file the FIRST run placed — the second run
+  would leave a credential copy behind that cleanup no longer knows about. For
+  the same reason a `secret` entry is mode-hardened on the skip path too: an
+  already-present credential file sitting at `0644` is world-readable to every
+  other account on the host, and this lane is what put it there. `absent` and
+  `failed` produce no row, because a receipt row is authority to remove and
+  neither of those placed anything to remove.
 
 **Rationale.** This is the study's third KEEP, and it is the discipline the write
 substrate already applies to its own temp file: `O_EXCL` "refuses a pre-planted
@@ -455,7 +542,10 @@ being pushed as machine-local state on a shared branch.
 
 **Decision.** `cleanup` enumerates with `git worktree list --porcelain -z` and
 partitions every entry into: **managed** (inside the resolved farm AND carrying a
-readable receipt), **other**, **locked**, **prunable**. Then:
+readable receipt), **managed-orphan** (inside the farm but with NO readable
+receipt — absent, malformed, or a version this build cannot read),
+**other** (a worktree OUTSIDE the farm this lane never created), **locked**,
+**prunable**. Then:
 
 1. If the process cwd is inside any candidate, the whole run refuses
    (`VALIDATION_ERROR`) naming the candidate and the directory to run from.
@@ -473,10 +563,39 @@ readable receipt), **other**, **locked**, **prunable**. Then:
 4. Prunable registrations are always pruned.
 5. **No branch is ever deleted.** The report names `git branch -d <name>` per
    worktree removed, as text the operator runs if they want to.
-6. `other` and `locked` entries are listed and skipped, with the reason.
-7. `cleanup` with neither a name nor `--all` is a `USAGE` failure naming both
+6. **A managed-orphan is cleanable, but only as a whole tree under `--force`.**
+   With no receipt there is no pattern to replay and no way to tell an edited
+   copy from a placed one, so nothing is inverted file-by-file: `git worktree
+   remove --force` takes the entire tree and the report says exactly that. Under
+   `--files-only` there is nothing to invert, so the orphan is left standing with
+   its unreadable-receipt reason reported; without `--force` the removal is
+   refused before anything is touched, naming the flag. This is the recovery for
+   a partial setup whose receipt write failed (REQ-WORKTREE-011).
+7. `other` and `locked` entries are listed and skipped, with the reason.
+8. `cleanup` with neither a name nor `--all` is a `USAGE` failure naming both
    spellings — the shape `config get` with no key already has
-   (`src/cli/commands/config.ts:842-849`).
+   (`src/cli/commands/config.ts:842-849`). **This one criterion is met across
+   two layers, and the split is a consequence of the code vocabulary rather than
+   a design choice.** `USAGE` is a CLI-edge code (`src/cli/kit/output.ts`) that
+   the engine cannot spell without importing the CLI, so the engine classifies
+   the refusal as far as its own vocabulary reaches — `VALIDATION_ERROR`,
+   carrying the sentence and a `next` naming both spellings
+   (`src/worktree/cleanup.ts:245-258`) — and the verb re-raises it as
+   `CliFailure { code: "USAGE" }` (`src/cli/commands/worktree.ts:678-706`). The
+   verb still CALLS the engine for that sentence rather than keeping a second
+   copy of it: the refusal is the engine's first statement, ahead of every read,
+   so the call costs nothing and the two surfaces cannot drift apart. What the
+   operator observes is unchanged — one `USAGE` failure naming `<name>` and
+   `--all` — and the criterion is written against that, not against the layer.
+9. **`cleanup <name>` for a name no cleanable worktree carries is refused**, not
+   quietly treated as a sweep of nothing (`src/cli/commands/worktree.ts:713-722`).
+   The refusal is `VALIDATION_ERROR`, it names the name and the resolved farm,
+   its `why` states that cleanup inverts a receipt or force-removes a
+   receipt-less orphan and a name matching neither is refused, and its `next`
+   names `stamity worktree list` as the surface that
+   answers which rows are managed. A no-op exit 0 here is the failure mode
+   worth designing out: an operator who mistypes a name would read "cleanup
+   complete" and believe a worktree was torn down.
 
 **Rationale.** Inversion from a written record is the study's first KEEP, and its
 recorded reason is a residual-secret class: pattern replay missed entries the
@@ -552,14 +671,23 @@ The name is validated before any of this by `git check-ref-format --branch`,
 plus a path-safety pass refusing `..` segments, a leading `-`, a backslash, and
 any control character.
 
-**Rationale.** `NETWORK_ERROR` is declared in the `ErrorCode` union and the
-generated CLI page currently labels it "Reserved, never thrown: … no code path
-in this build produces it" (`docs/cli-reference.md:94-101`,
-`src/types/errors.ts:38-47`). This lane's fetch is the first real transport
-operation in the CLI, so it is the code's first honest use; the page is
-regenerated in the same change and the reserved note goes with it. Deferring the
-fetch on `--dry-run` is what keeps a preview free of network state, matching the
-reference's behaviour and this CLI's rule that a dry run touches nothing.
+**Rationale.** `NETWORK_ERROR` is declared in the `ErrorCode` union
+(`src/types/errors.ts:38-47`) and the generated CLI page labelled it "Reserved,
+never thrown: … no code path in this build produces it". This lane's fetch is
+the first real transport operation in the CLI, so it is the code's first honest
+use, and `fetchBranch` is the throw site (`src/worktree/git.ts:458-483`).
+That made the page's note false the moment the code shipped, so the note is gone
+and the table row names this producer instead
+(`src/cli/docs/cliReference.ts:113-135`) — closed under REQ-WORKTREE-018.
+Deferring the fetch on `--dry-run` is what keeps a preview free of network
+state, matching the reference's behaviour and this CLI's rule that a dry run
+touches nothing.
+
+The classification that decides between a fall-through and a failure is one
+sentence of stderr, so it is a named constant with a pure classifier over it
+rather than an inline regex (`src/worktree/git.ts:443-456`): a git release that
+reworded "couldn't find remote ref" would otherwise turn every missing branch
+into a transport failure, silently.
 
 **Dropped.** Fetching unconditionally, including on `--dry-run`. A preview that
 mutates remote-tracking refs is a preview that changed something.
@@ -615,9 +743,13 @@ part of the contract:
 A `partial` payload names, at minimum: the worktree path and branch (so the
 operator knows a tree exists), each entry with its own `outcome`
 (`materialized` | `skipped` | `absent` | `failed`) and, for a failure, its errno
-and message, plus an `error` document whose `next` names both recovery paths —
-fix the cause and re-run `setup` (materialization is EEXIST-idempotent per
-REQ-WORKTREE-005), or `stamity worktree cleanup <name>`.
+and message, plus an `error` document whose `next` names the recovery. The tree
+now exists, so the recovery is a cleanup and a fresh setup, NOT a re-run of
+`setup` — a second `setup` refuses on the present directory. When the failure
+was an entry (the receipt still landed), `stamity worktree cleanup <name>`
+inverts what did land; when the receipt itself could not be written, the tree is
+a receipt-less orphan that nothing scopes, so `stamity worktree cleanup <name>
+--force` removes the whole tree (see REQ-WORKTREE-007's managed-orphan class).
 
 Two outcomes are explicitly NOT `partial`: a consent-declined secret entry, and
 a branch whose checkout carries no `.stamity/manifest.json` (REQ-WORKTREE-013).
@@ -662,6 +794,19 @@ with the answer it would get for this invocation. **The dry-run entry table and
 the real run's entry table agree row for row and strategy for strategy**, which
 is the parity property the merge engine already holds itself to
 (`src/merge/safeWrite.ts:43-48`, `src/merge/safeWrite.ts:593-598`).
+
+**A dry run never prompts, on any stream.** "Touches nothing" includes the
+operator's attention: a preview that stops to ask about a branch it is not going
+to create has already changed something, and an unanswerable question inside a
+preview is the same defect as the warning-with-no-gate REQ-WORKTREE-008 drops.
+So `--dry-run` reads the consent gate as CLOSED regardless of the stream, and
+every gate in the plan carries the answer THIS invocation's flags give it —
+`--use-existing` present shows as granted, absent shows as withheld — with one
+line stating that an interactive run would have asked instead
+(`src/cli/commands/worktree.ts:564-571`). The entry table does not depend on
+consent at all, which is what keeps the parity property above true across the
+two runs: a withheld secret is a marked row in BOTH tables, not an absence from
+one.
 
 **Rationale.** `--dry-run` is registered automatically for a `mutating: true`
 module (`src/cli/kit/program.ts:239`), so the only question is what it promises;
@@ -747,7 +892,7 @@ later change adds them deliberately:
 - it does not spawn, attach to, or terminate an agent session in any client;
 - it does not synchronise learnings between worktrees;
 - it does not coordinate the gates. A green gate in one worktree says nothing
-  about another (`docs/working-with-stamity.md:128-131`).
+  about another (`docs/working-with-stamity.md:179-182`).
 
 One fact of the design is reported rather than compensated for: an uncommitted
 handoff or learning does not travel to a new worktree, because a checkout
@@ -773,6 +918,14 @@ at that moment — with no lock spanning the two and no conflict rule.
 1. **Symlink creation that fails with `EPERM` or `EACCES` falls back to a copy**,
    and the fallback is a reported notice naming the path and both strategies —
    not a silent substitution. Every other errno is a materialization failure.
+   **The fallback does not apply when the source is a DIRECTORY**: that entry
+   fails instead, carrying the errno and a message naming both usable strategies
+   (`src/worktree/materialize.ts:305-317`). Copying in place of linking a
+   directory would deep-copy a whole tree the operator never asked to duplicate
+   — for the reference's own default row that is `node_modules`, silently turned
+   from one shared tree into two on the platform least able to afford it. A
+   fallback that changes the ORDER of a write is a convenience; one that changes
+   its magnitude is a different operation, and it needs the operator to pick it.
 2. **A `secret: true` copy is not mode-hardened on win32**, because
    `hardenEnvMcpMode` does not run there — "Windows has no POSIX mode… so the
    pass is skipped rather than made to report a tightening it did not perform"
@@ -822,17 +975,50 @@ generated file whose contents equal the defaults is a file that drifts from them
 
 **Decision.** In the change that lands the lane:
 
-- `docs/working-with-stamity.md:113-134` is rewritten. "There is no managed
-  parallel lane yet" and "A managed worktree lane … is a planned feature" both
-  go; the section becomes the pointer its own re-open note says it becomes, and
-  the hand-copy instruction for `.env.mcp`
-  (`docs/working-with-stamity.md:124-126`) is replaced by the verb that does it.
-  The re-open trigger at `docs/working-with-stamity.md:5-9` loses the worktree
-  clause and the page's verified-at commit is restamped.
+- The "Two changes at once" section is rewritten — `113-134` before the change,
+  `docs/working-with-stamity.md:113-182` after it. "There is no managed parallel
+  lane yet" and "A managed worktree lane … is a planned feature" both go, the
+  section becomes the three verbs, and the hand-copy instruction for `.env.mcp`
+  (`124-126` as it stood) is replaced by the verb that does it. One line still
+  acknowledges plain `git worktree add`, because the claim it rests on — the
+  setup travels with any checkout, being committed — stays true and is what
+  makes an unmanaged tree in `list` a normal row rather than a defect.
+  The re-open trigger at `docs/working-with-stamity.md:5-9` loses the
+  worktree-lane clause and gains the three that can now falsify the section: a
+  `stamity worktree` subcommand joining or leaving, `.stamity/worktree.json`
+  changing shape, and the receipt's `version` moving off 1. A trigger whose
+  condition has fired is worth nothing, so it is repointed rather than deleted.
+  The page's verified-at commit is restamped by whoever re-attests the page.
 - `docs/cli-reference.md` is regenerated with `node scripts/generate-docs.mjs`
-  (`docs/cli-reference.md:5`), which adds the ninth command, its flags, and —
-  because REQ-WORKTREE-009 gives it a first producer — removes `NETWORK_ERROR`
-  from the "Reserved, never thrown" note (`docs/cli-reference.md:94-101`).
+  (`docs/cli-reference.md:5`), which adds the ninth command and its flags. The
+  "Reserved, never thrown" note does not come off the page by regeneration,
+  though, and that is the part worth stating precisely: **the note is
+  source-owned, not derived.** It was rendered from a `RESERVED_CODES` set
+  declared in the renderer, so regenerating against the new command surface
+  would have reproduced it verbatim over a code that now has a producer. The
+  closure is a source change — `NETWORK_ERROR` leaves the reserved set (which
+  empties, and goes with it rather than staying behind as a branch no render can
+  reach), and its table row is reworded to name `worktree setup`'s branch-plan
+  fetch and to keep the one distinction the classifier draws: a remote with no
+  such branch is a fall-through to `create`, not this code
+  (`src/cli/docs/cliReference.ts:113-135`). The page is regenerated after that,
+  and the byte gate holds the two together.
+- The suite case that asserted the negative is re-pointed rather than deleted.
+  It carried a file-list census over `src` designed to fire the moment a
+  producer appeared, and it fired: the assertion now names the five files and
+  keeps the same firing property for a SECOND producer, which is what would make
+  the row's single-producer wording false in turn. Its census runs with
+  `git grep --untracked` so the answer is a property of the source tree rather
+  than of git's index — the lane's own files are the reason that distinction
+  became load-bearing (`test/cli/docs/cliReference.test.ts`).
+- One further generated-page claim closes in the same change, and this lane is
+  what falsified it: every mutating command's section read "Writes to the
+  repository", which `worktree` does not do — `setup` materializes into the farm,
+  OUTSIDE the working tree (invariant 1). The renderer cannot introspect where a
+  command writes and a hand-kept table of destinations would be the second
+  unversioned copy that page exists to retire, so the sentence now claims only
+  what `mutating` asserts: that the command writes, and that `--dry-run` previews
+  it (`src/cli/docs/cliReference.ts:377-395`).
 - `docs/getting-started.md:139-159` gains one sentence pointing at the verb from
   the state table, since that table is where a reader learns `.env.mcp` does not
   travel.
@@ -848,8 +1034,13 @@ trigger nobody will trust the next time.
 
 ## Acceptance criteria
 
-One set per requirement. Forty-seven criteria; each is machine-checkable unless
-tagged otherwise.
+One set per requirement. Eighty-seven criteria; each is machine-checkable unless
+tagged otherwise. (The count read "forty-seven" while the list held sixty-six,
+and the riders of the build rounds then took it to eighty-seven: a hand-kept
+number over a list several rounds have appended to. Restated here against the
+current list — `grep -c "^- GIVEN"` between this heading and the next is how it
+was derived, and is the check worth running the next time this section grows
+rather than counting by eye.)
 
 **REQ-WORKTREE-001**
 
@@ -872,6 +1063,11 @@ tagged otherwise.
   the resolved absolute path, and no directory is created.
 - GIVEN a name containing `/` (`feat/api`) WHEN setup runs THEN the worktree
   path is `<farm>/feat/api` and the run succeeds.
+- GIVEN a clone with one linked worktree WHEN `list`, `setup` and `cleanup` are
+  invoked with the cwd inside THAT worktree THEN each resolves the same repo
+  root, the same farm and the same policy file as the identical invocation from
+  the main checkout — no farm is created beneath the linked worktree, and the
+  inventory the three read is one list.
 
 **REQ-WORKTREE-003**
 
@@ -884,12 +1080,30 @@ tagged otherwise.
   for `node_modules/.cache` with `strategy: "skip"`, declared in EITHER order
   WHEN the entries resolve THEN `node_modules/.cache` resolves to `skip` and
   `node_modules/foo` resolves to `symlink`, identically for both orders.
-- GIVEN an entry naming `README.md` (tracked) WHEN the file is read THEN it
-  fails with `VALIDATION_ERROR` naming the path and stating the checkout already
-  supplies it.
+- GIVEN an entry naming `README.md` (tracked) WHEN **setup resolves its plan**
+  THEN it fails with `VALIDATION_ERROR` naming the path and stating the checkout
+  already supplies it. *(The moment is part of the criterion: admissibility
+  needs git's answer about a path, so it runs at plan resolution and not at the
+  read that parses the file.)*
 - GIVEN an entry naming `.stamity/review-gate.json` (neither tracked nor
-  ignored) WHEN the file is read THEN it fails with `VALIDATION_ERROR` naming
-  the path and both conditions.
+  ignored) WHEN **setup resolves its plan** THEN it fails with
+  `VALIDATION_ERROR` naming the path and both conditions.
+- GIVEN a `skip` row naming a path git TRACKS — a repository that commits
+  `node_modules`, under the built-in defaults — WHEN setup resolves its plan
+  THEN it does NOT fail: the row writes nothing, so it is never checked, and the
+  worktree is created with no `node_modules` materialized.
+- GIVEN a row named `node_modules/` and a second row named `node_modules` WHEN
+  the file is read THEN it fails with `VALIDATION_ERROR` as a contested path,
+  because the trailing slash is normalized before the contest is decided.
+- GIVEN a document carrying the top-level key `entry` WHEN the file is read THEN
+  it fails with `VALIDATION_ERROR` naming `entry` and listing the four keys a
+  document declares, and the built-in defaults are NOT silently used instead.
+- GIVEN a row carrying the key `strategey` WHEN the file is read THEN it fails
+  with `VALIDATION_ERROR` naming the key, the row's `list[index]` label, and the
+  four keys a row declares.
+- GIVEN a row whose `path` contains a newline WHEN the file is read THEN it
+  fails with `VALIDATION_ERROR` stating that the path carries a control
+  character, and the message itself is a single line.
 - GIVEN no `.stamity/worktree.json` at all WHEN setup runs THEN it succeeds and
   the resolved entry set equals the REQ-WORKTREE-004 defaults.
 
@@ -917,6 +1131,25 @@ tagged otherwise.
 - GIVEN a copy whose destination directory is read-only WHEN materialization
   runs THEN the entry's outcome is `failed` carrying the errno, and no partial
   file is left at the destination.
+- GIVEN a `copy` row naming a directory holding two files in two subdirectories
+  WHEN materialization runs THEN the results carry one row PER FILE, each with
+  its own `sha256`, and no row addresses the directory itself.
+- GIVEN that same directory row with a `skip` override on one of its
+  subdirectories WHEN materialization runs THEN the files under the override are
+  not placed and no row names them, while the others are placed.
+- GIVEN a `copy` row naming a directory every path under which is skipped WHEN
+  materialization runs THEN exactly one row is produced, its outcome is
+  `skipped`, and its reason states that every path under the directory is
+  skipped by the policy.
+- GIVEN a `symlink` row whose SOURCE does not exist WHEN materialization runs
+  THEN the outcome is `absent`, no link is created at the destination, and the
+  run's status is not `partial`.
+- GIVEN a `secret: true` copy whose destination already exists at mode `0644` on
+  a POSIX platform WHEN materialization runs THEN the outcome is `skipped`, the
+  destination's bytes are unchanged, and its mode afterwards is `0600`.
+- GIVEN a `skipped` (already present) entry WHEN the receipt is built THEN it
+  carries a row for that path whose `sha256` is the digest of the bytes AT THE
+  DESTINATION, and an `absent` or `failed` entry contributes no row.
 
 **REQ-WORKTREE-006**
 
@@ -947,7 +1180,19 @@ tagged otherwise.
 - GIVEN a worktree registered outside the farm WHEN `cleanup --all` runs THEN it
   is listed as `other`, skipped, and still present afterwards.
 - GIVEN `stamity worktree cleanup` with no name and no `--all` WHEN it runs THEN
-  it fails with `USAGE` naming both spellings.
+  it fails with `USAGE` naming both spellings. *(Asserted at the observable
+  surface. The engine raises `VALIDATION_ERROR` and the verb re-raises it as
+  `USAGE`; the criterion is about what the operator gets, so it is unchanged by
+  that split.)*
+- GIVEN the same invocation WHEN the engine's `cleanup` is called directly THEN
+  it throws `VALIDATION_ERROR` whose message and `next` name both spellings —
+  the sentence the verb re-raises, asserted once so the two layers cannot drift
+  into two different wordings.
+- GIVEN `stamity worktree cleanup nosuchname` in a repo with one managed
+  worktree named otherwise WHEN it runs THEN it fails with `VALIDATION_ERROR`
+  naming `nosuchname` and the resolved farm, its `next` names
+  `stamity worktree list`, the exit status is 1, and the existing worktree is
+  still present.
 
 **REQ-WORKTREE-008**
 
@@ -1014,6 +1259,13 @@ tagged otherwise.
   the entry table of the second, row for row and in the same order.
 - GIVEN `--dry-run` WHEN setup runs THEN no directory is created, no lock file
   appears, and `git worktree list` is unchanged.
+- GIVEN an existing local branch `feat`, a TTY on stdin, and no `--use-existing`
+  WHEN `setup feat --dry-run` runs THEN it exits 0 having asked NOTHING, and the
+  plan lists the `attach` gate with the answer this invocation gives it
+  (withheld) plus the statement that an interactive run would ask.
+- GIVEN that same repo WHEN the dry run is repeated with `--use-existing` THEN
+  the same gate is listed as granted, still with no prompt written to any
+  stream.
 
 **REQ-WORKTREE-013**
 
@@ -1056,6 +1308,10 @@ tagged otherwise.
   `strategy: "copy"`.
 - GIVEN a `symlink` entry whose creation raises `ENOSPC` WHEN materialization
   runs THEN the entry's outcome is `failed` and no fallback is attempted.
+- GIVEN a `symlink` entry whose SOURCE is a directory and whose creation raises
+  `EPERM` WHEN materialization runs THEN the outcome is `failed` carrying
+  `errno: "EPERM"`, the destination holds no copied tree, and the message names
+  both `copy` and `skip` as the strategies that would work.
 - GIVEN `process.platform === "win32"` WHEN a `secret: true` entry is copied
   THEN no `chmod` is attempted and the report states the permissions were left
   to the platform.
@@ -1075,11 +1331,31 @@ tagged otherwise.
 
 - GIVEN `docs/working-with-stamity.md` after the change WHEN it is read THEN it
   contains neither "there is no managed parallel lane yet" nor "is a planned
-  feature", and its re-open note no longer names the worktree lane.
+  feature", and its re-open note no longer names the lane SHIPPING as a pending
+  condition. *(The note still names the worktree lane, and has to: its three new
+  conditions — a subcommand joining or leaving, the policy file's shape, the
+  receipt version — are what can falsify the rewritten section. What had to go
+  is the fired condition, not the subject.)*
+- GIVEN that page WHEN its parallel-branch section is read THEN it names
+  `stamity worktree setup`, `stamity worktree list` and `stamity worktree
+  cleanup`, states that the farm is outside the repository, states that a branch
+  is never deleted, and still acknowledges that plain `git worktree` works.
 - GIVEN `docs/cli-reference.md` after the change WHEN it is regenerated by
   `node scripts/generate-docs.mjs` THEN the file is byte-identical to the
   committed one, lists `stamity worktree`, and does not list `NETWORK_ERROR` as
   never thrown.
+- GIVEN the rendered page WHEN its `NETWORK_ERROR` row is read THEN it names
+  `worktree setup` and `origin` as the producer, and states that a remote with
+  no such branch is not this code; and the strings "Reserved, never thrown" and
+  "no code path in this build produces" appear nowhere on the page.
+- GIVEN a census of `NETWORK_ERROR` across `src` — including untracked files, so
+  the answer is a property of the source tree rather than of git's index — WHEN
+  it runs THEN it returns exactly the declaration, the renderer, the transient
+  classifier, and the two worktree files; a SIXTH file fails the case, because a
+  second producer makes the row's single-producer wording false.
+- GIVEN the rendered page WHEN every mutating command's section is read THEN
+  none of them claims the write lands in the repository, and each carries the
+  location-free sentence naming `--dry-run`.
 - GIVEN the rewritten section WHEN a reader follows it THEN every command it
   names exists in the CLI reference table.
   *(judgment: reviewer — prose accuracy is not machine-checkable; the two
@@ -1157,7 +1433,7 @@ and the surrounding symbol is the durable address.
 | `source` | `src/workspace/model.ts:20-25` | the precedent for an operator-authored policy file outside the manifest |
 | `source` | `scripts/leak-gate.mjs:382-388,456-468` | the reserved-name rule this page is written under, and the untracked-file walk |
 | `doc` | `docs/getting-started.md:139-159` | the state table and the commit decision REQ-WORKTREE-004 is settled from |
-| `doc` | `docs/working-with-stamity.md:5-9,113-134` | the published promise and its re-open trigger |
+| `doc` | `docs/working-with-stamity.md:5-9,113-182` | the published promise and its re-open trigger; the line spans are the post-rewrite ones, and the promise text they held is quoted in Context |
 | `doc` | `docs/cli-reference.md:5,71-105` | the generated page, its exit table, and the reserved `NETWORK_ERROR` note |
 | `spec` | `docs/specs/overlay-layers.md:118-145,368-381` | the sibling spec's fail-closed posture, adopted here |
 | `memory` | `stamity-worktree-reference-study` | the reference implementation's lifecycle, receipts, state tiers, and the keep/fix list |

@@ -354,7 +354,37 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // emitters that write a tool grant: above the roster it reads, below every
   // consumer of the answer.
   "src/roster/agentGrants.ts": { unit: "s2b-u04", wave: 4 },
+  // The worktree lane's engine primitives (WT-U1a). Wave 4 is their true depth
+  // and not a phase number: the deepest thing any of them imports is the
+  // wave-3 atomic-write substrate (the receipt writes through `atomicWriteFile`
+  // with the git dir as its boundary; materialization reuses
+  // `assertWriteTargetContained`), and nothing here reads a wave-4 module. They
+  // are one unit because they hold one contract between them — the policy
+  // resolves a strategy, materialization performs it and reports what it did,
+  // and the receipt records that report so cleanup can invert it — so the two
+  // edges inside the set (materialize -> receipt for the row shape and the
+  // digest) are same-unit rather than a layering claim. Placed at their final
+  // depth now, so WT-U1b's git orchestration lands above them as a new row
+  // rather than as a re-plan of this one.
+  "src/worktree/policy.ts": { unit: "wt-u1a", wave: 4 },
+  "src/worktree/receipt.ts": { unit: "wt-u1a", wave: 4 },
+  "src/worktree/materialize.ts": { unit: "wt-u1a", wave: 4 },
   // wave 5
+  // The worktree lane's git orchestration (WT-U1b), one wave above the
+  // primitives it drives. Wave 5 is its true depth: `setup` and `cleanup`
+  // consume the wave-4 policy/receipt/materialize set and the wave-3 lock and
+  // atomic writer, and nothing here is read by a wave-4 module. One unit,
+  // because the three hold one contract between them — `git` owns the single
+  // subprocess seam and the pure parsers over git's output, `setup` composes a
+  // checkout under the name lock that spans check -> add -> materialize ->
+  // receipt, and `cleanup` inverts exactly that receipt — so the edges inside
+  // the set (`setup` -> `git`, `cleanup` -> `git`, `cleanup` -> `setup` for
+  // the shared lock path and consent vocabulary) are same-unit rather than a
+  // layering claim. The CLI verb that calls them is WT-U2's and lands at wave
+  // 14 like every other command, which is why nothing here climbs.
+  "src/worktree/git.ts": { unit: "wt-u1b", wave: 5 },
+  "src/worktree/setup.ts": { unit: "wt-u1b", wave: 5 },
+  "src/worktree/cleanup.ts": { unit: "wt-u1b", wave: 5 },
   "src/manifest/ledger.ts": { unit: "p1-37", wave: 5 },
   "src/workspace/sync.ts": { unit: "p1-38", wave: 5 },
   // Authored as p1-39; re-cut into s2d-10 with the catalog above — see there.
@@ -426,6 +456,17 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/commands/clean.ts": { unit: "p2-10", wave: 14 },
   "src/cli/commands/learn.ts": { unit: "p2-11", wave: 14 },
   "src/cli/notice/updateNotice.ts": { unit: "p2-12", wave: 14 },
+  // The worktree verb (WT-U2), at the leaf-command wave rather than beside
+  // `workspace.ts` one above it. Wave 14 is its true depth: everything it calls
+  // is engine — the wave-5 setup/cleanup orchestration and the wave-4/3 policy
+  // and git modules under them — plus the wave-13 kit, and it imports no
+  // wave-14 command engine, which is the only reason `workspace.ts` sits at 15.
+  // The row was planned at this depth by WT-U1b, so landing the verb is not a
+  // re-plan of the wave map. Its value imports of `src/worktree/setup.ts` and
+  // `src/worktree/cleanup.ts` are also what retire those six modules from the
+  // registry-only ratchet below: the composition root wired them, and until
+  // this file existed nothing called them.
+  "src/cli/commands/worktree.ts": { unit: "wt-u2", wave: 14 },
   // wave 15 (P2 wave 2) — commands composed over a wave-14 engine
   "src/cli/commands/init.ts": { unit: "p2-13", wave: 15 },
   "src/cli/commands/init/panel.ts": { unit: "p2-13", wave: 15 },

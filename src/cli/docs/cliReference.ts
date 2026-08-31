@@ -118,22 +118,38 @@ const CODE_MEANINGS: Record<ErrorCode, string> = {
   INTEGRITY_ERROR: "output cannot be regenerated to match its source",
   FS_ERROR: "a filesystem operation failed",
   CLEAN_ERROR: "removal failed part-way",
-  NETWORK_ERROR: "nothing in this build throws it — see the reserved note under the table",
+  // Until the worktree lane landed, this row read "nothing in this build throws
+  // it" and the table carried a "Reserved, never thrown" note beneath it. The
+  // branch-plan fetch in `src/worktree/git.ts` now throws it, so both the row
+  // and the note were false the moment that code shipped — and the note was the
+  // worse of the two, because it told a CI author the branch was unreachable.
+  // The row names the producer instead, and it names the ONE thing that is not
+  // this code: a remote that simply has no such branch is a fall-through to
+  // creating it, not a failure.
+  NETWORK_ERROR:
+    "a git transport failed — `worktree setup` could not reach `origin` to plan its branch; " +
+    "a remote with no such branch is not this",
   LOCK_TIMEOUT:
     "a write lock could not be taken before the retry schedule ran out; another `stamity` " +
     "run was holding it",
 };
 
-/**
- * Codes the union declares that no code path in this build can produce.
+/*
+ * There is no "reserved codes" set here any more, and its absence is the point.
  *
- * They stay in the table because the type still declares them and a reader who
- * greps the source will find them, but they are labelled: the preamble tells CI
- * authors to branch on `error.code`, and a row that looks like the others is an
- * instruction to write a branch that can never be taken. `NETWORK_ERROR` is the
- * live example — the CLI makes no outbound call that throws it.
+ * The page used to carry a note under the table — "Reserved, never thrown:
+ * `NETWORK_ERROR`" — for codes the union declared that no code path produced.
+ * `NETWORK_ERROR` was its only member, and the worktree lane gave it a producer
+ * (`fetchBranch` in `src/worktree/git.ts`), which made the note the one kind of
+ * documentation defect this module exists to prevent: a confident negative
+ * claim about code, restated by hand, that the code then outgrew.
+ *
+ * The machinery went with the note rather than staying behind as an empty set,
+ * because a renderer branch no render can reach is a second copy waiting to go
+ * stale in its own right. Every row in the table above now describes a code
+ * something can throw; if a future code arrives with no producer, the change
+ * that adds it owns saying so.
  */
-const RESERVED_CODES: ReadonlySet<ErrorCode> = new Set<ErrorCode>(["NETWORK_ERROR"]);
 
 // ── Command introspection ────────────────────────────────────────
 
@@ -268,9 +284,6 @@ function indexSection(facts: readonly CommandFacts[]): string[] {
 }
 
 function globalSection(facts: readonly CommandFacts[]): string[] {
-  const reserved = (Object.keys(CODE_MEANINGS) as ErrorCode[]).filter((errorCode) =>
-    RESERVED_CODES.has(errorCode),
-  );
   return [
     "## What every command shares",
     "",
@@ -341,18 +354,6 @@ function globalSection(facts: readonly CommandFacts[]): string[] {
       ]),
     ),
     "",
-    ...(reserved.length === 0
-      ? []
-      : [
-          `Reserved, never thrown: ${reserved.map(code).join(", ")}. The engine's type declares`,
-          `${reserved.length === 1 ? "it" : "them"}, and no code path in this build produces`,
-          `${reserved.length === 1 ? "it" : "one"} — so a CI branch on ${
-            reserved.length === 1 ? "that code" : "those codes"
-          } can never be taken. Listed`,
-          "rather than dropped so the table stays a complete reading of the type, and labelled",
-          "rather than left to look like the rows above it.",
-          "",
-        ]),
     "Two more codes exist only at the CLI edge and never come from the engine:",
     `${code("USAGE")} for a rejected command line, and ${code("FAILURE")} for a fault that`,
     "carries no engine classification.",
@@ -375,7 +376,21 @@ function commandSection(command: CommandFacts): string[] {
 
   lines.push(
     command.mutating
-      ? `Writes to the repository, so ${code("--dry-run")} previews the change without making it.`
+      ? // NOT "writes to the repository". That blanket sentence was printed on
+        // every mutating command's section and was false for at least two of
+        // them: `worktree setup` materializes a checkout into the FARM — a
+        // directory OUTSIDE this repository, named by the lane policy — and
+        // `workspace sync` rewrites MEMBER repositories' manifests. A reader
+        // who took it at face value would go looking for the change in a
+        // working tree that never gained one.
+        //
+        // Nothing on a `CommandModule` says where its writes land, and a
+        // hand-kept table of destinations here would be exactly the second,
+        // unversioned copy this page exists to retire. So the sentence claims
+        // only what `mutating` actually asserts — that the command writes, and
+        // that the shared flag previews it — and leaves WHERE to the command's
+        // own arguments and flags below.
+        `Writes when it runs, so ${code("--dry-run")} previews the change without making it.`
       : "Reads only. Nothing is written, so there is no preview mode to need.",
     "",
   );
