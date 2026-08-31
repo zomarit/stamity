@@ -8,7 +8,7 @@ obsolete_when: design tooling emits a themed three-tier token graph that clears 
 spawns: [researcher, implementer, reviewer]
 ---
 
-# /stamity-design-system-create
+# /st-design-system-create
 
 Generates the token graph and the design document a repo's interface work reuses. It
 starts from what the repo already has, delegates every write, and gates what came back.

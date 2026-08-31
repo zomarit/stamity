@@ -169,10 +169,13 @@ export const CONTENT_PREFIX = "stamity-";
  * rename is an unreclaimable-orphan bug in every already-installed repo. So the
  * short prefix lands on the typed half only, and the marker half holds still.
  *
- * Pack-supplied artifacts are the documented exception: they keep
- * {@link CONTENT_PREFIX} whatever their class, because their filenames are
- * hashed into a signed `pack.json` manifest that this cut does not re-sign.
- * {@link contentPrefixFor} is the one place that rule is written down.
+ * Origin does not enter into it. An installed pack's commands and skills are
+ * typed after a slash exactly like the corpus's, so they take this prefix too:
+ * the surface an operator sees is one namespace, not one per supplier. The
+ * earlier cut held packs back at {@link CONTENT_PREFIX} only because their
+ * filenames are hashed into a signed `pack.json`; the manifests were
+ * regenerated with the rename, so the carve-out has nothing left to protect.
+ * {@link contentPrefixFor} is the one place the class rule is written down.
  */
 export const INVOCABLE_CONTENT_PREFIX = "st-";
 
@@ -196,8 +199,9 @@ export const ENGINE_CONTENT_PREFIXES: readonly string[] = [
 ];
 
 /**
- * The subject {@link contentPrefixFor} rules on: a content class, plus whether
- * an installed pack supplied the artifact.
+ * The subject {@link contentPrefixFor} rules on: a content class, and nothing
+ * else. Where the artifact came from is deliberately absent — a corpus command
+ * and a pack command are typed the same way, so they are prefixed the same way.
  *
  * Structural on purpose — this module is a zero-import leaf, and a `CatalogItem`
  * or a `CanonicalFile` satisfies it as-is.
@@ -205,8 +209,6 @@ export const ENGINE_CONTENT_PREFIXES: readonly string[] = [
 export interface ContentPrefixSubject {
   /** Content class (`"command"`, `"skill"`, `"agent"`, `"rule"`). */
   readonly type: string;
-  /** Present when an installed pack supplied the artifact; absent for the corpus. */
-  readonly provenance?: { readonly pack: string };
 }
 
 /**
@@ -216,9 +218,13 @@ export interface ContentPrefixSubject {
  * frontmatter id calls this, so the typed command, the file on disk, the
  * charter's touchpoint spelling and the ownership gate cannot drift apart by
  * each re-deciding the question locally.
+ *
+ * Class is the whole of it. The invocable classes take
+ * {@link INVOCABLE_CONTENT_PREFIX}, everything else takes
+ * {@link CONTENT_PREFIX}, and an installed pack's artifacts answer to the same
+ * two lines as the corpus's.
  */
 export function contentPrefixFor(artifact: ContentPrefixSubject): string {
-  if (artifact.provenance !== undefined) return CONTENT_PREFIX;
   return artifact.type === "command" || artifact.type === "skill"
     ? INVOCABLE_CONTENT_PREFIX
     : CONTENT_PREFIX;

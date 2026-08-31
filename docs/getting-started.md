@@ -38,7 +38,7 @@ answered them:
    previous setup from the predecessor project was detected (migrate, or leave it), or an
    existing agent config file was found (supplement it, replace it, or skip it). When both
    are present the first subsumes the second. If neither is present the question does not
-   appear. The migration path has its own page — [migration](migration.md).
+   appear.
 
 `-y` takes every default and asks nothing, which is what makes the command safe to pipe
 or run in CI. `--json` puts one JSON document on stdout, and because stdout belongs to
@@ -152,5 +152,4 @@ confirm the tree is clean.
 ## Where to go next
 
 - [Packs and trust](packs-and-trust.md) — installing content on top of the corpus, and what the gates check.
-- [Migration](migration.md) — moving a repository off the predecessor setup.
 - [Troubleshooting](troubleshooting.md) — exit codes, doctor rows, and the common failures.

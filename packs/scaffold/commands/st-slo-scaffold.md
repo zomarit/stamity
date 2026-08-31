@@ -8,7 +8,7 @@ obsolete_when: platform tooling derives vendor-neutral objectives and paired-win
 spawns: [implementer, reviewer]
 ---
 
-# /stamity-slo-scaffold
+# /st-slo-scaffold
 
 Gives a service its first reliability objectives: what is measured, what the target is,
 how much budget that leaves, and which alerts consume it. The command resolves the

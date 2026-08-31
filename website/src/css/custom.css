@@ -24,7 +24,67 @@
  * puts these declarations in the same specificity bucket, where being loaded after Infima wins.
  */
 
+/*
+ * Manrope, self-hosted. The file is served from this site's own origin rather than linked from
+ * Google's CDN, which is the difference between one request on a connection the browser already
+ * has and a second DNS lookup, TLS handshake and third-party round trip before any text can
+ * paint. It also means no visitor's IP reaches a third party to read these docs, and the site's
+ * typography cannot change or vanish underneath it.
+ *
+ * ONE FILE, EVERY WEIGHT. This is the variable cut: a single `wght` axis running 200-800, so the
+ * whole range costs 24 KB once instead of a request per weight. `font-weight: 200 800` declares
+ * that range to the browser — and declaring the *range* rather than a single value is the load-
+ * bearing part, because it is what lets the browser interpolate a real 600 off the axis instead
+ * of smearing the 400 into a synthetic bold. The numbers are the font's own: the `fvar` table in
+ * this file reports min=200 max=800.
+ *
+ * `font-display: swap` paints the text in the fallback stack immediately and swaps Manrope in on
+ * arrival. The alternative is a period of invisible text — the wrong trade for a docs site, where
+ * the words are the entire product and a reflow costs less than a blank page.
+ *
+ * THE `unicode-range` IS NOT DECORATION, AND IT IS COUPLED TO THIS FILE. The filename is upstream
+ * Manrope's, but the payload is the latin subset, so the range below states exactly which
+ * codepoints the file can actually draw; anything outside it falls through to the stack in
+ * `--ifm-font-family-base` instead of rendering as tofu. Every character currently in `docs/` and
+ * `src/` lands inside it. Replace the woff2 with a wider subset and this range has to widen with
+ * it, or the new glyphs are silently unreachable.
+ *
+ * THIS URL IS NOT THE ONE THAT SHIPS. Docusaurus resolves `url()` through webpack, so the built
+ * CSS points at a content-hashed copy under `/assets/fonts/` — which is the good outcome, because
+ * a hashed filename can be cached immutably in a way the stable path below cannot. The file stays
+ * in `static/fonts/` anyway so that an unhashed copy ships next to `OFL.txt`: the SIL Open Font
+ * License requires the licence to travel with the font, and it cannot travel with a name webpack
+ * invents at build time.
+ *
+ * The brackets are upstream Manrope's variable-font naming convention. They are percent-encoded
+ * here because `[` and `]` are reserved in a URI path and this is the correct spelling of the
+ * source form; webpack decodes them and re-emits the literal characters. Both spellings were
+ * fetched against the built site and both return the font, so the round trip is safe in either
+ * direction — worth knowing before anyone "fixes" one of them.
+ */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/Manrope%5Bwght%5D.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
+  /*
+   * Manrope in front of Infima's own base stack, which is reproduced below unaltered rather than
+   * trimmed: it is the fallback that renders the first paint under `swap`, and on any glyph
+   * outside the subset above, so it has to stay a complete stack in its own right. Infima derives
+   * `--ifm-heading-font-family` from this token, so headings follow without a second declaration.
+   *
+   * `--ifm-font-family-monospace` is deliberately absent. Code keeps the system mono stack.
+   */
+  --ifm-font-family-base: 'Manrope', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell,
+    Noto Sans, sans-serif, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+
   /*
    * The mark's own violet, unmodified: 6.12:1 on the paper below and 6.32:1 on white, so it is
    * legible as link text without being nudged off brand. The scale steps lightness by ±3/±5/±9,

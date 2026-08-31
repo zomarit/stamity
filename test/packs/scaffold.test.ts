@@ -74,10 +74,11 @@ const URL_ALLOWLIST: readonly string[] = ["rfc-editor.org", "owasp.org", "w3.org
 
 const URL_PATTERN = /https?:\/\/[^\s<>()"'\]]+/gi;
 const SUBSTITUTION_TOKEN = /\$\{STAMITY:[A-Z_]+\}/g;
-// Both prefixes, deliberately: core commands and skills are `st-<id>` and
-// pack-own artifacts stay `stamity-<id>`, so a guard anchored on one prefix is
-// blind to half the surface it exists to check. The captured group is the bare
-// id either way, which is what frontmatter declares.
+// Both prefixes, deliberately: commands and skills are `st-<id>` in the corpus
+// and in every pack alike, while agents and rules keep `stamity-<id>`, so a
+// guard anchored on one prefix is blind to half the surface it exists to
+// check. The captured group is the bare id either way, which is what
+// frontmatter declares.
 const COMMAND_MENTION = /\/(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
 const BARE_MENTION = /(?<![/A-Za-z0-9_-])(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
 
@@ -184,7 +185,7 @@ interface TriggerRow {
 /** A row built from literals, for the anti-shadowing fixture cases. */
 const row = (id: string, description: string, body = ""): TriggerRow => ({
   id,
-  relPath: `commands/stamity-${id}.md`,
+  relPath: `commands/st-${id}.md`,
   description,
   body,
 });
@@ -248,7 +249,7 @@ describe("scaffold pack — engine ingress", () => {
     expect(parsed.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(parsed.description).toBeTypeOf("string");
     expect(Object.keys(parsed.integrity).toSorted()).toEqual(
-      COMMAND_IDS.map((id) => `commands/stamity-${id}.md`).toSorted(),
+      COMMAND_IDS.map((id) => `commands/st-${id}.md`).toSorted(),
     );
     expect(parsed.declaredTools).toEqual(["claude", "cursor", "copilot", "codex"]);
     expect(parsed.permissions?.toolFootprint).toContain("edit");
@@ -259,7 +260,7 @@ describe("scaffold pack — engine ingress", () => {
     const files = await enumeratePackContent(PACK_ROOT);
 
     expect(files.map((file) => file.relPath)).toEqual(
-      COMMAND_IDS.map((id) => `commands/stamity-${id}.md`).toSorted(),
+      COMMAND_IDS.map((id) => `commands/st-${id}.md`).toSorted(),
     );
     expect(new Set(files.map((file) => file.contentClass))).toEqual(new Set(["commands"]));
 
@@ -338,17 +339,17 @@ describe("scaffold pack — engine ingress", () => {
 
   it("fixture: a body edited without regenerating its digest is refused", async () => {
     const parsed = await manifest;
-    const relPath = "commands/stamity-auth-scaffold.md";
+    const relPath = "commands/st-auth-scaffold.md";
     const t = tempDir();
     await t.seedFiles({
       [PACK_MANIFEST_FILE]: await manifestRaw,
       [relPath]: `${await readFile(join(PACK_ROOT, relPath), "utf8")}\nappended line\n`,
-      "commands/stamity-slo-scaffold.md": await readFile(
-        join(PACK_ROOT, "commands", "stamity-slo-scaffold.md"),
+      "commands/st-slo-scaffold.md": await readFile(
+        join(PACK_ROOT, "commands", "st-slo-scaffold.md"),
         "utf8",
       ),
-      "commands/stamity-design-system-create.md": await readFile(
-        join(PACK_ROOT, "commands", "stamity-design-system-create.md"),
+      "commands/st-design-system-create.md": await readFile(
+        join(PACK_ROOT, "commands", "st-design-system-create.md"),
         "utf8",
       ),
     });
@@ -873,12 +874,14 @@ describe("scaffold pack — anti-shadowing", () => {
           );
           continue;
         }
-        // The escape hatch accepts either live prefix, because the neighbour set spans both
-        // namespaces: a core command or skill is named `st-<id>` and a pack-own artifact is
-        // named `stamity-<id>`. Anchored on `stamity-` alone this clause could never be
-        // satisfied for a core neighbour — the declaration it demands would cite an id that
-        // no longer exists — so a legitimate declared overlap with core would read as
-        // shadowing and there would be no wording that cleared it.
+        // The escape hatch accepts either live prefix. Commands and skills — the only
+        // classes in this neighbour set — are `st-<id>` whether the corpus or a pack
+        // supplies them, so `st-` is the spelling a declaration will use today; the
+        // `stamity-` alternative is kept because agents and rules still carry it and a
+        // widened neighbour filter would otherwise silently stop clearing declarations.
+        // Anchored on `stamity-` alone this clause could never be satisfied at all — the
+        // declaration it demands would cite an id that no longer exists — so a legitimate
+        // declared overlap would read as shadowing with no wording that cleared it.
         const declared =
           entry.body.includes(`st-${other.id}`) || entry.body.includes(`stamity-${other.id}`);
         if (score >= OVERLAP_DECLARE_AT && !declared) {
@@ -920,7 +923,18 @@ describe("scaffold pack — anti-shadowing", () => {
     // Same description on both sides of the escape hatch: the only difference is
     // whether the body names the artifact it overlaps.
     const undeclared = row("design-system-create", generatorDescription);
+    // The live spelling: `design-system-detect` is a skill, and every skill —
+    // corpus or pack — is `st-<id>` now, so this is the wording a real pack
+    // body would use to declare the overlap.
     const declared = row(
+      "design-system-create",
+      generatorDescription,
+      "Consumes the inventory st-design-system-detect writes.",
+    );
+    // The long prefix still clears the hatch, because agents and rules keep it.
+    // Kept as its own row so the second accepted spelling has a case of its own
+    // rather than riding on the first one.
+    const declaredLongPrefix = row(
       "design-system-create",
       generatorDescription,
       "Consumes the inventory stamity-design-system-detect writes.",
@@ -928,10 +942,11 @@ describe("scaffold pack — anti-shadowing", () => {
 
     expect(shadowingProblems([undeclared], [detector])).toEqual([
       expect.stringMatching(
-        /stamity-design-system-create\.md: description overlaps design-system-detect at 0\.\d\d without naming it/,
+        /st-design-system-create\.md: description overlaps design-system-detect at 0\.\d\d without naming it/,
       ),
     ]);
     expect(shadowingProblems([declared], [detector])).toEqual([]);
+    expect(shadowingProblems([declaredLongPrefix], [detector])).toEqual([]);
   });
 
   it("fixture: a near-identical description trips the hard cap, which no declaration clears", () => {
@@ -941,7 +956,7 @@ describe("scaffold pack — anti-shadowing", () => {
     const clone = row(
       "auth-generate",
       "Builds the first authentication layer for a service that has none at all.",
-      "Overlaps stamity-auth-scaffold deliberately.",
+      "Overlaps st-auth-scaffold deliberately.",
     );
 
     expect(shadowingProblems([clone], [original])).toEqual([

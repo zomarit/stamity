@@ -8,7 +8,7 @@ obsolete_when: release tooling natively couples the version decision, attested a
 spawns: [implementer, test-runner, reviewer, fixer, devops]
 ---
 
-# /stamity-release
+# /st-release
 
 Assemble a release; hand the publish decision to a human. Everything this
 command does is reversible. Every one-way door is somebody else's keystroke.
@@ -110,7 +110,7 @@ Delegated to the devops sub-agent, which runs the project's build, produces the
 artifacts beside its output, and reports what it could not produce. Skipping a
 row silently is the failure this step exists to prevent; an unproduced artifact
 is named in the handoff, and a failing build stops the cut as a red gate does.
-The artifact set and its command shapes are the `stamity-release` skill's Step 5
+The artifact set and its command shapes are the `st-release` skill's Step 5
 — cited, not restated, because two copies of one table drift. The floor:
 
 every release carries build provenance signed through a transparency log plus
@@ -152,7 +152,7 @@ automatic unpublish or an automatic rollback is never taken by this flow — the
 operator does it or approves it.
 
 When a release causes a production incident, hand off to
-`/stamity-incident-response`, which owns severity, mitigation, and the
+`/st-incident-response`, which owns severity, mitigation, and the
 post-mortem. This command's job ended at the gate it stopped in front of.
 
 ## Model classes

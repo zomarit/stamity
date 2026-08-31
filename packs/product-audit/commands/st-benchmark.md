@@ -8,7 +8,7 @@ obsolete_when: the project's CI reports per-metric regression verdicts with nois
 spawns: [researcher, reviewer]
 ---
 
-# /stamity-benchmark
+# /st-benchmark
 
 Measures, compares, and reports. **This command assesses; it never modifies
 product code.** It writes measurements and a report under `.stamity/`, and an
@@ -185,7 +185,7 @@ findings leave this command:
   class change, a dependency that costs what it costs — routes to
   `/st-plan`.
 - A per-module profiling pass, when the regression's cause is not visible from
-  the diff, is the `stamity-perf-audit` skill's subject, not this command's.
+  the diff, is the `st-perf-audit` skill's subject, not this command's.
 
 When a run opens a regression epic on a linked board rather than a report:
 

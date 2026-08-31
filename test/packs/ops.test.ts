@@ -62,13 +62,13 @@ const PACK_IDENTITY =
 const SHIPPED_FILES: readonly string[] = [
   "agents/stamity-devops.md",
   "agents/stamity-incident-responder.md",
-  "commands/stamity-incident-response.md",
-  "commands/stamity-release.md",
-  "skills/stamity-ci-pipeline/SKILL.md",
-  "skills/stamity-containerize/SKILL.md",
-  "skills/stamity-gh-agentic-workflows/SKILL.md",
-  "skills/stamity-incident-response/SKILL.md",
-  "skills/stamity-release/SKILL.md",
+  "commands/st-incident-response.md",
+  "commands/st-release.md",
+  "skills/st-ci-pipeline/SKILL.md",
+  "skills/st-containerize/SKILL.md",
+  "skills/st-gh-agentic-workflows/SKILL.md",
+  "skills/st-incident-response/SKILL.md",
+  "skills/st-release/SKILL.md",
 ];
 
 /**
@@ -106,45 +106,45 @@ const DEGREASE_CEILING = Math.floor(PREDECESSOR_MOVER_LINES * 0.6);
  * that starts writing somewhere new has no row to hide behind.
  */
 const WRITE_CLAIMS: readonly { path: string; body: string; claim: string }[] = [
-  { path: "CHANGELOG.md", body: "skills/stamity-release/SKILL.md", claim: "`CHANGELOG.md`" },
-  { path: "package.json", body: "skills/stamity-release/SKILL.md", claim: "`package.json` or the stack's" },
-  { path: "package-lock.json", body: "skills/stamity-release/SKILL.md", claim: "`package-lock.json`" },
-  { path: "pnpm-lock.yaml", body: "skills/stamity-release/SKILL.md", claim: "`pnpm-lock.yaml`" },
-  { path: "yarn.lock", body: "skills/stamity-release/SKILL.md", claim: "`yarn.lock`" },
-  { path: "dist/**", body: "skills/stamity-release/SKILL.md", claim: "dist/sbom.cdx.json" },
+  { path: "CHANGELOG.md", body: "skills/st-release/SKILL.md", claim: "`CHANGELOG.md`" },
+  { path: "package.json", body: "skills/st-release/SKILL.md", claim: "`package.json` or the stack's" },
+  { path: "package-lock.json", body: "skills/st-release/SKILL.md", claim: "`package-lock.json`" },
+  { path: "pnpm-lock.yaml", body: "skills/st-release/SKILL.md", claim: "`pnpm-lock.yaml`" },
+  { path: "yarn.lock", body: "skills/st-release/SKILL.md", claim: "`yarn.lock`" },
+  { path: "dist/**", body: "skills/st-release/SKILL.md", claim: "dist/sbom.cdx.json" },
   {
     path: ".github/workflows/**",
-    body: "skills/stamity-gh-agentic-workflows/SKILL.md",
+    body: "skills/st-gh-agentic-workflows/SKILL.md",
     claim: "`.github/workflows/`",
   },
-  { path: ".gitlab-ci.yml", body: "skills/stamity-ci-pipeline/SKILL.md", claim: "`.gitlab-ci.yml`" },
+  { path: ".gitlab-ci.yml", body: "skills/st-ci-pipeline/SKILL.md", claim: "`.gitlab-ci.yml`" },
   {
     path: "azure-pipelines.yml",
-    body: "skills/stamity-ci-pipeline/SKILL.md",
+    body: "skills/st-ci-pipeline/SKILL.md",
     claim: "`azure-pipelines.yml`",
   },
-  { path: "Dockerfile", body: "skills/stamity-containerize/SKILL.md", claim: "`Dockerfile`" },
-  { path: ".dockerignore", body: "skills/stamity-containerize/SKILL.md", claim: "`.dockerignore`" },
+  { path: "Dockerfile", body: "skills/st-containerize/SKILL.md", claim: "`Dockerfile`" },
+  { path: ".dockerignore", body: "skills/st-containerize/SKILL.md", claim: "`.dockerignore`" },
   {
     path: "docker-compose.yml",
-    body: "skills/stamity-containerize/SKILL.md",
+    body: "skills/st-containerize/SKILL.md",
     claim: "`docker-compose.yml`",
   },
-  { path: "compose.yaml", body: "skills/stamity-containerize/SKILL.md", claim: "`compose.yaml`" },
-  { path: "k8s/**", body: "skills/stamity-containerize/SKILL.md", claim: "`k8s/`" },
+  { path: "compose.yaml", body: "skills/st-containerize/SKILL.md", claim: "`compose.yaml`" },
+  { path: "k8s/**", body: "skills/st-containerize/SKILL.md", claim: "`k8s/`" },
   {
     path: "docs/incidents/**",
-    body: "skills/stamity-incident-response/SKILL.md",
+    body: "skills/st-incident-response/SKILL.md",
     claim: "`docs/incidents/`",
   },
   {
     path: "docs/runbooks/**",
-    body: "skills/stamity-incident-response/SKILL.md",
+    body: "skills/st-incident-response/SKILL.md",
     claim: "`docs/runbooks/`",
   },
   {
     path: ".stamity/inbox.md",
-    body: "commands/stamity-incident-response.md",
+    body: "commands/st-incident-response.md",
     claim: "`.stamity/inbox.md`",
   },
 ];
@@ -643,7 +643,7 @@ describe("ops pack — anti-shadowing", () => {
 
   it("the containerize exemplar pins both stages by digest, with no floating base", async () => {
     const skill = (await packFiles).find(
-      (file) => file.relPath === "skills/stamity-containerize/SKILL.md",
+      (file) => file.relPath === "skills/st-containerize/SKILL.md",
     );
     expect(skill).toBeDefined();
     const body = skill!.parsed.body;
@@ -683,7 +683,7 @@ describe("ops pack — fail-closed release boundary", () => {
   const FILE_CITATION = /\b(?:agents|skills|rules|commands|hooks|content|governance)\/[A-Za-z0-9_-]+/g;
 
   async function releaseCommand(): Promise<CorpusFile> {
-    const file = (await packFiles).find((entry) => entry.relPath === "commands/stamity-release.md");
+    const file = (await packFiles).find((entry) => entry.relPath === "commands/st-release.md");
     if (file === undefined) throw new Error("the release command is missing from the pack");
     return file;
   }
@@ -714,7 +714,11 @@ describe("ops pack — fail-closed release boundary", () => {
 
     expect(section).not.toBe("");
     expect(section.match(FILE_CITATION) ?? []).toEqual([]);
-    expect(section).not.toMatch(/\bstamity-[a-z-]+/);
+    // Both prefixes: an artifact named in this section is a leak of the
+    // invariant into another file whichever namespace spells it, and anchoring
+    // on `stamity-` alone stopped seeing commands and skills the moment they
+    // moved to `st-`.
+    expect(section).not.toMatch(/\b(?:stamity|st)-[a-z-]+/);
   });
 
   it("no pack body cites a core content file path", async () => {
@@ -733,10 +737,11 @@ describe("ops pack — fail-closed release boundary", () => {
 });
 
 describe("ops pack — cross-references resolve", () => {
-  // Both prefixes, deliberately: core commands and skills are `st-<id>` and
-  // pack-own artifacts stay `stamity-<id>`, so a guard anchored on one prefix
-  // is blind to half the surface it exists to check. The captured group is the
-  // bare id either way, which is what frontmatter declares.
+  // Both prefixes, deliberately: commands and skills are `st-<id>` in the
+  // corpus and in every pack alike, while agents and rules keep `stamity-<id>`,
+  // so a guard anchored on one prefix is blind to half the surface it exists to
+  // check. The captured group is the bare id either way, which is what
+  // frontmatter declares.
   const COMMAND_MENTION = /\/(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
   const BARE_MENTION = /(?<![/A-Za-z0-9_-])(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
   const SUBSTITUTION_TOKEN = /\$\{STAMITY:[A-Z_]+\}/g;
@@ -775,10 +780,10 @@ describe("ops pack — cross-references resolve", () => {
 
   it("the incident flow hands over through the core handoff skill, by live id", async () => {
     const [files, index] = await Promise.all([packFiles, loadCorpusIndex(CORPUS_ROOT)]);
-    const command = files.find((file) => file.relPath === "commands/stamity-incident-response.md");
+    const command = files.find((file) => file.relPath === "commands/st-incident-response.md");
 
-    // Contract change: core command and skill ids carry the `st-` prefix; only
-    // pack-own ids still spell out `stamity-`. The handoff skill is core, so the
+    // Contract change: every command and skill id carries the `st-` prefix,
+    // pack-supplied ones included; `stamity-` is left to agents and rules. The
     // live id this body must cite is `st-handoff`.
     expect(command?.parsed.body).toMatch(/`st-handoff`/);
     expect(index.items.some((item) => item.type === "skill" && item.id === "handoff")).toBe(true);
@@ -801,7 +806,7 @@ describe("ops pack — cross-references resolve", () => {
    * This assertion REPLACES a membership check against
    * REPO_SUBSTITUTION_TOKENS (a token had to be wired). That check was
    * strictly weaker and gave false assurance: it passed green while
-   * skills/stamity-release/SKILL.md shipped `${STAMITY:VERIFY_GATE_ALL}` into
+   * skills/st-release/SKILL.md shipped `${STAMITY:VERIFY_GATE_ALL}` into
    * every install. The wired list is still read, to name in the failure
    * message that being wired is no defence here.
    */

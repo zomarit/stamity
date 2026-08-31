@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "description": "Greenfield generators built to the repo's quality floor — the implementer writes, a specialist lens gates, and a failed gate buys exactly one regeneration.",
   "integrity": {
-    "commands/stamity-auth-scaffold.md": "88545986d07c9009182ea8098d9af6f3341522d2df9ef81c98781230a45bb4c6",
-    "commands/stamity-design-system-create.md": "7e0dc58abeff11c5ccef6464b5d906294404b90e0270c8a9cf5d960736a14614",
-    "commands/stamity-slo-scaffold.md": "520a30155380397c35f3c2a19bada8fbeec6ebe988244a3e5e1a7adbce5af500"
+    "commands/st-auth-scaffold.md": "8ffa680375b07221c7d426cd30ef5c852636e497822e5bc360c63d9ca7b96cd1",
+    "commands/st-design-system-create.md": "3f3e9b0a9945708657cbac8f10c761bec9d80a9def1324bd6ec949a16879251e",
+    "commands/st-slo-scaffold.md": "9efbec1c028a144495b7f2219d1fcafea2f7924636d12b69c7566881e36c1ebb"
   },
   "declaredTools": [
     "claude",

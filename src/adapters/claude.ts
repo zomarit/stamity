@@ -826,10 +826,10 @@ function mcpRow(emission: McpEmission): AdapterOutput {
  * namespace all agree by construction.
  *
  * Which prefix that is belongs to {@link contentPrefixFor}, not to this
- * function: a command lands on `st-`, an agent or a rule on `stamity-`, and a
- * pack-supplied artifact keeps `stamity-` whatever its class. Deciding it here
- * is how the four adapters drift out of agreement with each other and with the
- * ownership gate.
+ * function: a command or a skill lands on `st-`, an agent or a rule on
+ * `stamity-`, and an installed pack's artifacts take the same two answers its
+ * class earns in the corpus. Deciding it here is how the four adapters drift
+ * out of agreement with each other and with the ownership gate.
  */
 function emittedId(item: CatalogItem): string {
   const bare =

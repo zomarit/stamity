@@ -106,6 +106,19 @@ const TROUBLESHOOTING = "docs/troubleshooting.md";
  */
 const GUIDES: readonly string[] = [GETTING_STARTED, MIGRATION, PACKS_AND_TRUST, TROUBLESHOOTING];
 
+/**
+ * The guides README rows — every guide but one.
+ *
+ * The migration guide is published and unlisted, and that is a decision rather than an
+ * oversight: it keeps the route the predecessor's sunset material promises (pinned in
+ * `test/ci/docsSite.test.ts`), and it is off the site's navigation (`website/sidebars.ts`) and
+ * off this map because the readers who need it arrive already holding a link, while a reader who
+ * arrives here has no predecessor setup to move off. `llms.txt` still indexes it — an agent
+ * reading the tree is given the whole tree — so "reachable" is asserted against the index for
+ * every guide and against the map for these.
+ */
+const MAPPED_GUIDES: readonly string[] = GUIDES.filter((page) => page !== MIGRATION);
+
 /** Every hand-written page. The properties below are asserted on all of them. */
 const HAND_PAGES: readonly string[] = [...PAGES, ...GUIDES];
 
@@ -235,10 +248,11 @@ const README_LINK_TARGETS: readonly string[] = [
   // and README keeps a row pointing at nothing, which is the failure this list is for.
   GOVERNANCE,
   CODE_OF_CONDUCT,
-  // The four guides joined the map at publication, for the same reason: a row
-  // is what makes a page reachable, and a guide the README does not name is a
-  // page only the index knows about.
-  ...GUIDES,
+  // The guides joined the map at publication, for the same reason: a row is
+  // what makes a page reachable, and a guide the README does not name is a
+  // page only the index knows about. All of them but the migration guide —
+  // see MAPPED_GUIDES for why that one is reached from elsewhere.
+  ...MAPPED_GUIDES,
 ];
 
 /** The generated client-capability page — the mechanism README's surface prose must agree with. */
@@ -446,6 +460,32 @@ describe("README", () => {
     expect(pitch, "README's opening line does not name the owner").toContain(OWNER);
 
     expect(read(README), "README never shows the install command").toContain(INSTALL_COMMAND);
+  });
+
+  it("leads on a theme-aware banner whose sources are both in the tree", () => {
+    // The banner is HTML, so the markdown link assertions below cannot see it: a wordmark
+    // renamed or moved under `website/static/img/` would leave a broken image at the top of the
+    // most-read page in the repository with nothing failing. Both sources are resolved here.
+    const text = read(README);
+
+    const sources = [...text.matchAll(/(?:src|srcset)="([^"]+)"/g)].map((match) => match[1] ?? "");
+    expect(sources.length, "README shows no banner").toBeGreaterThanOrEqual(2);
+    for (const source of sources) {
+      expect(
+        existsSync(join(REPO_ROOT, source)),
+        `README's banner shows missing ${source}`,
+      ).toBe(true);
+    }
+
+    // The dark source is an enhancement; the `img` is what every surface that does not
+    // implement `<picture>` — a plain markdown viewer, the npm page — actually renders, and
+    // its `alt` is what a reader with no images at all gets instead of the mark.
+    expect(text, "README's banner has no theme-aware source").toMatch(
+      /<source[^>]*prefers-color-scheme: dark[^>]*srcset="/,
+    );
+    expect(text, "README's banner has no fallback image with alt text").toMatch(
+      /<img[^>]*\balt="stamity"/,
+    );
   });
 
   it("stays within the hand-page line budget", () => {
@@ -844,13 +884,27 @@ describe("the guides", () => {
     ).toEqual([PREDECESSOR_NAME_PAGE]);
   });
 
-  it("is reachable: every guide is on the map and in the agent-native index", () => {
+  it("is reachable: every guide is in the agent-native index, and every mapped one on the map", () => {
     const readme = read(README);
     const index = read("llms.txt");
+
+    // The index carries the whole tree, unlisted pages included — that is what makes it the
+    // agent-native map, and it is where the migration guide stays findable by a reader who
+    // arrives without the predecessor's link in hand.
     for (const page of GUIDES) {
-      expect(readme, `README does not link ${page}`).toContain(`](${page})`);
       expect(index, `llms.txt does not list ${page}`).toContain(`](${page})`);
     }
+
+    for (const page of MAPPED_GUIDES) {
+      expect(readme, `README does not link ${page}`).toContain(`](${page})`);
+    }
+
+    // The omission asserted from the other side, so re-adding the row fails here rather than
+    // quietly undoing the decision MAPPED_GUIDES records.
+    expect(
+      readme,
+      "README rowed the migration guide again — it is reached from the predecessor's own material",
+    ).not.toContain(`](${MIGRATION})`);
   });
 
   it("getting started shows the install line and the whole command surface", () => {

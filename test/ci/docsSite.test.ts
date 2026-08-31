@@ -31,6 +31,12 @@ const workflow = readFileSync(WORKFLOW, "utf8");
 /** The migration guide's source file. Its NAME is not its URL, which is the point of the block below. */
 const MIGRATION_PAGE = join(REPO_ROOT, "docs", "migration.md");
 
+/** The sidebar, read as text for the one page it deliberately does not list. */
+const SIDEBARS = readFileSync(join(REPO_ROOT, "website", "sidebars.ts"), "utf8");
+
+/** Sidebar source with its prose stripped, so a rationale mentioning a page is not an entry. */
+const SIDEBAR_CODE = SIDEBARS.replace(/\/\*[\s\S]*?\*\//g, " ").replaceAll(/\/\/.*$/gm, " ");
+
 /**
  * The migration guide's published route, assembled from fragments.
  *
@@ -100,6 +106,23 @@ describe("the docs site keeps the one URL the sunset material promises", () => {
       .toBeDefined();
     expect(front ?? "", "the migration guide's published route moved").toContain(
       `slug: ${MIGRATION_SLUG}`,
+    );
+  });
+
+  it("keeps that page out of the navigation, so only the bridge artifacts lead to it", () => {
+    // The route above is a promise to readers arriving from the predecessor's sunset material.
+    // It is NOT an invitation to everyone else: a permanent "Start here" row would offer a
+    // migration to every reader who has nothing to migrate off. So the page is published and
+    // unlisted, and the absence is asserted because nothing else would catch it — the sidebar's
+    // own guard reports a LISTED page that is missing from disk, and never a page on disk that
+    // is listed nowhere. The rationale lives in `website/sidebars.ts`; this holds it true.
+    expect(SIDEBAR_CODE, "the migration page is listed in the sidebar again").not.toMatch(
+      /migration/i,
+    );
+    // And the reason the page survives the omission: the sidebar is navigation, not the build's
+    // page set, so an unlisted page under `docs/` is still rendered at its slug.
+    expect(SIDEBARS, "the sidebar no longer explains why the page is unlisted").toMatch(
+      /deliberately unlisted/i,
     );
   });
 

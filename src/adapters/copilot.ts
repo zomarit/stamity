@@ -695,7 +695,8 @@ function declaredGlobs(item: CatalogItem): string[] {
  * construction.
  *
  * {@link contentPrefixFor} owns which prefix that is — `st-` for the invocable
- * commands, `stamity-` for agents, rules and anything a pack supplied.
+ * commands and skills, `stamity-` for agents and rules, with an installed
+ * pack's artifacts answering to the same class rule as the corpus's.
  */
 function emittedId(item: CatalogItem): string {
   const bare =

@@ -477,7 +477,13 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
       [".cursor/agents/stamity-sentinel.md", "cursor", "sentinel", "agent"],
       [".github/instructions/stamity-guard.instructions.md", "copilot", "guard", "rule"],
       [".github/agents/stamity-sentinel.agent.md", "copilot", "sentinel", "agent"],
-      [".github/prompts/stamity-launch.prompt.md", "copilot", "cmd-launch", "command"],
+      // CONTRACT CHANGE (pack surface unified onto `st-`): this row read
+      // `.github/prompts/stamity-launch.prompt.md` while pack origin
+      // special-cased the prefix. A pack command is typed after a slash exactly
+      // like a corpus one, so it is now prefixed by CLASS — `st-` — and the
+      // three rows above it prove the other half of the same rule: a pack's
+      // agents and rules still emit under `stamity-`.
+      [".github/prompts/st-launch.prompt.md", "copilot", "cmd-launch", "command"],
     ];
     for (const [path, adapter, artifactId, artifactType] of expected) {
       const row = rows.get(path);
@@ -559,7 +565,10 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
     expect(candidatePaths).toContain(".agents/skills/stamity-runbook/SKILL.md");
     expect(candidatePaths).toContain(".agents/skills/stamity-runbook/references/notes.md");
     expect(candidatePaths).toContain(".claude/rules/stamity-guard.md");
-    expect(candidatePaths).toContain(".github/prompts/stamity-launch.prompt.md");
+    // CONTRACT CHANGE (pack surface unified onto `st-`): the pack command now
+    // emits — and so reclaims — under `st-`. The path had to move with the
+    // emission, or the sweep would be asserted against a file nothing writes.
+    expect(candidatePaths).toContain(".github/prompts/st-launch.prompt.md");
     for (const candidate of candidates) expect(candidate.reason).toBe("deselected");
   });
 

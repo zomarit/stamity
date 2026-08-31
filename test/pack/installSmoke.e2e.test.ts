@@ -495,7 +495,7 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // the surface asserted is now the one this client actually reads.
       const syncAfterInstall = await fixture.run(["sync"]);
       expect(syncAfterInstall.code, syncAfterInstall.stderr).toBe(0);
-      const projectedSkill = repoPath(fixture, ".claude/skills/stamity-ci-pipeline/SKILL.md");
+      const projectedSkill = repoPath(fixture, ".claude/skills/st-ci-pipeline/SKILL.md");
       const corpusSkill = repoPath(fixture, ".claude/skills/st-qa/SKILL.md");
       expect(await exists(repoPath(fixture, ".agents/skills"))).toBe(false);
       expect(await exists(projectedSkill), "pack skill projected after install+sync").toBe(true);
@@ -714,7 +714,7 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // Grant resolution end to end. Two enforcement points decide whether a pack agent
       // can do anything: the install-time ingress check, and the policy
       // document the generated guard parses. Before this, ops installed
-      // cleanly and both /stamity-release and /stamity-incident-response were
+      // cleanly and both /st-release and /st-incident-response were
       // inert — the guard answered NO_POLICY for every agent the pack added.
       const fixture = getFixture();
       await initRepo(fixture, "claude");
@@ -963,7 +963,7 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       expect(synced.code, synced.stderr).toBe(0);
       // Claude-only fixture, so the live skills surface is this client's
       // own native root rather than the vendor-neutral tree it does not read.
-      const packSkill = ".claude/skills/stamity-release/SKILL.md";
+      const packSkill = ".claude/skills/st-release/SKILL.md";
       expect(await exists(repoPath(fixture, packSkill))).toBe(true);
 
       await writeOrgPolicy(fixture, { version: 1, packs: { deny: ["*"] } });

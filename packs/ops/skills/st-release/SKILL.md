@@ -10,7 +10,7 @@ obsolete_when: package tooling emits attested release artifacts and gates every 
 # Release
 
 The runnable half of a release: the commands, the artifacts, and the gates.
-`/stamity-release` is the orchestrating half — it spawns the roles, runs the
+`/st-release` is the orchestrating half — it spawns the roles, runs the
 review, and stops in front of the same boundary — and the two are one procedure
 split by what each holds. Where both would state a table, it lives on one side
 only: the version decision is stated there, the artifact command shapes here.
@@ -43,7 +43,7 @@ no published bytes. That is a complete run, not a failed one.
 
 ## Step 2 — Version decision
 
-The increment table and the pre-release suffixes live in `/stamity-release`,
+The increment table and the pre-release suffixes live in `/st-release`,
 beside the gate that asks before a MAJOR bump; they are not repeated here. Two
 rules this side adds: competing readings take the larger increment and record
 why in the changelog, and a published pre-release is smoke-tested before the
@@ -134,6 +134,6 @@ personally is always an acceptable answer, and the default answer is hold.
 
 ## Rollback
 
-Decided in `/stamity-release`, which owns the deprecate-over-unpublish rule and
+Decided in `/st-release`, which owns the deprecate-over-unpublish rule and
 the handoff to the incident lane. The one thing this side enforces: an automatic
 unpublish is never run by this procedure, whatever the summary says.

@@ -118,7 +118,7 @@ describe("pins-in-sync gate", () => {
   it("aggregate recompute over a tampered staged pack differs from its pin", async () => {
     const { packsDir } = await stagePacks(getTemp());
     const root = join(packsDir, "ops");
-    await tamperFile(join(root, "commands", "stamity-release.md"));
+    await tamperFile(join(root, "commands", "st-release.md"));
 
     const manifest = await readPackManifest(root);
     const recomputed = Object.fromEntries(
@@ -297,7 +297,7 @@ describe("generate-pack-manifests.mjs", () => {
     const seeded = runGenerator(["--packs-dir", packsDir, "--pins", pinsPath]);
     expect(seeded.status, seeded.output).toBe(0);
 
-    await tamperFile(join(packsDir, "ops", "commands", "stamity-release.md"));
+    await tamperFile(join(packsDir, "ops", "commands", "st-release.md"));
     const run = runGenerator(["--check", "--packs-dir", packsDir, "--pins", pinsPath]);
     expect(run.status).toBe(1);
     expect(run.output).toContain("ops");

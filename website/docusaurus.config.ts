@@ -36,12 +36,14 @@ const config: Config = {
   tagline:
     'Agentic coding setups for Claude Code, Cursor, GitHub Copilot and Codex, from one canonical source.',
 
-  // The brand marks are in `website/static/img/`, copied byte-for-byte from `assets/stamity/`,
-  // which is where they are drawn and where the plugin manifests and the README read them from.
-  // Docusaurus can only serve what is under `static/`, so the copy is structural rather than a
-  // choice — the thing to know is which direction it flows: a mark is re-cut in `assets/stamity/`
-  // and copied here, never edited here. `static/` is served from the site root, so every reference
-  // below is `/img/<file>`.
+  // The brand marks are in `website/static/img/`, and that directory is now the tree's ONLY copy
+  // of them: the full mark set is drawn and kept in a brand source outside this repository, which
+  // ships only what a build reads — this directory, plus the `assets/logo.svg` the plugin
+  // manifests point at. Docusaurus can only serve what is under `static/`, so the copy is
+  // structural rather than a choice, and the thing to know is which direction it flows: a mark is
+  // re-cut outside and copied here, never edited here. README's banner reads the two wordmarks
+  // from this directory too, by repo-relative path. `static/` is served from the site root, so
+  // every reference below is `/img/<file>`.
   favicon: 'img/favicon.svg',
 
   // The deploy target. Not claimed yet — see the header note and the workflow's arming condition.

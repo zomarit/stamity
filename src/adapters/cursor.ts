@@ -543,9 +543,9 @@ function prefixedId(id: string): string {
  * rather than by convention.
  *
  * The prefix comes from {@link contentPrefixFor} rather than {@link prefixedId},
- * because this is the typed half of the surface: a corpus command takes `st-`,
- * while a command an installed pack supplied keeps `stamity-` (its filename is
- * hashed into a signed manifest this engine does not re-sign).
+ * because this is the typed half of the surface, and it answers by class alone:
+ * a command takes `st-` whether the corpus or an installed pack supplied it,
+ * since the operator types both the same way.
  */
 function commandName(item: CatalogItem): string {
   const bare = item.id.startsWith(COMMAND_ID_PREFIX)
