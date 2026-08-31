@@ -101,6 +101,13 @@ jobs:
         working-directory: website
         run: npm run build
 
+      # llms.txt is generated at the repository root (one home per subject) and the site serves
+      # only what lands in website/build, so the deployable copies it in after the build. The
+      # first real deploy proved the gap: https://stamity.dev/llms.txt answered 404 while the
+      # runbook's verify step expects it to serve.
+      - name: Serve llms.txt at the site root
+        run: cp llms.txt website/build/llms.txt
+
       # Uploaded on every trigger, deploy or not, so a pull request can be inspected as bytes
       # rather than as a passing check.
       - name: Upload the built site
