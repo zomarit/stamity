@@ -44,6 +44,13 @@ on:
         description: 'Publish the built site to GitHub Pages. Requires Pages enabled and the domain claimed.'
         type: boolean
         default: false
+  # A completed release also arms the deploy (maintainer decision, 2026-08-31): the site follows
+  # every published version without a hand dispatch. The deploy condition narrows this to a
+  # SUCCESSFUL run of a REAL tag push — a failed run, a dry-run rehearsal (event
+  # workflow_dispatch), and any non-v ref all fall through to the build-and-stop path.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
 
 permissions:
   contents: read
@@ -134,7 +141,12 @@ jobs:
     # dispatch whose input went missing or arrived empty is not 'false' either, and it DEPLOYS.
     # test/ci/workflow.test.ts evaluates both spellings against every trigger shape, so a rewrite
     # into the inversion fails there rather than the first time someone opens the form.
-    if: github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true'
+    #
+    # The second arm (2026-08-31): a COMPLETED Release run deploys the site — but only when that
+    # run succeeded AND was a real `v*` tag push. `workflow_run.event == 'push'` excludes the
+    # dry-run rehearsals (dispatch-triggered), and the head_branch prefix excludes any non-tag
+    # ref, so a red release or a rehearsal still ends at build-and-stop.
+    if: (github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ubuntu-latest
     # Download, package, publish. No install and no build, so this is generous already.
     timeout-minutes: 10

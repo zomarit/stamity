@@ -1273,6 +1273,7 @@ describe("docs-site.yml — builds on every change, deploys only when armed", ()
       "pull_request",
       "push",
       "workflow_dispatch",
+      "workflow_run",
     ]);
     const triggers = (docsSite.workflow as unknown as Record<string, unknown>)["on"] as {
       workflow_dispatch?: { inputs?: { deploy?: { type?: string; default?: boolean } } };
@@ -1332,10 +1333,12 @@ describe("docs-site.yml — builds on every change, deploys only when armed", ()
     expect(docsSite.source.toLowerCase()).toContain("not enabled");
   });
 
-  describe("nothing but an armed dispatch can deploy", () => {
+  describe("nothing but an armed dispatch or a succeeded real release can deploy", () => {
     /** The condition this file must carry, character for character. */
     const DEPLOY_CONDITION =
-      "github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true'";
+      "(github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true') || " +
+      "(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && " +
+      "github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v'))";
 
     const condition = (deploy.if ?? "").replace(/\s+/g, " ").trim();
 
@@ -1361,6 +1364,52 @@ describe("docs-site.yml — builds on every change, deploys only when armed", ()
       {
         label: "a dispatch with no inputs context at all",
         context: { github: { event_name: "workflow_dispatch", ref: "refs/heads/main" } },
+        deploys: false,
+      },
+      {
+        label: "a succeeded release run from a real v tag",
+        context: {
+          github: {
+            event_name: "workflow_run",
+            ref: "refs/heads/main",
+            event: { workflow_run: { conclusion: "success", event: "push", head_branch: "v1.0.2" } },
+          },
+        },
+        deploys: true,
+      },
+      {
+        label: "a FAILED release run from a v tag",
+        context: {
+          github: {
+            event_name: "workflow_run",
+            ref: "refs/heads/main",
+            event: { workflow_run: { conclusion: "failure", event: "push", head_branch: "v1.0.2" } },
+          },
+        },
+        deploys: false,
+      },
+      {
+        label: "a succeeded dry-run rehearsal (dispatch-triggered release run)",
+        context: {
+          github: {
+            event_name: "workflow_run",
+            ref: "refs/heads/main",
+            event: {
+              workflow_run: { conclusion: "success", event: "workflow_dispatch", head_branch: "main" },
+            },
+          },
+        },
+        deploys: false,
+      },
+      {
+        label: "a succeeded release-workflow run whose head is not a v ref",
+        context: {
+          github: {
+            event_name: "workflow_run",
+            ref: "refs/heads/main",
+            event: { workflow_run: { conclusion: "success", event: "push", head_branch: "main" } },
+          },
+        },
         deploys: false,
       },
     ];
