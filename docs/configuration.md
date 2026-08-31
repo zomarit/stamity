@@ -14,6 +14,11 @@ Values live in `.stamity/manifest.json`. Editing that file by hand is not the su
 path — `config set` validates the result against the manifest schema before it writes,
 and prints the same refusal the writer would have produced.
 
+On a terminal, `stamity config` with no subcommand opens a navigable picker over the same
+rows `config list` prints, and applies the one key it settles per run through the validation
+and write path `config set` uses. Scripts, pipes and CI see no prompt — there, bare `config`
+is `config list`.
+
 ## Stored and effective
 
 A key reads two ways, and they disagree whenever a key is unset.

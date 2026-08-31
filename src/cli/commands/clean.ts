@@ -148,6 +148,7 @@ async function confirmDestruction(
     stdinIsTTY: ctx.terminal.stdinIsTTY,
     yes: ctx.yes,
     json: ctx.json,
+    env: ctx.app.runtime.env,
   });
   if (!gate.interactive) {
     throw new CliFailure({
