@@ -28,8 +28,8 @@ import {
 import type { PackageEntry } from "../../../src/types/detect.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
-import type { ImportDecision } from "../../../src/types/manifest.ts";
-import { useTempDir } from "../../support/tempDir.ts";
+import type { ImportDecision, SetupManifest } from "../../../src/types/manifest.ts";
+import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 
 /**
  * The emission seam is pure by contract — planning never touches the working
@@ -471,38 +471,35 @@ describe("override content layer", () => {
   });
 
   /**
-   * The boundary of the claim above, pinned: skills are the one content class
-   * the layer does not reach, and these assertions are what keep the seam's
-   * header from overclaiming it (see the "Declared gap — SKILLS" note in
-   * `src/cli/engine/emission.ts`).
+   * The fourth class, held as the same POSITIVE the rules case above holds.
    *
-   * Not an endorsement of the behaviour — a drift guard in both directions.
-   * The catalog half is asserted first, so the case localizes the gap instead
-   * of merely recording it: the walk DOES index a user skill as `origin:
-   * "user"`, and the two edits that would project it live in the skills seam
-   * (`buildCoreEmissionPlan` narrows the spec to its corpus half before calling
-   * `projectSkills`; `ProjectSkillsOptions.contentRoot` is a bare corpus-root
-   * string with nowhere to put an override root) — neither is this unit's file
-   * to write.
+   * TEST CHANGE, justified: this case used to pin the declared SKILLS gap — a
+   * user skill indexed as `origin: "user"` and then emitted as the SHIPPED body,
+   * because `buildCoreEmissionPlan` narrowed the content spec to its corpus half
+   * before calling `projectSkills` and `ProjectSkillsOptions.contentRoot` had no
+   * third slot to narrow INTO. Operator decision 11 closed that seam: the option
+   * carries the full `ContentRoots` spec and the planner passes root plus
+   * override root through. Its own instruction said to INVERT rather than delete
+   * when the seam widened, because deleting it would drop the only guard that
+   * the header text and the mechanism move together — so the assertions flip and
+   * the shape stays.
    *
-   * When that option widens to the full `ContentRoots` spec this case goes RED.
-   * The fix then is to INVERT it into the positive assertion the other three
-   * classes carry, and to put "skill" back into the header sentence. Deleting
-   * it to get green would restore exactly the text-vs-mechanism drift it exists
-   * to catch.
+   * The catalog half is still asserted first: it localizes the claim to the
+   * projection rather than to the walk, which is what made the old gap
+   * diagnosable in the first place.
    */
-  it("does not reach the skills class — the declared gap, pinned against the header", async () => {
+  it("emits the USER body for the skills class too — both a shadowing and a new skill", async () => {
     const repo = getRepo();
     // Two shapes at once: a NEW user skill (nothing to shadow) and one taking a
-    // shipped skill's id. The second is the sharper failure — a repo that
-    // believes it replaced a skill silently keeps running the shipped body.
+    // shipped skill's id. The second is the sharper case — a repo that believes
+    // it replaced a skill used to keep running the shipped body, silently.
     await repo.seedFiles({
       ".stamity/overrides/skills/st-house-drill/SKILL.md": overrideSkill("house-drill"),
       [`.stamity/overrides/skills/st-${SHADOWED_SKILL_ID}/SKILL.md`]:
         overrideSkill(SHADOWED_SKILL_ID),
     });
 
-    // The walk sees both: whatever drops them, it is not the content layer.
+    // The walk sees both: the index half and the emission half agree now.
     const index = await buildContentIndex({
       packRoots: [],
       overrideRoot: join(repo.dir, ".stamity", "overrides"),
@@ -526,17 +523,30 @@ describe("override content layer", () => {
       },
     });
 
-    // No row anywhere carries an authored body, and nothing half-lands under
-    // the projection dir for the skill that had nothing to shadow.
-    expect(rows.filter((row) => row.content.includes(USER_MARKER))).toEqual([]);
-    expect(rows.filter((row) => row.path.includes("house-drill"))).toEqual([]);
-    // The shadowed one emits — with the SHIPPED body, which is the gap's
-    // user-visible shape rather than an absence anyone would notice.
+    // The shadowed one emits the AUTHORED body — into the vendor-neutral tree
+    // and into Claude Code's native copy, which is a path rewrite of the same
+    // bytes, so both trees inherit the layer identically.
     const projected = rows.filter((row) =>
-      row.path.startsWith(`.agents/skills/st-${SHADOWED_SKILL_ID}/`),
+      row.path.endsWith(`/st-${SHADOWED_SKILL_ID}/SKILL.md`),
     );
-    expect(projected.length).toBeGreaterThan(0);
-    expect(projected.every((row) => !row.content.includes(USER_MARKER))).toBe(true);
+    expect(projected.map((row) => row.path).toSorted()).toEqual([
+      `.agents/skills/st-${SHADOWED_SKILL_ID}/SKILL.md`,
+      `.claude/skills/st-${SHADOWED_SKILL_ID}/SKILL.md`,
+    ]);
+    expect(projected.every((row) => row.content.includes(USER_MARKER))).toBe(true);
+
+    // And the one with nothing to shadow lands rather than being dropped:
+    // presence in the tree is what admits a user artifact, here as elsewhere.
+    const drill = rows.filter((row) => row.path.endsWith("/st-house-drill/SKILL.md"));
+    expect(drill.map((row) => row.path).toSorted()).toEqual([
+      ".agents/skills/st-house-drill/SKILL.md",
+      ".claude/skills/st-house-drill/SKILL.md",
+    ]);
+    expect(drill.every((row) => row.content.includes(USER_MARKER))).toBe(true);
+
+    // Not both bodies: the bundled skill it took the id of is gone from the plan.
+    const bundled = await corpusSkillMarker(SHADOWED_SKILL_ID);
+    expect(rows.filter((row) => row.content.includes(bundled))).toEqual([]);
   });
 
   /**
@@ -708,9 +718,14 @@ describe("override content layer", () => {
       rows.some((row) => row.content.includes(marker[cls])),
     );
     expect(arrived.toSorted()).toEqual([...OVERRIDE_EMITTING_CLASSES].toSorted());
-    // Said the other way round too, because the gap is the half a reader needs
-    // named: the fourth class is `skill`, and nothing carries its body.
-    expect(arrived).not.toContain("skill");
+    // TEST CHANGE, justified: the second assertion used to be
+    // `expect(arrived).not.toContain("skill")` — the gap half, naming the one
+    // class whose body reached nothing. Operator decision 11 closed that seam,
+    // so it is now the opposite claim, and stated against the full class
+    // enumeration rather than one name: the equality above would still pass if
+    // BOTH the list and the mechanism lost a class together, and this is what
+    // refuses that pair.
+    expect(arrived.toSorted()).toEqual([...CONTENT_CLASSES].toSorted());
   });
 
   it("keeps a floor rule whole when an override takes its id", async () => {
@@ -870,6 +885,132 @@ describe("override content layer", () => {
     expect(paths).toContain(".claude/rules/stamity-other-rule.md");
     expect(paths).not.toContain(`.claude/rules/stamity-${SHADOWED_ID}.md`);
   });
+
+  /**
+   * The converse `ProjectSkillsOptions.contentRoot`'s own comment names:
+   * `packRoots` staying out of the widened skills index (so pack skills are
+   * never double-projected) means an override skill can claim a pack skill's
+   * directory or catalog id with nothing upstream positioned to refuse it —
+   * `buildContentIndex` for this walk never saw the pack half, and the
+   * generic directory-collision throw in `mergeSkillProjections` (below) used
+   * to name the corpus skill and tell the operator to rename or remove the
+   * PACK, which is backwards when the row sharing the directory is the
+   * override rather than a corpus skill.
+   *
+   * Both fixtures install a real pack (through the real install path, as the
+   * rule/pack case above does) supplying a skill named `triage`, directory
+   * `stamity-triage`.
+   */
+  describe("an override skill colliding with an installed pack's skill", () => {
+    async function installTriagePack(repo: TempDirHandle): Promise<SetupManifest> {
+      const packFiles = {
+        "skills/stamity-triage/SKILL.md": [
+          "---",
+          "id: triage",
+          "type: skill",
+          "description: Pack-supplied triage skill.",
+          "tags:",
+          "  - implementation",
+          "load: on-demand",
+          "obsolete_when: never",
+          "---",
+          "",
+          "Triage the report.",
+          "",
+        ].join("\n"),
+      };
+      await repo.seedFiles(
+        Object.fromEntries(
+          Object.entries(packFiles).map(([rel, body]) => [`pack-src/triagepack/${rel}`, body]),
+        ),
+      );
+      await repo.seedFiles({
+        "pack-src/triagepack/pack.json": `${JSON.stringify(
+          {
+            name: "triagepack",
+            version: "1.0.0",
+            integrity: Object.fromEntries(
+              Object.entries(packFiles).map(([rel, body]) => [
+                rel,
+                createHash("sha256").update(body, "utf8").digest("hex"),
+              ]),
+            ),
+          },
+          null,
+          2,
+        )}\n`,
+      });
+      const base = repoContext(repo.dir);
+      const plan = await planPackInstall(repo.dir, join(repo.dir, "pack-src", "triagepack"), {
+        allowUntrusted: true,
+      });
+      expect(plan.collisions).toEqual([]);
+      const applied = await applyPackInstall(repo.dir, plan, base.manifest, {
+        engineVersion: base.engineVersion,
+        now: FIXED_NOW,
+      });
+      expect(applied.result.installed).toBe(true);
+      return applied.manifest;
+    }
+
+    it("refuses a same-directory collision, naming the OVERRIDE file rather than the pack", async () => {
+      const repo = getRepo();
+      const manifest = await installTriagePack(repo);
+      // Same directory the pack skill projects into (`stamity-triage`), a
+      // different id — so the catalog's own id-shadowing never fires and the
+      // clash surfaces only where the two projections meet.
+      await repo.seedFiles({
+        ".stamity/overrides/skills/stamity-triage/SKILL.md": overrideSkill("house-drill"),
+      });
+
+      const err = await rejectionOf(getEmissionPlanner().plan({ ...repoContext(repo.dir), manifest }));
+      // The remedy names the override, not the pack: renaming or removing the
+      // pack would not touch the file actually holding the directory.
+      expect(err?.code).toBe("VALIDATION_ERROR");
+      expect(err?.message).toContain("Pack-skill overrides are unsupported today");
+      expect(err?.message).toContain(".stamity/overrides/skills/stamity-triage/SKILL.md");
+      expect(err?.message).toContain("triagepack");
+    });
+
+    it("refuses a different-directory same-id collision, naming the OVERRIDE file", async () => {
+      const repo = getRepo();
+      const manifest = await installTriagePack(repo);
+      // A directory of its own, but the SAME catalog id the pack skill holds —
+      // paths never collide, so nothing upstream of the merge would even see
+      // this without the guard: both bodies would otherwise project under one
+      // catalog id, silently.
+      await repo.seedFiles({
+        ".stamity/overrides/skills/stamity-triage-house/SKILL.md": overrideSkill("triage"),
+      });
+
+      const err = await rejectionOf(getEmissionPlanner().plan({ ...repoContext(repo.dir), manifest }));
+
+      expect(err?.code).toBe("VALIDATION_ERROR");
+      expect(err?.message).toContain("Pack-skill overrides are unsupported today");
+      expect(err?.message).toContain(".stamity/overrides/skills/stamity-triage-house/SKILL.md");
+      expect(err?.message).toContain("triagepack");
+    });
+
+    it("still emits both bodies when the override skill is unrelated to the pack skill", async () => {
+      const repo = getRepo();
+      const manifest = await installTriagePack(repo);
+      // Neither the pack skill's id nor its directory: a plain, unrelated
+      // override skill living alongside an installed pack.
+      await repo.seedFiles({
+        ".stamity/overrides/skills/stamity-house-drill/SKILL.md": overrideSkill("house-drill"),
+      });
+
+      const rows = await getEmissionPlanner().plan({ ...repoContext(repo.dir), manifest });
+      const paths = rows.map((row) => row.path);
+
+      expect(paths).toContain(".agents/skills/stamity-triage/SKILL.md");
+      expect(paths).toContain(".agents/skills/stamity-house-drill/SKILL.md");
+      const houseDrill = rows.find(
+        (row) => row.path === ".agents/skills/stamity-house-drill/SKILL.md",
+      );
+      expect(houseDrill?.content).toContain(USER_MARKER);
+    });
+  });
 });
 
 /**
@@ -887,7 +1028,34 @@ async function corpusMarker(id: string): Promise<string> {
   return line!.trim();
 }
 
+/**
+ * The same fingerprint for a bundled SKILL, whose readable file lives one
+ * directory down (`content/skills/st-<id>/SKILL.md`). Read at run time for the
+ * reason above: a literal would go stale into a vacuous assertion.
+ */
+async function corpusSkillMarker(id: string): Promise<string> {
+  const raw = await readFile(
+    join(process.cwd(), "content", "skills", `st-${id}`, "SKILL.md"),
+    "utf8",
+  );
+  const body = raw.slice(raw.indexOf("\n---", 3) + 4);
+  const line = body.split("\n").find((entry) => entry.trim().length > 40 && !entry.startsWith("#"));
+  expect(line).toBeDefined();
+  return line!.trim();
+}
+
 /** A plan as one digest: any single changed byte moves it. */
 function digestOf(rows: readonly AdapterOutput[]): string {
   return createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+}
+
+/** The rejection an async call produced, or `null` when it resolved. */
+async function rejectionOf(promise: Promise<unknown>): Promise<EngineError | null> {
+  try {
+    await promise;
+    return null;
+  } catch (err) {
+    expect(err).toBeInstanceOf(EngineError);
+    return err as EngineError;
+  }
 }

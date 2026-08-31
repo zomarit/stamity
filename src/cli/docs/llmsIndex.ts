@@ -12,7 +12,7 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the five guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the six guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
  * The guides are held to the same dated hand-page contract as three of those
  * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
@@ -165,6 +165,13 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Working with stamity",
         description:
           "the nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/customization.md",
+        title: "Customization",
+        description:
+          "where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries.",
         regenerateCommand: null,
       },
       {

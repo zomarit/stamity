@@ -381,6 +381,224 @@ describe("projectSkills selection edges", () => {
   });
 });
 
+// ── The repo's own override tree ─────────────────────────────────
+
+/**
+ * `.stamity/overrides/skills/` reaching THIS projection, which is the whole of
+ * operator decision 11: the option below used to be a bare corpus-root string,
+ * so a user `SKILL.md` that won its id in the index still emitted the SHIPPED
+ * body — silently, because the index reported the override as taken. These are
+ * the cases the file had none of; every one of them was inexpressible while
+ * `ProjectSkillsOptions.contentRoot` had no third slot to name an override root
+ * in.
+ *
+ * Both roots live in ONE volume, read through the same injected seam the rest
+ * of this file uses — the corpus under `corpus/`, the override tree under
+ * `overrides/`, exactly the two-root shape `buildContentIndex` merges.
+ */
+describe("projectSkills over an override tree", () => {
+  const CORPUS_DIR = "corpus";
+  const OVERRIDE_DIR = "overrides";
+
+  /** A skill body distinguishable per layer, so "which body shipped" is answerable. */
+  const skillDoc = (id: string, description: string, body: string): string =>
+    artifact(
+      [
+        `id: ${id}`,
+        "type: skill",
+        `description: ${description}`,
+        "tags: [review]",
+        "load: on-demand",
+        "obsolete_when: never",
+      ].join("\n"),
+      body,
+    );
+
+  const SHIPPED_MARKER = "Shipped body: run the bundled drill.";
+  const HOUSE_MARKER = "House body: run this repository's own drill.";
+
+  function volumeOf(files: Record<string, string>): {
+    fs: ProjectSkillsOptions["fs"];
+    corpusRoot: string;
+    overrideRoot: string;
+  } {
+    const volume = makeVolume(files);
+    return {
+      fs: volume.fs,
+      corpusRoot: `${volume.root}/${CORPUS_DIR}`,
+      overrideRoot: `${volume.root}/${OVERRIDE_DIR}`,
+    };
+  }
+
+  it("emits the OVERRIDE body for a skill whose id a corpus skill already holds", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The house version of this skill, authored in this repo.",
+        `${HOUSE_MARKER}\n`,
+      ),
+      // A second corpus skill nobody overrides: the override layer replaces one
+      // identity, it does not narrow the projection to the overridden one.
+      [`${CORPUS_DIR}/skills/st-beta/SKILL.md`]: skillDoc(
+        "beta",
+        "A bundled skill no override touches.",
+        "Untouched bundled body.\n",
+      ),
+    });
+
+    const rows = await projectSkills(contextOf(["alpha", "beta"]), {
+      contentRoot: { root: volume.corpusRoot, overrideRoot: volume.overrideRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+    const byPath = new Map(rows.map((row) => [row.path, row.content]));
+
+    const shadowed = byPath.get(`${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`);
+    expect(shadowed).toContain(HOUSE_MARKER);
+    // Not both bodies, and not the shipped one anywhere in the plan.
+    expect(rows.filter((row) => row.content.includes(SHIPPED_MARKER))).toEqual([]);
+    // The head is the override's too, not just the body.
+    expect(shadowed).toContain("The house version of this skill, authored in this repo.");
+    // The untouched skill still projects: this is a replacement, not a filter.
+    expect(byPath.get(`${SKILLS_PROJECTION_DIR}/st-beta/SKILL.md`)).toContain(
+      "Untouched bundled body.",
+    );
+  });
+
+  it("emits a user skill the corpus never shipped", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/skills/st-house-drill/SKILL.md`]: skillDoc(
+        "house-drill",
+        "A skill this repo authored and the corpus never had.",
+        `${HOUSE_MARKER}\n`,
+      ),
+    });
+
+    const rows = await projectSkills(contextOf(["alpha", "house-drill"]), {
+      contentRoot: { root: volume.corpusRoot, overrideRoot: volume.overrideRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+
+    expect(pathsOf(rows)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`,
+      `${SKILLS_PROJECTION_DIR}/st-house-drill/SKILL.md`,
+    ]);
+    const drill = rows.find((row) => row.path.includes("st-house-drill"));
+    expect(drill?.content).toContain(HOUSE_MARKER);
+    // Attribution follows the artifact, so the ledger names the user skill.
+    expect(drill?.artifactId).toBe("house-drill");
+    expect(drill?.artifactType).toBe("skill");
+  });
+
+  it("stamps `origin` per row — the mechanism the pack/override merge guard reads", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/skills/st-house-drill/SKILL.md`]: skillDoc(
+        "house-drill",
+        "A skill this repo authored and the corpus never had.",
+        `${HOUSE_MARKER}\n`,
+      ),
+    });
+
+    const rows = await projectSkills(contextOf(["alpha", "house-drill"]), {
+      contentRoot: { root: volume.corpusRoot, overrideRoot: volume.overrideRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+
+    const byPath = new Map(rows.map((row) => [row.path, row]));
+    expect(byPath.get(`${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`)?.origin).toBe("corpus");
+    expect(byPath.get(`${SKILLS_PROJECTION_DIR}/st-house-drill/SKILL.md`)?.origin).toBe("user");
+  });
+
+  it("ships the OVERRIDE directory's support files, not the shadowed corpus skill's", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${CORPUS_DIR}/skills/st-alpha/references/shipped.md`]: "Bundled reference.\n",
+      [`${OVERRIDE_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The house version of this skill, authored in this repo.",
+        `${HOUSE_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/skills/st-alpha/references/house.md`]: "House reference.\n",
+      [`${OVERRIDE_DIR}/skills/st-alpha/references/deep/nested.md`]: "House nested reference.\n",
+    });
+
+    const rows = await projectSkills(contextOf(["alpha"]), {
+      contentRoot: { root: volume.corpusRoot, overrideRoot: volume.overrideRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+
+    // The whole override DIRECTORY is the unit that ships — the shadowed
+    // corpus skill's own references do not survive alongside it, which is what
+    // keeps a skill's dispatch table describing files that are actually there.
+    expect(pathsOf(rows)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`,
+      `${SKILLS_PROJECTION_DIR}/st-alpha/references/deep/nested.md`,
+      `${SKILLS_PROJECTION_DIR}/st-alpha/references/house.md`,
+    ]);
+    const byPath = new Map(rows.map((row) => [row.path, row.content]));
+    expect(byPath.get(`${SKILLS_PROJECTION_DIR}/st-alpha/references/house.md`)).toBe(
+      "House reference.\n",
+    );
+    expect(byPath.get(`${SKILLS_PROJECTION_DIR}/st-alpha/references/deep/nested.md`)).toBe(
+      "House nested reference.\n",
+    );
+  });
+
+  it("plans byte-identically to a corpus-only projection when the repo has no override tree", async () => {
+    const files = {
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${CORPUS_DIR}/skills/st-alpha/references/shipped.md`]: "Bundled reference.\n",
+      [`${CORPUS_DIR}/skills/st-beta/SKILL.md`]: skillDoc(
+        "beta",
+        "A second bundled skill.",
+        "Untouched bundled body.\n",
+      ),
+    };
+    const ctx = contextOf(["alpha", "beta"]);
+
+    const bare = volumeOf(files);
+    const asString = await projectSkills(ctx, {
+      contentRoot: bare.corpusRoot,
+      ...(bare.fs === undefined ? {} : { fs: bare.fs }),
+    });
+
+    const absent = volumeOf(files);
+    const withMissingOverride = await projectSkills(ctx, {
+      // The common case: the option always carries the repo's override path and
+      // the directory is simply not there (ENOENT), the same non-event an
+      // absent class directory is.
+      contentRoot: { root: absent.corpusRoot, overrideRoot: absent.overrideRoot },
+      ...(absent.fs === undefined ? {} : { fs: absent.fs }),
+    });
+
+    // Non-degenerate: a real three-row plan, not an empty one agreeing with itself.
+    expect(asString).toHaveLength(3);
+    expect(withMissingOverride).toEqual(asString);
+  });
+});
+
 // ── Native per-client re-targeting ───────────────────────────────
 
 /**
@@ -525,10 +743,18 @@ describe("retargetProjection", () => {
     const source = await projectSkills(contextOf(["handoff"]));
     const [native] = retargetProjection(source, NATIVE_DIR);
 
+    // TEST CHANGE, justified: `origin` joined the shape so the pack/override
+    // merge guard (`../../src/emit/planner.ts`'s `mergeSkillProjections`) can
+    // tell an override-origin row from a corpus one without a second walk.
+    // `retargetProjection` still carries every field through verbatim — the
+    // assertion this case protects, that re-targeting spreads the row rather
+    // than reconstructing it — so `origin` belongs in the list, not a reason
+    // to drop the case.
     expect(Object.keys(native ?? {}).toSorted()).toEqual([
       "artifactId",
       "artifactType",
       "content",
+      "origin",
       "path",
     ]);
   });

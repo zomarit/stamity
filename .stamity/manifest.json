@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.0.1",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-08-31T06:42:46.633Z",
+  "updatedAt": "2026-08-31T15:04:27.879Z",
   "tools": [
     "claude"
   ],
@@ -64,7 +64,7 @@
       "adapter": "claude",
       "artifactId": "creator",
       "artifactType": "agent",
-      "contentHash": "42f97e00fbada1127f2d216f4a1efd1ce51a549e1ccaa8ba617b3cd6127f8706",
+      "contentHash": "1b98f3176fada06f29b4b02b2e85d5724a74cc407cdb643f0bb984f95be63b06",
       "path": ".claude/agents/stamity-creator.md"
     },
     {

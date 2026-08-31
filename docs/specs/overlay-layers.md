@@ -33,14 +33,14 @@ and the patch survives an upstream rewrite of everything it did not name.
 The overlay surface is documented as shipped behaviour in four module comments
 and implemented nowhere:
 
-- `src/content/userContent.ts:71-75` — "Declared gap: this module and the walk
+- `src/content/userContent.ts:72-76` — "Declared gap: this module and the walk
   it feeds implement customization by REPLACEMENT… The `.customize.yaml` and
   `.customize.md` overlay surfaces (layers 2 and 3 of the four-layer precedence)
   are read by nothing here and by nothing downstream."
 - `src/content/catalog.ts:53-58` — "Declared gap, ONE half… an artifact is
   customized by taking its id, not by patching its frontmatter or appending to
   its body."
-- `src/cli/engine/emission.ts:71-73` — "Declared gap — `.customize.yaml` and
+- `src/cli/engine/emission.ts:79-81` — "Declared gap — `.customize.yaml` and
   `.customize.md`, layers 2 and 3 of the four-layer precedence, are read by
   nothing on this path."
 - `src/guard/promptGuard.ts:37` — "Cap on user-authored content (learnings,
@@ -81,9 +81,9 @@ The research handed over said the `.md`-only extension filter makes
 and the difference changes a requirement:
 
 - `.customize.yaml` **is** excluded by the extension filter
-  (`src/content/catalog.ts:717-719`, `src/content/userContent.ts:396-400`).
+  (`src/content/catalog.ts:717-719`, `src/content/userContent.ts:554-557`).
   It is dropped before any read, and it is not reported: `SkippedUserEntry`
-  covers symlinks only (`src/content/userContent.ts:356-388`).
+  covers symlinks only (`src/content/userContent.ts:327-350`).
 - `.customize.md` is **not** excluded by that filter. It ends in `.md`, so it
   becomes a walk candidate, and it is dropped one step later by the
   no-frontmatter skip (`src/content/catalog.ts:765`) — also silently. A
@@ -101,19 +101,23 @@ is loud.
 
 `stamity validate` knows two outcomes for a contested identity: `replaces <x>`,
 and `takes the id of <x> — not emitted, the bundled body is still what ships`
-(`src/cli/commands/validate.ts:582-597`, over `ValidateShadow`,
-`src/cli/commands/validate.ts:71-93`). A patched item is neither. `LedgerEntry`
+(`src/cli/commands/validate.ts:610-628`, over `ValidateShadow`,
+`src/cli/commands/validate.ts:74-101`). A patched item is neither. `LedgerEntry`
 (`src/types/manifest.ts:76-97`) has no field for it and, per REQ-OVERLAY-013,
 needs none.
 
-### The dependency
+### The dependency, discharged
 
-Skill overlays index under this spec and do not emit until lane D11 lands.
-`OVERRIDE_EMITTING_CLASSES` is `agent`, `rule`, `command`
-(`src/cli/engine/emission.ts:92-100`); `skill` is absent because the projection
-takes a bare corpus-root string with no slot to narrow into
-(`ProjectSkillsOptions.contentRoot`, `src/emit/skillsProjection.ts:141`, feeding
-`buildContentIndex` at `src/emit/skillsProjection.ts:167`).
+Skill overlays index under this spec and emit with every other class.
+`OVERRIDE_EMITTING_CLASSES` is `agent`, `rule`, `command`, `skill` — a full
+enumeration of `ContentClass` rather than a subset
+(`src/cli/engine/emission.ts:100-121`). `skill` joined it when the projection
+widened: `ProjectSkillsOptions.contentRoot` takes the full `ContentRoots` spec
+(`src/emit/skillsProjection.ts:179`, feeding `buildContentIndex` at
+`src/emit/skillsProjection.ts:209`), so an override skill's whole directory —
+`SKILL.md` and every support file under it — is what projects
+(`src/emit/skillsProjection.ts:48-52`). Nothing in this spec waits on a lane
+outside it.
 
 ## Invariants
 
@@ -140,7 +144,7 @@ Floors for this lane. They hold whatever the merge does.
    report line appears, no ledger row moves, no emitted byte differs.
 6. **Author bytes stay author-owned.** Overlay files live inside
    `.stamity/overrides/`, which no emission path targets
-   (`src/cli/engine/emission.ts:74-81`): never planned, never wrapped in a
+   (`src/cli/engine/emission.ts:83-89`): never planned, never wrapped in a
    managed block, never reclaimed.
 
 ## Requirements
@@ -170,7 +174,7 @@ Overlays never sit beside a corpus or a pack file.
 
 **Rationale.** The override tree is the one tree the engine writes into and
 never emits into, and that ownership split is already stated and already held
-(`src/cli/engine/emission.ts:74-81`, `src/content/userContent.ts:60-69`). An
+(`src/cli/engine/emission.ts:83-89`, `src/content/userContent.ts:61-70`). An
 overlay placed there inherits the whole contract with no new rule. Deriving the
 target id from the filename rather than from a key inside the file means the
 address is visible in a directory listing and cannot disagree with itself.
@@ -187,14 +191,14 @@ corpus walk and the pack walk read, which is framework territory.
 `*.customize.yaml` and `*.customize.md` for file-layout classes, and
 `SKILL.customize.yaml` / `SKILL.customize.md` inside each skill directory. In
 the same change, the artifact candidate filters
-(`src/content/catalog.ts:717-719`, `src/content/userContent.ts:396-400`) are
+(`src/content/catalog.ts:717-719`, `src/content/userContent.ts:554-557`) are
 narrowed so that a name ending `.customize.md` is never a candidate artifact in
 any layer.
 
 A skill directory that holds overlay files and no `SKILL.md` is an overlay
 carrier, not work in progress. A skill directory holding neither remains work in
 progress and is still passed over in silence
-(`src/content/userContent.ts:346-348`).
+(`src/content/userContent.ts:347-349`).
 
 **Rationale.** Without the narrowing, the body patch is simultaneously an
 overlay and a phantom artifact at id `<slug>.customize` — the defect evidenced
@@ -322,7 +326,7 @@ re-parsing the RAW document text, not the frontmatter map
 (`src/content/catalog.ts:825-827` into `src/content/frontmatter.ts:159-165`), so
 a merge that produced a map with no raw twin would either skip the closed
 tool-vocabulary check or need a second implementation of it — and a gate that
-disagrees with itself is the defect `src/content/userContent.ts:32-38` already
+disagrees with itself is the defect `src/content/userContent.ts:33-39` already
 records. `composeFrontmatter` is documented as making parse → compose → parse an
 identity on both halves (`src/content/frontmatter.ts:109-121`), which is exactly
 the property the round trip needs. The composite `source` label gives
@@ -383,15 +387,15 @@ way.
 ### REQ-OVERLAY-011 — `validate` gains a third customization outcome, `patched`
 
 **Decision.** The report row type (`ValidateShadow`,
-`src/cli/commands/validate.ts:71-93`) gains a discriminator distinguishing
+`src/cli/commands/validate.ts:74-101`) gains a discriminator distinguishing
 `replaced` from `patched`. A `patched` row carries the class, the id, the base
 artifact's content-root-relative path and its origin (`corpus`, or the pack id),
 and the repo-relative paths of the overlay files applied. The shadowing block
-(`src/cli/commands/validate.ts:582-597`) prints it as a third line shape. `emits`
+(`src/cli/commands/validate.ts:610-628`) prints it as a third line shape. `emits`
 keeps its meaning and its `OVERRIDE_EMITTING_CLASSES` derivation
-(`src/cli/commands/validate.ts:296-302`). A `patched` row is information and
+(`src/cli/commands/validate.ts:297-301`). A `patched` row is information and
 never moves the exit code, exactly as a shadow does not
-(`src/cli/commands/validate.ts:56`).
+(`src/cli/commands/validate.ts:58`).
 
 **Rationale.** Today's two outcomes are both false of a patched item: nothing
 was replaced, and nothing left the index. A report that squeezed a patch into
@@ -404,11 +408,11 @@ channel.
 ### REQ-OVERLAY-012 — One gate judges the merged artifact, at the two lanes that already judge
 
 **Decision.** `stamity validate` materializes the merged artifact (REQ-OVERLAY-008)
-and runs `checkUserArtifact` (`src/content/userContent.ts:469-503`) over it,
+and runs `checkUserArtifact` (`src/content/userContent.ts:627-661`) over it,
 whole: required frontmatter, id/filename agreement, lifecycle declarations,
 deny-scan over frontmatter keys, values and comments, and
 `validateContentBody`'s body judgment with its lean line cap. The save path
-(`saveUserContent`, `src/content/userContent.ts:265`) gains the same treatment
+(`saveUserContent`, `src/content/userContent.ts:266`) gains the same treatment
 when it writes an overlay. Two clarifications the merge forces:
 
 - The id/filename agreement check reads the BASE's identity, since the merged
@@ -419,9 +423,9 @@ when it writes an overlay. Two clarifications the merge forces:
 
 Emission does not deny-scan an overlay, for the reason it does not deny-scan
 anything: a scan at emission time reprints the author's own flagged text on every
-sync (`src/cli/engine/emission.ts:86-89`).
+sync (`src/cli/engine/emission.ts:94-97`).
 
-**Rationale.** One gate, two callers, unchanged. `src/content/userContent.ts:32-38`
+**Rationale.** One gate, two callers, unchanged. `src/content/userContent.ts:33-39`
 records what happened the last time a second lane grew checks of its own — an
 artifact landed through one surface and was reported by the other.
 
@@ -440,28 +444,40 @@ item IS the item, emitted under the base's `artifactId` and `artifactType`, and
 regresses" (`test/content/catalog.test.ts:486`) — and the overlay layer earns the
 same case. On the ledger: its job is reclaim and drift over EMITTED paths, and an
 overlay source file is never an emitted path
-(`src/cli/engine/emission.ts:74-81`), so a `patched` flag there would be state
+(`src/cli/engine/emission.ts:83-89`), so a `patched` flag there would be state
 nothing reads.
 
 **Dropped.** A `patched: true` ledger field, for the reason above.
 
-### REQ-OVERLAY-014 — All four classes index; skill emission waits on lane D11
+### REQ-OVERLAY-014 — All four classes index and emit; no carve-out remains
 
-**Decision.** Overlays apply to all four content classes at the index. `agent`,
-`rule` and `command` reach emission today (`OVERRIDE_EMITTING_CLASSES`,
-`src/cli/engine/emission.ts:92-100`). `skill` does not, because the skills
-projection takes a bare corpus-root string
-(`src/emit/skillsProjection.ts:141,167`), so a skill overlay indexes and does not
-emit until lane D11 widens that option to the full `ContentRoots` spec. This spec
-does not make D11's edit. While `skill` is outside
-`OVERRIDE_EMITTING_CLASSES`, a `patched` row for a skill carries `emits: false`
-and says the bundled body is still what ships — the wording the `replaced` row
-already uses for that case (`src/cli/commands/validate.ts:591-595`).
+**Decision.** Overlays apply to all four content classes at both the index and
+emission. `OVERRIDE_EMITTING_CLASSES` is `agent`, `rule`, `command`, `skill` — a
+full enumeration of `ContentClass` rather than a subset
+(`src/cli/engine/emission.ts:100-121`). `skill` joined it when lane D11 widened
+`ProjectSkillsOptions.contentRoot` from a bare corpus-root string to the full
+`ContentRoots` spec (`src/emit/skillsProjection.ts:179`), so a skill overlay
+indexes and emits exactly as an agent, rule or command override already does —
+this spec makes no further edit to reach that state. The `patched`-row carve-out
+this requirement used to state for `skill` — `emits: false`, the bundled body
+still what ships — is gone with the class it described: no content class holds
+that shape today.
 
-**Rationale.** The index-level behaviour is class-uniform, and the emission
-carve-out already exists and is already reported. If D11 lands first, as the
-batch order intends, skill overlays emit with no further edit here — the merge
-happens inside the walk the widened projection reads.
+**Rationale.** The index-level behaviour was already class-uniform, and the
+former emission carve-out was a dependency on lane D11 landing, not a
+permanent asymmetry. D11 landed first, per the batch order this spec assumed,
+so the merge already happens inside the walk the widened projection reads —
+see "The dependency, discharged" above — and this requirement records the
+same fact rather than a still-open wait on it.
+
+**Superseded text (D11 pending; kept for the record the requirement id
+carries forward).** Overlays applied to all four content classes at the index.
+`agent`, `rule` and `command` reached emission; `skill` did not, because the
+skills projection took a bare corpus-root string, so a skill overlay indexed
+and did not emit until lane D11 widened that option to the full `ContentRoots`
+spec. While `skill` was outside `OVERRIDE_EMITTING_CLASSES`, a `patched` row
+for a skill carried `emits: false` and said the bundled body was still what
+shipped — the wording the `replaced` row used for that case.
 
 **Dropped.** Shipping three classes and adding `skill` later. It would create a
 second class carve-out, at the index, beside the one at emission — and the two
@@ -469,7 +485,7 @@ would then have to be kept in agreement.
 
 ### REQ-OVERLAY-015 — The pinned negative test and the four comments migrate with the implementation
 
-**Decision.** `test/corpus/commands/lightTrio.test.ts:756-764` asserts that the
+**Decision.** `test/corpus/commands/lightTrio.test.ts:758-767` asserts that the
 creator agent's body mentions neither `.customize.` nor a four-layer precedence.
 It gates the behaviour this spec changes, so it is rewritten in place — not
 deleted, not skipped — in the same change, carrying an inline reason naming what
@@ -477,8 +493,8 @@ about the contract changed. Its replacement asserts the positive: the creator
 body names both overlay files, states the effective precedence chain of
 invariant 3, and states the exclusivity refusal of REQ-OVERLAY-004. In the same
 change the three declared-gap comments
-(`src/content/userContent.ts:71-75`, `src/content/catalog.ts:53-58`,
-`src/cli/engine/emission.ts:71-73`) are rewritten to describe what the code now
+(`src/content/userContent.ts:72-76`, `src/content/catalog.ts:53-58`,
+`src/cli/engine/emission.ts:79-81`) are rewritten to describe what the code now
 does, and `src/guard/promptGuard.ts:37` becomes accurate rather than
 aspirational.
 
@@ -618,10 +634,10 @@ tagged otherwise.
 
 - GIVEN an overlay on an agent, a rule and a command WHEN sync runs THEN each
   merged body reaches every selected client that receives that class.
-- GIVEN an overlay on a skill, with lane D11 not yet landed, WHEN the index is
-  built and `stamity validate` runs THEN the item is patched in the index AND
-  the `patched` row carries `emits: false` and says the bundled body is still
-  what ships.
+- GIVEN an overlay on a skill WHEN sync runs THEN the merged body reaches every
+  selected client that receives the skill class — both the vendor-neutral
+  `.agents/skills/` tree and each client-native re-target of those same bytes —
+  and the `patched` row carries `emits: true`.
 
 **REQ-OVERLAY-015**
 
@@ -673,9 +689,8 @@ The suites that extend, and what each takes:
   missing-required-field findings over merged text (REQ-OVERLAY-011, 012).
 - `test/cli/engine/emission.test.ts` — the overlay-free byte-identity case held
   to the same four dialects in a pack-having repo as in a pack-free one, matching
-  the shape already pinned there; plus the three emitting classes carrying merged
-  bodies, and the skill class pinned to whichever side of lane D11 the tree is on
-  (REQ-OVERLAY-013, 014).
+  the shape already pinned there; plus the four emitting classes carrying merged
+  bodies (REQ-OVERLAY-013, 014).
 - `test/corpus/commands/lightTrio.test.ts` — the case at lines 756-764 rewritten
   in place, with its inline reason (REQ-OVERLAY-015).
 
@@ -690,13 +705,13 @@ and the surrounding symbol is the durable address.
 | `source` | `src/content/catalog.ts:805-849` | `buildItem` — the checks the merged artifact re-runs |
 | `source` | `src/content/frontmatter.ts:122-129` | `composeFrontmatter` — the materialization mechanism |
 | `source` | `src/content/frontmatter.ts:159-181` | `extractToolsFrontmatter` — why the raw round trip is required |
-| `source` | `src/content/userContent.ts:469-503` | `checkUserArtifact` — the one gate REQ-OVERLAY-012 reuses |
-| `source` | `src/cli/commands/validate.ts:71-93,582-597` | the report row type and the block that prints it |
-| `source` | `src/cli/engine/emission.ts:74-100` | ownership of the override tree, and the emitting-class set |
-| `source` | `src/emit/skillsProjection.ts:141,167` | the lane D11 dependency |
+| `source` | `src/content/userContent.ts:627-661` | `checkUserArtifact` — the one gate REQ-OVERLAY-012 reuses |
+| `source` | `src/cli/commands/validate.ts:74-101,610-628` | the report row type and the block that prints it |
+| `source` | `src/cli/engine/emission.ts:83-89,100-121` | ownership of the override tree, and the emitting-class set |
+| `source` | `src/emit/skillsProjection.ts:179` | the skills `contentRoot` widening lane D11 discharged |
 | `source` | `src/guard/promptGuard.ts:38` | the user-content ceiling that binds an overlay body |
 | `test` | `test/content/catalog.test.ts:347-731` | the override-layer block the overlay block is written beside |
-| `test` | `test/corpus/commands/lightTrio.test.ts:756-764` | the negative case REQ-OVERLAY-015 migrates |
+| `test` | `test/corpus/commands/lightTrio.test.ts:758-767` | the negative case REQ-OVERLAY-015 migrates |
 
 ## Risks
 
@@ -706,10 +721,6 @@ and the surrounding symbol is the durable address.
   did not write. Mitigated by fail-closed with both files named, and by the base
   being unchanged on disk: deleting the overlay restores the shipped artifact
   exactly.
-- **A skill overlay before lane D11 lands is index-visible and
-  emission-invisible.** The same silent shape D11 exists to close.
-  REQ-OVERLAY-014's `emits: false` row is the mitigation, and it is the same
-  mitigation already in place for a full skill override.
 - **Fail-closed on an orphan overlay makes a filename typo stop the sync.** The
   loud failure is the decision (REQ-OVERLAY-010), and the cost is real: a typo
   now blocks a run that previously succeeded. Weighed against a silent no-op the

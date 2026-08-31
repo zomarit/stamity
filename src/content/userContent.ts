@@ -22,9 +22,10 @@ import { parseFrontmatter } from "./frontmatter.ts";
  *
  * A repo's own agents, skills, rules and commands live under
  * `<rootDir>/.stamity/overrides/<class>/`, beside the generated setup and above
- * the bundled corpus wherever the two are merged. This module owns the three
- * operations that lane needs — save one, discover them all, judge one — and
- * deliberately nothing else. It never reads the bundled corpus, so an id that
+ * the bundled corpus wherever the two are merged. This module owns the four
+ * operations that lane needs — save one, discover them all, judge one, screen
+ * the support files a skill directory carries beside its artifact
+ * ({@link scanUserSkillSupportFiles}) — and deliberately nothing else. It never reads the bundled corpus, so an id that
  * also exists there is not its business to detect: override semantics belong to
  * whoever merges the two trees, and discovery reports a shadowing artifact
  * exactly like any other.
@@ -385,6 +386,163 @@ async function scanSkipped(root: string, type: UserArtifactType): Promise<Skippe
       }),
   );
   return [...linked, ...composed.flat()];
+}
+
+// ── Skill support files ────────────────────────────────────────────────────
+
+/** One block-severity deny hit in a skill override's hand-placed support file. */
+export interface UserSkillSupportFinding {
+  /** Absolute path of the support file the hit sits in. */
+  filePath: string;
+  /** Always `error`: only block rows are reported from this walk. */
+  severity: "error";
+  /**
+   * The deny gate's own message — the pattern id and the offset it matched at.
+   * The span itself is never in here: {@link scanForDeniedPatterns} redacts a
+   * block row's snippet at the scanner, so reporting this text cannot deliver
+   * the payload the finding refuses.
+   */
+  detail: string;
+}
+
+/** What one pass over the override skills' support files found. */
+export interface UserSkillSupportScan {
+  readonly findings: UserSkillSupportFinding[];
+  /** Entries the projection passes over, in {@link SkippedUserEntry}'s shape. */
+  readonly skipped: SkippedUserEntry[];
+  /** Support files actually read and screened. */
+  readonly inspected: number;
+}
+
+/** Why a linked entry inside a skill override was passed over. */
+const SUPPORT_SYMLINK_SKIP_REASON =
+  `is a symlink inside a skill override, and the skills projection copies regular files and ` +
+  `real directories only — it is not emitted to any client, and its target is never ` +
+  `screened. Replace the link with the file itself.`;
+
+/**
+ * Deny-screen every hand-placed support file under `<root>/skills/<id>/`.
+ *
+ * A skill override projects WHOLE: `SKILL.md` plus every regular file beside it,
+ * byte-verbatim, into each client's skills tree on every sync
+ * (`../emit/skillsProjection.ts`). Those bytes reach agent context exactly as
+ * the artifact body does — and nothing read them. {@link checkUserArtifact}
+ * judges the composed `SKILL.md` alone, and {@link saveUserContent} writes only
+ * that file, so a `references/*.md` is hand-placed by construction and meets no
+ * write gate at all. This walk is the re-check the injection-screening rule
+ * names `stamity validate` as the surface for.
+ *
+ * Four properties, each a decision:
+ *
+ * - **Block rows only.** The same {@link denyViolations} seam the artifact body
+ *   goes through, filtered to the refusing half. A support file is a data file
+ *   rather than an authored artifact, so the advisory rows that shape an
+ *   artifact's prose — filler phrasing, lean lines, an unusable `load:` — have
+ *   nothing to say about it, and the warn-severity deny rows would report
+ *   character-level advisories against material (a fixture, a transcript) that
+ *   legitimately carries them.
+ * - **Every regular file, no extension filter.** The projection decodes each
+ *   support file as UTF-8 and writes the decode, so screening the same decode
+ *   screens exactly the bytes that land in agent context — and the deny catalog
+ *   is text-only by contract ({@link scanForDeniedPatterns} takes a string).
+ *   Filtering by extension would leave `payload.png` holding markdown, which is
+ *   the first thing an author routing around this gate would reach for.
+ * - **`SKILL.md` is excluded.** It is the artifact, judged once by the gate that
+ *   owns it; a linked one is already reported by
+ *   {@link discoverSkippedUserEntries}. Scanning it here would put two rows on
+ *   the author's screen for one line of their file.
+ * - **Every skill directory, indexed or not.** A directory whose `SKILL.md` is
+ *   absent or linked projects nothing today, but its support files are one edit
+ *   away from doing so, and coupling the screen to catalog state would make the
+ *   answer depend on a defect elsewhere in the same tree.
+ *
+ * Environment failures propagate, matching the rest of this module: an
+ * unreadable support file is an unscreened one, and `stamity validate` turns the
+ * throw into an error finding naming the path.
+ */
+export async function scanUserSkillSupportFiles(rootDir: string): Promise<UserSkillSupportScan> {
+  const classDir = join(userContentRoot(rootDir), CLASS_LAYOUT.skill.dir);
+  const entries = await listDir(classDir);
+  if (entries === null) return { findings: [], skipped: [], inspected: 0 };
+
+  const perSkill = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => scanSkillSupport(join(classDir, entry.name))),
+  );
+  return {
+    findings: perSkill.flatMap((scan) => scan.findings),
+    skipped: perSkill.flatMap((scan) => scan.skipped),
+    inspected: perSkill.reduce((total, scan) => total + scan.inspected, 0),
+  };
+}
+
+/** One entry under a skill directory: a regular file, or a link passed over. */
+interface SupportEntry {
+  /** POSIX path relative to the skill directory. */
+  readonly relative: string;
+  readonly linked: boolean;
+}
+
+async function scanSkillSupport(skillDir: string): Promise<UserSkillSupportScan> {
+  const entries = (await walkSupportEntries(skillDir, "")).filter(
+    (entry) => entry.relative !== SKILL_FILE,
+  );
+  const absolute = (entry: SupportEntry): string => join(skillDir, ...entry.relative.split("/"));
+
+  const skipped = entries
+    .filter((entry) => entry.linked)
+    .map((entry) => ({
+      type: "skill" as const,
+      filePath: absolute(entry),
+      reason: SUPPORT_SYMLINK_SKIP_REASON,
+    }));
+
+  const files = entries.filter((entry) => !entry.linked);
+  // Bounded like the artifact walk: a support tree is small by design, not by
+  // guarantee, and a skill may ship a reference folder of any size.
+  const raws = await pLimit(READ_CONCURRENCY).map(files, (entry) => readIfPresent(absolute(entry)));
+
+  const findings: UserSkillSupportFinding[] = [];
+  let inspected = 0;
+  for (const [index, entry] of files.entries()) {
+    // Absent by the time the read landed: the walk listed it, something removed
+    // it. Nothing to screen, and nothing to report.
+    const raw = raws[index];
+    if (raw === null || raw === undefined) continue;
+    inspected += 1;
+    for (const violation of denyViolations(raw, `support file \`${entry.relative}\``)) {
+      if (violation.severity !== "error") continue;
+      findings.push({ filePath: absolute(entry), severity: "error", detail: violation.detail });
+    }
+  }
+  return { findings, skipped, inspected };
+}
+
+/**
+ * Every entry under `dir`, depth-first with codepoint-ordered siblings, as POSIX
+ * paths relative to it. Mirrors the projection's own walk
+ * (`../emit/skillsProjection.ts`) in what it treats as content — regular files,
+ * recursing through real directories — and differs in one way that is the point:
+ * a symlink is RETURNED as skipped rather than dropped, because the author who
+ * placed it believes those bytes ship.
+ *
+ * Links are classified before kind, since a `Dirent` describes the link itself:
+ * a symlink to a directory answers `false` to `isDirectory()`, so the subtree
+ * behind it is passed over whole and reported once at its root.
+ */
+async function walkSupportEntries(dir: string, prefix: string): Promise<SupportEntry[]> {
+  const entries = await listDir(dir);
+  if (entries === null) return [];
+  const nested = await Promise.all(
+    entries.map((entry) => {
+      const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      if (entry.isSymbolicLink()) return Promise.resolve([{ relative, linked: true }]);
+      if (entry.isDirectory()) return walkSupportEntries(join(dir, entry.name), relative);
+      return Promise.resolve(entry.isFile() ? [{ relative, linked: false }] : []);
+    }),
+  );
+  return nested.flat();
 }
 
 async function scanClass(root: string, type: UserArtifactType): Promise<UserContentArtifact[]> {

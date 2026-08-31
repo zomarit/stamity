@@ -43,13 +43,16 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * command's job is to name the shipped artifact behind it, because the operator
  * who did it by accident — a floor rule renamed into the tree, a copied file
  * that kept its id — has no other surface that would tell them. It names which
- * of the two bodies emits rather than assuming the override's does: the skills
- * class is indexed from the override tree but not yet projected out of it (the
- * SKILLS gap in `../engine/emission.ts`), and calling that a replacement would
- * leave its author believing an override is live when it is not — the same harm
- * as the accident, printed by the surface that exists to prevent it. Reading
- * the bundled corpus to answer is not a widening of scope: the subject is still
- * the user's file, and nothing bundled is judged.
+ * of the two bodies emits rather than asserting the override's does. All four
+ * classes project out of the override tree today, so that answer is uniformly
+ * "the override's" — but it is READ from `OVERRIDE_EMITTING_CLASSES`
+ * (`../engine/emission.ts`) rather than stated here, because the one class that
+ * was ever indexed without being projected (skills) made this surface tell its
+ * author an override was live when it was not, which is the same harm as the
+ * accident printed by the surface that exists to prevent it. Derivation is what
+ * keeps that from recurring silently. Reading the bundled corpus to answer is
+ * not a widening of scope: the subject is still the user's file, and nothing
+ * bundled is judged.
  *
  * Non-mutating: no `--dry-run`, nothing written, nothing created to find out
  * that it is absent. Exit 1 iff a finding is an error; warnings alone exit 0 —
@@ -82,12 +85,17 @@ export interface ValidateShadow {
    */
   replaced: string[];
   /**
-   * Whether taking the id also took over EMISSION — true for the classes in
-   * `OVERRIDE_EMITTING_CLASSES` (`../engine/emission.ts`), false for `skill`,
-   * whose per-client projection still reads the corpus half only.
+   * Whether taking the id also took over EMISSION: true for the classes in
+   * `OVERRIDE_EMITTING_CLASSES` (`../engine/emission.ts`), which is every
+   * content class today — `skill` was the last exception, and its per-client
+   * projection now reads the override half too.
    *
-   * A machine-readable field rather than wording alone, so a CI consumer can
-   * act on the difference the human line describes.
+   * Uniformly true is not the same as constant, which is why the field stays. It
+   * is derived from that list on every run, so a class that ever stops
+   * projecting reports `false` here instead of this surface quietly claiming a
+   * replacement that never happened — the exact defect the skills gap produced
+   * while it was open. A machine-readable field rather than wording alone, so a
+   * CI consumer can act on the difference the human line describes.
    */
   emits: boolean;
 }
@@ -210,13 +218,21 @@ async function collectReport(rootDir: string, engine: EngineRegistry): Promise<V
  * Re-running any of its constituent gates here would double-report their
  * findings and re-open exactly the divergence single-sourcing closed.
  *
- * Two things are reported that the per-artifact gate cannot see, because both
- * are facts about the TREE rather than about a file:
+ * Three things are reported that the per-artifact gate cannot see, because none
+ * of them is a fact about the artifact FILE:
  *
  * - **Skipped entries.** A symlink in the override tree is passed over by every
  *   walk that reads it, so the artifact an author believes is live is not. It
  *   is a warning, not an error: nothing is broken, but the author's expectation
  *   is wrong and only this command can say so.
+ * - **Skill support files.** A skill override projects WHOLE — `SKILL.md` plus
+ *   every regular file beside it, byte-verbatim, into each client's skills tree
+ *   on every sync — so a hand-placed `references/*.md` reaches agent context on
+ *   the same terms the body does. The save path writes only `SKILL.md`, which
+ *   makes those files hand-placed by construction and this command the only gate
+ *   that ever reads them; a block-severity hit is an error here for exactly the
+ *   reason it is one in the body. The finding names the file and the pattern id
+ *   and never the matched span, which the deny scanner redacts at source.
  * - **Shadows.** Which bundled artifact each override replaced, read from the
  *   merged catalog. Informational — see the module header.
  */
@@ -225,10 +241,11 @@ async function collectUserContent(
   engine: EngineRegistry,
 ): Promise<SectionReport> {
   const { userContent } = engine.content;
-  // Two disjoint walks of one small tree, plus the per-artifact judgements.
-  const [artifacts, skipped] = await Promise.all([
+  // Three disjoint walks of one small tree, plus the per-artifact judgements.
+  const [artifacts, skipped, support] = await Promise.all([
     userContent.discoverUserContent(rootDir),
     userContent.discoverSkippedUserEntries(rootDir),
+    userContent.scanUserSkillSupportFiles(rootDir),
   ]);
   const judged = await Promise.all(
     artifacts.map(async (artifact) => ({
@@ -246,18 +263,29 @@ async function collectUserContent(
         message: violation.detail,
       })),
     ),
-    ...skipped.map((entry) =>
+    ...[...skipped, ...support.skipped].map((entry) =>
       finding("user-content", repoPath(rootDir, entry.filePath), "warning", entry.reason),
+    ),
+    ...support.findings.map((row) =>
+      finding("user-content", repoPath(rootDir, row.filePath), row.severity, row.detail),
     ),
   ];
 
   // Skipped entries count as inspected: the command looked at them, and a
   // section reporting a warning while claiming to have read nothing reads as a
-  // finding about thin air.
-  const inspected = artifacts.length + skipped.length;
+  // finding about thin air. Support files are counted under their own noun
+  // rather than folded into the artifact total — a skill with four reference
+  // files is one artifact, and calling it five would misreport what the
+  // override tree holds.
+  const artifactUnits = artifacts.length + skipped.length;
+  const supportUnits = support.inspected + support.skipped.length;
+  const summary = [
+    ...(artifactUnits > 0 ? [plural(artifactUnits, "artifact")] : []),
+    ...(supportUnits > 0 ? [plural(supportUnits, "skill support file")] : []),
+  ].join(" and ");
   const shadowing = artifacts.length === 0 ? EMPTY_SHADOWS : await collectShadows(rootDir, engine);
   return {
-    ...section("user-content", findings, inspected, plural(inspected, "artifact")),
+    ...section("user-content", findings, artifactUnits + supportUnits, summary),
     ...(shadowing.note === undefined ? {} : { note: shadowing.note }),
     shadows: shadowing.shadows,
   };

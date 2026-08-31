@@ -724,33 +724,35 @@ describe("creator — the body matches the customization lane it describes", () 
     expect(contract).toMatch(/no block-severity deny hit/i);
   });
 
-  it("says how a saved artifact reaches a client, and which class it does not", async () => {
+  it("says how a saved artifact reaches a client, for every class including skills", async () => {
     const delivery = section(await load(CREATOR), "Delivery").replace(/\s+/g, " ");
 
-    // Engine lockstep: `skill` is the one class an override does not take over at emission.
-    // When the skills seam widens this flips, and the body has to move with it.
+    // Engine lockstep: no class is left out of override emission any more.
     const notProjected = CONTENT_CLASSES.filter((cls) => !OVERRIDE_EMITTING_CLASSES.includes(cls));
-    expect(notProjected).toEqual(["skill"]);
+    expect(notProjected).toEqual([]);
 
     expect(delivery).toMatch(/the next `stamity sync` picks it up and projects it per client/i);
     expect(delivery).toMatch(/never regenerated, never wrapped in a managed block, and never reclaimed/i);
-    expect(delivery).toMatch(/a skill is indexed but not projected/i);
     // An artifact that lands and emits nowhere is the failure this section exists to name.
     expect(delivery).toMatch(/lands and emits nowhere/i);
-
-    // TEST CHANGE, justified: this case pinned a second limit, "an installed
-    // pack drops the layer". `overlayContentRoots` (src/cli/engine/emission.ts) carries
-    // all three parts of the content-root spec through the pack rebuild now, and
-    // test/cli/engine/emission.test.ts holds a pack-having repo to the same four
-    // dialects as a pack-free one — so the warning the body told the agent to issue was
-    // false, and unfalsifiable to the operator who received it. The engine half is
-    // asserted here in its place: exactly ONE class is left out of override emission.
-    expect(delivery).not.toMatch(/installed pack/i);
-    expect(delivery).toMatch(/One limit holds today/);
     expect(delivery).toMatch(
       /in a repo with packs installed exactly as in one without/i,
     );
-    expect(notProjected).toHaveLength(1);
+
+    // TEST CHANGE, justified: this case pinned the last limit the section
+    // carried — "a skill is indexed but not projected", with `notProjected`
+    // asserted as exactly `["skill"]`. Operator decision 11 threaded the
+    // override root into the skills projection (src/emit/skillsProjection.ts,
+    // src/emit/planner.ts), so the warning the body told the agent to attach to
+    // every skill save became false. The pins move with the mechanism: all four
+    // classes are named as emitting, and the two things an author of a skill
+    // override actually has to know — the whole directory travels, and the
+    // directory name is the invoked name — are what the section says instead.
+    expect(delivery).toMatch(/agent, skill, rule and command overrides all emit/i);
+    expect(delivery).not.toMatch(/indexed but not projected/i);
+    expect(delivery).not.toMatch(/One limit holds today/i);
+    expect(delivery).toMatch(/a skill override carries its whole directory/i);
+    expect(delivery).toMatch(/projected under the directory name it was saved as/i);
   });
 
   it("claims no four-layer precedence and no .customize surface", async () => {

@@ -45,8 +45,15 @@
  * {@link classifySelection}), so a floor-tagged skill survives a hand-edited
  * manifest and a deselected one is dropped here and reclaimed by the ledger.
  *
- * Pure planning: rows out, no filesystem writes. Reading the bundled corpus
- * (through the catalog's injectable filesystem seam) is the only I/O.
+ * Selection is not the only layer that decides a body. The index this module
+ * builds takes the same roots the rest of emission walks
+ * ({@link ProjectSkillsOptions.contentRoot}), so a repo's own
+ * `.stamity/overrides/skills/<dir>/SKILL.md` wins the id it claims and ITS
+ * directory — `SKILL.md` and every support file under it — is what projects.
+ *
+ * Pure planning: rows out, no filesystem writes. Reading the bundled corpus and
+ * the repo's override tree (through the catalog's injectable filesystem seam) is
+ * the only I/O.
  *
  * The context parameter is a structural subset of the CLI layer's
  * `EmissionContext` — this module reads `manifest` + `engineVersion` only, and
@@ -63,6 +70,8 @@ import {
   typeIdKey,
   type CatalogFs,
   type CatalogItem,
+  type ContentOrigin,
+  type ContentRoots,
 } from "../content/catalog.ts";
 import { composeFrontmatter, parseFrontmatter } from "../content/frontmatter.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
@@ -121,6 +130,14 @@ export interface ProjectedFile {
   artifactId: string;
   /** Content class of the source, or `"infra"` for non-content emissions. */
   artifactType: ContentClass | "infra";
+  /**
+   * Which layer supplied the source artifact — `"user"` for an override-tree
+   * row, `"corpus"` for the bundled tree, `"pack"` for an installed pack.
+   * Unset for a non-content (`"infra"`) row and for a producer that has not
+   * been taught to stamp it; a reader that needs the distinction treats
+   * `undefined` as "not an override" rather than as an error.
+   */
+  origin?: ContentOrigin;
 }
 
 /**
@@ -137,8 +154,29 @@ export interface SkillsEmissionContext {
 
 /** Test seams; production callers pass nothing and read the bundled corpus. */
 export interface ProjectSkillsOptions {
-  /** Corpus root override; defaults to the package-bundled corpus. */
-  contentRoot?: string;
+  /**
+   * Which roots the projection indexes. A bare string is the corpus root and
+   * stays the shorthand every fixture uses; the {@link ContentRoots} spelling is
+   * what lets a caller name the repo's own override tree as well, so a
+   * `.stamity/overrides/skills/<dir>/SKILL.md` reaches emission the way a user
+   * agent, rule or command already does. Defaults to the package-bundled corpus.
+   *
+   * `packRoots` is deliberately NOT supplied by this projection's caller
+   * (`./planner.ts` → `buildCoreEmissionPlan`), even though the spec has the
+   * slot. Installed packs keep their own resolution lane —
+   * `resolveInstalledPackContent` produces pack skill rows and
+   * `mergeSkillProjections` folds them in under a directory-collision check —
+   * so indexing them here as well would project every pack skill twice and
+   * trip that check against rows this projection itself laid down.
+   *
+   * The exclusion opens a converse case `mergeSkillProjections` also has to
+   * close: an override in the corpus-plus-override index above can claim a
+   * catalog id or a directory a pack skill supplies, because this index never
+   * sees the pack half to refuse it. `mergeSkillProjections` is where the two
+   * sides finally meet, so it is where that refusal has to live — see its own
+   * comment.
+   */
+  contentRoot?: string | ContentRoots;
   /** Filesystem override for corpus reads; defaults to `node:fs/promises`. */
   fs?: CatalogFs;
 }
@@ -147,8 +185,12 @@ export interface ProjectSkillsOptions {
  * Project every selected skill into `.agents/skills/<dir>/…`.
  *
  * `<dir>` is the catalog directory name as authored (`st-verify`, prefix
- * included) — the projection preserves the corpus's own naming so a skill's
- * internal relative links and its dispatch-table paths survive unchanged.
+ * included) — the projection preserves the source's own naming so a skill's
+ * internal relative links and its dispatch-table paths survive unchanged. For
+ * an override that is the OVERRIDE's directory name: an author who files their
+ * replacement under a different directory than the skill whose id it takes gets
+ * it projected under theirs, because the alternative is emitting a directory
+ * whose contents came from somewhere else.
  *
  * Rows are returned sorted by path (codepoint order), one row per regular
  * file; within a skill that places `SKILL.md` before its `references/`
@@ -355,6 +397,7 @@ async function projectOneSkill(
         content,
         artifactId: item.id,
         artifactType: item.type,
+        origin: item.origin ?? "corpus",
       };
     }),
   );
