@@ -50,18 +50,19 @@ A saved artifact is not live yet. The next `stamity sync` picks it up and projec
 it per client through the same emission a corpus artifact goes through. The
 source file under `.stamity/overrides/` is never regenerated, never wrapped in a
 managed block, and never reclaimed; the per-client copies are, and one stops
-being emitted when its override stops existing. Agent, rule and command
-overrides emit wherever their class reaches a selected client, in a repo with
-packs installed exactly as in one without. One limit holds today, and under it
-the SHIPPED body is still what reaches the client:
+being emitted when its override stops existing. Agent, skill, rule and command
+overrides all emit wherever their class reaches a selected client, in a repo with
+packs installed exactly as in one without.
 
-- **A skill is indexed but not projected.** The projection that turns a skill
-  into files reads the corpus root alone, so a user `SKILL.md` taking a corpus
-  skill's id changes the index and nothing a client reads. `stamity validate`
-  says so on that artifact's shadowing line.
+A skill override carries its whole directory: the `SKILL.md` and every support
+file under it, the override's files rather than those of the skill whose id it
+took. It is projected under the directory name it was saved as, so filing a
+replacement under a different directory than the bundled skill changes the name
+the client invokes — file it under the same one to keep that stable.
 
 An artifact that lands and emits nowhere is the same broken promise as one that
-was never saved, so a skill save is reported with that limit attached.
+was never saved, so what a save reports is where the artifact will appear, never
+a bare confirmation that a file was written.
 
 ## Save contract
 

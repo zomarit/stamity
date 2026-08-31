@@ -8,11 +8,11 @@ import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 
 /**
- * The gate on the eight hand-written pages: three at the root, five guides
+ * The gate on the nine hand-written pages: three at the root, six guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * eight are typed by a human, so the only guard is this file.
+ * nine are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -44,7 +44,7 @@ import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all eight pages because the hand bucket is
+ * Two properties are asserted on all nine pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -92,6 +92,10 @@ const CODE_OF_CONDUCT = "CODE_OF_CONDUCT.md";
 /** The three hand pages at the repository root, by repo-relative path. */
 const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
 
+// Declared in path order, which is not the order GUIDES reads in: this block is a lookup and
+// the array below is the sidebar's sequence, so the customization guide sits first here and
+// third there.
+const CUSTOMIZATION = "docs/customization.md";
 const GETTING_STARTED = "docs/getting-started.md";
 const MIGRATION = "docs/migration.md";
 const PACKS_AND_TRUST = "docs/packs-and-trust.md";
@@ -99,16 +103,17 @@ const TROUBLESHOOTING = "docs/troubleshooting.md";
 const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 
 /**
- * The five hand-written guides under `docs/`.
+ * The six hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these five are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these six are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  */
 const GUIDES: readonly string[] = [
   GETTING_STARTED,
   MIGRATION,
   WORKING_WITH_STAMITY,
+  CUSTOMIZATION,
   PACKS_AND_TRUST,
   TROUBLESHOOTING,
 ];
@@ -333,9 +338,10 @@ async function corpusCounts(): Promise<Map<string, number>> {
 }
 
 describe("hand pages", () => {
-  // Renamed from "all seven" when the workflow guide joined the bucket: the name states the
-  // membership count, the loop below is unchanged and still runs over every member.
-  it("all eight exist and carry real content", () => {
+  // Renamed twice as the bucket grew — "all seven" when the workflow guide joined, "all eight"
+  // when the customization guide did: the name states the membership count, and the loop below
+  // is unchanged through both and still runs over every member.
+  it("all nine exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -890,17 +896,21 @@ describe("CONTRIBUTING.md", () => {
  *
  * The block above proves a guide is datable, linkable and leak-free. It cannot
  * prove the page still SAYS the thing it was written to say, and four of these
- * five make a claim about a mechanism that can move underneath it: the doctor's
+ * six make a claim about a mechanism that can move underneath it: the doctor's
  * probe set, the trust ladder's rungs, whether signature verification is armed,
  * and what the predecessor's own uninstall verb destroys. So each assertion
  * below reads the mechanism rather than a second copy of it, the way the README
  * corpus counts do.
  *
- * The workflow guide is the one with no bespoke case here yet. What it narrates
- * — which touchpoint to open and what each writes — is owned by `AGENTS.md`
- * rather than by a symbol this file can read, so its guard is the bucket-wide
- * contract above plus its own re-open trigger, and a case pinning it to the
- * touchpoint index belongs with whichever change makes that index readable.
+ * Two guides have no bespoke case here yet, for different reasons. The workflow
+ * guide narrates which touchpoint to open and what each writes, which `AGENTS.md`
+ * owns rather than any symbol this file can read — a case pinning it to the
+ * touchpoint index belongs with whichever change makes that index readable. The
+ * customization guide is the opposite shape: what it claims IS readable — the
+ * override tree's four class paths, the strict/advisory split and the per-class
+ * line thresholds, all owned by `src/content/userContent.ts` — so its gap is a
+ * case nobody has written, not a claim nothing can reach. Both are held to the
+ * bucket-wide contract above and to their own re-open triggers meanwhile.
  */
 describe("the guides", () => {
   it("carves the predecessor's name out for exactly one page, coupled to the leak gate", () => {

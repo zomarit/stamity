@@ -250,8 +250,11 @@ function hookScriptArtifactId(path: string): string {
 /**
  * Aggregate the wave-0 core emitters into one plan: charter render, skills
  * projection, hooks infrastructure, and the per-tool MCP accessor. Reads
- * context only; the charter and skills reads honour the corpus half of
- * `ctx.contentRoot` when a caller pins one.
+ * context only; the charter read honours the corpus half of `ctx.contentRoot`
+ * when a caller pins one, and the skills read honours the corpus half AND the
+ * repo's override tree — the whole of the layer, since a narrowed spec is what
+ * used to make a user skill index as `origin: "user"` and emit as the shipped
+ * body.
  *
  * Installed packs join the skills and hooks surfaces here: `packs` is the
  * resolved pack content (the composer resolves once and passes it down; a
@@ -270,8 +273,24 @@ export async function buildCoreEmissionPlan(
   ctx: EmissionContext,
   packs?: ResolvedPackContent,
 ): Promise<CoreEmissionPlan> {
-  const corpusRoot = contentRootsOf(ctx.contentRoot).root;
+  const roots = contentRootsOf(ctx.contentRoot);
+  const corpusRoot = roots.root;
   const contentRoot = corpusRoot === undefined ? {} : { contentRoot: corpusRoot };
+  // The skills projection takes the corpus root AND the repo's override tree,
+  // never the corpus half alone: narrowing here is what left a user `SKILL.md`
+  // winning its id in the index and emitting the shipped body anyway. Pack
+  // roots stay out on purpose — packs reach the projection through
+  // `resolveInstalledPackContent` and `mergeSkillProjections` below, and
+  // indexing them here too would double-project every pack skill straight into
+  // that merge's directory-collision refusal. The converse — an override
+  // claiming a pack skill's id or directory, invisible to this index because it
+  // never saw the pack half — is `mergeSkillProjections`' to refuse; see its
+  // comment for why an override-origin row gets a different remedy than a
+  // corpus-origin one.
+  const skillsContentRoot: ContentRoots = {
+    ...(corpusRoot === undefined ? {} : { root: corpusRoot }),
+    ...(roots.overrideRoot === undefined ? {} : { overrideRoot: roots.overrideRoot }),
+  };
   // Pack resolution gates hooks planning (pack hook files are read through the
   // user-hook lane) and nothing else, so it is a dependency EDGE inside the
   // parallel fan — the charter and skills reads never wait on it.
@@ -285,7 +304,10 @@ export async function buildCoreEmissionPlan(
       facts: { monorepoPackages: ctx.facts.monorepoPackages },
       ...contentRoot,
     }),
-    projectSkills({ manifest: ctx.manifest, engineVersion: ctx.engineVersion }, contentRoot),
+    projectSkills(
+      { manifest: ctx.manifest, engineVersion: ctx.engineVersion },
+      { contentRoot: skillsContentRoot },
+    ),
     packsPromise.then(async (resolved) =>
       planHooksInfra({
         rootDir: ctx.rootDir,
@@ -354,16 +376,60 @@ export async function buildCoreEmissionPlan(
  * coincidence of content would still interleave their `references/` subtrees
  * under one name, and the ledger would attribute the result to whichever
  * artifact claimed the path first.
+ *
+ * `corpusSkills` is not corpus-only despite the name: it is `projectSkills`'
+ * output over the corpus root AND the repo's override tree
+ * (`buildCoreEmissionPlan`'s `skillsContentRoot`), so a row in it can be
+ * `origin: "user"`. `packRoots` staying out of that index (see
+ * `ProjectSkillsOptions.contentRoot`'s comment) means an override claiming a
+ * pack skill's id or directory is invisible to every check upstream of here —
+ * this is the one place both sides are in hand at once. Two shapes, caught
+ * before the generic directory-collision throw above ever fires on them:
+ *
+ * - **Same directory.** An override skill's DIRECTORY is also a pack skill's
+ *   directory. Falling through to the directory-collision throw would name
+ *   the corpus skill and tell the operator to rename or remove the PACK —
+ *   wrong on both counts, since the row sharing that directory is the
+ *   override, not a corpus skill, and the pack was never the thing that moved.
+ * - **Different directory, same id.** An override claims a pack skill's
+ *   catalog id from a directory of its own. Paths never collide, so nothing
+ *   upstream throws at all: both bodies would project, silently, under one
+ *   catalog id — two files answering to the same identity, at emission
+ *   instead of at the index.
+ *
+ * Pack-skill overrides are unsupported today. Both shapes refuse naming the
+ * OVERRIDE file as the thing to remove or rename; removing the pack is the
+ * stated alternative, exactly as the corpus-vs-pack throw below offers for its
+ * own case.
  */
 function mergeSkillProjections(
   corpusSkills: readonly ProjectedFile[],
   packs: ResolvedPackContent,
 ): ProjectedFile[] {
   const corpusByPath = new Map(corpusSkills.map((row) => [row.path, row]));
+  const overridesById = new Map(
+    corpusSkills.filter((row) => row.origin === "user").map((row) => [row.artifactId, row]),
+  );
   for (const row of packs.skillRows) {
     const corpusRow = corpusByPath.get(row.path);
-    if (corpusRow === undefined) continue;
     const packId = packSupplierOf(packs.items, row.artifactId);
+    const overrideRow = corpusRow?.origin === "user" ? corpusRow : overridesById.get(row.artifactId);
+    if (overrideRow !== undefined) {
+      const overridePath = overrideSkillFilePath(overrideRow);
+      const shape =
+        overrideRow.path === row.path
+          ? `shares its directory with the pack skill "${row.artifactId}"'s`
+          : `claims the catalog id ("${row.artifactId}") of ${
+              packId === undefined ? "an installed pack" : `installed pack "${packId}"`
+            }'s skill, from a different directory`;
+      throw new EngineError(
+        `Pack-skill overrides are unsupported today: the override at "${overridePath}" ${shape} ` +
+          `(both would project to the client). Remove or rename ${overridePath}, or remove ` +
+          `the pack (\`clean --pack ${packId ?? "<pack-id>"}\`).`,
+        { code: "VALIDATION_ERROR" },
+      );
+    }
+    if (corpusRow === undefined) continue;
     throw new EngineError(
       `${packId === undefined ? "An installed pack" : `Installed pack "${packId}"`} supplies ` +
         `skill "${row.artifactId}" under a directory the corpus skill ` +
@@ -386,6 +452,18 @@ function mergeSkillProjections(
  */
 function packSupplierOf(items: readonly CatalogItem[], skillId: string): string | undefined {
   return items.find((item) => item.type === "skill" && item.id === skillId)?.provenance?.pack;
+}
+
+/**
+ * The override source file an `origin: "user"` skill row was rendered from,
+ * reconstructed from its emitted path rather than carried alongside it —
+ * `ProjectedFile` has no source-path field, and the projection dir name is the
+ * override directory name unchanged (`skillsProjection.ts`'s own naming
+ * guarantee), so the join back is exact.
+ */
+function overrideSkillFilePath(row: ProjectedFile): string {
+  const dir = row.path.slice(`${SKILLS_PROJECTION_DIR}/`.length).split("/")[0];
+  return `${STATE_DIR}/overrides/skills/${dir}/SKILL.md`;
 }
 
 // ── Composition ──────────────────────────────────────────────────

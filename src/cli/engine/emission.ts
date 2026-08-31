@@ -47,26 +47,34 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * repo to the same four dialects as the pack-free one, so a rebuild that
  * narrows again fails there rather than going quiet.
  *
- * Declared gap — SKILLS. Of the four content classes, `agent`, `rule` and
- * `command` arrive at emission; `skill` does not. That is the whole set, named
- * either way round rather than counted: the three that arrive are exactly
- * {@link OVERRIDE_EMITTING_CLASSES} below, and the one that does not is the
- * fourth member of `ContentClass`.
+ * ALL FOUR content classes arrive. `agent`, `rule` and `command` reach their
+ * clients through the residue planners named above; `skill` reaches them
+ * through the core projection instead, which is why it took a second edit to
+ * get there and why it is worth stating rather than leaving to be inferred from
+ * {@link OVERRIDE_EMITTING_CLASSES} below.
  *
- * The catalog half of the missing one works: a `.stamity/overrides/skills/
- * <dir>/SKILL.md` indexes as `origin: "user"` like any other class. What never
- * sees the override root is the projection that turns a skill into files —
- * `buildCoreEmissionPlan` narrows the spec to its corpus half before calling
- * `projectSkills` (`../../emit/planner.ts`), and `ProjectSkillsOptions`
- * (`../../emit/skillsProjection.ts`) declares `contentRoot` as a bare corpus-
- * root string, with no third slot to narrow INTO. Both edits belong to the
- * skills seam, not here; widening that option to the full `ContentRoots` spec
- * is what closes it. Until then a user skill taking a corpus skill's id emits
- * the SHIPPED body — silently, since the index reports the override as taken —
- * which is the failure worth naming out loud. The pinned cases in
- * `test/cli/engine/emission.test.ts` hold the text and the mechanism together:
- * one asserts all three classes above arrive, one asserts the fourth does not,
- * so neither can move without the other going red.
+ * The skills path has two halves and both are live. The catalog half indexes a
+ * `.stamity/overrides/skills/<dir>/SKILL.md` as `origin: "user"` like any other
+ * class. The projection half now takes the same roots: `ProjectSkillsOptions`
+ * (`../../emit/skillsProjection.ts`) declares `contentRoot` as the full
+ * `ContentRoots` spec, and `buildCoreEmissionPlan` (`../../emit/planner.ts`)
+ * hands it the corpus root together with the override root rather than
+ * narrowing to the corpus half — the narrowing that used to leave a user skill
+ * winning its id in the index while the SHIPPED body emitted, silently. An
+ * override's whole directory travels: `SKILL.md` and every support file beneath
+ * it, the override's files and not the shadowed skill's. Both skill trees
+ * inherit this identically, because the `.claude/skills/` copy is a path
+ * re-target of these same rendered bytes (`retargetProjection`).
+ *
+ * Pack skills are the one thing that stays out of that widened spec: they reach
+ * the same projection through their own resolution lane and are merged under a
+ * directory-collision check, so indexing them a second time here would
+ * double-project them into it.
+ *
+ * The pinned cases in `test/cli/engine/emission.test.ts` hold the text and the
+ * mechanism together: one asserts the three residue classes arrive, one asserts
+ * the skills class arrives in both trees with the authored body, so neither can
+ * move without the other going red.
  *
  * Declared gap — `.customize.yaml` and `.customize.md`, layers 2 and 3 of the
  * four-layer precedence, are read by nothing on this path. Two layers ship:
@@ -93,19 +101,23 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * The content classes an override takes over at EMISSION, as opposed to merely
  * in the index — where all four merge.
  *
- * `skill` is absent, for the reason the SKILLS gap above gives: the projection
- * that turns a skill into files never sees the override root, so a user skill
- * holding a corpus skill's id emits the SHIPPED body. Exported because the
- * surfaces that REPORT an override have to say so — `../commands/validate.ts`
- * prints what each override replaced, and a second copy of this set over there
- * would go on claiming a replacement for as long as it took anyone to notice
- * the skills seam had widened. One list, beside the mechanism it describes:
- * closing the gap is an edit here, and the report follows it.
+ * All four are here now. `skill` joined when the projection that turns a skill
+ * into files started taking the override root (the skills paragraph above), and
+ * this list is the assertion that it did: it is a full enumeration of
+ * `ContentClass` rather than a subset, and a class dropping out of it is a
+ * regression, not a configuration.
+ *
+ * Exported because the surfaces that REPORT an override have to say so —
+ * `../commands/validate.ts` prints what each override replaced, and a second
+ * copy of this set over there would have gone on claiming the opposite for as
+ * long as it took anyone to notice the skills seam had widened. One list,
+ * beside the mechanism it describes, so the report follows the code.
  */
 export const OVERRIDE_EMITTING_CLASSES: readonly ContentClass[] = Object.freeze([
   "agent",
   "rule",
   "command",
+  "skill",
 ]);
 
 /**
