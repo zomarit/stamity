@@ -3,11 +3,15 @@
  * layout.
  *
  * Still not a theme fork. Every rule below either sets a variable Infima already reads or styles
- * the landing page's own classes — there is no restyled component, no overridden theme selector,
- * and nothing here to re-reconcile on an Infima upgrade. What grew is the token set, because the
- * palette is now the product's rather than the starter's: three colours (violet #6B24FF, ink
- * #09090C, paper #F6F6F8) taken from the marks in `static/img/`, so the navbar wordmark and the
- * page it sits on are cut from the same three values.
+ * the landing page's own classes — there is no restyled component and no theme selector named
+ * here, so an Infima upgrade has nothing to re-reconcile. One rule, `.landing .landing__install`,
+ * does land on a class the landing page hands to a theme component; what it argues with, and why
+ * it is scoped rather than shouted, is written above the rule.
+ *
+ * What grew is the token set, because the palette is now the product's rather than the starter's:
+ * three colours (violet #6B24FF, ink #09090C, paper #F6F6F8) taken from the marks in
+ * `static/img/`, so the navbar wordmark and the page it sits on are cut from the same three
+ * values.
  *
  * CONTRAST IS COMPUTED, NOT EYEBALLED. Every foreground/background pair this file creates clears
  * WCAG AA for body text (4.5:1); the pairs and their measured ratios are named in the comments
@@ -257,7 +261,33 @@ html[data-theme='dark'] .landing::before {
   margin-bottom: 2rem;
 }
 
-.landing__install {
+/*
+ * The install line is `@theme/CodeBlock`, so this class sits on the block's OUTER container — the
+ * div that already carries the theme's background, radius, shadow and the copy button. Three
+ * declarations, and only three, because everything else the block needs it already has:
+ *
+ * `text-align` because `.landing` centres the page and the code inherits it; the theme has no
+ * opinion, having never been rendered inside a centred column. `margin-bottom` because the theme's
+ * own is `--ifm-leading` (1.25rem), and this page spaces its blocks at the 2rem the pitch above
+ * uses — matching the neighbour is the point, so the value is the neighbour's. The `border` is
+ * carried over from the bare `pre` this replaced: the same hairline token as every other edge on
+ * the site, and what keeps the block's edge readable in light mode, where Prism's github ground is
+ * within a few percent of the page's paper and the theme's hairline shadow alone barely shows.
+ *
+ * THE DESCENDANT SELECTOR IS LOAD-BEARING, and only for `margin-bottom`. Docusaurus emits the
+ * theme's CSS modules AFTER this file, so `.landing__install` and `.codeBlockContainer_*` tie on
+ * specificity and the later one — the theme's `margin-bottom: var(--ifm-leading)` — wins. Scoping
+ * to the page that owns the block breaks the tie on specificity instead of on source order, which
+ * is the half of the cascade a bundler cannot reorder underneath it. `.landing` is the block's
+ * actual parent (`<main className="landing">` in `src/pages/index.tsx`), so this is still the
+ * landing page styling its own class, not a theme selector overridden; `!important` would have
+ * bought the same pixel and given up saying which rule it was arguing with.
+ *
+ * Both modes are covered without a second rule: the border reads `--ifm-toc-border-color`, which
+ * the dark block above already re-points, and the fill, text and copy button are the theme's, so
+ * they follow the same Prism pair (github / dracula) the docs pages render.
+ */
+.landing .landing__install {
   border: 1px solid var(--ifm-toc-border-color);
   margin-bottom: 2rem;
   text-align: left;

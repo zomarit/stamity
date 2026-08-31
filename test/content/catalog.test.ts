@@ -583,6 +583,9 @@ describe("the override layer", () => {
       "VALIDATION_ERROR",
     );
     expect(traversal.message).toContain("rules/evil.md");
+    // Root-qualified: `rules/evil.md` alone reads the same in every layer, so the
+    // refusal has to say which tree the offending file sits in.
+    expect(traversal.message).toContain("overrides/rules/evil.md");
     expect(traversal.message).toContain("`..` segment");
 
     const separator = await expectRejection(
@@ -590,6 +593,36 @@ describe("the override layer", () => {
       "VALIDATION_ERROR",
     );
     expect(separator.message).toContain("backslash separator");
+  });
+
+  /**
+   * Regression. A content-root-relative `source` spells a corpus file, a pack
+   * copy, and an override identically, so a malformed override sent the author
+   * to whichever twin they found first — and `rules/stamity-security.md` exists
+   * in both trees here precisely to make that confusion reproducible. Each layer
+   * has its own root, so the absolute path is unambiguous by construction.
+   */
+  it("names the override tree's own file, not its corpus twin, when an override is malformed", async () => {
+    const malformedYaml = await expectRejection(
+      () =>
+        overlayIndexOf(CORPUS, {
+          "rules/stamity-security.md": "---\nid: [unterminated\n---\nBody.\n",
+        }),
+      "VALIDATION_ERROR",
+    );
+    expect(malformedYaml.message).toContain("overrides/rules/stamity-security.md");
+
+    const badField = await expectRejection(
+      () =>
+        overlayIndexOf(CORPUS, {
+          "rules/security.md": artifact("id: security\ntype: rule\ntags: 3"),
+        }),
+      "VALIDATION_ERROR",
+    );
+    expect(badField.message).toContain("overrides/rules/security.md");
+    // The offending field is named alongside the file: both halves of "which
+    // file, which key" are what make the message actionable.
+    expect(badField.message).toContain("`tags`");
   });
 
   it("keeps a skill override addressable as the whole directory it is", async () => {

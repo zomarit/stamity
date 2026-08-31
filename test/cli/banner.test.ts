@@ -109,7 +109,7 @@ describe("wordmark — the single accent", () => {
     expect(stripVTControlCharacters(renderWordmark({ accent }))).toBe(renderWordmark());
   });
 
-  it("colours a single cell run — the first t's left crossbar arm, not the letterforms", () => {
+  it("colours a single cell run — the first t's whole crossbar, not the letterforms", () => {
     const art = renderWordmark({ accent: "truecolor" });
     // Split rather than match: a regex literal spelling the escape byte is a
     // control character in source, which the lint bans outright.
@@ -117,9 +117,20 @@ describe("wordmark — the single accent", () => {
       .split(VIOLET.truecolor)
       .slice(1)
       .map((tail) => tail.split(RESET_FG)[0] ?? "");
-    // Two half-cells stacked: the lower half of one row and the upper half of
-    // the next, which together read as one violet square beside the stem.
-    expect(colored).toEqual(["▄", "▀"]);
+    // Contract change (operator decision): the accent was the crossbar's left
+    // ARM alone — `["▄", "▀"]`, one violet square beside the stem — and is now
+    // the FULL crossbar, matching the single continuous violet path in
+    // `website/static/img/wordmark.svg` (x 75.96 -> 122.96), which runs left arm
+    // through stem crossing to right arm with no ink drawn over it.
+    //
+    // The stem crossing is violet rather than ink because the medium colours a
+    // whole cell or none of it: the two cells where crossbar meets stem render
+    // as one glyph each, so the grid declares those pixels accent outright
+    // instead of leaning on the renderer's accent-wins fallback — which is what
+    // keeps "no cell mixes two inks" literally true of the grid.
+    //
+    // Five cells per text row, the crossbar's width: arm, stem, stem, arm, arm.
+    expect(colored).toEqual(["▄██▄▄", "▀██▀▀"]);
   });
 });
 

@@ -1,3 +1,7 @@
+---
+title: Client capability matrix
+---
+
 <!-- GENERATED FILE — do not edit by hand. Rewrite it with `node scripts/generate-capability-matrix.mjs`. -->
 
 # Client capability matrix

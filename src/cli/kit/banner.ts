@@ -8,8 +8,9 @@ import { resolveColorEnabled } from "./terminal.ts";
  * at all, so it renders in whatever foreground the reader's theme already uses
  * — light terminal, dark terminal, high-contrast, a `script(1)` transcript. The
  * mark therefore needs no light/dark variant and can never collide with a
- * user's background. Exactly ONE cell run carries color: the left arm of the
- * first `t`'s crossbar, in the brand violet #6B24FF. That single accent is the
+ * user's background. Exactly ONE cell run carries color: the whole crossbar of
+ * the first `t` — left arm, stem crossing, right arm, the one continuous violet
+ * path the SVG draws — in the brand violet #6B24FF. That single accent is the
  * whole of the color budget, and it degrades (24-bit -> 256 -> 16) or vanishes
  * rather than being approximated by painting more of the mark.
  *
@@ -74,10 +75,10 @@ const ACCENT = "+";
 const WORDMARK: readonly string[] = [
   "        ##                      ##  ##",
   "        ##                      ##  ##",
-  "        ##                          ##",
-  "###### +#### ####### ########## ## ##### ##  ##",
-  "###### +#### ####### ########## ## ##### ##  ##",
-  "##      ##   ##   ## ##  ##  ## ##  ##   ##  ##",
+  "        ++                          ##",
+  "###### +++++ ####### ########## ## ##### ##  ##",
+  "###### +++++ ####### ########## ## ##### ##  ##",
+  "##      ++   ##   ## ##  ##  ## ##  ##   ##  ##",
   "######  ##   ##   ## ##  ##  ## ##  ##   ##  ##",
   "######  ##   ##   ## ##  ##  ## ##  ##   ##  ##",
   "    ##  ##   ##   ## ##  ##  ## ##  ##   ##  ##",

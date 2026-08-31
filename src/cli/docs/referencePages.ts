@@ -55,6 +55,7 @@ import {
 import { findPackageRoot } from "../../shared/paths.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../../types/content.ts";
 import { EngineError } from "../../types/errors.ts";
+import { INVOCABLE_CONTENT_PREFIX, contentPrefixFor } from "../../types/markers.ts";
 
 /** The one command that rewrites every generated page in this lane. */
 export const REGENERATE_COMMAND = "node scripts/generate-docs.mjs";
@@ -74,6 +75,21 @@ const PACKS_DIR = "packs";
  */
 export function generatedBanner(): string {
   return `<!-- GENERATED FILE — do not edit by hand. Rewrite it with \`${REGENERATE_COMMAND}\`. -->`;
+}
+
+/**
+ * The site frontmatter a generated page opens with, and it opens with it
+ * literally: the site generator reads frontmatter only when the block starts at
+ * byte 0, so a banner placed ahead of it is not "a comment before the metadata"
+ * — it is the whole block going unparsed, and every page then takes its
+ * navigation label from its slug instead of the title stated here.
+ *
+ * One home for the shape, for the same reason {@link generatedBanner} is one:
+ * the sibling renderers emit it too, and a second spelling of a three-line
+ * block is how one page ends up published under a label nobody chose.
+ */
+export function frontmatterBlock(title: string): string {
+  return ["---", `title: ${title}`, "---"].join("\n");
 }
 
 function fail(message: string): never {
@@ -150,10 +166,11 @@ const CLASS_PAGES: Record<ContentClass, Omit<ReferencePageSpec, "covers">> = {
     title: "Commands",
     blurb: "every command in the corpus — its trigger, tags, load mode and retirement condition.",
     intro:
-      "A command is a touchpoint a human types. Ids carry the " +
-      `\`${COMMAND_ID_PREFIX}\` prefix the catalog applies so a command can never shadow a ` +
-      "skill or agent of the same name; the typed touchpoint drops it. Authored in " +
-      "`content/commands/`.",
+      "A command is a touchpoint a human types, and each heading below is that " +
+      `invocation exactly as it is typed — the \`${INVOCABLE_CONTENT_PREFIX}\` prefix, after a ` +
+      "slash. The catalog files commands under a namespacing prefix of its own so one can " +
+      "never shadow a skill or agent of the same name; that prefix is bookkeeping, and " +
+      "nothing types it. Authored in `content/commands/`.",
   },
 };
 
@@ -206,10 +223,38 @@ function tick(value: string): string {
 }
 
 /**
+ * The heading spelling for one artifact: what an operator invokes it by, not
+ * what the catalog files it under.
+ *
+ * The two differ in exactly the places a reader notices. A command's catalog id
+ * carries {@link COMMAND_ID_PREFIX} so it cannot shadow a skill or an agent of
+ * the same name — internal bookkeeping that nobody types — and every class then
+ * takes the filename prefix its emission earns. So the page headed a touchpoint
+ * `cmd-work` while its own intro said the typed form drops that prefix; the
+ * reader was left to work out which of the two the client would accept.
+ *
+ * Which prefix a class earns is {@link contentPrefixFor}'s answer, not one
+ * re-decided here — the same call the adapters make, so the page and the file
+ * an install lands cannot disagree about the spelling. The leading slash is the
+ * command half of that: a command is typed after one, so the heading shows it.
+ * The already-prefixed guard means an id authored with its prefix already on it
+ * renders once rather than doubled.
+ */
+function invokedName(item: CatalogItem): string {
+  const bare =
+    item.type === "command" && item.id.startsWith(COMMAND_ID_PREFIX)
+      ? item.id.slice(COMMAND_ID_PREFIX.length)
+      : item.id;
+  const prefix = contentPrefixFor(item);
+  const spelled = bare.startsWith(prefix) ? bare : `${prefix}${bare}`;
+  return item.type === "command" ? `/${spelled}` : spelled;
+}
+
+/**
  * One artifact's block, opened by the blank line that separates it from the
- * previous one: the id as a heading, the description as the prose under it,
- * and the three remaining projected fields as a short field list. A list
- * rather than a table because a `description` and an `obsolete_when` are
+ * previous one: the {@link invokedName} heading, the description as the prose
+ * under it, and the three remaining projected fields as a short field list. A
+ * list rather than a table because a `description` and an `obsolete_when` are
  * sentences — in a table they would wrap into unreadable cells.
  */
 function artifactBlock(item: CatalogItem): string[] {
@@ -224,7 +269,7 @@ function artifactBlock(item: CatalogItem): string[] {
   }
   return [
     "",
-    `### ${tick(item.id)}`,
+    `### ${tick(invokedName(item))}`,
     "",
     description,
     "",
@@ -249,6 +294,8 @@ function renderClassPage(spec: ReferencePageSpec, index: ContentIndex): string {
     .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   const lines = [
+    frontmatterBlock(spec.title),
+    "",
     generatedBanner(),
     "",
     `# ${spec.title}`,
@@ -362,6 +409,8 @@ function packBlock(pack: PackInventory): string[] {
 
 function renderPacksPage(spec: ReferencePageSpec, packs: readonly PackInventory[]): string {
   const lines = [
+    frontmatterBlock(spec.title),
+    "",
     generatedBanner(),
     "",
     `# ${spec.title}`,

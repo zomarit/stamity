@@ -1,3 +1,7 @@
+---
+title: Getting started
+---
+
 <!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, or a
      verb joins or leaves the command surface. `test/docsPages.test.ts` holds this page to the
@@ -56,10 +60,13 @@ that on your behalf. `--dry-run` previews the whole run without writing.
 
 ## What lands
 
-Two things are written for every client, because three of the four read them natively:
+`AGENTS.md` is written for every client — the charter: repository facts, the floor
+invariants, the touchpoint index. Three of the four read it natively.
 
-- `AGENTS.md` — the charter: repository facts, the floor invariants, the touchpoint index.
-- `.agents/skills/` — the skills projection.
+`.agents/skills/` — the skills projection — is written for the clients that read that
+tree, and only when one is selected. Claude Code keeps its own copy in `.claude/skills/`
+instead, so a claude-only repository gets no `.agents/` tree at all: the projection
+would duplicate the native copy byte for byte, for a client that never looks at it.
 
 Then each client gets what it cannot read without help. The short version:
 

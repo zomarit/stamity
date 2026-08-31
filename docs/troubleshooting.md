@@ -1,3 +1,7 @@
+---
+title: Troubleshooting
+---
+
 <!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
 <!-- Re-open when: a doctor probe is added or removed, an error code starts or stops being
      thrown, or the three-status exit model changes. `test/docsPages.test.ts` holds this page
