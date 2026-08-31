@@ -44,6 +44,77 @@ because the id is still claimed; what changed is that the override's body is now
 the only text under it. Replacing a floor is a decision to take deliberately,
 not one to find later in the shadowing lines.
 
+## Patching instead of replacing
+
+Replacement is not the only lane and it is the expensive one: a full override is
+a copy of the whole artifact, so every later upstream improvement stops
+arriving and nothing reports the divergence. An overlay states the delta and
+nothing else. The base keeps flowing from the corpus or the pack that supplies
+it, and the patch survives an upstream rewrite of everything it did not name.
+
+An overlay is two halves, either one alone or both together, filed where the
+full override would have gone:
+
+| Half | Path | Effect |
+|---|---|---|
+| `.customize.yaml` | `.stamity/overrides/<class>/<slug>.customize.yaml` | patches the frontmatter |
+| `.customize.md` | `.stamity/overrides/<class>/<slug>.customize.md` | appends to the body |
+
+A skill's halves are composed the way its readable file is —
+`.stamity/overrides/skills/<slug>/SKILL.customize.yaml` and
+`SKILL.customize.md` — in a directory that needs no `SKILL.md` of its own, and
+`<slug>` is the bundled file's name with the engine prefix off (`st-qa` is
+patched as `qa`). A command is addressed by its bare slug, not its `cmd-` id.
+
+The effective precedence chain is declared rather than counted, and exactly one
+of the two applies to any `(class, id)`:
+
+- corpus-or-pack → `.customize.yaml` → `.customize.md`
+- corpus-or-pack → full override (`<slug>.md` in the override tree)
+
+An overlay and a full override of one id are refused together, naming both
+files: an artifact is either replaced or patched, never both. A full override is
+your own file, so patching it means editing it. The engine's save gate refuses
+to write an override over an id an overlay already patches, and it refuses the
+reverse arrangement at the walk — so the choice is made once, in the open.
+
+**Merge semantics.** Frontmatter is a shallow key set: a key the overlay
+declares replaces the base value whole, a key written `key:` with no value is
+removed from the merged head, a key the overlay does not name is untouched, and
+lists (`tags`, `tools`) replace whole — there are no append verbs. The body half
+is appended after the base body with one blank line between them. No prepend, no
+section anchors, no templating: the base's own bytes are otherwise untouched, so
+deleting the overlay restores the shipped artifact exactly.
+
+**Writing one.** A half is written directly, not through the artifact save: the
+save gate files artifacts under an id, and a half is not an artifact. The gate
+that judges it is `stamity validate`, which merges the pair over the base and
+runs the whole save contract below over the RESULT — so a patch that would break
+the artifact is named before a sync applies it, with the base file, every half
+applied, and the offending field in one line.
+
+**What refuses.** Each one stops the sync and names the file:
+
+- an `id` or `type` key in the `.customize.yaml` — that is the identity the
+  patch is addressed by, and moving it would orphan its own base;
+- a `---` frontmatter fence at the head of a `.customize.md` — those keys belong
+  in the other half;
+- YAML that does not parse, or whose root is not a map;
+- an overlay whose slug matches no artifact in any layer, which is almost always
+  a typo in the filename;
+- an overlay sitting beside a full override of the same id;
+- a `.customize.md` body past the same length ceiling a full override's body is
+  held to — an author hits this by accident on a large paste, not by design;
+- an overlay filename (or, for a skill, its carrier directory) spelled with the
+  engine's own `stamity-`/`st-` prefix — save it under the bare spelling
+  instead, the same spelling the save gate already reserves;
+- a merged artifact that fails any check an authored one would fail.
+
+`stamity validate` prints a `patched` line for each pair — the base still
+supplying the body, the layer it comes from, and every half applied. It is
+information, not a finding: a patch is this lane working, so it never moves the
+exit code on its own.
+
 ## Delivery
 
 A saved artifact is not live yet. The next `stamity sync` picks it up and projects

@@ -1,5 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import type { ContentIndex, PackContentRoot } from "../../content/catalog.ts";
+import type { UserContentOverlay } from "../../content/userContent.ts";
 import type { EngineRegistry } from "../../index.ts";
 import type { ContentClass } from "../../types/content.ts";
 import { EngineError } from "../../types/errors.ts";
@@ -38,7 +40,8 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  *   a second, staler copy of every rule in the CLI. What the command adds is
  *   grouping, repo-relative paths, and one next-step line.
  *
- * The user-content section reports one thing that is not a defect at all:
+ * The user-content section reports two things that are not defects at all.
+ *
  * SHADOWING. An override takes a bundled artifact's id on purpose, and the
  * command's job is to name the shipped artifact behind it, because the operator
  * who did it by accident — a floor rule renamed into the tree, a copied file
@@ -53,6 +56,18 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * keeps that from recurring silently. Reading the bundled corpus to answer is
  * not a widening of scope: the subject is still the user's file, and nothing
  * bundled is judged.
+ *
+ * PATCHING. An overlay — `.customize.yaml` over the frontmatter, `.customize.md`
+ * appended to the body — states a delta instead of taking the id, so the base
+ * keeps flowing from the corpus or the pack that supplies it. That is the third
+ * customization outcome and today's two would each describe it wrongly: nothing
+ * was replaced, and nothing left the index. A `patched` row names the base, the
+ * layer supplying it, and every half applied, and it never moves the exit code.
+ * What DOES move the exit code is the merged artifact: the same
+ * `checkUserArtifact` gate runs over base-plus-patch, because the text that
+ * reaches agent context is neither file on its own — and every walk refusal an
+ * overlay can cause becomes a finding here, since an overlay file meets no other
+ * gate in this command.
  *
  * Non-mutating: no `--dry-run`, nothing written, nothing created to find out
  * that it is absent. Exit 1 iff a finding is an error; warnings alone exit 0 —
@@ -70,8 +85,20 @@ export interface ValidateFinding {
 
 type ValidateSource = ValidateFinding["source"];
 
-/** One bundled identity a user artifact took over. Information, never a finding. */
-export interface ValidateShadow {
+/**
+ * One customization outcome, discriminated by `outcome`. Information, never a
+ * finding — a customized id is this lane working, whichever shape it took.
+ *
+ * Two shapes, and exactly one of them applies to any `(class, id)`: an artifact
+ * is either REPLACED by a full override or PATCHED by an overlay. The engine
+ * refuses a tree that claims both, so the discriminator is a fact about the
+ * repo rather than a preference of this report.
+ */
+export type ValidateShadow = ValidateReplaced | ValidatePatched;
+
+/** One bundled identity a user artifact took over. */
+interface ValidateReplaced {
+  outcome: "replaced";
   /** Class of the contested identity. */
   type: ContentClass;
   /** The catalog id both layers claim. */
@@ -96,6 +123,33 @@ export interface ValidateShadow {
    * replacement that never happened — the exact defect the skills gap produced
    * while it was open. A machine-readable field rather than wording alone, so a
    * CI consumer can act on the difference the human line describes.
+   */
+  emits: boolean;
+}
+
+/**
+ * One shipped identity an overlay PATCHES — the third outcome, and the one
+ * today's two would each have described wrongly: nothing was replaced, and
+ * nothing left the index. The patched item IS the item, emitted under the base's
+ * identity, which is why the ledger needs no vocabulary for it either.
+ */
+interface ValidatePatched {
+  outcome: "patched";
+  /** Class of the patched artifact. */
+  type: ContentClass;
+  /** The catalog id the overlay is addressed by. */
+  id: string;
+  /** Content-root-relative path of the BASE — the file that still supplies the body. */
+  base: string;
+  /** Layer the base came from: `corpus`, or the id of the pack that supplies it. */
+  origin: string;
+  /** Repo-relative POSIX paths of the halves applied, frontmatter half first. */
+  overlays: string[];
+  /**
+   * Whether the merged body reaches emission, from the same
+   * `OVERRIDE_EMITTING_CLASSES` derivation the replaced row uses. A patch rides
+   * on the base's own artifact, so it is true wherever the class emits at all —
+   * derived rather than asserted, for the reason the sibling field is.
    */
   emits: boolean;
 }
@@ -182,7 +236,7 @@ async function collectReport(rootDir: string, engine: EngineRegistry): Promise<V
       "user-content",
       rootDir,
       repoPath(rootDir, engine.content.userContent.userContentRoot(rootDir)),
-      () => collectUserContent(rootDir, engine),
+      () => collectUserContent(rootDir, engine, state.manifest),
     ),
     guarded("user-hooks", rootDir, hooksDir, () => collectUserHooks(rootDir, engine, state)),
     guarded("learnings", rootDir, join(STATE_DIR, LEARNINGS_DIR), () =>
@@ -233,19 +287,28 @@ async function collectReport(rootDir: string, engine: EngineRegistry): Promise<V
  *   that ever reads them; a block-severity hit is an error here for exactly the
  *   reason it is one in the body. The finding names the file and the pattern id
  *   and never the matched span, which the deny scanner redacts at source.
- * - **Shadows.** Which bundled artifact each override replaced, read from the
- *   merged catalog. Informational — see the module header.
+ * - **Customization.** Which bundled artifact each override replaced and which
+ *   each overlay patched, read from the merged catalog. Informational — see the
+ *   module header.
+ * - **Overlays.** A `.customize.yaml`/`.customize.md` pair is not an artifact
+ *   and meets no gate above: the artifact walk excludes both halves by name, so
+ *   this section is where the MERGED artifact — base frontmatter patched, base
+ *   body appended to — goes through `checkUserArtifact` whole, and where the
+ *   walk's own refusals (an orphan, an identity key, a fence, an overlay beside
+ *   a full override) become findings the author can act on.
  */
 async function collectUserContent(
   rootDir: string,
   engine: EngineRegistry,
+  manifest: SetupManifest | null,
 ): Promise<SectionReport> {
   const { userContent } = engine.content;
-  // Three disjoint walks of one small tree, plus the per-artifact judgements.
-  const [artifacts, skipped, support] = await Promise.all([
+  // Four disjoint walks of one small tree, plus the per-artifact judgements.
+  const [artifacts, skipped, support, overlays] = await Promise.all([
     userContent.discoverUserContent(rootDir),
     userContent.discoverSkippedUserEntries(rootDir),
     userContent.scanUserSkillSupportFiles(rootDir),
+    userContent.discoverUserOverlays(rootDir),
   ]);
   const judged = await Promise.all(
     artifacts.map(async (artifact) => ({
@@ -253,6 +316,15 @@ async function collectUserContent(
       check: await userContent.checkUserArtifact(artifact),
     })),
   );
+
+  // One catalog walk answers both halves of the customization report: what each
+  // override replaced, and what each overlay patched. It is run only when the
+  // tree holds something customizing, so the ordinary repo never pays for
+  // reading the bundled corpus.
+  const customization =
+    artifacts.length === 0 && overlays.length === 0
+      ? EMPTY_SHADOWS
+      : await collectCustomization(rootDir, engine, manifest, overlays);
 
   const findings = [
     ...judged.flatMap(({ artifact, check }) =>
@@ -269,6 +341,7 @@ async function collectUserContent(
     ...support.findings.map((row) =>
       finding("user-content", repoPath(rootDir, row.filePath), row.severity, row.detail),
     ),
+    ...customization.findings,
   ];
 
   // Skipped entries count as inspected: the command looked at them, and a
@@ -279,63 +352,269 @@ async function collectUserContent(
   // override tree holds.
   const artifactUnits = artifacts.length + skipped.length;
   const supportUnits = support.inspected + support.skipped.length;
+  // Overlays count under their own noun: a pair is one patch however many halves
+  // it has, and calling it an artifact would misreport what the tree holds — the
+  // artifact it patches is not in this tree at all.
+  const overlayUnits = overlays.length;
   const summary = [
     ...(artifactUnits > 0 ? [plural(artifactUnits, "artifact")] : []),
+    ...(overlayUnits > 0 ? [plural(overlayUnits, "overlay")] : []),
     ...(supportUnits > 0 ? [plural(supportUnits, "skill support file")] : []),
   ].join(" and ");
-  const shadowing = artifacts.length === 0 ? EMPTY_SHADOWS : await collectShadows(rootDir, engine);
   return {
-    ...section("user-content", findings, artifactUnits + supportUnits, summary),
-    ...(shadowing.note === undefined ? {} : { note: shadowing.note }),
-    shadows: shadowing.shadows,
+    ...section("user-content", findings, artifactUnits + overlayUnits + supportUnits, summary),
+    ...(customization.note === undefined ? {} : { note: customization.note }),
+    shadows: customization.shadows,
   };
 }
 
-/** The no-override answer, allocated once: nothing walked, nothing replaced. */
-const EMPTY_SHADOWS: ShadowScan = { shadows: [] };
+/** The no-customization answer, allocated once: nothing walked, nothing changed. */
+const EMPTY_SHADOWS: CustomizationScan = { shadows: [], findings: [] };
 
-interface ShadowScan {
+interface CustomizationScan {
   readonly shadows: readonly ValidateShadow[];
+  /** Findings the merged artifacts and the overlay refusals produced. */
+  readonly findings: readonly ValidateFinding[];
   /** Why the scan could not answer. Printed as a note — never as a finding. */
   readonly note?: string;
 }
 
 /**
- * Which bundled identities the override tree took over, from the merged
- * catalog's own shadow surface.
+ * What the repo customizes, from one merged catalog walk: the identities the
+ * override tree took over, the identities an overlay patched, and the judgement
+ * of every merged artifact.
  *
- * The walk is run only when the tree holds at least one artifact, so the
- * ordinary repo — no overrides — never pays for reading the bundled corpus.
+ * The walk is what makes the overlay half possible without a second
+ * implementation of anything. It resolves the base, applies the pair, composes
+ * the merged document and runs it back through the item builder — so what comes
+ * out of `byKey` at a patched id IS the artifact the next `sync` emits, and this
+ * command's job is to read it rather than to re-derive it.
  *
- * A walk that throws degrades to a note rather than a finding. The catalog
- * refuses a malformed artifact with a `VALIDATION_ERROR` naming the file, and
- * that same file has already been reported here by the per-artifact gate in
- * better terms; turning the walk's failure into a second finding would
- * double-report the defect, and letting it escape would replace the section's
- * real findings with one message about an index.
+ * Two failure postures, split by whose file the failure is about:
+ *
+ * - A walk failure naming an OVERLAY file is an error finding against that file.
+ *   An overlay meets no other gate in this command — the artifact walk excludes
+ *   both halves by name — so degrading it to a note would leave the author with
+ *   an exit 0 over a tree that stops the next sync.
+ * - Anything else degrades to a note, unchanged. The catalog refuses a malformed
+ *   override artifact with a `VALIDATION_ERROR` naming the file, and the
+ *   per-artifact gate has already reported that same file in better terms;
+ *   turning the walk's failure into a second finding would double-report the
+ *   defect, and letting it escape would replace the section's real findings with
+ *   one message about an index.
  */
-async function collectShadows(rootDir: string, engine: EngineRegistry): Promise<ShadowScan> {
+async function collectCustomization(
+  rootDir: string,
+  engine: EngineRegistry,
+  manifest: SetupManifest | null,
+  overlays: readonly UserContentOverlay[],
+): Promise<CustomizationScan> {
   const { catalog, userContent } = engine.content;
+  const packRoots = await installedPackRoots(rootDir, engine, manifest);
   try {
     const index = await catalog.buildContentIndex({
       overrideRoot: userContent.userContentRoot(rootDir),
+      packRoots,
     });
+    const patched = await Promise.all(
+      overlays.map((overlay) => judgePatched(rootDir, engine, index, overlay)),
+    );
     return {
-      shadows: (index.shadows ?? []).map((shadow) => ({
-        type: shadow.type,
-        id: shadow.id,
-        path: repoPath(rootDir, shadow.winner.filePath),
-        replaced: shadow.shadowed.map((item) => item.relativePath),
-        emits: OVERRIDE_EMITTING_CLASSES.includes(shadow.type),
-      })),
+      shadows: [
+        ...(index.shadows ?? []).map((shadow) => ({
+          outcome: "replaced" as const,
+          type: shadow.type,
+          id: shadow.id,
+          path: repoPath(rootDir, shadow.winner.filePath),
+          replaced: shadow.shadowed.map((item) => item.relativePath),
+          emits: OVERRIDE_EMITTING_CLASSES.includes(shadow.type),
+        })),
+        ...patched.flatMap((result) => result.rows),
+      ],
+      findings: patched.flatMap((result) => result.findings),
     };
   } catch (cause) {
+    const named = overlayFailure(rootDir, overlays, cause);
+    if (named !== undefined) return { shadows: [], findings: [named] };
     return {
       shadows: [],
+      findings: [],
       note:
         `could not report what these overrides replace until the tree indexes: ` +
         `${messageOf(cause)}`,
     };
+  }
+}
+
+/**
+ * The walk's refusal as a finding against the overlay file it names, or
+ * `undefined` when no overlay is implicated.
+ *
+ * Attribution is by PATH rather than by parsing the message: every overlay
+ * refusal names the absolute path of at least one half — that is the engine's
+ * own fail-closed contract, and the merged-artifact refusals carry a composite
+ * label naming the base and every half applied. The message then passes through
+ * verbatim, so the field it names is the field the author reads.
+ */
+function overlayFailure(
+  rootDir: string,
+  overlays: readonly UserContentOverlay[],
+  cause: unknown,
+): ValidateFinding | undefined {
+  const message = messageOf(cause);
+  const named = overlays
+    .flatMap(halfPaths)
+    .find((path) => message.includes(path));
+  return named === undefined
+    ? undefined
+    : finding("user-content", repoPath(rootDir, named), "error", message);
+}
+
+/** Absolute paths of one pair's halves, frontmatter half first. */
+function halfPaths(overlay: UserContentOverlay): string[] {
+  return [overlay.frontmatterPath, overlay.bodyPath].filter(
+    (path): path is string => path !== undefined,
+  );
+}
+
+/**
+ * One overlay pair: its report row, and every finding the MERGED artifact earns.
+ *
+ * The merged item is read out of the index rather than rebuilt — it is what the
+ * walk already produced for that id, keeping the base's file, origin and
+ * provenance — and it goes through `checkUserArtifact` whole: required
+ * frontmatter, the lifecycle declarations, the deny scan over frontmatter and
+ * body, filler phrasing, the class's lean line threshold. One gate, the same one
+ * the save path runs, so this command cannot report a defect the engine would
+ * have let land or miss one it would have refused.
+ *
+ * Findings are addressed to the half that plausibly carries the text: body-judged
+ * kinds to the `.customize.md`, everything else to the `.customize.yaml`, each
+ * falling back to the other when the pair has only one half. The pair is two
+ * files describing one patch, sitting beside each other under one slug, so the
+ * address is a starting point and the message is what names the field.
+ */
+async function judgePatched(
+  rootDir: string,
+  engine: EngineRegistry,
+  index: ContentIndex,
+  overlay: UserContentOverlay,
+): Promise<{ rows: ValidatePatched[]; findings: ValidateFinding[] }> {
+  const { catalog, userContent } = engine.content;
+  const id = catalog.applyCommandPrefix(overlay.slug, overlay.type);
+  const item = index.byKey.get(catalog.typeIdKey(overlay.type, id));
+  // Unreachable through the walk, which refuses an orphan outright; carried so a
+  // future walk that reported one instead of throwing cannot crash this report.
+  if (item === undefined) return { rows: [], findings: [] };
+
+  const check = await userContent.checkUserArtifact({
+    type: overlay.type,
+    id: item.id,
+    filePath: item.filePath,
+    frontmatter: item.frontmatter,
+    body: item.body,
+    // The merged artifact sits on its BASE's file, whose name carries the engine
+    // prefix its id does not. Its identity is the base's by construction — an
+    // overlay may not move `id` or `type` — and a base whose declared id
+    // disagrees with its own filename is the walk's finding, in its own terms.
+    fileSlug: item.id,
+  });
+
+  const findings = [...check.errors, ...check.warnings].map((violation) =>
+    finding(
+      "user-content",
+      repoPath(rootDir, addressOf(overlay, violation.kind)),
+      violation.severity,
+      violation.detail,
+    ),
+  );
+
+  return {
+    rows: [
+      {
+        outcome: "patched",
+        type: overlay.type,
+        id: item.id,
+        base: item.relativePath,
+        origin: item.provenance?.pack ?? catalog.originOf(item),
+        overlays: halfPaths(overlay).map((path) => repoPath(rootDir, path)),
+        emits: OVERRIDE_EMITTING_CLASSES.includes(overlay.type),
+      },
+    ],
+    findings: [...findings, ...cappedBody(rootDir, engine, overlay)],
+  };
+}
+
+/** Violation kinds the body half is the plausible author of. */
+const BODY_JUDGED_KINDS: ReadonlySet<string> = new Set([
+  "anti-slop",
+  "lean-lines",
+  "deny-pattern",
+]);
+
+/** The half a finding is addressed to; either half stands in for an absent one. */
+function addressOf(overlay: UserContentOverlay, kind: string): string {
+  const [preferred, fallback] = BODY_JUDGED_KINDS.has(kind)
+    ? [overlay.bodyPath, overlay.frontmatterPath]
+    : [overlay.frontmatterPath, overlay.bodyPath];
+  // One of the two is always present: a pair with neither half is not discovered.
+  return preferred ?? (fallback as string);
+}
+
+/**
+ * The user-content ceiling over the body half, as one finding or none.
+ *
+ * An overlay body is user-authored text that re-enters agent context on every
+ * run, which is exactly what `MAX_USER_CONTENT_LENGTH` bounds
+ * (`../../guard/promptGuard.ts`) — a body past it is truncated where it is read
+ * rather than emitted whole, so the patch the author sees on disk is not the
+ * patch the client gets. Read from the constant rather than restated, so the
+ * number moves in one place.
+ */
+function cappedBody(
+  rootDir: string,
+  engine: EngineRegistry,
+  overlay: UserContentOverlay,
+): ValidateFinding[] {
+  const cap = engine.guard.promptGuard.MAX_USER_CONTENT_LENGTH;
+  if (overlay.bodyPath === undefined || (overlay.bodyLength ?? 0) <= cap) return [];
+  return [
+    finding(
+      "user-content",
+      repoPath(rootDir, overlay.bodyPath),
+      "error",
+      `body patch is ${overlay.bodyLength} characters, over the ${cap}-character ceiling on ` +
+        `user-authored content — text past it is truncated where the artifact re-enters agent ` +
+        `context, so split the patch or move the material into a skill support file`,
+    ),
+  ];
+}
+
+/**
+ * Walk roots for the installed packs, or none.
+ *
+ * Read because a pack is a layer an overlay can legitimately be addressed at: a
+ * pack supplies the id, the overlay patches the item in force, and an index
+ * built without those roots would call that patch an orphan and refuse a repo
+ * that is correctly configured. It also lets a shadow row name a pack artifact
+ * an override replaced, which this section could not answer before.
+ *
+ * Total: a repo with no manifest has no installed packs by construction, and a
+ * pack state this reader refuses (a directory pruned by hand) degrades to no
+ * pack roots rather than to a failed section — the sync path is where that
+ * refusal belongs, and it names the file there.
+ */
+async function installedPackRoots(
+  rootDir: string,
+  engine: EngineRegistry,
+  manifest: SetupManifest | null,
+): Promise<PackContentRoot[]> {
+  if (manifest === null) return [];
+  try {
+    const packs = await engine.pack.projection.discoverInstalledPacks(rootDir, manifest);
+    return engine.pack.projection.packContentRoots(packs);
+  } catch {
+    return [];
   }
 }
 
@@ -595,34 +874,58 @@ function renderReport(ctx: CliContext, report: ValidateReport): void {
 }
 
 /**
- * The shadowing block: one line per identity an override took over, naming what
- * it replaced — or, for a class the override layer does not reach at emission,
- * naming what it did NOT replace. Nothing is printed for a repo with no
- * overrides, or with overrides that collide with nothing — an empty section
- * header would read as a defect class the repo has, rather than as one it does
- * not.
+ * The shadowing block: one line per customized identity, in the vocabulary of
+ * what was done to it. An override REPLACES, naming what it replaced — or, for a
+ * class the override layer does not reach at emission, naming what it did NOT
+ * replace. An overlay PATCHES, naming the base still supplying the body, which
+ * layer supplies it, and every half applied. Nothing is printed for a repo that
+ * customizes nothing — an empty section header would read as a defect class the
+ * repo has, rather than as one it does not.
  *
- * The header sentence says "takes a bundled id" rather than "replaces bundled
- * content" because that is the part every row has in common; whether the take
- * reached emission is the per-row half, and stating it once for the block was
- * how this surface came to assert the opposite of the mechanism for skills.
+ * The header sentence is composed from the two counts rather than stated once
+ * for the block. A patch takes no id and replaces nothing, so a single sentence
+ * covering both would be false of one of them — which is exactly how this
+ * surface came to assert the opposite of the mechanism for skills.
  */
 function renderShadows(ctx: CliContext, shadows: readonly ValidateShadow[]): void {
   if (shadows.length === 0) return;
   const { palette } = ctx;
 
-  ctx.io.out(
-    `${palette.bold("shadowing")} — ${plural(shadows.length, "override")} ` +
-      `${shadows.length === 1 ? "takes" : "take"} a bundled id\n\n`,
-  );
-  for (const shadow of shadows) {
-    const outcome = shadow.emits
-      ? `replaces ${shadow.replaced.join(", ")}`
-      : `takes the id of ${shadow.replaced.join(", ")} — not emitted, ` +
-        `the bundled ${shadow.type} body is still what ships`;
-    ctx.io.out(
-      `  ${shadow.type} ${palette.bold(shadow.id)}  ${palette.dim(shadow.path)}  ${outcome}\n`,
-    );
+  const replaced = shadows.filter((row) => row.outcome === "replaced").length;
+  const patched = shadows.length - replaced;
+  const clauses = [
+    ...(replaced > 0
+      ? [`${plural(replaced, "override")} ${replaced === 1 ? "takes" : "take"} a bundled id`]
+      : []),
+    ...(patched > 0
+      ? [
+          `${plural(patched, "overlay")} ${patched === 1 ? "patches" : "patch"} ` +
+            // "one" only where the clause before it already said what: a patched
+            // row standing alone has to name the thing it patches.
+            `${replaced > 0 ? "one" : "a bundled id"}`,
+        ]
+      : []),
+  ];
+  ctx.io.out(`${palette.bold("shadowing")} — ${clauses.join(", ")}\n\n`);
+
+  for (const row of shadows) {
+    const [path, outcome] =
+      row.outcome === "replaced"
+        ? [
+            row.path,
+            row.emits
+              ? `replaces ${row.replaced.join(", ")}`
+              : `takes the id of ${row.replaced.join(", ")} — not emitted, ` +
+                `the bundled ${row.type} body is still what ships`,
+          ]
+        : [
+            row.overlays.join(", "),
+            row.emits
+              ? `patches ${row.base} (${row.origin})`
+              : `patches ${row.base} (${row.origin}) — not emitted, the bundled ` +
+                `${row.type} body is still what ships`,
+          ];
+    ctx.io.out(`  ${row.type} ${palette.bold(row.id)}  ${palette.dim(path)}  ${outcome}\n`);
   }
   ctx.io.out("\n");
 }

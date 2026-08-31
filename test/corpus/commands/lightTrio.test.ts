@@ -612,6 +612,13 @@ describe("creator — reachable from a shipped command", () => {
 });
 
 describe("creator — the body matches the customization lane it describes", () => {
+  /**
+   * Real temp directories for the overlay case below: the walk it drives reads
+   * the bundled corpus off disk as the base its patch applies to, which the
+   * virtual-volume lane models with a fixture corpus instead of the shipped one.
+   */
+  const getPatchRepo = useTempDir("stamity-creator-overlay");
+
   it("states the precedence the catalog resolves: user tree, then packs, then corpus", async () => {
     const volume = makeVolume({
       "corpus/rules/stamity-api.md": doc(
@@ -755,14 +762,74 @@ describe("creator — the body matches the customization lane it describes", () 
     expect(delivery).toMatch(/projected under the directory name it was saved as/i);
   });
 
-  it("claims no four-layer precedence and no .customize surface", async () => {
-    const body = (await load(CREATOR)).parsed.body;
+  /**
+   * TEST CHANGE, justified: this case asserted the NEGATIVE — that the creator
+   * body mentions neither `.customize.` nor a four-layer precedence — because
+   * the overlay surface was a declared gap three module headers promised and
+   * nothing read. Batch D12 landed it: the walk merges a `.customize.yaml` over
+   * the resolved artifact's frontmatter and appends a `.customize.md` to its
+   * body (`src/content/catalog.ts`), and `stamity validate` reports and judges
+   * the result (`src/cli/commands/validate.ts`). Leaving the negative green
+   * would require the agent that authors customization to go on hiding a shipped
+   * surface from the authors it exists to serve. Rewritten in place rather than
+   * deleted, so the record of the claim moving survives: it now pins the
+   * positive REQ-OVERLAY-015 names — both halves, the effective precedence chain
+   * of invariant 3, and the exclusivity refusal. The four-layer half is the one
+   * claim that stays negative, because that phrase is RETIRED: it counted layers
+   * that were never simultaneously reachable, which is what made the surface
+   * unimplementable.
+   */
+  it("documents the overlay lane: both halves, the chain, and the exclusivity refusal", async () => {
+    const text = flow(await load(CREATOR));
 
-    // Two layers ship — canonical frontmatter, then the override tree. Advertising
-    // `.customize.yaml`/`.customize.md` would describe a surface nothing reads
-    // (`src/content/userContent.ts`, declared gap).
-    expect(body).not.toMatch(/\.customize\./);
-    expect(body).not.toMatch(/four-layer|four layers/i);
+    // The two halves, by the exact names the walk looks for.
+    expect(text).toMatch(/`\.customize\.yaml`/);
+    expect(text).toMatch(/`\.customize\.md`/);
+    // Composed rather than listed for the one directory-layout class.
+    expect(text).toMatch(/SKILL\.customize\.yaml/);
+
+    // The effective precedence chain, declared as invariant 3 declares it: two
+    // chains, exactly one of which applies to any (class, id).
+    expect(text).toMatch(
+      /corpus-or-pack → `\.customize\.yaml` → `\.customize\.md`/,
+    );
+    expect(text).toMatch(/corpus-or-pack → full override/);
+    expect(text).toMatch(/exactly one of the two applies to any `\(class, id\)`/i);
+
+    // The exclusivity refusal, and the reason it is one.
+    expect(text).toMatch(
+      /an overlay and a full override of one id are refused together, naming both files/i,
+    );
+    expect(text).toMatch(/either replaced or patched, never both/i);
+
+    // The counted phrasing stays retired.
+    expect((await load(CREATOR)).parsed.body).not.toMatch(/four-layer|four layers/i);
+  });
+
+  it("keeps the overlay claims answerable by the engine that implements them", async () => {
+    const text = flow(await load(CREATOR));
+
+    // Engine lockstep for the report line the body promises an author: a patched
+    // artifact is reported by `validate`, never as a finding, and the id it is
+    // addressed by is the bare slug for every class — `cmd-` included.
+    const repo = getPatchRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/rules/testing.customize.yaml": "description: The house floor.\n",
+    });
+    const index = await buildContentIndex({
+      overrideRoot: join(repo.dir, ".stamity", "overrides"),
+    });
+    const patched = index.items.find((item) => item.id === "testing");
+
+    // The base still supplies the file and the layer; only the named key moved.
+    expect(patched?.description).toBe("The house floor.");
+    expect(originOf(patched as CatalogItem)).toBe("corpus");
+    expect(index.shadows).toEqual([]);
+
+    // The body half of the same claim.
+    expect(text).toMatch(/the base keeps flowing from the corpus or the pack that supplies it/i);
+    expect(text).toMatch(/prints a `patched` line/i);
+    expect(text).toMatch(/never moves the exit code/i);
   });
 });
 

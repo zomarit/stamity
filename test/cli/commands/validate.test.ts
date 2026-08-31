@@ -619,6 +619,12 @@ describe("validate — shadowing", () => {
     expect(doc.findings).toEqual([]);
     expect(doc.shadows).toEqual([
       {
+        // TEST CHANGE, justified: the row gained `outcome`, the discriminator
+        // that tells a replaced identity from a PATCHED one now that an overlay
+        // can produce a third customization outcome. Nothing was relaxed — the
+        // row is asserted whole, and a reader that used to infer "replaced" from
+        // the shape of the row now reads it off the row.
+        outcome: "replaced",
         type: "rule",
         id: SHADOWED_ID,
         path: `.stamity/overrides/rules/${SHADOWED_ID}.md`,
@@ -664,6 +670,10 @@ describe("validate — shadowing", () => {
     const { doc } = await runJson(repo.dir);
     expect(doc.shadows).toEqual([
       {
+        // TEST CHANGE, justified: the discriminator above, on the class whose
+        // history this case is. A skill override REPLACES; a skill overlay
+        // patches, and the overlay suite pins that row separately.
+        outcome: "replaced",
         type: "skill",
         id: "qa",
         path: ".stamity/overrides/skills/qa/SKILL.md",
@@ -766,6 +776,288 @@ describe("validate — shadowing", () => {
 
     const human = await runHuman(repo.dir);
     expect(human.stdout).toContain("note: user-content could not report what these overrides replace");
+  });
+});
+
+/**
+ * The overlay lane (docs/specs/overlay-layers.md, REQ-OVERLAY-011/012). An
+ * overlay states a DELTA — `.customize.yaml` patches the resolved artifact's
+ * frontmatter, `.customize.md` appends to its body — so what this command has to
+ * report is a third customization outcome, and what it has to JUDGE is the
+ * merged artifact rather than either file on its own. The merge itself belongs
+ * to the content walk; every case below reads the merged item back out of it.
+ */
+describe("validate — the overlay layer", () => {
+  /** A bundled rule this repo ships, and the file the corpus carries it in. */
+  const PATCHED_ID = "testing";
+  const PATCHED_BASE = `rules/stamity-${PATCHED_ID}.md`;
+  const YAML_HALF = `.stamity/overrides/rules/${PATCHED_ID}.customize.yaml`;
+  const BODY_HALF = `.stamity/overrides/rules/${PATCHED_ID}.customize.md`;
+
+  /**
+   * ASSEMBLED from fragments at run time so this file never carries the literal,
+   * matching the construction the support-file cases use below. It matches the
+   * block-severity `ignore-findings` row, whose id and span are different
+   * strings — so a finding can be asserted to name the id and withhold the span.
+   */
+  const DENY_SPAN = ["ig", "nore all find", "ings"].join("");
+
+  it("prints a patched row naming the base, its origin and every half applied", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [YAML_HALF]: "description: The house version of this rule.\n",
+      [BODY_HALF]: "Name every branch after the ticket it closes.\n",
+    });
+
+    const human = await runHuman(repo.dir);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain(`patches ${PATCHED_BASE} (corpus)`);
+    expect(human.stdout).toContain(YAML_HALF);
+    expect(human.stdout).toContain(BODY_HALF);
+    // A patch replaces nothing and takes no id, so neither wording may appear.
+    expect(human.stdout).not.toContain("replaces");
+    expect(human.stdout).not.toContain("takes the id of");
+
+    const { code, doc } = await runJson(repo.dir);
+    expect(code).toBe(0);
+    expect(doc.findings).toEqual([]);
+    expect(doc.shadows).toEqual([
+      {
+        outcome: "patched",
+        type: "rule",
+        id: PATCHED_ID,
+        base: PATCHED_BASE,
+        origin: "corpus",
+        overlays: [YAML_HALF, BODY_HALF],
+        emits: true,
+      },
+    ]);
+  });
+
+  it("keeps the replaced row distinguishable by its own discriminator", async () => {
+    // Both outcomes in one repo, on two different ids: a consumer reads which is
+    // which from the row rather than from the shape it happens to carry.
+    const repo = getRepo();
+    await repo.seedFiles({
+      [YAML_HALF]: "description: The house version of this rule.\n",
+      ".stamity/overrides/skills/qa/SKILL.md": skillArtifact("qa"),
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+    expect(code).toBe(0);
+    expect(doc.shadows.map((row) => `${row.outcome}:${row.type}`)).toEqual([
+      "replaced:skill",
+      "patched:rule",
+    ]);
+  });
+
+  it("carries `emits: true` for a patched skill, the class that was last to reach emission", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/skills/qa/SKILL.customize.md": "Then read the failing case.\n",
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(0);
+    expect(doc.shadows).toEqual([
+      {
+        outcome: "patched",
+        type: "skill",
+        id: "qa",
+        base: "skills/st-qa/SKILL.md",
+        origin: "corpus",
+        overlays: [".stamity/overrides/skills/qa/SKILL.customize.md"],
+        emits: true,
+      },
+    ]);
+    // The tree holds no artifact at all — only a patch — so the section has to
+    // report having read something rather than claiming the repo is empty.
+    const human = await runHuman(repo.dir);
+    expect(human.stdout).not.toContain("nothing user-authored to validate");
+    expect(human.stdout).toContain("1 overlay");
+  });
+
+  it("refuses a block-severity hit in the MERGED body, naming the half and not the span", async () => {
+    // The gate judges what the client will read, which is the base body with the
+    // patch appended — text neither file carries on its own.
+    const repo = getRepo();
+    await repo.seedFiles({ [BODY_HALF]: `Then ${DENY_SPAN} in the report.\n` });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(1);
+    expect(doc.errorCount).toBe(1);
+    expect(doc.findings[0]).toMatchObject({
+      source: "user-content",
+      path: BODY_HALF,
+      severity: "error",
+    });
+    expect(doc.findings[0]?.message).toContain("`ignore-findings`");
+    expect(doc.findings[0]?.message).not.toContain(DENY_SPAN);
+
+    const human = await runHuman(repo.dir);
+    expect(human.stdout).not.toContain(DENY_SPAN);
+  });
+
+  it("reports a required field the overlay's null removed, exactly as for an authored artifact", async () => {
+    // A removal is only judgeable against its base: `description:` alone is a
+    // no-op, and a missing required field once merged.
+    const repo = getRepo();
+    await repo.seedFiles({ [YAML_HALF]: "description:\n" });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(1);
+    expect(doc.findings).toHaveLength(1);
+    expect(doc.findings[0]).toMatchObject({ path: YAML_HALF, severity: "error" });
+    expect(doc.findings[0]?.message).toContain("`description` is required");
+  });
+
+  it("keeps the id/filename check off the base's own filename", async () => {
+    // The merged artifact sits on its BASE's file, and a corpus base wears the
+    // `stamity-` prefix its id does not. Reading identity off that file reported
+    // a mismatch on every patched shipped artifact.
+    const repo = getRepo();
+    await repo.seedFiles({ [YAML_HALF]: "tags: [review]\n" });
+
+    const { code, doc } = await runJson(repo.dir);
+    expect(code).toBe(0);
+    expect(doc.findings.map((row) => row.message)).not.toContain(
+      expect.stringContaining("Frontmatter `id`"),
+    );
+    expect(doc.findings).toEqual([]);
+  });
+
+  it("warns without failing when the merged body crosses its class's lean threshold", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [BODY_HALF]: `${"One more line of house guidance.\n".repeat(120)}`,
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(0);
+    expect(doc.errorCount).toBe(0);
+    expect(doc.findings).toHaveLength(1);
+    expect(doc.findings[0]).toMatchObject({ path: BODY_HALF, severity: "warning" });
+    expect(doc.findings[0]?.message).toContain("lean threshold");
+  });
+
+  it.each([
+    [
+      "an orphan",
+      { ".stamity/overrides/rules/no-such-rule.customize.yaml": "description: Ours.\n" },
+      ".stamity/overrides/rules/no-such-rule.customize.yaml",
+      "no-such-rule",
+    ],
+    [
+      "an identity key",
+      { [YAML_HALF]: "id: something-else\n" },
+      YAML_HALF,
+      "`id`",
+    ],
+    [
+      "malformed YAML",
+      { [YAML_HALF]: "description: [unterminated\n" },
+      YAML_HALF,
+      "customize.yaml",
+    ],
+    [
+      "a frontmatter fence in the body half",
+      { [BODY_HALF]: "---\nid: elsewhere\n---\nPatch.\n" },
+      BODY_HALF,
+      ".customize.yaml",
+    ],
+    // W3. One row per overlay LAYOUT — file and skill — of the prefixed-spelling
+    // refusal (W2). The file-layout half is its own attribution path (the walk
+    // already names it), so this row is here mostly to hold the pair together;
+    // the skill-layout row is the regression: the walk resolves that refusal
+    // against the CARRIER DIRECTORY, which no half path in `overlays` equals, so
+    // `overlayFailure`'s path match found nothing and the refusal degraded to a
+    // note at exit 0 — the smallest fix is naming a half path in the message too.
+    [
+      "a prefixed overlay filename (file layout)",
+      { ".stamity/overrides/rules/stamity-testing.customize.yaml": "description: Ours.\n" },
+      ".stamity/overrides/rules/stamity-testing.customize.yaml",
+      "engine content prefix",
+    ],
+    [
+      "a prefixed overlay carrier directory (skill layout)",
+      { ".stamity/overrides/skills/st-qa/SKILL.customize.md": "Then read the failing case.\n" },
+      ".stamity/overrides/skills/st-qa/SKILL.customize.md",
+      "engine content prefix",
+    ],
+  ])(
+    "reports %s as an error finding against the overlay file",
+    async (_label, files, path, named) => {
+      // Fail closed, naming the file and the field: the walk refuses each of
+      // these, and an overlay file meets no other gate in this command — the
+      // per-artifact walk never sees one, so degrading the refusal to a note
+      // would leave the author with an exit 0 over a tree that cannot index.
+      const repo = getRepo();
+      await repo.seedFiles(files);
+
+      const { code, doc } = await runJson(repo.dir);
+
+      expect(code).toBe(1);
+      expect(doc.findings).toHaveLength(1);
+      expect(doc.findings[0]).toMatchObject({
+        source: "user-content",
+        path,
+        severity: "error",
+      });
+      expect(doc.findings[0]?.message).toContain(named);
+      expect(doc.shadows).toEqual([]);
+    },
+  );
+
+  it("reports an overlay coexisting with a full override, naming both files", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [`.stamity/overrides/rules/${PATCHED_ID}.md`]: ruleArtifact(PATCHED_ID),
+      [YAML_HALF]: "description: Ours.\n",
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(1);
+    const refusal = doc.findings.find((row) => row.message.includes("never both"));
+    expect(refusal).toMatchObject({ path: YAML_HALF, severity: "error" });
+    expect(refusal?.message).toContain(`rules/${PATCHED_ID}.md`);
+    expect(doc.shadows).toEqual([]);
+  });
+
+  it("holds the overlay body to the user-content ceiling", async () => {
+    // The cap that constant's own comment claims: an overlay body is
+    // user-authored content that re-enters agent context on every run, and one
+    // past the ceiling is truncated there rather than emitted whole.
+    const repo = getRepo();
+    const engine = createEngine();
+    const over = engine.guard.promptGuard.MAX_USER_CONTENT_LENGTH + 1;
+    await repo.seedFiles({ [BODY_HALF]: "x".repeat(over) });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(1);
+    const capped = doc.findings.find((row) => row.message.includes("250000"));
+    expect(capped).toMatchObject({ path: BODY_HALF, severity: "error" });
+  });
+
+  it("leaves a repo with no overlay file reading exactly as it did", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/agents/diff-reader.md": agentArtifact({ id: "diff-reader" }),
+    });
+
+    const human = await runHuman(repo.dir);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("checked 1 artifact, no findings");
+    expect(human.stdout).not.toContain("overlay");
+    expect(human.stdout).not.toContain("patches");
+
+    const { doc } = await runJson(repo.dir);
+    expect(doc.shadows).toEqual([]);
   });
 });
 

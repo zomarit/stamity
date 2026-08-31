@@ -82,7 +82,7 @@ export function parseFrontmatter(raw: string, source: string): ParsedFrontmatter
   if (match === null) return { frontmatter: {}, body: text, hadFrontmatter: false };
 
   const [, block = "", body = ""] = match;
-  return { frontmatter: parseBlock(block, source), body, hadFrontmatter: true };
+  return { frontmatter: parseFrontmatterBlock(block, source), body, hadFrontmatter: true };
 }
 
 /**
@@ -90,8 +90,16 @@ export function parseFrontmatter(raw: string, source: string): ParsedFrontmatter
  * root-must-be-a-map question and guards alias expansion — then re-code its
  * failure as a content defect. The config layer's message already names the
  * source and the fix, so it is carried through verbatim rather than re-worded.
+ *
+ * Exported because a frontmatter head is not always fenced: an overlay's
+ * `.customize.yaml` IS the block, with no document around it to split (the
+ * overlay layer in `./catalog.ts`). Reading it through this function rather
+ * than through a second call to the config parser keeps ONE re-coding of a
+ * YAML failure into a content defect — two of them would eventually disagree
+ * about what a malformed head costs, which is the divergence the single-gate
+ * rule exists to prevent.
  */
-function parseBlock(block: string, source: string): Record<string, unknown> {
+export function parseFrontmatterBlock(block: string, source: string): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = parseYamlStrict(block, `${source} frontmatter`);

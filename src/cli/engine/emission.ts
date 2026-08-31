@@ -76,9 +76,21 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * the skills class arrives in both trees with the authored body, so neither can
  * move without the other going red.
  *
- * Declared gap — `.customize.yaml` and `.customize.md`, layers 2 and 3 of the
- * four-layer precedence, are read by nothing on this path. Two layers ship:
- * canonical frontmatter, then this tree (`../../content/userContent.ts`).
+ * Overlays need no code on this path, and that is the design rather than a gap
+ * left over. A `<slug>.customize.yaml` patches the resolved artifact's
+ * frontmatter and a `<slug>.customize.md` appends to its body inside the WALK
+ * (`../../content/catalog.ts`), which merges the pair over the base and hands
+ * back one item at one id — so the patched item IS the item every planner here
+ * already reads, emitted under the base's identity, through the same rows and
+ * the same ledger entries. Nothing distinguishes it at this seam, and nothing
+ * should: a second vocabulary for a patched artifact would be state nobody
+ * reads, since an overlay source file is never an emitted path (below).
+ *
+ * The phrase "four-layer precedence" is retired with the gap it labelled. Two
+ * customization chains exist and exactly one applies to any `(class, id)`:
+ * corpus-or-pack → `.customize.yaml` → `.customize.md`, or corpus-or-pack →
+ * full override in this tree (`../../content/userContent.ts`). They are mutually
+ * exclusive, and a tree claiming both is refused at the walk.
  *
  * Ownership across that layer is the same install-once split installed packs
  * get (`../../pack/projection.ts`): the emitted per-client copy of a user

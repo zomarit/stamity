@@ -34,7 +34,18 @@ export const MAX_PHASE_INPUT_LENGTH = 500_000;
 /** Cap on a single agent response. */
 export const MAX_AGENT_OUTPUT_LENGTH = 1_000_000;
 
-/** Cap on user-authored content (learnings, handoffs, customize bodies). */
+/**
+ * Cap on one piece of user-authored content entering agent context.
+ *
+ * Two lanes read it today, and each one bounds a different surface with it:
+ * `stamity learn capture` bounds the note it takes on stdin
+ * (`../cli/commands/learn.ts`), and `stamity validate` bounds an overlay's body
+ * patch (`../cli/commands/validate.ts`) — the `.customize.md` half, which is
+ * appended to a shipped artifact's body and re-enters context on every run.
+ * A body past this ceiling is truncated where it is read, so the patch on disk
+ * stops being the patch the client gets; the check names the file rather than
+ * letting the difference go unreported.
+ */
 export const MAX_USER_CONTENT_LENGTH = 250_000;
 
 /** patternId reported when the length cap truncated the input. */

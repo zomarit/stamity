@@ -6,6 +6,7 @@ import {
   checkUserArtifact,
   discoverSkippedUserEntries,
   discoverUserContent,
+  discoverUserOverlays,
   saveUserContent,
   scanUserSkillSupportFiles,
   userContentRoot,
@@ -15,7 +16,9 @@ import {
   type SaveResult,
   type UserArtifactType,
   type UserContentArtifact,
+  type UserContentOverlay,
 } from "../../src/content/userContent.ts";
+import { buildContentIndex } from "../../src/content/catalog.ts";
 import { CONTENT_CLASSES } from "../../src/types/content.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -295,6 +298,52 @@ describe("saveUserContent", () => {
       "type",
     ]);
   });
+
+  it("refuses to replace an id an overlay already patches, naming both halves", async () => {
+    // REQ-OVERLAY-004 at the point the state would be created. An id is either
+    // REPLACED by a full override or PATCHED by an overlay: the walk refuses a
+    // tree holding both, so a save that landed one beside the other would report
+    // success and stop every later sync on a file nobody mentioned.
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/agents/reviewer.customize.yaml": "description: Ours.\n",
+      ".stamity/overrides/agents/reviewer.customize.md": "Read the tests first.\n",
+    });
+
+    const result = await save("agent", "reviewer", CLEAN_AGENT);
+
+    expect(result.saved).toBe(false);
+    expect(result.path).toBeUndefined();
+    expect(joined(result.errors)).toContain(
+      join(userContentRoot(repo.dir), "agents", "reviewer.customize.yaml"),
+    );
+    expect(joined(result.errors)).toContain(
+      join(userContentRoot(repo.dir), "agents", "reviewer.customize.md"),
+    );
+    // Refused before any filesystem call: nothing landed.
+    await expect(discover()).resolves.toEqual([]);
+  });
+
+  it("saves an id no overlay patches, with overlays elsewhere in the tree", async () => {
+    // The exclusivity gate is per identity, not per tree: a patched `testing`
+    // must not make every other save fail.
+    await getRepo().seedFiles({
+      ".stamity/overrides/rules/testing.customize.yaml": "description: Ours.\n",
+    });
+
+    const result = await save("agent", "reviewer", CLEAN_AGENT);
+    expect(result.errors).toEqual([]);
+    expect(result.saved).toBe(true);
+  });
+
+  it("refuses an overlay half saved as an artifact id, since a half is not one", async () => {
+    // The save path writes artifacts and nothing else: `.` is not a slug
+    // character, so an id shaped like a half cannot address a file through here.
+    const result = await save("rule", "testing.customize", CLEAN_AGENT);
+
+    expect(result.saved).toBe(false);
+    expect(joined(result.errors)).toContain("is not a slug");
+  });
 });
 
 describe("discoverUserContent", () => {
@@ -393,6 +442,178 @@ describe("discoverUserContent", () => {
     const [artifact] = await discover();
     expect(artifact!.id).toBe("house-style");
     expect(kinds(await validateUserArtifact(artifact!))).toContain("missing-field");
+  });
+
+  /**
+   * REGRESSION (REQ-OVERLAY-002). A body patch ends in `.md`, so the candidate
+   * filter took it for an artifact: one that carried a frontmatter block indexed
+   * as a phantom `UserContentArtifact` at `<slug>.customize`, judged by the
+   * gate, counted in the report, and named to the author as an override they
+   * never wrote. Red against the unnarrowed filter, where the walk returned two
+   * artifacts and the second one's id was `house-style.customize`.
+   */
+  it("never lists a `.customize.md` body patch as an artifact of its own", async () => {
+    await getRepo().seedFiles({
+      ".stamity/overrides/rules/house-style.md": doc(
+        "id: house-style\ntype: rule\ndescription: Ours.\ntags: [review]",
+        "Rule.\n",
+      ),
+      // The worst shape: a body patch that happens to carry a head, which is
+      // what turned an overlay into a second claimant.
+      ".stamity/overrides/rules/house-style.customize.md": doc(
+        "type: rule\ndescription: Phantom.",
+        "Patch.\n",
+      ),
+      ".stamity/overrides/agents/reviewer.customize.md": "Extra paragraph.\n",
+      ".stamity/overrides/skills/recipe/SKILL.customize.md": "Extra step.\n",
+    });
+
+    const found = await discover();
+
+    expect(found.map((artifact) => `${artifact.type}:${artifact.id}`)).toEqual([
+      "rule:house-style",
+    ]);
+    expect(found.map((artifact) => artifact.filePath)).not.toContain(
+      join(userContentRoot(getRepo().dir), "rules", "house-style.customize.md"),
+    );
+  });
+
+  it("agrees with the content walk about what an overlay half is not", async () => {
+    // The mirror the two suffix constants rest on, asserted rather than assumed:
+    // this walk and the one that merges overlays are driven over one override
+    // tree, and neither may see an artifact in either half. A drift here is the
+    // phantom coming back through whichever walk was left unnarrowed.
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/rules/testing.customize.md": "One more paragraph.\n",
+      ".stamity/overrides/rules/testing.customize.yaml": "description: Ours.\n",
+    });
+
+    await expect(discover()).resolves.toEqual([]);
+
+    const index = await buildContentIndex({ overrideRoot: userContentRoot(repo.dir) });
+    expect(index.items.map((item) => item.id)).not.toContain("testing.customize");
+    // …and the pair really did apply, so the case is about the filter rather
+    // than about a tree the walk ignored wholesale.
+    expect(index.items.find((item) => item.id === "testing")?.description).toBe("Ours.");
+  });
+
+  it("lists a file literally named `customize.md` as the ordinary artifact it is", async () => {
+    // The suffix test is `.customize.md`, leading dot included: a rule an author
+    // really called `customize` is untouched by the narrowing.
+    await getRepo().seedFiles({
+      ".stamity/overrides/rules/customize.md": doc("id: customize\ntype: rule", "Rule.\n"),
+    });
+
+    const found = await discover();
+    expect(found.map((artifact) => artifact.id)).toEqual(["customize"]);
+  });
+});
+
+describe("discoverUserOverlays", () => {
+  /**
+   * The discovery half of the overlay lane (docs/specs/overlay-layers.md,
+   * REQ-OVERLAY-001/002/012). What this pass returns is what `stamity validate`
+   * names as the patch applied to an artifact; the MERGE belongs to the walk
+   * that holds the base, and nothing here re-derives it.
+   */
+  const overlays = (): Promise<UserContentOverlay[]> => discoverUserOverlays(getRepo().dir);
+
+  const at = (...segments: string[]): string =>
+    join(userContentRoot(getRepo().dir), ...segments);
+
+  it("returns nothing for an override tree that holds no overlay file", async () => {
+    await getRepo().seedFiles({ ".stamity/overrides/rules/house-style.md": CLEAN_AGENT });
+    await expect(overlays()).resolves.toEqual([]);
+  });
+
+  it("returns nothing for a repo with no override tree at all", async () => {
+    await expect(overlays()).resolves.toEqual([]);
+  });
+
+  it("joins both halves of one pair, in class order then slug order", async () => {
+    await getRepo().seedFiles({
+      ".stamity/overrides/rules/testing.customize.yaml": "description: Ours.\n",
+      ".stamity/overrides/rules/testing.customize.md": "One more paragraph.\n",
+      ".stamity/overrides/rules/api.customize.yaml": "description: Ours too.\n",
+      ".stamity/overrides/agents/reviewer.customize.md": "Read the tests first.\n",
+      ".stamity/overrides/commands/ship.customize.yaml": "description: Ships, our way.\n",
+    });
+
+    const found = await overlays();
+
+    expect(found.map((overlay) => `${overlay.type}:${overlay.slug}`)).toEqual([
+      "agent:reviewer",
+      "rule:api",
+      "rule:testing",
+      "command:ship",
+    ]);
+    // Two files, one patch: the halves join rather than opening a second pair.
+    expect(found[2]).toEqual({
+      type: "rule",
+      slug: "testing",
+      frontmatterPath: at("rules", "testing.customize.yaml"),
+      bodyPath: at("rules", "testing.customize.md"),
+      bodyLength: "One more paragraph.\n".length,
+    });
+    // A pair with no body half carries no length rather than a zero, which
+    // would read as an empty file the caller has to tell apart from an absent one.
+    expect(found[1]!.bodyLength).toBeUndefined();
+  });
+
+  it("finds a skill's composed halves, in a directory that carries no SKILL.md", async () => {
+    // An overlay CARRIER, not work in progress: the base it patches lives in the
+    // corpus, so there is nothing for the author to put beside the halves.
+    await getRepo().seedFiles({
+      ".stamity/overrides/skills/qa/SKILL.customize.md": "Then read the failing case.\n",
+    });
+
+    await expect(overlays()).resolves.toEqual([
+      {
+        type: "skill",
+        slug: "qa",
+        bodyPath: at("skills", "qa", "SKILL.customize.md"),
+        bodyLength: "Then read the failing case.\n".length,
+      },
+    ]);
+    // The artifact walk still passes the directory over: it holds no SKILL.md.
+    await expect(discover()).resolves.toEqual([]);
+  });
+
+  it("addresses a prefixed filename by the id it implies, as the walk does", async () => {
+    // `slugOf`'s rule, mirrored: the engine's filename prefixes are a naming
+    // convention rather than part of an identity, so a half named after the
+    // shipped file still patches the artifact that file supplies.
+    await getRepo().seedFiles({
+      ".stamity/overrides/rules/stamity-testing.customize.yaml": "description: Ours.\n",
+    });
+
+    const found = await overlays();
+    expect(found.map((overlay) => overlay.slug)).toEqual(["testing"]);
+  });
+
+  it("claims nothing for a near-miss name", async () => {
+    // The infix is exact. None of these is a half — and none of them is
+    // excluded from being an artifact either.
+    await getRepo().seedFiles({
+      ".stamity/overrides/rules/testing.customize.yml": "description: Ignored.\n",
+      ".stamity/overrides/rules/testing.customise.yaml": "description: Ignored.\n",
+      ".stamity/overrides/rules/customize.md": doc("id: customize\ntype: rule", "Rule.\n"),
+    });
+
+    await expect(overlays()).resolves.toEqual([]);
+  });
+
+  it("passes over a symlinked half rather than describing a patch that never applies", async () => {
+    const repo = getRepo();
+    const rulesDir = join(userContentRoot(repo.dir), "rules");
+    await mkdir(rulesDir, { recursive: true });
+    await repo.seedFiles({ "elsewhere/patch.yaml": "description: Ours.\n" });
+    await symlink(repo.path("elsewhere", "patch.yaml"), join(rulesDir, "testing.customize.yaml"));
+
+    // The walk that merges reads regular files only, so a pair built from a link
+    // here would name a patch the sync never applies.
+    await expect(overlays()).resolves.toEqual([]);
   });
 });
 

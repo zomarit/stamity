@@ -1014,6 +1014,241 @@ describe("override content layer", () => {
 });
 
 /**
+ * The overlay layer at the emission seam (docs/specs/overlay-layers.md,
+ * REQ-OVERLAY-013 and 014).
+ *
+ * The override block above answers "does the author's WHOLE artifact reach the
+ * clients". This one answers the question an overlay raises instead: does the
+ * MERGED artifact reach them — the base still flowing from the corpus, with the
+ * patch applied on top. The failure it guards is the silent one: an overlay that
+ * indexes and does not emit leaves a repo running the shipped body while its
+ * tree, and `validate`, both say it is patched.
+ */
+describe("overlay content layer", () => {
+  const getRepo = useTempDir("emission-overlays");
+
+  /** A bundled rule this repo ships, patched rather than replaced. */
+  const PATCHED_ID = "testing";
+
+  /** Body text the overlay appends, present nowhere in the corpus. */
+  const OVERLAY_MARKER = "House addendum: every fixture names the invariant it is about.";
+
+  /** The description the frontmatter half installs over the shipped one. */
+  const OVERLAY_DESCRIPTION = "The house testing rule, patched in this repository.";
+
+  /** A repo context for all four clients with the patched rule selected. */
+  function overlayContext(rootDir: string): EmissionContext {
+    return {
+      rootDir,
+      manifest: createManifest({
+        tools: ["claude", "cursor", "copilot", "codex"],
+        selection: { items: { agent: [], skill: [], rule: [PATCHED_ID], command: [] } },
+        generatorVersion: "0.0.0-test",
+        now: FIXED_NOW,
+      }),
+      engineVersion: "0.0.0-test",
+      facts: { greenfield: true, monorepoPackages: [] },
+    };
+  }
+
+  it("emits the MERGED body to every selected client, base text and patch together", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [`.stamity/overrides/rules/${PATCHED_ID}.customize.yaml`]: `description: ${OVERLAY_DESCRIPTION}\n`,
+      [`.stamity/overrides/rules/${PATCHED_ID}.customize.md`]: `${OVERLAY_MARKER}\n`,
+    });
+
+    const rows = await getEmissionPlanner().plan(overlayContext(repo.dir));
+
+    // One dialect per client, all four carrying the appended text — the same
+    // four the override layer reaches, so the two customization shapes have the
+    // same reach rather than the overlay reaching a subset.
+    const carrying = rows.filter((row) => row.content.includes(OVERLAY_MARKER));
+    expect(carrying.map((row) => row.path).toSorted()).toEqual([
+      `.claude/rules/stamity-${PATCHED_ID}.md`,
+      `.cursor/rules/stamity-${PATCHED_ID}.mdc`,
+      `.github/instructions/stamity-${PATCHED_ID}.instructions.md`,
+      "AGENTS.md",
+    ]);
+    expect(new Set(rows.map((row) => row.path)).size).toBe(rows.length);
+
+    // The BASE still flows. This is the whole difference between a patch and a
+    // replacement: an override drops the shipped body, an overlay keeps it and
+    // appends. A merge that emitted the patch alone would pass every assertion
+    // above and have thrown the artifact away.
+    const bundled = await corpusMarker(PATCHED_ID);
+    expect(carrying.every((row) => row.content.includes(bundled))).toBe(true);
+
+    // And the patched FIELD replaced its base value rather than joining it: the
+    // shipped description is gone from the plan, everywhere.
+    const shippedDescription = await corpusDescription(PATCHED_ID);
+    expect(rows.filter((row) => row.content.includes(shippedDescription))).toEqual([]);
+    expect(
+      rows.filter((row) => row.content.includes(OVERLAY_DESCRIPTION)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("emits a body-only patch, with no frontmatter half present", async () => {
+    // Either half may appear without the other, so the reach of the pair is not
+    // evidence for the reach of one file.
+    const repo = getRepo();
+    await repo.seedFiles({
+      [`.stamity/overrides/rules/${PATCHED_ID}.customize.md`]: `${OVERLAY_MARKER}\n`,
+    });
+
+    const rows = await getEmissionPlanner().plan(overlayContext(repo.dir));
+
+    const claude = rows.find((row) => row.path === `.claude/rules/stamity-${PATCHED_ID}.md`);
+    expect(claude?.content).toContain(OVERLAY_MARKER);
+    expect(claude?.content).toContain(await corpusDescription(PATCHED_ID));
+  });
+
+  /**
+   * W1 — completing the per-class emission matrix. The rule case above pins
+   * one of four content classes; `skillsProjection.test.ts`'s "projectSkills
+   * over a patched (overlay) skill" pins the skill class at its own seam. This
+   * pair closes the remaining two — agent and command — at THIS seam (the full
+   * emission plan), so all four classes are pinned against the same failure
+   * the rule case guards: a merge that indexes and validates as patched but
+   * does not reach what a client actually reads.
+   */
+  const PATCHED_AGENT_ID = "test-runner";
+  const PATCHED_COMMAND_ID = "ask";
+  const AGENT_OVERLAY_MARKER = "House agent addendum: escalate to a human before force-pushing.";
+  const COMMAND_OVERLAY_MARKER = "House command addendum: cite the file and line for every claim.";
+
+  /** A repo context selecting one agent and one command alongside the patched rule. */
+  function classOverlayContext(rootDir: string): EmissionContext {
+    return {
+      rootDir,
+      manifest: createManifest({
+        tools: ["claude", "cursor", "copilot", "codex"],
+        selection: {
+          items: {
+            agent: [PATCHED_AGENT_ID],
+            skill: [],
+            rule: [],
+            command: [PATCHED_COMMAND_ID],
+          },
+        },
+        generatorVersion: "0.0.0-test",
+        now: FIXED_NOW,
+      }),
+      engineVersion: "0.0.0-test",
+      facts: { greenfield: true, monorepoPackages: [] },
+    };
+  }
+
+  it("emits the MERGED body for a patched AGENT — base text and the overlay's addendum both", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [`.stamity/overrides/agents/${PATCHED_AGENT_ID}.customize.md`]: `${AGENT_OVERLAY_MARKER}\n`,
+    });
+
+    const rows = await getEmissionPlanner().plan(classOverlayContext(repo.dir));
+
+    const carrying = rows.filter((row) => row.content.includes(AGENT_OVERLAY_MARKER));
+    expect(carrying.length).toBeGreaterThan(0);
+
+    // The base still flows — a merge that shipped the patch alone would pass
+    // the assertion above and have thrown the artifact away.
+    const bundled = await corpusAgentMarker(PATCHED_AGENT_ID);
+    expect(carrying.every((row) => row.content.includes(bundled))).toBe(true);
+  });
+
+  it("emits the MERGED body for a patched COMMAND — base text and the overlay's addendum both", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [`.stamity/overrides/commands/${PATCHED_COMMAND_ID}.customize.md`]: `${COMMAND_OVERLAY_MARKER}\n`,
+    });
+
+    const rows = await getEmissionPlanner().plan(classOverlayContext(repo.dir));
+
+    const carrying = rows.filter((row) => row.content.includes(COMMAND_OVERLAY_MARKER));
+    expect(carrying.length).toBeGreaterThan(0);
+
+    const bundled = await corpusCommandMarker(PATCHED_COMMAND_ID);
+    expect(carrying.every((row) => row.content.includes(bundled))).toBe(true);
+  });
+
+  it("plans byte-identically with a pack installed and no `.customize.*` file anywhere", async () => {
+    /**
+     * REQ-OVERLAY-013's second half. The pack-free byte-identity case is pinned
+     * twice in the override block above; this is the pack-HAVING one the spec's
+     * test plan names, and it is a different code path rather than a repetition:
+     * a resolved pack set is what makes `residueContext` (`src/emit/planner.ts`)
+     * rebuild the content spec, and the overlay pass rides that rebuild. A
+     * discovery pass that cost a byte would show up here and nowhere else.
+     */
+    const repo = getRepo();
+    const packFiles = {
+      "rules/stamity-opsguard.md": [
+        "---",
+        "id: opsguard",
+        "type: rule",
+        "description: Pack-supplied deployment guard rule.",
+        "tags:",
+        "  - devops",
+        "load: on-demand",
+        "obsolete_when: the deploy pipeline enforces it",
+        "scope: conditional",
+        'globs: ["**/*.md"]',
+        "---",
+        "",
+        "Watch the rollout counters before declaring the deploy done.",
+        "",
+      ].join("\n"),
+    };
+    await repo.seedFiles(
+      Object.fromEntries(
+        Object.entries(packFiles).map(([rel, body]) => [`pack-src/opspack/${rel}`, body]),
+      ),
+    );
+    await repo.seedFiles({
+      "pack-src/opspack/pack.json": `${JSON.stringify(
+        {
+          name: "opspack",
+          version: "1.0.0",
+          integrity: Object.fromEntries(
+            Object.entries(packFiles).map(([rel, body]) => [
+              rel,
+              createHash("sha256").update(body, "utf8").digest("hex"),
+            ]),
+          ),
+        },
+        null,
+        2,
+      )}\n`,
+    });
+    // An override tree that EXISTS and holds no overlay: the state a repo has
+    // the moment it takes its first override, which is where a discovery pass
+    // that reported an empty tree as something would first show.
+    await mkdir(join(repo.dir, ".stamity", "overrides", "rules"), { recursive: true });
+
+    const base = overlayContext(repo.dir);
+    const plan = await planPackInstall(repo.dir, join(repo.dir, "pack-src", "opspack"), {
+      allowUntrusted: true,
+    });
+    const applied = await applyPackInstall(repo.dir, plan, base.manifest, {
+      engineVersion: base.engineVersion,
+      now: FIXED_NOW,
+    });
+    expect(applied.result.installed).toBe(true);
+
+    const ctx = { ...base, manifest: applied.manifest };
+    const [withLayer, reference] = await Promise.all([
+      getEmissionPlanner().plan(ctx),
+      composeEmissionPlanner(ADAPTER_REGISTRY).plan(ctx),
+    ]);
+
+    // Non-degenerate: the pack really is in the plan, so the digests are being
+    // compared over a plan the pack lane built.
+    expect(withLayer.some((row) => row.path.includes("opsguard"))).toBe(true);
+    expect(digestOf(withLayer)).toBe(digestOf(reference));
+  });
+});
+
+/**
  * The distinctive opening line of a bundled rule's body, read from the corpus.
  * Read at run time rather than pinned as a literal, so an unrelated edit to the
  * shipped rule cannot quietly make the "not both bodies" assertion vacuous.
@@ -1042,6 +1277,42 @@ async function corpusSkillMarker(id: string): Promise<string> {
   const line = body.split("\n").find((entry) => entry.trim().length > 40 && !entry.startsWith("#"));
   expect(line).toBeDefined();
   return line!.trim();
+}
+
+/**
+ * The same fingerprint for a bundled AGENT (`content/agents/stamity-<id>.md`).
+ * Read at run time for the reason {@link corpusMarker} is.
+ */
+async function corpusAgentMarker(id: string): Promise<string> {
+  const raw = await readFile(join(process.cwd(), "content", "agents", `stamity-${id}.md`), "utf8");
+  const body = raw.slice(raw.indexOf("\n---", 3) + 4);
+  const line = body.split("\n").find((entry) => entry.trim().length > 40 && !entry.startsWith("#"));
+  expect(line).toBeDefined();
+  return line!.trim();
+}
+
+/**
+ * The same fingerprint for a bundled COMMAND (`content/commands/st-<id>.md`).
+ * Read at run time for the reason {@link corpusMarker} is.
+ */
+async function corpusCommandMarker(id: string): Promise<string> {
+  const raw = await readFile(join(process.cwd(), "content", "commands", `st-${id}.md`), "utf8");
+  const body = raw.slice(raw.indexOf("\n---", 3) + 4);
+  const line = body.split("\n").find((entry) => entry.trim().length > 40 && !entry.startsWith("#"));
+  expect(line).toBeDefined();
+  return line!.trim();
+}
+
+/**
+ * The `description` a bundled rule declares, read from the corpus for the same
+ * reason {@link corpusMarker} is: a literal would go stale, and a stale literal
+ * makes "the shipped value is gone" pass against a value that was never there.
+ */
+async function corpusDescription(id: string): Promise<string> {
+  const raw = await readFile(join(process.cwd(), "content", "rules", `stamity-${id}.md`), "utf8");
+  const line = raw.split("\n").find((entry) => entry.startsWith("description: "));
+  expect(line, `corpus rule ${id} declares no description`).toBeDefined();
+  return line!.slice("description: ".length).trim();
 }
 
 /** A plan as one digest: any single changed byte moves it. */

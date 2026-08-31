@@ -390,8 +390,19 @@ async function projectOneSkill(
       // cheap and turns any hostile name (separator, traversal) into a named
       // refusal instead of a write outside the target tree.
       assertSafePath(posix.join(skillDir, relative), `skill "${item.id}" projection`);
-      const raw = await fs.readFile(join(sourceDir, ...relative.split("/")), "utf8");
-      const content = relative === SKILL_FILE ? renderSkill(raw, skillDir) : raw;
+      // `SKILL.md` renders from the ITEM, not from disk: a patched skill keeps
+      // the base's `filePath` (spec REQ-003, the catalog's merge-identity
+      // rule), so `item.body`/`item.frontmatter` already carry the merged
+      // document while a disk read at `sourceDir` would silently re-fetch the
+      // unpatched corpus bytes. Support files have no overlay half — overlays
+      // patch `SKILL.md` only — so they stay a verbatim disk read from
+      // `sourceDir`, which is filePath-agnostic: a full-override skill's
+      // `filePath` IS the override directory, so this is still the right root
+      // for its siblings too.
+      const content =
+        relative === SKILL_FILE
+          ? renderSkill(composeFrontmatter(item.frontmatter, item.body), skillDir)
+          : await fs.readFile(join(sourceDir, ...relative.split("/")), "utf8");
       return {
         path: posix.join(SKILLS_PROJECTION_DIR, skillDir, relative),
         content,

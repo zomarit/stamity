@@ -843,6 +843,96 @@ describe("check — a drift gate that cannot run", () => {
     expect(result.stdout).toContain("next:");
   });
 
+  /**
+   * A repo whose only defect is a malformed overlay
+   * (docs/specs/overlay-layers.md, REQ-OVERLAY-009).
+   *
+   * Decision-13 parity, held at the screen rather than only at the walk: an
+   * overlay defect throws out of the content walk exactly as a malformed
+   * override does, so `sync` stops and `check` has no verdict to print. Without
+   * this case the walk's refusal is proven and its CONSEQUENCE is not — and the
+   * consequence is what an operator meets, since a `check` that swallowed the
+   * throw and printed a clean verdict would be reporting on an index that was
+   * never built.
+   *
+   * The corpus rule is seeded BEFORE the fixture sync and the overlay AFTER it,
+   * for the reason {@link seedUnplannableRepo} removes the charter after its
+   * own: the manifest and the emitted files stay real, so only the NEXT plan
+   * fails and every doctor probe still answers.
+   */
+  const HOUSE_RULE_FIXTURE = [
+    "---",
+    "id: house",
+    "type: rule",
+    "description: fixture house rule",
+    "tags: [review]",
+    "load: on-demand",
+    "obsolete_when: fixture trigger",
+    "scope: conditional",
+    'globs: ["**/*.md"]',
+    "---",
+    "",
+    "# House",
+    "",
+    "House rule body.",
+    "",
+  ].join("\n");
+
+  /** The overlay half, addressed at the corpus rule above and not parseable. */
+  const MALFORMED_OVERLAY = ".stamity/overrides/rules/house.customize.yaml";
+
+  async function seedMalformedOverlayRepo(handle: TempDirHandle): Promise<string> {
+    await handle.seedFiles({ "corpus/rules/stamity-house.md": HOUSE_RULE_FIXTURE });
+    const root = await seedRepo(handle);
+    await handle.seedFiles({ [MALFORMED_OVERLAY]: "description: [unterminated\n" });
+    return root;
+  }
+
+  it("reports a malformed overlay as `drift: not evaluated`, naming the overlay file", async () => {
+    const handle = getRepo();
+    const root = await seedMalformedOverlayRepo(handle);
+
+    const { code, doc } = await runJson(root);
+    const human = await runHuman(root);
+
+    expect(code).toBe(1);
+    expect(doc.ok).toBe(false);
+    // The manifest and every other probe are fine; the one broken thing is the
+    // patch, and the screen says so instead of blaming the manifest.
+    expect(row(doc, "manifest").status).toBe("pass");
+    expect(doc.drift).toBeNull();
+    expect(doc.driftStatus).toBe("failed");
+
+    // Fail-closed, naming the file: the refusal the walk raises survives all the
+    // way to the operator rather than being flattened into "the plan failed".
+    const error = doc.error as { code: string; message: string; why: string; next: string };
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain("could not evaluate drift");
+    expect(error.why).toContain("house.customize.yaml");
+
+    // And the human screen carries the same verdict, never a green close.
+    expect(human.code).toBe(1);
+    expect(human.stdout).toContain("drift: not evaluated");
+    expect(human.stdout).not.toContain("all green");
+  });
+
+  it("evaluates drift normally once the overlay parses", async () => {
+    // The other side of the same fixture: the corpus rule and a WELL-FORMED
+    // overlay over it, so the case above is failing on the defect rather than
+    // on the presence of an override tree or of a patched artifact at all.
+    const handle = getRepo();
+    await handle.seedFiles({ "corpus/rules/stamity-house.md": HOUSE_RULE_FIXTURE });
+    const root = await seedRepo(handle);
+    await handle.seedFiles({
+      ".stamity/overrides/rules/house.customize.md": "House addendum.\n",
+    });
+
+    const { doc } = await runJson(root);
+
+    expect(doc.driftStatus).toBe("evaluated");
+    expect(doc.drift).not.toBeNull();
+  });
+
   it("still says `the manifest has to be readable first` when that IS the reason", async () => {
     // The narrow swallow that survives: an un-initialised repo. The `manifest`
     // row owns that message with its fix, so drift does not repeat it as a
