@@ -8,7 +8,7 @@ obsolete_when: target frameworks ship an authorization-code-with-PKCE default wh
 spawns: [researcher, implementer, reviewer]
 ---
 
-# /stamity-auth-scaffold
+# /st-auth-scaffold
 
 Builds an authentication layer for a service that does not yet have one. The command
 resolves the shape, delegates every write, and gates what came back. It authors nothing

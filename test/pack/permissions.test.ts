@@ -425,8 +425,8 @@ describe("checkAgentCapabilities", () => {
     expect(
       checkAgentCapabilities(
         [
-          file("skills/stamity-release/SKILL.md", ["spawn", "filesystem"]),
-          file("commands/stamity-release.md", ["network"]),
+          file("skills/st-release/SKILL.md", ["spawn", "filesystem"]),
+          file("commands/st-release.md", ["network"]),
           file("agents/README.txt", ["network"]),
         ],
         { toolFootprint: ["read"] },

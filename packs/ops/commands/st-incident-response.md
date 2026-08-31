@@ -8,7 +8,7 @@ obsolete_when: incident tooling natively couples severity classification, gated 
 spawns: [incident-responder, researcher]
 ---
 
-# /stamity-incident-response
+# /st-incident-response
 
 Drive an open incident from first signal to a filed post-mortem. Stabilize
 first, understand second, prevent third — in that order, because a perfect fix

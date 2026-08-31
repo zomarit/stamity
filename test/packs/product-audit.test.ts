@@ -53,11 +53,11 @@ const GATE_SCRIPT = join(REPO_ROOT, "scripts", "leak-gate.mjs");
 
 /** The pack's shipped artifacts, by pack-relative path. */
 const COMMAND_PATHS = [
-  "commands/stamity-product-audit.md",
-  "commands/stamity-benchmark.md",
+  "commands/st-product-audit.md",
+  "commands/st-benchmark.md",
 ] as const;
 const RULE_PATH = "rules/stamity-epic-audit-frame.md";
-const SKILL_PATH = "skills/stamity-perf-audit/SKILL.md";
+const SKILL_PATH = "skills/st-perf-audit/SKILL.md";
 const CONTENT_PATHS: readonly string[] = [...COMMAND_PATHS, RULE_PATH, SKILL_PATH];
 
 /** Body line caps by artifact class — the same SoT caps the corpus suite binds. */
@@ -112,17 +112,17 @@ const RETIRED_SEVERITIES: readonly string[] = [
 const WRITE_CLAIMS: readonly { path: string; command: string; claim: string }[] = [
   {
     path: ".stamity/audits/**",
-    command: "commands/stamity-product-audit.md",
+    command: "commands/st-product-audit.md",
     claim: ".stamity/audits/<axis>-<sha>.md",
   },
   {
     path: ".stamity/benchmarks/**",
-    command: "commands/stamity-benchmark.md",
+    command: "commands/st-benchmark.md",
     claim: ".stamity/benchmarks/baseline.json",
   },
   {
     path: ".stamity/verify/**",
-    command: "commands/stamity-product-audit.md",
+    command: "commands/st-product-audit.md",
     claim: ".stamity/verify/<axis>-<sha>.json",
   },
 ];
@@ -425,7 +425,7 @@ describe("the return contract — both commands answer the flow that spawned the
 
     // The findings-contract row itself, which is where the four-level scale was
     // published: it now names the core scale and says whose it is.
-    const auditBody = (await packFile("commands/stamity-product-audit.md")).parsed.body;
+    const auditBody = (await packFile("commands/st-product-audit.md")).parsed.body;
     expect(auditBody).toMatch(
       /\| `severity` \| `Critical` · `Warning` · `Minor` — the core reviewer's scale, unchanged \|/,
     );
@@ -439,7 +439,7 @@ describe("the return contract — both commands answer the flow that spawned the
     expect(audit).not.toMatch(/critical or high finding/i);
 
     // Benchmark's verdict enum maps onto the same scale rather than sitting beside it.
-    const benchmark = flow((await packFile("commands/stamity-benchmark.md")).parsed.body);
+    const benchmark = flow((await packFile("commands/st-benchmark.md")).parsed.body);
     expect(benchmark).toMatch(/`regression-critical` is `Critical`/);
     expect(benchmark).toMatch(/`regression-warning` is `Warning`/);
     expect(benchmark).toMatch(/`stable`, `improvement` and `noisy` route out as nothing/);
@@ -451,7 +451,7 @@ describe("the return contract — both commands answer the flow that spawned the
 
 describe("benchmark — the artifact key and what may be promoted from it", () => {
   it("keys stored results on <sha> or <sha>-dirty, and refuses to promote a dirty one", async () => {
-    const file = await packFile("commands/stamity-benchmark.md");
+    const file = await packFile("commands/st-benchmark.md");
     const body = file.parsed.body;
     const flat = flow(body);
 
@@ -476,7 +476,7 @@ describe("benchmark — the artifact key and what may be promoted from it", () =
   });
 
   it("gates the ref-mode rewrite on a question regardless of tree state, and performs no checkout", async () => {
-    const flat = flow((await packFile("commands/stamity-benchmark.md")).parsed.body);
+    const flat = flow((await packFile("commands/st-benchmark.md")).parsed.body);
 
     // The ref path checked refs out and stashed — rewriting every tracked
     // file — while the same file stated in bold that it never modifies product code
@@ -491,7 +491,7 @@ describe("benchmark — the artifact key and what may be promoted from it", () =
   });
 
   it("keys the budget branch on the perf-budget-declared result, not on artifact presence", async () => {
-    const flat = flow((await packFile("commands/stamity-benchmark.md")).parsed.body);
+    const flat = flow((await packFile("commands/st-benchmark.md")).parsed.body);
 
     // The performance axis produces budget-free artifacts as a NORMAL
     // outcome, so "the artifact exists" never meant "budgets exist" — and `stable`,
@@ -503,7 +503,7 @@ describe("benchmark — the artifact key and what may be promoted from it", () =
   });
 
   it("verdict bands are total over the load axes and tied to the measured noise", async () => {
-    const body = (await packFile("commands/stamity-benchmark.md")).parsed.body;
+    const body = (await packFile("commands/st-benchmark.md")).parsed.body;
     const flat = flow(body);
 
     // A 30% memory rise landed in no row, Bundle had no regression band,
@@ -530,7 +530,7 @@ describe("benchmark — the artifact key and what may be promoted from it", () =
   });
 
   it("cites only the frame blocks it can honour, and states its own evidence rule", async () => {
-    const flat = flow((await packFile("commands/stamity-benchmark.md")).parsed.body);
+    const flat = flow((await packFile("commands/st-benchmark.md")).parsed.body);
 
     // The frame's item shape is built on a module taxonomy benchmark never
     // establishes, and its Guardrails demand `path:line` evidence a metric
@@ -674,7 +674,7 @@ describe("frontmatter contract — the four artifacts, shape by shape", () => {
 
 describe("the verify seam — evidence comes from .stamity/verify/, never from a second copy of the checks", () => {
   it("product-audit names the axis parameter set and cites the neutral artifact family", async () => {
-    const command = await packFile("commands/stamity-product-audit.md");
+    const command = await packFile("commands/st-product-audit.md");
     const body = command.parsed.body;
 
     expect(body).toContain(VERIFY_SEAM);
@@ -692,7 +692,7 @@ describe("the verify seam — evidence comes from .stamity/verify/, never from a
         .filter((file) => file.relPath.startsWith("skills/st-verify/references/"))
         .map((file) => declaredId(file)),
     );
-    const body = (await packFile("commands/stamity-product-audit.md")).parsed.body;
+    const body = (await packFile("commands/st-product-audit.md")).parsed.body;
 
     expect(shippedAxes.size).toBeGreaterThan(0);
     for (const [auditAxis, verifyAxes] of Object.entries(AXIS_MAP)) {
@@ -706,19 +706,19 @@ describe("the verify seam — evidence comes from .stamity/verify/, never from a
   });
 
   it("benchmark consumes the performance artifact of the same family", async () => {
-    const body = (await packFile("commands/stamity-benchmark.md")).parsed.body;
+    const body = (await packFile("commands/st-benchmark.md")).parsed.body;
 
     expect(body).toContain(".stamity/verify/performance-<sha>.json");
   });
 
   it("an absent artifact routes to the core verify skill — no predecessor fallback, no inline checks", async () => {
-    const audit = flow((await packFile("commands/stamity-product-audit.md")).parsed.body);
-    const benchmark = flow((await packFile("commands/stamity-benchmark.md")).parsed.body);
+    const audit = flow((await packFile("commands/st-product-audit.md")).parsed.body);
+    const benchmark = flow((await packFile("commands/st-benchmark.md")).parsed.body);
 
     // The graceful path: run the producer, then continue.
-    // Contract change: the verify skill is core, and core ids now carry the
-    // `st-` prefix, so `st-verify` is the id a pack body must route users to.
-    // Pack-own ids are unaffected and still spell out `stamity-`.
+    // Contract change: every command and skill id carries the `st-` prefix now,
+    // pack-supplied ones included, so `st-verify` is the id a pack body must
+    // route users to. `stamity-` survives on agents and rules only.
     expect(audit).toMatch(/absent or stale, run the `st-verify` skill/i);
     expect(audit).toMatch(/derives none inline/i);
     expect(benchmark).toMatch(/absent or stale, run the `st-verify` skill/i);
@@ -789,7 +789,7 @@ describe("assesses, never modifies", () => {
   });
 
   it("the write surface is stated: audit output and refreshed evidence only", async () => {
-    const audit = flow((await packFile("commands/stamity-product-audit.md")).parsed.body);
+    const audit = flow((await packFile("commands/st-product-audit.md")).parsed.body);
 
     expect(audit).toContain(".stamity/audits/<axis>-<sha>.md");
     expect(audit).toMatch(/No source file, no configuration/i);
@@ -822,7 +822,7 @@ describe("assesses, never modifies", () => {
 
 describe("board-less repos degrade to a report", () => {
   it("the degradation and its output path are stated in the body", async () => {
-    const body = flow((await packFile("commands/stamity-product-audit.md")).parsed.body);
+    const body = flow((await packFile("commands/st-product-audit.md")).parsed.body);
 
     expect(body).toMatch(/no board linked/i);
     expect(body).toMatch(/not an error/i);
@@ -945,10 +945,11 @@ describe("trigger domains stay disjoint", () => {
 });
 
 describe("no dangling references", () => {
-  // Both prefixes, deliberately: core commands and skills are `st-<id>` and
-  // pack-own artifacts stay `stamity-<id>`, so a guard anchored on one prefix
-  // is blind to half the surface it exists to check. The captured group is the
-  // bare id either way, which is what frontmatter declares.
+  // Both prefixes, deliberately: commands and skills are `st-<id>` in the
+  // corpus and in every pack alike, while agents and rules keep `stamity-<id>`,
+  // so a guard anchored on one prefix is blind to half the surface it exists to
+  // check. The captured group is the bare id either way, which is what
+  // frontmatter declares.
   const COMMAND_MENTION = /\/(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;
   /** Bare artifact mentions; the lookbehind keeps `/st-…` and mid-token hits out. */
   const BARE_MENTION = /(?<![/A-Za-z0-9_-])(?:stamity|st)-([a-z0-9][a-z0-9-]*)/g;

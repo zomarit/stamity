@@ -3,6 +3,17 @@
      this page describes changes. `test/docsPages.test.ts` derives all three from the content
      catalog and the generated capability matrix and fails here first. -->
 
+<!-- The banner leads the rendered page and replaces nothing under it: GitHub picks the source by
+     the reader's theme, and every other surface — a plain markdown viewer, a text terminal, the
+     npm page — falls through to the `img` and its `alt`. Both files are the site's own copies in
+     `website/static/img/`, read by repo-relative path so a fork or a clone renders them too. -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="website/static/img/wordmark-dark.svg">
+    <img src="website/static/img/wordmark.svg" alt="stamity" width="440">
+  </picture>
+</p>
+
 # stamity
 
 stamity, by zomarit, is an ESM-only TypeScript CLI that generates agentic coding setups — a
@@ -88,7 +99,6 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`GOVERNANCE.md`](GOVERNANCE.md) | Who decides, how a change lands, and what the private layer holds. |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and the two channels a report goes through. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Prerequisites, what `init` asks and writes per client, and the guided first change. |
-| [`docs/migration.md`](docs/migration.md) | Moving a repository off the predecessor setup — both paths, and what does not transfer. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
 

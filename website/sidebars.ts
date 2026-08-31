@@ -1,4 +1,4 @@
-import {existsSync, readdirSync} from 'node:fs';
+import {existsSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 
@@ -15,19 +15,28 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
  *    un-buildable for as long as any page is outstanding — while a page that silently
  *    disappears from the navigation is exactly what the warning is for.
  *
- * 2. THE MIGRATION PAGE IS MATCHED BY PREFIX, NOT NAMED. `scripts/leak-gate.mjs` treats the
- *    predecessor project's name as a reserved token and allows it on an exact list of paths —
- *    the migration-detection module, its tests, and the migration page itself. This file is not
- *    on that list, and putting it there would widen an exemption that exists to hold one name to
- *    the few places that cannot work without it. The gate assembles its own reserved tokens from
- *    fragments for the same reason, and this is the same move: match the stable prefix, and let
- *    the file on disk supply the rest of its name. `migration` is the prefix rather than the
- *    whole filename for the same reason: it matches the page whether it is `migration.md` or
- *    carries the predecessor's name in its own, and this file needs to know neither.
+ * 2. THE MIGRATION PAGE IS DELIBERATELY UNLISTED. `docs/migration.md` is built and published —
+ *    it keeps the route the predecessor's sunset material promises, and `test/ci/docsSite.test.ts`
+ *    pins that route — but no entry below points at it, and that omission is the decision, not an
+ *    oversight. The people who need that page arrive on it from the predecessor's own bridge
+ *    artifacts: its deprecation notice, its final README, its sunset note. Everyone who arrives
+ *    here instead has no predecessor setup to move off, and a permanent "Start here" row would
+ *    sell every one of them a migration they do not need. Property 1 is why this has to be
+ *    written down at all — it reports a LISTED page that is missing from disk, and nothing
+ *    reports a page on disk that is listed nowhere, so this note is the only record that the
+ *    page is absent on purpose.
+ *
+ *    If it is ever re-listed, it is matched by a filename prefix rather than named outright.
+ *    `scripts/leak-gate.mjs` treats the predecessor project's name as a reserved token and allows
+ *    it on an exact list of paths — the migration-detection module, its tests, and the migration
+ *    page itself. This file is not on that list, and putting it there would widen an exemption
+ *    that exists to hold one name to the few places that cannot work without it. The gate
+ *    assembles its own reserved tokens from fragments for the same reason: match the stable
+ *    prefix, and let the file on disk supply the rest of its name, whether that is `migration.md`
+ *    or a filename carrying the predecessor's own.
  */
 const SITE_DIR = typeof __dirname === 'string' ? __dirname : process.cwd();
 const DOCS_DIR = resolve(SITE_DIR, '..', 'docs');
-const MIGRATION_ID_PREFIX = 'migration';
 
 /** Ids named exactly, filtered to what exists — with the drop reported rather than swallowed. */
 function present(ids: readonly string[]): string[] {
@@ -38,18 +47,10 @@ function present(ids: readonly string[]): string[] {
   });
 }
 
-/** Ids matched by a stable filename prefix, sorted so the emitted order is deterministic. */
-function matching(prefix: string): string[] {
-  return readdirSync(DOCS_DIR)
-    .filter((name) => name.startsWith(prefix) && name.endsWith('.md'))
-    .map((name) => name.slice(0, -'.md'.length))
-    .sort();
-}
-
 const categories = [
   {
     label: 'Start here',
-    items: [...present(['getting-started']), ...matching(MIGRATION_ID_PREFIX)],
+    items: present(['getting-started']),
   },
   {
     label: 'Reference',

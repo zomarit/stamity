@@ -8,7 +8,7 @@ obsolete_when: clients natively open evidence-backed assessment epics from machi
 spawns: [researcher, reviewer]
 ---
 
-# /stamity-product-audit
+# /st-product-audit
 
 Assesses the product as it stands at one commit, and turns the result into work
 someone else picks up. **This command assesses; it never modifies product
@@ -37,7 +37,7 @@ already reads, and the `st-dep-audit` skill owns the standalone pass. A
 second derivation here would be the no-second-copy rule broken by the command
 that states it.
 
-Invocation: `/stamity-product-audit axis=security`. An invocation that names no
+Invocation: `/st-product-audit axis=security`. An invocation that names no
 axis asks once and declares `all` as the default-if-no-response. `all` is a
 single epic over a single taxonomy — never two runs stapled together, and never
 a merged verdict that hides which axis produced a finding.

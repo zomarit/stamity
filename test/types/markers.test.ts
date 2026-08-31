@@ -208,13 +208,26 @@ describe("contentPrefixFor", () => {
     expect(contentPrefixFor({ type: "rule" })).toBe(CONTENT_PREFIX);
   });
 
-  // A pack's filenames are hashed into a signed `pack.json` this engine does
-  // not re-sign, so provenance outranks class: a pack command stays
-  // `stamity-release`, and the mixed surface that produces is deliberate.
-  it("keeps a pack-supplied artifact on the long prefix whatever its class", () => {
-    const supplied = { pack: "@acme/ops" };
-    expect(contentPrefixFor({ type: "command", provenance: supplied })).toBe(CONTENT_PREFIX);
-    expect(contentPrefixFor({ type: "skill", provenance: supplied })).toBe(CONTENT_PREFIX);
+  // CONTRACT CHANGE (pack surface unified onto `st-`): this case previously
+  // asserted the opposite — that provenance outranked class, so a pack command
+  // stayed `stamity-release`. That carve-out existed only because the pack
+  // filenames were hashed into a signed `pack.json` the cut would not re-sign;
+  // the manifests were regenerated with the rename, so origin no longer enters
+  // the decision. The assertion is inverted rather than deleted because the
+  // property worth gating is that a pack artifact is prefixed by CLASS.
+  //
+  // `provenance` is passed on a variable, not a fresh literal: the field is no
+  // longer part of `ContentPrefixSubject`, and the point of the case is that an
+  // extra origin field on the subject changes nothing.
+  it("prefixes a pack-supplied artifact by class, not by origin", () => {
+    const packCommand = { type: "command", provenance: { pack: "@acme/ops" } };
+    const packSkill = { type: "skill", provenance: { pack: "@acme/ops" } };
+    const packAgent = { type: "agent", provenance: { pack: "@acme/ops" } };
+    const packRule = { type: "rule", provenance: { pack: "@acme/ops" } };
+    expect(contentPrefixFor(packCommand)).toBe(INVOCABLE_CONTENT_PREFIX);
+    expect(contentPrefixFor(packSkill)).toBe(INVOCABLE_CONTENT_PREFIX);
+    expect(contentPrefixFor(packAgent)).toBe(CONTENT_PREFIX);
+    expect(contentPrefixFor(packRule)).toBe(CONTENT_PREFIX);
   });
 });
 

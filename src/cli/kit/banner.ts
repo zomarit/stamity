@@ -22,7 +22,8 @@ import { resolveColorEnabled } from "./terminal.ts";
  * theme, so no cell ever mixes two inks, and the letterforms are drawn so that
  * situation cannot arise (`test/cli/banner.test.ts` pins it).
  *
- * Proportions are read off `assets/stamity/wordmark.svg` rather than eyeballed:
+ * Proportions are read off `website/static/img/wordmark.svg` — the tree's copy
+ * of the drawn mark, and the same file README's banner shows — not eyeballed:
  * the 23.2-unit stem is two columns, so the 489x130 artwork lands at 47 columns
  * with a three-pixel ascender, an eight-pixel x-height and a three-pixel
  * descender. The `i` keeps its square dot (two cells wide, one row tall, one

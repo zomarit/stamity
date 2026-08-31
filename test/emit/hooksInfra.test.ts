@@ -279,8 +279,8 @@ describe("policy document: installed-pack agent rows", () => {
 
   it("carries a row per ops-pack agent with the grant its frontmatter and footprint agree on", async () => {
     // Grant resolution, the emission half: without these rows the generated guard answers
-    // NO_POLICY for every agent the ops pack installed, and /stamity-release and
-    // /stamity-incident-response are inert on a repo that installed it cleanly.
+    // NO_POLICY for every agent the ops pack installed, and /st-release and
+    // /st-incident-response are inert on a repo that installed it cleanly.
     const p = await planWithPackAgents(opsAgents);
     const document = policyDoc(p);
 

@@ -446,8 +446,8 @@ describe("verify skill — artifact seam", () => {
     // Fourth row, and the reason the count moved from 3: the roster was drawn from a
     // `content/`-scoped grep, so the pack consumers of the same path were invisible to
     // it. `grep -rn "\.stamity/verify" packs/` reaches both — the product-audit pack
-    // (`commands/stamity-product-audit.md`, `commands/stamity-benchmark.md`,
-    // `skills/stamity-perf-audit/SKILL.md`) and the scaffold pack
+    // (`commands/st-product-audit.md`, `commands/st-benchmark.md`,
+    // `skills/st-perf-audit/SKILL.md`) and the scaffold pack
     // (`commands/stamity-{auth-scaffold,design-system-create,slo-scaffold}.md`), each
     // declaring `.stamity/verify/**` in its `pack.json` touchedPaths. Both names are
     // asserted so a `checks[]` / `summary` schema change meets its full consumer set
