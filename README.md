@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 37bd456. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit f5a451b. -->
 <!-- Re-open when: the corpus counts, the eight-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives all three from the content
      catalog and the generated capability matrix and fails here first. -->

@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 37bd456. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit f5a451b. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, or a
      verb joins or leaves the command surface. `test/docsPages.test.ts` holds this page to the
      hand-page contract, and `docs/cli-reference.md` plus `docs/capability-matrix.md` are the
