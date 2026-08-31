@@ -25,6 +25,7 @@ mistake.
 | `stamity add` | yes | writes | install a content pack: run the gate chain, show every command it would wire, then write |
 | `stamity config` | yes | writes | inspect and change the setup: keys, detection refresh, MCP servers |
 | `stamity workspace` | yes | writes | one policy across several repositories: status, guided creation, and the cascade |
+| `stamity worktree` | yes | writes | parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown |
 | `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
 
@@ -45,7 +46,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 9 of the commands above, success and
+run that reaches a command — all 10 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -92,14 +93,8 @@ string — there is no second numbering to read.
 | `INTEGRITY_ERROR` | output cannot be regenerated to match its source |
 | `FS_ERROR` | a filesystem operation failed |
 | `CLEAN_ERROR` | removal failed part-way |
-| `NETWORK_ERROR` | nothing in this build throws it — see the reserved note under the table |
+| `NETWORK_ERROR` | a git transport failed — `worktree setup` could not reach `origin` to plan its branch; a remote with no such branch is not this |
 | `LOCK_TIMEOUT` | a write lock could not be taken before the retry schedule ran out; another `stamity` run was holding it |
-
-Reserved, never thrown: `NETWORK_ERROR`. The engine's type declares
-it, and no code path in this build produces
-it — so a CI branch on that code can never be taken. Listed
-rather than dropped so the table stays a complete reading of the type, and labelled
-rather than left to look like the rows above it.
 
 Two more codes exist only at the CLI edge and never come from the engine:
 `USAGE` for a rejected command line, and `FAILURE` for a fault that
@@ -109,7 +104,7 @@ carries no engine classification.
 
 set up this repo: detect the stack, decide the defaults, write the state
 
-Writes to the repository, so `--dry-run` previews the change without making it.
+Writes when it runs, so `--dry-run` previews the change without making it.
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -123,7 +118,7 @@ Writes to the repository, so `--dry-run` previews the change without making it.
 
 regenerate every managed file from the manifest and bundled content
 
-Writes to the repository, so `--dry-run` previews the change without making it.
+Writes when it runs, so `--dry-run` previews the change without making it.
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -149,7 +144,7 @@ Adds no flags of its own beyond the shared matrix above.
 
 install a content pack: run the gate chain, show every command it would wire, then write
 
-Writes to the repository, so `--dry-run` previews the change without making it.
+Writes when it runs, so `--dry-run` previews the change without making it.
 
 | Argument | What it is |
 |---|---|
@@ -164,7 +159,7 @@ Writes to the repository, so `--dry-run` previews the change without making it.
 
 inspect and change the setup: keys, detection refresh, MCP servers
 
-Writes to the repository, so `--dry-run` previews the change without making it.
+Writes when it runs, so `--dry-run` previews the change without making it.
 
 | Argument | What it is |
 |---|---|
@@ -178,7 +173,7 @@ Adds no flags of its own beyond the shared matrix above.
 
 one policy across several repositories: status, guided creation, and the cascade
 
-Writes to the repository, so `--dry-run` previews the change without making it.
+Writes when it runs, so `--dry-run` previews the change without making it.
 
 | Argument | What it is |
 |---|---|
@@ -189,11 +184,33 @@ Writes to the repository, so `--dry-run` previews the change without making it.
 | `--tools <csv>` | defaults.tools for the created workspace, comma-separated (claude, cursor, copilot, codex) — workspace init only | — |
 | `--force` | workspace init: overwrite a workspace.json already at this directory, or create one nested inside an outer workspace. workspace sync: in every member, overwrite colliding unmanaged files after a verified .bak | — |
 
+## `stamity worktree`
+
+parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown
+
+Writes when it runs, so `--dry-run` previews the change without making it.
+
+| Argument | What it is |
+|---|---|
+| `[subcommand]` | list \| setup \| cleanup — omit for list |
+| `[name]` | the worktree name — its directory under the farm, and the branch it checks out |
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--use-existing` | worktree setup: attach to an existing local branch of that name | — |
+| `--no-use-existing` | worktree setup: refuse rather than attach to an existing local branch | — |
+| `--track` | worktree setup: track the remote branch of that name | — |
+| `--no-track` | worktree setup: create a new local branch off HEAD instead of tracking | — |
+| `--copy-secrets` | worktree setup: copy entries marked `secret` in the policy — without it they are skipped and the report says so | — |
+| `--all` | worktree cleanup: sweep every worktree this lane manages | — |
+| `--files-only` | worktree cleanup: invert the receipt's files and leave the checkout in place | — |
+| `--force` | worktree cleanup: proceed on a worktree carrying uncommitted changes | — |
+
 ## `stamity clean`
 
 remove every generated file and the .stamity/ state directory
 
-Writes to the repository, so `--dry-run` previews the change without making it.
+Writes when it runs, so `--dry-run` previews the change without making it.
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -208,7 +225,7 @@ agent content rather than a person. Hidden is not secret — `stamity learn --he
 in full — and it is documented here because a verb that exists and is undocumented is
 worse than one that is merely unadvertised.
 
-Writes to the repository, so `--dry-run` previews the change without making it.
+Writes when it runs, so `--dry-run` previews the change without making it.
 
 | Argument | What it is |
 |---|---|

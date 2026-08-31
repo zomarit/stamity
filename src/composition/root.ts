@@ -74,6 +74,12 @@ import * as workspaceDetect from "../workspace/detect.ts";
 import * as workspaceResolve from "../workspace/resolve.ts";
 import * as workspaceManifest from "../workspace/manifest.ts";
 import * as workspaceSync from "../workspace/sync.ts";
+import * as worktreePolicy from "../worktree/policy.ts";
+import * as worktreeGit from "../worktree/git.ts";
+import * as worktreeReceipt from "../worktree/receipt.ts";
+import * as worktreeMaterialize from "../worktree/materialize.ts";
+import * as worktreeSetup from "../worktree/setup.ts";
+import * as worktreeCleanup from "../worktree/cleanup.ts";
 import * as hooksModel from "../hooks/model.ts";
 import * as userHooks from "../hooks/userHooks.ts";
 import * as hookScripts from "../hooks/scripts.ts";
@@ -184,6 +190,27 @@ export interface EngineRegistry {
     readonly resolve: typeof workspaceResolve;
     readonly manifest: typeof workspaceManifest;
     readonly sync: typeof workspaceSync;
+  };
+  /**
+   * The managed worktree lane: the policy file and its longest-prefix
+   * resolution, the receipt schema with its git-dir home, and the TOCTOU-safe
+   * materialization the receipt records — plus the git orchestration over
+   * them. `git` is the lane's one subprocess seam and the pure parsers over
+   * what git prints; `setup` and `cleanup` are the two flows, one creating a
+   * checkout under a name lock and writing the receipt, the other inverting
+   * that receipt and never touching a branch.
+   *
+   * A worktree is a checkout of ONE repository; the `workspace` group above
+   * holds several repositories. The two are separate concerns that differ at
+   * the fifth character, which is why they are separate groups rather than one.
+   */
+  readonly worktree: {
+    readonly policy: typeof worktreePolicy;
+    readonly receipt: typeof worktreeReceipt;
+    readonly materialize: typeof worktreeMaterialize;
+    readonly git: typeof worktreeGit;
+    readonly setup: typeof worktreeSetup;
+    readonly cleanup: typeof worktreeCleanup;
   };
   readonly hooks: {
     readonly model: typeof hooksModel;
@@ -303,6 +330,14 @@ export function createEngine(): EngineRegistry {
       resolve: workspaceResolve,
       manifest: workspaceManifest,
       sync: workspaceSync,
+    },
+    worktree: {
+      policy: worktreePolicy,
+      receipt: worktreeReceipt,
+      materialize: worktreeMaterialize,
+      git: worktreeGit,
+      setup: worktreeSetup,
+      cleanup: worktreeCleanup,
     },
     hooks: { model: hooksModel, userHooks, scripts: hookScripts },
     tools: { categories: toolCategories, allowlist, translator },

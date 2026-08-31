@@ -80,7 +80,8 @@
                   "**/roster/**",
                   "**/shared/**",
                   "**/tools/**",
-                  "**/workspace/**"
+                  "**/workspace/**",
+                  "**/worktree/**"
                 ],
                 "message": "src/types is a leaf: it imports nothing internal"
               }
@@ -126,7 +127,8 @@
                   "**/roster/**",
                   "**/shared/**",
                   "**/tools/**",
-                  "**/workspace/**"
+                  "**/workspace/**",
+                  "**/worktree/**"
                 ],
                 "message": "wave-1 kernel utilities may import only src/types"
               }

@@ -1,5 +1,5 @@
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit f5a451b. -->
-<!-- Re-open when: the corpus counts, the eight-verb command surface, or a client capability
+<!-- Re-open when: the corpus counts, the nine-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives all three from the content
      catalog and the generated capability matrix and fails here first. -->
 
@@ -47,13 +47,16 @@ learnings, handoffs.
 
 ## Commands
 
-`init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `clean` — eight
-verbs, plus the hidden `learn` plumbing verb agents call to record a learning through the
-engine's write gates. `init` sets a repo up, `sync` regenerates every managed file from the
-manifest, `check` diagnoses the environment and fails on drift between disk and what the
-engine would write now, `validate` checks the content this repo authored, `add` installs a
-pack once its trust gates pass, `config` reads and changes the setup, `workspace` puts one
-policy over many repositories, `clean` removes all of it.
+`init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
+`clean` — nine verbs, plus the hidden `learn` plumbing verb agents call to record a
+learning through the engine's write gates. `init` sets a repo up, `sync` regenerates every
+managed file from the manifest, `check` diagnoses the environment and fails on drift
+between disk and what the engine would write now, `validate` checks the content this repo
+authored, `add` installs a pack once its trust gates pass, `config` reads and changes the
+setup, `workspace` puts one policy over many repositories, `worktree` runs several branches
+of one repository side by side — creating each checkout with the machine-local state a
+checkout cannot carry, and tearing it back down from the receipt that says what was placed
+— `clean` removes all of it.
 
 ## Working on this repository
 

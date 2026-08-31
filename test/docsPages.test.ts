@@ -540,15 +540,16 @@ describe("README", () => {
     expect(lines(read(README)).length).toBeLessThanOrEqual(README_MAX_LINES);
   });
 
-  // Renamed when the workspace verb joined the advertised surface — "seven verbs" until then:
-  // the name states the count, and the array below is what the assertion actually reads.
+  // Renamed on each growth of the advertised surface — "seven verbs" before `workspace`, "eight
+  // verbs" before `worktree`: the name states the count, and the array below is what the
+  // assertion actually reads.
   //
   // This is the SECOND hand-maintained copy of the surface, the getting-started case below
   // holding the first. Both are literal lists rather than derivations from `COMMANDS`, so a verb
   // that joins the CLI and not these two arrays leaves both pages understating the surface with
   // nothing failing — which is exactly how README went on saying "seven verbs" while `workspace`
   // shipped. A verb lands in `src/cli.ts` and in both arrays, in that order.
-  it("states the command surface — eight verbs plus the plumbing verb", () => {
+  it("states the command surface — nine verbs plus the plumbing verb", () => {
     const text = read(README);
     for (const command of [
       "init",
@@ -558,6 +559,7 @@ describe("README", () => {
       "add",
       "config",
       "workspace",
+      "worktree",
       "clean",
     ]) {
       expect(text, `README omits \`${command}\``).toContain(`\`${command}\``);
@@ -992,8 +994,8 @@ describe("the guides", () => {
     );
     // Hand-maintained, in the order `src/cli.ts` advertises, and it is the DRIVER: a verb joins
     // the surface here first and the page is then obliged to name it, which is what made
-    // `workspace` a required word on that page rather than an optional one. The plumbing verb is
-    // deliberately absent — `learn` is not something a reader types.
+    // `workspace` a required word on that page rather than an optional one, and `worktree` after
+    // it. The plumbing verb is deliberately absent — `learn` is not something a reader types.
     for (const command of [
       "init",
       "sync",
@@ -1002,6 +1004,7 @@ describe("the guides", () => {
       "add",
       "config",
       "workspace",
+      "worktree",
       "clean",
     ]) {
       expect(text, `the getting-started guide omits \`${command}\``).toContain(`\`${command}\``);

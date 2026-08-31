@@ -100,18 +100,23 @@ Cursor, Copilot and Codex get a plain-words line rather than a slash command bec
 `st-onboard` is a skill, and only Claude Code turns a project skill into a `/name`
 invocation. Asking for it by name reaches a file that is genuinely on disk.
 
-## The eight verbs
+## The nine verbs
 
-`init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `clean`
+`init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
+`clean`
 
 `init` sets a repo up. `sync` regenerates every managed file from the manifest — run it
 after any config change, because `config` edits state and never regenerates output.
 `check` diagnoses and gates. `validate` checks content this repository authored. `add`
 installs a pack once its trust gates pass. `config` reads and changes the setup.
 `workspace` puts one policy over many repositories — see [workspaces](workspaces.md).
+`worktree` runs several branches of this one repository side by side: `worktree setup
+<name>` creates the checkout beside the repository and copies in the machine-local files a
+checkout cannot carry, `worktree list` says what exists and what state each one is in, and
+`worktree cleanup <name>` removes exactly what setup recorded — never the branch.
 `clean` removes all of it.
 
-There is a ninth, `learn`, which agents call to record a learning through the engine's
+There is a tenth, `learn`, which agents call to record a learning through the engine's
 write gates. It is plumbing, not something you type. The gates exist because a learning is
 text that re-enters an agent's context on a later session: anything with write access to
 the repository can author a file that is read back into a prompt, which makes a note a
@@ -157,7 +162,9 @@ makes the clone arrive with working commands and skills already on disk, and bec
 generated content earns no exemption from review: it lands as an ordinary diff, and
 `check` is what catches it drifting from what the engine would emit today. The one file
 that is **not** committed is `.env.mcp` — MCP credentials — and it is the single entry
-init adds to `.gitignore` for you.
+init adds to `.gitignore` for you. Because everything above it is committed, a second
+checkout of this repository arrives with the whole setup already in place and that one file
+missing, which is exactly what `stamity worktree setup` places for you when it creates one.
 
 ## Keeping it current
 
