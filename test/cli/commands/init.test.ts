@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -12,8 +12,11 @@ import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
-import { readManifest } from "../../../src/manifest/manifest.ts";
+import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
+import type { Tool } from "../../../src/types/core.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
+import { readWorkspaceManifest } from "../../../src/workspace/manifest.ts";
+import { WORKSPACE_MANIFEST_FILE } from "../../../src/workspace/model.ts";
 import { runInProcess, type InProcessResult } from "../../support/inProcess.ts";
 import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -1489,5 +1492,402 @@ describe("init — the existing-config decision binds later syncs", () => {
     // The user's bytes survive wherever the mode promised they would.
     const agentsMd = await readFile(join(root, "AGENTS.md"), "utf8");
     expect(agentsMd.includes("# my agent notes")).toBe(mode !== "replace");
+  });
+});
+
+// ── The conditional workspace offer ────────────────────────────────
+
+/**
+ * `stamity init` in a directory that holds several repositories may OFFER to
+ * create a `workspace.json`. Four properties carry the whole feature, and every
+ * case below is one of them:
+ *
+ *   1. WHEN it arms. `detectWorkspaceContext` vetoes both directions of
+ *      "already settled" — a directory that IS a workspace root, and one INSIDE
+ *      somebody else's workspace — and only then does the candidate scan run,
+ *      needing two or more to arm.
+ *   2. Interactive only, defaulting to NO, and asked LAST.
+ *   3. A non-interactive run NEVER creates one and ALWAYS discloses.
+ *   4. Every other init is byte-identical. The rest of this file is that proof:
+ *      not one case above needed an edit, because a fresh temp `repo/` holds no
+ *      sibling repositories and the probe answers zero.
+ *
+ * No mocks: the candidates are real directories carrying the real markers the
+ * scan qualifies on, and the manifest each run writes is read back through
+ * `readWorkspaceManifest` — the engine's own validating reader — rather than
+ * parsed out of stdout.
+ */
+
+/**
+ * A directory `detectSubRepos` counts as a candidate under `repo/`.
+ *
+ * `tools` writes a REAL setup manifest through `createManifest`/`writeManifest`
+ * rather than a hand-rolled `{version, tools}` document, because the tool union
+ * derives from READING those manifests back through the validating reader: a
+ * minimal fixture would be refused there and the union case would then pass on
+ * the fallback path instead of the path it claims to cover.
+ */
+async function seedWorkspaceCandidate(
+  path: string,
+  opts: { tools?: readonly Tool[] } = {},
+): Promise<void> {
+  const dir = getTemp().path("repo", path);
+  await mkdir(join(dir, ".git"), { recursive: true });
+  await writeFile(join(dir, ".git", "HEAD"), "ref: refs/heads/main\n", "utf8");
+  if (opts.tools !== undefined) {
+    await writeManifest(
+      dir,
+      createManifest({
+        tools: [...opts.tools],
+        selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+        generatorVersion: "0.0.0-test",
+      }),
+    );
+  }
+}
+
+/** Seeds N candidates under `repo/` in scan order and answers the repo root. */
+async function makeRepoWithCandidates(paths: readonly string[]): Promise<string> {
+  const root = await makeRepo();
+  // Seeding order is irrelevant: `detectSubRepos` sorts its result by path.
+  await Promise.all(paths.map((path) => seedWorkspaceCandidate(path)));
+  return root;
+}
+
+/** The workspace manifest at `root`, read back through the engine's own reader. */
+function readWorkspaceBack(root: string): ReturnType<typeof readWorkspaceManifest> {
+  return readWorkspaceManifest(root);
+}
+
+const OFFER_QUESTION =
+  "3 repositories found under this directory. Create a workspace.json so one policy " +
+  "reaches all of them? [y/N] ";
+
+describe("init — the workspace offer arms only on a standalone directory with two members", () => {
+  it("three sibling repositories arm the offer, and it defaults to [y/N]", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+
+    // tools (blank -> claude), the no-git gate (blank -> yes), then the offer.
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", "", "n"] });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(OFFER_QUESTION);
+    expect(await readWorkspaceBack(root)).toBeNull();
+  });
+
+  it("a workspace.json already at this directory disarms it — the root is settled", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+    await writeFile(
+      join(root, WORKSPACE_MANIFEST_FILE),
+      `${JSON.stringify({ version: "1.0.0", defaults: { tools: ["claude"] }, repos: [] }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", ""] });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain("Create a workspace.json");
+    expect(result.stdout).not.toContain("workspace:");
+  });
+
+  it("a directory INSIDE an outer workspace disarms it — no nested offer", async () => {
+    // The workspace manifest sits at the temp root, the parent of `repo/`, so
+    // the ancestor walk classifies `repo/` as a member. `shouldSuggestWorkspace`
+    // does NOT cover this direction (it only checks the directory itself),
+    // which is why the probe calls `detectWorkspaceContext` rather than it.
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+    await writeFile(
+      getTemp().path(WORKSPACE_MANIFEST_FILE),
+      `${JSON.stringify({ version: "1.0.0", defaults: { tools: ["claude"] }, repos: [] }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", ""] });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain("Create a workspace.json");
+    expect(result.stdout).not.toContain("workspace:");
+  });
+
+  it("exactly one repository arms nothing — one repository is just a repository", async () => {
+    const root = await makeRepoWithCandidates(["api"]);
+
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", ""] });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain("Create a workspace.json");
+    expect(result.stdout).not.toContain("workspace:");
+  });
+
+  it("an already-initialised repo with siblings suppresses the offer entirely — --force re-arms it", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+    // A real first run, so `.stamity/manifest.json` exists the way the second
+    // run actually finds it, not a hand-written stand-in for the reader.
+    expect((await runInit(root, ["-y"])).code).toBe(0);
+
+    // Interactive, not `-y`: the pin that actually bites is that `offerArmed`
+    // stays false here, so no CONFIRM is asked before the already-initialised
+    // refusal — an interactive run with the guard removed would ask one more
+    // question and print it before that refusal, which `-y` could never show.
+    const second = await runInit(root, [], { ttyStdin: true });
+
+    expect(second.code).toBe(1);
+    expect(second.stderr).toContain("already initialised");
+    expect(countQuestions(second.stdout)).toBe(0);
+    expect(countConfirmations(second.stdout)).toBe(0);
+    expect(second.stdout).not.toContain("Create a workspace.json");
+    expect(second.stdout).not.toContain("workspace:");
+
+    const forced = await runInit(root, ["--force", "-y"]);
+
+    expect(forced.code).toBe(0);
+    expect(forced.stdout).toContain(
+      "workspace: 3 repositories found under this directory (api, docs, web).",
+    );
+  });
+
+  it("a repository with no siblings arms nothing, on every stream", async () => {
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["-y"], { ttyStdin: true });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain("workspace:");
+    expect(await readWorkspaceBack(root)).toBeNull();
+  });
+});
+
+describe("init — an answered workspace offer", () => {
+  it("a yes over a subset registers exactly the selected members", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+
+    // tools, no-git gate, the offer (yes), then rows 1 and 3 of the selection.
+    const result = await runInit(root, [], {
+      ttyStdin: true,
+      stdinLines: ["", "", "y", "1,3"],
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Which repositories join this workspace? (3 found)");
+    const manifest = await readWorkspaceBack(root);
+    expect(manifest?.repos.map((entry) => entry.path)).toEqual(["api", "web"]);
+    // Exactly the three keys the guided path composes — nothing hand-authored.
+    expect(Object.keys(manifest ?? {})).toEqual(["version", "defaults", "repos"]);
+    expect(result.stdout).toContain("workspace:");
+    expect(result.stdout).toContain("registering 2 members (api, web)");
+  });
+
+  it("defaults.tools is the UNION of the selected members' own manifests, in TOOLS order", async () => {
+    const root = await makeRepo();
+    // Deliberately non-degenerate: two members declaring DIFFERENT tools, so a
+    // run that took either member's list verbatim — or the `claude` fallback —
+    // produces a different answer than the union does.
+    await seedWorkspaceCandidate("api", { tools: ["cursor"] });
+    await seedWorkspaceCandidate("web", { tools: ["claude"] });
+
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", "", "y", ""] });
+
+    expect(result.code).toBe(0);
+    expect((await readWorkspaceBack(root))?.defaults.tools).toEqual(["claude", "cursor"]);
+  });
+
+  it("no selected member carries a manifest: defaults.tools falls back to claude", async () => {
+    const root = await makeRepoWithCandidates(["api", "web"]);
+
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", "", "y", ""] });
+
+    expect(result.code).toBe(0);
+    expect((await readWorkspaceBack(root))?.defaults.tools).toEqual(["claude"]);
+  });
+
+  it("a no writes nothing and prints nothing further", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", "", "n"] });
+
+    expect(result.code).toBe(0);
+    expect(await readWorkspaceBack(root)).toBeNull();
+    // The question was asked; nothing about it reaches the panel afterwards.
+    expect(result.stdout).toContain("Create a workspace.json");
+    expect(result.stdout).not.toContain("workspace:");
+  });
+
+  it("--dry-run on an answered yes previews in the future tense and writes nothing", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+
+    const result = await runInit(root, ["--dry-run"], {
+      ttyStdin: true,
+      stdinLines: ["", "", "y", ""],
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Dry run");
+    expect(result.stdout).toContain(
+      `workspace: ${join(root, WORKSPACE_MANIFEST_FILE)} would be created`,
+    );
+    expect(result.stdout).not.toContain(" was created");
+    expect(existsSync(join(root, WORKSPACE_MANIFEST_FILE))).toBe(false);
+    expect(await readWorkspaceBack(root)).toBeNull();
+
+    const doc = await runInit(root, ["--dry-run", "--json"], { ttyStdin: true });
+    const decisions = parseSingleDoc(doc.stdout)["decisions"] as Record<string, unknown>;
+    // `--json` is itself non-interactive, so this is the SAME shape REQ-WS-003
+    // pins for a declined or unarmed offer — `workspaceCreated` reads false on
+    // every path that writes nothing, previewed yes included.
+    expect(decisions["workspaceCreated"]).toBe(false);
+    expect(await readWorkspaceBack(root)).toBeNull();
+  });
+
+  it("an applyInit that throws leaves no workspace.json behind", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+    // A corpus with no charter is a broken install, and core emission refuses
+    // outright: the real production failure this ordering exists for. The write
+    // is sequenced AFTER `applyInit` precisely so a failed init cannot leave a
+    // workspace with no initialised root behind.
+    __setContentRootForTests(getTemp().path("empty-corpus"));
+    await mkdir(getTemp().path("empty-corpus"), { recursive: true });
+
+    const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", "", "y", ""] });
+
+    expect(result.code).not.toBe(0);
+    expect(await readWorkspaceBack(root)).toBeNull();
+    expect(existsSync(join(root, WORKSPACE_MANIFEST_FILE))).toBe(false);
+  });
+
+  it("clearing every box creates nothing and says so — an answer, not a refusal", async () => {
+    // The empty selection is only reachable on the raw menu: the typed path
+    // reads a blank answer as "keep the defaults", which is every candidate.
+    const root = await makeRepoWithCandidates(["api", "web"]);
+    const { run, input, transcript } = startInitOnMenuTty(root);
+
+    await waitForOutput(transcript, "> [x] claude", "the tools menu");
+    input.write(KEY_ENTER);
+    await waitForOutput(transcript, "Continue?", "the no-repository confirmation");
+    input.write("\n");
+    await waitForOutput(transcript, "Create a workspace.json", "the workspace offer");
+    input.write("y\n");
+    await waitForOutput(transcript, "> [x] api", "the member menu");
+    input.write(KEY_SPACE);
+    await waitForOutput(transcript, "> [ ] api", "the cleared api box");
+    input.write(KEY_DOWN);
+    input.write(KEY_SPACE);
+    await waitForOutput(transcript, "> [ ] web", "the cleared web box");
+    input.write(KEY_ENTER);
+
+    expect(await run).toBe(0);
+    expect(transcript()).toContain("workspace: no repositories selected");
+    expect(await readWorkspaceBack(root)).toBeNull();
+  });
+});
+
+describe("init — a non-interactive run never creates a workspace and always discloses", () => {
+  it("-y discloses the count, the paths and the verb, and writes nothing", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+
+    const result = await runInit(root, ["-y"], { ttyStdin: true });
+
+    expect(result.code).toBe(0);
+    expect(countQuestions(result.stdout)).toBe(0);
+    expect(result.stdout).toContain(
+      "workspace: 3 repositories found under this directory (api, docs, web).",
+    );
+    expect(result.stdout).toContain("stamity workspace init");
+    expect(await readWorkspaceBack(root)).toBeNull();
+  });
+
+  it("piped stdin discloses and asks nothing at all", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+
+    // No TTY on stdin: the same non-interactive gate `-y` and `--json` reach.
+    const result = await runInit(root, []);
+
+    expect(result.code).toBe(0);
+    expect(countQuestions(result.stdout)).toBe(0);
+    expect(countConfirmations(result.stdout)).toBe(0);
+    expect(result.stdout).toContain("workspace: 3 repositories found under this directory");
+    expect(await readWorkspaceBack(root)).toBeNull();
+  });
+
+  it("--json carries the candidate paths and workspaceCreated: false, and writes nothing", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+
+    const result = await runInit(root, ["--json"], { ttyStdin: true });
+
+    expect(result.code).toBe(0);
+    const decisions = parseSingleDoc(result.stdout)["decisions"] as Record<string, unknown>;
+    expect(decisions["workspaceCandidates"]).toEqual(["api", "docs", "web"]);
+    expect(decisions["workspaceCreated"]).toBe(false);
+    expect(await readWorkspaceBack(root)).toBeNull();
+  });
+
+  it("--dry-run reports the disclosure and creates nothing", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+
+    const result = await runInit(root, ["-y", "--dry-run"], { ttyStdin: true });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Dry run");
+    expect(result.stdout).toContain("workspace: 3 repositories found under this directory");
+    expect(existsSync(join(root, WORKSPACE_MANIFEST_FILE))).toBe(false);
+  });
+
+  it("the paths are capped, and the cap says what it left out", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "infra", "tools", "web"]);
+
+    const result = await runInit(root, ["-y"], { ttyStdin: true });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(
+      "workspace: 5 repositories found under this directory (api, docs, infra, … and 2 more).",
+    );
+  });
+});
+
+describe("init — the offer never widens the ordinary prompt ceiling", () => {
+  it("an armed-and-declined run adds ONE confirmation and no typed question", async () => {
+    const bare = await makeRepo("bare");
+    const disarmed = await runInit(bare, [], { ttyStdin: true, stdinLines: ["", ""] });
+
+    const armed = await makeRepoWithCandidates(["api", "docs", "web"]);
+    const result = await runInit(armed, [], { ttyStdin: true, stdinLines: ["", "", "n"] });
+
+    expect(disarmed.code).toBe(0);
+    expect(result.code).toBe(0);
+    // The typed-question count is untouched: the offer is a confirm, and the
+    // member selection only exists once somebody answered it yes.
+    expect(countQuestions(result.stdout)).toBe(countQuestions(disarmed.stdout));
+    expect(countQuestions(result.stdout)).toBeLessThanOrEqual(2);
+    expect(countConfirmations(result.stdout)).toBe(countConfirmations(disarmed.stdout) + 1);
+  });
+
+  it("a yes adds exactly one more typed question: the member selection", async () => {
+    const bare = await makeRepo("bare");
+    const disarmed = await runInit(bare, [], { ttyStdin: true, stdinLines: ["", ""] });
+
+    const armed = await makeRepoWithCandidates(["api", "docs", "web"]);
+    const result = await runInit(armed, [], { ttyStdin: true, stdinLines: ["", "", "y", "1,3"] });
+
+    expect(result.code).toBe(0);
+    expect(countQuestions(result.stdout)).toBe(countQuestions(disarmed.stdout) + 1);
+  });
+});
+
+describe("init — every unarmed run is byte-identical", () => {
+  it("the JSON decisions key set is unchanged when the offer does not arm", async () => {
+    const bare = await makeRepo("bare");
+    const bareDoc = await runInit(bare, ["--json"], { ttyStdin: true });
+
+    // One sibling repository: the probe ran and found something, and the
+    // document still gains nothing — the diff fires on the armed precondition
+    // or it does not exist.
+    const oneRepo = await makeRepoWithCandidates(["api"]);
+    const oneDoc = await runInit(oneRepo, ["--json"], { ttyStdin: true });
+
+    const bareKeys = Object.keys(parseSingleDoc(bareDoc.stdout)["decisions"] as object);
+    const oneKeys = Object.keys(parseSingleDoc(oneDoc.stdout)["decisions"] as object);
+
+    expect(oneKeys).toEqual(bareKeys);
+    expect(bareKeys).not.toContain("workspaceCandidates");
+    expect(bareKeys).not.toContain("workspaceCreated");
   });
 });

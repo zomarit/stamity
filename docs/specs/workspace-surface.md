@@ -128,7 +128,7 @@ disclosure block that prints nothing when its input is empty
 `docs/getting-started.md:103-105` heads a section "The seven verbs" and lists
 them, then calls `learn` "an eighth" at `docs/getting-started.md:113`. The
 containment pin is a hand-maintained literal array, NOT derived from `COMMANDS`
-(`test/docsPages.test.ts:960`) — so forgetting the array is the regression this
+(`test/docsPages.test.ts:997-1006`) — so forgetting the array is the regression this
 lane has to name out loud. `src/cli.ts:26` says "the eight CommandModules" and
 `src/cli.ts:41-42` spells the advertised surface by name. All four move together.
 
@@ -175,7 +175,19 @@ spinner already running, in two stages:
 
 The result rides `InitDecisions` as a source-tagged field beside the others
 (`src/cli/commands/init/plan.ts:43-82`): the candidate list, and nothing derived
-from it.
+from it. It is carried as `DetectedRepo[]` — path, name, `hasGit`, `hasManifest`
+(`src/workspace/detect.ts:65-74`, `src/cli/commands/init/plan.ts:88-97`) — and not as a path
+list, because the guided selection REQ-WS-006 runs labels each row with the markers that
+qualified it and reads `hasManifest` to decide which member is worth a manifest read. The
+narrowing to paths happens at the JSON boundary alone
+(`src/cli/commands/init.ts:1131-1136`).
+
+Arming is suppressed on an already-initialised repository, for the reason every other init
+prompt is suppressed there: the apply refuses, so the answer would be discarded. The condition is
+`!alreadyInitialised && workspaceOfferArmed(settled)` over `alreadyInitialised = !force && (await
+readManifest(rootDir)) !== null` (`src/cli/commands/init.ts:895,976`,
+`src/cli/commands/init/plan.ts:132-137`). `--force` is what makes that apply proceed, so it
+re-arms the offer — the question on a terminal and the disclosure off one alike.
 
 **Rationale, including the cost.** Stage 1 is a single round of at most eleven
 `stat` calls over a path chain computed arithmetically
@@ -223,6 +235,19 @@ init` runs (REQ-WS-006), asked before `applyInit` with every other prompt; the
 resulting `workspace.json` is written AFTER `applyInit` returns successfully. A
 `no` writes nothing and prints nothing further.
 
+Two endings sit under the `yes`, and both are answers rather than failures:
+
+- **Keep-none.** An operator who opens the selection and clears every box has said "not these",
+  so nothing is written and one line says so — the same reading `workspace init` gives the empty
+  set (REQ-WS-006). The three write-nothing states (no offer, a declined one, a non-interactive
+  run) are carried as `null` and this fourth one as a non-null empty array, so the note can tell
+  them apart (`src/cli/commands/init.ts:972-991,1065-1071`).
+- **`--dry-run` on an answered offer.** The manifest is composed through
+  `createWorkspaceManifest` and reported in the future tense, and `writeWorkspaceManifest` is not
+  called (`src/cli/commands/init.ts:491-507,536-547`). The `--json` document's
+  `workspaceCreated` is therefore false on a previewed yes as well as on a declined offer
+  (`src/cli/commands/init.ts:1134`).
+
 This is a conditional prompt in the `askProceedWithoutGit` shape
 (`src/cli/commands/init.ts:242-264`): gated on a detected precondition, outside
 the two-question ordinary-path ceiling, and asked last. Both conditional
@@ -256,8 +281,19 @@ prints one disclosure line, on every one of those runs, in the panel and in the
 > policy over repositories you did not name is not an unattended default. Create
 > one with \`stamity workspace init\`.`
 
+The cap is spelled: the first three candidate paths, and when more were found, `, … and N more`
+after them (`MAX_DISCLOSED_CANDIDATES`, `src/cli/commands/init.ts:370-375,509-514`). Three keeps
+the line one glance wide while the tail stays stated rather than dropped.
+
+The vehicle is init's own notes list, not a second printing surface. The line is pushed LAST —
+after the no-git and migrate disclosures and one per imported path — and the list is then either
+rendered inside the `--dry-run` report or printed line by line above the panel
+(`src/cli/commands/init.ts:1037-1076`). An armed offer leaves exactly one note whatever the
+answer was, except the interactive `no`, which was asked and declined and so says nothing
+further.
+
 The JSON document gains the candidate paths and `workspaceCreated: false` under
-`decisions` (`src/cli/commands/init.ts:809-826`).
+`decisions` (`src/cli/commands/init.ts:1131-1136`).
 
 **Rationale.** This is the migrate gate's split, applied to a different decision
 and for the same stated reason: the unattended default is the one that changes
@@ -306,7 +342,12 @@ workspace sync         run the cascade over every member
 manifests and regenerates member files — so `--dry-run` registers
 (`src/cli/kit/program.ts:54-56`). Dispatch is positional over `args[0]` with a
 `USAGE` `CliFailure` on anything else, naming the three
-(`src/cli/commands/config.ts:1086-1104`). Every argument carries a description,
+(`src/cli/commands/config.ts:1086-1104`, `src/cli/commands/workspace.ts:1206-1229`). Positional
+rather than a commander subcommand means an unknown verb REACHES the command, so it leaves as a
+thrown failure and exits 1: every thrown command failure collapses to 1, and 2 is reserved for
+the parse errors commander rejects before any action runs
+(`src/cli/kit/program.ts:28-44`). The classification travels as `error.code: "USAGE"`, which is
+REQ-WS-016's contract rather than an exception to it. Every argument carries a description,
 because the reference generator throws without one
 (`src/cli/docs/cliReference.ts:418-421`).
 
@@ -342,14 +383,26 @@ name.
 3. `defaults.tools` is DERIVED, not asked: the union of the selected members'
    own `tools` (`src/types/manifest.ts:200-201`), normalised to `TOOLS` order,
    falling back to `["claude"]` — the same `DEFAULT_TOOL` init falls back to
-   (`src/cli/commands/init.ts:109`) — when no selected member carries a
+   (`src/cli/commands/init.ts:148`) — when no selected member carries a
    manifest. A `--tools <csv>` flag overrides it, spelled and validated exactly
-   as init's is (`src/cli/commands/init.ts:594`, `src/cli/commands/init/plan.ts:177-198`).
+   as init's is (`src/cli/commands/init.ts:847`, `src/cli/commands/init/plan.ts:177-198`).
 4. The manifest is built by `createWorkspaceManifest(defaults, repos)`
    (`src/workspace/manifest.ts:460-469`) and written by `writeWorkspaceManifest`
    (`src/workspace/manifest.ts:440-453`).
 5. The run prints the written path, the member count, the resolved tool list,
    and the next step `stamity workspace sync`.
+
+A member whose setup manifest EXISTS and does not read cleanly contributes nothing to that union
+rather than failing the creation, and a member with no manifest at all is treated no differently:
+only a member the scan already saw a manifest on is read, so an absent one costs no read
+(`src/cli/commands/workspace.ts:646-653,662-675`). The rule is stated once and binds both
+surfaces — the verb, and init's offer, which rebuilds this glue rather than importing it for the
+layering reason its own header records (`src/cli/commands/init.ts:346-368,447-453,468-480`) — so
+the two paths cannot diverge on what a defective member means. Reading one member as toolless
+costs a line in a file the operator can edit the moment it is written, and `--tools` overrides it
+outright; refusing would mean no workspace can be created until a repository it does not yet
+manage is repaired. `stamity validate` is the surface that reports that member
+(`src/cli/commands/validate.ts:246-248,785-801`).
 
 `groups`, `lockedContent`, `defaults.selection`, `defaults.maturityTier`,
 `defaults.mcp` and per-member `overrides` are not asked and not written. They are
@@ -380,12 +433,24 @@ REQ-WS-013's reason — it is state nothing reads.
 |---|---|
 | `workspace.json` already at the cwd | `VALIDATION_ERROR`, naming the path; `--force` overwrites |
 | the cwd is a member of an outer workspace | `VALIDATION_ERROR`, naming the outer root and its manifest; `--force` proceeds |
-| zero candidates found | `VALIDATION_ERROR`, naming the scan depth and the two markers a candidate carries |
+| zero candidates found | `VALIDATION_ERROR`, naming the scan depth and the two markers a candidate carries; `--force` does NOT lift it |
 | exactly one candidate | proceeds — one member is a workspace with room to grow |
 | non-interactive (`-y`, `--json`, piped) | proceeds, taking every candidate, and prints the full member list it wrote |
 
-Both refusals are lifted by one `--force` flag, spelled as init's is
-(`src/cli/commands/init.ts:614`).
+The first two refusals — and only those two — are lifted by one `--force` flag, spelled as
+init's is (`src/cli/commands/init.ts:867`). `force` is read inside `assertCreatable` alone, and
+the zero-candidate check runs after it and throws unconditionally
+(`src/cli/commands/workspace.ts:508-510,529-546,737-742`): there is no recoverable fact to
+override, because guided creation over an empty list guides nothing.
+
+Commander registers a flag per COMMAND rather than per subcommand, so this one `--force` is
+visible on all three and its description names BOTH meanings it carries — `workspace init`'s
+overwrite-or-nest, and `workspace sync`'s in-member overwrite of colliding unmanaged files after
+a verified `.bak` (REQ-WS-011 step 5). One flag with one description that says which subcommand
+reads which half is what keeps `--help` and the generated reference page from advertising a
+meaning the run does not have; the string is copied verbatim into that page
+(`src/cli/commands/workspace.ts:1185-1204`, `docs/cli-reference.md:190`), so editing it is a docs
+change.
 
 **Rationale.** The first two conditions are the two ways an operator reaches this
 verb by accident, and both are recoverable facts rather than errors — the engine
@@ -414,7 +479,16 @@ the surface disagreeing with the machine.
 
 ### REQ-WS-008 — `workspace status` reports one row per declared member, in five states
 
-**Decision.** `status` reads the manifest through `readWorkspaceManifest`
+**Decision.** WHICH workspace `status` reports is decided by the NEAREST manifest at or above the
+cwd, not by the cwd being a root: the shared read resolves through `detectWorkspaceContext`,
+whose candidate chain is `dir` then its ancestors and whose first hit wins
+(`src/cli/commands/workspace.ts:146-155`, `src/workspace/detect.ts:166-184,191-201`). So `status`
+run inside `apps/web` reports the workspace that actually governs `apps/web` instead of refusing
+at a directory that is plainly inside one, and a nested workspace shadows the outer one for the
+directories below it — the same rule REQ-WS-007's nesting row is written against. Only a cwd with
+no manifest anywhere above it refuses, as `CONFIG_ERROR`.
+
+`status` then reads that root's manifest through `readWorkspaceManifest`
 (`src/workspace/manifest.ts:401-426`) and prints one row per `repos[]` entry, in
 declaration order:
 
@@ -433,6 +507,14 @@ same two conditions `requireRepoDirectory` fails a cascade row on
 (`src/workspace/sync.ts:357-404`); `unresolved` is `resolveRepoConfig`'s
 `VALIDATION_ERROR` for an undefined group name
 (`src/workspace/resolve.ts:172-197`), caught per row and printed with its message.
+
+The five states are not independent: resolution runs FIRST and its refusal WINS the row
+(`src/cli/commands/workspace.ts:227-263`). A member whose entry the resolver rejected is reported
+`unresolved` whatever its directory says — present, missing or escaped — because it has no tools,
+no matched groups and no locks to report, and printing a directory state with every other column
+blank would name a condition the row cannot explain. The disk classification is therefore reached
+only on an entry that resolved, and `unresolved` is the one state that carries `error` instead of
+`tools`.
 
 `status` exits 0 whenever it could read the manifest, whatever the rows say.
 
@@ -530,6 +612,15 @@ supplies does, per member, in order:
 
 Step 4 patches the manifest read in step 1. It never composes a fresh one.
 
+Step 3's "write nothing" is a claim about THIS layer's write alone. Step 5's `applySync` persists
+the member manifest unconditionally at its own commit point, stamping `updatedAt` from the clock
+it was handed (`src/cli/commands/sync/engine.ts:861-867`, `src/manifest/manifest.ts:833-836`), so
+no run of the cascade leaves a member manifest untouched on a wall clock. The whole run — the
+bridge's write and the apply alike — is driven by one injected clock read once
+(`src/cli/commands/workspace.ts:988-1006,1132`), which is what makes the no-op testable: under a
+fixed clock, "the workspace had nothing new to say to this member" is byte-identity across a
+double run.
+
 **Rationale.** Persistent beats ambient, and the argument is concrete rather than
 aesthetic: with the values written down, a member is correct when somebody runs
 plain `stamity sync` inside it — which is the single most likely thing to happen
@@ -588,7 +679,10 @@ lock refused — and are written nowhere.
 
 The report and the shipped documentation say so in one sentence: selection deltas
 and locked content are resolved and reported, and do not yet change an emitted
-file.
+file. The report's half is the conditional notice under the tally, which prints only where the
+manifest declares a lock, a baseline selection or a group delta, or where a row reported a lock
+applied (`src/cli/commands/workspace.ts:1047-1069,1098-1099`). The documentation's half is
+`docs/workspaces.md`, under "What does not propagate yet".
 
 **Rationale.** `planSync` overwrites the manifest's selection with the full
 corpus on every run (`src/cli/commands/sync/engine.ts:476`, stated at
@@ -687,8 +781,32 @@ drift row. In the same change that lands the verb:
 - `src/cli.ts:41-42` names `workspace` in the advertised surface.
 - `docs/getting-started.md:103-105` becomes "The eight verbs" and lists
   `workspace`; `docs/getting-started.md:113` calls `learn` "a ninth".
-- The hand-maintained containment array at `test/docsPages.test.ts:960` gains
+- The hand-maintained containment array at `test/docsPages.test.ts:997-1006` gains
   `"workspace"`.
+- `test/cli/surface.e2e.test.ts`'s `ADVERTISED` array (`test/cli/surface.e2e.test.ts:31-40`)
+  gains `"workspace"` between `config` and `clean`, and the two hand-written COUNT literals in
+  that file move with it: the in-process enumeration asserting nine registered commands
+  (`test/cli/surface.e2e.test.ts:51,53`) and the child-process `--help` case asserting eight
+  advertised ones (`test/cli/surface.e2e.test.ts:81`). This is the fourth pin, and it is the one
+  that fails loudly — exact list equality in help order, plus `learn` last and hidden — so it is
+  named here beside the three that fail quietly.
+- `README.md`'s OWN verb surface moves too, and it is a THIRD hand-maintained copy the
+  getting-started pair does not cover: the bullet list at `README.md:50` (`init` · `sync` ·
+  `check` · `validate` · `add` · `config` · `workspace` · `clean`), the enumeration sentence
+  naming what each verb does (`README.md:50-56`, `workspace` puts one policy over many
+  repositories), and the re-open trigger at `README.md:2-4`, which names "the eight-verb command
+  surface" as one of the three facts that reopen the page. All three land in the same change as
+  the CLI change itself, for the reason `test/docsPages.test.ts` states at the SECOND array
+  below: nothing fails when a verb lands in `src/cli.ts` and not here, in the direction that
+  matters, so the citation is the mitigation.
+- The SECOND hand-maintained verb array — README's own, distinct from the getting-started
+  containment array above — sits at `test/docsPages.test.ts:551-566`, in the case named `states
+  the command surface — eight verbs plus the plumbing verb`. It gains `"workspace"` alongside the
+  getting-started array, in the same change, and the case's OWN NAME carries a second, cheaper
+  pin beside the array: a reviewer reading the test list sees "eight verbs" fail to match a
+  seven-item array by eye, before ever reading what the array contains. `test/docsPages.test.ts`
+  gains a case asserting `README.md` names `workspace` alongside the array — the acceptance
+  criterion mirroring REQ-WS-017's existing getting-started one, stated below.
 - `docs/cli-reference.md` is regenerated (`src/cli/docs/cliReference.ts:466-470`).
 
 **Rationale for the `check` half.** `check`'s subject is THIS repository's
@@ -699,7 +817,7 @@ workspace probe would answer are answered already: manifest field defects by
 `validate`'s workspace section (`src/cli/commands/validate.ts:184-186,478-493`),
 and member truth by `status`. A third answer is a third opinion.
 
-**Rationale for the rest.** The array at `test/docsPages.test.ts:960` is a
+**Rationale for the rest.** The array at `test/docsPages.test.ts:997-1006` is a
 literal list, not a derivation from `COMMANDS`, so nothing fails when it goes
 stale in the direction that matters — a verb missing from the prose. Naming it
 here is the mitigation, and the regenerated reference page has its own byte gate
@@ -712,8 +830,12 @@ what that suite asserts about every verb, not just this one.
 
 ## Acceptance criteria
 
-One set per requirement. Forty-three criteria; each is machine-checkable unless
-tagged otherwise.
+One set per requirement. Seventy-three criteria; each is machine-checkable unless
+tagged otherwise. (The count read "forty-three" while the list held sixty-two, then "seventy-two"
+while a later round's rider grew the list to seventy-three: a hand-kept number over a list several
+rounds have appended to. Restated here against the current list — `grep -c "^- GIVEN"` under this
+heading is how it was derived, and is the check worth running the next time this section grows
+rather than counting by eye.)
 
 **REQ-WS-001**
 
@@ -726,6 +848,10 @@ tagged otherwise.
   `stamity init` runs THEN the offer is not armed.
 - GIVEN a directory holding exactly one repository WHEN `stamity init` runs THEN
   the offer is not armed.
+- GIVEN a directory holding three sibling repositories AND its own
+  `.stamity/manifest.json` WHEN `stamity init` runs THEN no question is asked and no disclosure
+  line is printed; WHEN `stamity init --force` runs in that same directory THEN the offer fires
+  again.
 
 **REQ-WS-002**
 
@@ -739,6 +865,12 @@ tagged otherwise.
 - GIVEN an armed offer, an interactive `y`, and an `applyInit` that throws WHEN
   the run ends THEN no `workspace.json` was written.
 - GIVEN an armed offer WHEN the confirm is rendered THEN its default is `[y/N]`.
+- GIVEN an armed offer and an interactive `y` WHEN every box in the member selection is cleared
+  THEN no `workspace.json` exists afterwards, the exit status is 0, and one note says nothing was
+  created.
+- GIVEN an armed offer, an interactive `y` and a non-empty selection WHEN `stamity init
+  --dry-run` runs THEN the note names the manifest in the future tense, no `workspace.json`
+  exists afterwards, and a `--json` run of the same shape carries `workspaceCreated: false`.
 
 **REQ-WS-003**
 
@@ -750,6 +882,9 @@ tagged otherwise.
   `workspace.json` exists.
 - GIVEN an armed offer WHEN `stamity init` runs with piped stdin THEN the
   disclosure line is printed and no question is asked.
+- GIVEN five detected candidates and a non-interactive run WHEN the disclosure line is printed
+  THEN it names the first three candidate paths followed by `… and 2 more`, and it is the LAST
+  note the run emits.
 
 **REQ-WS-004**
 
@@ -764,8 +899,10 @@ tagged otherwise.
 
 - GIVEN the built CLI WHEN `stamity --help` runs THEN `workspace` appears between
   `config` and `clean`.
-- GIVEN `stamity workspace frobnicate` WHEN it runs THEN it exits 2 with a
-  `USAGE` failure naming `status`, `init` and `sync`.
+- GIVEN `stamity workspace frobnicate` WHEN it runs THEN it exits 1 with a
+  `USAGE` failure naming `status`, `init` and `sync`, and under `--json` the single document
+  carries `error.code: "USAGE"`. Not 2: the subcommand is positional, so the run reaches the
+  command and its throw takes the failure lane, which is 1 by construction.
 - GIVEN `stamity workspace` with no subcommand, on a TTY and on a pipe WHEN it
   runs THEN both produce the `status` output, byte for byte.
 - GIVEN the command module WHEN `renderCliReference()` runs THEN it does not
@@ -786,6 +923,12 @@ tagged otherwise.
 - GIVEN a completed `workspace init` WHEN the written file is read back by
   `readWorkspaceManifest` THEN it parses with zero validation errors and carries
   exactly the keys `version`, `defaults` and `repos`.
+- GIVEN two detected candidates, one whose `.stamity/manifest.json` does not read cleanly and one
+  carrying `tools: ["codex"]` WHEN `workspace init` completes THEN it exits 0, `workspace.json`
+  registers both members, and `defaults.tools` is `["codex"]`.
+- GIVEN that same pair WHEN `stamity init`'s answered offer creates the workspace THEN
+  `defaults.tools` is `["codex"]` there too — the two surfaces derive the same list from the same
+  members.
 
 **REQ-WS-007**
 
@@ -797,6 +940,8 @@ tagged otherwise.
   exits 1 naming the outer root and its manifest path.
 - GIVEN a directory holding no repositories WHEN `workspace init` runs THEN it
   exits 1 with a message naming the scan depth and both candidate markers.
+- GIVEN that same directory WHEN `workspace init --force` runs THEN it exits 1 with that same
+  refusal — the flag lifts the two recoverable conditions and not this one.
 - GIVEN two detected candidates WHEN `workspace init -y` runs THEN
   `workspace.json` registers both and stdout names both paths.
 
@@ -817,6 +962,13 @@ tagged otherwise.
 - GIVEN a manifest whose `repos[]` registers `api` and `./api` WHEN
   `workspace status` runs THEN it exits 1 at the READ, naming both spellings —
   no row is printed.
+- GIVEN a workspace root holding `workspace.json` and a cwd two directories inside one of its
+  members WHEN `workspace status` runs THEN it reports that root and its members and exits 0,
+  rather than refusing; and GIVEN a nested `workspace.json` between the two, the nested one is
+  reported instead.
+- GIVEN a member that names an undefined group AND whose directory does not exist WHEN
+  `workspace status` runs THEN its row reads `unresolved`, not `absent`, and carries the
+  resolver's `error` in place of `tools`.
 
 **REQ-WS-009**
 
@@ -846,8 +998,12 @@ tagged otherwise.
 - GIVEN that member afterwards WHEN `stamity sync` is run inside it directly THEN
   the codex emission survives and no path is reported as reclaimed.
 - GIVEN a member whose manifest already matches the resolved values WHEN
-  `workspace sync` runs THEN the member manifest's bytes are unchanged, its
-  `updatedAt` did not move, and the row is `synced`.
+  `workspace sync` runs twice under a fixed clock THEN the member manifest's bytes after the
+  second run are identical to those after the first, its row is `synced`, and its `patched` list
+  is empty — the bridge wrote nothing on either run. The pin is the bridge's write, not the
+  file's timestamp: `applySync` rewrites the member manifest on every run and re-stamps
+  `updatedAt` from the clock it was passed, so an unmoved `updatedAt` is observable only where
+  the clock does not move either.
 - GIVEN a member manifest carrying a populated `ledger` and an `importChoice`
   WHEN `workspace sync` rewrites it THEN both survive byte-identically.
 - GIVEN a workspace declaring no `maturityTier` and a member carrying `scaleup`
@@ -877,9 +1033,9 @@ tagged otherwise.
 - GIVEN a member whose `overrides.removeItems` names a locked id WHEN
   `workspace sync` runs THEN that id appears in the member's row as
   `lockedApplied` and the emitted files are unaffected.
-- GIVEN the shipped documentation for `workspace sync` WHEN it is read THEN it
-  states that selection deltas and locked content are resolved and reported and
-  do not yet change an emitted file. *(judgment: reviewer — prose accuracy is
+- GIVEN `docs/workspaces.md` — the shipped page for this surface — WHEN its `workspace sync`
+  section is read THEN it states that selection deltas and locked content are resolved and
+  reported and do not yet change an emitted file. *(judgment: reviewer — prose accuracy is
   not machine-checkable.)*
 
 **REQ-WS-014**
@@ -921,8 +1077,15 @@ tagged otherwise.
   pre-change run.
 - GIVEN the change WHEN the docs-pages suite runs THEN the getting-started
   containment array includes `workspace` and the page contains `` `workspace` ``.
+- GIVEN the change WHEN the docs-pages suite runs THEN README's OWN verb array — the second
+  hand-maintained copy, distinct from the getting-started one above — includes `workspace`, and
+  `README.md` names it both in the bullet list and in the enumeration sentence. Mirrors the
+  getting-started criterion above for the surface a repository's own README carries.
 - GIVEN the change WHEN the CLI-reference drift gate runs THEN the committed
   `docs/cli-reference.md` matches the render and carries a `workspace` section.
+- GIVEN the change WHEN the CLI surface suite runs THEN its `ADVERTISED` array lists `workspace`
+  between `config` and `clean`, the in-process enumeration asserts nine registered commands in
+  help order with `learn` last and hidden, and the `--help` case asserts eight advertised ones.
 - GIVEN `src/cli.ts` after the change WHEN it is read THEN neither count comment
   says "eight". *(judgment: reviewer — the count is prose; the reference gate
   covers the machine-checkable half.)*
@@ -978,6 +1141,9 @@ The suites that extend, and what each takes:
   there (REQ-WS-017).
 - `test/docsPages.test.ts` — the containment array at line 960 gains
   `"workspace"` in the same change as the prose (REQ-WS-017).
+- `test/cli/surface.e2e.test.ts` — the `ADVERTISED` array and the two count literals move
+  together, and the existing assertions are unchanged in SHAPE: exact list equality, help order,
+  `learn` last and hidden (REQ-WS-017).
 - `test/cli/commands/check.test.ts` — unchanged, and that is the assertion:
   the existing probe-list case is what pins REQ-WS-017's `check` half.
 
@@ -1001,8 +1167,10 @@ and the surrounding symbol is the durable address.
 | `source` | `src/cli/kit/prompts.ts:63-73,198-206,305-314` | the gate, `confirm`, `selectMany` |
 | `source` | `src/cli/commands/validate.ts:184-186,473-494` | the workspace section that already exists, and why `check` gains none |
 | `source` | `src/types/errors.ts:1-47` | the retired sysexits map and the `error.code` channel |
+| `source` | `src/cli/commands/workspace.ts:146-263,508-546,969-1009,1185-1229` | the landed verb: the shared read, the refusal matrix, the bridge, the flag and dispatch surface |
+| `test` | `test/cli/surface.e2e.test.ts:31-40,51,81` | the advertised-surface array and the two count literals REQ-WS-017 moves |
 | `test` | `test/workspace/sync.test.ts:24,54` | the engine-suite harness the bridge tests extend |
-| `test` | `test/docsPages.test.ts:955-964` | the hand-maintained verb array REQ-WS-017 moves |
+| `test` | `test/docsPages.test.ts:997-1006` | the hand-maintained verb array REQ-WS-017 moves |
 | `test` | `test/cli/docs/cliReference.test.ts:81` | the byte gate that fails until the page regenerates |
 
 ## Risks
@@ -1049,6 +1217,13 @@ and the surrounding symbol is the durable address.
   explicit list — so it inherits no currency-header or re-open-trigger contract.
   If that bucket is ever widened to a glob over `docs/`, both specs need both
   before the widening lands.
+- `docs/workspaces.md` is written to the hand-page contract — byte-0 `title:` frontmatter equal
+  to its H1, a commit-form currency header, and a `Re-open when:` trigger naming
+  `test/docsPages.test.ts` — but nothing enforces any of that until the page joins `GUIDES`
+  there, gains its README map row and its sidebar entry. Those wirings are a sibling unit's, and
+  until they land the page is published-but-unlisted and its contract is unchecked. The gap is
+  one direction only: a page carrying the contract early costs nothing, while a page wired in
+  without it fails the bucket's own assertions.
 - Neither spec is indexed in `llms.txt`. That index is asserted to carry every
   GUIDE (`test/docsPages.test.ts:939-941`), and the specs are not guides, so no
   current check requires it. Adding a specs section remains a reasonable

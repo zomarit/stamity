@@ -431,6 +431,16 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/commands/init/panel.ts": { unit: "p2-13", wave: 15 },
   "src/cli/commands/sync.ts": { unit: "p2-14", wave: 15 },
   "src/cli/commands/check.ts": { unit: "p2-15", wave: 15 },
+  // The workspace verb sits beside `sync.ts` rather than with the wave-14 leaf
+  // commands: its cascade subcommand drives the wave-14 emission engine
+  // (`./sync/engine.ts`) per member, which is the same reason `sync.ts` is
+  // here. Placed at its final depth now so landing the cascade is not a
+  // re-plan of the wave map — which is how it landed (W-U3), one file and no
+  // new row: a `workspace/` child holding the cascade would have to sit at
+  // wave 15 to reach the emission engine, and this file importing a sibling at
+  // its own wave under another unit is the violation `checkWaveLayering`
+  // names. The module header states the same refusal at the call site.
+  "src/cli/commands/workspace.ts": { unit: "w-u1", wave: 15 },
   // wave 16 (P2 wave 3) — program assembly
   "src/cli.ts": { unit: "p2-16", wave: 16 },
 
@@ -684,10 +694,12 @@ const REGISTRY_ONLY_MODULES: ReadonlyMap<string, string> = new Map([
   ["src/resilience/failureClass.ts", "transient-vs-substantive classification; only a retry loop would read it"],
   ["src/resilience/retry.ts", "retry with backoff; no engine call site retries"],
   ["src/roster/triggers.ts", "specialist trigger table, consumed as prompt content rather than by engine code"],
-  ["src/shared/runId.ts", "reached only through src/guard/promptGuard.ts, itself registry-only"],
-  ["src/workspace/manifest.ts", "workspace.json reader/writer; the workspace lane has no command"],
-  ["src/workspace/resolve.ts", "workspace precedence resolution; same lane"],
-  ["src/workspace/sync.ts", "the workspace cascade; same lane"],
+  // Retired by the workspace cascade (W-U3): `stamity workspace sync` drives
+  // `src/workspace/sync.ts` through the registry, which runs `resolveRepoConfig`
+  // per member, reaches `normalizeRepoPathKey` in `src/workspace/manifest.ts`
+  // for its duplicate check, and stamps every journal line with
+  // `src/shared/runId.ts`. Four rows the lane's own command turned into real
+  // call sites, deleted in the direction this ratchet allows.
 ]);
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit 37bd456. -->
-<!-- Re-open when: the corpus counts, the seven-verb command surface, or a client capability
+<!-- Re-open when: the corpus counts, the eight-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives all three from the content
      catalog and the generated capability matrix and fails here first. -->
 
@@ -47,12 +47,13 @@ learnings, handoffs.
 
 ## Commands
 
-`init` · `sync` · `check` · `validate` · `add` · `config` · `clean` — seven verbs, plus the
-hidden `learn` plumbing verb agents call to record a learning through the engine's write
-gates. `init` sets a repo up, `sync` regenerates every managed file from the manifest,
-`check` diagnoses the environment and fails on drift between disk and what the engine would
-write now, `validate` checks the content this repo authored, `add` installs a pack once its
-trust gates pass, `config` reads and changes the setup, `clean` removes all of it.
+`init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `clean` — eight
+verbs, plus the hidden `learn` plumbing verb agents call to record a learning through the
+engine's write gates. `init` sets a repo up, `sync` regenerates every managed file from the
+manifest, `check` diagnoses the environment and fails on drift between disk and what the
+engine would write now, `validate` checks the content this repo authored, `add` installs a
+pack once its trust gates pass, `config` reads and changes the setup, `workspace` puts one
+policy over many repositories, `clean` removes all of it.
 
 ## Working on this repository
 
@@ -101,6 +102,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/getting-started.md`](docs/getting-started.md) | Prerequisites, what `init` asks and writes per client, and the guided first change. |
 | [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | The nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once. |
 | [`docs/customization.md`](docs/customization.md) | Where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries. |
+| [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — the manifest, the init offer, the status rows, and the cascade. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
 

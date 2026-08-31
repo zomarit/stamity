@@ -63,6 +63,13 @@ function decisionsFixture(overrides: Partial<InitDecisions> = {}): InitDecisions
       hasExistingAgents: false,
       existingTools: [],
     },
+    // FIXTURE RECONCILIATION (workspace init hook): `InitDecisions` gained the
+    // workspace probe's result. The panel reads neither field — the offer's
+    // disclosure rides the command's `notes`, like the git and migrate lines —
+    // so the fixture carries the no-workspace-here answer and no assertion in
+    // this suite moves.
+    workspaceCandidates: [],
+    workspaceSource: "standalone",
     ...overrides,
   };
 }

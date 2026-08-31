@@ -24,6 +24,7 @@ mistake.
 | `stamity validate` | yes | reads only | check the content, hooks, learnings and credentials this repo authored |
 | `stamity add` | yes | writes | install a content pack: run the gate chain, show every command it would wire, then write |
 | `stamity config` | yes | writes | inspect and change the setup: keys, detection refresh, MCP servers |
+| `stamity workspace` | yes | writes | one policy across several repositories: status, guided creation, and the cascade |
 | `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
 
@@ -44,7 +45,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 8 of the commands above, success and
+run that reaches a command — all 9 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -172,6 +173,21 @@ Writes to the repository, so `--dry-run` previews the change without making it.
 | `[value]` | new value, or the MCP server id |
 
 Adds no flags of its own beyond the shared matrix above.
+
+## `stamity workspace`
+
+one policy across several repositories: status, guided creation, and the cascade
+
+Writes to the repository, so `--dry-run` previews the change without making it.
+
+| Argument | What it is |
+|---|---|
+| `[subcommand]` | status \| init \| sync — omit for status |
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--tools <csv>` | defaults.tools for the created workspace, comma-separated (claude, cursor, copilot, codex) — workspace init only | — |
+| `--force` | workspace init: overwrite a workspace.json already at this directory, or create one nested inside an outer workspace. workspace sync: in every member, overwrite colliding unmanaged files after a verified .bak | — |
 
 ## `stamity clean`
 

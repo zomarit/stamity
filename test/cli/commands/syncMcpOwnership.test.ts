@@ -489,6 +489,11 @@ function decisionsFor(rootDir: string): InitDecisions {
     existingConfigPaths: [],
     detected: { languages: [], linters: [], testFrameworks: [], ciProviders: [] },
     repoInfo: emptyInfo(rootDir),
+    // FIXTURE RECONCILIATION (workspace init hook): `InitDecisions` gained the
+    // workspace probe's result, which `applyInit` does not read. The fixture
+    // carries the no-workspace-here answer; nothing this suite asserts moves.
+    workspaceCandidates: [],
+    workspaceSource: "standalone",
   };
 }
 

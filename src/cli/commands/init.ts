@@ -22,6 +22,13 @@ import {
   type MaturityTier,
   type Tool,
 } from "../../types/core.ts";
+import { STATE_DIR } from "../../types/markers.ts";
+import type { DetectedRepo } from "../../workspace/detect.ts";
+import {
+  createWorkspaceManifest,
+  writeWorkspaceManifest,
+} from "../../workspace/manifest.ts";
+import { WORKSPACE_MANIFEST_FILE } from "../../workspace/model.ts";
 import { readHistoryFacts, readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import { bannerBlock } from "../kit/banner.ts";
 import { CliFailure } from "../kit/output.ts";
@@ -30,13 +37,19 @@ import {
   closePrompts,
   confirm,
   promptGate,
+  sanitizeLabel,
   selectMany,
   selectOne,
   type PromptGate,
   type PromptIo,
 } from "../kit/prompts.ts";
 import { applyInit, type InitApplyReport } from "./init/apply.ts";
-import { buildInitDecisions, type InitDecisions, type InitOverrides } from "./init/plan.ts";
+import {
+  buildInitDecisions,
+  workspaceOfferArmed,
+  type InitDecisions,
+  type InitOverrides,
+} from "./init/plan.ts";
 import {
   emissionSummary,
   gitignoreLine,
@@ -52,10 +65,7 @@ import {
  *
  * At most TWO prompts on the ordinary path, both TTY-gated, both
  * flag-addressable, and `-y` (or `--json`, which implies it) skips both —
- * detection over asking everywhere else. A third, {@link askProceedWithoutGit},
- * fires ONLY where the git probe answers "no repository here", which is not the
- * ordinary path and is the one state where writing dozens of files leaves the
- * operator no revert path at all:
+ * detection over asking everywhere else:
  *
  *   1. Tools confirm — fires ONLY when nothing decided the target set: no
  *      `--tools` flag and zero tool traces in the repo (`toolsSource ===
@@ -69,6 +79,35 @@ import {
  *      When both exist the predecessor moment subsumes the import ask: one
  *      prompt only, and the import choice defaults to `supplement` silently
  *      but is still disclosed and recorded.
+ *
+ * TWO further prompts sit OUTSIDE that ceiling, and neither is on the ordinary
+ * path: each fires only where a detected precondition holds, each is asked
+ * after both questions above, and a run can meet both preconditions at once —
+ * a directory holding sibling repositories can also be one git does not answer
+ * for.
+ *
+ *   a. {@link askProceedWithoutGit} — fires ONLY where the git probe answers
+ *      "no repository here", the one state where writing dozens of files leaves
+ *      the operator no revert path at all. Defaults to YES: init creates files
+ *      rather than replacing any.
+ *   b. {@link askCreateWorkspace} — fires ONLY where this directory is
+ *      standalone (not a workspace root, not inside one) and holds two or more
+ *      repositories. Defaults to NO, and asked LAST, after the git gate has
+ *      settled whether this run happens at all. A yes runs the same guided
+ *      selection `stamity workspace init` runs, and the `workspace.json` it
+ *      composes is written AFTER `applyInit` returns — a failed init that left
+ *      one behind would leave a workspace with no initialised root and no
+ *      explanation.
+ *
+ * Default NO on (b) because creating `workspace.json` at the root of somebody's
+ * projects directory declares an intent about repositories the operator did not
+ * name. It is reversible — one file, deleted — but noisily so, since the next
+ * `workspace sync` would rewrite manifests in every member. Which is also why a
+ * NON-INTERACTIVE run never creates one: `-y` means "take the defaults for this
+ * repository's setup", and no reading of it reaches a sibling repository's
+ * configuration. Those runs print {@link workspaceOfferNote} instead, on every
+ * one of them, because staying silent is exactly the state where an operator
+ * never learns the surface exists.
  *
  * Non-interactive runs (piped stdin, `-y`, `--json`) take every default —
  * init is not destructive, so the npx-first bar demands the default flow
@@ -299,6 +338,220 @@ async function askImport(
     ],
     defaultValue: DEFAULT_IMPORT_MODE,
   });
+}
+
+// ── The conditional workspace offer ────────────────────────────
+
+/**
+ * The guided creation this offer runs is `stamity workspace init`'s, and it is
+ * REBUILT here over the shared engine primitives rather than imported from
+ * `./workspace.ts`.
+ *
+ * Not a preference — the architecture gate forbids the import. `test/
+ * architecture/boundaries.test.ts` keeps a plan map keyed by source path, and
+ * `checkWaveLayering` allows an edge only within one unit or strictly DOWN a
+ * wave (`toEntry.wave < fromEntry.wave`). This file and `./workspace.ts` both
+ * sit at wave 15 under different units, so `init.ts -> workspace.ts` is exactly
+ * the violation that gate names. Nor can the shared half move down: the engine
+ * layer may not import the CLI (boundary rule 4), so `selectMany` and the
+ * rendering cannot live under `src/workspace/`, and the one piece that could —
+ * the tool union — would need a NEW engine module, which is a plan-map row plus
+ * a composition-root registration in files this unit does not own.
+ *
+ * What is duplicated is therefore only the thin glue: the marker label, the
+ * union, and the fallback. Everything with a decision in it is shared already
+ * and reached directly — `detectSubRepos` (through `./init/plan.ts`'s probe),
+ * `createWorkspaceManifest` and `writeWorkspaceManifest` — so the two paths
+ * cannot mint different manifest SHAPES, and each suite pins its own path's
+ * tool derivation against the same stated rule. Collapsing the glue is a
+ * deliberate wave-map re-plan, which is a change of its own.
+ */
+
+/**
+ * Most candidate paths the disclosure line names before it collapses into a
+ * count. Three keeps the line one glance wide while the cap stays honest about
+ * what it left out — the same trade the panel's suggestion block makes.
+ */
+const MAX_DISCLOSED_CANDIDATES = 3;
+
+/**
+ * The workspace offer: one confirm, interactive only, defaulting to NO.
+ *
+ * A conditional prompt in {@link askProceedWithoutGit}'s shape — gated on a
+ * detected precondition, outside the two-question ordinary-path ceiling, and
+ * asked last. It is deliberately NOT a third variant of the existing-config
+ * moment: that moment is a decision about ONE repository's files, this is a
+ * decision about several repositories, and folding them would make one answer
+ * bind two unrelated things.
+ */
+async function askCreateWorkspace(
+  gate: PromptGate,
+  promptIo: PromptIo,
+  count: number,
+): Promise<boolean> {
+  return await confirm(gate, promptIo, {
+    question:
+      `${String(count)} repositories found under this directory. Create a workspace.json ` +
+      `so one policy reaches all of them?`,
+    defaultYes: false,
+  });
+}
+
+/**
+ * The markers that qualified a directory, for the selection row's label:
+ * `.git`, the state directory, or both. `detectSubRepos` never returns a row
+ * carrying neither, so the list is never empty.
+ */
+function workspaceMarkers(repo: DetectedRepo): string {
+  return [...(repo.hasGit ? [".git"] : []), ...(repo.hasManifest ? [STATE_DIR] : [])].join(", ");
+}
+
+/**
+ * One `selectMany` over the candidates in scan order, every one preselected.
+ *
+ * The empty set is a REAL answer: an operator who clears every box has said
+ * "not these", and reading it back as the defaults would write a manifest they
+ * just declined. The caller turns it into a nothing-created line rather than a
+ * refusal, because declining is not an error.
+ *
+ * Paths come off the filesystem rather than out of this process, so labels go
+ * through `sanitizeLabel` — a directory name may carry control bytes.
+ */
+async function askWorkspaceMembers(
+  gate: PromptGate,
+  promptIo: PromptIo,
+  candidates: readonly DetectedRepo[],
+): Promise<DetectedRepo[]> {
+  const picked = await selectMany<string>(gate, promptIo, {
+    question: `Which repositories join this workspace? (${String(candidates.length)} found)`,
+    choices: candidates.map((repo) => ({
+      value: repo.path,
+      label: `${sanitizeLabel(repo.path)} — ${workspaceMarkers(repo)}`,
+    })),
+    defaultValues: candidates.map((repo) => repo.path),
+  });
+  const chosen = new Set(picked);
+  return candidates.filter((repo) => chosen.has(repo.path));
+}
+
+/**
+ * One member's declared tools, or nothing.
+ *
+ * A member whose setup manifest exists and does not validate contributes
+ * NOTHING to the union rather than failing the offer: `defaults.tools` is a
+ * baseline in a file the operator can edit the moment it is written, while
+ * refusing would mean an init cannot finish until a repository it does not yet
+ * manage is repaired. `stamity validate` is the surface that reports a
+ * defective member manifest.
+ */
+async function workspaceMemberTools(memberDir: string): Promise<readonly Tool[]> {
+  try {
+    return (await readManifest(memberDir))?.tools ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The union of the selected members' own tool lists, in {@link TOOLS} order,
+ * falling back to {@link DEFAULT_TOOL} when no selected member declares one.
+ *
+ * UNION rather than intersection: `defaults` is the baseline every member
+ * inherits before its own overrides, so a union preserves what each member
+ * already had and lets a member narrow itself. An intersection would silently
+ * drop a client one member was already targeting, and the first cascade would
+ * then reclaim that client's files.
+ *
+ * Only a member the scan already saw a manifest on is read — `hasManifest` is
+ * the same probe that qualified it, so a member with no manifest costs no read.
+ */
+async function deriveWorkspaceTools(
+  rootDir: string,
+  selected: readonly DetectedRepo[],
+): Promise<Tool[]> {
+  const lists = await Promise.all(
+    selected.map(async (repo) =>
+      repo.hasManifest ? workspaceMemberTools(join(rootDir, repo.path)) : [],
+    ),
+  );
+  const declared = new Set<string>(lists.flat());
+  const tools = TOOLS.filter((tool) => declared.has(tool));
+  return tools.length === 0 ? [DEFAULT_TOOL] : tools;
+}
+
+/**
+ * Compose and persist the manifest for the selected members.
+ *
+ * Built by `createWorkspaceManifest` and written by `writeWorkspaceManifest`,
+ * never hand-serialized, so this path cannot mint a shape the writer refuses —
+ * and the writer's own validation is what keeps a bad composition off disk.
+ * `--dry-run` composes and reports without writing, like everything else in
+ * this command.
+ */
+async function createOfferedWorkspace(
+  rootDir: string,
+  selected: readonly DetectedRepo[],
+  dryRun: boolean,
+): Promise<{ path: string; members: string[]; tools: Tool[] }> {
+  const tools = await deriveWorkspaceTools(rootDir, selected);
+  const manifest = createWorkspaceManifest(
+    { tools },
+    selected.map((repo) => ({ path: repo.path })),
+  );
+  if (!dryRun) await writeWorkspaceManifest(rootDir, manifest);
+  return {
+    path: join(rootDir, WORKSPACE_MANIFEST_FILE),
+    members: manifest.repos.map((entry) => entry.path),
+    tools: [...manifest.defaults.tools],
+  };
+}
+
+/** Candidate paths for a one-line disclosure, capped and honest about the tail. */
+function candidateSummary(candidates: readonly DetectedRepo[]): string {
+  const shown = candidates.slice(0, MAX_DISCLOSED_CANDIDATES).map((repo) => repo.path);
+  const omitted = candidates.length - shown.length;
+  return omitted > 0 ? `${shown.join(", ")}, … and ${String(omitted)} more` : shown.join(", ");
+}
+
+/**
+ * The line every non-interactive run with an armed offer prints — piped, `-y`
+ * and `--json` alike.
+ *
+ * The migrate gate's split, applied to a different decision for the same stated
+ * reason: the unattended default is the one that changes nothing, and it says
+ * so out loud. It is also the question protocol's unattested-product-decision
+ * trigger — the change would move configuration in repositories the request
+ * never named — so the declared default executes and the run names it.
+ */
+function workspaceOfferNote(candidates: readonly DetectedRepo[]): string {
+  return (
+    `workspace: ${String(candidates.length)} repositories found under this directory ` +
+    `(${candidateSummary(candidates)}). No ${WORKSPACE_MANIFEST_FILE} was created — this run ` +
+    `is not interactive, and declaring a policy over repositories you did not name is not an ` +
+    `unattended default. Create one with \`stamity workspace init\`.`
+  );
+}
+
+/** What the answered offer did, on both surfaces. */
+function workspaceCreatedNote(
+  created: { path: string; members: string[]; tools: Tool[] },
+  dryRun: boolean,
+): string {
+  const tense = dryRun ? "would be created" : "was created";
+  return (
+    `workspace: ${created.path} ${tense}, registering ${String(created.members.length)} ` +
+    `member${created.members.length === 1 ? "" : "s"} (${created.members.join(", ")}) with ` +
+    `tools ${created.tools.join(", ")}. Run \`stamity workspace sync\` to apply this policy ` +
+    `to every member.`
+  );
+}
+
+/** The keep-none ending: an answer, not a refusal, so it says so and nothing is written. */
+function workspaceKeptNoneNote(): string {
+  return (
+    `workspace: no repositories selected — no ${WORKSPACE_MANIFEST_FILE} was created. ` +
+    `Run \`stamity workspace init\` to pick the repositories that join.`
+  );
 }
 
 // ── Effective view ─────────────────────────────────────────────
@@ -709,6 +962,34 @@ export const initCommand: CommandModule = {
       });
     }
 
+    // THE WORKSPACE OFFER — the second conditional prompt, and the LAST
+    // question of the run. Asked after the git gate on purpose: that gate
+    // decides whether this run happens at all, and an operator who is about to
+    // cancel should not first be asked to design a policy for it. Suppressed on
+    // an already-initialised repo for the reason every other prompt is: the
+    // apply below refuses, so the answer would be discarded.
+    //
+    // `null` covers three states that all write nothing — no offer, a declined
+    // one, and a non-interactive run — and the note the panel prints
+    // distinguishes them. A non-null empty array is the fourth: an operator who
+    // opened the selection and cleared every box.
+    const offerArmed = !alreadyInitialised && workspaceOfferArmed(settled);
+    let workspaceMembers: DetectedRepo[] | null = null;
+    if (offerArmed && gate.interactive) {
+      const wanted = await askCreateWorkspace(
+        gate,
+        ctx.promptIo,
+        settled.workspaceCandidates.length,
+      );
+      if (wanted) {
+        workspaceMembers = await askWorkspaceMembers(
+          gate,
+          ctx.promptIo,
+          settled.workspaceCandidates,
+        );
+      }
+    }
+
     // Every question is settled, so the prompt session has no further job — and
     // holding it open is not free. On a real terminal readline keeps stdin in
     // raw mode, where Ctrl-C is a byte the prompt kit consumes rather than a
@@ -735,6 +1016,15 @@ export const initCommand: CommandModule = {
     const carry: CarryReport | null =
       migrating !== null
         ? await carryPredecessorAssets(rootDir, migrating, { dryRun: ctx.dryRun, now })
+        : null;
+
+    // AFTER `applyInit`, and only after it returned: a failed init that left a
+    // workspace.json behind would leave a workspace with no initialised root
+    // and no explanation. Every throw above this line therefore leaves the
+    // sibling repositories exactly as they were found.
+    const workspaceCreation =
+      workspaceMembers !== null && workspaceMembers.length > 0
+        ? await createOfferedWorkspace(rootDir, workspaceMembers, ctx.dryRun)
         : null;
 
     const effective = effectiveView(settled, defaults);
@@ -767,6 +1057,17 @@ export const initCommand: CommandModule = {
           ctx.dryRun,
         ),
       );
+    }
+    // LAST, because it is the only note about repositories other than this one.
+    // An armed offer always leaves exactly one line, whatever the answer was —
+    // except the interactive `no`, which writes nothing and prints nothing
+    // further, because the operator was asked and declined.
+    if (workspaceCreation !== null) {
+      notes.push(workspaceCreatedNote(workspaceCreation, ctx.dryRun));
+    } else if (workspaceMembers !== null) {
+      notes.push(workspaceKeptNoneNote());
+    } else if (offerArmed && !gate.interactive) {
+      notes.push(workspaceOfferNote(settled.workspaceCandidates));
     }
 
     if (ctx.dryRun) {
@@ -819,6 +1120,20 @@ export const initCommand: CommandModule = {
           migrate,
           importChoice,
           existingConfigPaths: settled.existingConfigPaths,
+          // Present ONLY on a run whose offer armed. Every other init produces
+          // the key set it produced before this feature existed, which is the
+          // byte-identity property the whole hook is held to: the document
+          // either fires on the detected precondition or does not exist.
+          // `--json` makes a run non-interactive, so `workspaceCreated` is
+          // false on every document that carries it — stated rather than
+          // implied, because the field is what tells a machine reader that a
+          // workspace was found and deliberately not created.
+          ...(offerArmed
+            ? {
+                workspaceCandidates: settled.workspaceCandidates.map((repo) => repo.path),
+                workspaceCreated: workspaceCreation !== null && !ctx.dryRun,
+              }
+            : {}),
         },
         report,
         carry,

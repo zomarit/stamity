@@ -10,6 +10,7 @@ import { initCommand } from "./cli/commands/init.ts";
 import { learnCommand } from "./cli/commands/learn.ts";
 import { syncCommand } from "./cli/commands/sync.ts";
 import { validateCommand } from "./cli/commands/validate.ts";
+import { workspaceCommand } from "./cli/commands/workspace.ts";
 import { runCli, type CommandModule } from "./cli/kit/program.ts";
 import {
   checkForUpdateNotice,
@@ -22,7 +23,7 @@ import {
  *
  * Everything else is owned elsewhere: the exit-code contract, flag matrix and
  * JSON funnel live in `./cli/kit/program.ts`; each verb's behavior lives in its
- * own module under `./cli/commands/`. This file only (1) enumerates the eight
+ * own module under `./cli/commands/`. This file only (1) enumerates the nine
  * CommandModules in help order, (2) fires the update-notice probe early and
  * settles it non-blockingly after the run, and (3) records the exit code.
  *
@@ -38,7 +39,11 @@ import {
 
 /**
  * The advertised surface in help order — init, sync, check, validate, add,
- * config, clean — plus `learn`, the one hidden plumbing verb.
+ * config, workspace, clean — plus `learn`, the one hidden plumbing verb.
+ *
+ * `workspace` sits after `config` and before `clean`: it is a configuration
+ * verb, and `clean` stays last on the advertised surface because it is the one
+ * that removes what the others wrote.
  */
 export const COMMANDS: readonly CommandModule[] = [
   initCommand,
@@ -47,6 +52,7 @@ export const COMMANDS: readonly CommandModule[] = [
   validateCommand,
   addCommand,
   configCommand,
+  workspaceCommand,
   cleanCommand,
   learnCommand,
 ];

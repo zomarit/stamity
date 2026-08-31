@@ -20,8 +20,24 @@ import { useCliFixture } from "../support/cliHarness.ts";
 
 const packageJson = createRequire(import.meta.url)("../../package.json") as { version: string };
 
-/** The advertised surface, in the SoT help order. `learn` is hidden plumbing. */
-const ADVERTISED = ["init", "sync", "check", "validate", "add", "config", "clean"] as const;
+/**
+ * The advertised surface, in the SoT help order. `learn` is hidden plumbing.
+ *
+ * `workspace` joined between `config` and `clean` with the multi-repo verb: the
+ * assertions below are unchanged in shape — exact list equality, help order,
+ * `learn` last and hidden — and only the enumerated surface moved, because the
+ * surface itself grew a command rather than an assertion being loosened.
+ */
+const ADVERTISED = [
+  "init",
+  "sync",
+  "check",
+  "validate",
+  "add",
+  "config",
+  "workspace",
+  "clean",
+] as const;
 
 /** A minimal CommandModule under the given name, for the uniqueness guard. */
 const twin = (name: string): CommandModule => ({
@@ -32,9 +48,9 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 8 uniquely-named commands in help order, learn last and hidden", () => {
+  it("registers exactly 9 uniquely-named commands in help order, learn last and hidden", () => {
     expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, "learn"]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(8);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(9);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
       "learn",
     ]);
@@ -62,7 +78,7 @@ describe("COMMANDS enumeration (in-process)", () => {
 describe("advertised surface (child process)", () => {
   const getFixture = useCliFixture();
 
-  it("--help lists exactly the 7 advertised commands and not learn", async () => {
+  it("--help lists exactly the 8 advertised commands and not learn", async () => {
     const result = await getFixture().run(["--help"]);
 
     expect(result.code).toBe(0);
