@@ -20,13 +20,22 @@ different `description` on a shipped rule must copy the entire body into
 upstream edit to the original. The copy is the cost, and it is paid in silence:
 the shipped body keeps improving, the override does not, and nothing reports the
 divergence because a shadow is a legitimate state
-(`src/content/catalog.ts:242-251`).
+(`src/content/catalog.ts:243-263`).
 
 An overlay is the smaller instrument. It states the delta and nothing else, so
 the base artifact keeps flowing from the corpus or the pack that supplies it,
 and the patch survives an upstream rewrite of everything it did not name.
 
 ## Context
+
+*Recorded as the tree stood when this design was taken, and kept in that tense.
+The surface has since landed: the merge lives in the walk
+(`src/content/catalog.ts:642-1127`), the report lane's discovery pass in
+`src/content/userContent.ts:462-639`, and the `patched` outcome in
+`src/cli/commands/validate.ts:130-155`. Every decision below was reasoned from
+the state this section describes, and a decision whose premise has been deleted
+cannot be re-read — so the premise stays and the requirements below carry the
+alignment.*
 
 ### The promise, and the four places it is written down
 
@@ -52,6 +61,13 @@ description of a live surface. Nothing else in the tree — no naming convention
 no placement rule, no class scope, no merge semantics — exists, and no
 `.customize.*` file exists on disk.
 
+*The four addresses above are PRE-REWRITE ones; REQ-OVERLAY-015 rewrote every
+one of them in the change that landed the surface, so following a line number
+here reaches the replacement rather than the quoted text. The replacements are
+at `src/content/userContent.ts:72-95`, `src/content/catalog.ts:58-70`,
+`src/cli/engine/emission.ts:79-93` and `src/guard/promptGuard.ts:37-49`, and
+none of them describes the surface as read by nothing.*
+
 ### What layer 1 does today, precisely
 
 Three roots feed one index in precedence order USER > PACK > CORPUS
@@ -67,7 +83,7 @@ artifact claiming a lower layer's id takes it and the replaced items leave
 The item that resolve produces is the patchable model. `CatalogItem`
 (`src/content/catalog.ts:95-139`) carries a frontmatter map and a body;
 `description`, `tags`, `precedence` and `tools` are derived from that map by
-`buildItem` (`src/content/catalog.ts:805-849`) through closed-vocabulary checks
+`buildItem` (`src/content/catalog.ts:1424-1476`) through closed-vocabulary checks
 — `requireEnum` over `RULE_PRECEDENCES`, `requireStringArray` over `tags`,
 `extractToolsFrontmatter` over the closed `TOOLS` set
 (`src/content/frontmatter.ts:159-181`). `id` and `type` are identity.
@@ -81,12 +97,12 @@ The research handed over said the `.md`-only extension filter makes
 and the difference changes a requirement:
 
 - `.customize.yaml` **is** excluded by the extension filter
-  (`src/content/catalog.ts:717-719`, `src/content/userContent.ts:554-557`).
+  (`src/content/catalog.ts:1335-1339`, `src/content/userContent.ts:808-814`).
   It is dropped before any read, and it is not reported: `SkippedUserEntry`
   covers symlinks only (`src/content/userContent.ts:327-350`).
 - `.customize.md` is **not** excluded by that filter. It ends in `.md`, so it
   becomes a walk candidate, and it is dropped one step later by the
-  no-frontmatter skip (`src/content/catalog.ts:765`) — also silently. A
+  no-frontmatter skip (`src/content/catalog.ts:1385`) — also silently. A
   `.customize.md` that happens to carry a frontmatter block is worse than
   dropped: it indexes as a phantom artifact under the id `<slug>.customize`,
   because a dot passes `assertSafePath` (`src/content/catalog.ts:336-360`) and
@@ -101,7 +117,7 @@ is loud.
 
 `stamity validate` knows two outcomes for a contested identity: `replaces <x>`,
 and `takes the id of <x> — not emitted, the bundled body is still what ships`
-(`src/cli/commands/validate.ts:610-628`, over `ValidateShadow`,
+(`src/cli/commands/validate.ts:890-931`, over `ValidateShadow`,
 `src/cli/commands/validate.ts:74-101`). A patched item is neither. `LedgerEntry`
 (`src/types/manifest.ts:76-97`) has no field for it and, per REQ-OVERLAY-013,
 needs none.
@@ -111,7 +127,7 @@ needs none.
 Skill overlays index under this spec and emit with every other class.
 `OVERRIDE_EMITTING_CLASSES` is `agent`, `rule`, `command`, `skill` — a full
 enumeration of `ContentClass` rather than a subset
-(`src/cli/engine/emission.ts:100-121`). `skill` joined it when the projection
+(`src/cli/engine/emission.ts:112-133`). `skill` joined it when the projection
 widened: `ProjectSkillsOptions.contentRoot` takes the full `ContentRoots` spec
 (`src/emit/skillsProjection.ts:179`, feeding `buildContentIndex` at
 `src/emit/skillsProjection.ts:209`), so an override skill's whole directory —
@@ -144,7 +160,7 @@ Floors for this lane. They hold whatever the merge does.
    report line appears, no ledger row moves, no emitted byte differs.
 6. **Author bytes stay author-owned.** Overlay files live inside
    `.stamity/overrides/`, which no emission path targets
-   (`src/cli/engine/emission.ts:83-89`): never planned, never wrapped in a
+   (`src/cli/engine/emission.ts:95-101`): never planned, never wrapped in a
    managed block, never reclaimed.
 
 ## Requirements
@@ -166,7 +182,7 @@ alternative to, under `<rootDir>/.stamity/overrides/`:
 | `skill` | directory | `skills/<slug>/SKILL.customize.yaml` | `skills/<slug>/SKILL.customize.md` |
 
 `<slug>` is the filename slug the walk already derives — `slugOf`
-(`src/content/catalog.ts:909`), which strips the reserved `stamity-` and `st-`
+(`src/content/catalog.ts:1536`), which strips the reserved `stamity-` and `st-`
 filename prefixes. For commands this is the bare slug, not the `cmd-`-prefixed
 catalog id, exactly as a full override's filename is
 (`src/content/catalog.ts:819`). Either file may appear without the other.
@@ -174,7 +190,7 @@ Overlays never sit beside a corpus or a pack file.
 
 **Rationale.** The override tree is the one tree the engine writes into and
 never emits into, and that ownership split is already stated and already held
-(`src/cli/engine/emission.ts:83-89`, `src/content/userContent.ts:61-70`). An
+(`src/cli/engine/emission.ts:95-101`, `src/content/userContent.ts:61-70`). An
 overlay placed there inherits the whole contract with no new rule. Deriving the
 target id from the filename rather than from a key inside the file means the
 address is visible in a directory listing and cannot disagree with itself.
@@ -190,15 +206,28 @@ corpus walk and the pack walk read, which is framework territory.
 **Decision.** The override-tree walk gains an overlay discovery pass that lists
 `*.customize.yaml` and `*.customize.md` for file-layout classes, and
 `SKILL.customize.yaml` / `SKILL.customize.md` inside each skill directory. In
-the same change, the artifact candidate filters
-(`src/content/catalog.ts:717-719`, `src/content/userContent.ts:554-557`) are
-narrowed so that a name ending `.customize.md` is never a candidate artifact in
-any layer.
+the same change, the artifact candidate filters are narrowed so that a name
+ending `.customize.md` is never a candidate artifact in any layer.
+
+**Landed as two passes, in two modules, and both halves are in.** The walk's
+pass is `discoverOverlays` (`src/content/catalog.ts:935-1031`), and it is the
+one that merges. The override-tree module carries a second, report-only pass —
+`discoverUserOverlays` (`src/content/userContent.ts:513-519`) — because
+`stamity validate` has to name what each pair applies to before any merge
+exists to read; it merges nothing, and its header says so
+(`src/content/userContent.ts:81-84`). Both candidate filters are narrowed:
+`src/content/catalog.ts:1275-1284` and `src/content/userContent.ts:804-814`.
+The two suffix constants are spelled in both modules rather than imported
+across them, with the reason stated where the second copy lives
+(`src/content/userContent.ts:260-277`) and the parity asserted behaviourally
+rather than assumed: one override tree driven through both walks, both required
+to treat the same file as no artifact and the patch required to have really
+applied (`test/content/userContent.test.ts:486-499`).
 
 A skill directory that holds overlay files and no `SKILL.md` is an overlay
 carrier, not work in progress. A skill directory holding neither remains work in
 progress and is still passed over in silence
-(`src/content/userContent.ts:347-349`).
+(`src/content/userContent.ts:418-420`).
 
 **Rationale.** Without the narrowing, the body patch is simultaneously an
 overlay and a phantom artifact at id `<slug>.customize` — the defect evidenced
@@ -215,14 +244,27 @@ to implement than to rename.
 **Decision.** An overlay for `(class, slug)` applies to whichever item the
 layered walk RESOLVES for that `(class, id)` — the corpus artifact, or the pack
 artifact, whichever holds the key after the resolve loop
-(`src/content/catalog.ts:466-502`). Application runs after that loop and before
-`items` is assembled (`src/content/catalog.ts:505-511`).
+(`src/content/catalog.ts:526-560`). Application runs after that loop and before
+`items` is assembled (`src/content/catalog.ts:569`, into
+`src/content/catalog.ts:571-580`).
 
 **Rationale.** "The artifact currently in force" is the only target that stays
 correct when a pack is installed or removed, and it is unambiguous by
 construction: a pack that claims an id the corpus already holds is refused at
-the walk (`src/content/catalog.ts:479-489`), so the resolved base is never
+the walk (`src/content/catalog.ts:536-546`), so the resolved base is never
 contested between those two layers.
+
+**Landed, with the consequence every reporting lane inherits.** The merge runs
+on the resolved item, after the layer loop and before `items` is assembled
+(`src/content/catalog.ts:562-580`). That makes the pack roots part of the
+question rather than a detail of the caller: an index built without them would
+resolve a pack-supplied id to nothing and call a correct patch an orphan. So
+`stamity validate` resolves the installed packs before it walks
+(`installedPackRoots`, `src/cli/commands/validate.ts:607-619`, handed in at
+`src/cli/commands/validate.ts:413-418`), and it degrades to no pack roots
+rather than to a failed section when the pack state is unreadable — the sync
+path is where that refusal belongs. Any future lane that builds this index to
+report on an overlay carries the same roots, for the same reason.
 
 **Dropped.** Targeting the corpus item specifically. It reads simpler and is
 wrong the first time a pack legitimately supplies the id: the author would patch
@@ -230,10 +272,30 @@ a body nobody emits, and the report would say the patch applied.
 
 ### REQ-OVERLAY-004 — An overlay and a full override of one id are refused together
 
-**Decision.** For one `(class, slug)`, an overlay file and a full override
-(`<slug>.md`, or `<slug>/SKILL.md` for a skill) present at the same time is a
-refusal at read time. The message names both absolute paths and says which one
-to remove.
+**Decision.** An overlay whose resolved base came from the override tree is
+refused, whatever that override's filename. The refusal is at read time and its
+message names both absolute paths and says which one to remove
+(`src/content/catalog.ts:900-909`).
+
+Stated by identity rather than by filename because the landed rule has two
+reads and the filename one is the weaker. Discovery pairs an overlay with a
+full override of the same slug in the same class directory
+(`src/content/catalog.ts:967`, joined at `src/content/catalog.ts:980-985`,
+refused at `src/content/catalog.ts:1062-1064`); the merge then re-reads
+exclusivity off the base it resolved, refusing any base whose `origin` is
+`user` (`src/content/catalog.ts:1069-1072`). The second read is what covers an
+override whose declared `id` disagrees with its own filename — the walk indexes
+it under the DECLARED id (`src/content/catalog.ts:1385-1391`) and reports the
+disagreement rather than repairing it
+(`src/content/catalog.ts:1416-1419`), so it REPLACED the id the overlay
+addresses while sitting under a filename the first read would never have
+paired. An id is either replaced or patched, and which file spells it is not
+the question.
+
+The save path holds the same rule from the other side, in its own words: a full
+override cannot land on an id an overlay already patches
+(`src/content/userContent.ts:344-347`, message at
+`src/content/userContent.ts:1292-1300`).
 
 **Rationale.** A full override is the author's own file. Patching it means
 editing it, so the combination has no use case that a text editor does not serve
@@ -248,8 +310,12 @@ own bytes and costs the comprehensibility of every downstream report.
 ### REQ-OVERLAY-005 — Frontmatter merge is a shallow key set, with null as removal
 
 **Decision.** `.customize.yaml` is a YAML document whose root is a map, parsed by
-the existing strict parser (`src/content/frontmatter.ts:94-107`). Merging it
-over the base frontmatter map:
+`parseFrontmatterBlock` (`src/content/frontmatter.ts:102-115`) — exported for
+this lane, because an overlay's head IS the block with no document around it to
+split, and a second call into the config parser would be a second re-coding of a
+YAML failure into a content defect
+(`src/content/frontmatter.ts:88-99`, read by the merge at
+`src/content/catalog.ts:776`). Merging it over the base frontmatter map:
 
 - a key present in the overlay **replaces** the base value entirely;
 - a key whose value is YAML null — written `key:` or `key: null` — is
@@ -259,8 +325,11 @@ over the base frontmatter map:
   remove verbs in v1;
 - a nested map replaces whole. The merge does not recurse.
 
-Key ORDER of the merged map is the base's order for every key the base declared,
-with overlay-only keys appended in the order the overlay declared them.
+Key ORDER of the merged MAP is the base's order for every key the base declared,
+with overlay-only keys appended in the order the overlay declared them
+(`src/content/catalog.ts:840-867`). The map is what the merged item carries; the
+re-emitted head composed on the way through `buildItem` is a separate question,
+and v1 does not answer it — see the non-goals.
 
 **Rationale.** Predictability over power. Every merge verb is a second language
 an author writes and a reviewer has to simulate, and the corpus frontmatter is
@@ -285,7 +354,7 @@ included — is refused, naming the file and the key.
 moved either would silently re-target itself and orphan its own base. The
 walk-stamped fields (`origin`, `provenance`, `filePath`, `relativePath`) need no
 rule: they are not frontmatter, so an overlay cannot reach them
-(`src/content/catalog.ts:829-842`).
+(`src/content/catalog.ts:1456-1469`, `origin` and `provenance` at 1467-1468).
 
 **Dropped.** Ignoring the keys with a warning. An ignored key is
 indistinguishable from a working one to the author who wrote it, which is the
@@ -313,22 +382,35 @@ placeholder substitution are named non-goals for v1 (see below).
 ### REQ-OVERLAY-008 — The merged artifact is materialized and built by the existing path
 
 **Decision.** The merged frontmatter map and merged body are composed back into
-a single document with `composeFrontmatter` (`src/content/frontmatter.ts:122-129`)
-and that document is handed to `buildItem` (`src/content/catalog.ts:805-849`) as
-`raw`, alongside the merged map and merged body. The resulting item keeps the
-BASE artifact's `filePath`, `relativePath`, `origin` and `provenance`. The
-`source` label used for refusal messages is a composite: the base file's absolute
-path, plus the absolute paths of the overlay files applied.
+a single document with `composeFrontmatter` (`src/content/frontmatter.ts:130-137`)
+and that document is handed to `buildItem` (`src/content/catalog.ts:1424-1476`)
+as `raw`, alongside the merged map and merged body
+(`src/content/catalog.ts:1134-1139`). The resulting item keeps the BASE
+artifact's `filePath`, `relativePath`, `origin` and `provenance`. The `source`
+label used for refusal messages is a composite: the base file's absolute path,
+plus the absolute paths of the overlay files applied.
+
+**How the label is carried.** `source` is an OPTIONAL field on
+`BuildItemInput`, defaulting to the artifact's own `filePath`
+(`src/content/catalog.ts:1415-1421`, applied at `src/content/catalog.ts:1438`),
+so the ordinary scan passes nothing and its messages are unchanged — the
+composite exists for the one caller with two candidate files. Its spelling is
+`` `${base.filePath} (patched by ${applied.join(", ")})` ``, halves in
+frontmatter-then-body order (`src/content/catalog.ts:759-768`). One further
+input is not the base's: `slug` is set to the base's own `id` rather than to the
+overlay's filename slug (`src/content/catalog.ts:1136-1139`), because the merged
+artifact IS that artifact and the rebuild must not re-report a filename
+disagreement the scan already reported once.
 
 **Rationale.** This is what makes "re-validates through the exact `buildItem`
 checks" implementable rather than aspirational. `buildItem` reads `tools` by
 re-parsing the RAW document text, not the frontmatter map
-(`src/content/catalog.ts:825-827` into `src/content/frontmatter.ts:159-165`), so
-a merge that produced a map with no raw twin would either skip the closed
+(`src/content/catalog.ts:1454` into `src/content/frontmatter.ts:166-172`),
+so a merge that produced a map with no raw twin would either skip the closed
 tool-vocabulary check or need a second implementation of it — and a gate that
 disagrees with itself is the defect `src/content/userContent.ts:33-39` already
 records. `composeFrontmatter` is documented as making parse → compose → parse an
-identity on both halves (`src/content/frontmatter.ts:109-121`), which is exactly
+identity on both halves (`src/content/frontmatter.ts:116-128`), which is exactly
 the property the round trip needs. The composite `source` label gives
 decision-13 naming parity for free: every `require*` and
 `extractToolsFrontmatter` message is already prefixed `${source}:` and already
@@ -354,20 +436,26 @@ reports `drift: not evaluated` — decision-13 parity — for each of:
 | its root is not a map | absolute path |
 | it declares `id` or `type` | absolute path, the key |
 | `.customize.md` opens with a `---` fence | absolute path |
+| `.customize.md` is over the user-content ceiling | absolute path, the body's character count, the limit |
 | an overlay coexists with a full override | both absolute paths |
 | the overlay is an orphan | absolute path, the id looked for |
 | the merged artifact fails any `buildItem` check | composite label, the field |
 
+The ceiling row is the one addition this table took after the design was
+settled, and it earned its place at the walk rather than only at `validate`:
+the two gates were failing closed in opposite directions, so a repo could sync
+a body patch its own validator rejects (`src/content/catalog.ts:794-821`).
+
 **Rationale.** Parity with the settled posture for a malformed override, and
 with the reason it was settled: a walk that carries on past a defective artifact
 indexes a half-formed entry, which is worse than a run that stops and names the
-file (`src/content/catalog.ts:35-39`).
+file (`src/content/catalog.ts:32-44`).
 
 **Dropped.** Warn-and-skip — report the overlay as ignored and emit the base.
 Rejected because its observable outcome is exactly today's bug: a tree that
 looks customized and a sync that ships the bundled body. The walk already
 records that outcome as the reason its symlink skip was made loud
-(`src/content/catalog.ts:687-695`).
+(`src/content/catalog.ts:1243-1251`).
 
 ### REQ-OVERLAY-010 — An orphan overlay is an error
 
@@ -386,16 +474,31 @@ way.
 
 ### REQ-OVERLAY-011 — `validate` gains a third customization outcome, `patched`
 
-**Decision.** The report row type (`ValidateShadow`,
-`src/cli/commands/validate.ts:74-101`) gains a discriminator distinguishing
-`replaced` from `patched`. A `patched` row carries the class, the id, the base
-artifact's content-root-relative path and its origin (`corpus`, or the pack id),
-and the repo-relative paths of the overlay files applied. The shadowing block
-(`src/cli/commands/validate.ts:610-628`) prints it as a third line shape. `emits`
-keeps its meaning and its `OVERRIDE_EMITTING_CLASSES` derivation
-(`src/cli/commands/validate.ts:297-301`). A `patched` row is information and
-never moves the exit code, exactly as a shadow does not
-(`src/cli/commands/validate.ts:58`).
+**Decision.** The report row type becomes a discriminated union
+(`ValidateShadow`, `src/cli/commands/validate.ts:88-97`) over two members. The
+discriminator is a new `outcome` field, and the pre-existing row takes
+`outcome: "replaced"` (`src/cli/commands/validate.ts:99-128`) — it is spelled on
+that row too rather than left implicit, so a consumer branches on a field that
+is present in both shapes instead of on the absence of one.
+
+A `patched` row (`src/cli/commands/validate.ts:136-155`) carries exactly seven
+keys: `outcome`, `type`, `id`, `base` (the base's content-root-relative path —
+the file that still supplies the body), `origin` (`corpus`, or the id of the
+pack supplying it), `overlays` (the repo-relative paths of the halves applied,
+frontmatter half first) and `emits`. It carries no `replaced`, because nothing
+was replaced. The row is assembled at `src/cli/commands/validate.ts:532-543` and
+printed by the shadowing block as a third line shape
+(`src/cli/commands/validate.ts:890-931`), whose header sentence is composed from
+the two counts rather than stated once — a single sentence covering both would
+be false of one of them.
+
+`emits` keeps its meaning and its `OVERRIDE_EMITTING_CLASSES` derivation on both
+rows (`src/cli/commands/validate.ts:430` and
+`src/cli/commands/validate.ts:541`). A `patched` row is information and never
+moves the exit code, exactly as a `replaced` row does not
+(`src/cli/commands/validate.ts:72-74`, `src/cli/commands/validate.ts:88-90`),
+and both travel to the JSON consumer under the same `shadows` key
+(`src/cli/commands/validate.ts:1061-1064`).
 
 **Rationale.** Today's two outcomes are both false of a patched item: nothing
 was replaced, and nothing left the index. A report that squeezed a patch into
@@ -407,23 +510,53 @@ channel.
 
 ### REQ-OVERLAY-012 — One gate judges the merged artifact, at the two lanes that already judge
 
-**Decision.** `stamity validate` materializes the merged artifact (REQ-OVERLAY-008)
-and runs `checkUserArtifact` (`src/content/userContent.ts:627-661`) over it,
-whole: required frontmatter, id/filename agreement, lifecycle declarations,
-deny-scan over frontmatter keys, values and comments, and
-`validateContentBody`'s body judgment with its lean line cap. The save path
-(`saveUserContent`, `src/content/userContent.ts:266`) gains the same treatment
-when it writes an overlay. Two clarifications the merge forces:
+**Decision.** `stamity validate` runs `checkUserArtifact`
+(`src/content/userContent.ts:883-917`) over the merged artifact, whole:
+required frontmatter, id/filename agreement, lifecycle declarations, deny-scan
+over frontmatter keys, values and comments, and `validateContentBody`'s body
+judgment with its lean line cap. It does not re-materialize the merge to do so
+— the item it judges is read out of `byKey` at the patched id
+(`src/cli/commands/validate.ts:497-521`), which is the artifact the next `sync`
+emits, so the command reads what the walk produced rather than re-deriving it.
 
-- The id/filename agreement check reads the BASE's identity, since the merged
-  artifact's file is the base's file.
-- The 250 000-character user-content ceiling
-  (`MAX_USER_CONTENT_LENGTH`, `src/guard/promptGuard.ts:38`) binds the overlay
-  body, which is what that constant's own comment already claims.
+**Save parity, as recorded.** The save path cannot write an overlay at all.
+`saveUserContent` files an artifact under an id (`artifactPath`,
+`src/content/userContent.ts:1302-1309`), and `saveIdDefect` refuses any id that
+is not a bare slug before a path is composed
+(`src/content/userContent.ts:1267-1273`, against
+`src/content/userContent.ts:293`) — `<slug>.customize` carries a dot and is not
+one. So the parity this requirement asks for is not "the same gate when the save
+path writes a half"; it is the EXCLUSIVITY refusal, in the direction the save
+path can meet it: writing a full override over an id an overlay already patches
+is refused before any filesystem call
+(`src/content/userContent.ts:344-347`). A half is authored directly and judged
+by `validate`, which is the lane that holds the merged text.
+
+Three clarifications the merge forces:
+
+- The id/filename agreement check reads the BASE's identity. It is not inferred
+  — `UserArtifactCheckInput.fileSlug` is the field that says so
+  (`src/content/userContent.ts:199-212`, read at
+  `src/content/userContent.ts:1163`), and `validate` sets it to the merged
+  item's own `id` (`src/cli/commands/validate.ts:510-521`). Without it, a corpus
+  base wearing the `stamity-`/`st-` filename prefix its id does not would report
+  a mismatch on every patched shipped artifact.
+- The 250 000-character user-content ceiling binds the overlay body at BOTH
+  lanes, not only at the reporting one. The walk refuses it during
+  `buildContentIndex` (`src/content/catalog.ts:811-821`), and `validate` reports
+  the same file (`cappedBody`, `src/cli/commands/validate.ts:574-591`). One lane
+  alone was the defect: the two were failing closed in opposite directions, so a
+  repo could sync a patch its own validator rejects.
+- `MAX_USER_CONTENT_LENGTH`'s own comment (`src/guard/promptGuard.ts:37-49`)
+  now names its two READERS — `stamity learn capture` and `stamity validate` —
+  rather than listing the surfaces the cap covers, which is what the quoted
+  "learnings, handoffs, customize bodies" phrasing did. The walk is not on that
+  list and is not meant to be: it restates the number rather than importing it,
+  and the reason is architectural. See Concerns.
 
 Emission does not deny-scan an overlay, for the reason it does not deny-scan
 anything: a scan at emission time reprints the author's own flagged text on every
-sync (`src/cli/engine/emission.ts:94-97`).
+sync (`src/cli/engine/emission.ts:103-109`).
 
 **Rationale.** One gate, two callers, unchanged. `src/content/userContent.ts:33-39`
 records what happened the last time a second lane grew checks of its own — an
@@ -444,7 +577,7 @@ item IS the item, emitted under the base's `artifactId` and `artifactType`, and
 regresses" (`test/content/catalog.test.ts:486`) — and the overlay layer earns the
 same case. On the ledger: its job is reclaim and drift over EMITTED paths, and an
 overlay source file is never an emitted path
-(`src/cli/engine/emission.ts:83-89`), so a `patched` flag there would be state
+(`src/cli/engine/emission.ts:95-101`), so a `patched` flag there would be state
 nothing reads.
 
 **Dropped.** A `patched: true` ledger field, for the reason above.
@@ -454,7 +587,7 @@ nothing reads.
 **Decision.** Overlays apply to all four content classes at both the index and
 emission. `OVERRIDE_EMITTING_CLASSES` is `agent`, `rule`, `command`, `skill` — a
 full enumeration of `ContentClass` rather than a subset
-(`src/cli/engine/emission.ts:100-121`). `skill` joined it when lane D11 widened
+(`src/cli/engine/emission.ts:112-133`). `skill` joined it when lane D11 widened
 `ProjectSkillsOptions.contentRoot` from a bare corpus-root string to the full
 `ContentRoots` spec (`src/emit/skillsProjection.ts:179`), so a skill overlay
 indexes and emits exactly as an agent, rule or command override already does —
@@ -485,7 +618,7 @@ would then have to be kept in agreement.
 
 ### REQ-OVERLAY-015 — The pinned negative test and the four comments migrate with the implementation
 
-**Decision.** `test/corpus/commands/lightTrio.test.ts:758-767` asserts that the
+**Decision.** `test/corpus/commands/lightTrio.test.ts:765-807` asserts that the
 creator agent's body mentions neither `.customize.` nor a four-layer precedence.
 It gates the behaviour this spec changes, so it is rewritten in place — not
 deleted, not skipped — in the same change, carrying an inline reason naming what
@@ -508,8 +641,9 @@ that the contract changed.
 
 ## Acceptance criteria
 
-One set per requirement. Thirty-two criteria; each is machine-checkable unless
-tagged otherwise.
+One set per requirement. Thirty-four criteria; each is machine-checkable unless
+tagged otherwise. The count moved by two when the ceiling joined the
+REQ-OVERLAY-009 table.
 
 **REQ-OVERLAY-001**
 
@@ -595,6 +729,18 @@ tagged otherwise.
 - GIVEN any refusal in the table above WHEN `stamity sync` runs THEN it stops,
   and `stamity check` reports `drift: not evaluated` — matching the settled
   behaviour for a malformed override.
+- GIVEN a `.customize.md` of `MAX_USER_CONTENT_LENGTH + 1` characters WHEN the
+  index is built THEN the walk throws `VALIDATION_ERROR` naming that absolute
+  path, the body's character count and the limit, and no merged item reaches the
+  index.
+- GIVEN a `.customize.md` of exactly `MAX_USER_CONTENT_LENGTH` characters WHEN
+  the index is built THEN it merges and the patched item is in the index. The
+  pair is driven from the guard's own constant rather than from a literal, so
+  moving either number alone turns the case red
+  (`test/content/catalog.test.ts:1199-1238`). That block is named for
+  REQ-OVERLAY-012, which is where the ceiling is stated as a rule; these two
+  criteria sit here because the ceiling is a row in the REQ-OVERLAY-009 refusal
+  table. One behaviour, two requirements that need it — not a drift.
 
 **REQ-OVERLAY-010**
 
@@ -660,6 +806,16 @@ Named so a later change can add them deliberately rather than discover them:
 - **Merge verbs.** No `tags+:`, no remove-by-value, no recursion into nested
   maps.
 - **Prepend, or insertion at any position other than the end.**
+- **A guaranteed per-key order in the RE-EMITTED head.** The merged map keeps
+  the base's declared order with overlay-only keys appended (REQ-OVERLAY-005),
+  and that map is what the merged item carries. The document composed on the way
+  through `buildItem` is a different artifact: `composeFrontmatter` hoists
+  `LEAD_KEYS` — `id`, `type`, `description`, `tags` — to the front whatever order
+  the map declared (`src/content/frontmatter.ts:64`,
+  `src/content/frontmatter.ts:138-151`). That text does not survive the builder,
+  which reads it only to re-parse `tools` (`src/content/catalog.ts:1454`),
+  so nothing on disk carries it today and v1 promises nothing about its order. A
+  lane that ever writes a merged head to a file decides this then, deliberately.
 - **Per-key blame in a merged refusal.** The composite source label names both
   files; it does not say which one supplied the offending key.
 - **Patching a full override.** Refused by REQ-OVERLAY-004.
@@ -701,17 +857,22 @@ and the surrounding symbol is the durable address.
 
 | Pointer | Target | Why |
 |---|---|---|
-| `source` | `src/content/catalog.ts:466-523` | the layer resolve and `items` assembly the merge slots into |
-| `source` | `src/content/catalog.ts:805-849` | `buildItem` — the checks the merged artifact re-runs |
-| `source` | `src/content/frontmatter.ts:122-129` | `composeFrontmatter` — the materialization mechanism |
-| `source` | `src/content/frontmatter.ts:159-181` | `extractToolsFrontmatter` — why the raw round trip is required |
-| `source` | `src/content/userContent.ts:627-661` | `checkUserArtifact` — the one gate REQ-OVERLAY-012 reuses |
-| `source` | `src/cli/commands/validate.ts:74-101,610-628` | the report row type and the block that prints it |
-| `source` | `src/cli/engine/emission.ts:83-89,100-121` | ownership of the override tree, and the emitting-class set |
+| `source` | `src/content/catalog.ts:642-1127` | the overlay layer: discovery, merge, and every refusal |
+| `source` | `src/content/catalog.ts:526-580` | the layer resolve and `items` assembly the merge slots into |
+| `source` | `src/content/catalog.ts:1424-1476` | `buildItem` — the checks the merged artifact re-runs |
+| `source` | `src/content/frontmatter.ts:101-114` | `parseFrontmatterBlock` — the one strict read of an unfenced head |
+| `source` | `src/content/frontmatter.ts:129-151` | `composeFrontmatter` and its `LEAD_KEYS` hoist |
+| `source` | `src/content/frontmatter.ts:167-189` | `extractToolsFrontmatter` — why the raw round trip is required |
+| `source` | `src/content/userContent.ts:462-639` | the report lane's discovery pass, which merges nothing |
+| `source` | `src/content/userContent.ts:883-917` | `checkUserArtifact` — the one gate REQ-OVERLAY-012 reuses |
+| `source` | `src/cli/commands/validate.ts:88-155` | the discriminated report row type, both members |
+| `source` | `src/cli/commands/validate.ts:497-546,890-931` | the per-pair judgement, and the block that prints it |
+| `source` | `src/cli/engine/emission.ts:95-101,112-133` | ownership of the override tree, and the emitting-class set |
 | `source` | `src/emit/skillsProjection.ts:179` | the skills `contentRoot` widening lane D11 discharged |
-| `source` | `src/guard/promptGuard.ts:38` | the user-content ceiling that binds an overlay body |
-| `test` | `test/content/catalog.test.ts:347-731` | the override-layer block the overlay block is written beside |
-| `test` | `test/corpus/commands/lightTrio.test.ts:758-767` | the negative case REQ-OVERLAY-015 migrates |
+| `source` | `src/guard/promptGuard.ts:37-49` | the user-content ceiling that binds an overlay body |
+| `test` | `test/content/catalog.test.ts:348-731` | the override-layer block the overlay block is written beside |
+| `test` | `test/content/catalog.test.ts:733-1434` | the overlay-layer block, REQ-OVERLAY-002 through 013 |
+| `test` | `test/corpus/commands/lightTrio.test.ts:765-807` | the case REQ-OVERLAY-015 migrated, with its inline reason |
 
 ## Risks
 
@@ -741,6 +902,34 @@ and the surrounding symbol is the durable address.
 - The page is not indexed in `llms.txt`. That index lists generated pages and a
   named set of guides; adding a specs section to it is a reasonable follow-up
   and is not required by any current check.
+- **The user-content ceiling is spelled twice, on purpose, and the arrangement
+  has a named exit.** The walk holds the body half to `MAX_OVERLAY_BODY_LENGTH`
+  (`src/content/catalog.ts:347-363`), a RESTATEMENT of
+  `MAX_USER_CONTENT_LENGTH` (`src/guard/promptGuard.ts:49`) rather than an
+  import of it. The reason is architectural, not stylistic: the prompt guard is
+  registry-wired by construction and that wiring is gated — it is listed in
+  `REGISTRY_ONLY_MODULES` as "cited by two validator headers, imported by
+  neither" (`test/architecture/boundaries.test.ts:681`), and that list may only
+  shrink (`test/architecture/boundaries.test.ts:893-897`). A direct edge from
+  the walk retires the claim, which is a decision for the change that wants to
+  make it rather than a side effect of adding a size check.
+
+  The two numbers cannot drift apart unnoticed meanwhile, because both sides are
+  driven from the guard's own constant rather than from a literal: the walk's
+  refusal at `test/content/catalog.test.ts:1199-1238` (importing it at
+  `test/content/catalog.test.ts:27`) and `validate`'s at
+  `test/cli/commands/validate.test.ts:1012-1018` (reading it off the engine
+  registry). Moving either number alone turns a suite red.
+
+  This is recorded as a concern and not as a defect because the cross-pin holds
+  it, but it is a two-place constant and the follow-on is named:
+  `2026-08-31_batch-d12-overlays/build/8`, the architecture-ratchet decision,
+  deferred rather than dropped. One unit owning both `src/content/catalog.ts`
+  and `test/architecture/boundaries.test.ts` either accepts the production edge
+  — deleting the row, which is what the ratchet message itself prescribes — or
+  moves the constant to a shared leaf both sides may import. Whichever it
+  settles, this restatement then collapses to one spelling or earns its second
+  one explicitly.
 - Line-number citations drift. `SECURITY.md` retired them for exactly that
   reason and moved to `file::symbol`. This spec keeps them because the evidence
   here is often a comment block or a loop rather than a named export, and a

@@ -24,6 +24,19 @@ function expectEngineError(run: () => unknown, code: EngineError["code"]): Engin
   return error;
 }
 
+/**
+ * Top-level keys of a composed document's head, in the order they were written.
+ * Read off the text rather than off a parsed map, because the order a document
+ * carries is the thing under assertion.
+ */
+function headKeys(document: string): string[] {
+  const [, block = ""] = /^---\n([\s\S]*?)\n---\n/.exec(document) ?? [];
+  return block
+    .split("\n")
+    .map((line) => /^([A-Za-z_][\w-]*):/.exec(line)?.[1])
+    .filter((key): key is string => key !== undefined);
+}
+
 /** Fence lines in a composed document, ignoring the trailing whitespace the grammar tolerates. */
 function fenceLines(document: string): string[] {
   return document.split("\n").filter((line) => line.trim() === "---");
@@ -218,6 +231,81 @@ describe("parse -> compose -> parse", () => {
     expect(reparsed.frontmatter).toEqual(ARTIFACT_MAP);
     expect(reparsed.body).toBe(parsed.body);
     // Second pass is a fixpoint: re-emitting an already-composed document is a no-op.
+    expect(composeFrontmatter(reparsed.frontmatter, reparsed.body)).toBe(composed);
+  });
+
+  /**
+   * The identity REQ-OVERLAY-008 rests on, over the map shape REQ-OVERLAY-005
+   * produces (docs/specs/overlay-layers.md).
+   *
+   * An overlay's merged map is not a hand-authored one: a base key the overlay
+   * nulled is GONE, and the keys the overlay introduced are APPENDED after every
+   * key the base declared, whatever they are named. The merged artifact is then
+   * composed and handed back to the walk's own item builder, so if this trip
+   * were not an identity the overlay layer would re-validate a document that is
+   * not the one it merged.
+   *
+   * The map is written as a literal rather than produced by the catalog's merge:
+   * this suite owns the frontmatter guarantee, and `test/content/catalog.test.ts`
+   * owns the claim that the merge emits this shape. Reaching across would make
+   * one failure red in two places and neither of them the cause.
+   */
+  it("round-trips a merged overlay map — removed key gone, overlay-only keys appended", () => {
+    // Base order: two lead keys, then three the base declared after them.
+    // `precedence` is the key the overlay removed with a null.
+    const merged = {
+      id: "security",
+      type: "rule",
+      load: "always",
+      obsolete_when: "never",
+      // Overlay-only keys, appended in the order the overlay declared them —
+      // two of which are LEAD_KEYS, which is what makes the hoist observable.
+      description: "The house security floor.",
+      tags: ["floor:security"],
+      scope: "conditional",
+    };
+    const body = "Base body.\nLast line.\n\nHouse addendum.\n";
+
+    // The merge's own claim: base order first, overlay-only keys appended, and
+    // no trace of the removed key.
+    expect(Object.keys(merged)).toEqual([
+      "id",
+      "type",
+      "load",
+      "obsolete_when",
+      "description",
+      "tags",
+      "scope",
+    ]);
+    expect(Object.hasOwn(merged, "precedence")).toBe(false);
+
+    const composed = composeFrontmatter(merged, body);
+    const reparsed = parseFrontmatter(composed, SOURCE);
+
+    // Values survive whole — the identity the merged artifact is re-validated
+    // against — and the removed key never reappears from the base.
+    expect(reparsed.frontmatter).toEqual(merged);
+    expect(reparsed.body).toBe(body);
+    expect(composed).not.toContain("precedence");
+
+    // Order is where the map and the DOCUMENT part company, and the line is
+    // drawn here rather than left to be discovered: the map appends overlay-only
+    // keys at the end, and composing hoists the identity keys back to the front,
+    // so a re-emitted head reads like every other artifact instead of carrying
+    // the accident of which keys an overlay happened to add.
+    expect(headKeys(composed)).toEqual([
+      "id",
+      "type",
+      "description",
+      "tags",
+      "load",
+      "obsolete_when",
+      "scope",
+    ]);
+    expect(Object.keys(reparsed.frontmatter)).toEqual(headKeys(composed));
+
+    // And the hoist settles: re-emitting the parsed-back map reproduces the same
+    // bytes, so an overlay does not shuffle its artifact's head on every sync.
     expect(composeFrontmatter(reparsed.frontmatter, reparsed.body)).toBe(composed);
   });
 

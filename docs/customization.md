@@ -4,9 +4,10 @@ title: Customization
 
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit ce0b6c7. -->
 <!-- Re-open when: a save gate is added or removed, a content class joins or leaves the
-     override tree, or the overlay layers land. `test/docsPages.test.ts` holds this page to
-     the hand-page contract; `src/content/userContent.ts` owns the gate this page narrates
-     and `src/cli/engine/emission.ts` owns the set of classes that emit. -->
+     override tree, a merge verb joins the overlay layer, a class gains or loses overlay
+     support, or patch-or-replace exclusivity changes. `test/docsPages.test.ts` holds this
+     page to the hand-page contract; `src/content/userContent.ts` owns the save gate and
+     `src/content/catalog.ts` owns the overlay merge this page narrates. -->
 
 # Customization
 
@@ -15,8 +16,10 @@ for what this one needs instead: your own agents, rules, commands and skills, au
 `.stamity/overrides/` and merged above the bundled content wherever the two meet.
 
 Nothing in this lane edits the corpus. `content/` is framework territory — shipped and
-regenerated, so an edit there is erased by the next update — which is why an override is not a
-patch on a bundled file. It is a file of your own, and claiming an id is how it takes over.
+regenerated, so an edit there is erased by the next update — which is why neither shape of
+customization touches a bundled file. An override is a file of your own, and claiming an id is
+how it takes over; an overlay is a patch filed in the same tree, and the artifact it patches
+stays exactly where it was.
 
 ## Where an override lives
 
@@ -128,13 +131,51 @@ The save writes one file. The per-client copies change on the next `stamity sync
 the artifact up and projects it through the same emission a corpus artifact goes through — and
 an override that stops existing stops being emitted on the sync after that.
 
-## Overlay layers are designed, not shipped
+## Patching instead of replacing
 
-Replacement is all-or-nothing today: changing one field of a bundled artifact means copying the
-whole body and carrying that copy forward. Field-level patches — `.customize.yaml` for the
-frontmatter, `.customize.md` for the body — are specified in
-[the overlay-layers spec](specs/overlay-layers.md) and implemented nowhere. Nothing on disk
-reads either file yet, so treat the spec as a design and not as behaviour.
+An override replaces. An overlay **patches**: it states the delta and nothing else over a
+bundled artifact you have not fully overridden, so the base keeps flowing from the corpus or the
+pack that supplies it and the patch survives an upstream rewrite of everything it did not name.
+A copy of the whole body cannot do that — it stops tracking the original the moment it is taken.
+[The overlay-layers spec](specs/overlay-layers.md) is the design reference behind what follows:
+what was decided, what was dropped, and why.
+
+An overlay is two halves, either one alone or both together, filed in the class directory a full
+override of the same id would use:
+
+| Class | Frontmatter patch | Body patch |
+|---|---|---|
+| agent | `agents/<slug>.customize.yaml` | `agents/<slug>.customize.md` |
+| rule | `rules/<slug>.customize.yaml` | `rules/<slug>.customize.md` |
+| command | `commands/<slug>.customize.yaml` | `commands/<slug>.customize.md` |
+| skill | `skills/<slug>/SKILL.customize.yaml` | `skills/<slug>/SKILL.customize.md` |
+
+`<slug>` is the bundled file's name with the engine prefix off — `st-qa` is patched as `qa`, a
+command by its bare slug rather than its `cmd-` id — and a skill's halves compose onto `SKILL`
+the way its readable file does, in a directory that needs no `SKILL.md` of its own.
+
+**The merge.** The frontmatter half is a shallow key set: a key it declares replaces the base
+value whole, a key written `key:` with no value is removed from the merged head, and a key it
+does not name is untouched. Lists — `tags`, `tools` — replace whole, and there are no append
+verbs. The body half is appended after the base body with one blank line between them; no
+prepend, no section anchors, no templating. The base file is never written to, so deleting an
+overlay restores the shipped artifact exactly.
+
+**Patch or replace, never both.** One chain applies to any id: the base plus its halves, or a
+full override. The two are refused together, naming both files, and saving a full override over
+an id an overlay already patches is refused before anything is written — a full override is your
+own file, so patching it means editing it.
+
+**What refuses.** An overlay defect stops the sync and names the file and the offending field or
+condition: a `.customize.yaml` that is not valid YAML or whose root is not a map; an `id` or
+`type` key in it, which is the identity the patch is addressed by; a `---` fence at the head of a
+`.customize.md`, whose keys belong in the other half; a slug matching no artifact in any layer,
+which is almost always a typo in the filename; a body patch over the 250 000-character ceiling on
+user-authored content; and a merged artifact failing any check an authored one would fail.
+`stamity validate` reports those same defects against the half that carries them, and prints one
+`patched` line per healthy pair — the base still supplying the body, the layer it comes from, and
+every half applied. That line is information and never moves the exit code, exactly as a
+shadowing line does not.
 
 ## Where to go next
 

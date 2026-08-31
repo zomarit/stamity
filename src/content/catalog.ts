@@ -7,9 +7,14 @@ import { requireEnum, requireString, requireStringArray } from "../config/parse.
 import { CONTENT_CLASSES, type ContentClass, type RulePrecedence } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import { stripEngineContentPrefix } from "../types/markers.ts";
+import { carriesEngineContentPrefix, stripEngineContentPrefix } from "../types/markers.ts";
 import { resolveBundledContentRoot } from "./contentRoot.ts";
-import { extractToolsFrontmatter, parseFrontmatter } from "./frontmatter.ts";
+import {
+  composeFrontmatter,
+  extractToolsFrontmatter,
+  parseFrontmatter,
+  parseFrontmatterBlock,
+} from "./frontmatter.ts";
 // Type-only: the skipped-entry vocabulary has one home, and it is the module
 // that already reports it to authors. No runtime edge is created.
 import type { SkippedUserEntry } from "./userContent.ts";
@@ -50,12 +55,19 @@ import type { SkippedUserEntry } from "./userContent.ts";
  * the one exception and stay strict: a pack claiming an id the corpus or an
  * earlier pack already holds is refused (see {@link buildContentIndex}).
  *
- * Declared gap, ONE half. Replacing a whole artifact is the only customization
- * layer implemented here: the `.customize.yaml` / `.customize.md` overlay
- * surfaces — the other two layers of the four-layer customization contract —
- * are read by nothing in this module and by nothing downstream of it, so an
- * artifact is customized by taking its id, not by patching its frontmatter or
- * appending to its body.
+ * Customization comes in two shapes, and exactly one of them applies to any
+ * `(class, id)`. REPLACEMENT is the override above: a whole artifact under the
+ * override tree takes the id. PATCHING is the overlay layer — a
+ * `<slug>.customize.yaml` beside where that override would sit patches the
+ * resolved artifact's frontmatter, a `<slug>.customize.md` appends to its body,
+ * and the base keeps flowing from the corpus or the pack that supplies it.
+ * Discovery AND merge semantics both live in this module, in the overlay-layer
+ * section below ({@link applyOverlays} and the helpers around it), which states
+ * why they are folded in here rather than split into a module of their own. The
+ * two shapes are mutually exclusive and their
+ * coexistence is refused, so an id is either replaced or patched, never both —
+ * which is why the phrase "four-layer precedence" is retired: it counted layers
+ * that were never simultaneously reachable.
  *
  * The override layer's REACH is not a gap and is not latent: the emission seam
  * supplies {@link ContentRoots.overrideRoot} (`src/cli/engine/emission.ts`),
@@ -309,6 +321,47 @@ const SKILL_FILE = "SKILL.md";
 /** Artifact file extension. `.mdc` rule twins do not match, and are not artifacts. */
 const ARTIFACT_EXTENSION = ".md";
 
+/** Filename infix + extension of an overlay's frontmatter half. */
+const OVERLAY_FRONTMATTER_SUFFIX = ".customize.yaml";
+
+/** Filename infix + extension of an overlay's body half. */
+const OVERLAY_BODY_SUFFIX = ".customize.md";
+
+/**
+ * Opening frontmatter fence, matched at the head of an overlay's body half. A
+ * BOM is stripped before the test for the reason the frontmatter parser strips
+ * one — the match is anchored at byte 0, so a mark written by a Windows editor
+ * would otherwise hide the fence and turn a refusal into a silent pass.
+ */
+const OVERLAY_OPENING_FENCE = /^---[ \t]*(?:\r?\n|$)/;
+
+/** UTF-8 byte-order mark. */
+const BOM = 0xfe_ff;
+
+/** Trailing newlines of a base body, normalised before the overlay separator. */
+const TRAILING_NEWLINES = /(?:\r?\n)+$/;
+
+/** Keys an overlay may never carry: they are the identity it is addressed BY. */
+const OVERLAY_IDENTITY_KEYS = ["id", "type"] as const;
+
+/**
+ * Ceiling on an overlay's body half, in characters.
+ *
+ * The SAME ceiling `stamity validate` holds that file to — `MAX_USER_CONTENT_LENGTH`
+ * (`../guard/promptGuard.ts`), read there through the engine registry
+ * (`../cli/commands/validate.ts` → `cappedBody`). Restated rather than imported
+ * because the prompt guard is registry-wired by construction and the import
+ * graph is gated on it (`test/architecture/boundaries.test.ts` →
+ * `REGISTRY_ONLY_MODULES`): a direct edge from this walk retires that
+ * architectural claim, which is a decision for the change that wants to make it
+ * rather than a side effect of adding a size check.
+ *
+ * The two numbers cannot drift apart unnoticed: `test/content/catalog.test.ts`
+ * drives this refusal from the guard's own constant, one character over the
+ * limit and exactly at it, so moving either number alone turns that suite red.
+ */
+const MAX_OVERLAY_BODY_LENGTH = 250_000;
+
 /** Concurrent artifact reads per class directory. */
 const READ_CONCURRENCY = 8;
 
@@ -426,7 +479,7 @@ export async function buildContentIndex(
   // walk order — and therefore which claimant of a duplicated id wins — fixed.
   // Pack and override scans are equally disjoint and join the same batch;
   // ordering is imposed when the results are flattened, not by completion order.
-  const [scanned, packScanned, overrideScanned] = await Promise.all([
+  const [scanned, packScanned, overrideScanned, overlays] = await Promise.all([
     Promise.all(CONTENT_CLASSES.map((type) => scanClass(fs, root, type, { origin: "corpus" }))),
     Promise.all(
       packRoots.map((packRoot) =>
@@ -448,6 +501,10 @@ export async function buildContentIndex(
       : Promise.all(
           CONTENT_CLASSES.map((type) => scanClass(fs, overrideRoot, type, { origin: "user" })),
         ),
+    // Overlays live in the override tree and nowhere else, so an absent override
+    // root skips the pass entirely — the same non-event an absent class
+    // directory is, and what makes an overlay-free repo index byte-identically.
+    overrideRoot === undefined ? [] : discoverOverlays(fs, overrideRoot),
   ]);
 
   // Layer order is the precedence order, and it is imposed here rather than by
@@ -502,13 +559,25 @@ export async function buildContentIndex(
   }
   for (const [key, paths] of duplicates) collisions.push({ key, paths, kind: "duplicate-id" });
 
-  const items = [
+  // Patching runs on the RESOLVED item — whichever layer holds the key after the
+  // loop above — and before `items` is assembled. "The artifact currently in
+  // force" is the only target that stays correct when a pack is installed or
+  // removed; targeting the corpus specifically would patch a body nobody emits
+  // and report that the patch applied. A patched key is never a shadowed one
+  // (an overlay over a full override is refused), so `shadows` below reads the
+  // same map it would have read unpatched.
+  const patched = await applyOverlays(fs, overlays, byKey);
+
+  const resolved = [
     // A replaced artifact leaves the index entirely: one identity, one body, so
     // a consumer iterating `items` cannot emit both the shipped original and
     // the override that took its id.
     ...shippedItems.filter((item) => !shadowedKeys.has(typeIdKey(item.type, item.id))),
     ...userItems,
   ];
+  // A patch does not move an item: the merged artifact takes the base's place in
+  // walk order, keeping its file, its origin and its provenance.
+  const items = patched.size === 0 ? resolved : resolved.map((item) => patched.get(item) ?? item);
   return {
     items,
     byKey,
@@ -568,6 +637,548 @@ function claimantOf(existing: CatalogItem): string {
   return existing.provenance === undefined
     ? `claimed by the corpus artifact at ${existing.relativePath}`
     : `claimed by installed pack "${existing.provenance.pack}" (${existing.relativePath})`;
+}
+
+/**
+ * ── The overlay layer ────────────────────────────────────────────────────────
+ *
+ * An overlay states a DELTA rather than a replacement: `.customize.yaml` patches
+ * the resolved artifact's frontmatter, `.customize.md` appends to its body, and
+ * the base keeps flowing from the corpus or the pack that supplies it — so the
+ * patch survives an upstream rewrite of everything it did not name. The
+ * alternative, a full override, is a copy of the whole artifact that stops
+ * tracking the original in silence.
+ *
+ * It lives HERE, in the walk, rather than in a module of its own. Discovery is
+ * layout — which directory each class lives in, that a skill's readable file is
+ * composed rather than listed, how a filename becomes a slug — and every one of
+ * those facts already has its home in this file. Merging is the walk's own item
+ * contract, because the merged document goes straight back through
+ * {@link buildItem}. A second module would have had to import the layout, the
+ * slug rule and the item builder to say anything at all, which is a seam that
+ * carries no boundary.
+ *
+ * Every defect fails closed with `VALIDATION_ERROR` naming the absolute path and
+ * the offending field — the posture the walk already takes for a malformed
+ * artifact, and for the same reason. Warn-and-skip was the alternative and its
+ * observable outcome is exactly the bug this layer closes: a tree that looks
+ * customized and a sync that ships the bundled body.
+ */
+
+/** Which half of a pair an overlay file is. */
+type OverlayHalfKind = "frontmatter" | "body";
+
+/** One overlay file: where it is, and what it says. */
+interface OverlayHalf {
+  /** Absolute path, named in every refusal this file can cause. */
+  path: string;
+  /** File text, verbatim. */
+  text: string;
+}
+
+/** The halves read for one artifact. Either may be absent; both may not. */
+interface OverlayHalves {
+  frontmatter?: OverlayHalf;
+  body?: OverlayHalf;
+}
+
+/** A merged artifact, ready to go back through {@link buildItem}. */
+interface MergedOverlay {
+  /** Merged frontmatter map: base order first, overlay-only keys appended. */
+  frontmatter: Record<string, unknown>;
+  /** Merged body: the base's, one blank line, then the body half. */
+  body: string;
+  /**
+   * The merged document as text. {@link buildItem} re-reads `tools` from the RAW
+   * document rather than from the map, so a merge with no raw twin would either
+   * skip the closed tool-vocabulary check or need a second implementation of it
+   * — and a gate that disagrees with itself is worse than no gate.
+   */
+  raw: string;
+  /**
+   * Label for every refusal the merged artifact can raise: the base file's
+   * absolute path plus every overlay path applied. The `require*` helpers
+   * already prefix their messages with it and already name the field, so both
+   * files and the offending key land in one line with no extra plumbing.
+   */
+  source: string;
+}
+
+/**
+ * Which half — if either — a filename in the override tree is. `base` is the
+ * name with the suffix removed and nothing else done to it; turning that into a
+ * slug is {@link slugOf}'s business.
+ */
+function overlayHalfOf(name: string): { base: string; half: OverlayHalfKind } | null {
+  if (name.endsWith(OVERLAY_FRONTMATTER_SUFFIX)) {
+    return { base: name.slice(0, -OVERLAY_FRONTMATTER_SUFFIX.length), half: "frontmatter" };
+  }
+  if (name.endsWith(OVERLAY_BODY_SUFFIX)) {
+    return { base: name.slice(0, -OVERLAY_BODY_SUFFIX.length), half: "body" };
+  }
+  return null;
+}
+
+/**
+ * The filename one half takes for a given base name — the inverse of
+ * {@link overlayHalfOf}, and why the two suffixes are spelled once. A skill's
+ * halves are COMPOSED (`SKILL.customize.yaml`) rather than listed, so the walk
+ * has to build those names rather than recognise them.
+ */
+function overlayHalfName(base: string, half: OverlayHalfKind): string {
+  return `${base}${half === "frontmatter" ? OVERLAY_FRONTMATTER_SUFFIX : OVERLAY_BODY_SUFFIX}`;
+}
+
+/** True for either half; the artifact candidate filter narrows itself by it. */
+function isOverlayFileName(name: string): boolean {
+  return overlayHalfOf(name) !== null;
+}
+
+/**
+ * Merge one pair over its base.
+ *
+ * Frontmatter is a SHALLOW key set: a key the overlay declares replaces the base
+ * value entirely, a key whose value is null is removed, a key the overlay does
+ * not name is untouched, and lists and nested maps replace whole. There are no
+ * merge verbs in v1 — each one is a second language an author writes and a
+ * reviewer has to simulate, and list UNION in particular is the option that
+ * looks helpful and is not, because under it a tag can never be removed without
+ * introducing a verb anyway.
+ *
+ * The body is APPEND-only. No section-anchor convention exists in any content
+ * class, so an anchored insert would have to invent one; a prepended note lands
+ * above the artifact's own first heading and reads as its opening, which is the
+ * one position that changes how a client renders the file.
+ */
+function mergeOverlay(base: CatalogItem, halves: OverlayHalves): MergedOverlay {
+  const patch = halves.frontmatter === undefined ? {} : readOverlayFrontmatter(halves.frontmatter);
+  const appended = halves.body === undefined ? undefined : readOverlayBody(halves.body);
+
+  const frontmatter = mergeOverlayFrontmatter(base.frontmatter, patch);
+  const body = appended === undefined ? base.body : appendOverlayBody(base.body, appended);
+  const applied = [halves.frontmatter?.path, halves.body?.path].filter(
+    (path): path is string => path !== undefined,
+  );
+
+  return {
+    frontmatter,
+    body,
+    raw: composeFrontmatter(frontmatter, body),
+    source: `${base.filePath} (patched by ${applied.join(", ")})`,
+  };
+}
+
+/** Parse the frontmatter half and refuse anything that would move the identity. */
+function readOverlayFrontmatter(half: OverlayHalf): Record<string, unknown> {
+  // The document IS the block, so it goes through the frontmatter module's own
+  // strict parser: one parser, one re-coding of a YAML failure into a content
+  // defect, and no second implementation to disagree with the first.
+  const patch = parseFrontmatterBlock(half.text, half.path);
+
+  for (const key of OVERLAY_IDENTITY_KEYS) {
+    // `hasOwn`, not a value read: `id:` with no value is a removal request, and
+    // removing the identity is the same defect as changing it. Ignoring the key
+    // with a warning was the alternative — an ignored key is indistinguishable
+    // from a working one to the author who wrote it.
+    if (!Object.hasOwn(patch, key)) continue;
+    throw new EngineError(
+      `${half.path}: an overlay must not declare \`${key}\`. That is the identity the overlay ` +
+        `is addressed BY — a patch that moved it would re-target itself and orphan its own ` +
+        `base. Remove the \`${key}\` key.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  return patch;
+}
+
+/**
+ * Read the body half, refusing a frontmatter fence at its head and a body past
+ * the user-content ceiling.
+ *
+ * The ceiling is measured over the RAW file text — before the BOM strip below —
+ * because that is the number `stamity validate` reports for the same file
+ * (`../cli/commands/validate.ts` → `cappedBody`, over the body length
+ * `./userContent.ts` records at discovery). Measuring the stripped text instead
+ * would put the two gates one character apart at exactly the limit.
+ *
+ * Held HERE and not only there because the two gates were failing closed in
+ * opposite directions: validate refused an oversized body patch and the walk
+ * merged it, so a repo could sync a patch its own validator rejects. Text past
+ * the ceiling is truncated where the artifact re-enters agent context, so the
+ * client runs a body the author was never shown a flag for — silent, which is
+ * the direction this layer exists to close.
+ */
+function readOverlayBody(half: OverlayHalf): string {
+  if (half.text.length > MAX_OVERLAY_BODY_LENGTH) {
+    throw new EngineError(
+      `${half.path}: the body patch is ${half.text.length} characters, over the ` +
+        `${MAX_OVERLAY_BODY_LENGTH}-character ceiling on user-authored content. Text past it is ` +
+        `truncated where the artifact re-enters agent context, so the patch on disk stops being ` +
+        `the patch the client gets — split the patch, or move the material into a skill support ` +
+        `file.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  const text = half.text.charCodeAt(0) === BOM ? half.text.slice(1) : half.text;
+  if (OVERLAY_OPENING_FENCE.test(text)) {
+    throw new EngineError(
+      `${half.path}: a body overlay carries a body and nothing else, but this one opens with a ` +
+        `\`---\` frontmatter fence. Frontmatter is patched by the other half of the pair — move ` +
+        `those keys into the matching \`${OVERLAY_FRONTMATTER_SUFFIX}\` file.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  return text;
+}
+
+/**
+ * Shallow key-set merge, preserving the base's declared key order and appending
+ * overlay-only keys in the order the overlay declared them. Order is not
+ * cosmetic: a re-emitted head that reshuffled its keys is a diff nobody asked
+ * for on every artifact the overlay touched.
+ */
+function mergeOverlayFrontmatter(
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  // Null-prototype: a computed-key assignment (`merged[key] = value`) with
+  // `key === "__proto__"` on an ordinary `{}` does not create an own property
+  // of that name — it reassigns `merged`'s own `[[Prototype]]` through the
+  // inherited setter, and the key vanishes from `Object.keys`/`Object.entries`
+  // silently rather than merging. An author who names a frontmatter key
+  // `__proto__` (YAML permits it) would see it disappear with no refusal, on
+  // an object that never inherits that setter to begin with.
+  const merged: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const [key, value] of Object.entries(base)) {
+    if (!Object.hasOwn(patch, key)) {
+      merged[key] = value;
+      continue;
+    }
+    // Null is removal, in both spellings YAML gives it: `key:` and `key: null`.
+    if (patch[key] !== null) merged[key] = patch[key];
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    // Removing a key the base never declared is a no-op rather than a defect:
+    // the merged map is the same either way.
+    if (Object.hasOwn(base, key) || value === null) continue;
+    merged[key] = value;
+  }
+  return merged;
+}
+
+/**
+ * Base body, exactly one blank line, then the appended text. The base's own
+ * bytes are otherwise untouched; only its trailing newlines are normalised, so
+ * a base that already ended in blank lines does not widen the separator.
+ */
+function appendOverlayBody(base: string, appended: string): string {
+  const trimmed = base.replace(TRAILING_NEWLINES, "");
+  return trimmed === "" ? appended : `${trimmed}\n\n${appended}`;
+}
+
+/**
+ * An overlay addressed at an id no layer supplies.
+ *
+ * Loud rather than inert: an overlay is addressed BY its filename, so a typo in
+ * that filename is the likeliest authoring mistake and is otherwise undetectable
+ * — the author sees a file on disk and an unchanged artifact, with nothing
+ * connecting the two. The cost is real (a typo stops a run that used to
+ * succeed), and the fix is one step either way.
+ */
+function refuseOrphanOverlay(paths: readonly string[], type: ContentClass, id: string): never {
+  throw new EngineError(
+    `Overlay ${paths.join(" and ")} patches ${type} "${id}", but no artifact of that id exists ` +
+      `in any layer — not the corpus, not an installed pack, not the override tree. An overlay ` +
+      `is addressed by its filename, so this is usually a typo in it. Correct the filename, or ` +
+      `remove the file.`,
+    { code: "VALIDATION_ERROR" },
+  );
+}
+
+/**
+ * An overlay and a full override of one identity.
+ *
+ * A full override is the author's own file, so patching it means editing it and
+ * the combination serves no purpose a text editor does not serve better.
+ * Refusing it is also what keeps the effective precedence chain legible: an id
+ * is either replaced or patched, never both, so a downstream report has two
+ * customization outcomes to print rather than four.
+ */
+/**
+ * Refuse an overlay filename spelled WITH an engine content prefix
+ * (`stamity-`/`st-`).
+ *
+ * {@link slugOf} strips the prefix before resolving what a pair patches, so
+ * `stamity-security.customize.yaml` and `security.customize.yaml` name the
+ * exact same patch — accepting both leaves two spellings for one identity,
+ * which is what let a prefix-spelled overlay pass this walk while the
+ * save-path's exclusivity probe (`../content/userContent.ts` →
+ * `saveIdDefect`), which composes its candidate paths from the bare id only,
+ * never saw it coming. One spelling is canonical here for the same reason
+ * `saveIdDefect` reserves the prefix on the save side: the bare slug.
+ *
+ * `halfPaths` names every half FILE this refusal is also about, in addition to
+ * `path` (the file-layout half itself, or a skill's carrier directory).
+ * `stamity validate` attributes an overlay refusal to a finding by matching the
+ * message against a half's absolute path (`../cli/commands/validate.ts` →
+ * `overlayFailure`/`halfPaths`) — it never has the carrier directory to match
+ * against, only the halves inside it — so a message naming the directory alone
+ * is unattributable there: it degrades to a note at exit 0 while the overlay
+ * still throws on the next `sync`. Naming a half path too is what keeps this
+ * refusal reachable by both readers of the message: this walk (which resolves
+ * an overlay by its carrier) and `validate` (which resolves one by its halves).
+ */
+function refusePrefixedOverlaySpelling(
+  path: string,
+  base: string,
+  halfPaths: readonly string[] = [],
+): never {
+  const bare = stripEngineContentPrefix(base);
+  const halves = halfPaths.length > 0 ? ` (${halfPaths.join(" and ")})` : "";
+  throw new EngineError(
+    `${path}${halves}: an overlay filename carries the engine content prefix, which names the ` +
+      `generated corpus, not a repo's own patch. Save it under the bare spelling ` +
+      `${JSON.stringify(bare)} instead — the canonical form the save gate's own reserved-prefix ` +
+      `rule also requires.`,
+    { code: "VALIDATION_ERROR" },
+  );
+}
+
+function refuseOverlayExclusivity(overridePath: string, overlayPaths: readonly string[]): never {
+  const overlays = overlayPaths.join(" and ");
+  throw new EngineError(
+    `The override at ${overridePath} and the overlay ${overlays} claim one identity. An artifact ` +
+      `is either REPLACED by a full override or PATCHED by an overlay, never both — a full ` +
+      `override is your own file, so patch it by editing it. Remove ${overlays}, or remove ` +
+      `${overridePath}.`,
+    { code: "VALIDATION_ERROR" },
+  );
+}
+
+/** One artifact's overlay halves, as the override tree holds them. */
+interface DiscoveredOverlay {
+  /** Class the halves patch, from the class directory they were found in. */
+  type: ContentClass;
+  /** Filename slug they address, prefix-stripped by {@link slugOf}. */
+  slug: string;
+  /** Absolute path of the `.customize.yaml` half, when present. */
+  frontmatterPath?: string;
+  /** Absolute path of the `.customize.md` half, when present. */
+  bodyPath?: string;
+  /** Absolute path of a full override of the same slug — refused when present. */
+  overridePath?: string;
+}
+
+/**
+ * Every overlay pair in the override tree, in class order then name order.
+ *
+ * A distinct pass rather than a branch inside {@link scanClass}, because the two
+ * answer different questions: the scan asks "is this an artifact", and an
+ * overlay is emphatically not one — it is a delta addressed at an artifact some
+ * other layer supplies. Overlays are looked for in the override tree ONLY. The
+ * corpus and pack trees are framework territory, and a patch sitting beside the
+ * file it patches would be a customization the author cannot carry forward.
+ */
+async function discoverOverlays(fs: CatalogFs, root: string): Promise<DiscoveredOverlay[]> {
+  const perClass = await Promise.all(
+    CONTENT_CLASSES.map(async (type) => {
+      const { dir, layout } = CLASS_LAYOUT[type];
+      const entries = await listDir(fs, join(root, dir));
+      if (entries === null) return [];
+      return layout === "directory"
+        ? scanSkillOverlays(fs, root, type, entries)
+        : fileOverlays(root, type, entries);
+    }),
+  );
+  return perClass.flat();
+}
+
+/**
+ * Overlays for a file-layout class, plus the full override of the same slug when
+ * the tree holds one — the two are collected in a single listing because the
+ * exclusivity refusal needs both, and a second listing could disagree with the
+ * first about what is on disk.
+ */
+function fileOverlays(root: string, type: ContentClass, entries: Dirent[]): DiscoveredOverlay[] {
+  const { dir } = CLASS_LAYOUT[type];
+  const found = new Map<string, DiscoveredOverlay>();
+  const overrides = new Map<string, string>();
+
+  for (const entry of entries) {
+    // Regular files only: a symlink is never followed out of the tree it was
+    // found in, on this pass as on every other in this module.
+    if (!entry.isFile()) continue;
+    const path = join(root, dir, entry.name);
+    const half = overlayHalfOf(entry.name);
+    if (half === null) {
+      if (entry.name.endsWith(ARTIFACT_EXTENSION)) overrides.set(slugOf(basename(entry.name)), path);
+      continue;
+    }
+    if (carriesEngineContentPrefix(half.base)) refusePrefixedOverlaySpelling(path, half.base);
+    const slug = slugOf(half.base);
+    const existing = found.get(slug);
+    // One pair per slug: the two halves are two files describing one patch, so
+    // the second one found joins the first rather than starting a second pair.
+    const pair = existing ?? { type, slug };
+    if (half.half === "frontmatter") pair.frontmatterPath = path;
+    else pair.bodyPath = path;
+    if (existing === undefined) found.set(slug, pair);
+  }
+
+  const pairs = [...found.values()];
+  for (const pair of pairs) {
+    const overridePath = overrides.get(pair.slug);
+    if (overridePath !== undefined) pair.overridePath = overridePath;
+  }
+  return pairs;
+}
+
+/**
+ * Overlays for the one directory-layout class. A skill's readable file is
+ * COMPOSED rather than listed, and so are its overlay halves, so each skill
+ * directory is listed to see which of the three files it holds.
+ *
+ * A directory carrying overlay halves and no `SKILL.md` is an overlay CARRIER,
+ * not work in progress: the base it patches lives in the corpus or in a pack,
+ * so there is nothing for the author to put beside them.
+ */
+async function scanSkillOverlays(
+  fs: CatalogFs,
+  root: string,
+  type: ContentClass,
+  entries: Dirent[],
+): Promise<DiscoveredOverlay[]> {
+  const { dir } = CLASS_LAYOUT[type];
+  const skillDirs = entries.filter((entry) => entry.isDirectory());
+  const listings = await Promise.all(
+    skillDirs.map((entry) => listDir(fs, join(root, dir, entry.name))),
+  );
+  const skillBase = basename(SKILL_FILE);
+
+  return skillDirs.flatMap((entry, index) => {
+    const inner = listings[index] ?? [];
+    const pathOf = (name: string): string | undefined =>
+      inner.some((candidate) => candidate.name === name && candidate.isFile())
+        ? join(root, dir, entry.name, name)
+        : undefined;
+
+    const frontmatterPath = pathOf(overlayHalfName(skillBase, "frontmatter"));
+    const bodyPath = pathOf(overlayHalfName(skillBase, "body"));
+    if (frontmatterPath === undefined && bodyPath === undefined) return [];
+    if (carriesEngineContentPrefix(entry.name)) {
+      refusePrefixedOverlaySpelling(
+        join(root, dir, entry.name),
+        entry.name,
+        [frontmatterPath, bodyPath].filter((p): p is string => p !== undefined),
+      );
+    }
+    const overridePath = pathOf(SKILL_FILE);
+    return [
+      {
+        type,
+        slug: slugOf(entry.name),
+        ...(frontmatterPath === undefined ? {} : { frontmatterPath }),
+        ...(bodyPath === undefined ? {} : { bodyPath }),
+        ...(overridePath === undefined ? {} : { overridePath }),
+      },
+    ];
+  });
+}
+
+/**
+ * Merge every discovered pair over the item its `(class, slug)` resolves to, and
+ * answer base-item → merged-item so the caller can put each merged artifact in
+ * its base's place.
+ *
+ * The merged document goes back through {@link buildItem} as `raw`, so it
+ * re-runs the EXACT checks an authored artifact runs — including the closed
+ * tool vocabulary, which is read from the raw text rather than from the map.
+ * Validating the overlay in isolation was the alternative and does not work: a
+ * removal is only judgeable against its base, since `description:` is a no-op
+ * alone and a missing required field once merged.
+ */
+async function applyOverlays(
+  fs: CatalogFs,
+  overlays: readonly DiscoveredOverlay[],
+  byKey: Map<string, CatalogItem>,
+): Promise<Map<CatalogItem, CatalogItem>> {
+  const patched = new Map<CatalogItem, CatalogItem>();
+  if (overlays.length === 0) return patched;
+
+  // Read first, merge second: bounded concurrency for the same reason the
+  // artifact reads are bounded, and it keeps the merge loop synchronous so a
+  // refusal stops it at the offending pair.
+  const paths = overlays.flatMap(overlayPathsOf);
+  const texts = await pLimit(READ_CONCURRENCY).map(paths, (path) => readArtifact(fs, path));
+  const textByPath = new Map(paths.map((path, index) => [path, texts[index] ?? null]));
+
+  for (const overlay of overlays) {
+    const overlayPaths = overlayPathsOf(overlay);
+    if (overlay.overridePath !== undefined) {
+      refuseOverlayExclusivity(overlay.overridePath, overlayPaths);
+    }
+    const id = applyCommandPrefix(overlay.slug, overlay.type);
+    const key = typeIdKey(overlay.type, id);
+    const base = byKey.get(key);
+    if (base === undefined) refuseOrphanOverlay(overlayPaths, overlay.type, id);
+    // Exclusivity again, read by IDENTITY rather than by filename: an override
+    // whose declared id disagrees with its own filename still REPLACED this id,
+    // and an id is either replaced or patched, never both.
+    if (originOf(base) === "user") refuseOverlayExclusivity(base.filePath, overlayPaths);
+
+    const halves = halvesOf(overlay, textByPath);
+    // Both halves vanished between the listing and the read. Nothing to apply,
+    // and nothing an author can act on — the same non-event an absent file is.
+    if (halves === null) continue;
+
+    const merged = mergeOverlay(base, halves);
+    const built = buildItem({
+      type: overlay.type,
+      // The base's own id, not the filename slug: the merged artifact IS that
+      // artifact, so a filename disagreement the scan already reported must not
+      // be reported a second time by the rebuild.
+      slug: base.id,
+      raw: merged.raw,
+      relativePath: base.relativePath,
+      filePath: base.filePath,
+      // Decision-13 naming parity: one line names the base, every overlay file
+      // applied, and the offending field.
+      source: merged.source,
+      frontmatter: merged.frontmatter,
+      body: merged.body,
+      origin: originOf(base),
+      ...(base.provenance === undefined ? {} : { provenance: base.provenance }),
+    });
+    byKey.set(key, built.item);
+    patched.set(base, built.item);
+  }
+  return patched;
+}
+
+/** Every overlay path of one pair, frontmatter half first. */
+function overlayPathsOf(overlay: DiscoveredOverlay): string[] {
+  return [overlay.frontmatterPath, overlay.bodyPath].filter(
+    (path): path is string => path !== undefined,
+  );
+}
+
+/** The read halves of one pair, or null when neither could be read. */
+function halvesOf(
+  overlay: DiscoveredOverlay,
+  textByPath: ReadonlyMap<string, string | null>,
+): OverlayHalves | null {
+  const halfAt = (path: string | undefined): OverlayHalf | undefined => {
+    if (path === undefined) return undefined;
+    const text = textByPath.get(path);
+    return text === null || text === undefined ? undefined : { path, text };
+  };
+  const frontmatter = halfAt(overlay.frontmatterPath);
+  const body = halfAt(overlay.bodyPath);
+  if (frontmatter === undefined && body === undefined) return null;
+  return {
+    ...(frontmatter === undefined ? {} : { frontmatter }),
+    ...(body === undefined ? {} : { body }),
+  };
 }
 
 /**
@@ -716,7 +1327,16 @@ async function scanClass(
 
   const named = entries
     .filter((entry) => (layout === "directory" ? entry.isDirectory() : entry.isFile()))
-    .filter((entry) => layout === "directory" || entry.name.endsWith(ARTIFACT_EXTENSION));
+    // An overlay half is never an artifact candidate, in any layer. `.customize.yaml`
+    // was already excluded by the extension test; `.customize.md` was NOT, so a body
+    // patch carrying a frontmatter block indexed as a phantom artifact at id
+    // `<slug>.customize` — a claimant nobody wrote, emitted beside the artifact it
+    // meant to patch. The narrowing is what makes the two files mean one thing each.
+    .filter(
+      (entry) =>
+        layout === "directory" ||
+        (entry.name.endsWith(ARTIFACT_EXTENSION) && !isOverlayFileName(entry.name)),
+    );
 
   // A skill's readable file is composed, not listed, so its kind has to be
   // read from its own directory before it is opened. One extra listing per
@@ -792,6 +1412,13 @@ interface BuildItemInput {
   body: string;
   origin: ContentOrigin;
   provenance?: { pack: string; declaredTools: readonly string[] };
+  /**
+   * Label every field-level refusal is prefixed with; {@link filePath} when
+   * absent. A MERGED artifact passes a composite naming the base file and every
+   * overlay applied, because a refusal caused by a patch has two candidate files
+   * and naming one of them sends the author to the wrong one.
+   */
+  source?: string;
 }
 
 /**
@@ -808,14 +1435,14 @@ function buildItem(input: BuildItemInput): { item: CatalogItem; collision: Conte
   // walk labels its parse with it: only the root tells a corpus artifact apart
   // from a pack copy or an override of the same name. `relativePath` stays the
   // indexed identity — it is what collisions and shadows are reported under.
-  const source = input.filePath;
+  const source = input.source ?? input.filePath;
 
   const declared = requireString(frontmatter, "id", { source, optional: true })?.trim();
   const bareId = declared === undefined || declared === "" ? slug : declared;
   // Validated before the command prefix goes on: `cmd-..` is a literal segment
   // name that no traversal check would object to, so prefixing first would hide
   // exactly the id this guard exists to catch.
-  assertSafePath(bareId, `${input.filePath} \`id\``);
+  assertSafePath(bareId, `${source} \`id\``);
   const id = applyCommandPrefix(bareId, type);
 
   const precedence = requireEnum(frontmatter, "precedence", RULE_PRECEDENCES, {

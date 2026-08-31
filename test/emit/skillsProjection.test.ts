@@ -599,6 +599,119 @@ describe("projectSkills over an override tree", () => {
   });
 });
 
+/**
+ * A PATCH, not a replacement: `.customize.yaml`/`.customize.md` beside where an
+ * override would sit merge onto the base rather than standing in for it, and
+ * the base keeps supplying everything the overlay does not name. `buildItem`
+ * folds the merge into the item's own `body`/`frontmatter` but — by spec
+ * REQ-003, the merge-identity rule — the patched item keeps the BASE's
+ * `filePath`, because the merged artifact IS that artifact, not a new file
+ * living somewhere else.
+ *
+ * A projection that re-reads `SKILL.md` from `filePath` on disk therefore
+ * reads the UNPATCHED corpus bytes straight past the merge: the catalog
+ * reports the patch applied, `validate` prints `patched`/`emits: true`, and
+ * the shipped file carries none of it. This is the regression case for that
+ * hole (`src/emit/skillsProjection.ts`'s `projectOneSkill`), watched red
+ * against the unfixed projection (a disk re-read at `filePath`) before the fix
+ * that renders `SKILL.md` from the merged `item.body`/`item.frontmatter`
+ * instead.
+ */
+describe("projectSkills over a patched (overlay) skill", () => {
+  const CORPUS_DIR = "corpus";
+  const OVERRIDE_DIR = "overrides";
+
+  const BASE_BODY_MARKER = "Base step: run the bundled recipe.";
+  const PATCHED_BODY_MARKER = "House step: run this repo's own recipe addendum.";
+
+  function volumeOf(files: Record<string, string>): {
+    fs: ProjectSkillsOptions["fs"];
+    corpusRoot: string;
+    overrideRoot: string;
+  } {
+    const volume = makeVolume(files);
+    return {
+      fs: volume.fs,
+      corpusRoot: `${volume.root}/${CORPUS_DIR}`,
+      overrideRoot: `${volume.root}/${OVERRIDE_DIR}`,
+    };
+  }
+
+  it("emits the MERGED body for a corpus skill an overlay body-patches, not the unpatched corpus bytes", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-recipe/SKILL.md`]: artifact(
+        "id: recipe\ntype: skill\ndescription: The bundled recipe.\ntags: [review]",
+        `${BASE_BODY_MARKER}\n`,
+      ),
+      // Overlay slug resolves from the CARRIER directory's own name
+      // (`recipe`), matched against the base item's id — not against the
+      // corpus directory name (`st-recipe`).
+      [`${OVERRIDE_DIR}/skills/recipe/SKILL.customize.md`]: `${PATCHED_BODY_MARKER}\n`,
+    });
+
+    const rows = await projectSkills(contextOf(["recipe"]), {
+      contentRoot: { root: volume.corpusRoot, overrideRoot: volume.overrideRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+    const skill = rows.find((row) => row.path.endsWith("/st-recipe/SKILL.md"));
+
+    expect(skill).toBeDefined();
+    // Append-only merge: the base's own line survives AND the overlay's
+    // addendum ships alongside it. A disk re-read carries the first and drops
+    // the second silently — this is the assertion that catches it.
+    expect(skill?.content).toContain(BASE_BODY_MARKER);
+    expect(skill?.content).toContain(PATCHED_BODY_MARKER);
+
+    // Ships into BOTH trees identically: the vendor-neutral projection above,
+    // and the native re-target the claude adapter serves from the same bytes.
+    const native = retargetProjection(rows, ".claude/skills");
+    const nativeSkill = native.find((row) => row.path.endsWith("/st-recipe/SKILL.md"));
+    expect(nativeSkill?.content).toContain(PATCHED_BODY_MARKER);
+  });
+
+  it("emits the MERGED frontmatter for a corpus skill an overlay frontmatter-patches", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-recipe/SKILL.md`]: artifact(
+        "id: recipe\ntype: skill\ndescription: The bundled recipe.\ntags: [review]",
+        `${BASE_BODY_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/skills/recipe/SKILL.customize.yaml`]: "description: Our house recipe.\n",
+    });
+
+    const rows = await projectSkills(contextOf(["recipe"]), {
+      contentRoot: { root: volume.corpusRoot, overrideRoot: volume.overrideRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+    const skill = rows.find((row) => row.path.endsWith("/st-recipe/SKILL.md"));
+
+    // The patched description reaches the spec-shaped head; the unpatched
+    // corpus value ("The bundled recipe.") is nowhere in the emitted file.
+    expect(skill?.content).toContain("description: Our house recipe.");
+    expect(skill?.content).not.toContain("The bundled recipe.");
+  });
+
+  it("still projects support files from disk — an overlay patches SKILL.md only", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-recipe/SKILL.md`]: artifact(
+        "id: recipe\ntype: skill\ndescription: The bundled recipe.\ntags: [review]",
+        `${BASE_BODY_MARKER}\n`,
+      ),
+      [`${CORPUS_DIR}/skills/st-recipe/references/steps.md`]: "Corpus reference, unpatched.\n",
+      [`${OVERRIDE_DIR}/skills/recipe/SKILL.customize.md`]: `${PATCHED_BODY_MARKER}\n`,
+    });
+
+    const rows = await projectSkills(contextOf(["recipe"]), {
+      contentRoot: { root: volume.corpusRoot, overrideRoot: volume.overrideRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+    const byPath = new Map(rows.map((row) => [row.path, row.content]));
+
+    expect(byPath.get(`${SKILLS_PROJECTION_DIR}/st-recipe/references/steps.md`)).toBe(
+      "Corpus reference, unpatched.\n",
+    );
+  });
+});
+
 // ── Native per-client re-targeting ───────────────────────────────
 
 /**

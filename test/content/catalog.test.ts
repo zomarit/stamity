@@ -24,6 +24,7 @@ import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
 } from "../../src/content/contentRoot.ts";
+import { MAX_USER_CONTENT_LENGTH } from "../../src/guard/promptGuard.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { useTempDir } from "../support/tempDir.ts";
 import { makeVolume } from "../support/vfs.ts";
@@ -726,6 +727,710 @@ describe("the override layer", () => {
   it("reports no skipped entries for a corpus with no links", async () => {
     const { index } = await indexOf(CORPUS);
     expect(index.skipped).toEqual([]);
+  });
+});
+
+describe("the overlay layer", () => {
+  /**
+   * The overlay lane's own block, beside the override layer's. An overlay states
+   * a DELTA — `.customize.yaml` patches frontmatter, `.customize.md` appends to
+   * the body — so the base keeps flowing from whichever layer supplies it, and
+   * every defect is loud (docs/specs/overlay-layers.md, REQ-OVERLAY-002..010).
+   */
+
+  /** A base rule carrying every frontmatter shape an overlay can act on. */
+  const BASE_RULE = artifact(
+    "id: security\ntype: rule\ndescription: Security floor.\ntags: [floor:security]\n" +
+      "load: always\nobsolete_when: never\nprecedence: critical\ntools: [claude]",
+    "Base body.\nLast line.\n",
+  );
+  const BASE_CORPUS: Record<string, string> = { "rules/stamity-security.md": BASE_RULE };
+
+  describe("REQ-OVERLAY-002 — `.customize.md` is never an artifact candidate", () => {
+    /**
+     * Regression. `.customize.md` ends in `.md`, so it passed the artifact
+     * candidate filter, and a body patch that happened to carry a frontmatter
+     * block indexed as a REAL artifact at id `<slug>.customize` — a phantom
+     * claimant the author never wrote, emitted alongside the artifact it was
+     * meant to patch.
+     *
+     * This case pins the OVERRIDE-tree half of that story — the file also
+     * carries a frontmatter fence, so REQ-OVERLAY-007's fence refusal fires
+     * regardless of the artifact-candidate narrowing below. The narrowing's
+     * own red-first bite (no fence to trip on another refusal first) is the
+     * next case, "treats a corpus-side `.customize.md` as no artifact and no
+     * overlay" — reverting the filter's `!isOverlayFileName(entry.name)` arm
+     * turns that one red, not this one.
+     */
+    it("never indexes a fenced `.customize.md` as a phantom artifact at `<slug>.customize`", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(BASE_CORPUS, {
+            // No declared id, so the filename slug is the id — which is exactly
+            // how the phantom got its name.
+            "rules/security.customize.md": artifact("type: rule\ndescription: Phantom.", "Patch.\n"),
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      // The fence is refused (REQ-OVERLAY-007) and points at the yaml half.
+      expect(refusal.message).toContain("overrides/rules/security.customize.md");
+      expect(refusal.message).toContain(".customize.yaml");
+      // And the phantom id is unreachable in every code path, not merely
+      // shadowed: the walk stops before any item is assembled.
+      expect(refusal.message).not.toContain("security.customize.md indexed");
+    });
+
+    it("treats a corpus-side `.customize.md` as no artifact and no overlay", async () => {
+      // Overlays never sit beside a corpus or a pack file (REQ-OVERLAY-001), so
+      // one found there is inert — not an artifact, not a patch, not a refusal.
+      const { index } = await indexOf({
+        ...BASE_CORPUS,
+        "rules/stamity-security.customize.md": artifact("type: rule\ndescription: Phantom."),
+      });
+
+      expect(index.items.map((item) => item.id)).toEqual(["security"]);
+      expect(index.byKey.has(typeIdKey("rule", "security.customize"))).toBe(false);
+      expect(itemAt(index, "rule", "security").body).toBe("Base body.\nLast line.\n");
+    });
+
+    it.each([
+      ["a near-miss extension", "rules/security.customize.yml"],
+      ["a near-miss infix", "rules/security.customise.yaml"],
+    ])("claims nothing for %s (%j)", async (_label, path) => {
+      // The infix is exact. A name that only looks like a half is inert: not an
+      // overlay, and — carrying no `.md` — not an artifact either.
+      const { index } = await overlayIndexOf(BASE_CORPUS, { [path]: "description: Ignored.\n" });
+
+      expect(itemAt(index, "rule", "security").description).toBe("Security floor.");
+      expect(index.items.map((item) => item.id)).toEqual(["security"]);
+    });
+
+    it("indexes a file literally named `customize.md` as the ordinary artifact it is", async () => {
+      // The suffix test is `.customize.md`, leading dot included, so a rule that
+      // happens to be CALLED `customize` is untouched by the narrowing.
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/customize.md": artifact("id: customize\ntype: rule\ndescription: Ours."),
+      });
+
+      expect(originOf(itemAt(index, "rule", "customize"))).toBe("user");
+      expect(index.collisions).toEqual([]);
+    });
+
+    it("discovers a `.customize.yaml` as an overlay and never as an artifact candidate", async () => {
+      const { index } = await overlayIndexOf(
+        { "commands/stamity-deploy.md": artifact("id: deploy\ntype: command\ndescription: Ships.") },
+        { "commands/deploy.customize.yaml": "description: Ships, our way.\n" },
+      );
+
+      expect(index.items.map((item) => item.id)).toEqual(["cmd-deploy"]);
+      expect(itemAt(index, "command", "cmd-deploy").description).toBe("Ships, our way.");
+      expect(index.byKey.has(typeIdKey("command", "cmd-deploy.customize"))).toBe(false);
+    });
+  });
+
+  describe("REQ-OVERLAY-003 — the target is the shadow-resolved item", () => {
+    it("patches the corpus artifact in place, keeping its identity and its file", async () => {
+      const { index, root } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.yaml": "description: The repo's own floor.\n",
+      });
+
+      const item = itemAt(index, "rule", "security");
+      expect(item.description).toBe("The repo's own floor.");
+      expect(originOf(item)).toBe("corpus");
+      expect(item.relativePath).toBe("rules/stamity-security.md");
+      expect(item.filePath).toBe(join(root, "rules", "stamity-security.md"));
+
+      // One identity, one body: a patch adds no second claimant, replaces
+      // nothing, and contests nothing.
+      expect(index.items.filter((entry) => entry.type === "rule")).toHaveLength(1);
+      expect(index.shadows).toEqual([]);
+      expect(index.collisions).toEqual([]);
+
+      // Every key the overlay did not name carries its base value.
+      expect(item.tags).toEqual(["floor:security"]);
+      expect(item.precedence).toBe("critical");
+      expect(item.tools).toEqual(["claude"]);
+      expect(item.frontmatter.load).toBe("always");
+      expect(item.frontmatter.obsolete_when).toBe("never");
+      expect(item.body).toBe("Base body.\nLast line.\n");
+    });
+
+    it("patches the PACK artifact when a pack is the layer that supplies the id", async () => {
+      const volume = makeVolume({
+        ...under("corpus", CORPUS),
+        ...under("pack", {
+          "agents/stamity-ops.md": artifact(
+            "id: ops\ntype: agent\ndescription: Pack ops agent.",
+            "Pack body.\n",
+          ),
+        }),
+        ...under("overrides", { "agents/ops.customize.yaml": "description: Our ops agent.\n" }),
+      });
+      const packRoots: PackContentRoot[] = [{ pack: "ops", root: join(volume.root, "pack") }];
+
+      const index = await buildContentIndex(
+        {
+          root: join(volume.root, "corpus"),
+          packRoots,
+          overrideRoot: join(volume.root, "overrides"),
+        },
+        { fs: volume.fs },
+      );
+
+      // Targeting the corpus specifically would patch a body nobody emits; the
+      // resolved item is the only target that stays correct across an install.
+      const item = itemAt(index, "agent", "ops");
+      expect(item.description).toBe("Our ops agent.");
+      expect(originOf(item)).toBe("pack");
+      expect(item.provenance).toEqual({ pack: "ops", declaredTools: [] });
+      expect(item.relativePath).toBe("agents/stamity-ops.md");
+      expect(item.body).toBe("Pack body.\n");
+      expect(index.shadows).toEqual([]);
+    });
+
+    it("patches a command under its bare slug, not its `cmd-`-prefixed catalog id", async () => {
+      const { index } = await overlayIndexOf(CORPUS, {
+        "commands/plan.customize.yaml": "description: Plans, our way.\n",
+      });
+
+      expect(itemAt(index, "command", "cmd-plan").description).toBe("Plans, our way.");
+    });
+
+    it("patches a skill from a directory that carries overlays and no SKILL.md", async () => {
+      const { index, root } = await overlayIndexOf(CORPUS, {
+        "skills/recipe/SKILL.customize.yaml": "description: Our recipe.\n",
+        "skills/recipe/SKILL.customize.md": "House step.\n",
+      });
+
+      // An overlay carrier is not work in progress: the directory holds no
+      // SKILL.md by design, because the base is the corpus skill.
+      const item = itemAt(index, "skill", "recipe");
+      expect(item.description).toBe("Our recipe.");
+      expect(item.filePath).toBe(join(root, "skills", "stamity-recipe", "SKILL.md"));
+      expect(item.body).toBe("Body text.\n\nHouse step.\n");
+      expect(index.skipped).toEqual([]);
+    });
+  });
+
+  describe("REQ-OVERLAY-005 — the frontmatter merge", () => {
+    it("replaces a key the overlay declares and leaves every other key alone", async () => {
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.yaml": "description: new\n",
+      });
+
+      const item = itemAt(index, "rule", "security");
+      expect(item.description).toBe("new");
+      expect(item.frontmatter).toEqual({
+        id: "security",
+        type: "rule",
+        description: "new",
+        tags: ["floor:security"],
+        load: "always",
+        obsolete_when: "never",
+        precedence: "critical",
+        tools: ["claude"],
+      });
+    });
+
+    it.each([
+      ["a bare key", "precedence:\n"],
+      ["an explicit null", "precedence: null\n"],
+    ])("removes a key whose overlay value is null — %s", async (_label, overlay) => {
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.yaml": overlay,
+      });
+
+      const item = itemAt(index, "rule", "security");
+      expect("precedence" in item.frontmatter).toBe(false);
+      expect("precedence" in item).toBe(false);
+    });
+
+    it("replaces a list value whole rather than unioning it", async () => {
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.yaml": "tags: [d]\ntools: [cursor]\n",
+      });
+
+      const item = itemAt(index, "rule", "security");
+      expect(item.tags).toEqual(["d"]);
+      expect(item.tools).toEqual(["cursor"]);
+    });
+
+    it("treats a null for a key the base never declared as a no-op", async () => {
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.yaml": "nothing_here:\n",
+      });
+
+      const item = itemAt(index, "rule", "security");
+      expect("nothing_here" in item.frontmatter).toBe(false);
+      expect(Object.keys(item.frontmatter)).toEqual([
+        "id",
+        "type",
+        "description",
+        "tags",
+        "load",
+        "obsolete_when",
+        "precedence",
+        "tools",
+      ]);
+    });
+
+    it("replaces a nested map whole rather than recursing into it", async () => {
+      const { index } = await overlayIndexOf(
+        {
+          "rules/stamity-security.md": artifact(
+            "id: security\ntype: rule\ndescription: Floor.\nlimits:\n  lines: 10\n  words: 20",
+          ),
+        },
+        { "rules/security.customize.yaml": "limits:\n  words: 5\n" },
+      );
+
+      // v1 has no merge verbs: `lines` is gone because the whole map replaced.
+      expect(itemAt(index, "rule", "security").frontmatter.limits).toEqual({ words: 5 });
+    });
+
+    it("keeps the base's key order and appends overlay-only keys in overlay order", async () => {
+      const { index } = await overlayIndexOf(
+        {
+          "rules/stamity-security.md": artifact(
+            "id: security\ntype: rule\ndescription: Floor.\ntags: [a]",
+          ),
+        },
+        { "rules/security.customize.yaml": "tags: [b]\nprecedence: high\nload: always\n" },
+      );
+
+      // Declared key order keeps a re-emitted head diff-minimal rather than
+      // reshuffled by the merge.
+      expect(Object.keys(itemAt(index, "rule", "security").frontmatter)).toEqual([
+        "id",
+        "type",
+        "description",
+        "tags",
+        "precedence",
+        "load",
+      ]);
+    });
+
+    /**
+     * min/5. `merged[key] = value` on an ordinary `{}` accumulator does not
+     * create an OWN property when `key === "__proto__"` — it reassigns
+     * `merged`'s own `[[Prototype]]` through the inherited setter instead, so
+     * the key vanishes from `Object.keys`/`Object.entries` with no refusal.
+     * Not exploitable (this is a fresh, per-merge object, never
+     * `Object.prototype` itself) but silent: an author who names a
+     * frontmatter key `__proto__` — YAML permits the string — would watch it
+     * disappear from the merged map rather than merging or being refused.
+     */
+    it("keeps a `__proto__`-named key as an ordinary own key rather than letting it vanish", async () => {
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.yaml": '__proto__:\n  polluted: true\n',
+      });
+
+      const item = itemAt(index, "rule", "security");
+      // An own, enumerable key — not a prototype reassignment: it shows up in
+      // `Object.keys` and reads back through the property itself.
+      expect(Object.keys(item.frontmatter)).toContain("__proto__");
+      expect(Object.getPrototypeOf(item.frontmatter)).toBeNull();
+      expect((item.frontmatter as Record<string, unknown>)["__proto__"]).toEqual({
+        polluted: true,
+      });
+    });
+  });
+
+  describe("REQ-OVERLAY-007 — the body merge is append-only", () => {
+    it("appends the body half after exactly one blank line", async () => {
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.md": "Extra paragraph.\n",
+      });
+
+      expect(itemAt(index, "rule", "security").body).toBe(
+        "Base body.\nLast line.\n\nExtra paragraph.\n",
+      );
+    });
+
+    it.each([
+      ["no trailing newline", "Base.", "Base.\n\nExtra.\n"],
+      ["three trailing newlines", "Base.\n\n\n", "Base.\n\nExtra.\n"],
+      ["an empty body", "", "Extra.\n"],
+    ])("writes one separator for a base with %s", async (_label, body, expected) => {
+      const { index } = await overlayIndexOf(
+        { "rules/stamity-security.md": artifact("id: security\ntype: rule", body) },
+        { "rules/security.customize.md": "Extra.\n" },
+      );
+
+      expect(itemAt(index, "rule", "security").body).toBe(expected);
+    });
+
+    it("appends a body whose own `---` is a horizontal rule further down", async () => {
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.md": "Extra.\n\n---\n\nMore.\n",
+      });
+
+      // Only the HEAD of the half is a fence position; a rule inside the text
+      // is body, exactly as it is in an artifact.
+      expect(itemAt(index, "rule", "security").body).toBe(
+        "Base body.\nLast line.\n\nExtra.\n\n---\n\nMore.\n",
+      );
+    });
+
+    it.each([
+      ["a bare fence", "---\ndescription: Sneaky.\n---\nBody.\n"],
+      ["a fence with trailing spaces", "---  \ndescription: Sneaky.\n---\nBody.\n"],
+      ["a fence hidden behind a BOM", "﻿---\ndescription: Sneaky.\n---\nBody.\n"],
+      ["an unterminated fence", "---\ndescription: Sneaky.\n"],
+    ])("refuses a `.customize.md` opening with %s", async (_label, text) => {
+      const refusal = await expectRejection(
+        () => overlayIndexOf(BASE_CORPUS, { "rules/security.customize.md": text }),
+        "VALIDATION_ERROR",
+      );
+
+      // An author who writes frontmatter there means it to apply, so the
+      // refusal points at the half that would have applied it.
+      expect(refusal.message).toContain("overrides/rules/security.customize.md");
+      expect(refusal.message).toContain(".customize.yaml");
+    });
+  });
+
+  describe("REQ-OVERLAY-008 — the merged artifact re-runs the existing checks", () => {
+    it("runs the closed tool vocabulary over the MERGED document", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(BASE_CORPUS, {
+            "rules/security.customize.yaml": "tools: [not-a-tool]\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      // The same message an authored artifact would produce: the field, the
+      // offending name, and the valid set.
+      expect(refusal.message).toContain("`tools`");
+      expect(refusal.message).toContain("not-a-tool");
+      expect(refusal.message).toContain("Valid tools:");
+    });
+
+    it("labels a merged refusal with the base file and every applied overlay file", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(BASE_CORPUS, {
+            "rules/security.customize.yaml": "tags: 3\n",
+            "rules/security.customize.md": "Extra.\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("corpus/rules/stamity-security.md");
+      expect(refusal.message).toContain("overrides/rules/security.customize.yaml");
+      expect(refusal.message).toContain("overrides/rules/security.customize.md");
+      expect(refusal.message).toContain("`tags`");
+    });
+
+    it("names only the half that was applied", async () => {
+      const refusal = await expectRejection(
+        () => overlayIndexOf(BASE_CORPUS, { "rules/security.customize.yaml": "tags: 3\n" }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/rules/security.customize.yaml");
+      expect(refusal.message).not.toContain(".customize.md");
+    });
+  });
+
+  describe("REQ-OVERLAY-006/009/010 — the refusals", () => {
+    it.each([
+      ["id", "id: something-else\n"],
+      ["id", "id:\n"],
+      ["type", "type: agent\n"],
+      ["type", "type: null\n"],
+    ])("refuses an overlay that declares `%s` (%j)", async (key, overlay) => {
+      const refusal = await expectRejection(
+        () => overlayIndexOf(BASE_CORPUS, { "rules/security.customize.yaml": overlay }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/rules/security.customize.yaml");
+      expect(refusal.message).toContain(`\`${key}\``);
+    });
+
+    it("refuses malformed overlay YAML without indexing a partially merged item", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(BASE_CORPUS, {
+            "rules/security.customize.yaml": "description: [unterminated\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/rules/security.customize.yaml");
+    });
+
+    it("refuses an overlay whose YAML root is not a map", async () => {
+      const refusal = await expectRejection(
+        () => overlayIndexOf(BASE_CORPUS, { "rules/security.customize.yaml": "- one\n- two\n" }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/rules/security.customize.yaml");
+    });
+
+    it("refuses an orphan overlay, naming the file and the id it looked for", async () => {
+      const refusal = await expectRejection(
+        () => overlayIndexOf(BASE_CORPUS, { "rules/no-such-rule.customize.yaml": "description: x\n" }),
+        "VALIDATION_ERROR",
+      );
+
+      // A filename typo is otherwise undetectable: a file on disk and an
+      // unchanged artifact, with no signal connecting the two.
+      expect(refusal.message).toContain("overrides/rules/no-such-rule.customize.yaml");
+      expect(refusal.message).toContain("no-such-rule");
+    });
+
+    it("refuses an overlay that coexists with a full override of the same slug", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(BASE_CORPUS, {
+            "rules/security.md": artifact("id: security\ntype: rule\ndescription: Ours."),
+            "rules/security.customize.yaml": "description: x\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/rules/security.md");
+      expect(refusal.message).toContain("overrides/rules/security.customize.yaml");
+    });
+
+    it("refuses an overlay over a full override that took the id under another filename", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(BASE_CORPUS, {
+            "rules/house-floor.md": artifact("id: security\ntype: rule\ndescription: Ours."),
+            "rules/security.customize.yaml": "description: x\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      // Exclusivity is about the identity, not only the filename: an id is
+      // either replaced or patched, never both.
+      expect(refusal.message).toContain("overrides/rules/house-floor.md");
+      expect(refusal.message).toContain("overrides/rules/security.customize.yaml");
+    });
+
+    it("refuses an overlay beside a full skill override in the same directory", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(CORPUS, {
+            "skills/recipe/SKILL.md": artifact("id: recipe\ntype: skill\ndescription: Ours."),
+            "skills/recipe/SKILL.customize.yaml": "description: x\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/skills/recipe/SKILL.md");
+      expect(refusal.message).toContain("overrides/skills/recipe/SKILL.customize.yaml");
+    });
+  });
+
+  describe("canonical overlay spelling — one prefix-free filename per identity", () => {
+    /**
+     * W2. `slugOf` strips an engine content prefix before resolving what a pair
+     * patches (this file's own `stripEngineContentPrefix` call), so
+     * `stamity-security.customize.yaml` and `security.customize.yaml` name the
+     * SAME patch — walk-valid either way. That is exactly the gap the save-path
+     * exclusivity probe fell into (prove/13): `saveIdDefect`
+     * (`../../src/content/userContent.ts`) composes its candidate paths from the
+     * bare id only, so a prefix-spelled overlay is walk-visible and
+     * save-invisible at once. Refusing the prefixed spelling AT DISCOVERY closes
+     * that gap by removing the second spelling rather than by teaching the save
+     * probe to vary-probe it — one canonical spelling, matching the save gate's
+     * own reserved-prefix stance (`saveIdDefect`'s `ENGINE_CONTENT_PREFIXES`
+     * refusal).
+     */
+    it("refuses a `stamity-`-prefixed overlay filename, naming the file and the bare spelling", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(BASE_CORPUS, {
+            "rules/stamity-security.customize.yaml": "description: Prefixed spelling.\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/rules/stamity-security.customize.yaml");
+      // Names the canonical (bare) spelling the author should use instead.
+      expect(refusal.message).toContain("security");
+    });
+
+    it("refuses an `st-`-prefixed overlay filename the same way", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(
+            { "commands/stamity-deploy.md": artifact("id: deploy\ntype: command\ndescription: Ships.") },
+            { "commands/st-deploy.customize.yaml": "description: Prefixed spelling.\n" },
+          ),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/commands/st-deploy.customize.yaml");
+      expect(refusal.message).toContain("deploy");
+    });
+
+    it("refuses a prefixed overlay carried by its BODY half alone", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(BASE_CORPUS, {
+            "rules/stamity-security.customize.md": "Patch.\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/rules/stamity-security.customize.md");
+    });
+
+    it("refuses a `stamity-`-prefixed skill overlay CARRIER directory", async () => {
+      const refusal = await expectRejection(
+        () =>
+          overlayIndexOf(CORPUS, {
+            "skills/stamity-recipe/SKILL.customize.yaml": "description: Prefixed spelling.\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      // Named at the CARRIER directory and at the half inside it: a skill's
+      // slug lives on the directory the halves sit in, but the halves
+      // themselves are still validated by their own paths, so the refusal
+      // points an author at both.
+      expect(refusal.message).toContain("overrides/skills/stamity-recipe");
+      expect(refusal.message).toContain("recipe");
+    });
+
+    it("still accepts the canonical (bare) spelling — this is a refusal, not a new failure mode", async () => {
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.yaml": "description: Bare spelling.\n",
+      });
+
+      expect(itemAt(index, "rule", "security").description).toBe("Bare spelling.");
+    });
+
+    it("the save-path exclusivity probe still bites on the canonical spelling", async () => {
+      // W2's other half: refusing the prefixed spelling at the walk restores
+      // the probe's completeness by removing the second spelling entirely — a
+      // save over the bare id an overlay already patches must still be caught.
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.yaml": "description: Patched.\n",
+      });
+      const item = itemAt(index, "rule", "security");
+
+      expect(item.description).toBe("Patched.");
+      // The overlay's own id is the bare slug, which is exactly what
+      // `saveIdDefect` composes its candidate paths from — no prefix variant
+      // for it to miss once the prefixed spelling can no longer exist.
+      expect(item.id).toBe("security");
+    });
+
+    /**
+     * Negative boundary. `carriesEngineContentPrefix` tests `startsWith("st-")`
+     * — the hyphen included — so a bare slug that merely OPENS with the letters
+     * `st` (no hyphen) is not the reserved prefix and must not be refused: a
+     * false positive here would make an ordinary word an unusable slug for every
+     * overlay author.
+     */
+    it("does not refuse a bare slug that merely opens with `st` (no hyphen) — `style`, not `st-yle`", async () => {
+      const { index } = await overlayIndexOf(
+        { "rules/stamity-style.md": artifact("id: style\ntype: rule\ndescription: Base.") },
+        { "rules/style.customize.yaml": "description: Patched style guide.\n" },
+      );
+
+      expect(itemAt(index, "rule", "style").description).toBe("Patched style guide.");
+    });
+  });
+
+  describe("REQ-OVERLAY-012 — the user-content ceiling binds the body half", () => {
+    /**
+     * Fail-closed parity with `stamity validate`, in the direction that was
+     * broken: validate reported an oversized `.customize.md` as an error finding
+     * and the WALK merged it anyway, so a repo could sync a body its own
+     * validator refuses — text past the ceiling is truncated where the artifact
+     * re-enters agent context, which means the patch on disk stops being the
+     * patch the client gets, silently.
+     *
+     * The cap is read from the constant validate reads
+     * (`src/guard/promptGuard.ts`), so the two gates cannot drift to two
+     * different numbers. A test import creates no production edge.
+     */
+    /** One character past the ceiling. */
+    const oversizedBody = `${"x".repeat(MAX_USER_CONTENT_LENGTH)}\n`;
+
+    it("refuses a body patch over the ceiling, naming the file and the limit", async () => {
+      const refusal = await expectRejection(
+        () => overlayIndexOf(BASE_CORPUS, { "rules/security.customize.md": oversizedBody }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("overrides/rules/security.customize.md");
+      expect(refusal.message).toContain(String(MAX_USER_CONTENT_LENGTH));
+      // The same message family validate prints for the same defect, so an
+      // author who met one of the two gates recognises the other.
+      expect(refusal.message).toContain("ceiling on user-authored content");
+    });
+
+    it("admits a body patch exactly at the ceiling, and merges it", async () => {
+      // The boundary from the legal side: a cap that refused its own limit
+      // would move the ceiling by one and disagree with validate about which
+      // repos are shippable.
+      const atCap = "x".repeat(MAX_USER_CONTENT_LENGTH);
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/security.customize.md": atCap,
+      });
+
+      expect(itemAt(index, "rule", "security").body).toBe(`Base body.\nLast line.\n\n${atCap}`);
+    });
+
+    it("leaves an over-ceiling file that is not an overlay half alone", async () => {
+      // The ceiling is a rule about the BODY PATCH, not about every byte in the
+      // override tree: a full override of the same size is the author's own
+      // artifact and is judged by the checks that judge an artifact.
+      const { index } = await overlayIndexOf(BASE_CORPUS, {
+        "rules/house-floor.md": artifact(
+          "id: house-floor\ntype: rule\ndescription: Ours.",
+          oversizedBody,
+        ),
+      });
+
+      expect(itemAt(index, "rule", "house-floor").body).toBe(oversizedBody);
+    });
+  });
+
+  describe("REQ-OVERLAY-013 — no overlay files means byte-identical", () => {
+    it("indexes identically when the override tree holds no `.customize.*` file", async () => {
+      const volume = makeVolume({
+        ...under("corpus", CORPUS),
+        ...under("pack", {
+          "rules/stamity-ops.md": artifact("id: ops\ntype: rule\ndescription: Pack ops floor."),
+        }),
+        ...under("overrides", {
+          // A populated override tree with nothing the overlay pass claims.
+          "rules/README.md": "How this tree works.\n",
+          "agents/house-style.md": artifact("id: house-style\ntype: agent\ndescription: Ours."),
+        }),
+      });
+      const root = join(volume.root, "corpus");
+      const packRoots: PackContentRoot[] = [{ pack: "ops", root: join(volume.root, "pack") }];
+
+      const plain = await buildContentIndex({ root, packRoots }, { fs: volume.fs });
+      const withTree = await buildContentIndex(
+        { root, packRoots, overrideRoot: join(volume.root, "overrides") },
+        { fs: volume.fs },
+      );
+
+      // Everything the override layer already did, unchanged — the overlay pass
+      // contributes nothing at all when nothing addresses it.
+      expect(withTree.items.filter((item) => originOf(item) !== "user")).toEqual(plain.items);
+      expect(withTree.collisions).toEqual(plain.collisions);
+      expect(withTree.shadows).toEqual([]);
+      expect(withTree.skipped).toEqual([]);
+      expect(withTree.items.map((item) => item.id)).toEqual([
+        ...plain.items.map((item) => item.id),
+        "house-style",
+      ]);
+    });
   });
 });
 
