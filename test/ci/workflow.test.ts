@@ -1255,6 +1255,199 @@ describe.skipIf(WINDOWS)("release.yml — the release proofs, executed", () => {
   });
 });
 
+// ── release.yml: the changelog extraction, executed ──────────────────────────
+
+/**
+ * The `Compose release notes` step's CHANGELOG extraction, RUN, against fixture changelogs in a
+ * scratch directory — the same seam the `Resolve version` suite above uses.
+ *
+ * Why running it rather than reading it. The awk program that carves a `## [x.y.z]` section out of
+ * CHANGELOG.md gates an IRREVERSIBLE `npm publish`: a version whose section is missing, empty, or
+ * accidentally matched against an adjacent heading must fail THIS step, in the gates job, before
+ * the pack is handed to the publish job — "a release that cannot describe itself does not ship".
+ * A substring match on the awk source cannot prove the control flow does that; only feeding the
+ * real block real changelogs can. So the step's `run:` is pulled from the parsed YAML and executed
+ * exactly as the runner would, with the same `env:` values reaching it.
+ *
+ * Not run on Windows, for the reason the `Resolve version` suite is not: the step is a bash/awk
+ * script GitHub runs on ubuntu, and a Git-for-Windows bash is a different interpreter.
+ */
+describe.skipIf(WINDOWS)("release.yml — the changelog extraction, executed", () => {
+  const root = mkdtempSync(join(tmpdir(), "stamity-changelog-"));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  const COMPOSE = runOf(stepsOf(release, "gates"), "Compose release notes");
+
+  interface ComposeRun {
+    readonly status: number | null;
+    readonly out: string;
+    readonly notes: string;
+  }
+
+  let seq = 0;
+
+  /**
+   * Run the shipped Compose step against `changelog` (or no CHANGELOG.md at all when null) with
+   * `version` as the section to extract. Every non-changelog value reaches the block through `env:`
+   * exactly as the workflow supplies it, so the block runs unmodified — the test drives the real
+   * logic, it does not re-implement it.
+   */
+  function compose(changelog: string | null, version: string): ComposeRun {
+    const cwd = join(root, `run-${(seq += 1)}`);
+    mkdirSync(cwd, { recursive: true });
+    if (changelog !== null) writeFileSync(join(cwd, "CHANGELOG.md"), changelog);
+    const result = spawnSync("bash", ["-c", COMPOSE], {
+      cwd,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        VERSION: version,
+        PACKAGE_NAME: "pkg",
+        TARBALL: "pkg-1.2.0.tgz",
+        TARBALL_SHA256: "0".repeat(64),
+        SBOM_PRESENT: "true",
+        GITHUB_SHA: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      },
+    });
+    const notesPath = join(cwd, "release-notes.md");
+    return {
+      status: result.status,
+      out: `${result.stdout}${result.stderr}`,
+      notes: existsSync(notesPath) ? readFileSync(notesPath, "utf8") : "",
+    };
+  }
+
+  /** A section with two entry groups and a Keep-a-Changelog footer of `[label]: url` link-defs. */
+  const WITH_FOOTER = [
+    "# Changelog",
+    "",
+    "## [1.2.0] - 2026-08-01",
+    "",
+    "### Added",
+    "- A shiny new flag.",
+    "",
+    "### Fixed",
+    "- A real bug.",
+    "",
+    "[1.2.0]: https://example.invalid/compare/v1.1.0...v1.2.0",
+    "[1.1.0]: https://example.invalid/compare/v1.0.0...v1.1.0",
+    "",
+  ].join("\n");
+
+  it("extracts exactly the matching section's body, with the footer link-defs excluded", () => {
+    const run = compose(WITH_FOOTER, "1.2.0");
+
+    expect(run.status, run.out).toBe(0);
+    // The body of the matched section is present.
+    expect(run.notes).toContain("### Added");
+    expect(run.notes).toContain("- A shiny new flag.");
+    expect(run.notes).toContain("### Fixed");
+    expect(run.notes).toContain("- A real bug.");
+    // The `[label]: url` footer is where the section stops: none of it bleeds into the notes.
+    expect(run.notes, "footer link-def line must be excluded").not.toContain("[1.2.0]:");
+    expect(run.notes, "footer link-def URL must be excluded").not.toContain("example.invalid");
+  });
+
+  it("emits a non-empty Changes body for a real section — the positive control", () => {
+    // Isolates the extraction from the surrounding boilerplate: the text between the `### Changes`
+    // marker and the artifact table is the awk output, and for a real section it is non-empty. A
+    // rule that carved nothing would still render the header and table, so a bare `status == 0`
+    // would not catch it; this asserts the payload itself carries content.
+    const run = compose(WITH_FOOTER, "1.2.0");
+    const marker = "### Changes\n\n";
+    const start = run.notes.indexOf(marker);
+    expect(start, "the notes must carry a Changes section").toBeGreaterThanOrEqual(0);
+    const rest = run.notes.slice(start + marker.length);
+    const body = rest.slice(0, rest.indexOf("\n\n| Artifact"));
+    expect(body.trim().length, run.notes).toBeGreaterThan(0);
+    expect(body).toContain("- A shiny new flag.");
+  });
+
+  it("fails closed when no heading matches the version — publish cannot proceed", () => {
+    // The fail-closed contract: a version with no `## [x.y.z]` heading fails THIS step. The message
+    // pins WHICH guard fired — the `if (!found) exit 3` in the awk END block — so neutering that
+    // guard (which leaves the empty-body check to catch the same input with a different message)
+    // turns this assertion red. Status alone would not: the two guards are belt-and-braces.
+    const run = compose(WITH_FOOTER, "9.9.9");
+
+    expect(run.status, run.out).not.toBe(0);
+    expect(run.out).toContain("No changelog section");
+    expect(run.out).toContain('has no "## [9.9.9]" section');
+    expect(run.notes, "no release notes are written on a fail-closed exit").toBe("");
+  });
+
+  it("rejects a section whose body is only whitespace", () => {
+    // A heading with nothing but a blank/whitespace line under it is not usable release notes. The
+    // awk matches the heading (found = 1) and prints the whitespace line, so the `if (!found)` guard
+    // passes it through; the empty-body check is the one that must reject it.
+    const changelog = [
+      "# Changelog",
+      "",
+      "## [1.2.0] - 2026-08-01",
+      "   \t  ",
+      "## [1.1.0] - 2026-07-01",
+      "- an entry that belongs to the older section.",
+      "",
+    ].join("\n");
+    const run = compose(changelog, "1.2.0");
+
+    expect(run.status, run.out).not.toBe(0);
+    expect(run.out).toContain("Empty changelog section");
+    expect(run.notes).toBe("");
+  });
+
+  it("does not match an adjacent heading: VERSION 1.0.1 never matches `## [1.0.10]`", () => {
+    // The closing `]` in the `## [$VERSION]` target is the disambiguator. A prefix match that
+    // dropped it would read `## [1.0.10]` as a `1.0.1` section and publish the wrong notes; here
+    // there is no `## [1.0.1]` section at all, so the correct answer is a fail-closed exit.
+    const changelog = [
+      "# Changelog",
+      "",
+      "## [1.0.10] - 2026-08-01",
+      "- belongs to the ten-th patch, not the first.",
+      "",
+    ].join("\n");
+
+    const missed = compose(changelog, "1.0.1");
+    expect(missed.status, missed.out).not.toBe(0);
+    expect(missed.out).toContain('has no "## [1.0.1]" section');
+
+    // The section IS extractable under its own exact version — proving the 1.0.1 failure is the
+    // adjacency guard, not a malformed fixture.
+    const hit = compose(changelog, "1.0.10");
+    expect(hit.status, hit.out).toBe(0);
+    expect(hit.notes).toContain("- belongs to the ten-th patch, not the first.");
+  });
+
+  it("stops a middle section at the next `## [` heading, not at end of file", () => {
+    // Extraction of a section that is neither first nor last must yield that section's body alone —
+    // no bleed backward into a newer section or forward into an older one.
+    const changelog = [
+      "# Changelog",
+      "",
+      "## [2.0.0] - 2026-08-10",
+      "- newer entry, above the target.",
+      "",
+      "## [1.5.0] - 2026-08-05",
+      "- the target entry.",
+      "",
+      "## [1.0.0] - 2026-08-01",
+      "- older entry, below the target.",
+      "",
+      "[2.0.0]: https://example.invalid/2",
+      "[1.5.0]: https://example.invalid/15",
+      "[1.0.0]: https://example.invalid/1",
+      "",
+    ].join("\n");
+    const run = compose(changelog, "1.5.0");
+
+    expect(run.status, run.out).toBe(0);
+    expect(run.notes).toContain("- the target entry.");
+    expect(run.notes, "the newer section must not bleed in").not.toContain("newer entry");
+    expect(run.notes, "the older section must not bleed in").not.toContain("older entry");
+  });
+});
+
 // ── docs-site.yml ────────────────────────────────────────────────────────────
 
 /** A `workflow_dispatch` context for this workflow: main, and whatever the form supplied. */
