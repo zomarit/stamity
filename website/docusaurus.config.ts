@@ -126,7 +126,7 @@ const config: Config = {
     // 2:1 ratio every unfurler crops to, so nothing important is cut. Docusaurus emits it as both
     // `og:image` and `twitter:image` on every page, which is why it is set once here rather than
     // per page. Light only, deliberately: the unfurl has no way to read the reader's theme.
-    image: 'img/social-card.png',
+    image: 'img/social-card-dark.png',
     colorMode: {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
