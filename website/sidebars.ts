@@ -68,7 +68,7 @@ const categories = [
   },
   {
     label: 'Guides',
-    items: present(['packs-and-trust', 'troubleshooting']),
+    items: present(['working-with-stamity', 'packs-and-trust', 'troubleshooting']),
   },
 ];
 

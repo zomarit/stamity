@@ -6,7 +6,7 @@ title: Skills
 
 # Skills
 
-A skill is a procedure an agent runs when the work calls for it. Its `description` is the trigger a client matches against the task at hand — it is the only part always in context, so it carries the whole activation claim. Authored in `content/skills/<id>/SKILL.md`.
+A skill is a procedure an agent runs when the work calls for it. Its `description` is the trigger a client matches against the task at hand — it is the only part always in context, so it carries the whole activation claim. Authored in `content/skills/st-<id>/SKILL.md`. Each heading is the name the skill is emitted and invoked under: the frontmatter `id` behind the `st-` prefix the invocable classes carry — the same prefix the path above spells out. The bare id is the `id:` line inside that `SKILL.md`.
 
 8 skills.
 

@@ -55,7 +55,11 @@ import {
 import { findPackageRoot } from "../../shared/paths.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../../types/content.ts";
 import { EngineError } from "../../types/errors.ts";
-import { INVOCABLE_CONTENT_PREFIX, contentPrefixFor } from "../../types/markers.ts";
+import {
+  CONTENT_PREFIX,
+  INVOCABLE_CONTENT_PREFIX,
+  contentPrefixFor,
+} from "../../types/markers.ts";
 
 /** The one command that rewrites every generated page in this lane. */
 export const REGENERATE_COMMAND = "node scripts/generate-docs.mjs";
@@ -140,7 +144,10 @@ const CLASS_PAGES: Record<ContentClass, Omit<ReferencePageSpec, "covers">> = {
     intro:
       "An agent is a role a client spawns for one bounded job. Its `description` is the " +
       "trigger the spawning side reads to decide whether this role fits the work, so it " +
-      "states the job rather than advertising the role. Authored in `content/agents/`.",
+      "states the job rather than advertising the role. Authored in `content/agents/`. " +
+      "Each heading is the name the agent is emitted under — the frontmatter `id` behind the " +
+      `\`${CONTENT_PREFIX}\` filename prefix every non-invocable class carries — so it matches ` +
+      "the artifact's filename stem in that directory rather than the bare `id:` line inside it.",
   },
   skill: {
     path: `${REFERENCE_DOC_DIR}/skills.md`,
@@ -150,7 +157,10 @@ const CLASS_PAGES: Record<ContentClass, Omit<ReferencePageSpec, "covers">> = {
       "A skill is a procedure an agent runs when the work calls for it. Its `description` " +
       "is the trigger a client matches against the task at hand — it is the only part " +
       "always in context, so it carries the whole activation claim. Authored in " +
-      "`content/skills/<id>/SKILL.md`.",
+      `\`content/skills/${INVOCABLE_CONTENT_PREFIX}<id>/SKILL.md\`. Each heading is the name ` +
+      "the skill is emitted and invoked under: the frontmatter `id` behind the " +
+      `\`${INVOCABLE_CONTENT_PREFIX}\` prefix the invocable classes carry — the same prefix the ` +
+      "path above spells out. The bare id is the `id:` line inside that `SKILL.md`.",
   },
   rule: {
     path: `${REFERENCE_DOC_DIR}/rules.md`,
@@ -159,7 +169,10 @@ const CLASS_PAGES: Record<ContentClass, Omit<ReferencePageSpec, "covers">> = {
     intro:
       "A rule is a constraint that binds work in this repository. `load` states when it " +
       "enters context: `always` for the floor a client must never work without, " +
-      "`on-demand` for constraints scoped to files or tasks. Authored in `content/rules/`.",
+      "`on-demand` for constraints scoped to files or tasks. Authored in `content/rules/`. " +
+      "Each heading is the name the rule is emitted under — the frontmatter `id` behind the " +
+      `\`${CONTENT_PREFIX}\` filename prefix every non-invocable class carries — so it matches ` +
+      "the artifact's filename stem in that directory rather than the bare `id:` line inside it.",
   },
   command: {
     path: `${REFERENCE_DOC_DIR}/commands.md`,

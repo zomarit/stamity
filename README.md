@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 37bd456. -->
 <!-- Re-open when: the corpus counts, the seven-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives all three from the content
      catalog and the generated capability matrix and fails here first. -->
@@ -99,6 +99,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`GOVERNANCE.md`](GOVERNANCE.md) | Who decides, how a change lands, and what the private layer holds. |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and the two channels a report goes through. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Prerequisites, what `init` asks and writes per client, and the guided first change. |
+| [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | The nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
 
