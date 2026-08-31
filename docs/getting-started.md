@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 37bd456. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, or a
      verb joins or leaves the command surface. `test/docsPages.test.ts` holds this page to the
      hand-page contract, and `docs/cli-reference.md` plus `docs/capability-matrix.md` are the
@@ -111,9 +111,16 @@ installs a pack once its trust gates pass. `config` reads and changes the setup.
 removes all of it.
 
 There is an eighth, `learn`, which agents call to record a learning through the engine's
-write gates. It is plumbing, not something you type. Every flag and every exit status is
-in [the CLI reference](cli-reference.md); every settable key is in
-[the configuration reference](configuration.md).
+write gates. It is plumbing, not something you type. The gates exist because a learning is
+text that re-enters an agent's context on a later session: anything with write access to
+the repository can author a file that is read back into a prompt, which makes a note a
+security surface rather than a scratch file. So the CLI is the one write path, and every
+note passes it — a name shape that cannot address anything but a file in place, per-file
+and per-directory caps, content checks (frontmatter schema, required sections, injection
+screening), and an integrity digest stamped over the body.
+
+Every flag and every exit status is in [the CLI reference](cli-reference.md); every
+settable key is in [the configuration reference](configuration.md).
 
 ## When something looks wrong
 
@@ -142,8 +149,14 @@ Everything the setup knows about itself is under `.stamity/`:
 | `.stamity/packs/` | content installed by `add`, one directory per pack |
 
 Commit it. The manifest is the provenance record, and a teammate who clones the
-repository gets the same setup without re-running init. The one file that is **not**
-committed is `.env.mcp` — MCP credentials — which the setup adds to `.gitignore` for you.
+repository gets the same setup without re-running init. Everything init writes outside
+that directory commits for the same reason — `AGENTS.md`, `.agents/`, and the client
+trees `.claude/`, `.cursor/`, `.github/prompts/` and `.codex/` — because that is what
+makes the clone arrive with working commands and skills already on disk, and because
+generated content earns no exemption from review: it lands as an ordinary diff, and
+`check` is what catches it drifting from what the engine would emit today. The one file
+that is **not** committed is `.env.mcp` — MCP credentials — and it is the single entry
+init adds to `.gitignore` for you.
 
 ## Keeping it current
 
@@ -158,5 +171,6 @@ confirm the tree is clean.
 
 ## Where to go next
 
+- [Working with stamity](working-with-stamity.md) — the nine touchpoints as one workflow, and how to run two changes at once.
 - [Packs and trust](packs-and-trust.md) — installing content on top of the corpus, and what the gates check.
 - [Troubleshooting](troubleshooting.md) — exit codes, doctor rows, and the common failures.

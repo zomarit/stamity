@@ -6,7 +6,7 @@ title: Rules
 
 # Rules
 
-A rule is a constraint that binds work in this repository. `load` states when it enters context: `always` for the floor a client must never work without, `on-demand` for constraints scoped to files or tasks. Authored in `content/rules/`.
+A rule is a constraint that binds work in this repository. `load` states when it enters context: `always` for the floor a client must never work without, `on-demand` for constraints scoped to files or tasks. Authored in `content/rules/`. Each heading is the name the rule is emitted under — the frontmatter `id` behind the `stamity-` filename prefix every non-invocable class carries — so it matches the artifact's filename stem in that directory rather than the bare `id:` line inside it.
 
 12 rules.
 

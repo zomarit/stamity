@@ -12,11 +12,14 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the four guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the five guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
- * The guides are held to the same hand-page contract as the root five by
- * `test/docsPages.test.ts`, which is what keeps a literal entry here from
- * pointing at a page nobody can date.
+ * The guides are held to the same dated hand-page contract as three of those
+ * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
+ * which is what keeps a literal entry here from pointing at a page nobody can
+ * date. GOVERNANCE and CODE_OF_CONDUCT are literal entries the suite does not
+ * gate: `test/docsPages.test.ts:73-90` owns the reason each is excluded from
+ * `PAGES`.
  *
  * **Repo-relative, always.** Every target is a path inside this tree. No
  * absolute link is admissible and the renderer refuses one: this index is
@@ -155,6 +158,13 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Migration",
         description:
           "moving a repository off the predecessor setup — the guided path, the manual path, and what does not transfer.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/working-with-stamity.md",
+        title: "Working with stamity",
+        description:
+          "the nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once.",
         regenerateCommand: null,
       },
       {

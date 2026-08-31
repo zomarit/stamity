@@ -6,7 +6,7 @@ title: Agents
 
 # Agents
 
-An agent is a role a client spawns for one bounded job. Its `description` is the trigger the spawning side reads to decide whether this role fits the work, so it states the job rather than advertising the role. Authored in `content/agents/`.
+An agent is a role a client spawns for one bounded job. Its `description` is the trigger the spawning side reads to decide whether this role fits the work, so it states the job rather than advertising the role. Authored in `content/agents/`. Each heading is the name the agent is emitted under — the frontmatter `id` behind the `stamity-` filename prefix every non-invocable class carries — so it matches the artifact's filename stem in that directory rather than the bare `id:` line inside it.
 
 10 agents.
 
