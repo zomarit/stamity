@@ -2,7 +2,7 @@
 title: Working with stamity
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 37bd456. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79570c. -->
 <!-- Re-open when: a touchpoint joins or leaves the command surface, a touchpoint's one-line job
      changes, a `stamity worktree` subcommand joins or leaves, `.stamity/worktree.json` changes
      shape, or the receipt's `version` moves off 1. `test/docsPages.test.ts` holds this page to the
