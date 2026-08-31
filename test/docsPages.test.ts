@@ -283,6 +283,9 @@ const lines = (text: string): string[] => text.replace(/\n$/, "").split("\n");
  * three lines of it — the `slug` that publishes the page under the predecessor's name, which is
  * a URL the filename itself cannot carry — and counting those against the six-line head would
  * hold that one page to a shorter header than its siblings for a reason the contract never made.
+ * The three other `docs/` guides carry frontmatter too, a two-line `title:` block Docusaurus
+ * reads for the sidebar label and the document title; "every sidebar-listed hand page declares
+ * its H1 as its title" below is what holds that block to the page it labels.
  */
 const afterFrontmatter = (text: string): string =>
   /^---\r?\n/.test(text) ? text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "") : text;
@@ -424,6 +427,33 @@ describe("hand pages", () => {
       `no hand page was re-verified at the ${RELEASE_CUT_DATE} cut — move the banner date on the ` +
         `pages this cut rewrote, or move RELEASE_CUT_DATE to the cut that actually happened`,
     ).toBe(RELEASE_CUT_DATE);
+  });
+
+  it("every sidebar-listed hand page declares its H1 as its title", () => {
+    // Docusaurus reads the `title:` frontmatter key for the sidebar label AND the document
+    // title; a page whose H1 and frontmatter title drift apart shows one heading in the sidebar
+    // and a different one on the page. `migration.md` is excluded on purpose — it carries only
+    // a `slug:` block (see MAPPED_GUIDES) and is off the sidebar, so it has no title to check.
+    let checked = 0;
+    for (const page of MAPPED_GUIDES) {
+      const text = read(page);
+
+      const frontmatter = /^---\r?\ntitle: (.+?)\r?\n---\r?\n/.exec(text);
+      expect(frontmatter, `${page} carries no title frontmatter for the sidebar`).not.toBeNull();
+      const title = frontmatter?.[1] ?? "";
+
+      const h1 = /^# (.+)$/m.exec(afterFrontmatter(text))?.[1];
+      expect(h1, `${page} has no H1 to check its frontmatter title against`).toBeDefined();
+
+      expect(title, `${page}'s frontmatter title diverges from its own H1`).toBe(h1);
+      checked += 1;
+    }
+    // Vacuity guard: an empty or mis-filtered MAPPED_GUIDES would pass the loop above having
+    // asserted nothing.
+    expect(checked, "no hand page under docs/ was checked for a title").toBeGreaterThan(0);
+    expect(checked, "MAPPED_GUIDES filtered out a page the loop should have checked").toBe(
+      MAPPED_GUIDES.length,
+    );
   });
 
   it("passes the leak gate", () => {

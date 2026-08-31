@@ -1,12 +1,16 @@
+---
+title: Commands
+---
+
 <!-- GENERATED FILE — do not edit by hand. Rewrite it with `node scripts/generate-docs.mjs`. -->
 
 # Commands
 
-A command is a touchpoint a human types. Ids carry the `cmd-` prefix the catalog applies so a command can never shadow a skill or agent of the same name; the typed touchpoint drops it. Authored in `content/commands/`.
+A command is a touchpoint a human types, and each heading below is that invocation exactly as it is typed — the `st-` prefix, after a slash. The catalog files commands under a namespacing prefix of its own so one can never shadow a skill or agent of the same name; that prefix is bookkeeping, and nothing types it. Authored in `content/commands/`.
 
 9 commands.
 
-### `cmd-ask`
+### `/st-ask`
 
 Read-only codebase Q&A: parallel facet research, file:line-cited claims, confidence, contradictions, blocked list.
 
@@ -14,7 +18,7 @@ Read-only codebase Q&A: parallel facet research, file:line-cited claims, confide
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively answer codebase questions with cited, confidence-rated claims
 
-### `cmd-board`
+### `/st-board`
 
 Work a backlog from any source — chat, file, or platform board: fill, pickup with readiness gate and handoff to work, groom, setup.
 
@@ -22,7 +26,7 @@ Work a backlog from any source — chat, file, or platform board: fill, pickup w
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively bridge repo work to platform boards with status-only write-back
 
-### `cmd-debug`
+### `/st-debug`
 
 Hypothesis-driven debugging with observation-only instrumentation and user reproduction; fixes route through the work pipeline after root cause and a failing test.
 
@@ -30,7 +34,7 @@ Hypothesis-driven debugging with observation-only instrumentation and user repro
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively enforce root-cause-before-fix with failing-test gates
 
-### `cmd-plan`
+### `/st-plan`
 
 Produce a persisted, reviewable plan from deep research — feature, bug, refactor, migration, test, or roadmap intent — consumed by work.
 
@@ -38,7 +42,7 @@ Produce a persisted, reviewable plan from deep research — feature, bug, refact
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively produce persisted decomposed plans with complete per-unit interfaces
 
-### `cmd-pr-resolve`
+### `/st-pr-resolve`
 
 Resolve PR review comments: normalized findings, rigor-evaluated auto-declines with cited replies, one consolidated triage ask, signed replies.
 
@@ -46,7 +50,7 @@ Resolve PR review comments: normalized findings, rigor-evaluated auto-declines w
 - **Load:** `on-demand`
 - **Obsolete when:** PR platforms natively triage and answer review threads with evidence-graded rigor
 
-### `cmd-quick`
+### `/st-quick`
 
 Tier-1 small-change lane with batch semantics and hard size/risk refusal thresholds; quality gates never skipped.
 
@@ -54,7 +58,7 @@ Tier-1 small-change lane with batch semantics and hard size/risk refusal thresho
 - **Load:** `on-demand`
 - **Obsolete when:** trivial-change quality gating is a native client feature
 
-### `cmd-rework`
+### `/st-rework`
 
 Intake and triage feedback on agent-delivered work: proof-block baseline, leftover scan, REVISE/DEFER routing, validated plan into the work pipeline.
 
@@ -62,7 +66,7 @@ Intake and triage feedback on agent-delivered work: proof-block baseline, leftov
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively triage delivered-work feedback against run proof records
 
-### `cmd-spec`
+### `/st-spec`
 
 Create and maintain the project spec: greenfield/brownfield auto-detect, converge scan on drift, confirm-gated truth merge, testability census.
 
@@ -70,7 +74,7 @@ Create and maintain the project spec: greenfield/brownfield auto-detect, converg
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively maintain a spec-of-record with drift detection and gated merge
 
-### `cmd-work`
+### `/st-work`
 
 Execute a change end to end: frame, research, plan, build with sub-agents, prove with gates, review loop, QA checkpoint, proof block.
 

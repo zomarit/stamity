@@ -48,7 +48,7 @@ import { MANIFEST_REPO_PATH } from "../../manifest/manifest.ts";
 import { TOOLS } from "../../types/core.ts";
 import { MANIFEST_VERSION, type SetupManifest } from "../../types/manifest.ts";
 import { EngineError } from "../../types/errors.ts";
-import { REGENERATE_COMMAND, generatedBanner } from "./referencePages.ts";
+import { REGENERATE_COMMAND, frontmatterBlock, generatedBanner } from "./referencePages.ts";
 
 /** Repo-relative path of the committed page this module renders. */
 export const CONFIG_REFERENCE_DOC_PATH = "docs/configuration.md";
@@ -169,6 +169,10 @@ export function renderConfigReferenceFrom(specs: readonly ConfigKeySpec[]): stri
   const rows = specs.map((spec) => [code(spec.key), spec.hint, unsetBehaviour(spec)]);
 
   const lines = [
+    // Frontmatter first, banner second: the site generator parses the block only
+    // at byte 0, so the banner cannot lead the file without unpublishing the title.
+    frontmatterBlock("Configuration reference"),
+    "",
     generatedBanner(),
     "",
     "# Configuration reference",

@@ -754,7 +754,12 @@ async function scanClass(
     const raw = raws[index];
     if (raw === null || raw === undefined) continue;
 
-    const parsed = parseFrontmatter(raw, candidate.relativePath);
+    // Labelled with the absolute path, not the relative one: `skills/verify/SKILL.md`
+    // spells a corpus file, a pack copy, and an override identically, and a refusal
+    // that names it sends the author to whichever twin they open first. Each layer
+    // has its own root, so `filePath` distinguishes them by construction — and it
+    // still ends in the relative path, so nothing downstream loses that spelling.
+    const parsed = parseFrontmatter(raw, candidate.filePath);
     // No frontmatter block: a README, a support file, a rule's `.mdc` twin read
     // by a future layout change. Not an artifact, not a defect.
     if (!parsed.hadFrontmatter) continue;
@@ -799,14 +804,18 @@ interface BuildItemInput {
  */
 function buildItem(input: BuildItemInput): { item: CatalogItem; collision: ContentCollision | null } {
   const { frontmatter, relativePath, slug, type } = input;
-  const source = relativePath;
+  // The absolute path labels every field-level refusal below, for the reason the
+  // walk labels its parse with it: only the root tells a corpus artifact apart
+  // from a pack copy or an override of the same name. `relativePath` stays the
+  // indexed identity — it is what collisions and shadows are reported under.
+  const source = input.filePath;
 
   const declared = requireString(frontmatter, "id", { source, optional: true })?.trim();
   const bareId = declared === undefined || declared === "" ? slug : declared;
   // Validated before the command prefix goes on: `cmd-..` is a literal segment
   // name that no traversal check would object to, so prefixing first would hide
   // exactly the id this guard exists to catch.
-  assertSafePath(bareId, `${relativePath} \`id\``);
+  assertSafePath(bareId, `${input.filePath} \`id\``);
   const id = applyCommandPrefix(bareId, type);
 
   const precedence = requireEnum(frontmatter, "precedence", RULE_PRECEDENCES, {

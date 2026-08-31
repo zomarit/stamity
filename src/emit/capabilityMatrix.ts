@@ -512,6 +512,15 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
   const dated = resolveTriggers(inputs.triggers, ordered);
 
   const lines = [
+    // Frontmatter first, banner second: the site generator parses the block only
+    // at byte 0, so the banner cannot lead the file without the page taking its
+    // navigation label from the slug. Spelled out here rather than imported from
+    // the docs renderers' shared helper, for the same reason the banner below is:
+    // this is the emit layer, and it does not depend on the CLI's docs lane.
+    "---",
+    "title: Client capability matrix",
+    "---",
+    "",
     `<!-- GENERATED FILE — do not edit by hand. Rewrite it with \`${REGENERATE_COMMAND}\`. -->`,
     "",
     "# Client capability matrix",

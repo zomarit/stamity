@@ -8,10 +8,15 @@ import { afterAll, describe, expect, it } from "vitest";
 import {
   REFERENCE_PAGES,
   REGENERATE_COMMAND,
+  frontmatterBlock,
   generatedBanner,
   renderReferencePages,
 } from "../../../src/cli/docs/referencePages.ts";
-import { buildContentIndex, type CatalogItem } from "../../../src/content/catalog.ts";
+import {
+  COMMAND_ID_PREFIX,
+  buildContentIndex,
+  type CatalogItem,
+} from "../../../src/content/catalog.ts";
 import { lookupCatalogEntry } from "../../../src/pack/curated.ts";
 import { CONTENT_CLASSES } from "../../../src/types/content.ts";
 import { EngineError } from "../../../src/types/errors.ts";
@@ -94,9 +99,18 @@ describe("renderReferencePages — drift gate", () => {
     }
   });
 
-  it("gives every page a generated banner naming the regen command", async () => {
-    for (const bytes of (await live()).values()) {
-      expect(bytes.startsWith(`${generatedBanner()}\n`)).toBe(true);
+  it("opens every page with its frontmatter title, then the generated banner", async () => {
+    // Changed assertion (not a weakening): the banner used to be the first bytes
+    // of every page, and Docusaurus parses frontmatter ONLY at byte 0 — so a
+    // banner ahead of it made the whole block invisible and every sidebar label
+    // was derived from the page slug instead of its title. The contract moved:
+    // frontmatter first, banner immediately after it, both still asserted here.
+    for (const [path, bytes] of await live()) {
+      const title = REFERENCE_PAGES.find((page) => page.path === path)?.title ?? "";
+      expect(title, `${path} has no page spec to take a title from`).not.toBe("");
+      expect(bytes.startsWith(`${frontmatterBlock(title)}\n\n${generatedBanner()}\n`)).toBe(true);
+      expect(bytes.indexOf("---"), `${path} does not open with frontmatter`).toBe(0);
+      expect(bytes).toContain(`title: ${title}`);
       expect(bytes).toContain(REGENERATE_COMMAND);
     }
   });
@@ -133,16 +147,31 @@ describe("renderReferencePages — drift gate", () => {
   });
 });
 
+/**
+ * The spelling a reader invokes an artifact by: `/st-work`, `st-verify`,
+ * `stamity-creator`. Written out here rather than imported from the renderer, so
+ * the assertion below is an independent claim about the page rather than a
+ * mirror of the code that produced it.
+ */
+const invoked = (item: CatalogItem): string => {
+  if (item.type === "command") return `/st-${item.id.replace(/^cmd-/, "")}`;
+  return item.type === "skill" ? `st-${item.id}` : `stamity-${item.id}`;
+};
+
 describe("frontmatter projection", () => {
   it("puts every corpus artifact on its class page exactly once, in id order", async () => {
     const [pages, index] = await Promise.all([live(), buildContentIndex()]);
     for (const spec of REFERENCE_PAGES) {
       if (spec.covers === "packs") continue;
       const page = pages.get(spec.path) ?? "";
+      // Changed expectation (not a weakening): the headings were the raw catalog
+      // ids and are now the invoked spellings, because a reader who types
+      // `/st-work` was being shown `cmd-work`. Same set, same order, same
+      // one-entry-per-artifact claim — only the rendering of each id moved.
       const expected = index.items
         .filter((item) => item.type === spec.covers)
-        .map((item) => item.id)
-        .toSorted();
+        .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+        .map(invoked);
       const headings = page
         .split("\n")
         .filter((line) => line.startsWith("### "))
@@ -176,10 +205,22 @@ describe("frontmatter projection", () => {
     }
   });
 
-  it("explains the catalog's command-id prefix on the commands page", async () => {
-    const commands = (await live()).get("docs/reference/commands.md") ?? "";
-    expect(commands).toContain("`cmd-`");
-    expect(commands).toContain("### `cmd-");
+  it("heads a command with the touchpoint a human types, and shows the catalog id nowhere", async () => {
+    // Inverted assertion (not a weakening): this used to REQUIRE `### `cmd-` on
+    // the commands page. That heading is the catalog's internal namespacing, not
+    // anything a reader types, and it contradicted the page's own prose one line
+    // above it. The contract moved to "the internal id appears nowhere
+    // reader-facing", so the old requirement becomes its own regression case,
+    // asserted across every page rather than only the one that showed it.
+    const pages = await live();
+    const commands = pages.get("docs/reference/commands.md") ?? "";
+    expect(commands).toContain("### `/st-work`");
+    expect(commands).toMatch(/^### `\/st-[a-z][a-z-]*`$/m);
+    for (const [path, bytes] of pages) {
+      expect(bytes, `${path} shows the catalog-internal command id prefix`).not.toContain(
+        COMMAND_ID_PREFIX,
+      );
+    }
   });
 });
 
@@ -330,7 +371,11 @@ describe("refuse-to-render on a defective artifact", () => {
         packsRoot: fixture.packsRoot,
       });
       const agents = pages.get("docs/reference/agents.md") ?? "";
-      expect(agents).toContain("### `probe`");
+      // Changed expectation (not a weakening): headings render the invoked
+      // spelling now, and an agent with the frontmatter id `probe` is invoked as
+      // `stamity-probe`. The claim — this artifact reached its class page — is
+      // the same one, held to the spelling the page actually ships.
+      expect(agents).toContain("### `stamity-probe`");
       expect(agents).toContain("1 agent.");
       expect(pages.get("docs/reference/packs.md") ?? "").toContain("### `probe-pack`");
       // An empty class is a legitimate state, not a defect.

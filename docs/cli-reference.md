@@ -1,3 +1,7 @@
+---
+title: CLI reference
+---
+
 <!-- GENERATED FILE — do not edit by hand. Rewrite it with `node scripts/generate-docs.mjs`. -->
 
 # CLI reference

@@ -42,7 +42,7 @@ import { COMMANDS } from "../../cli.ts";
 import type { CommandModule } from "../kit/program.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
 import { code, table } from "./configReference.ts";
-import { REGENERATE_COMMAND, generatedBanner } from "./referencePages.ts";
+import { REGENERATE_COMMAND, frontmatterBlock, generatedBanner } from "./referencePages.ts";
 
 /** Repo-relative path of the committed page this module renders. */
 export const CLI_REFERENCE_DOC_PATH = "docs/cli-reference.md";
@@ -437,6 +437,10 @@ export function renderCliReferenceFrom(commands: readonly CommandModule[]): stri
   }
 
   const lines = [
+    // Frontmatter first, banner second: the site generator parses the block only
+    // at byte 0, so the banner cannot lead the file without unpublishing the title.
+    frontmatterBlock("CLI reference"),
+    "",
     generatedBanner(),
     "",
     "# CLI reference",

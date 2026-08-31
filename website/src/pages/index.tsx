@@ -1,5 +1,6 @@
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+import CodeBlock from '@theme/CodeBlock';
 import Layout from '@theme/Layout';
 import type {ReactNode} from 'react';
 
@@ -20,9 +21,17 @@ export default function Home(): ReactNode {
         <h1 className="landing__title">{siteConfig.title}</h1>
         <p className="landing__pitch">{siteConfig.tagline}</p>
 
-        <pre className="landing__install">
-          <code>npx @zomarit/stamity init</code>
-        </pre>
+        {/*
+         * The theme's own code block, not a bare `pre`, and the reason is the copy button: this is
+         * the one line on the site a reader is meant to take away with them, and a hand-rolled
+         * `pre` is the only place on the whole site where copying is a manual selection. `sh`
+         * matches the fence `docs/getting-started.md` uses for the same command, so the two render
+         * identically. `className` lands on the block's outer container — see `.landing__install`
+         * in `src/css/custom.css` for what is adjusted there and what is left to the theme.
+         */}
+        <CodeBlock language="sh" className="landing__install">
+          npx @zomarit/stamity init
+        </CodeBlock>
 
         <div className="landing__links">
           <Link className="button button--primary button--lg" to="/docs/getting-started">
