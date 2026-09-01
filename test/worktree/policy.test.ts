@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EngineError, type ErrorCode } from "../../src/types/errors.ts";
 import {
@@ -485,8 +485,12 @@ describe("worktree policy — admissibility against git facts (REQ-WORKTREE-003)
 describe("worktree policy — farm resolution (REQ-WORKTREE-002)", () => {
   it("defaults to a dot-directory sibling of the repository, keyed by the repo directory name", () => {
     const policy = builtInWorktreePolicy();
+    // The farm is a real filesystem location, so the expected value is native,
+    // resolve-anchored form — matching the drive `resolveFarmDir` resolves the
+    // repo root onto on Windows. A `join("/home/dev/projects", …)` literal is
+    // drive-less and only held off Windows, where `resolve` and `join` coincide.
     expect(resolveFarmDir(policy, "/home/dev/projects/myrepo")).toBe(
-      join("/home/dev/projects", WORKTREE_FARM_DIR_NAME, "myrepo"),
+      resolve("/home/dev/projects", WORKTREE_FARM_DIR_NAME, "myrepo"),
     );
   });
 
@@ -495,7 +499,11 @@ describe("worktree policy — farm resolution (REQ-WORKTREE-002)", () => {
       policyText({ version: 1, farmDir: "../worktrees/myrepo" }),
       POLICY_PATH,
     );
-    expect(resolveFarmDir(policy, "/home/dev/projects/myrepo")).toBe("/home/dev/projects/worktrees/myrepo");
+    // Native, resolve-anchored form: the farm is a real path, so the POSIX
+    // string literal that only held off Windows is replaced with `resolve`.
+    expect(resolveFarmDir(policy, "/home/dev/projects/myrepo")).toBe(
+      resolve("/home/dev/projects/worktrees/myrepo"),
+    );
   });
 
   it("refuses a farmDir inside the repository, naming the resolved absolute path", () => {
@@ -508,7 +516,10 @@ describe("worktree policy — farm resolution (REQ-WORKTREE-002)", () => {
   it("refuses a farmDir that resolves to the repository root itself", () => {
     const policy = parseWorktreePolicy(policyText({ version: 1, farmDir: "." }), POLICY_PATH);
     const error = refuses(() => resolveFarmDir(policy, "/home/dev/projects/myrepo"), "VALIDATION_ERROR");
-    expect(error.message).toContain("/home/dev/projects/myrepo");
+    // The refusal names the resolved repo root (a real path an operator reads),
+    // so the expected substring is native, resolve-anchored — not the POSIX
+    // literal, which the backslash-and-drive message never contains on Windows.
+    expect(error.message).toContain(resolve("/home/dev/projects/myrepo"));
   });
 });
 
@@ -627,8 +638,9 @@ describe("farmDir must be a sibling-ish location [secfix W2]", () => {
       policyText({ version: 1, farmDir: "../worktrees/myrepo" }),
       POLICY_PATH,
     );
+    // Native, resolve-anchored form — see the farm-resolution cases above.
     expect(resolveFarmDir(policy, "/home/dev/projects/myrepo")).toBe(
-      "/home/dev/projects/worktrees/myrepo",
+      resolve("/home/dev/projects/worktrees/myrepo"),
     );
   });
 });

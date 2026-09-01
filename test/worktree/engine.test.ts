@@ -75,6 +75,19 @@ import { useTempDir } from "../support/tempDir.ts";
 // git is absent instead of silently passing an early `return`.
 const gitAvailable = (await runGit({ args: ["--version"], cwd: process.cwd() })).status === 0;
 
+/**
+ * POSIX mode assertion gate. Node cannot set or read 0o600/0o700/0o755 on
+ * Windows (a writable file reads back 0o666) and `chmod` does not restrict a
+ * directory there, so an exact-mode assertion tests a mechanism the platform
+ * lacks. Where a case is ENTIRELY a mode check it is `it.skipIf(WINDOWS)`; where
+ * one mode assertion sits among platform-independent ones (a checkout path, a
+ * dirty count), only that line is guarded with `if (!WINDOWS)`, so the rest
+ * still runs — and gates — on Windows. The farm's Windows protection is ACL
+ * inheritance under a user-scoped location, not a chmod bit (see
+ * docs/specs/worktree-lane.md § Windows).
+ */
+const WINDOWS = process.platform === "win32";
+
 const getRoot = useTempDir("worktree-engine");
 
 /** Runs git in a fixture and throws with git's own stderr when it fails. */
@@ -452,7 +465,9 @@ describe.skipIf(!gitAvailable)("worktree setup", () => {
     // The checkout supplies the committed content; the lane supplies the rest.
     expect(await readFile(join(fix.farm, "feat", "README.md"), "utf8")).toBe("# fixture\n");
     expect(await readFile(join(fix.farm, "feat", ".env.mcp"), "utf8")).toBe(SECRET_BODY);
-    expect((await stat(join(fix.farm, "feat", ".env.mcp"))).mode & 0o777).toBe(0o600);
+    // POSIX mode assertion — guarded so the rest of this case (path, dirtiness)
+    // still runs on Windows. See WINDOWS.
+    if (!WINDOWS) expect((await stat(join(fix.farm, "feat", ".env.mcp"))).mode & 0o777).toBe(0o600);
     // `node_modules` is a `skip` row: present in the report's decision, absent on disk.
     expect(await exists(join(fix.farm, "feat", "node_modules"))).toBe(false);
 
@@ -478,7 +493,9 @@ describe.skipIf(!gitAvailable)("worktree setup", () => {
     expect(receipt.version).toBe(1);
     expect(receipt.worktree).toEqual(result.worktree);
     expect(receipt.entries).toHaveLength(1);
-    expect(receipt.entries[0]).toMatchObject({ path: ".env.mcp", strategy: "copy", mode: "0600" });
+    expect(receipt.entries[0]).toMatchObject({ path: ".env.mcp", strategy: "copy" });
+    // The recorded mode is a POSIX mode assertion — guarded. See WINDOWS.
+    if (!WINDOWS) expect(receipt.entries[0]?.mode).toBe("0600");
     expect(receipt.entries[0]?.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -1126,7 +1143,8 @@ describe("the git timeout is scoped to fetch, not to worktree mutations [secfix 
 });
 
 describe.skipIf(!gitAvailable)("worktree security fixes over a real repository [secfix]", () => {
-  it("creates the farm directory at 0700 [secfix W2]", async () => {
+  // win32-gated: the whole case is a POSIX directory-mode assertion — see WINDOWS.
+  it.skipIf(WINDOWS)("creates the farm directory at 0700 [secfix W2]", async () => {
     const fix = await seedRepo(getRoot().dir);
     await runWorktreeSetup(setupOptions(fix, "feat"));
     expect((await stat(fix.farm)).mode & 0o777).toBe(0o700);
@@ -1153,9 +1171,11 @@ describe.skipIf(!gitAvailable)("worktree security fixes over a real repository [
     expect(withheld.entries.find((entry) => entry.path === ".env.mcp")?.outcome).toBe("skipped");
     expect(await exists(join(fix.farm, "feat", ".env.mcp"))).toBe(false);
 
-    // (3) forced to 0600 when granted, even from a 0644 source
+    // (3) forced to 0600 when granted, even from a 0644 source. The copy still
+    // runs on Windows (it proves the credential travels under consent); only the
+    // POSIX mode read-back is guarded. See WINDOWS.
     await runWorktreeSetup(setupOptions(fix, "feat2", { consent: GRANTED }));
-    expect((await stat(join(fix.farm, "feat2", ".env.mcp"))).mode & 0o777).toBe(0o600);
+    if (!WINDOWS) expect((await stat(join(fix.farm, "feat2", ".env.mcp"))).mode & 0o777).toBe(0o600);
   });
 
   it("a dirty cleanup without --force mutates NOTHING [secfix frontier-W2]", async () => {
