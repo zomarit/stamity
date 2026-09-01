@@ -935,10 +935,25 @@ at that moment — with no lock spanning the two and no conflict rule.
    unchanged: the wider rename retry schedule and its jitter
    (`src/merge/atomicWrite.ts:866-905`), and the lock's own retry and staleness
    budget (`src/merge/atomicWrite.ts:143-171`).
-4. **Residual: none of this is covered by CI.** There is no Windows job, so
-   items 1 and 2 are design decisions with unit-level coverage over injected
-   errnos and no end-to-end evidence. That is recorded in Risks, not smoothed
-   over.
+4. **The POSIX-mode mechanism has no Windows equivalent, and its tests are
+   platform-gated.** A Windows CI job now runs the suite, and the properties that
+   assert an exact POSIX mode — a `0600` secret, a `0700` farm, a preserved
+   `0755`, a read-only-directory denial — cannot hold there: Node cannot set or
+   read those bits on Windows (a writable file reads back `0o666`) and `chmod`
+   does not restrict a directory. Those assertions are gated with `skipIf` (a
+   `WINDOWS` const, or `CAN_TEST_PERMISSIONS` where a case also needs a non-root
+   runner, in `test/worktree/engine.test.ts` and `test/worktree/materialize.test.ts`),
+   so they keep running — and gating — on darwin and Linux while standing down on
+   Windows. On Windows a copied secret's protection is the farm's LOCATION —
+   outside the repository, under the user's own directory, with the ACL
+   inheritance that location carries — not a chmod bit. The production copy path
+   attempts no `chmod` on win32 (`src/worktree/materialize.ts` → `applyMode`) and
+   the farm's own `chmod(0o700)` is a non-throwing no-op there, so a setup run does
+   not fail on Windows; it reports the file's permissions as whatever the platform
+   gave it (item 2). The path-composition and inventory behaviours (the farm path,
+   the git-reported worktree paths) ARE now exercised on Windows and normalise to
+   the native separator at their seams (`src/worktree/git.ts` → `worktreePathFor`,
+   `listWorktrees`).
 
 **Rationale.** The reference carried exactly two Windows accommodations and the
 study flags both as under-verified. Naming the posture — including the part that

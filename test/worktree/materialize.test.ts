@@ -27,6 +27,24 @@ import { useTempDir } from "../support/tempDir.ts";
  * this suite, which is what the spec's own residual note says about them.
  */
 
+/**
+ * POSIX mode assertion gate. Node cannot set or read 0o600/0o700/0o755 on
+ * Windows (a writable file always reads back 0o666) and `chmod` does not
+ * restrict a directory there, so a case that asserts an exact mode tests a
+ * mechanism the platform does not have. `skipIf(WINDOWS)` keeps these running —
+ * and gating — on darwin and Linux while standing them down on Windows, where
+ * the farm's protection is ACL inheritance under a user-scoped location, not a
+ * chmod bit (see docs/specs/worktree-lane.md § Windows).
+ */
+const WINDOWS = process.platform === "win32";
+/**
+ * A case that depends on a directory mode ENFORCING a denial: false under root
+ * (which bypasses the bit) and under Windows (`process.getuid` is undefined and
+ * chmod does not restrict), true only where a non-root POSIX runner can observe
+ * the refusal.
+ */
+const CAN_TEST_PERMISSIONS = typeof process.getuid === "function" && process.getuid() !== 0;
+
 const getRoot = useTempDir("worktree-materialize");
 
 interface Fixture {
@@ -137,7 +155,8 @@ describe("worktree materialization — copy (REQ-WORKTREE-005)", () => {
     await expect(stat(join(fix.worktreeRoot, ".env.mcp"))).rejects.toThrow();
   });
 
-  it("carries the source's permission bits onto the copy", async () => {
+  // win32-gated: POSIX mode assertion — see WINDOWS.
+  it.skipIf(WINDOWS)("carries the source's permission bits onto the copy", async () => {
     const fix = await fixture();
     await seedSource(fix, "run.sh", "#!/bin/sh\necho hi\n", 0o755);
 
@@ -148,7 +167,8 @@ describe("worktree materialization — copy (REQ-WORKTREE-005)", () => {
     expect(result.mode).toBe("0755");
   });
 
-  it("forces a secret entry to 0600 whatever the source's mode was", async () => {
+  // win32-gated: POSIX mode assertion — see WINDOWS.
+  it.skipIf(WINDOWS)("forces a secret entry to 0600 whatever the source's mode was", async () => {
     const fix = await fixture();
     await seedSource(fix, ".env.mcp", SECRET_BODY, 0o644);
 
@@ -159,7 +179,8 @@ describe("worktree materialization — copy (REQ-WORKTREE-005)", () => {
     expect(result.secretModeApplied).toBe(true);
   });
 
-  it("hardens a secret entry that was already present, so a re-run cannot leave it loose", async () => {
+  // win32-gated: POSIX mode assertion — see WINDOWS.
+  it.skipIf(WINDOWS)("hardens a secret entry that was already present, so a re-run cannot leave it loose", async () => {
     const fix = await fixture();
     await seedSource(fix, ".env.mcp", SECRET_BODY, 0o644);
     const destination = join(fix.worktreeRoot, ".env.mcp");
@@ -187,9 +208,11 @@ describe("worktree materialization — copy (REQ-WORKTREE-005)", () => {
     expect(result.reason).toBeDefined();
   });
 
-  // Skipped for root, which is not refused by a directory mode bit. The case
-  // above covers the same contract without that dependency.
-  it.skipIf(typeof process.getuid === "function" && process.getuid() === 0)(
+  // Skipped where a directory mode does not enforce a denial: under root (which
+  // bypasses the bit) and under Windows (chmod does not restrict a directory, so
+  // the write would succeed and the outcome would be `materialized`). The case
+  // above covers the same failed-write contract without that dependency.
+  it.skipIf(!CAN_TEST_PERMISSIONS)(
     "reports a read-only destination directory as failed with no file left behind",
     async () => {
       const fix = await fixture();
@@ -413,7 +436,10 @@ describe("worktree materialization — the batch and its receipt rows (REQ-WORKT
    * copy the first run placed — and for the entry this lane copies by default,
    * that is credential material left behind.
    */
-  it("records materialized and skipped rows, and never absent or failed ones", async () => {
+  // win32-gated: the receipt row records the forced 0600 mode, a POSIX mode
+  // assertion — see WINDOWS. The materialized/skipped/absent outcome rows are
+  // covered platform-independently by the outcome case above.
+  it.skipIf(WINDOWS)("records materialized and skipped rows, and never absent or failed ones", async () => {
     const fix = await fixture();
     await seedSource(fix, ".env.mcp", SECRET_BODY);
     const existing = "MCP_GITHUB_TOKEN=placed-by-the-first-run\n";
@@ -493,7 +519,10 @@ describe("copy never stamps a symlink's 0777 onto the copied bytes [secfix W4]",
     expect(await present(join(fix.worktreeRoot, "d", "real.txt"))).toBe(true);
   });
 
-  it("reads a directly-named symlink source's mode through the link, not as 0777 [secfix]", async () => {
+  // win32-gated: asserts the exact 0644 read through the link — a POSIX mode
+  // assertion — see WINDOWS. The sibling case above proves the 0777 guard with a
+  // platform-independent `.not.toBe(0o777)`.
+  it.skipIf(WINDOWS)("reads a directly-named symlink source's mode through the link, not as 0777 [secfix]", async () => {
     const fix = await fixture();
     const target = join(fix.sourceRoot, "target.txt");
     await writeFile(target, "data\n", "utf8");
