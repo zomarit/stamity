@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { access, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -38,6 +39,9 @@ import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
  * handle itself, so `outside/` can be a real sibling the escape case links to
  * and the cleanup still owns both.
  */
+
+/** `mkfifo` and a directory symlink under test both need a real POSIX filesystem. */
+const WINDOWS = process.platform === "win32";
 
 const getTemp = useTempDir("stamity-workspace");
 
@@ -180,7 +184,7 @@ interface StatusDoc {
     lockedApplied?: string[];
     error?: { code: string; message: string };
   }[];
-  journal: { repo: string; run: string; ts: string } | null;
+  journal: { repo: string; run: string; ts: string }[];
   error?: { code: string; message: string };
 }
 
@@ -425,11 +429,17 @@ describe("workspace status — the crash journal", () => {
     expect(result.stdout).toContain(RUN);
     expect(result.stdout).toContain("2026-08-31T10:00:02.000Z");
     expect(result.stdout).toContain("half-written");
-    expect(doc.journal).toEqual({
-      repo: "apps/web",
-      run: RUN,
-      ts: "2026-08-31T10:00:02.000Z",
-    });
+    // TEST CHANGE, justified (D2): `journal` is now an ARRAY of every live
+    // flight rather than at most one — see the "multiple flights" and "a
+    // later clean run" cases below for why a single object can no longer
+    // state the contract. One live flight is still one element.
+    expect(doc.journal).toEqual([
+      {
+        repo: "apps/web",
+        run: RUN,
+        ts: "2026-08-31T10:00:02.000Z",
+      },
+    ]);
   });
 
   it("strips control bytes out of a journal line's ts before it renders", async () => {
@@ -482,7 +492,11 @@ describe("workspace status — the crash journal", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).not.toContain("half-written");
-    expect(singleDocument((await runWorkspace(root, ["status", "--json"])).stdout).journal).toBeNull();
+    // TEST CHANGE, justified (D2): "no live flight" is now the empty array
+    // rather than `null` — see the array-shape note on the case above.
+    expect(singleDocument((await runWorkspace(root, ["status", "--json"])).stdout).journal).toEqual(
+      [],
+    );
   });
 
   it("prints nothing, exits 0 and writes nothing when the last line is truncated mid-JSON", async () => {
@@ -521,6 +535,90 @@ describe("workspace status — the crash journal", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).not.toContain("half-written");
+  });
+
+  // D1: a FIFO planted at the journal's name must never make `open(path, "r")`
+  // block forever. `mkfifo` is POSIX-only, so this case is skipped on Windows
+  // rather than made to pass there — there is no FIFO to plant.
+  it.skipIf(WINDOWS)(
+    "returns instead of hanging when a FIFO sits at the journal's name",
+    async () => {
+      const temp = getTemp();
+      const root = await seedWorkspace(temp, manifestOf([{ path: "apps/web" }]));
+      await seedMember(root, "apps/web", true);
+      await mkdir(join(root, STATE_DIR), { recursive: true });
+      execFileSync("mkfifo", [join(root, STATE_DIR, WORKSPACE_SYNC_JOURNAL_FILE)]);
+
+      // The vitest timeout IS the red signal for this case: before the fix,
+      // `open(fifo, "r")` blocks forever with nothing on the write end, and
+      // this `await` never resolves. The assertion below only runs because the
+      // command returned at all.
+      const result = await runWorkspace(root, ["status"]);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).not.toContain("half-written");
+    },
+  );
+
+  // D2(a): a stale flight must not survive a LATER, unrelated clean run for the
+  // same repo — only hand-deleting the journal should have cleared it before
+  // this fix, which is exactly the undocumented trap the finding names.
+  it("suppresses a stale flight once a LATER run writes a terminal line for the same repo", async () => {
+    const temp = getTemp();
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/web" }]));
+    await seedMember(root, "apps/web", true);
+    await seedJournal(root, [
+      // A run that died mid-flight on apps/web...
+      journalLine({ ts: "2026-08-31T09:00:00.000Z", run: "run-A", repo: "apps/web", event: "started" }),
+      // ...followed by a LATER, DIFFERENT run that completed apps/web cleanly.
+      journalLine({ ts: "2026-08-31T10:00:00.000Z", run: "run-B", repo: "apps/web", event: "started" }),
+      journalLine({
+        ts: "2026-08-31T10:00:01.000Z",
+        run: "run-B",
+        repo: "apps/web",
+        event: "finished",
+        status: "ok",
+      }),
+    ]);
+
+    const result = await runWorkspace(root, ["status"]);
+    const doc = singleDocument((await runWorkspace(root, ["status", "--json"])).stdout);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain("half-written");
+    expect(doc.journal).toEqual([]);
+  });
+
+  // D2(b): default concurrency runs several members at once, so more than one
+  // flight can be genuinely live — every one of them has to be named, not just
+  // the newest.
+  it("names every member still in flight when more than one is unterminated", async () => {
+    const temp = getTemp();
+    const root = await seedWorkspace(
+      temp,
+      manifestOf([{ path: "apps/api" }, { path: "apps/web" }, { path: "apps/db" }]),
+    );
+    await seedMember(root, "apps/api", true);
+    await seedMember(root, "apps/web", true);
+    await seedMember(root, "apps/db", true);
+    await seedJournal(root, [
+      journalLine({ ts: "2026-08-31T10:00:00.000Z", run: RUN, repo: "apps/api", event: "started" }),
+      journalLine({ ts: "2026-08-31T10:00:01.000Z", run: RUN, repo: "apps/web", event: "started" }),
+      journalLine({
+        ts: "2026-08-31T10:00:02.000Z",
+        run: RUN,
+        repo: "apps/db",
+        event: "finished",
+        status: "ok",
+      }),
+    ]);
+
+    const result = await runWorkspace(root, ["status"]);
+    const doc = singleDocument((await runWorkspace(root, ["status", "--json"])).stdout);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout.match(/in flight:/g)).toHaveLength(2);
+    expect(doc.journal.map((flight) => flight.repo).toSorted()).toEqual(["apps/api", "apps/web"]);
   });
 });
 
@@ -1222,6 +1320,68 @@ describe("workspace sync — the bridge", () => {
   });
 });
 
+describe("workspace sync — the root pre-flight line", () => {
+  // D3: the resolved root and member count must be visible BEFORE the cascade
+  // writes a single member's manifest, not only in the report printed after
+  // every write already landed.
+  it("prints the resolved root, ahead of every per-member result, before any member is written", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(
+      temp,
+      manifestOf([{ path: "apps/api" }, { path: "apps/web" }], {
+        defaults: { tools: ["claude"] },
+      }),
+    );
+    await seedSyncMember(root, "apps/api", { tools: ["claude"] });
+    await seedSyncMember(root, "apps/web", { tools: ["claude"] });
+
+    const result = await runSync(root);
+
+    expect(result.code).toBe(0);
+    const rootLineIndex = result.stdout.indexOf(root);
+    const firstMemberResultIndex = result.stdout.indexOf("apps/api");
+    expect(rootLineIndex).toBeGreaterThanOrEqual(0);
+    expect(firstMemberResultIndex).toBeGreaterThan(rootLineIndex);
+    expect(result.stdout).toContain("2 members declared");
+  });
+});
+
+describe("workspace sync — a symlink alias between two members is refused", () => {
+  // D5: duplicate detection at manifest-read time is textual
+  // (`normalizeRepoPathKey`), while containment is realpath-resolved. A
+  // `repos[]` entry that is a symlink to a SIBLING member passes both, so two
+  // rows would otherwise cascade concurrently into one real directory.
+  it.skipIf(WINDOWS)(
+    "refuses before either row is attempted, naming both declared paths",
+    async () => {
+      const temp = getTemp();
+      await seedCorpus(temp);
+      const root = await seedWorkspace(
+        temp,
+        manifestOf([{ path: "apps/web" }, { path: "apps/web-alias" }], {
+          defaults: { tools: ["claude"] },
+        }),
+      );
+      const web = await seedSyncMember(root, "apps/web", { tools: ["claude"] });
+      await symlink(web, join(root, "apps/web-alias"), "dir");
+
+      const result = await runSync(root);
+      const doc = singleSyncDocument((await runSync(root, ["--json"])).stdout);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain("apps/web");
+      expect(result.stderr).toContain("apps/web-alias");
+      expect(doc.error?.code).toBe("VALIDATION_ERROR");
+      expect(doc.error?.message).toContain("apps/web");
+      expect(doc.error?.message).toContain("apps/web-alias");
+      // Neither row was ever attempted — the manifest is untouched from what
+      // `seedSyncMember` wrote, and nothing describes it as patched.
+      expect((await readManifest(web))?.tools).toEqual(["claude"]);
+    },
+  );
+});
+
 describe("workspace sync — selection and locks are reported, not written", () => {
   it("leaves each member's selection to that member's own sync", async () => {
     const temp = getTemp();
@@ -1370,6 +1530,35 @@ describe("workspace sync — one member's failure is one row", () => {
     // The sibling with no collision synced clean.
     expect(doc.repos[1]?.state).toBe("synced");
     expect((await readManifest(web))?.tools).toEqual(["claude"]);
+  });
+
+  // D4: `--force` on `sync` had zero coverage — the flag could be unwired and
+  // the suite would stay green. This is the WITH-force control for the case
+  // directly above: the same collision, overwritten behind a verified `.bak`.
+  it("overwrites a colliding unmanaged file under --force, behind a verified .bak", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(
+      temp,
+      manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude"] } }),
+    );
+    const api = await seedSyncMember(root, "apps/api", { tools: ["claude"] });
+    await writeFile(join(api, "AGENTS.md"), "hand-written, not the engine's\n", "utf8");
+
+    const result = await runSync(root, ["--force"]);
+    const doc = singleSyncDocument((await runSync(root, ["--force", "--json"])).stdout);
+
+    expect(result.code).toBe(0);
+    expect(doc.outcome).toBe("passed");
+    expect(doc.repos[0]?.state).toBe("synced");
+    // The engine's generated content landed at the path that collided...
+    expect(await readFile(join(api, "AGENTS.md"), "utf8")).not.toBe(
+      "hand-written, not the engine's\n",
+    );
+    // ...and the hand-written original survives, verified, one directory over.
+    expect(await readFile(join(api, "AGENTS.md.bak"), "utf8")).toBe(
+      "hand-written, not the engine's\n",
+    );
   });
 
   it("surfaces the cascade's own refusal for a member directory that is not there", async () => {

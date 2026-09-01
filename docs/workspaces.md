@@ -100,7 +100,7 @@ Bare `stamity workspace` is `status`, on a terminal and on a pipe alike — ther
 here for a picker to navigate, so both produce the same bytes. It reports the nearest
 `workspace.json` at or above the current directory, so running it inside `apps/web` reports the
 workspace that actually governs `apps/web`. The report is a root line, one row per declared member
-in declaration order, and at most one journal line.
+in declaration order, and one journal line per member still in flight.
 
 | Row state | What it means |
 |---|---|
@@ -117,10 +117,15 @@ The **root line** names the workspace root and says whether it carries a setup m
 own. It is marked informative: the root is never a cascade target, since the scan starts at the
 root's children and a member path spelled `"."` or `""` is refused by shape.
 
-The **journal line** appears only when the crash trail holds a `started` entry with no `finished`
-or `skipped` entry for the same run and member — the member in flight when a process died. It is
-read from a bounded 64 KiB tail rather than the whole file, and an absent journal, an unreadable
-one, or a window beginning mid-line each print nothing.
+A **journal line** prints for every member whose LAST line in the crash trail is a `started` with
+no `finished` or `skipped` line after it for that member — from this run or any later one. That is
+per-member liveness, not per-run: a member's own most recent line decides it, so a run that died
+mid-flight and a later, unrelated run that finished that same member cleanly leave no line behind —
+only a genuinely unterminated member still prints. Concurrency runs several members at once (the
+machine's core count, capped at eight — see `workspace sync` below), so more than one line can
+print at once, one per member still live. The trail is read from a bounded 64 KiB tail rather than
+the whole file, and an absent journal, an unreadable one, or a window beginning mid-line each print
+nothing.
 
 `status` exits 0 whenever it could read the manifest, whatever the rows say: it is a report, not a
 gate. Two gates exist already — `stamity validate` on the manifest's field defects and `workspace
@@ -130,7 +135,15 @@ directory, surfaces as that read's own failure instead, at exit 1.
 
 ## `workspace sync`
 
-The cascade, running members in parallel — the machine's core count, capped at eight, since a
+`sync` resolves its root the same way `status` does: the nearest `workspace.json` at or above the
+current directory, through the same ancestor walk. Running it inside a member directory therefore
+syncs the workspace that governs that member, not only a workspace whose root the cwd happens to
+be. Before the cascade writes a single byte, `sync` prints one line naming the resolved root and how
+many members it declares — ahead of every per-member result, since this is the one subcommand that
+writes and an operator running it from a nested directory should see which root it resolved before
+it starts rewriting manifests, not only in the summary after every write already landed.
+
+The cascade itself runs members in parallel — the machine's core count, capped at eight, since a
 member sync is write-heavy. Rows come back in manifest order whatever
 order they finished in, and one member's failure is one row: it never stops the others, and it
 never quietly passes either. Per member, in order:
@@ -149,7 +162,10 @@ never quietly passes either. Per member, in order:
    member's ledger, import choice and creation stamp intact.
 4. **Plan and apply** that member's own sync — the same path plain `stamity sync` runs inside it.
 5. A member whose apply refused a colliding path fails its row naming the refusals; everything
-   else in that member's plan is already on disk.
+   else in that member's plan is already on disk. `workspace sync --force` clears exactly the
+   collision class plain `sync --force` clears in every member — content the engine did not write
+   at a name it wants — overwriting it behind a verified `.bak` in that member's own directory,
+   per member, the same as running `stamity sync --force` there directly.
 
 **What does not propagate yet.** Selection deltas and locked content are resolved and reported —
 each member's row names any locked id whose removal the lock refused — and they do not yet change
@@ -175,7 +191,8 @@ carry. The plan it reports is computed from the unpatched manifest: the one each
 rather than an invented plan for a manifest that does not exist yet.
 
 `--json` emits exactly one document per run. `status` carries the root, the member rows and the
-journal entry; `init` carries the path, `created`, `dryRun`, the members, the resolved defaults and
+journal entries (an array, empty when no member is in flight); `init` carries the path, `created`,
+`dryRun`, the members, the resolved defaults and
 the manifest; `sync` publishes the cascade's own result — `outcome`, `counts`, `repos[]` with each
 row's `state` and error, and `journalWarnings` — with the bridge's `patched` and `lockedApplied`
 added onto the rows it reached. Exit statuses are 0, 1 and 2 only, and the failure class travels
@@ -187,7 +204,7 @@ as `error.code` rather than in the number. `--json` also makes a run non-interac
 | Path | What it is |
 |---|---|
 | `workspace.json` at the root | the policy. Yours to edit by hand; only `workspace init` writes it |
-| `<root>/.stamity/workspace-sync-journal.jsonl` | the crash trail, two lines appended per attempted member per run. Nothing reads it back to decide anything — `status` displays its last unterminated entry and that is all — so deleting it is always safe. Nothing rotates it either |
+| `<root>/.stamity/workspace-sync-journal.jsonl` | the crash trail, two lines appended per attempted member per run. Nothing reads it back to decide anything — `status` displays every member still unterminated and that is all — so deleting it is always safe. Nothing rotates it either |
 | `<member>/.stamity/manifest.json` | the member's own provenance record, and the propagated policy once a cascade has run. The bridge patches three fields there and leaves the rest of the document as it found it |
 
 Ordinary commands are not workspace-aware: `stamity init` and `stamity sync` run inside a member

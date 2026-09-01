@@ -159,7 +159,8 @@ Floors for this lane. They hold whatever the surface grows into.
 
 Each requirement states the decision, why it was taken, and the alternative it
 rules out. All seventeen were settled here; the operator delegated the design
-and none of them is left open.
+(`.stamity/runs/2026-08-31_batch-d14-workspace/record.md`) and none of them is
+left open.
 
 ### REQ-WS-001 — Init probes for a workspace once, gated on a cheap classification
 
@@ -355,8 +356,11 @@ Bare `workspace` is `status` on EVERY stream, terminal included — it grows no
 interactive picker.
 
 **Rationale.** One verb over three subcommands rather than three top-level verbs:
-they share a subject (`workspace.json` at the cwd), a read (the validated
-manifest), and a refusal (no manifest here), and `config` already established
+they share a subject (the `workspace.json` governing the cwd — `init` composes
+one there directly, while `status` and `sync` reach it through the ancestor
+walk REQ-WS-008 and REQ-WS-011 describe, not by requiring the cwd to BE the
+root), a read (the validated manifest), and a refusal (no manifest here), and
+`config` already established
 that shape for exactly that reason (`src/cli/commands/config.ts:65-96`). Bare
 `workspace` is the read because a workspace has no key registry to navigate —
 `config`'s picker exists to let an operator find a key they cannot spell
@@ -556,15 +560,25 @@ looks broken to an operator who ran `stamity init` there and saw nothing.
 path gate widened for one case, and the widened gate is the one that also admits
 every other spelling of "outside the tree the cascade is confined to".
 
-### REQ-WS-010 — The last unterminated cascade renders in `status`, from a bounded tail
+### REQ-WS-010 — Every unterminated cascade renders in `status`, from a bounded tail
 
 **Decision.** `status` reads the tail of
 `<root>/.stamity/workspace-sync-journal.jsonl`
 (`src/workspace/sync.ts:68,289-293`) — the last bounded window of bytes, not the
-file — and prints at most one line: the most recent `started` entry carrying a
-`run` id with no `finished` or `skipped` entry for that same `run` and `repo`.
-The line names the member, the run id and the timestamp, and says its tree may
-be half-written.
+file — and prints one line per member whose LAST line in that tail is a
+`started` with no `finished` or `skipped` line after it for that member, from
+this run or any later one (`src/cli/commands/workspace.ts::unterminatedFlights`).
+Each line names the member, its own `started` line's run id and timestamp, and
+says its tree may be half-written.
+
+Liveness is decided per MEMBER by that member's last line, not per `(run,
+repo)` pair. The journal is append-only in write order, so a `finished` or
+`skipped` line for a member — from the SAME run that started it, or from a
+later, unrelated run — supersedes an earlier `started` for that member.
+Concurrency runs several members at once (`min(cpus, 8)`,
+`src/workspace/sync.ts:234-237`), so more than one member can be genuinely
+unterminated in the same tail, and every one of them prints — not only the
+most recent.
 
 An absent journal, an unreadable one, a malformed line, and a window that starts
 mid-line each print nothing. Nothing is written back, rotated or truncated.
@@ -572,12 +586,32 @@ mid-line each print nothing. Nothing is written back, rotated or truncated.
 **Rationale.** The journal already carries exactly this signal and says so — "a
 `started` with no terminal line names the member that was in flight when the
 process died" (`src/workspace/sync.ts:44-48`) — and the `run` id exists
-precisely so a reader can tell this run's unterminated line from one left three
-runs ago (`src/workspace/sync.ts:118-123`). Today nothing reads it back, so the
-forensics the cascade pays for on every member are reachable only by opening a
-JSONL file by hand. Rendering it in `status` is the smallest surface that makes
-the cost worth paying, and it keeps the journal diagnostic-only: it is displayed,
+precisely so a reader can tell THIS run's unterminated line from one left three
+runs ago when both are read directly off the file
+(`src/workspace/sync.ts:118-123`). It does not follow that a `(run, repo)` pair
+is the right key for DECIDING liveness in `status`'s render: keying on the pair
+means a run's `started` line for a member stays "in flight" forever once that
+run is gone, even after a dozen later runs finished that same member cleanly —
+the only way to clear it was to hand-delete the journal, and nothing said so.
+Keying on the member alone, and asking only "is this member's last line a
+`started`", reads the same signal without that trap, and the run id is still
+reported on the line that fires, so nothing forensic is lost by dropping it
+from the KEY. Rendering it in `status` is the smallest surface that makes the
+cost worth paying, and it keeps the journal diagnostic-only: it is displayed,
 never acted on (invariant 6).
+
+Member-keying gives something up, named rather than left implicit: two
+OVERLAPPING cascades on the same root are an unsupported configuration — there
+is no run-level lock — and under that configuration a terminal line from
+cascade A can suppress cascade B's genuinely-live flight for the same member,
+since the last line for a repo wins regardless of which run wrote it. The
+trade is accepted anyway. The alternative it replaces failed CERTAINLY, on
+ordinary single-run use, every time a run was killed: that member's flight
+stayed "in flight" forever, clearable only by deleting the journal by hand,
+with nothing telling the operator so. The new failure mode instead requires an
+already-unsupported concurrent configuration to reach at all, and it misreports
+a diagnostic-only signal that gates nothing (invariant 6) — a strictly smaller
+and rarer cost than the one it replaces.
 
 **Dropped.** Selective resume from the journal — skipping members whose last run
 finished `ok`. It is a named non-goal below, and it would turn a best-effort
@@ -588,8 +622,21 @@ unrelated append succeeded.
 
 ### REQ-WS-011 — The bridge: the cascade writes workspace-resolved values into the member's own manifest, then syncs it
 
-**Decision.** The `RepoSyncCallback` (`src/workspace/sync.ts:148-151`) this lane
-supplies does, per member, in order:
+**Decision.** `sync` resolves its root through the same shared read REQ-WS-008
+documents for `status` — `requireWorkspaceRoot`'s ancestor walk from the cwd
+through `detectWorkspaceContext`, nearest manifest wins
+(`src/cli/commands/workspace.ts::requireWorkspaceRoot`,
+`src/workspace/detect.ts:166-184,191-201`) — not a check that the cwd itself is
+the root. This was true from the first cut and undocumented for `sync`
+specifically: the page described the walk only under `workspace status`.
+`sync` is the one subcommand that writes, so it prints one line naming the
+resolved root and the declared member count BEFORE the cascade writes a single
+byte, ahead of any per-member result — an operator who invoked it from a nested
+directory sees which root it resolved before that root's members are rewritten,
+not only in the summary after every write already landed.
+
+The `RepoSyncCallback` (`src/workspace/sync.ts:148-151`) this lane
+supplies then does, per member, in order:
 
 1. `readManifest(memberDir)` (`src/manifest/manifest.ts:782`). `null` fails the
    row (REQ-WS-012).
@@ -608,7 +655,37 @@ supplies does, per member, in order:
 6. A member whose apply refused at least one path throws `EngineError`
    (`ADAPTER_ERROR`) naming the refused paths, so the row is `failed` — the same
    verdict `stamity sync` reaches for the same condition
-   (`src/cli/commands/sync.ts:118-121`).
+   (`src/cli/commands/sync.ts:118-121`). `workspace sync --force` forwards
+   `force: true` into step 5's `applySync`, which clears exactly the collision
+   class plain `sync --force` clears in one repository — unmanaged content at a
+   name the engine did not write — overwriting it behind a verified `.bak`, per
+   member (`src/cli/commands/sync/engine.ts:583,637-647`).
+
+Before any member is attempted, the manifest's `repos[]` entries are checked
+for a REALPATH alias: two declared paths resolving to the same directory
+through a link (`refuseRealpathAliases`,
+`src/cli/commands/workspace.ts`). Manifest-read-time duplicate detection
+(`normalizeRepoPathKey`, `src/workspace/manifest.ts:98`) is textual — it
+compares declared SPELLINGS — while containment (REQ-WS-008's `escaped` state,
+and the cascade's own `requireRepoDirectory`) is realpath-resolved, so a
+`repos[]` entry that is a symlink to a SIBLING member's directory passes both:
+the spellings differ, and both stay inside the root. Left unchecked, both rows
+would cascade concurrently into one real directory's `.stamity/manifest.json`,
+racing the read-modify-write this bridge performs. The alias check refuses
+before either row is attempted, naming both declared paths, the same way the
+textual duplicate check refuses at manifest-read time.
+
+The check is filesystem-CASE-SENSITIVITY-dependent, and deliberately so: on a
+case-insensitive volume (the macOS and Windows defaults) `realpath` folds two
+case-variant spellings of one directory to the same string, so `"apps/Web"`
+and `"apps/web"` as two `repos[]` entries refuse the run as aliases even though
+neither is a link. On a case-sensitive volume they resolve to two distinct
+directories and both cascade normally. This is not a gap in the check — the
+manifest itself preserves whatever case an author writes in `repos[]`
+(`src/workspace/manifest.ts`'s path handling does no case-folding of its own),
+so the divergence an author would hit is the volume's, not this check's, and
+the refusal on a case-insensitive volume is the correct answer to "do these
+two entries name one directory" on that volume.
 
 Step 4 patches the manifest read in step 1. It never composes a fresh one.
 
@@ -830,12 +907,13 @@ what that suite asserts about every verb, not just this one.
 
 ## Acceptance criteria
 
-One set per requirement. Seventy-three criteria; each is machine-checkable unless
+One set per requirement. Seventy-eight criteria; each is machine-checkable unless
 tagged otherwise. (The count read "forty-three" while the list held sixty-two, then "seventy-two"
-while a later round's rider grew the list to seventy-three: a hand-kept number over a list several
-rounds have appended to. Restated here against the current list — `grep -c "^- GIVEN"` under this
-heading is how it was derived, and is the check worth running the next time this section grows
-rather than counting by eye.)
+while a later round's rider grew the list to seventy-three, then seventy-eight once a fix round
+added the multi-flight, pre-flight-ordering, `--force` and symlink-alias cases: a hand-kept number
+over a list several rounds have appended to. Restated here against the current list —
+`grep -c "^- GIVEN"` under this heading is how it was derived, and is the check worth running the
+next time this section grows rather than counting by eye.)
 
 **REQ-WS-001**
 
@@ -981,16 +1059,26 @@ rather than counting by eye.)
 **REQ-WS-010**
 
 - GIVEN a journal whose last lines are a `started` for run `R` on `apps/web` and
-  no terminal line for that pair WHEN `workspace status` runs THEN exactly one
+  no terminal line for that member WHEN `workspace status` runs THEN exactly one
   journal line is printed, naming `apps/web` and `R`.
 - GIVEN a journal where every `started` has a matching terminal line WHEN
   `workspace status` runs THEN no journal line is printed.
+- GIVEN a journal recording a `started` for run `A` on `apps/web` with no
+  terminal line, followed by a LATER, unrelated run `B` that started and
+  cleanly finished `apps/web` WHEN `workspace status` runs THEN no journal line
+  is printed — the later clean run supersedes the stale flight from `A`.
+- GIVEN a journal with `started` lines for `apps/api` and `apps/web` and no
+  terminal line for either WHEN `workspace status` runs THEN two journal lines
+  print, one naming each member.
 - GIVEN no journal file, and separately a journal whose last line is truncated
   mid-JSON WHEN `workspace status` runs THEN it exits 0, prints no journal line,
   and the file is unmodified.
 
 **REQ-WS-011**
 
+- GIVEN a two-member workspace WHEN `workspace sync` runs THEN the resolved root
+  and member count are printed BEFORE the first member's result line, in the
+  captured stream.
 - GIVEN a workspace declaring `defaults.tools: ["claude", "codex"]` and a member
   whose manifest carries `tools: ["claude"]` WHEN `workspace sync` runs THEN the
   member's `.stamity/manifest.json` reads `tools: ["claude", "codex"]` AND the
@@ -1011,6 +1099,13 @@ rather than counting by eye.)
 - GIVEN a member whose apply refuses one colliding path WHEN `workspace sync`
   runs THEN that member's row is `failed`, its error message names the refused
   path, and every other member's row is `synced`.
+- GIVEN that same member and `workspace sync --force` WHEN it runs THEN the
+  row is `synced`, the collision is overwritten with the engine's generated
+  content, and the original content survives verified at the colliding path
+  plus `.bak`.
+- GIVEN two `repos[]` entries where the second is a symlink to the first's
+  directory WHEN `workspace sync` runs THEN it exits 1 with a `VALIDATION_ERROR`
+  naming both declared paths, and neither member's manifest is touched.
 
 **REQ-WS-012**
 
@@ -1217,13 +1312,14 @@ and the surrounding symbol is the durable address.
   explicit list — so it inherits no currency-header or re-open-trigger contract.
   If that bucket is ever widened to a glob over `docs/`, both specs need both
   before the widening lands.
-- `docs/workspaces.md` is written to the hand-page contract — byte-0 `title:` frontmatter equal
-  to its H1, a commit-form currency header, and a `Re-open when:` trigger naming
-  `test/docsPages.test.ts` — but nothing enforces any of that until the page joins `GUIDES`
-  there, gains its README map row and its sidebar entry. Those wirings are a sibling unit's, and
-  until they land the page is published-but-unlisted and its contract is unchecked. The gap is
-  one direction only: a page carrying the contract early costs nothing, while a page wired in
-  without it fails the bucket's own assertions.
+- STALE, corrected: `docs/workspaces.md` is written to the hand-page contract — byte-0 `title:`
+  frontmatter equal to its H1, a commit-form currency header, and a `Re-open when:` trigger naming
+  `test/docsPages.test.ts` — and it IS a member of `GUIDES` (`test/docsPages.test.ts:104,118`),
+  which is what enforces that contract, its README map row and its sidebar entry. The earlier
+  version of this bullet described a "published-but-unlisted, contract unchecked" gap that a
+  sibling unit's wiring was supposed to close; that wiring landed, and this bullet is left in
+  place, corrected, rather than deleted, so a reader who remembers the earlier claim finds the
+  reconciliation rather than a silently vanished concern.
 - Neither spec is indexed in `llms.txt`. That index is asserted to carry every
   GUIDE (`test/docsPages.test.ts:939-941`), and the specs are not guides, so no
   current check requires it. Adding a specs section remains a reasonable

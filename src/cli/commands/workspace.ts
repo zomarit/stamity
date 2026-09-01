@@ -135,7 +135,8 @@ interface JournalFlight {
 interface StatusReport {
   root: { path: string; hasSetupManifest: boolean };
   members: MemberRow[];
-  journal: JournalFlight | null;
+  /** Every member still live at the tail's last line. Empty when none is. */
+  journal: JournalFlight[];
 }
 
 // ── The shared read ────────────────────────────────────────────────────────
@@ -194,17 +195,40 @@ async function isFile(path: string): Promise<boolean> {
 }
 
 /**
+ * The workspace root's own realpath, resolved ONCE per command run rather than
+ * once per member: {@link classifyMemberDir} needs it for every row, and
+ * sharing one resolution keeps a root-side failure a single, clearly-caused
+ * fact instead of N members each independently hitting the same failed call.
+ * `null` on any failure — the same "unanswerable containment question" the
+ * per-member check reads as `escaped`.
+ */
+async function resolveRootReal(rootDir: string): Promise<string | null> {
+  try {
+    return await realpath(rootDir);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The disk half of a member's state, decided by the same two conditions
  * `requireRepoDirectory` fails a cascade row on: the directory is missing or is
  * not a directory (`absent`), or it resolves outside the root through a link
- * (`escaped`). A containment question that cannot be answered — `realpath`
- * failing after `stat` already succeeded — reads as `escaped` for the cascade's
- * own stated reason: an unanswerable containment question is not a positive
- * answer, and reporting `ok` for a row `sync` will refuse would be worse than
- * reporting the refusal a run early.
+ * (`escaped`). A containment question that cannot be answered — the root's own
+ * realpath unresolvable, or `member`'s realpath failing after `stat` already
+ * succeeded — reads as `escaped` for the cascade's own stated reason: an
+ * unanswerable containment question is not a positive answer, and reporting
+ * `ok` for a row `sync` will refuse would be worse than reporting the refusal a
+ * run early.
+ *
+ * The root and member realpath resolutions are two SEPARATE steps rather than
+ * one shared `try`: a root-side failure is `rootReal === null`, resolved once
+ * by the caller ({@link resolveRootReal}) and reused for every row, so it
+ * cannot be conflated with THIS member's own link failing to resolve.
  */
 async function classifyMemberDir(
   rootDir: string,
+  rootReal: string | null,
   repoPath: string,
 ): Promise<Exclude<MemberState, "unresolved">> {
   const dir = join(rootDir, repoPath);
@@ -216,14 +240,15 @@ async function classifyMemberDir(
   }
   if (!entry.isDirectory()) return "absent";
 
-  let root: string;
+  if (rootReal === null) return "escaped";
+
   let member: string;
   try {
-    [root, member] = await Promise.all([realpath(rootDir), realpath(dir)]);
+    member = await realpath(dir);
   } catch {
     return "escaped";
   }
-  if (member !== root && !member.startsWith(join(root, sep))) return "escaped";
+  if (member !== rootReal && !member.startsWith(join(rootReal, sep))) return "escaped";
 
   return (await isFile(join(dir, STATE_DIR, MANIFEST_FILE))) ? "ok" : "unconfigured";
 }
@@ -239,6 +264,7 @@ async function classifyMemberDir(
 async function buildMemberRow(
   ctx: CliContext,
   rootDir: string,
+  rootReal: string | null,
   manifest: WorkspaceManifest,
   entry: WorkspaceRepoEntry,
 ): Promise<MemberRow> {
@@ -259,7 +285,7 @@ async function buildMemberRow(
   const groups = entry.groups ?? [];
   return {
     path: entry.path,
-    state: await classifyMemberDir(rootDir, entry.path),
+    state: await classifyMemberDir(rootDir, rootReal, entry.path),
     tools: [...resolved.tools],
     ...(groups.length === 0 ? {} : { groups: [...groups] }),
     ...(resolved.lockedApplied.length === 0 ? {} : { lockedApplied: [...resolved.lockedApplied] }),
@@ -276,6 +302,13 @@ async function buildMemberRow(
  */
 async function readJournalTail(rootDir: string, fileName: string): Promise<string | null> {
   const path = join(rootDir, STATE_DIR, fileName);
+  // A FIFO (or any non-regular file) planted at the journal's name would
+  // block `open(path, "r")` forever — the write side already treats that path
+  // as hostile (`../../workspace/sync.ts`'s contained append), and this read
+  // refuses it the same way `classifyMemberDir` refuses a non-directory
+  // member: every filesystem answer here is "no signal", so a bad file type
+  // reads as "nothing to show" rather than hanging the command.
+  if (!(await isFile(path))) return null;
   let handle;
   try {
     handle = await open(path, "r");
@@ -291,7 +324,15 @@ async function readJournalTail(rootDir: string, fileName: string): Promise<strin
     await handle.read(buffer, 0, length, start);
     const text = buffer.toString("utf8");
     if (start === 0) return text;
-    // The window began mid-line: that first fragment is not a record.
+    // The window is ASSUMED to begin mid-line, so the first fragment before
+    // the first newline is dropped as a partial record. That assumption can be
+    // wrong by exactly one record: when `start` lands precisely on a line
+    // boundary in the underlying file, the "first fragment" is actually a
+    // whole record, and dropping it under-reports by one line. There is no
+    // way to tell the two cases apart from the window alone — the byte just
+    // before `start` decides it, and that byte was never read — so this
+    // accepts the rare one-record under-report rather than reading one extra
+    // byte on every tail just to resolve a boundary that is otherwise inert.
     const firstBreak = text.indexOf("\n");
     return firstBreak === -1 ? "" : text.slice(firstBreak + 1);
   } catch {
@@ -317,27 +358,45 @@ function journalFields(line: string): { ts: string; run: string; repo: string; e
 }
 
 /**
- * The most recent `started` line with no `finished` or `skipped` line for the
- * same run AND repo — the member that was in flight when the process died.
+ * Every repo whose LAST line in the tail is a `started` with no terminal line
+ * after it — the members still in flight when the process died, or when the
+ * tail was read.
  *
- * Keyed on the pair because the journal is append-only across runs: without the
- * run id, an unterminated line left three runs ago would be indistinguishable
- * from this one's. A malformed line is skipped rather than fatal.
+ * Liveness is decided per REPO by the last line concerning that repo, not per
+ * (run, repo) pair: the journal is append-only in write order, so a `finished`
+ * or `skipped` line for a repo — from THIS run or a later, unrelated one —
+ * supersedes an earlier `started` for the same repo. Without that, a killed
+ * run's flight would read as in-flight forever, surviving arbitrarily many
+ * clean re-syncs until the journal was hand-deleted. Concurrency runs several
+ * members at once (default: the machine's core count, capped at eight), so
+ * more than one repo can be genuinely live at once — every one of them is
+ * returned, not just the newest. A malformed line is skipped rather than
+ * fatal.
+ *
+ * What this gives up: two OVERLAPPING cascades on the same root are
+ * unsupported (there is no run-level lock), and under that unsupported
+ * configuration a terminal line from cascade A can suppress cascade B's
+ * genuinely-live flight for the same repo — the last line wins regardless of
+ * which run wrote it. The trade is accepted anyway, because the alternative it
+ * replaces (per-`(run, repo)` keying) failed CERTAINLY, on ordinary single-run
+ * use: a killed run's flight stayed "in flight" forever, clearable only by
+ * deleting the journal by hand. This failure mode instead needs an
+ * already-unsupported concurrent configuration to reach, on a signal that is
+ * diagnostic-only and never gates anything (invariant 6).
  */
-function lastUnterminatedFlight(text: string): JournalFlight | null {
-  const started: JournalFlight[] = [];
-  const terminated = new Set<string>();
+function unterminatedFlights(text: string): JournalFlight[] {
+  const lastByRepo = new Map<string, JournalFlight | null>();
   for (const line of text.split("\n")) {
     if (line.trim() === "") continue;
     const fields = journalFields(line);
     if (fields === null) continue;
-    const key = `${fields.run} ${fields.repo}`;
-    if (fields.event === "started") started.push({ repo: fields.repo, run: fields.run, ts: fields.ts });
-    else if (fields.event === "finished" || fields.event === "skipped") terminated.add(key);
+    if (fields.event === "started") {
+      lastByRepo.set(fields.repo, { repo: fields.repo, run: fields.run, ts: fields.ts });
+    } else if (fields.event === "finished" || fields.event === "skipped") {
+      lastByRepo.set(fields.repo, null);
+    }
   }
-  return (
-    started.findLast((flight) => !terminated.has(`${flight.run} ${flight.repo}`)) ?? null
-  );
+  return [...lastByRepo.values()].filter((flight): flight is JournalFlight => flight !== null);
 }
 
 // ── Rendering ──────────────────────────────────────────────────────────────
@@ -366,7 +425,7 @@ function renderDetail(row: MemberRow): string {
 
 function renderStatus(ctx: CliContext, report: StatusReport): void {
   const { palette } = ctx;
-  ctx.io.out(`${palette.bold("workspace")} ${report.root.path}\n`);
+  ctx.io.out(`${palette.bold("workspace")} ${sanitizeLabel(report.root.path)}\n`);
   ctx.io.out(
     `  ${palette.dim(
       `root: ${
@@ -388,8 +447,7 @@ function renderStatus(ctx: CliContext, report: StatusReport): void {
     }
   }
 
-  if (report.journal !== null) {
-    const flight = report.journal;
+  for (const flight of report.journal) {
     ctx.io.out(
       `\n${palette.yellow("in flight:")} ${sanitizeLabel(flight.repo)} started at ${sanitizeLabel(flight.ts)} in ` +
         `run ${sanitizeLabel(flight.run)} and never finished — its tree may be half-written\n`,
@@ -403,7 +461,7 @@ function renderStatus(ctx: CliContext, report: StatusReport): void {
 
 /**
  * `workspace status` — one row per declared member, in declaration order, plus
- * the root's informative line and at most one journal line.
+ * the root's informative line and one journal line per member still in flight.
  *
  * Exit 0 whenever the manifest was read. A defect the manifest READ refuses —
  * two spellings of one directory, an escaping path, an unknown tool — leaves
@@ -412,9 +470,10 @@ function renderStatus(ctx: CliContext, report: StatusReport): void {
 async function runStatus(ctx: CliContext, cwd: string): Promise<CommandResult> {
   const rootDir = await requireWorkspaceRoot(ctx, cwd);
   const manifest = await requireWorkspaceManifest(ctx, rootDir);
+  const rootReal = await resolveRootReal(rootDir);
 
   const [members, journalText] = await Promise.all([
-    Promise.all(manifest.repos.map((entry) => buildMemberRow(ctx, rootDir, manifest, entry))),
+    Promise.all(manifest.repos.map((entry) => buildMemberRow(ctx, rootDir, rootReal, manifest, entry))),
     readJournalTail(rootDir, ctx.engine.workspace.sync.WORKSPACE_SYNC_JOURNAL_FILE),
   ]);
 
@@ -424,7 +483,7 @@ async function runStatus(ctx: CliContext, cwd: string): Promise<CommandResult> {
       hasSetupManifest: await isFile(join(rootDir, STATE_DIR, MANIFEST_FILE)),
     },
     members,
-    journal: journalText === null ? null : lastUnterminatedFlight(journalText),
+    journal: journalText === null ? [] : unterminatedFlights(journalText),
   };
 
   renderStatus(ctx, report);
@@ -681,7 +740,7 @@ async function deriveDefaultTools(
 /** The keep-none ending: an answer, not a refusal, so it exits 0 and says so. */
 function renderKeepNone(ctx: CliContext, rootDir: string): void {
   const { palette } = ctx;
-  ctx.io.out(`${palette.bold("workspace")} ${rootDir}\n`);
+  ctx.io.out(`${palette.bold("workspace")} ${sanitizeLabel(rootDir)}\n`);
   ctx.io.out(`  ${palette.yellow("no members selected")} — nothing was created\n`);
   ctx.io.out(
     `${palette.dim("run stamity workspace init again to pick the repositories that join")}\n`,
@@ -700,7 +759,7 @@ function renderKeepNone(ctx: CliContext, rootDir: string): void {
 function renderCreated(ctx: CliContext, report: InitReport, manifest: WorkspaceManifest): void {
   const { palette } = ctx;
   const count = manifest.repos.length;
-  ctx.io.out(`${palette.bold("workspace")} ${report.path}\n`);
+  ctx.io.out(`${palette.bold("workspace")} ${sanitizeLabel(report.path)}\n`);
   ctx.io.out(
     `  ${report.dryRun ? "would register" : "registered"} ${String(count)} member${count === 1 ? "" : "s"}\n`,
   );
@@ -868,7 +927,17 @@ interface SyncReport {
   journalWarnings: string[];
 }
 
-/** Element-wise equality: a reordered tool list is a different list to emission. */
+/**
+ * Element-wise equality, order included.
+ *
+ * Emission itself does not care about order — both `tools` and an `mcp` block's
+ * `servers` are folded into a `Set` before emission reads them
+ * (`sync/engine.ts:526-527`) — so a pure reorder is not actually a different
+ * list to emission. This function still treats it as one: the conservative
+ * direction is to over-report a patch on a reorder, not to under-report a real
+ * change, and a false patch here costs one extra manifest write rather than a
+ * missed one.
+ */
 function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
@@ -1072,10 +1141,29 @@ function inertPolicyNotice(manifest: WorkspaceManifest, report: SyncReport): str
   );
 }
 
+/**
+ * The pre-flight line: the resolved root and how many members it declares,
+ * printed BEFORE the cascade writes a single byte.
+ *
+ * `sync` is the one subcommand that writes, and it resolves its root the same
+ * way `status` does — an ancestor walk from the cwd through
+ * {@link requireWorkspaceRoot}, undocumented for this subcommand until this
+ * line existed. Naming the root here, ahead of the writes it governs, is what
+ * lets an operator running `sync` from a nested directory catch a
+ * wrongly-resolved root before it rewrites every member's manifest, rather
+ * than only after — the root line used to print at the TOP of the render, but
+ * the render itself only ran once the cascade had already finished.
+ */
+function printSyncPreflight(ctx: CliContext, rootDir: string, memberCount: number): void {
+  const { palette } = ctx;
+  ctx.io.out(`${palette.bold("workspace")} ${sanitizeLabel(rootDir)}\n`);
+  ctx.io.out(
+    `  ${palette.dim(`resolved root, ${String(memberCount)} member${memberCount === 1 ? "" : "s"} declared`)}\n`,
+  );
+}
+
 function renderSync(ctx: CliContext, manifest: WorkspaceManifest, report: SyncReport): void {
   const { palette } = ctx;
-  ctx.io.out(`${palette.bold("workspace")} ${report.root}\n`);
-
   if (report.repos.length === 0) {
     ctx.io.out(`  ${palette.dim("no members registered — add repos[] entries to workspace.json")}\n`);
   } else {
@@ -1114,6 +1202,60 @@ function renderSync(ctx: CliContext, manifest: WorkspaceManifest, report: SyncRe
 }
 
 /**
+ * Refuses two `repos[]` entries that resolve to the same directory through a
+ * link before the cascade touches either of them.
+ *
+ * Duplicate detection at manifest-read time (`normalizeRepoPathKey`,
+ * `../../workspace/manifest.ts`) is textual — it compares declared SPELLINGS —
+ * while containment is realpath-resolved (`classifyMemberDir`, above). A
+ * `repos[]` entry that is a symlink to a SIBLING member's directory passes the
+ * textual check (the spellings differ) and passes containment (both stay
+ * inside the root), so both rows would cascade concurrently into one real
+ * directory: the read-modify-write on that directory's `.stamity/manifest.json`
+ * races, a write can be lost, and a later sync misclassifies what it finds.
+ * This check closes that gap the way the textual one closes its own — by
+ * refusing before either row is attempted, naming both declared paths.
+ *
+ * Absent or unreadable entries are skipped: `classifyMemberDir` and the
+ * cascade's own `requireRepoDirectory` already report those states on their
+ * own, and an alias check has nothing to say about a member that is not there.
+ */
+async function refuseRealpathAliases(
+  rootDir: string,
+  repos: readonly WorkspaceRepoEntry[],
+): Promise<void> {
+  const resolved = await Promise.all(
+    repos.map(async (entry) => {
+      try {
+        return { path: entry.path, real: await realpath(join(rootDir, entry.path)) };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const byReal = new Map<string, string[]>();
+  for (const row of resolved) {
+    if (row === null) continue;
+    const existing = byReal.get(row.real);
+    if (existing === undefined) byReal.set(row.real, [row.path]);
+    else existing.push(row.path);
+  }
+  for (const paths of byReal.values()) {
+    if (paths.length < 2) continue;
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message: `repos[] entries ${paths.map((p) => JSON.stringify(p)).join(" and ")} resolve to the same directory`,
+      why:
+        "a symlink alias passes the manifest's textual duplicate check, and two entries cascading " +
+        "into one real directory would race that directory's manifest write concurrently",
+      next:
+        "keep one entry and drop the other from repos[] in workspace.json, or replace the symlink " +
+        "with the real path it points at",
+    });
+  }
+}
+
+/**
  * `workspace sync` end to end: resolve the root, read the manifest, drive the
  * cascade, map its verdict onto the exit contract.
  *
@@ -1133,8 +1275,12 @@ async function runSync(
 ): Promise<CommandResult> {
   const rootDir = await requireWorkspaceRoot(ctx, cwd);
   const manifest = await requireWorkspaceManifest(ctx, rootDir);
+  await refuseRealpathAliases(rootDir, manifest.repos);
   const now = ctx.app.runtime.clock.now();
   const outcomes = new Map<string, MemberOutcome>();
+
+  // Named BEFORE the cascade writes a single byte — see {@link printSyncPreflight}.
+  printSyncPreflight(ctx, rootDir, manifest.repos.length);
 
   ctx.spinner.start(ctx.dryRun ? "previewing the cascade…" : "syncing every member…");
   const result = await ctx.engine.workspace.sync.syncWorkspaceRepos({
