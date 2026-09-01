@@ -144,6 +144,53 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-01, the closure run's content batch. CORPUS PROSE moved, in
+  //     every dialect that carries the edited artifacts and in none that does
+  //     not:
+  //
+  //     CHANGED the five edited corpus artifacts across the selections that
+  //       carry them -- `commands/st-work.md` (the light row now names the two
+  //       specialist lenses it skips and the security lens it keeps, the deep
+  //       row's undefined "Prove-final" placement is anchored to the phase
+  //       order that exists, and the dependency-audit note points at the skill
+  //       that owns those fields), `agents/stamity-reviewer.md` (a
+  //       whole-branch carve-out so the diff-only scope stops contradicting
+  //       the deep pass, and a head that says "mutation" where it meant it),
+  //       `agents/stamity-implementer.md` (the spec delta names the
+  //       requirement id), `commands/st-plan.md` and `skills/st-dep-audit`
+  //       (the delegation and its return route). Each moved in the claude,
+  //       cursor, copilot, codex and `.agents/` forms that hold it, which is
+  //       the projection working: one source edit, every dialect.
+  //
+  //     What did NOT move: every path whose source this batch did not touch.
+  //       A corpus edit reaching an unrelated emitted file would mean the
+  //       projection had stopped being a function of its input.
+  //
+  //   - 2026-09-01, the timing-margin pass over the lock-staleness flake class.
+  //     One generated script moved and nothing else:
+  //
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       (24741 -> 26669 bytes) in the two claude-bearing selections. The
+  //       counter's wait ceiling went 10s -> 25s. The progress detector added
+  //       in the row below already waits out a queue that keeps handing the
+  //       lock on, but the ceiling was checked unconditionally underneath it,
+  //       so a herd of 30 writers on a loaded runner still hit it at roughly
+  //       330ms per critical section and dropped the tail writer's round --
+  //       fail-open by design, and the 29-of-30 signature on the windows leg.
+  //       25s is 4% of the 600s the client allows this hook's events and under
+  //       the 30s of its tightest class, so re-wiring the gate cannot put the
+  //       wait outside the budget. A holder that DIED still costs ~1s, not 25:
+  //       it hands the lock to nobody, so the idle detector returns and the
+  //       ceiling is never consulted.
+  //     CHANGED `.stamity/manifest.json` in the same two selections, each at
+  //       UNCHANGED byte length (16080 claude / 54488 all-four) -- the
+  //       fixed-width sha256 ledger row for that one script, and nothing else.
+  //
+  //     What did NOT move: every other emitted path in both trees, and the
+  //     cursor, copilot and codex selections entire -- the same containment
+  //     the row below relies on, and the reason a byte moving elsewhere would
+  //     have meant the edit escaped the claude adapter's residue.
+  //
   //   - 2026-08-26, the review-gate lock rewrite (windows leg, round 2). One
   //     generated script moved and nothing else:
   //
