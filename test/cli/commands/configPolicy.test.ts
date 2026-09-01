@@ -104,6 +104,15 @@ describe("config policy list", () => {
     expect(result.stdout).toContain(ORG_POLICY_REL_PATH);
     expect(result.stdout).toContain("mode: none");
     expect(result.stdout).toContain("every pack source installs");
+    // The path is displayed repo-relative and POSIX, on every platform. The
+    // containment assertion above cannot carry this alone: an ABSOLUTE posix
+    // path contains the relative one, so a regression to printing the machine
+    // layout passes it here and fails only on the Windows leg, one CI
+    // round-trip later. These two pin it where it can be seen locally — no
+    // drive letter, no separator that is not `/`, nothing above the repo root.
+    const pathLine = result.stdout.split("\n")[0] ?? "";
+    expect(pathLine.trim()).toBe(ORG_POLICY_REL_PATH);
+    expect(result.stdout).not.toContain(handle.dir);
     // A read never creates the artifact it reports on.
     expect(await rawPolicy(handle)).toBeNull();
   });

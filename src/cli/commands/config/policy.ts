@@ -1,3 +1,4 @@
+import { relative, sep } from "node:path";
 import { CliFailure } from "../../kit/output.ts";
 import type { CliContext, CommandResult } from "../../kit/program.ts";
 import { EngineError } from "../../../types/errors.ts";
@@ -106,6 +107,19 @@ async function readPolicy(ctx: CliContext, rootDir: string): Promise<PolicyRead>
 }
 
 /**
+ * Repo-relative POSIX form, so output never leaks a machine layout and reads
+ * the same on every platform. The same rule `check` and `init` apply to their
+ * own path output: a path an operator READS is displayed, and a displayed path
+ * is relative and POSIX. The absolute path stays inside the writer, which takes
+ * `rootDir` and composes its own target with native separators.
+ */
+function policyDisplayPath(ctx: CliContext, rootDir: string): string {
+  const absolute = ctx.engine.pack.orgPolicy.orgPolicyPath(rootDir);
+  const rel = relative(rootDir, absolute);
+  return rel === "" ? "." : rel.split(sep).join("/");
+}
+
+/**
  * The engine's defect message, re-raised with the step it cannot name.
  *
  * `policyError` in the engine states the defect and the consequence — every
@@ -117,7 +131,7 @@ function invalidPolicy(ctx: CliContext, rootDir: string, error: EngineError): Cl
   return new CliFailure({
     code: error.code,
     message: error.message,
-    why: `the policy is fail-closed: ${ctx.engine.pack.orgPolicy.orgPolicyPath(rootDir)} exists and does not read as the documented shape, so no pack installs and no denied pack projects`,
+    why: `the policy is fail-closed: ${policyDisplayPath(ctx, rootDir)} exists and does not read as the documented shape, so no pack installs and no denied pack projects`,
     next: "edit the file to fix the defect above, or run stamity config policy init --force to replace it with an empty policy",
   });
 }
@@ -227,7 +241,7 @@ function payload(policy: OrgTrustPolicy | null): Record<string, unknown> {
  */
 async function runPolicyList(ctx: CliContext, rootDir: string): Promise<CommandResult> {
   await requireSetupManifest(ctx, rootDir);
-  const path = ctx.engine.pack.orgPolicy.orgPolicyPath(rootDir);
+  const path = policyDisplayPath(ctx, rootDir);
   const policy = await requirePolicy(ctx, rootDir);
 
   ctx.io.out(`${path}\n`);
@@ -262,7 +276,7 @@ async function runPolicyInit(
   force: boolean,
 ): Promise<CommandResult> {
   await requireSetupManifest(ctx, rootDir);
-  const path = ctx.engine.pack.orgPolicy.orgPolicyPath(rootDir);
+  const path = policyDisplayPath(ctx, rootDir);
   const read = await readPolicy(ctx, rootDir);
 
   if (read.kind !== "absent" && !force) {
@@ -344,7 +358,7 @@ async function runPolicyAdd(
   // document in hand.
   assertPattern(ctx, list, pattern);
 
-  const path = ctx.engine.pack.orgPolicy.orgPolicyPath(rootDir);
+  const path = policyDisplayPath(ctx, rootDir);
   const before = await requirePolicy(ctx, rootDir);
 
   if (before !== null && (before.packs[list] ?? []).includes(pattern)) {
@@ -395,7 +409,7 @@ async function runPolicyRemove(
   pattern: string,
 ): Promise<CommandResult> {
   await requireSetupManifest(ctx, rootDir);
-  const path = ctx.engine.pack.orgPolicy.orgPolicyPath(rootDir);
+  const path = policyDisplayPath(ctx, rootDir);
   const before = await requirePolicy(ctx, rootDir);
 
   // Membership is judged against the persisted document, never against the
