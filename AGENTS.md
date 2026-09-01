@@ -1,4 +1,4 @@
-<!-- STAMITY:BEGIN v1.0.1 -->
+<!-- STAMITY:BEGIN v1.1.0 -->
 # Charter
 
 The always-on context for agents working in this repository. Everything else

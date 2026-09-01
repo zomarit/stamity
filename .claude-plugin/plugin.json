@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "stamity",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Generates a tool-agnostic agentic coding setup — charter, commands, agents, skills, rules, hooks, MCP wiring — for Claude Code, Cursor, GitHub Copilot and Codex from one canonical source.",
   "author": {
     "name": "zomarit"
