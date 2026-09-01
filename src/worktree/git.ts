@@ -231,8 +231,21 @@ export async function assertWorktreeName(
  * the shape pass above already refuses the spellings that would escape, and
  * this is the assertion that the two rules agree — a name that ever resolved
  * outside its farm would put a checkout somewhere nobody named.
+ *
+ * The explicit `isAbsolute(name)` refusal below is defence-in-depth: the sole
+ * caller, {@link assertWorktreeName}, already refuses an absolute name before
+ * this function ever runs. It is restated here because `join(farm, name)` does
+ * NOT re-root on an absolute second argument the way `resolve` would —
+ * `join("/farm", "/abs")` is `/farm/abs`, which passes the containment check
+ * below despite being a name this function was never asked to accept.
  */
 export function worktreePathFor(farmDir: string, name: string): string {
+  if (isAbsolute(name)) {
+    refuse(
+      `The worktree name ${JSON.stringify(name)} is an absolute path, and a worktree name is relative to the farm directory.`,
+      `Name the worktree relative to the farm directory, without a leading \`/\` or drive.`,
+    );
+  }
   // Compose with join, not resolve: the farm is already an absolute native path
   // from resolveFarmDir, and resolve would re-anchor a drive-less absolute onto
   // the current drive on Windows — turning `\farm` into `C:\farm` and moving the
@@ -626,9 +639,14 @@ export async function addWorktree(
 
   const collision = ALREADY_CHECKED_OUT.exec(outcome.stderr);
   if (collision !== null) {
+    // [m3] `collision[1]` is a path lifted out of GIT'S OWN stderr — untrusted
+    // the same way the rest of it is (see `sanitizeGitOutput`'s own header
+    // comment) — so it is sanitized before it rides into a message the
+    // operator's terminal renders, consistent with how `why` already is.
+    const other = sanitizeGitOutput(collision[1] ?? "");
     refuse(
-      `The branch ${JSON.stringify(request.branch)} is already checked out in the worktree at ${collision[1]}.`,
-      `Work in ${collision[1]}, or run setup with a different name.`,
+      `The branch ${JSON.stringify(request.branch)} is already checked out in the worktree at ${other}.`,
+      `Work in ${other}, or run setup with a different name.`,
     );
   }
   if (outcome.stderr.includes("already exists")) {

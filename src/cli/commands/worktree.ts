@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { basename, dirname, relative, resolve, sep } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import type { Command } from "commander";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -7,6 +7,7 @@ import { confirm, promptGate, sanitizeLabel, type PromptGate } from "../kit/prom
 import { EngineError } from "../../types/errors.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import {
+  isInside,
   readWorktreeInventory,
   runWorktreeCleanup,
   type WorktreeCleanupResult,
@@ -134,15 +135,6 @@ async function resolveLane(ctx: CliContext): Promise<Lane> {
   const repoRoot = basename(commonDir) === ".git" ? dirname(commonDir) : topLevel;
   const policy = await readWorktreePolicy(repoRoot);
   return { repoRoot, policy, farmDir: resolveFarmDir(policy, repoRoot), run };
-}
-
-/** True when `child` is `parent` or sits underneath it. */
-function isInside(child: string, parent: string): boolean {
-  const rel = relative(resolve(parent), resolve(child));
-  // The `startsWith("/")` guard matches the engine's `isInside` (cleanup.ts): on
-  // some platforms `relative` can return an absolute path when the two share no
-  // root, and an absolute `rel` is NOT "inside".
-  return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !rel.startsWith("/"));
 }
 
 /**
@@ -363,7 +355,12 @@ function renderList(ctx: CliContext, farmDir: string, rows: readonly ListRow[], 
     }
   }
   if (rows.length === 0) {
-    ctx.io.out(`  ${palette.dim("no worktrees registered")}\n`);
+    // [m5] Names the concrete next step, matching the empty-state pattern
+    // `workspace list` already uses ("no members registered — add repos[]
+    // entries to workspace.json") rather than stating the absence alone.
+    ctx.io.out(
+      `  ${palette.dim("no worktrees registered — run stamity worktree setup <name> to create one")}\n`,
+    );
   }
 }
 
@@ -637,18 +634,75 @@ async function runSetup(
 
 // ── cleanup (REQ-WORKTREE-007, REQ-WORKTREE-008) ───────────────────────────
 
+/** The `message`/`next` pair a partial cleanup's error document owes. */
+export interface PartialCleanupErrorDocument {
+  readonly message: string;
+  readonly next: string;
+}
+
+/**
+ * The error document a partial cleanup owes, naming what actually failed and
+ * pointing at the recovery that matches it. [secfix NEW-2, residual: `next`]
+ *
+ * A TREE-level failure (`git worktree remove` itself errored, after any
+ * file-level inversion already ran) and a FILE-level one (a receipt row
+ * could not be removed) are different facts, and a document that always says
+ * "receipt rows" / "remove the remaining files by hand" misdescribes the
+ * first — a tree-only failure leaves `files: []` on every report, so "the
+ * rows above name each one" points at rows that do not exist. `message` and
+ * `next` are chosen from the SAME three-way read of the result, so the two
+ * can never disagree about which case this run is in. Exported as a pure
+ * function, tested directly against hand-built results the way this codebase
+ * already tests its other pure classifiers (`classifyFetchFailure`,
+ * `classifyReceiptEntry`) rather than through a git-backed integration case.
+ */
+export function partialCleanupErrorDocument(
+  result: WorktreeCleanupResult,
+  rerun: string,
+): PartialCleanupErrorDocument {
+  const treeFailed = result.worktrees.some((report) => report.treeFailure !== null);
+  const fileFailed = result.worktrees.some((report) =>
+    report.files.some((file) => file.outcome === "failed"),
+  );
+  if (treeFailed && fileFailed) {
+    return {
+      message:
+        "One or more worktrees could not be fully removed, and one or more receipt rows could not be removed.",
+      next: `Fix the cause and re-run \`${rerun}\`. The worktree failures need \`git worktree remove\` to succeed on their own; the receipt rows that failed are named above and may need removing by hand.`,
+    };
+  }
+  if (treeFailed) {
+    return {
+      message: "One or more worktrees could not be fully removed.",
+      next: `Fix the cause \`git worktree remove\` reported above, then re-run \`${rerun}\` — there are no remaining receipt-row files to remove by hand for this failure.`,
+    };
+  }
+  return {
+    message: "One or more receipt rows could not be removed.",
+    next: `Fix the cause and re-run \`${rerun}\`, or remove the remaining files by hand — the rows above name each one.`,
+  };
+}
+
 function renderCleanup(ctx: CliContext, result: WorktreeCleanupResult): void {
   const { palette } = ctx;
   for (const report of result.worktrees) {
     const state =
-      report.skipped !== null
-        ? palette.dim(`skipped (${report.classification})`)
-        : report.removed
-          ? palette.green("removed")
-          : palette.yellow("files only");
+      report.treeFailure !== null
+        ? palette.red("failed")
+        : report.skipped !== null
+          ? palette.dim(`skipped (${report.classification})`)
+          : report.removed
+            ? palette.green("removed")
+            : palette.yellow("files only");
     ctx.io.out(`${state} ${sanitizeLabel(report.path)}\n`);
     if (report.skipped !== null) {
       ctx.io.out(`    ${palette.dim(sanitizeLabel(report.skipped))}\n`);
+    }
+    // [secfix NEW-2] A tree-level failure — the `git worktree remove` call
+    // itself, not any one receipt entry — reports on its own line rather
+    // than as a fabricated file row with no receipt-relative path to give it.
+    if (report.treeFailure !== null) {
+      ctx.io.out(`    ${palette.red(sanitizeLabel(report.treeFailure))}\n`);
     }
     for (const file of report.files) {
       const detail = file.detail === null ? "" : ` — ${sanitizeLabel(file.detail)}`;
@@ -754,8 +808,16 @@ async function runCleanup(
   // OR a receipt-less orphan needs consent too: both remove a checkout the run
   // cannot otherwise justify.
   const needsConsent = (all && candidates.length > 0) || dirty.length > 0 || orphans.length > 0;
+  // [secfix A5] Every dirty row is already in hand from the filter above — the
+  // preamble names each one rather than only the sweep's total count, so an
+  // operator approving `--all` sees WHICH trees carry uncommitted work before
+  // they say yes to removing them.
+  const dirtyList = dirty.map((row) => sanitizeLabel(row.entry.path)).join(", ");
   const preamble = all
-    ? `--all would take down ${candidates.length} worktree${candidates.length === 1 ? "" : "s"}.`
+    ? `--all would take down ${candidates.length} worktree${candidates.length === 1 ? "" : "s"}` +
+      (dirty.length === 0
+        ? "."
+        : `, ${dirty.length} carrying uncommitted changes: ${dirtyList}.`)
     : orphans.length > 0
       ? `${sanitizeLabel(orphans[0]?.entry.path ?? "")} carries no readable receipt, so cleanup cannot ` +
         `verify what it placed and would remove the whole tree.`
@@ -763,6 +825,13 @@ async function runCleanup(
   // Default NO, unlike the three setup gates: this one removes a checkout, and
   // the prompt kit's own rule is that a destructive confirmation on a closed
   // gate refuses rather than proceeding on an assumed yes.
+  //
+  // [secfix A4] `not-required`, not `granted`, when nothing needed asking: this
+  // CLI-layer read is not the engine's own — the engine re-reads the inventory
+  // and checks dirtiness itself before it removes anything (`cleanup.ts`), and
+  // that re-check only holds if a truthful "nothing to ask about" cannot be
+  // misread as "the operator said yes" for a tree that turned dirty in the gap
+  // between the two reads.
   const force: ConsentAnswer = needsConsent
     ? await answerGate(ctx, gate, {
         flag: opts["force"] === true ? true : undefined,
@@ -770,7 +839,7 @@ async function runCleanup(
         question: "Remove them?",
         defaultYes: false,
       })
-    : "granted";
+    : "not-required";
 
   if (force === "declined") {
     throw new CliFailure({
@@ -807,14 +876,15 @@ async function runCleanup(
   // The funnel's contract is that a returned exit-1 result OWES an error
   // document, and the engine's cleanup result carries none, so it is written
   // here rather than left for a consumer to infer from the rows.
+  const errorDocument = partialCleanupErrorDocument(result, rerun);
   return {
     exitCode: 1,
     json: {
       ...payload,
       error: {
         code: "FS_ERROR",
-        message: "One or more receipt rows could not be removed.",
-        next: `Fix the cause and re-run \`${rerun}\`, or remove the remaining files by hand — the rows above name each one.`,
+        message: errorDocument.message,
+        next: errorDocument.next,
       },
     },
   };

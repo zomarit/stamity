@@ -25,14 +25,16 @@ import { digestFile, type WorktreeReceiptEntry } from "./receipt.ts";
  * source's bits, because a `0600` file coming back `0644` is world-readable to
  * every other account on the host with nothing said.
  *
- * **Windows is designed for and not verified.** A symlink refused with `EPERM`
- * or `EACCES` falls back to a copy and SAYS so — a reported fallback, never a
- * silent substitution — and every other errno stays a failure. A secret copy is
- * not mode-hardened there, because the platform has no POSIX mode to harden,
- * and the result says the permissions were left to the platform rather than
- * reporting a tightening that did not happen. There is no Windows job in CI, so
- * both branches are reached through the injected `platform` and `symlinkImpl`
- * seams and by nothing else.
+ * **Windows is designed for, and a CI leg now runs the suite there too**
+ * [secfix A11]. A symlink refused with `EPERM` or `EACCES` falls back to a
+ * copy and SAYS so — a reported fallback, never a silent substitution — and
+ * every other errno stays a failure. A secret copy is not mode-hardened
+ * there, because the platform has no POSIX mode to harden, and the result
+ * says the permissions were left to the platform rather than reporting a
+ * tightening that did not happen. The symlink-fallback branch is reached
+ * through the injected `platform` and `symlinkImpl` seams on every platform
+ * this suite runs on; on the real Windows CI leg it is additionally reached
+ * by the live platform itself.
  *
  * Every `await` in a loop here is ordered on purpose, so `no-await-in-loop` is
  * off for the module: entries share parent directories, so two `mkdir` calls
@@ -50,9 +52,12 @@ export type MaterializeStrategy = "copy" | "symlink";
 /**
  * Per-entry outcome. `absent` (no source to place) and `skipped` (destination
  * already present) are NOT failures — only `failed` feeds the partial-success
- * contract upstream.
+ * contract upstream. `withheld` [secfix A2] is a child of a copied directory
+ * whose basename identifies it as a known credential and for which secrets
+ * consent was NOT granted this run — nothing was written, unlike `skipped`,
+ * where the destination already holds bytes.
  */
-export type MaterializeOutcome = "materialized" | "skipped" | "absent" | "failed";
+export type MaterializeOutcome = "materialized" | "skipped" | "absent" | "failed" | "withheld";
 
 /** One path to place, as the policy resolved it. */
 export interface MaterializeRequest {
@@ -86,6 +91,25 @@ export interface MaterializeOptions {
    * has to read the policy document.
    */
   readonly isSkipped?: (relPath: string) => boolean;
+  /**
+   * [secfix A2] Identity check for a child discovered while expanding a
+   * copied DIRECTORY: true when the child's basename is one this repository
+   * treats as a live credential, whatever the parent row's own `secret` flag
+   * says. Injected the same way `isSkipped` is — this module never reads the
+   * policy document — so a `copy` row naming an ordinary directory that
+   * happens to contain `.env.mcp` elevates that ONE child to the same
+   * treatment a top-level secret row gets: forced `0600`, and — when
+   * {@link secretsGranted} is not `true` — withheld rather than copied.
+   */
+  readonly isKnownCredential?: (relPath: string) => boolean;
+  /**
+   * [secfix A2] Whether this run has consent to copy secret material. Read
+   * only for a child elevated by {@link isKnownCredential}; a row already
+   * marked `secret` by the caller is unaffected — the consent decision for
+   * those already happened one layer up, before `materializeEntries` was
+   * ever called.
+   */
+  readonly secretsGranted?: boolean;
 }
 
 /** One entry's result. The report and the receipt are both built from these. */
@@ -136,7 +160,11 @@ export async function materializeEntries(
       results.push(await materializeEntry(request, opts));
       continue;
     }
-    if (expanded.length === 0) {
+    if (
+      expanded.requests.length === 0 &&
+      expanded.failures.length === 0 &&
+      expanded.withheld.length === 0
+    ) {
       results.push({
         relPath: request.relPath,
         requested: request.strategy,
@@ -146,7 +174,16 @@ export async function materializeEntries(
       });
       continue;
     }
-    for (const child of expanded) results.push(await materializeEntry(child, opts));
+    for (const child of expanded.requests) results.push(await materializeEntry(child, opts));
+    // [secfix A6a] Reported as failed ROWS, not thrown: an unreadable
+    // subdirectory must not discard the sibling files this same directory row
+    // already collected and materialized above.
+    results.push(...expanded.failures);
+    // [secfix A2] A withheld credential child: nothing was written, and
+    // `receiptEntryFor` (below) excludes `outcome: "withheld"` the same way it
+    // already excludes `absent` and `failed` — no receipt row for bytes that
+    // were never placed.
+    results.push(...expanded.withheld);
   }
   return results;
 }
@@ -155,11 +192,22 @@ export async function materializeEntries(
  * The files under a `copy` row that names a directory, or null when the request
  * is not one (a file, a symlink row, or an absent source — each of which
  * {@link materializeEntry} answers on its own).
+ *
+ * `failures` carries one row per subdirectory the walk could not enumerate —
+ * [secfix A6a] an unreadable subdirectory used to throw out of this function
+ * and escape {@link materializeEntries} entirely, discarding every result the
+ * batch had already collected, siblings included. The walk instead reports it
+ * and keeps going, the same "returned, not thrown" contract REQ-WORKTREE-011
+ * asks of a failure past the point real work has already landed.
  */
 async function expandRequest(
   request: MaterializeRequest,
   opts: MaterializeOptions,
-): Promise<MaterializeRequest[] | null> {
+): Promise<{
+  requests: MaterializeRequest[];
+  failures: MaterializeResult[];
+  withheld: MaterializeResult[];
+} | null> {
   if (request.strategy !== "copy") return null;
   let entry;
   try {
@@ -172,8 +220,25 @@ async function expandRequest(
   if (!entry.isDirectory()) return null;
 
   const collected: MaterializeRequest[] = [];
+  const failures: MaterializeResult[] = [];
+  const withheld: MaterializeResult[] = [];
   const walk = async (relDir: string): Promise<void> => {
-    for (const child of await readdir(join(opts.sourceRoot, relDir), { withFileTypes: true })) {
+    let children;
+    try {
+      children = await readdir(join(opts.sourceRoot, relDir), { withFileTypes: true });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      failures.push({
+        relPath: relDir,
+        requested: request.strategy,
+        strategy: request.strategy,
+        outcome: "failed",
+        reason: error instanceof Error ? error.message : String(error),
+        ...(code === undefined ? {} : { errno: code }),
+      });
+      return;
+    }
+    for (const child of children) {
       const relPath = posix.join(relDir, child.name);
       if (opts.isSkipped?.(relPath) === true) continue;
       // A symlink child is NOT copied: `copyFile` would follow it and stamp the
@@ -186,11 +251,77 @@ async function expandRequest(
         await walk(relPath);
         continue;
       }
-      collected.push({ relPath, strategy: "copy", secret: request.secret });
+      // [secfix A2] A child whose basename identifies it as a known
+      // credential gets EXACTLY the treatment a top-level secret row gets,
+      // whatever the parent directory row's own `secret` flag says: elevated
+      // and forced to `0600` when this run has consent, or withheld — never
+      // copied, never silently inherited as non-secret — when it does not.
+      const elevated = request.secret || opts.isKnownCredential?.(relPath) === true;
+      if (elevated && !request.secret && opts.secretsGranted !== true) {
+        withheld.push({
+          relPath,
+          requested: "copy",
+          strategy: "copy",
+          outcome: "withheld",
+          reason: "this run had no consent to copy secret material (--copy-secrets)",
+        });
+        continue;
+      }
+      collected.push({ relPath, strategy: "copy", secret: elevated });
     }
   };
   await walk(request.relPath);
-  return collected;
+  return { requests: collected, failures, withheld };
+}
+
+/**
+ * Depth-first search under `sourceRoot`/`relDir` for the first file whose
+ * basename `isKnownCredential` accepts. [secfix S1-W6] Used only by
+ * {@link placeSymlink}'s pre-flight refusal — a `copy` row's own credential
+ * scan ({@link expandRequest}'s walk) exists to ELEVATE a matching child, not
+ * merely to detect one, and stays separate rather than sharing this helper.
+ *
+ * Deliberately ignores `isSkipped`: a `skip` carve-out excludes a path from a
+ * `copy` row's file-by-file walk, but a `symlink` row exposes its whole
+ * subtree as one link regardless of any carve-out declared for a path inside
+ * it — honouring `isSkipped` here would let a policy row that protects
+ * nothing under a link still suppress this refusal. Symlink children are
+ * skipped, the same as the `copy` walk, so a cycle through a linked sibling
+ * cannot recurse forever.
+ *
+ * [security round-3 M3] This scan answers for the subtree AS IT STANDS AT
+ * SETUP, once. A symlink row that clears it remains a STANDING alias into a
+ * live directory — unlike a `copy`, nothing here re-checks it later, and a
+ * file added to that directory after setup (a credential dropped in by a
+ * later tool run, an editor, a second developer) is never scanned again. An
+ * operator who meets this refusal once must not conclude a `symlink` row is
+ * durably credential-checked; it is checked at THIS moment only.
+ */
+async function findCredentialInSubtree(
+  sourceRoot: string,
+  relDir: string,
+  isKnownCredential: (relPath: string) => boolean,
+): Promise<string | null> {
+  let children;
+  try {
+    children = await readdir(join(sourceRoot, relDir), { withFileTypes: true });
+  } catch {
+    // An unreadable subtree has nothing for this scan to report; the link
+    // attempt itself is what surfaces the read failure.
+    return null;
+  }
+  for (const child of children) {
+    const relPath = posix.join(relDir, child.name);
+    if (child.isSymbolicLink()) continue;
+    if (child.isDirectory()) {
+      // oxlint-disable-next-line no-await-in-loop -- depth-first by construction; the next frame depends on this one
+      const found = await findCredentialInSubtree(sourceRoot, relPath, isKnownCredential);
+      if (found !== null) return found;
+      continue;
+    }
+    if (isKnownCredential(relPath)) return relPath;
+  }
+  return null;
 }
 
 /**
@@ -272,7 +403,21 @@ async function placeCopy(
     return failure(request, performed, error, fallbackFrom);
   }
 
-  const mode = await applyMode(request, destination, sourceMode, opts);
+  // [m1] `applyMode` chmods the file `copyFile` above just created. A failure
+  // here (an unusual filesystem denying `chmod`) must not leave that file
+  // stranded: `outcome: "failed"` produces no receipt row
+  // ({@link receiptEntryFor}), so bytes landed with no row would be bytes
+  // cleanup has no authority over — for the entry this lane copies by
+  // default, that is a credential nothing can ever un-place. The same
+  // COPYFILE_EXCL reasoning as the copy failure above applies: this call
+  // created the file, so removing it here cannot destroy anyone else's bytes.
+  let mode: Pick<MaterializeResult, "mode" | "secretModeApplied">;
+  try {
+    mode = await applyMode(request, destination, sourceMode, opts);
+  } catch (error) {
+    await rm(destination, { force: true }).catch(() => undefined);
+    return failure(request, performed, error, fallbackFrom);
+  }
   return {
     relPath: request.relPath,
     requested: request.strategy,
@@ -307,6 +452,32 @@ async function placeSymlink(
       };
     }
     throw error;
+  }
+
+  // [secfix S1-W6] A `copy` row over a directory elevates a nested credential
+  // by IDENTITY (A2) — a `symlink` row over the same shape must not bypass
+  // that by construction. A symlink links its whole subtree as ONE unit, so
+  // there is no per-file boundary to elevate or withhold at the way `copy`
+  // has: the row is refused OUTRIGHT, before the syscall, naming the file and
+  // pointing at `copy` (which DOES have a consent gate) as the route.
+  if (sourceIsDirectory && opts.isKnownCredential !== undefined) {
+    const credential = await findCredentialInSubtree(opts.sourceRoot, request.relPath, opts.isKnownCredential);
+    if (credential !== null) {
+      return {
+        relPath: request.relPath,
+        requested: "symlink",
+        strategy: "symlink",
+        outcome: "failed",
+        reason:
+          `${credential} inside this directory is a known credential, and a symlink links its whole ` +
+          `subtree as one unit — there is no per-file boundary to gate consent at the way a \`copy\` ` +
+          `row has. Set this row's strategy to \`copy\` (with --copy-secrets) so the credential is ` +
+          `placed under the same consent gate a top-level secret row gets, or carve it out with a ` +
+          `\`skip\` row of its own. This check answers for the directory as it stands right now — a ` +
+          `symlink row that later clears it stays a standing alias into a live directory, so a file ` +
+          `added there afterward is never re-checked.`,
+      };
+    }
   }
 
   const link = opts.symlinkImpl ?? ((target: string, path: string) => symlink(target, path));

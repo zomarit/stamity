@@ -1,6 +1,32 @@
 import { chmod, lstat, mkdir, readFile, readlink, stat, symlink, writeFile } from "node:fs/promises";
+import type * as FsPromises from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+/**
+ * [m1] A one-shot `chmod` failure, injected at the module boundary rather
+ * than through a seam this module does not have: reliably forcing a real
+ * `EPERM` from `chmod` on demand cannot be done portably (ownership, not
+ * directory permissions, governs it), the same reason this suite already
+ * injects `symlinkImpl` for the analogous `EPERM`/`EACCES` case. Every other
+ * call passes straight through to the real implementation.
+ */
+let nextChmodFailure: NodeJS.ErrnoException | null = null;
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>();
+  return {
+    ...actual,
+    chmod: async (...args: Parameters<typeof actual.chmod>) => {
+      if (nextChmodFailure !== null) {
+        const error = nextChmodFailure;
+        nextChmodFailure = null;
+        throw error;
+      }
+      return actual.chmod(...args);
+    },
+  };
+});
+import { isKnownCredentialPath } from "../../src/worktree/policy.ts";
 import { sha256Hex } from "../../src/worktree/receipt.ts";
 import {
   materializeEntries,
@@ -179,8 +205,11 @@ describe("worktree materialization — copy (REQ-WORKTREE-005)", () => {
     expect(result.secretModeApplied).toBe(true);
   });
 
-  // win32-gated: POSIX mode assertion — see WINDOWS.
-  it.skipIf(WINDOWS)("hardens a secret entry that was already present, so a re-run cannot leave it loose", async () => {
+  // [secfix A10] Narrowed to a LINE-level gate: only the mode read-back is a
+  // POSIX assertion win32 cannot express (see WINDOWS) — the `outcome` claim
+  // is platform-independent and used to be silenced along with it by a
+  // whole-case `skipIf`.
+  it("hardens a secret entry that was already present, so a re-run cannot leave it loose", async () => {
     const fix = await fixture();
     await seedSource(fix, ".env.mcp", SECRET_BODY, 0o644);
     const destination = join(fix.worktreeRoot, ".env.mcp");
@@ -190,7 +219,29 @@ describe("worktree materialization — copy (REQ-WORKTREE-005)", () => {
     const result = await materializeEntry(request({ secret: true }), options(fix));
 
     expect(result.outcome).toBe("skipped");
-    expect((await stat(destination)).mode & 0o777).toBe(0o600);
+    if (!WINDOWS) expect((await stat(destination)).mode & 0o777).toBe(0o600);
+  });
+
+  // [m1] `applyMode` runs AFTER `copyFile` has already placed the bytes; a
+  // failure there used to leave that copy stranded — `outcome: "failed"`
+  // produces no receipt row, so cleanup would have had no authority over a
+  // credential that WAS on disk. `chmod` is mocked because reliably forcing a
+  // real `EPERM` from it (ownership, not directory permissions, governs
+  // `chmod`) cannot be done portably on demand — the same justification this
+  // suite already gives `symlinkImpl` for the analogous case.
+  // win32-gated: `applyMode` never calls `chmod` on win32 (no POSIX mode to
+  // set), so the injected failure below would never fire there — see WINDOWS.
+  it.skipIf(WINDOWS)("does not strand a copied credential when applyMode fails after the copy landed [m1]", async () => {
+    const fix = await fixture();
+    await seedSource(fix, ".env.mcp", SECRET_BODY);
+    nextChmodFailure = Object.assign(new Error("EPERM: injected"), { code: "EPERM" });
+
+    const result = await materializeEntry(request({ secret: true }), options(fix));
+
+    expect(result.outcome).toBe("failed");
+    expect(result.errno).toBe("EPERM");
+    // Nothing survives with no receipt row to authorize its removal.
+    await expect(stat(join(fix.worktreeRoot, ".env.mcp"))).rejects.toThrow();
   });
 
   it("leaves no partial file when the write fails, and carries the errno", async () => {
@@ -342,6 +393,61 @@ describe("worktree materialization — symlink (REQ-WORKTREE-005, REQ-WORKTREE-0
     expect(result.reason).toContain("directory");
     await expect(stat(join(fix.worktreeRoot, "vendor"))).rejects.toThrow();
   });
+
+  // [secfix S1-W6] A `copy` row elevates a nested credential by identity
+  // (A2). A `symlink` row over the SAME directory shape bypassed that
+  // entirely: `expandRequest` returns `null` for a non-`copy` strategy, so
+  // `placeSymlink` never scanned the subtree and linked the whole directory
+  // in — credential reachable, no consent gate, no notice. A symlink links
+  // its whole subtree as ONE unit, so there is no per-file boundary to
+  // elevate or withhold at the way a copy has; the row is refused outright,
+  // naming the file and pointing at `copy` + `--copy-secrets` as the route
+  // that DOES have a consent gate — the same voice the sibling "directory
+  // link refused, no copy fallback" case above already uses.
+  it("refuses a symlink row whose subtree holds a known-credential basename, naming the file", async () => {
+    const fix = await fixture();
+    await mkdir(join(fix.sourceRoot, "state"), { recursive: true });
+    await writeFile(join(fix.sourceRoot, "state", "a.json"), '{"a":1}', "utf8");
+    await writeFile(join(fix.sourceRoot, "state", ".env.mcp"), SECRET_BODY, "utf8");
+
+    const result = await materializeEntry(
+      request({ relPath: "state", strategy: "symlink" }),
+      options(fix, { isKnownCredential: isKnownCredentialPath }),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.reason).toContain("state/.env.mcp");
+    expect(result.reason).toContain("copy");
+    // Nothing was linked — the whole row refused before the syscall.
+    await expect(lstat(join(fix.worktreeRoot, "state"))).rejects.toThrow();
+  });
+
+  it("still links a directory with no credential inside it, `isKnownCredential` injected or not", async () => {
+    const fix = await fixture();
+    await mkdir(join(fix.sourceRoot, "vendor2"), { recursive: true });
+    await writeFile(join(fix.sourceRoot, "vendor2", "pkg.json"), "{}", "utf8");
+
+    const result = await materializeEntry(
+      request({ relPath: "vendor2", strategy: "symlink" }),
+      options(fix, { isKnownCredential: isKnownCredentialPath }),
+    );
+
+    expect(result.outcome).toBe("materialized");
+    expect(await readlink(join(fix.worktreeRoot, "vendor2"))).toBe(join(fix.sourceRoot, "vendor2"));
+  });
+
+  it("links a credential-bearing directory when no `isKnownCredential` predicate is injected", async () => {
+    // Unchanged posture, same as A2's file-level case: this module never
+    // reads the policy document, so with NOTHING injected it does exactly
+    // what the row asked.
+    const fix = await fixture();
+    await mkdir(join(fix.sourceRoot, "state3"), { recursive: true });
+    await writeFile(join(fix.sourceRoot, "state3", ".env.mcp"), SECRET_BODY, "utf8");
+
+    const result = await materializeEntry(request({ relPath: "state3", strategy: "symlink" }), options(fix));
+
+    expect(result.outcome).toBe("materialized");
+  });
 });
 
 describe("worktree materialization — a directory row covers its subtree (REQ-WORKTREE-003)", () => {
@@ -384,6 +490,126 @@ describe("worktree materialization — a directory row covers its subtree (REQ-W
     expect(results).toHaveLength(1);
     expect(results[0]?.outcome).toBe("skipped");
     await expect(stat(join(fix.worktreeRoot, "state"))).rejects.toThrow();
+  });
+
+  // [secfix A6a] The directory walk's `readdir` used to be unguarded, so an
+  // unreadable subdirectory THREW out of `expandRequest` and escaped
+  // `materializeEntries` entirely — discarding every result the batch had
+  // already collected, including sibling files this same directory row placed
+  // successfully. `chmod 0` on a subdirectory of the copied tree is the real
+  // syscall failure this closes; guarded like the suite's other permission
+  // cases (`CAN_TEST_PERMISSIONS`), because root and Windows do not enforce it.
+  it.skipIf(!CAN_TEST_PERMISSIONS)(
+    "an unreadable subdirectory reports as a failed row and does not discard the rest of the batch [secfix A6a]",
+    async () => {
+      const fix = await fixture();
+      await seedTree(fix);
+      await chmod(join(fix.sourceRoot, "state", "cache"), 0o000);
+
+      try {
+        const results = await materializeEntries([request({ relPath: "state" })], options(fix));
+
+        // The sibling file OUTSIDE the unreadable subdirectory still landed.
+        const topLevel = results.find((entry) => entry.relPath === "state/a.json");
+        expect(topLevel?.outcome).toBe("materialized");
+        expect(await readFile(join(fix.worktreeRoot, "state/a.json"), "utf8")).toBe('{"a":1}');
+
+        // The unreadable subdirectory is a FAILED row, not a swallowed error and
+        // not a thrown exception.
+        const failed = results.find((entry) => entry.outcome === "failed");
+        expect(failed).toBeDefined();
+        expect(failed?.relPath).toContain("cache");
+      } finally {
+        await chmod(join(fix.sourceRoot, "state", "cache"), 0o755);
+      }
+    },
+  );
+});
+
+// [secfix A2] A `copy` row naming a directory that turns out to contain a
+// known credential must give that ONE child the same treatment a top-level
+// secret row gets — elevated to `0600` + receipt parity under consent, and
+// withheld (never copied) without it — rather than silently inheriting the
+// parent directory row's own (non-secret) `secret` flag.
+describe("worktree materialization — a credential found inside a copied directory (REQ-WORKTREE-005/016) [secfix A2]", () => {
+  async function seedCredentialInDirectory(fix: Fixture, basename = ".env.mcp"): Promise<void> {
+    await mkdir(join(fix.sourceRoot, "state"), { recursive: true });
+    await writeFile(join(fix.sourceRoot, "state", "a.json"), '{"a":1}', "utf8");
+    await writeFile(join(fix.sourceRoot, "state", basename), SECRET_BODY, "utf8");
+  }
+
+  it.skipIf(WINDOWS)(
+    "elevates the credential child to 0600, with a matching receipt row, under consent",
+    async () => {
+      const fix = await fixture();
+      await seedCredentialInDirectory(fix);
+
+      const results = await materializeEntries(
+        [request({ relPath: "state" })],
+        options(fix, { isKnownCredential: isKnownCredentialPath, secretsGranted: true }),
+      );
+
+      const credential = results.find((entry) => entry.relPath === "state/.env.mcp");
+      expect(credential?.outcome).toBe("materialized");
+      expect(credential?.mode).toBe("0600");
+      expect(credential?.secretModeApplied).toBe(true);
+      expect((await stat(join(fix.worktreeRoot, "state", ".env.mcp"))).mode & 0o777).toBe(0o600);
+      // Receipt parity: the row this run's receipt would carry for the
+      // elevated child names its digest, the same as a top-level secret row.
+      expect(receiptEntryFor(credential!)?.sha256).toBe(sha256Hex(SECRET_BODY));
+
+      // The sibling, non-credential file is unaffected — not elevated, not
+      // withheld.
+      const sibling = results.find((entry) => entry.relPath === "state/a.json");
+      expect(sibling?.outcome).toBe("materialized");
+      expect(sibling?.secretModeApplied).toBeUndefined();
+    },
+  );
+
+  it("withholds the credential child without consent, names it, and copies nothing for it", async () => {
+    const fix = await fixture();
+    await seedCredentialInDirectory(fix);
+
+    const results = await materializeEntries(
+      [request({ relPath: "state" })],
+      options(fix, { isKnownCredential: isKnownCredentialPath, secretsGranted: false }),
+    );
+
+    const credential = results.find((entry) => entry.relPath === "state/.env.mcp");
+    expect(credential?.outcome).toBe("withheld");
+    expect(await stat(join(fix.worktreeRoot, "state", ".env.mcp")).catch(() => null)).toBeNull();
+    // No receipt row for bytes that were never placed.
+    expect(receiptEntryFor(credential!)).toBeNull();
+
+    // The sibling, non-credential file still landed — withholding one child
+    // does not withhold the whole directory.
+    const sibling = results.find((entry) => entry.relPath === "state/a.json");
+    expect(sibling?.outcome).toBe("materialized");
+  });
+
+  it("composes with the credential-identity normalizer: a Windows-dropped trailing dot/space still elevates [secfix A3]", async () => {
+    const fix = await fixture();
+    // `.env.mcp.` — a trailing dot Windows drops, addressing the SAME file on
+    // disk as `.env.mcp` there (see policy.ts's `normalizeCredentialBasename`).
+    await seedCredentialInDirectory(fix, ".env.mcp.");
+
+    const results = await materializeEntries(
+      [request({ relPath: "state" })],
+      options(fix, { isKnownCredential: isKnownCredentialPath, secretsGranted: false }),
+    );
+
+    const credential = results.find((entry) => entry.relPath === "state/.env.mcp.");
+    expect(credential?.outcome).toBe("withheld");
+  });
+
+  it("does not withhold or elevate when no `isKnownCredential` predicate is injected", async () => {
+    const fix = await fixture();
+    await seedCredentialInDirectory(fix);
+
+    const results = await materializeEntries([request({ relPath: "state" })], options(fix));
+
+    const credential = results.find((entry) => entry.relPath === "state/.env.mcp");
+    expect(credential?.outcome).toBe("materialized");
   });
 });
 
@@ -436,10 +662,12 @@ describe("worktree materialization — the batch and its receipt rows (REQ-WORKT
    * copy the first run placed — and for the entry this lane copies by default,
    * that is credential material left behind.
    */
-  // win32-gated: the receipt row records the forced 0600 mode, a POSIX mode
-  // assertion — see WINDOWS. The materialized/skipped/absent outcome rows are
-  // covered platform-independently by the outcome case above.
-  it.skipIf(WINDOWS)("records materialized and skipped rows, and never absent or failed ones", async () => {
+  // [secfix A10] Narrowed to a LINE-level gate: only the recorded `mode:
+  // "0600"` field is a POSIX assertion win32 cannot express (see WINDOWS) —
+  // the path/strategy/digest fields, and the skipped/absent claims, are
+  // platform-independent and used to be silenced along with it by a
+  // whole-case `skipIf`.
+  it("records materialized and skipped rows, and never absent or failed ones", async () => {
     const fix = await fixture();
     await seedSource(fix, ".env.mcp", SECRET_BODY);
     const existing = "MCP_GITHUB_TOKEN=placed-by-the-first-run\n";
@@ -451,12 +679,13 @@ describe("worktree materialization — the batch and its receipt rows (REQ-WORKT
       options(fix),
     );
 
-    expect(receiptEntryFor(copied!)).toEqual({
+    const copiedReceipt = receiptEntryFor(copied!);
+    expect(copiedReceipt).toMatchObject({
       path: ".env.mcp",
       strategy: "copy",
-      mode: "0600",
       sha256: sha256Hex(SECRET_BODY),
     });
+    if (!WINDOWS) expect(copiedReceipt?.mode).toBe("0600");
     expect(receiptEntryFor(skipped!)?.sha256).toBe(sha256Hex(existing));
     expect(receiptEntryFor(absent!)).toBeNull();
   });

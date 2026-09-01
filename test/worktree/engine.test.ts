@@ -1,5 +1,5 @@
 import { chmod, lstat, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, win32 } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   acquireWriteLock,
@@ -25,15 +25,18 @@ import {
   type WorktreeGitRunner,
 } from "../../src/worktree/git.ts";
 import {
+  applySetupConsent,
   planWorktreeSetup,
   probeSetupPresence,
   resolveBranchPlan,
   runWorktreeSetup,
   worktreeLockPath,
+  type ConsentAnswer,
   type WorktreeSetupConsent,
   type WorktreeSetupOptions,
 } from "../../src/worktree/setup.ts";
 import {
+  isInside,
   readWorktreeInventory,
   runWorktreeCleanup,
   type WorktreeCleanupOptions,
@@ -327,6 +330,53 @@ describe("worktree name rules (REQ-WORKTREE-009)", () => {
     expect(worktreePathFor("/farm", "feat/api")).toBe(join("/farm", "feat", "api"));
     expect(() => worktreePathFor("/farm", "../outside")).toThrowError(EngineError);
   });
+
+  // [secfix A9] worktreePathFor's containment guard is defence-in-depth behind
+  // assertWorktreeName, which is the sole caller's pre-guard — but the guard
+  // itself must still refuse an absolute name rather than silently joining it
+  // onto the farm (`join("/farm", "/abs")` === `/farm/abs`, which PASSES a
+  // naive containment check while never having been asked for).
+  it("refuses an absolute name outright, not just a name that later escapes via ..", () => {
+    expect(() => worktreePathFor("/farm", "/abs")).toThrowError(EngineError);
+  });
+});
+
+// [secfix A1] The farm-containment guard shared by cleanup.ts and the CLI.
+describe("isInside — farm containment (REQ-WORKTREE-007) [secfix A1]", () => {
+  it("does not classify a cross-drive win32 path as inside the farm", () => {
+    // path.win32.relative('C:\\src\\repo', 'D:\\work\\hotfix') returns the second
+    // path essentially unchanged when the two share no drive — a string that
+    // never starts with `/`, so the old `rel.startsWith("/")` guard let a
+    // cross-drive (or UNC) worktree read as "inside" the farm. Exercised with
+    // `path.win32` explicitly so the win32 semantics are pinned on every host
+    // platform, not only on a real Windows runner.
+    const rel = win32.relative("C:\\src\\repo", "D:\\work\\hotfix");
+    expect(win32.isAbsolute(rel)).toBe(true); // sanity: this IS the failure mode
+    expect(
+      isInside("D:\\work\\hotfix", "C:\\src\\repo", {
+        relative: win32.relative,
+        resolve: win32.resolve,
+        sep: win32.sep,
+        isAbsolute: win32.isAbsolute,
+      }),
+    ).toBe(false);
+  });
+
+  it("still classifies an ordinary nested win32 path as inside", () => {
+    expect(
+      isInside("C:\\farm\\feat\\child", "C:\\farm\\feat", {
+        relative: win32.relative,
+        resolve: win32.resolve,
+        sep: win32.sep,
+        isAbsolute: win32.isAbsolute,
+      }),
+    ).toBe(true);
+  });
+
+  it("classifies a native nested path as inside, and a sibling as outside", () => {
+    expect(isInside(join("/farm", "feat", "child"), join("/farm", "feat"))).toBe(true);
+    expect(isInside(join("/farm", "other"), join("/farm", "feat"))).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -442,6 +492,124 @@ describe.skipIf(!gitAvailable)("branch plan resolution (REQ-WORKTREE-009)", () =
     expect(plan.kind).toBe("create");
     expect(plan.remoteConsulted).toBe(false);
     expect(plan.reason).toContain("NOT consulted");
+  });
+});
+
+/**
+ * [secfix NR-1] `applySetupConsent`'s attach and track gates used to enumerate
+ * the NEGATIVE answers only (`declined` -> refuse, `unanswered` -> refuse) and
+ * fall through to PROCEED for anything else — a fail-OPEN default that let the
+ * new `"not-required"` value (added for A4's cleanup gate, but reachable here
+ * through the shared `ConsentAnswer` type) sail through both gates with no
+ * operator having said yes. The fix inverts both to a positive
+ * `answer !== "granted"` refusal, so a fifth `ConsentAnswer` member refuses by
+ * default rather than proceeding by default. This block also pins the parity
+ * `planConsentGates` promises: the plan's predicted effect for a gate and
+ * `applySetupConsent`'s real behaviour for the same answer must agree, for
+ * EVERY `ConsentAnswer` value — a plan that says `refuse` while the real run
+ * proceeds is the shape REQ-WORKTREE-012 exists to rule out.
+ */
+describe.skipIf(!gitAvailable)("consent gate fail-closed defaults and dry-run parity (REQ-WORKTREE-008/012) [secfix NR-1]", () => {
+  const ALL_ANSWERS: readonly ConsentAnswer[] = ["granted", "declined", "unanswered", "not-required"];
+
+  it("refuses an ATTACH gate for every non-granted answer, `not-required` included", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await mustGit(fix.root, "branch", "held");
+    const plan = await planWorktreeSetup({ repoRoot: fix.root, name: "held", fetch: true, consent: GRANTED });
+    expect(plan.branchPlan.kind).toBe("attach");
+
+    for (const answer of ["declined", "unanswered", "not-required"] as const) {
+      expect(
+        () => applySetupConsent(plan, { ...GRANTED, attach: answer }, "stamity worktree setup held"),
+        `attach:${answer} must refuse`,
+      ).toThrowError(EngineError);
+    }
+    // Sanity: an explicit `granted` still proceeds.
+    expect(() =>
+      applySetupConsent(plan, { ...GRANTED, attach: "granted" }, "stamity worktree setup held"),
+    ).not.toThrow();
+  });
+
+  it("refuses a TRACK gate for `unanswered`/`not-required`, and still falls through to create-off-HEAD on `declined`", async () => {
+    const base = getRoot().dir;
+    const fix = await seedRepo(base);
+    await seedOrigin(fix, base, "remote-only");
+    const plan = await planWorktreeSetup({
+      repoRoot: fix.root,
+      name: "remote-only",
+      fetch: true,
+      consent: GRANTED,
+    });
+    expect(plan.branchPlan.kind).toBe("track");
+
+    for (const answer of ["unanswered", "not-required"] as const) {
+      expect(
+        () => applySetupConsent(plan, { ...GRANTED, track: answer }, "stamity worktree setup remote-only"),
+        `track:${answer} must refuse`,
+      ).toThrowError(EngineError);
+    }
+    // `declined` keeps its OWN behaviour — falls through to `create` rather
+    // than refusing, because the operator asked for a new branch off HEAD.
+    const declined = applySetupConsent(
+      plan,
+      { ...GRANTED, track: "declined" },
+      "stamity worktree setup remote-only",
+    );
+    expect(declined.kind).toBe("create");
+  });
+
+  it("agrees with the planned gate effect for every ConsentAnswer value, on the ATTACH gate", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await mustGit(fix.root, "branch", "held");
+
+    for (const answer of ALL_ANSWERS) {
+      const consent = { ...GRANTED, attach: answer };
+      // oxlint-disable-next-line no-await-in-loop -- four small, independent reads; no shared state to race
+      const planned = await planWorktreeSetup({
+        repoRoot: fix.root,
+        name: "held",
+        fetch: true,
+        consent,
+      });
+      const gate = planned.gates.find((entry) => entry.gate === "attach");
+      expect(gate, `no attach gate planned for ${answer}`).toBeDefined();
+
+      let proceeded = true;
+      try {
+        applySetupConsent(planned, consent, "stamity worktree setup held");
+      } catch {
+        proceeded = false;
+      }
+      expect(proceeded, `attach:${answer} — plan said ${gate?.effect}`).toBe(gate?.effect === "proceed");
+    }
+  });
+
+  it("agrees with the planned gate effect for every ConsentAnswer value, on the TRACK gate", async () => {
+    const base = getRoot().dir;
+    const fix = await seedRepo(base);
+    await seedOrigin(fix, base, "remote-only");
+
+    for (const answer of ALL_ANSWERS) {
+      const consent = { ...GRANTED, track: answer };
+      // oxlint-disable-next-line no-await-in-loop -- four small, independent reads; no shared state to race
+      const planned = await planWorktreeSetup({
+        repoRoot: fix.root,
+        name: "remote-only",
+        fetch: true,
+        consent,
+      });
+      const gate = planned.gates.find((entry) => entry.gate === "track");
+      expect(gate, `no track gate planned for ${answer}`).toBeDefined();
+
+      let outcome: "proceed" | "refuse" | "create-instead";
+      try {
+        const result = applySetupConsent(planned, consent, "stamity worktree setup remote-only");
+        outcome = result.kind === planned.branchPlan.kind ? "proceed" : "create-instead";
+      } catch {
+        outcome = "refuse";
+      }
+      expect(outcome, `track:${answer} — plan said ${gate?.effect}`).toBe(gate?.effect);
+    }
   });
 });
 
@@ -694,6 +862,41 @@ describe.skipIf(!gitAvailable)("worktree setup", () => {
       entries: { path: string }[];
     };
     expect(receipt.entries.map((entry) => entry.path)).toEqual([".env.mcp"]);
+  });
+
+  // [secfix A6b] REQ-WORKTREE-011 promises a failure AFTER the tree exists is
+  // RETURNED, not thrown. `resolveSha`/`resolveWorktreeGitDir` run after the
+  // tree is created and after materialization, and both used `expectGit`,
+  // which THROWS on a non-zero exit — escaping `setupUnderLock` entirely and
+  // dropping the entries and notices the run had already computed, the same
+  // failure shape REQ-WORKTREE-011 exists to close for the materialize loop.
+  it("a post-add git-facts failure (resolveSha/resolveWorktreeGitDir) returns partial, not a throw [secfix A6b]", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    const worktreePath = join(fix.farm, "feat");
+    // Passes every OTHER git call through to the real binary; only the two
+    // `rev-parse` calls this flow makes AFTER `git worktree add` — both with
+    // `cwd` at the new worktree — are made to fail, the same way a git
+    // version skew or a half-initialised `.git` file could fail them for real.
+    const failingAfterAdd: WorktreeGitRunner = async (invocation) => {
+      if (invocation.cwd === worktreePath && invocation.args[0] === "rev-parse") {
+        return { status: 128, stdout: "", stderr: "fatal: injected rev-parse failure" };
+      }
+      return runGit(invocation);
+    };
+
+    const result = await runWorktreeSetup(setupOptions(fix, "feat", { run: failingAfterAdd }));
+
+    // Returned, not thrown — and the tree it created, plus the entries it
+    // already materialized, both survive in the result.
+    expect(result.status).toBe("partial");
+    expect(await exists(worktreePath)).toBe(true);
+    expect(await exists(join(worktreePath, ".env.mcp"))).toBe(true);
+    expect(result.entries.some((entry) => entry.outcome === "materialized")).toBe(true);
+    // No git-dir was resolvable, so no receipt could be written — the tree is
+    // a managed-orphan, and the error names the `--force` recovery for one.
+    expect(result.receiptPath).toBeNull();
+    expect(result.error?.code).toBe("FS_ERROR");
+    expect(result.error?.next).toContain("--force");
   });
 
   it("says so in the report when the lock opt-out is live (REQ-WORKTREE-010)", async () => {
@@ -1042,6 +1245,85 @@ describe.skipIf(!gitAvailable)("worktree cleanup", () => {
     expect(await exists(join(fix.farm, "feat"))).toBe(true);
   });
 
+  // [secfix A7] A `removeWorktree` failure on ONE tree mid-sweep used to throw
+  // straight out of `runWorktreeCleanup`, discarding the reports for every
+  // tree already inverted earlier in the SAME sweep. Per-tree aggregation
+  // means a completed tree's report survives the loop even when a later tree
+  // in the same sweep fails, and the run comes back `partial` rather than as
+  // a thrown error envelope with nothing computed.
+  it("a mid-sweep git-remove failure keeps the earlier tree's report, and reports partial [secfix A7]", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await runWorktreeSetup(setupOptions(fix, "alpha"));
+    await runWorktreeSetup(setupOptions(fix, "beta"));
+    const betaPath = join(fix.farm, "beta");
+
+    // Every OTHER git call passes through to the real binary; only the
+    // `worktree remove` of `beta` is made to fail with an unexpected git
+    // error (not the "contains modified" shape, which already has its own
+    // classified refusal) — the same kind of failure an admin-directory fault
+    // or a git version quirk could produce for real.
+    const failingOnBeta: WorktreeGitRunner = async (invocation) => {
+      if (
+        invocation.args[0] === "worktree" &&
+        invocation.args[1] === "remove" &&
+        invocation.args.at(-1) === betaPath
+      ) {
+        return { status: 1, stdout: "", stderr: "fatal: injected failure removing beta" };
+      }
+      return runGit(invocation);
+    };
+
+    const result = await runWorktreeCleanup(
+      cleanupOptions(fix, { all: true, force: "granted", run: failingOnBeta }),
+    );
+
+    expect(result.status).toBe("partial");
+    const alphaReport = result.worktrees.find((entry) => entry.path === join(fix.farm, "alpha"));
+    expect(alphaReport?.removed).toBe(true);
+    expect(await exists(join(fix.farm, "alpha"))).toBe(false);
+
+    const betaReport = result.worktrees.find((entry) => entry.path === betaPath);
+    expect(betaReport?.removed).toBe(false);
+    expect(await exists(betaPath)).toBe(true);
+  });
+
+  // [secfix NEW-2] `failedTreeReport`'s synthetic file row used to carry the
+  // ABSOLUTE worktree path in `CleanupFileReport.path`, where every other
+  // producer (a receipt-inversion row) fills the RECEIPT-RELATIVE path — a
+  // `--json` consumer joining `worktrees[].path` with `files[].path` would
+  // build nonsense for exactly this row. A tree-level failure (nothing about
+  // one file; the `git worktree remove` call itself failed) is now carried on
+  // its own field rather than forced into the per-file shape.
+  it("a mid-sweep git-remove failure reports on treeFailure, not as a bogus absolute-path file row [secfix NEW-2]", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await runWorktreeSetup(setupOptions(fix, "alpha"));
+    await runWorktreeSetup(setupOptions(fix, "beta"));
+    const betaPath = join(fix.farm, "beta");
+
+    const failingOnBeta: WorktreeGitRunner = async (invocation) => {
+      if (
+        invocation.args[0] === "worktree" &&
+        invocation.args[1] === "remove" &&
+        invocation.args.at(-1) === betaPath
+      ) {
+        return { status: 1, stdout: "", stderr: "fatal: injected failure removing beta" };
+      }
+      return runGit(invocation);
+    };
+
+    const result = await runWorktreeCleanup(
+      cleanupOptions(fix, { all: true, force: "granted", run: failingOnBeta }),
+    );
+
+    const betaReport = result.worktrees.find((entry) => entry.path === betaPath);
+    // No file row at all — this failure is not about any one receipt entry.
+    expect(betaReport?.files).toEqual([]);
+    // The tree-level failure is its own field, and its wording names what
+    // actually failed (removing the worktree), not "receipt rows".
+    expect(betaReport?.treeFailure).toContain("removing the worktree");
+    expect(betaReport?.treeFailure?.toLowerCase()).not.toContain("receipt row");
+  });
+
   it("refuses with both spellings when neither a name nor --all is given", async () => {
     const fix = await seedRepo(getRoot().dir);
 
@@ -1178,6 +1460,116 @@ describe.skipIf(!gitAvailable)("worktree security fixes over a real repository [
     if (!WINDOWS) expect((await stat(join(fix.farm, "feat2", ".env.mcp"))).mode & 0o777).toBe(0o600);
   });
 
+  // [secfix A2] A `copy` row naming a gitignored DIRECTORY (not itself
+  // flagged `secret` in the policy) that happens to contain `.env.mcp` used
+  // to copy that credential verbatim: no consent gate, no 0600, no withheld
+  // notice — the child inherited the parent row's own `secret: false`. An
+  // end-to-end `setup` run now gives the nested credential the SAME treatment
+  // a top-level secret row gets.
+  it("elevates a credential found inside a copied (non-secret) directory, gated the same as a top-level secret [secfix A2]", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await mkdir(join(fix.root, "state"), { recursive: true });
+    await writeFile(join(fix.root, "state", "cache.json"), "{}\n", "utf8");
+    await writeFile(join(fix.root, "state", ".env.mcp"), SECRET_BODY, "utf8");
+    await writeFile(join(fix.root, ".gitignore"), `${IGNORE_FILE}state/\n`, "utf8");
+    await mustGit(fix.root, "add", "-A");
+    await mustGit(fix.root, ...IDENTITY, "commit", "--quiet", "-m", "add state dir");
+    await mkdir(join(fix.root, ".stamity"), { recursive: true });
+    // The `state` ROW itself is NOT marked secret — only its nested
+    // `.env.mcp` child is a known credential by identity.
+    await writeFile(
+      join(fix.root, ".stamity", "worktree.json"),
+      JSON.stringify({ version: 1, entries: [{ path: "state", strategy: "copy" }] }),
+      "utf8",
+    );
+
+    // No consent: the nested credential is withheld, but the rest of the
+    // directory still lands.
+    const withheld = await runWorktreeSetup(setupOptions(fix, "feat", { consent: UNANSWERED }));
+    expect(withheld.entries.find((entry) => entry.path === "state/.env.mcp")?.outcome).toBe(
+      "withheld",
+    );
+    expect(await exists(join(fix.farm, "feat", "state", ".env.mcp"))).toBe(false);
+    expect(await exists(join(fix.farm, "feat", "state", "cache.json"))).toBe(true);
+    expect(withheld.notices.some((notice) => notice.includes("state/.env.mcp"))).toBe(true);
+
+    // Consent granted: the nested credential is copied AND forced to 0600,
+    // the same as a top-level secret row.
+    await runWorktreeSetup(setupOptions(fix, "feat2", { consent: GRANTED }));
+    expect(await exists(join(fix.farm, "feat2", "state", ".env.mcp"))).toBe(true);
+    if (!WINDOWS) {
+      expect((await stat(join(fix.farm, "feat2", "state", ".env.mcp"))).mode & 0o777).toBe(0o600);
+    }
+    const gitDir = (await mustGit(join(fix.farm, "feat2"), "rev-parse", "--absolute-git-dir")).trim();
+    const receipt = JSON.parse(await readFile(worktreeReceiptPath(gitDir), "utf8")) as {
+      entries: { path: string; sha256?: string }[];
+    };
+    const receiptRow = receipt.entries.find((entry) => entry.path === "state/.env.mcp");
+    expect(receiptRow?.sha256).toBe(sha256Hex(SECRET_BODY));
+  });
+
+  // [secfix S1-W6] A2's protection only ran for `strategy: "copy"` —
+  // `expandRequest` returned `null` for anything else, so a `symlink` row
+  // over the SAME gitignored directory bypassed the identity check entirely:
+  // the whole directory, credential included, was linked in with no consent
+  // gate and no notice. An end-to-end `setup` run now refuses that row
+  // outright (returned as a partial, per REQ-011 — not thrown), naming the
+  // credential and pointing at `copy` as the route that DOES have a gate.
+  it("refuses a symlink row whose directory holds a credential, end to end [secfix S1-W6]", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await mkdir(join(fix.root, "linked-state"), { recursive: true });
+    await writeFile(join(fix.root, "linked-state", "cache.json"), "{}\n", "utf8");
+    await writeFile(join(fix.root, "linked-state", ".env.mcp"), SECRET_BODY, "utf8");
+    await writeFile(join(fix.root, ".gitignore"), `${IGNORE_FILE}linked-state/\n`, "utf8");
+    await mustGit(fix.root, "add", "-A");
+    await mustGit(fix.root, ...IDENTITY, "commit", "--quiet", "-m", "add linked-state dir");
+    await mkdir(join(fix.root, ".stamity"), { recursive: true });
+    await writeFile(
+      join(fix.root, ".stamity", "worktree.json"),
+      JSON.stringify({ version: 1, entries: [{ path: "linked-state", strategy: "symlink" }] }),
+      "utf8",
+    );
+
+    const result = await runWorktreeSetup(setupOptions(fix, "feat", { consent: GRANTED }));
+
+    expect(result.status).toBe("partial");
+    const entry = result.entries.find((e) => e.path === "linked-state");
+    expect(entry?.outcome).toBe("failed");
+    expect(entry?.reason).toContain(".env.mcp");
+    // Nothing was linked — the credential never became reachable.
+    expect(await exists(join(fix.farm, "feat", "linked-state"))).toBe(false);
+  });
+
+  // [secfix A4] `force: "granted"` used to be what the CLI passed whenever it
+  // decided, at ITS OWN earlier read, that no consent question was needed — so
+  // if the tree turned dirty in the window between that read and the engine's
+  // own re-read of the inventory, the engine treated the stale "granted" as an
+  // answered gate and force-removed a dirty tree with nobody actually asked. A
+  // third value, `"not-required"`, is what a genuinely-needs-no-consent run
+  // must pass instead: the engine's own dirty check still gates on real
+  // consent, so a tree that IS dirty at the engine's own read still refuses.
+  it("treats `not-required` as no real consent: a tree dirty at the engine's own read still refuses [secfix A4]", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await runWorktreeSetup(setupOptions(fix, "feat"));
+    await writeFile(join(fix.farm, "feat", "dirty.txt"), "x\n", "utf8");
+
+    await refuses(
+      () => runWorktreeCleanup(cleanupOptions(fix, { names: ["feat"], force: "not-required" })),
+      "VALIDATION_ERROR",
+    );
+    expect(await exists(join(fix.farm, "feat"))).toBe(true);
+  });
+
+  it("`granted` — real consent — still proceeds through a dirty tree [secfix A4]", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await runWorktreeSetup(setupOptions(fix, "feat"));
+    await writeFile(join(fix.farm, "feat", "dirty.txt"), "x\n", "utf8");
+
+    const result = await runWorktreeCleanup(cleanupOptions(fix, { names: ["feat"], force: "granted" }));
+    expect(result.status).toBe("complete");
+    expect(await exists(join(fix.farm, "feat"))).toBe(false);
+  });
+
   it("a dirty cleanup without --force mutates NOTHING [secfix frontier-W2]", async () => {
     const fix = await seedRepo(getRoot().dir);
     await runWorktreeSetup(setupOptions(fix, "feat"));
@@ -1221,6 +1613,48 @@ describe.skipIf(!gitAvailable)("worktree security fixes over a real repository [
     const report = result.worktrees.find((entry) => entry.path === join(fix.farm, "feat"));
     expect(report?.droppedRows.length).toBeGreaterThan(0);
   });
+
+  // [secfix A8] Classification (receipt presence, dirtiness) used to be read
+  // ONCE, before the name lock was taken. A same-name `setup` racing this
+  // cleanup can flip that classification in the window between the read and
+  // the lock: cleanup reads "no receipt yet" (a setup mid-flight), classifies
+  // managed-orphan, then waits out the lock the racing setup holds — and,
+  // acting on the STALE read once it finally acquires the lock, would
+  // force-remove the tree the setup just finished building. The fix
+  // re-derives the disposition UNDER the lock, right before any destructive
+  // act, so the decision is made from what is true right now.
+  it("re-derives the disposition under the lock, so a racing setup's receipt wins over the stale pre-lock read [secfix A8]", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await runWorktreeSetup(setupOptions(fix, "feat"));
+    const gitDir = (await mustGit(join(fix.farm, "feat"), "rev-parse", "--absolute-git-dir")).trim();
+    const receiptPath = worktreeReceiptPath(gitDir);
+    const receiptBytes = await readFile(receiptPath, "utf8");
+    const commonDir = (await mustGit(fix.root, "rev-parse", "--absolute-git-dir")).trim();
+
+    // The receipt is ABSENT at the moment cleanup takes its pre-lock inventory
+    // read — the state a same-name setup leaves while it is still writing.
+    await rm(receiptPath, { force: true });
+    // Holds the SAME name lock cleanup's own `cleanOne` will contend for,
+    // simulating the racing setup still inside its own critical section.
+    const release = await acquireWriteLock(worktreeLockPath(commonDir, "feat"), commonDir);
+
+    const cleanupPromise = runWorktreeCleanup(cleanupOptions(fix, { names: ["feat"], force: "granted" }));
+
+    // While cleanup is blocked waiting on that lock, the racing setup
+    // "finishes": its receipt lands, then it releases the lock — exactly the
+    // order `setupUnderLock` writes the receipt and releases in.
+    await new Promise((resolveTimer) => setTimeout(resolveTimer, 250));
+    await writeFile(receiptPath, receiptBytes, "utf8");
+    await release();
+
+    const result = await cleanupPromise;
+    const report = result.worktrees.find((entry) => entry.path === join(fix.farm, "feat"));
+    // Had the stale pre-lock read been trusted, this would be a managed-orphan
+    // force-removed as a whole tree. Re-derived under the lock, it is
+    // `managed`, and the receipt's own inversion ran instead.
+    expect(report?.classification).toBe("managed");
+    expect(result.notices.some((notice) => notice.includes("no readable receipt"))).toBe(false);
+  }, 10_000);
 });
 
 // A tree inside the managed farm with no readable receipt is a managed-orphan:

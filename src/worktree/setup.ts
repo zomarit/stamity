@@ -28,6 +28,7 @@ import {
 } from "./materialize.ts";
 import {
   assertRulesAdmissible,
+  isKnownCredentialPath,
   materializationRules,
   readWorktreePolicy,
   resolveFarmDir,
@@ -74,8 +75,38 @@ import { createWorktreeReceipt, writeWorktreeReceipt, type WorktreeReceiptEntry 
  * worktree on disk and a message saying the command failed.
  */
 
-/** What the operator has said about one gated operation. */
-export type ConsentAnswer = "granted" | "declined" | "unanswered";
+/**
+ * What the operator has said about one gated operation.
+ *
+ * `not-required` is distinct from `granted`: it is what a caller passes when
+ * ITS OWN read of the world found nothing to ask about, and it must never be
+ * read as an answered gate. `cleanup`'s consent is resolved by the CLI from
+ * one inventory read, then re-checked by the engine against a SECOND,
+ * independent read taken later — a tree that turned dirty in that window must
+ * still refuse, which only holds if "nothing needed asking" and "the operator
+ * said yes" are different values. A caller that collapsed the two onto
+ * `granted` would have the engine treat its own stale non-answer as consent.
+ */
+export type ConsentAnswer = "granted" | "declined" | "unanswered" | "not-required";
+
+/**
+ * True for an explicit `"granted"` answer, false for every other value —
+ * `declined`, `unanswered`, `not-required`, and any future `ConsentAnswer`
+ * member. [secfix NR-1]
+ *
+ * Every consent check in this lane routes through this rather than
+ * enumerating the negative answers and falling through to proceed: a
+ * negative-only chain (`declined ? refuse : unanswered ? refuse : proceed`)
+ * is fail-OPEN by construction — it proceeds for any answer the author did
+ * not think to list, which is exactly how `applySetupConsent`'s attach and
+ * track gates let the later-added `"not-required"` value sail through with
+ * nobody having said yes. A positive `isGranted` check is fail-CLOSED by the
+ * same construction: a fifth `ConsentAnswer` member refuses by default rather
+ * than proceeding by default, with no gate needing to be told about it.
+ */
+export function isGranted(answer: ConsentAnswer): boolean {
+  return answer === "granted";
+}
 
 /**
  * The three gates of REQ-WORKTREE-008 that `setup` owns.
@@ -163,7 +194,10 @@ export interface WorktreeEntryReport {
   readonly path: string;
   readonly requested: MaterializeStrategy;
   readonly strategy: MaterializeStrategy;
-  readonly outcome: "materialized" | "skipped" | "absent" | "failed";
+  // [secfix A2] `withheld`: a credential child discovered while expanding a
+  // copied directory, for which this run had no secrets consent — distinct
+  // from `skipped`, which means the destination already holds bytes.
+  readonly outcome: "materialized" | "skipped" | "absent" | "failed" | "withheld";
   readonly reason: string | null;
   readonly mode: string | null;
   readonly errno: string | null;
@@ -337,7 +371,7 @@ function planConsentGates(
     gates.push({
       gate: "attach",
       answer: consent.attach,
-      effect: consent.attach === "granted" ? "proceed" : "refuse",
+      effect: isGranted(consent.attach) ? "proceed" : "refuse",
     });
   }
   if (branchPlan.kind === "track") {
@@ -346,19 +380,18 @@ function planConsentGates(
       answer: consent.track,
       // A DECLINED track is the one gate whose refusal is not a stop: the
       // operator asked for a new local branch off HEAD instead.
-      effect:
-        consent.track === "granted"
-          ? "proceed"
-          : consent.track === "declined"
-            ? "create-instead"
-            : "refuse",
+      effect: isGranted(consent.track)
+        ? "proceed"
+        : consent.track === "declined"
+          ? "create-instead"
+          : "refuse",
     });
   }
   if (entries.some((entry) => entry.secret)) {
     gates.push({
       gate: "secrets",
       answer: consent.secrets,
-      effect: consent.secrets === "granted" ? "proceed" : "skip",
+      effect: isGranted(consent.secrets) ? "proceed" : "skip",
     });
   }
   return gates;
@@ -386,13 +419,21 @@ export function applySetupConsent(
         `Work in ${branchPlan.checkedOutAt}, or run setup under a different name.`,
       );
     }
-    if (consent.attach === "declined") {
-      refuse(
-        `A local branch \`${branchPlan.branch}\` already exists and --no-use-existing was given, so this run will not attach to it.`,
-        `Pick a name with no branch behind it, or re-run: ${rerun} --use-existing`,
-      );
-    }
-    if (consent.attach === "unanswered") {
+    // [secfix NR-1] Positive `!isGranted`, not a negative enumeration: the
+    // gate used to list `declined` and `unanswered` by name and fall through
+    // to PROCEED for anything else, which is fail-open — a `ConsentAnswer`
+    // this chain did not name (`"not-required"`, or a future member) sailed
+    // through with nobody having said yes. `declined` keeps its own wording;
+    // every other non-granted answer (today: `unanswered`, `not-required`)
+    // gets the "this run cannot ask" refusal, because none of them is an
+    // operator saying no on purpose — they are all "no answer was given".
+    if (!isGranted(consent.attach)) {
+      if (consent.attach === "declined") {
+        refuse(
+          `A local branch \`${branchPlan.branch}\` already exists and --no-use-existing was given, so this run will not attach to it.`,
+          `Pick a name with no branch behind it, or re-run: ${rerun} --use-existing`,
+        );
+      }
       refuse(
         `Setting up \`${plan.name}\` would ATTACH the new worktree to the existing local branch \`${branchPlan.branch}\`, and this run cannot ask.`,
         `Re-run with the decision made: ${rerun} --use-existing`,
@@ -402,18 +443,22 @@ export function applySetupConsent(
   }
 
   if (branchPlan.kind === "track") {
-    if (consent.track === "unanswered") {
+    // [secfix NR-1] Same positive-check shape as the attach gate above:
+    // `declined` still falls through to `create` rather than refusing (the
+    // operator asked for a new branch off HEAD), but every OTHER non-granted
+    // answer refuses instead of proceeding.
+    if (!isGranted(consent.track)) {
+      if (consent.track === "declined") {
+        return {
+          ...branchPlan,
+          kind: "create",
+          reason: `\`origin/${branchPlan.branch}\` exists, but --no-track was given, so the branch is created off the current HEAD instead`,
+        };
+      }
       refuse(
         `Setting up \`${branchPlan.branch}\` would TRACK the remote branch \`origin/${branchPlan.branch}\`, and this run cannot ask.`,
         `Re-run with the decision made: ${rerun} --track`,
       );
-    }
-    if (consent.track === "declined") {
-      return {
-        ...branchPlan,
-        kind: "create",
-        reason: `\`origin/${branchPlan.branch}\` exists, but --no-track was given, so the branch is created off the current HEAD instead`,
-      };
     }
   }
 
@@ -502,7 +547,7 @@ async function setupUnderLock(
     kind: branchPlan.kind,
   });
 
-  const withheld = plan.entries.filter((entry) => entry.secret && consent.secrets !== "granted");
+  const withheld = plan.entries.filter((entry) => entry.secret && !isGranted(consent.secrets));
   if (withheld.length > 0) {
     notices.push(
       `${withheld.length === 1 ? "One entry holds" : `${withheld.length} entries hold`} secret ` +
@@ -518,6 +563,15 @@ async function setupUnderLock(
     // carved out of a copied directory is honoured during the walk rather than
     // copied and deleted afterwards.
     isSkipped: (relPath: string) => resolveStrategy(plan.policy, relPath) === "skip",
+    // [secfix A2] A child discovered while expanding a copied DIRECTORY gets
+    // the same identity check a top-level row gets: `isKnownCredentialPath`
+    // raises secrecy for the child's own basename regardless of what the
+    // parent directory row declared, and `secretsGranted` is this run's own
+    // consent answer — a child elevated this way is copied at `0600` when
+    // consent was granted, withheld (not copied, named in the report) when it
+    // was not.
+    isKnownCredential: isKnownCredentialPath,
+    secretsGranted: isGranted(consent.secrets),
   };
 
   // Materialized one PLAN ROW at a time rather than as one batch, so each
@@ -531,7 +585,7 @@ async function setupUnderLock(
   const entries: WorktreeEntryReport[] = [];
   const placed: MaterializeResult[] = [];
   for (const entry of plan.entries) {
-    if (entry.secret && consent.secrets !== "granted") {
+    if (entry.secret && !isGranted(consent.secrets)) {
       // A withheld secret is a ROW in the table, not an absence from it:
       // REQ-WORKTREE-008 asks for that entry's outcome to be `skipped`, and an
       // entry silently missing from the report is the shape the question
@@ -560,16 +614,23 @@ async function setupUnderLock(
     notices.push(...placementNotices(results));
   }
 
-  const head = await resolveSha(run, plan.worktreePath);
-  const gitDir = await resolveWorktreeGitDir(run, plan.worktreePath);
-
-  const receiptEntries = placed
-    .map(receiptEntryFor)
-    .filter((entry): entry is WorktreeReceiptEntry => entry !== null);
-
+  // [secfix A6b] `resolveSha` and `resolveWorktreeGitDir` both run AFTER the
+  // tree exists and after materialization, and both throw on a non-zero git
+  // exit. REQ-WORKTREE-011 promises a failure past that point is RETURNED, not
+  // thrown, so both calls — and the receipt write that depends on their
+  // answers — share one try/catch: any failure here leaves no git-dir to write
+  // a receipt to anyway, so it is reported the same way a receipt-write
+  // failure already was, rather than escaping and dropping the entries and
+  // notices this run already computed.
+  let head = "";
   let receiptPath: string | null = null;
   let receiptFailure: string | null = null;
   try {
+    head = await resolveSha(run, plan.worktreePath);
+    const gitDir = await resolveWorktreeGitDir(run, plan.worktreePath);
+    const receiptEntries = placed
+      .map(receiptEntryFor)
+      .filter((entry): entry is WorktreeReceiptEntry => entry !== null);
     receiptPath = await writeWorktreeReceipt(
       gitDir,
       createWorktreeReceipt({
@@ -580,8 +641,9 @@ async function setupUnderLock(
       }),
     );
   } catch (error) {
-    // A receipt that cannot be written is a materialization failure, not a
-    // silent degradation: without it cleanup has no authority to remove
+    // A receipt that cannot be written — or git facts that cannot be resolved
+    // to write it FROM — is a materialization failure, not a silent
+    // degradation: without a receipt, cleanup has no authority to remove
     // anything this run placed.
     receiptFailure = error instanceof Error ? error.message : String(error);
   }
@@ -663,6 +725,17 @@ function placementNotices(results: readonly MaterializeResult[]): string[] {
       notices.push(
         `${result.relPath}: this platform has no POSIX mode, so the secret copy was left at ` +
           `whatever permissions the platform gave it rather than hardened to 0600.`,
+      );
+    }
+    // [secfix A2] Named through the SAME withheld-notice channel a top-level
+    // secret row uses (see the notice built from `withheld` above) — a child
+    // this run elevated by identity inside a copied directory, but had no
+    // consent to copy.
+    if (result.outcome === "withheld") {
+      notices.push(
+        `${result.relPath}: holds secret material (a known credential name found inside a copied ` +
+          `directory) and was not copied, because this run had no consent for it. Re-run with ` +
+          `--copy-secrets to place it.`,
       );
     }
   }
