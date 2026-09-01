@@ -167,8 +167,14 @@ describe("command coverage", () => {
     expect(mutating.length).toBeGreaterThan(1);
     for (const command of mutating) {
       const section = page.split(`## \`stamity ${command.name}\``)[1] ?? "";
+      // Fixer batch F-E [E1]: the old sentence ("Writes when it runs...") was
+      // false for `config`/`workspace`/`worktree`, whose bare invocation is a
+      // read (config list / status / list) even though `mutating` is true for
+      // the command as a whole. `mutating` asserts only that `--dry-run` is
+      // registered, not that every invocation writes, so the pinned literal
+      // moved to the weaker, accurate claim below.
       expect(section, `${command.name} lost its write posture`).toContain(
-        "Writes when it runs, so `--dry-run` previews the change without making it.",
+        "May write when it runs, so `--dry-run` previews any change without making it.",
       );
     }
     for (const command of COMMANDS.filter((c) => !c.mutating)) {

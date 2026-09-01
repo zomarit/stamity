@@ -117,7 +117,8 @@ describe("wordmark — the single accent", () => {
       .split(VIOLET.truecolor)
       .slice(1)
       .map((tail) => tail.split(RESET_FG)[0] ?? "");
-    // Contract change (operator decision): the accent was the crossbar's left
+    // Contract change (handoff 2026-08-31_triage-decisions_410bf, decision 4):
+    // the accent was the crossbar's left
     // ARM alone — `["▄", "▀"]`, one violet square beside the stem — and is now
     // the FULL crossbar, matching the single continuous violet path in
     // `website/static/img/wordmark.svg` (x 75.96 -> 122.96), which runs left arm

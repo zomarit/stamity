@@ -104,7 +104,7 @@ carries no engine classification.
 
 set up this repo: detect the stack, decide the defaults, write the state
 
-Writes when it runs, so `--dry-run` previews the change without making it.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -118,7 +118,7 @@ Writes when it runs, so `--dry-run` previews the change without making it.
 
 regenerate every managed file from the manifest and bundled content
 
-Writes when it runs, so `--dry-run` previews the change without making it.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -144,7 +144,7 @@ Adds no flags of its own beyond the shared matrix above.
 
 install a content pack: run the gate chain, show every command it would wire, then write
 
-Writes when it runs, so `--dry-run` previews the change without making it.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
@@ -159,7 +159,7 @@ Writes when it runs, so `--dry-run` previews the change without making it.
 
 inspect and change the setup: keys, detection refresh, MCP servers
 
-Writes when it runs, so `--dry-run` previews the change without making it.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
@@ -173,7 +173,7 @@ Adds no flags of its own beyond the shared matrix above.
 
 one policy across several repositories: status, guided creation, and the cascade
 
-Writes when it runs, so `--dry-run` previews the change without making it.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
@@ -188,7 +188,7 @@ Writes when it runs, so `--dry-run` previews the change without making it.
 
 parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown
 
-Writes when it runs, so `--dry-run` previews the change without making it.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
@@ -210,7 +210,7 @@ Writes when it runs, so `--dry-run` previews the change without making it.
 
 remove every generated file and the .stamity/ state directory
 
-Writes when it runs, so `--dry-run` previews the change without making it.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -225,7 +225,7 @@ agent content rather than a person. Hidden is not secret — `stamity learn --he
 in full — and it is documented here because a verb that exists and is undocumented is
 worse than one that is merely unadvertised.
 
-Writes when it runs, so `--dry-run` previews the change without making it.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
