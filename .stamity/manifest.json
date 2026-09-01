@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.1.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-01T14:46:08.702Z",
+  "updatedAt": "2026-09-01T18:50:18.431Z",
   "tools": [
     "claude"
   ],
@@ -304,6 +304,13 @@
       "artifactType": "skill",
       "contentHash": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52",
       "path": ".claude/skills/st-design-system-detect/SKILL.md"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "st-eval-run",
+      "artifactType": "skill",
+      "contentHash": "97354abc924c588b4a943ca1cf94ced97cc420ed79a19c57c9bb3cfd86248107",
+      "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
       "adapter": "claude",
