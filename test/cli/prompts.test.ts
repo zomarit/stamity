@@ -13,9 +13,10 @@ import {
 import { CliFailure } from "../../src/cli/kit/output.ts";
 import type { CommandModule } from "../../src/cli/kit/program.ts";
 import { runInProcess } from "../support/inProcess.ts";
-// The raw-TTY double and the terminal's own key bytes, shared with the two
-// command suites that drive the same menu (`test/support/menuTty.ts`).
-import { MENU_KEYS as KEYS, MenuTtyInput } from "../support/menuTty.ts";
+// The raw-TTY double, the terminal's own key bytes, and the shared
+// synchronization helpers (`tick`, `press`) — shared with the two command
+// suites that drive the same menu (`test/support/menuTty.ts`).
+import { MENU_KEYS as KEYS, MenuTtyInput, press, tick } from "../support/menuTty.ts";
 
 const interactive: PromptGate = { interactive: true };
 
@@ -54,13 +55,11 @@ const TOOL_CHOICES = [
 const ESC = String.fromCharCode(27);
 const CURSOR_HIDE = `${ESC}[?25l`;
 const CURSOR_SHOW = `${ESC}[?25h`;
-/** Rewind for a 4-line frame (one question line + three choice rows). */
-const REWIND_4 = `${ESC}[4A`;
-
-const tick = (): Promise<void> =>
-  new Promise((resolve) => {
-    setImmediate(resolve);
-  });
+/**
+ * Rewind for a 5-line frame: the question line, the hint line (N1 — its own
+ * line now, no longer appended to the question), and three choice rows.
+ */
+const REWIND_5 = `${ESC}[5A`;
 
 function makeTtyPromptIo(opts: {
   rawMode: boolean;
@@ -90,16 +89,6 @@ function makeTtyPromptIo(opts: {
     output: () => chunks.join(""),
     chunks: () => chunks,
   };
-}
-
-/**
- * Drives keys into the fake stdin. All writes land first and one turn of the
- * loop delivers them: the keypress decoder is fed per byte, so a burst decodes
- * in order — verified against `node:readline` before this harness was written.
- */
-async function press(input: MenuTtyInput, ...keys: readonly string[]): Promise<void> {
-  for (const key of keys) input.write(key);
-  await tick();
 }
 
 /** The frames that carry menu rows, newest last. */
@@ -208,6 +197,27 @@ describe("confirm (interactive)", () => {
     const { io, input } = makePromptIo();
     input.end();
     expect(await confirm(interactive, io, { question: "Carry?", defaultYes: true })).toBe(true);
+    closePrompts(io);
+  });
+
+  // B6: EOF is sticky (session.closed), so one ctrl-D silently defaults every
+  // later gate on this stream — including a destructive confirm — unless the
+  // default is disclosed and NAMED, the way the selects already disclose
+  // theirs. Two cases (defaultYes true and false) so the disclosed word tracks
+  // the actual default rather than a hardcoded string.
+  it("discloses the default it applied on EOF, naming the value (B6)", async () => {
+    const { io, input, output } = makePromptIo();
+    input.end();
+    expect(await confirm(interactive, io, { question: "Carry?", defaultYes: true })).toBe(true);
+    expect(output()).toContain("no answer — keeping the default (yes)");
+    closePrompts(io);
+  });
+
+  it("discloses the default it applied on EOF, naming the value when the default is no (B6)", async () => {
+    const { io, input, output } = makePromptIo();
+    input.end();
+    expect(await confirm(interactive, io, { question: "Carry?", defaultYes: false })).toBe(false);
+    expect(output()).toContain("no answer — keeping the default (no)");
     closePrompts(io);
   });
 });
@@ -339,6 +349,25 @@ describe("selectOne (interactive)", () => {
     expect(output()).toContain("no answer — keeping the default (3)");
     closePrompts(io);
   });
+
+  // B2: `selectOne`'s typed numbered-list path prints `choice.label` raw — the
+  // sink `sanitizeLabel` was written for the menu's rows only, and this one has
+  // no menu fallback on a raw-incapable terminal.
+  it("sanitizes a control-byte label on the typed numbered rows (B2)", async () => {
+    const { io, input, output } = makePromptIo();
+    const bel = String.fromCharCode(7);
+    const esc = String.fromCharCode(27);
+    const hostile = `vendor-x${esc}]0;pwned${bel}-1`;
+    input.write("1\n");
+    await selectOne(interactive, io, {
+      question: "Which server?",
+      choices: [{ value: "x", label: hostile }],
+      defaultValue: "x",
+    });
+    expect(output()).not.toContain(`${esc}]0;`);
+    expect(output()).not.toContain(bel);
+    closePrompts(io);
+  });
 });
 
 describe("textInput (interactive)", () => {
@@ -358,6 +387,36 @@ describe("textInput (interactive)", () => {
     expect(await textInput(interactive, io, { question: "Name?", defaultValue: "core" })).toBe(
       "core",
     );
+    closePrompts(io);
+  });
+
+  // B6: textInput applied its default on EOF silently, where the selects
+  // already disclose. EOF is sticky, so one ctrl-D silently defaults every
+  // remaining free-form question on the stream.
+  it("discloses the default it applied on EOF, naming the value (B6)", async () => {
+    const { io, input, output } = makePromptIo();
+    input.end();
+    expect(await textInput(interactive, io, { question: "Name?", defaultValue: "core" })).toBe(
+      "core",
+    );
+    expect(output()).toContain("no answer — keeping the default (core)");
+    closePrompts(io);
+  });
+
+  // B2: `q.defaultValue` reaches the terminal unescaped in the bracket — a
+  // manifest-derived value (`config.ts`'s `askValue` passes the persisted
+  // value straight through as `defaultValue`) can carry a control byte, and
+  // this sink has no menu path to fall back to on any terminal.
+  it("sanitizes a control-byte defaultValue before it reaches the bracket (B2)", async () => {
+    const { io, input, output } = makePromptIo();
+    const bel = String.fromCharCode(7);
+    const esc = String.fromCharCode(27);
+    const hostile = `vendor-x${esc}]0;pwned${bel}-1`;
+    input.write("\n");
+    const result = await textInput(interactive, io, { question: "Server?", defaultValue: hostile });
+    expect(result).toBe(hostile); // the RETURNED value is untouched — only rendering sanitizes
+    expect(output()).not.toContain(`${esc}]0;`);
+    expect(output()).not.toContain(bel);
     closePrompts(io);
   });
 });
@@ -526,6 +585,9 @@ describe("selectOne (raw arrow menu)", () => {
       choices: TOOL_CHOICES,
       defaultValue: "a",
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.down, KEYS.down, KEYS.enter);
     expect(await pending).toBe("c");
   });
@@ -537,6 +599,9 @@ describe("selectOne (raw arrow menu)", () => {
       choices: TOOL_CHOICES,
       defaultValue: "a",
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.up, KEYS.enter);
     expect(await pending).toBe("c");
   });
@@ -548,6 +613,9 @@ describe("selectOne (raw arrow menu)", () => {
       choices: TOOL_CHOICES,
       defaultValue: "c",
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.down, KEYS.enter);
     expect(await pending).toBe("a");
   });
@@ -582,11 +650,12 @@ describe("selectOne (raw arrow menu)", () => {
       defaultValue: "a",
     });
     await tick();
-    expect(menuFrames(chunks)[0] ?? "").not.toContain(REWIND_4);
+    expect(menuFrames(chunks)[0] ?? "").not.toContain(REWIND_5);
     await press(input, KEYS.down);
-    // 1 question line + 3 rows: the cursor goes back to the question line so the
-    // whole menu is overwritten rather than reprinted underneath itself.
-    expect(menuFrames(chunks).at(-1) ?? "").toContain(REWIND_4);
+    // 1 question line + 1 hint line (N1) + 3 rows: the cursor goes back to the
+    // question line so the whole menu is overwritten rather than reprinted
+    // underneath itself.
+    expect(menuFrames(chunks).at(-1) ?? "").toContain(REWIND_5);
     await press(input, KEYS.enter);
     expect(await pending).toBe("b");
   });
@@ -598,6 +667,9 @@ describe("selectOne (raw arrow menu)", () => {
       choices: TOOL_CHOICES,
       defaultValue: "a",
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.enter);
     expect(await pending).toBe("a");
     expect(output()).toContain(CURSOR_HIDE);
@@ -620,6 +692,9 @@ describe("selectOne (raw arrow menu)", () => {
       expect(pending).rejects.toBeInstanceOf(CliFailure),
       expect(pending).rejects.toMatchObject({ doc: { code: "FAILURE", message: "aborted" } }),
     ]);
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.ctrlC);
     await asserted;
     // Raw mode dropped and the cursor back: an abort mid-menu must not leave the
@@ -659,6 +734,9 @@ describe("selectOne (raw arrow menu)", () => {
       expect(pending).rejects.toBeInstanceOf(CliFailure),
       expect(pending).rejects.toMatchObject({ doc: { code: "FAILURE", message: "aborted" } }),
     ]);
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     input.write(ESC);
     await new Promise((resolve) => setTimeout(resolve, 700));
     await press(input, KEYS.ctrlC);
@@ -711,6 +789,9 @@ describe("the raw menu — accept-time settling (SW2)", () => {
     // resolution — the exact race window SW2 named. Unfixed, `resolve(menu)`
     // handed back a reference to the mutable menu object, and the trailing
     // `down` moved `menu.active` to 2 before the awaiting code ever read it.
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     input.write(`${KEYS.down}${KEYS.enter}${KEYS.down}`);
     await tick();
     expect(await pending).toBe("b");
@@ -725,6 +806,9 @@ describe("the raw menu — accept-time settling (SW2)", () => {
     });
     // Enter accepts { a }; the trailing space, if it reached a still-live
     // listener, would toggle row `a` (the cursor's row) back off.
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     input.write(`${KEYS.enter}${KEYS.space}`);
     await tick();
     expect(await pending).toEqual(["a"]);
@@ -744,18 +828,21 @@ describe("the raw menu — label geometry and injection floor (F3/W1/W2/SW1)", (
       choices: [{ value: "x", label: hostile }],
       defaultValue: "x",
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.enter);
     expect(await pending).toBe("x");
 
     const rendered = output();
     expect(rendered).not.toContain(`${ESC}]0;`);
     expect(rendered).not.toContain(bel);
-    // Every ESC left in the whole transcript is one of the renderer's own four:
-    // CURSOR_HIDE (1) + one CLEAR_LINE per drawn line — the question line and
-    // the one choice row, drawn once (no navigation happened) — + CURSOR_SHOW
-    // (1) on the way out.
+    // Every ESC left in the whole transcript is one of the renderer's own:
+    // CURSOR_HIDE (1) + one CLEAR_LINE per drawn line — the question line, the
+    // hint line (N1 — its own line now), and the one choice row, drawn once
+    // (no navigation happened) — + CURSOR_SHOW (1) on the way out.
     const escCount = rendered.split(ESC).length - 1;
-    expect(escCount).toBe(1 + 2 + 1);
+    expect(escCount).toBe(1 + 3 + 1);
   });
 
   it("clamps a label wider than the terminal to the space left after the marker", async () => {
@@ -775,10 +862,65 @@ describe("the raw menu — label geometry and injection floor (F3/W1/W2/SW1)", (
     expect(await pending).toBe("x");
   });
 
+  // B3: the question line is `question + " " + MOVE_HINT/TOGGLE_HINT`, never
+  // width-clamped — MOVE_HINT alone is 51 columns, so a modest question at the
+  // default 80-column width wraps onto a second physical line and desyncs
+  // `rewind(height)`, which only walks back over the rows it thinks it drew.
+  // Reproduced with a plain (non-hostile) question long enough to push the
+  // combined line past 80 columns on its own.
+  it("clamps the question line to the terminal width so a long question cannot wrap the frame (B3)", async () => {
+    const { io, input, chunks } = makeTtyPromptIo({ rawMode: true, columns: 80 });
+    // N1 moved the hint onto its OWN line (`Menu.hint`, rendered separately
+    // from `menu.question` — no more `question + " " + MOVE_HINT` join), so
+    // the question line alone has to be the one that overflows: a 40-char
+    // question, the width this case used before N1, no longer exceeds 80 on
+    // its own and would pass with the clamp deleted (verified: it does).
+    // 100 chars is unambiguously past 80 with nothing else concatenated in.
+    const longQuestion = "x".repeat(100);
+    const pending = selectOne(interactive, io, {
+      question: longQuestion,
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    await tick();
+    const first = menuFrames(chunks)[0] ?? "";
+    // The rendered question line must fit within 80 columns.
+    const questionLine = first.split("\n").find((line) => line.includes("x".repeat(10))) ?? "";
+    // Strip the leading CLEAR_LINE escape before measuring.
+    const visible = questionLine.replace(new RegExp(`^${ESC}\\[2K`), "");
+    expect(visible.length).toBeLessThanOrEqual(80);
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("a");
+  });
+
+  // N1's other line: the hint (MOVE_HINT/TOGGLE_HINT) is now the LONGER of
+  // the two fixed lines this menu always draws, and had no clamp coverage of
+  // its own — only the question line was asserted above. A narrow terminal
+  // (40 columns) is well short of MOVE_HINT's own length, so this is red
+  // against a clamp that covers the question line but not the hint line.
+  it("clamps the hint line to the terminal width too, on a narrow terminal (B3)", async () => {
+    const { io, input, chunks } = makeTtyPromptIo({ rawMode: true, columns: 40 });
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    await tick();
+    const first = menuFrames(chunks)[0] ?? "";
+    const hintLine = first.split("\n").find((line) => line.includes("up/down")) ?? "";
+    const visible = hintLine.replace(new RegExp(`^${ESC}\\[2K`), "");
+    expect(visible.length).toBeLessThanOrEqual(40);
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("a");
+  });
+
   it("takes the typed path when the menu would not fit the terminal's height", async () => {
     const { io, input, output } = makeTtyPromptIo({ rawMode: true, rows: 5 });
-    // 17 rows + the question line (18) needs more than 5 terminal rows by any
-    // margin; `choiceCount + 2 > rows` (17 + 2 > 5) is the probe's own check.
+    // 17 rows + the question line + the hint line (N1 — its own line now) is
+    // 19, which needs more than 5 terminal rows by any margin;
+    // `choiceCount + 2 > rows` (17 + 2 > 5) is the probe's own check, and is
+    // now the frame's EXACT height rather than a margin (see `rawMenuIo`'s
+    // own comment).
     const choices = Array.from({ length: 17 }, (_, i) => ({
       value: String(i),
       label: `Choice ${i}`,
@@ -834,6 +976,9 @@ describe("the raw menu — TERM=dumb is the accessible opt-out (F2)", () => {
       choices: TOOL_CHOICES,
       defaultValue: "a",
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.enter);
     expect(await pending).toBe("a");
     expect(input.rawModes).toEqual([true, false]);
@@ -847,6 +992,9 @@ describe("the raw menu — TERM=dumb is the accessible opt-out (F2)", () => {
       choices: TOOL_CHOICES,
       defaultValue: "a",
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.enter);
     expect(await pending).toBe("a");
     expect(input.rawModes).toEqual([true, false]);
@@ -908,6 +1056,9 @@ describe("selectMany", () => {
       choices: TOOL_CHOICES,
       defaultValues: ["a", "c"],
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.space, KEYS.enter);
     expect(await pending).toEqual(["c"]);
   });
@@ -919,6 +1070,9 @@ describe("selectMany", () => {
       choices: TOOL_CHOICES,
       defaultValues: ["a", "b"],
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.space, KEYS.down, KEYS.space, KEYS.enter);
     expect(await pending).toEqual([]);
   });
@@ -933,6 +1087,9 @@ describe("selectMany", () => {
     const asserted = expect(pending).rejects.toMatchObject({
       doc: { code: "FAILURE", message: "aborted" },
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.ctrlC);
     await asserted;
     expect(input.rawModes).toEqual([true, false]);
@@ -1058,6 +1215,49 @@ describe("selectMany (typed fallback)", () => {
     expect(output()).toContain("no answer — keeping the defaults (1,2)");
     closePrompts(io);
   });
+
+  // B7: docs/workspaces.md promises "Clearing every box is an answer" — but on
+  // the typed path, a blank answer means "keep the defaults", and there was no
+  // way to TYPE the empty set. The literal "none" (case-insensitive) is that
+  // token.
+  for (const spelling of ["none", "NONE", "None"]) {
+    it(`accepts the literal ${JSON.stringify(spelling)} as the explicit empty selection (B7)`, async () => {
+      const { io, input } = makeTtyPromptIo({ rawMode: false });
+      // `.end()` rather than `.write()`: on unfixed code, "none" is an
+      // unrecognised token, so `selectMany` re-asks once — `.end()` makes the
+      // re-ask see EOF and resolve (to the wrong answer) instead of hanging
+      // this test for the full 20s timeout waiting on a line that never comes.
+      input.end(`${spelling}\n`);
+      expect(
+        await selectMany(interactive, io, {
+          question: "Which tools?",
+          choices: TOOL_CHOICES,
+          defaultValues: ["a", "b"],
+        }),
+      ).toEqual([]);
+      closePrompts(io);
+    });
+  }
+
+  // B2: a manifest-derived choice label (a pack description, a server id) is
+  // printed raw on the typed numbered-row path — the same hazard the raw menu
+  // already guards, but this sink is live on every terminal, not only the
+  // menu-capable ones.
+  it("sanitizes a control-byte label on the typed numbered rows (B2)", async () => {
+    const { io, input, output } = makeTtyPromptIo({ rawMode: false });
+    const bel = String.fromCharCode(7);
+    const esc = String.fromCharCode(27);
+    const hostile = `vendor-x${esc}]0;pwned${bel}-1`;
+    input.write("1\n");
+    await selectMany(interactive, io, {
+      question: "Which tools?",
+      choices: [{ value: "x", label: hostile }],
+      defaultValues: [],
+    });
+    expect(output()).not.toContain(`${esc}]0;`);
+    expect(output()).not.toContain(bel);
+    closePrompts(io);
+  });
 });
 
 describe("the raw menu and the readline session", () => {
@@ -1077,6 +1277,9 @@ describe("the raw menu and the readline session", () => {
       choices: TOOL_CHOICES,
       defaultValue: "a",
     });
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why.
+    await tick();
     await press(input, KEYS.down, KEYS.enter);
     expect(await menu).toBe("b");
 
@@ -1099,6 +1302,7 @@ describe("the raw menu and the readline session", () => {
       choices: TOOL_CHOICES,
       defaultValue: "a",
     });
+    await tick();
     await press(input, KEYS.down, KEYS.down, KEYS.enter);
     expect(await menu).toBe("c");
 
@@ -1122,6 +1326,7 @@ describe("the raw menu and the readline session", () => {
       choices: TOOL_CHOICES,
       defaultValue: "a",
     });
+    await tick();
     await press(input, KEYS.down, KEYS.enter);
     expect(await menu).toBe("b");
 
@@ -1133,6 +1338,180 @@ describe("the raw menu and the readline session", () => {
     // Two frames, one row each: the opening draw and the redraw after `down`.
     const rows = rendered.split("\n").filter((line) => line.includes("Cursor"));
     expect(rows).toHaveLength(2);
+    closePrompts(io);
+  });
+});
+
+describe("the raw menu — teardown does not leak a keystroke into the next prompt (B1)", () => {
+  it("drains a byte buffered on ENTRY, before the menu's own listener attaches, so it cannot be read as the menu's first keypress", async () => {
+    // A key lands on the stream before any prompt is reading it at all —
+    // whatever this run printed earlier left an Enter sitting unread. The
+    // stream has no listener yet, so `write` here is genuine OS-level
+    // buffering, not a race.
+    const { io, input } = makeTtyPromptIo({ rawMode: true });
+    input.write(KEYS.enter);
+    await tick();
+
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "b",
+    });
+    await tick();
+    // If the stray Enter survived to become this menu's first keypress, it
+    // already accepted the default ("b") before the operator's own keys below
+    // are ever read — proved by pressing down+enter for a DIFFERENT row and
+    // checking the menu actually followed it.
+    await press(input, KEYS.down, KEYS.enter);
+    expect(await pending).toBe("c");
+  });
+});
+
+describe("the raw menu — no-listener stream conditions (B4)", () => {
+  it(
+    "settles as EOF-keeping-the-default, WITH disclosure, when the input stream ends mid-menu",
+    async () => {
+      const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+      const pending = selectOne(interactive, io, {
+        question: "Which tool?",
+        choices: TOOL_CHOICES,
+        defaultValue: "b",
+      });
+      await tick();
+      input.end();
+      const picked = await pending;
+      expect(picked).toBe("b");
+      // Parity with the typed path's own EOF disclosure.
+      expect(output()).toContain("no answer — keeping the default");
+      // Cleanup still ran: raw mode dropped, cursor restored — a hang here
+      // would leave the operator's shell with no echo.
+      expect(input.rawModes).toEqual([true, false]);
+      expect(output()).toContain(CURSOR_SHOW);
+    },
+    // Short, deliberate timeout: unfixed, this hangs forever (no listener
+    // settles the promise on `end`), and the default 20s budget per case
+    // would make every red run of this suite slow for no benefit — the
+    // failure mode is "never settles", which a short timeout demonstrates
+    // just as conclusively as a long one.
+    1000,
+  );
+
+  it(
+    "settles as EOF-keeping-the-default when the input stream closes mid-menu",
+    async () => {
+      const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+      const pending = selectOne(interactive, io, {
+        question: "Which tool?",
+        choices: TOOL_CHOICES,
+        defaultValue: "a",
+      });
+      await tick();
+      input.emit("close");
+      const picked = await pending;
+      expect(picked).toBe("a");
+      expect(output()).toContain("no answer — keeping the default");
+      expect(input.rawModes).toEqual([true, false]);
+    },
+    1000,
+  );
+
+  it("restores the terminal and rejects cleanly on a stream error instead of throwing outside the try", async () => {
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    await tick();
+    const boom = new Error("stream exploded");
+    const asserted = expect(pending).rejects.toBe(boom);
+    input.emit("error", boom);
+    await asserted;
+    expect(input.rawModes).toEqual([true, false]);
+    expect(output()).toContain(CURSOR_SHOW);
+  });
+});
+
+describe("process-level signal guards while a menu is active (B5)", () => {
+  // Only the installation/removal half is testable in-process: actually
+  // delivering SIGTERM/SIGHUP to this process would end the vitest worker.
+  // The re-raise-after-restore half (the operator's shell gets its terminal
+  // back AND the process still exits on the signal) is verified by reading
+  // the implementation rather than by a test here.
+  it("installs transient SIGTERM/SIGHUP/exit guards for the duration of a menu, and removes them once it settles", async () => {
+    const { io, input } = makeTtyPromptIo({ rawMode: true });
+    const baseline = {
+      term: process.listenerCount("SIGTERM"),
+      hup: process.listenerCount("SIGHUP"),
+      exit: process.listenerCount("exit"),
+    };
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    await tick();
+    expect(process.listenerCount("SIGTERM")).toBe(baseline.term + 1);
+    expect(process.listenerCount("SIGHUP")).toBe(baseline.hup + 1);
+    expect(process.listenerCount("exit")).toBe(baseline.exit + 1);
+
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("a");
+
+    expect(process.listenerCount("SIGTERM")).toBe(baseline.term);
+    expect(process.listenerCount("SIGHUP")).toBe(baseline.hup);
+    expect(process.listenerCount("exit")).toBe(baseline.exit);
+  });
+});
+
+describe("C1-residual: a byte left behind by a menu does not silently answer the NEXT (cooked) prompt", () => {
+  // FIDELITY LIMIT, stated up front: this harness's `MenuTtyInput` is a
+  // PassThrough, so a byte written here lands in the JS-visible buffer —
+  // exactly what `ask`'s `drainNow` (via the `menuLeftovers` mark `runMenu`
+  // leaves behind) reads and discards. The mechanism this closes on a REAL
+  // terminal is one step earlier: a `pause()`d real TTY stops at `readStop()`,
+  // so the same byte sits in the KERNEL queue rather than the JS buffer until
+  // something `resume()`s the stream — which is exactly what `drainNow` does
+  // (`resume()`, one tick, discard, `pause()`) before `ask` ever opens a
+  // fresh readline session. That kernel-queue half is not reproducible against
+  // a PassThrough at all (there is no kernel underneath it) — it is CI/pty
+  // lane territory. What IS provable here, red against the unfixed `ask`, is
+  // the shape both cases share: a byte that outlives `runMenu`'s own teardown
+  // must not reach whichever prompt runs next as an unanswered line.
+  it("drains a leftover byte before the next cooked prompt opens its readline session, so a real answer is still required", async () => {
+    const { io, input } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    await tick();
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("a");
+    // By now `runMenu`'s `finally` has already run — `pause()` included. This
+    // write is genuinely POST-teardown, not a same-chunk trailing byte SW2
+    // already covers: it lands in the paused stream's own buffer (a paused
+    // stream QUEUES what it's written, per `drainBufferedInput`'s own doc),
+    // unconsumed by anything, exactly the shape `menuLeftovers` exists for.
+    input.write(KEYS.enter);
+
+    // The NEXT question on the SAME stream is a plain, cooked `confirm` — the
+    // shape `askProceedWithoutGit` (`../commands/init.ts`) actually has right
+    // after `init`'s tools checkbox. Unfixed, the leftover CR reaches the
+    // fresh readline `sessionFor` opens the instant it `resume()`s, decodes as
+    // an empty line, and `confirm` returns `defaultYes` (`true`) before this
+    // test ever writes a byte to it.
+    const carried = confirm(interactive, io, { question: "Continue?", defaultYes: true });
+    // Two ticks: enough for a leaked phantom line to resolve `carried` if the
+    // drain is missing, not enough for anything else to happen on its own.
+    await tick();
+    await tick();
+    // The real answer, opposite of the default — if the phantom byte had
+    // already silently resolved `carried` to the default (`true`), this write
+    // lands on a question nobody is listening to any more and the assertion
+    // below catches the drift.
+    input.write("n\n");
+    expect(await carried).toBe(false);
     closePrompts(io);
   });
 });

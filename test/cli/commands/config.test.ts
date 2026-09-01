@@ -96,6 +96,16 @@ function run(
  * with no `setRawMode`, which is exactly the input the kit's menu probe
  * refuses — so every case here reads the numbered list. The two raw-menu cases
  * build their own stdin below.
+ *
+ * BOTH stdin AND stdout are wired as TTYs (B8): a real interactive session has
+ * both, and `config`'s bare-verb branch now reads `ctx.terminal.stdoutIsTTY`
+ * too, so a caller of this helper that left stdout off the TTY set would stop
+ * opening the picker at all — exactly the bug this fix closes, reproduced by
+ * accident rather than on purpose. `NO_COLOR` goes along with it: a TTY stdout
+ * also flips `colorEnabled` on (`../../../src/cli/kit/terminal.ts::resolveColorEnabled`),
+ * and every assertion in this describe block matches plain, uncoloured text —
+ * this keeps the fixture's own long-standing "no TTY facts leak ANSI" property
+ * true after the stdout fact changes, rather than repainting every assertion.
  */
 function runInteractive(
   handle: TempDirHandle,
@@ -105,7 +115,8 @@ function runInteractive(
   return runInProcess([configCommand], ["config", ...args], {
     cwd: handle.dir,
     stdinLines,
-    tty: { stdin: true },
+    tty: { stdin: true, stdout: true },
+    env: { NO_COLOR: "1" },
   });
 }
 
@@ -146,10 +157,17 @@ function startConfigOnMenuTty(
 
   const running = runCli(["config", ...argv], [configCommand], {
     cwd: handle.dir,
-    env: {},
+    // NO_COLOR alongside `stdoutIsTTY: true` (B8): `terminal.stdoutIsTTY` now
+    // has to read true here too — the bare-verb branch checks it to decide
+    // whether the picker is even reachable, and a real raw-menu-capable
+    // session genuinely has both stdin AND stdout as TTYs — but that also
+    // flips `colorEnabled` on, and every menu-transcript assertion in this
+    // suite matches plain text. `NO_COLOR` keeps that true without touching
+    // the fact under test.
+    env: { NO_COLOR: "1" },
     io,
     promptIo: { input, output: promptOut },
-    terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY: true },
+    terminal: { stdoutIsTTY: true, stderrIsTTY: false, stdinIsTTY: true },
   });
   return { run: running, input, transcript: () => chunks.join("") };
 }
@@ -315,6 +333,29 @@ describe("config — the bare picker", () => {
     expect(bare.code).toBe(0);
     expect(bare.stdout).toBe(listed.stdout);
     expect(bare.stdout).not.toContain("Which setting?");
+  });
+
+  // B8: `promptGate` reads stdin alone, so a TTY stdin with a PIPED stdout
+  // (`stamity config | less`, or any script that captures output while
+  // attended) still opened the picker and wrote its typed prompt into the
+  // pipe — nobody there to answer it. docs/configuration.md and this file's
+  // own header promise "Scripts, pipes and CI see no prompt — bare config is
+  // config list"; a TTY stdin with a non-TTY stdout is exactly that case and
+  // was the one this promise did not hold for.
+  it("takes the list when stdin is a TTY but stdout is piped, and asks nothing (B8)", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude", "cursor"], maturityTier: "scaleup" });
+
+    // TTY stdin, but stdout left OFF the TTY set — the piped-stdout shape.
+    const piped = await runInProcess([configCommand], ["config"], {
+      cwd: handle.dir,
+      tty: { stdin: true },
+    });
+    const listed = await run(handle, ["list"]);
+
+    expect(piped.code).toBe(0);
+    expect(piped.stdout).toBe(listed.stdout);
+    expect(piped.stdout).not.toContain("Which setting?");
   });
 
   it("takes the list on a terminal under -y, so a script that asked for silence gets it", async () => {

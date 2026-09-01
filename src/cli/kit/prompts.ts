@@ -96,6 +96,31 @@ const sessions = new WeakMap<NodeJS.ReadableStream, Session>();
  */
 const abortedInputs = new WeakSet<NodeJS.ReadableStream>();
 
+/**
+ * Inputs a menu just tore down, marked so the very next `ask()` on the SAME
+ * stream drains it before opening a fresh readline session (C1-residual).
+ *
+ * `runMenu`'s own exit-drain (`drainBufferedInput`, in its `finally`) only
+ * catches a byte already sitting in the JS-visible buffer at that instant. It
+ * cannot catch one that lands 30-100ms later — a genuinely separate keystroke,
+ * not a same-chunk trailing byte — because by then the stream is `pause()`d:
+ * on a real TTY that is `readStop()`, so the byte sits in the KERNEL queue,
+ * invisible to `read()` until something resumes the stream. The readline
+ * `sessionFor` opens for the NEXT question does exactly that — `resume()`s the
+ * stream — and hands the byte over as if it had just been typed, landing as a
+ * phantom blank line on a question nobody answered.
+ *
+ * Only `runMenu` ever adds to this set, and only after confirming
+ * `input.isTTY === true` (`rawMenuIo`'s own probe, upstream of every call
+ * site) — so a pipe can never carry the mark. `printf "y\n" | stamity init`
+ * never touches a raw menu at all, and its `ask()` calls take the untouched,
+ * zero-cost path below. `ask` deletes the mark on the read (one-shot): a
+ * SECOND consecutive cooked question on the same stream, with no menu in
+ * between, must not pay for a drain or risk eating a legitimate type-ahead
+ * line the operator sent for it.
+ */
+const menuLeftovers = new WeakSet<NodeJS.ReadableStream>();
+
 const abortFailure = (): CliFailure => new CliFailure({ code: "FAILURE", message: "aborted" });
 
 function sessionFor(io: PromptIo): Session {
@@ -174,6 +199,12 @@ function writePrompt(session: Session, io: PromptIo, prompt: string): void {
 /** One question: write the prompt, then a queued line, the next line, or null on EOF. */
 async function ask(io: PromptIo, prompt: string): Promise<string | null> {
   if (abortedInputs.has(io.input)) throw abortFailure();
+  // C1-residual: one-shot drain of whatever a menu that just tore down on this
+  // SAME stream left behind — see `menuLeftovers`'s own doc for why
+  // `runMenu`'s exit-drain alone cannot catch this. `delete` both checks and
+  // clears the mark, so a second consecutive cooked question never pays for
+  // it and never risks eating a real type-ahead line.
+  if (menuLeftovers.delete(io.input)) await drainNow(io.input);
   const session = sessionFor(io);
   writePrompt(session, io, prompt);
   const queued = session.queue.shift();
@@ -202,7 +233,17 @@ export async function confirm(
 ): Promise<boolean> {
   if (!gate.interactive) return q.defaultYes;
   const answer = await ask(io, `${q.question} ${q.defaultYes ? "[Y/n]" : "[y/N]"} `);
-  const normalized = (answer ?? "").trim().toLowerCase();
+  // B6: EOF is not a blank answer someone gave — it is nobody answering at
+  // all, and it is STICKY (`session.closed`), so one ctrl-D silently defaults
+  // every later question on this stream, including a destructive confirm. The
+  // selects already disclose their own EOF default; this brings `confirm` to
+  // parity, naming the actual value kept rather than a row index (there is
+  // none to name here).
+  if (answer === null) {
+    io.output.write(`no answer — keeping the default (${q.defaultYes ? "yes" : "no"})\n`);
+    return q.defaultYes;
+  }
+  const normalized = answer.trim().toLowerCase();
   if (normalized === "y" || normalized === "yes") return true;
   if (normalized === "n" || normalized === "no") return false;
   return q.defaultYes;
@@ -235,14 +276,18 @@ export async function selectOne<T extends string>(
   // default the way it always has.
   if (raw !== null && q.choices.length > 0) {
     const menu = await runMenu(io, raw, {
-      question: `${q.question} ${MOVE_HINT}`,
+      question: q.question,
+      hint: MOVE_HINT,
       labels: q.choices.map((choice) => choice.label),
       active: defaultIndex === -1 ? 0 : defaultIndex,
       selected: null,
     });
     return q.choices[menu.active]?.value ?? q.defaultValue;
   }
-  const rows = q.choices.map((choice, i) => `  ${i + 1}) ${choice.label}`);
+  // B2: the same manifest-derived label the menu's `renderMenu` sanitizes
+  // reaches this numbered-list rendering too — the fallback path a raw-menu-
+  // incapable terminal always takes, so it has no other guard.
+  const rows = q.choices.map((choice, i) => `  ${i + 1}) ${sanitizeLabel(choice.label)}`);
   const bracket = defaultIndex === -1 ? q.defaultValue : String(defaultIndex + 1);
   const prompt = `${q.question}\n${rows.join("\n")}\nChoose 1-${q.choices.length} [${bracket}]: `;
 
@@ -318,7 +363,8 @@ export async function selectMany<T>(
   const raw = rawMenuIo(gate, io, q.choices.length);
   if (raw !== null && q.choices.length > 0) {
     const menu = await runMenu(io, raw, {
-      question: `${q.question} ${TOGGLE_HINT}`,
+      question: q.question,
+      hint: TOGGLE_HINT,
       labels: q.choices.map((choice) => choice.label),
       // The cursor opens on the first preselected row so the box under it is
       // the one the operator is most likely to be revisiting.
@@ -336,15 +382,23 @@ export async function selectMany<T>(
  *
  * `"default"` covers both a blank answer and one that is nothing but
  * separators — neither names a row, and re-asking over `","` would be a
- * correction the operator cannot act on. Anything that is not an in-range row
- * number comes back under `invalid` spelled the way it was typed, so the
- * re-ask can quote it.
+ * correction the operator cannot act on. `"empty"` is a DIFFERENT answer from
+ * `"default"`: the literal token `none` (case-insensitive, matched on the
+ * whole trimmed answer so it cannot collide with a comma-separated list that
+ * merely contains the word) is how the typed path expresses "every box
+ * cleared" — the one selection `docs/workspaces.md` promises is answerable
+ * ("Clearing every box is an answer") but that a blank line cannot spell,
+ * since a blank line already means "keep the defaults" (B7). Anything that is
+ * not an in-range row number and not `none` comes back under `invalid` spelled
+ * the way it was typed, so the re-ask can quote it.
  */
 function parseChoiceNumbers(
   answer: string,
   count: number,
-): "default" | { indexes: number[] } | { invalid: string[] } {
-  const tokens = answer
+): "default" | "empty" | { indexes: number[] } | { invalid: string[] } {
+  const trimmed = answer.trim();
+  if (trimmed.toLowerCase() === "none") return "empty";
+  const tokens = trimmed
     .split(",")
     .map((token) => token.trim())
     .filter((token) => token !== "");
@@ -378,10 +432,18 @@ async function selectManyTyped<T>(
   defaultIndexes: readonly number[],
 ): Promise<T[]> {
   const count = q.choices.length;
-  const rows = q.choices.map((choice, i) => `  ${i + 1}) ${choice.label}`);
+  // B2: same sink as `selectOne`'s typed rows — a manifest-derived label
+  // printed raw here has no other guard on this path.
+  const rows = q.choices.map((choice, i) => `  ${i + 1}) ${sanitizeLabel(choice.label)}`);
   const bracket =
     defaultIndexes.length === 0 ? "none" : defaultIndexes.map((index) => index + 1).join(",");
-  const prompt = `${q.question}\n${rows.join("\n")}\nChoose 1-${count}, comma-separated [${bracket}]: `;
+  // B7: the `'none'` mention is appended AFTER the pinned bracket line rather
+  // than woven into it, so the exact string every existing caller (and this
+  // kit's own suite) matches — `Choose 1-N, comma-separated [bracket]: ` —
+  // stays byte-identical; this is additive.
+  const prompt =
+    `${q.question}\n${rows.join("\n")}\nChoose 1-${count}, comma-separated [${bracket}]: ` +
+    `(type "none" to clear every box) `;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     // oxlint-disable-next-line no-await-in-loop -- a re-ask can only follow the answer it corrects
@@ -396,6 +458,7 @@ async function selectManyTyped<T>(
     const answer = raw.trim();
     const parsed = parseChoiceNumbers(answer, count);
     if (parsed === "default") return [...q.defaultValues];
+    if (parsed === "empty") return [];
     if ("indexes" in parsed) {
       const picked = new Set(parsed.indexes);
       return q.choices.filter((_choice, index) => picked.has(index)).map((choice) => choice.value);
@@ -417,7 +480,22 @@ export async function textInput(
   q: { question: string; defaultValue: string },
 ): Promise<string> {
   if (!gate.interactive) return q.defaultValue;
-  const answer = (await ask(io, `${q.question} [${q.defaultValue}]: `))?.trim() ?? "";
+  // B2: `q.defaultValue` can be manifest-derived (`../commands/config.ts`'s
+  // `askValue` passes the persisted value straight through), and this prompt
+  // has NO menu path to fall back to on any terminal — it is the one sink
+  // that is live everywhere the raw menu is not.
+  const raw = await ask(io, `${q.question} [${sanitizeLabel(q.defaultValue)}]: `);
+  // B6: EOF is nobody answering, not a blank answer somebody gave — sticky
+  // per `session.closed`, so one ctrl-D silently defaults every remaining
+  // free-form question on this stream unless it is disclosed, the way the
+  // selects already disclose theirs. The returned value is the real
+  // `defaultValue` (unsanitized — sanitisation is a rendering concern, not a
+  // value one); only what reaches the terminal goes through `sanitizeLabel`.
+  if (raw === null) {
+    io.output.write(`no answer — keeping the default (${sanitizeLabel(q.defaultValue)})\n`);
+    return q.defaultValue;
+  }
+  const answer = raw.trim();
   return answer === "" ? q.defaultValue : answer;
 }
 
@@ -498,6 +576,9 @@ function rawMenuIo(gate: PromptGate, io: PromptIo, choiceCount: number): RawIo |
   // `rows` is the fact node's tty layer reports; a stream that makes no such
   // promise (a pipe, most test doubles) leaves this check a no-op rather than a
   // refusal, so it stays additive over every case the probe already covered.
+  // `choiceCount + 2` is now the frame's EXACT drawn height (N1: the question
+  // line and the hint line, each its own row, plus one row per choice) —
+  // `runMenu`'s own `height` local computes the identical sum.
   if (typeof output.rows === "number" && choiceCount + 2 > output.rows) return null;
   // The cast carries the fact the line above established: narrowing an optional
   // property does not narrow the object that holds it.
@@ -528,6 +609,15 @@ const TOGGLE_HINT = "(up/down to move, space to toggle, enter to accept, ctrl-c 
 
 interface Menu {
   readonly question: string;
+  /**
+   * The key legend, rendered on ITS OWN line (N1) — appending it to `question`
+   * used to mean a plain, unremarkable question could push the WHOLE line past
+   * 80 columns on its own (`MOVE_HINT` alone is 54 characters), and the part
+   * that got clamped off first was the tail: `ctrl-c to cancel`, the only
+   * documented way out of the menu. A dedicated line is never in competition
+   * with the question's own length for the budget.
+   */
+  readonly hint: string;
   readonly labels: readonly string[];
   active: number;
   /** `null` marks a single-select menu: no boxes drawn, and space does nothing. */
@@ -582,7 +672,39 @@ function renderMenu(menu: Menu, columns: number): string {
     const fitted = clean.length > budget ? clean.slice(0, budget) : clean;
     return `${prefix}${fitted}`;
   });
-  return [menu.question, ...rows].map((line) => `${CLEAR_LINE}${line}\n`).join("");
+  // B3: neither the question line nor the hint line was ever clamped —
+  // `MOVE_HINT` alone is over 50 columns, so even split onto its own line
+  // (N1) a narrow terminal could still wrap either one, which `rewind(height)`
+  // below does not know about: it walks back exactly `labels.length + 2`
+  // LOGICAL lines, so a wrapped frame desyncs the very first time it redraws.
+  // Same budget logic as a row, with no prefix to subtract (neither line has
+  // one).
+  const clampToWidth = (line: string): string => (line.length > columns ? line.slice(0, columns) : line);
+  const questionLine = clampToWidth(menu.question);
+  const hintLine = clampToWidth(menu.hint);
+  return [questionLine, hintLine, ...rows].map((line) => `${CLEAR_LINE}${line}\n`).join("");
+}
+
+/**
+ * The value(s) an EOF-settled menu is keeping, rendered for the disclosure
+ * line — the menu's own parity with `confirm`/`textInput`'s EOF disclosures,
+ * which name the value rather than a bare "a default was applied" (N2).
+ *
+ * A single-select menu names the label under the cursor; a checkbox menu
+ * names every currently-ticked label, or `none` when the set is empty — the
+ * same `none` spelling `selectManyTyped`'s own disclosure already uses for an
+ * empty set. Labels are manifest-derived content this process did not author,
+ * so they go through `sanitizeLabel` — the same guard every other rendering
+ * seam in this file already applies.
+ */
+function menuDefaultDisclosure(menu: Menu): string {
+  if (menu.selected === null) {
+    const label = sanitizeLabel(menu.labels[menu.active] ?? "");
+    return `no answer — keeping the default (${label})`;
+  }
+  const kept = menu.labels.filter((_label, index) => menu.selected?.has(index) === true);
+  const rendered = kept.length === 0 ? "none" : kept.map((label) => sanitizeLabel(label)).join(", ");
+  return `no answer — keeping the defaults (${rendered})`;
 }
 
 /**
@@ -629,6 +751,140 @@ function restoreSession(io: PromptIo, carried: string[] | null): void {
 }
 
 /**
+ * Reads and discards whatever the stream ALREADY has sitting in its
+ * JS-visible internal buffer, without turning any of it into a keypress or a
+ * readline `line`.
+ *
+ * What this catches, precisely: a byte that arrived and was already pushed
+ * into the stream's internal buffer at the instant this runs — the same-chunk
+ * or same-tick case (an automated caller's burst write, or two keypress
+ * events `node:readline`'s decoder hands to one listener in the same
+ * synchronous pass). `read()` pulls straight out of that buffer without ever
+ * emitting `data`, so nothing decodes it.
+ *
+ * What it does NOT catch: a byte that has not arrived yet, or one held in the
+ * KERNEL's queue rather than the JS buffer — which is exactly the state a
+ * `pause()`d stream is in on a real TTY (`pause()` maps to `readStop()`; the
+ * kernel keeps queuing keystrokes, node just stops asking for them). A
+ * genuinely later keystroke — a real double-Enter with actual key-travel time
+ * between the two presses — lands in THAT window. `drainNow` below, and the
+ * one-shot mark it answers (`menuLeftovers`), are what close that half; this
+ * function is the belt for the same-tick case alone.
+ */
+function drainBufferedInput(input: NodeJS.ReadableStream): void {
+  // `NodeJS.ReadableStream.read()` returns `string | Buffer`, never a nullable
+  // type in its declared signature — but every real Readable (and this kit's
+  // own `MenuTtyInput`) returns `null` once the buffer is empty, which is the
+  // documented Node behaviour the type does not capture. Read as `unknown` and
+  // loop until that runtime `null` shows up.
+  const read = input.read.bind(input) as () => unknown;
+  // oxlint-disable-next-line no-cond-assign -- looping until the buffer reports empty is the point
+  while (read() !== null) {
+    /* discarded on purpose: never decoded into a keypress or a line */
+  }
+}
+
+/** Throws away every chunk it sees — the listener {@link drainNow} attaches. */
+function discardChunk(): void {
+  /* every chunk in the drain window is thrown away, unread */
+}
+
+/**
+ * Moves whatever the KERNEL is holding for `input` into the JS-visible
+ * buffer, then discards it — the fix for the half {@link drainBufferedInput}
+ * cannot reach on its own (C1-residual).
+ *
+ * `resume()` issues a `readStart()`: on the next turn of the event loop, libuv
+ * delivers whatever the kernel already had queued as a `data` chunk. A
+ * THROWAWAY `data` listener has to be attached FIRST — verified against
+ * `node:stream`: `resume()` with no `data` consumer does not buffer what
+ * arrives, it DISCARDS it, so a bare resume-then-read (this function's first
+ * shape) silently dropped every byte it was supposed to be draining, the
+ * operator's genuine next keystroke included. One `setImmediate` tick is
+ * enough for whatever is already kernel-queued to arrive (it is not a poll —
+ * a byte that has not physically arrived by then still has not arrived, and
+ * there is nothing further to wait for); every chunk the listener sees in
+ * that window is thrown away. `pause()` afterwards restores the exact
+ * flowing/paused state the caller found the stream in.
+ *
+ * THE CONTRACT this creates for every caller of a menu, stated once here: a
+ * menu's real first keystroke has to arrive at least one event-loop turn
+ * after the call that starts it, never in the same synchronous turn — this
+ * function (used both at `runMenu`'s entry and at `ask`'s one-shot leftover
+ * drain) is what makes that necessary, by discarding whatever lands in its
+ * own one-tick window regardless of whether it was stale or genuine.
+ */
+async function drainNow(input: NodeJS.ReadableStream): Promise<void> {
+  await new Promise<void>((resolve) => {
+    input.on("data", discardChunk);
+    input.resume();
+    setImmediate(() => {
+      input.removeListener("data", discardChunk);
+      input.pause();
+      resolve();
+    });
+  });
+}
+
+/**
+ * Installs the process-level guards a menu needs while it owns the terminal:
+ * SIGTERM/SIGHUP restore the terminal before the process exits, and a sync
+ * `exit` hook covers every other way the process could end mid-menu (an IDE
+ * cancel, an uncaught exception elsewhere). B5: with no guard, a signal
+ * arriving while `setRawMode(true)` is in effect leaves the operator's shell
+ * with no echo and a hidden cursor — the `finally` below never runs, because
+ * the process ends before the awaited promise ever settles.
+ *
+ * A signal handler restores THEN re-raises (`process.kill(pid, signal)`)
+ * rather than swallowing it: registering a listener suppresses node's own
+ * default disposition for that signal, so failing to re-raise would change
+ * this process's exit code and exit semantics for every signal, not just the
+ * one during a menu. Removed the instant it fires, so the re-raise reaches
+ * whatever default handling would otherwise have run.
+ *
+ * Returns the removal function, called from `runMenu`'s `finally` — every
+ * path out of a menu (accept, abort, EOF, error) uninstalls these before
+ * returning, so a menu that already finished cannot double-restore a terminal
+ * a LATER menu is now using.
+ */
+function installSignalGuards(raw: RawIo): () => void {
+  let removed = false;
+  const restore = (): void => {
+    try {
+      raw.input.setRawMode(false);
+    } catch {
+      // Best-effort: the stream may already be down, or may no longer
+      // support the call by the time a signal lands.
+    }
+    raw.output.write(CURSOR_SHOW);
+  };
+  function remove(): void {
+    if (removed) return;
+    removed = true;
+    process.removeListener("exit", onExit);
+    process.removeListener("SIGTERM", onSigterm);
+    process.removeListener("SIGHUP", onSighup);
+  }
+  function onExit(): void {
+    restore();
+  }
+  function onSigterm(): void {
+    restore();
+    remove();
+    process.kill(process.pid, "SIGTERM");
+  }
+  function onSighup(): void {
+    restore();
+    remove();
+    process.kill(process.pid, "SIGHUP");
+  }
+  process.once("SIGTERM", onSigterm);
+  process.once("SIGHUP", onSighup);
+  process.on("exit", onExit);
+  return remove;
+}
+
+/**
  * Runs one menu to Enter or Ctrl-C and returns the state it settled in.
  *
  * Cleanup is the whole point of the `finally`: listener off, raw mode off,
@@ -641,7 +897,18 @@ function restoreSession(io: PromptIo, carried: string[] | null): void {
 async function runMenu(io: PromptIo, raw: RawIo, menu: Menu): Promise<Menu> {
   if (abortedInputs.has(io.input)) throw abortFailure();
   const carried = quiesceSession(io);
-  const height = menu.labels.length + 1;
+  // B1, entry half: drain BEFORE the listener attaches and BEFORE the real
+  // `resume()` below, so a byte that landed on the stream while nothing was
+  // reading it cannot be read as this menu's own first keypress. `drainNow`,
+  // not the bare buffer read: a byte typed while the previous prompt was
+  // still up can be sitting in the KERNEL queue rather than the JS buffer
+  // (`quiesceSession`'s `rl.close()` paused it, i.e. `readStop()`), which has
+  // the identical limitation `drainBufferedInput`'s own doc names.
+  await drainNow(raw.input);
+  // N1: +2, not +1 — the question line AND the hint line, now that the hint
+  // has its own (see `Menu.hint`'s own doc for why it moved off the question
+  // line).
+  const height = menu.labels.length + 2;
   const count = menu.labels.length;
   const columns =
     typeof (raw.output as { columns?: number }).columns === "number"
@@ -649,6 +916,8 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu): Promise<Menu> {
       : DEFAULT_COLUMNS;
   emitKeypressEvents(raw.input);
   let listener: ((chunk: string | undefined, key: Key | undefined) => void) | null = null;
+  let onStreamEnd: (() => void) | null = null;
+  let onStreamError: ((err: unknown) => void) | null = null;
   let aborted = false;
   // Settled the instant Enter (or Ctrl-C) is processed, and checked FIRST in
   // the listener: `node:readline`'s keypress decoder can hand one `write()`
@@ -661,6 +930,7 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu): Promise<Menu> {
   // chunk after this one.
   let settled = false;
 
+  const removeSignalGuards = installSignalGuards(raw);
   try {
     raw.input.setRawMode(true);
     raw.output.write(CURSOR_HIDE);
@@ -670,6 +940,44 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu): Promise<Menu> {
         raw.output.write(`${drawn ? rewind(height) : ""}${renderMenu(menu, columns)}`);
         drawn = true;
       };
+
+      // B4, EOF half: no listener settled the promise when the input stream
+      // ended or closed — with nobody left to answer, this settles the SAME
+      // way the typed path's own EOF does: keep the default, and DISCLOSE it
+      // (parity with the question-protocol rule the typed path already
+      // honours). Unfixed, this hung forever with raw mode still on and the
+      // cursor still hidden.
+      onStreamEnd = (): void => {
+        if (settled) return;
+        settled = true;
+        if (listener !== null) raw.input.removeListener("keypress", listener);
+        listener = null;
+        // N2: NAME the value kept, the way `confirm`/`textInput`'s own EOF
+        // disclosures do (and the typed selects already did) — not just that
+        // a default was applied.
+        raw.output.write(`\n${menuDefaultDisclosure(menu)}\n`);
+        resolve({
+          question: menu.question,
+          hint: menu.hint,
+          labels: menu.labels,
+          active: menu.active,
+          selected: menu.selected === null ? null : new Set(menu.selected),
+        });
+      };
+      // B4, error half: an `error` event with no listener throws OUTSIDE this
+      // try, so the `finally` below never runs and the terminal is left in
+      // raw mode with the cursor hidden. Rejecting through the promise keeps
+      // the failure INSIDE the try, so cleanup still happens.
+      onStreamError = (err: unknown): void => {
+        if (settled) return;
+        settled = true;
+        if (listener !== null) raw.input.removeListener("keypress", listener);
+        listener = null;
+        reject(err);
+      };
+      raw.input.on("end", onStreamEnd);
+      raw.input.on("close", onStreamEnd);
+      raw.input.on("error", onStreamError);
 
       listener = (_chunk, key) => {
         if (settled) return;
@@ -714,6 +1022,7 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu): Promise<Menu> {
           listener = null;
           resolve({
             question: menu.question,
+            hint: menu.hint,
             labels: menu.labels,
             active: menu.active,
             selected: menu.selected === null ? null : new Set(menu.selected),
@@ -734,7 +1043,31 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu): Promise<Menu> {
     });
   } finally {
     if (listener !== null) raw.input.removeListener("keypress", listener);
+    if (onStreamEnd !== null) {
+      raw.input.removeListener("end", onStreamEnd);
+      raw.input.removeListener("close", onStreamEnd);
+    }
+    if (onStreamError !== null) raw.input.removeListener("error", onStreamError);
+    removeSignalGuards();
     raw.input.setRawMode(false);
+    // C1-residual, corrected: this drain is belt-and-braces for the SAME-TICK
+    // case only — a chunk already sitting in the JS buffer at this exact
+    // instant (an automated caller's burst write, or a second keypress event
+    // `node:readline`'s decoder handed to the listener in the same
+    // synchronous pass as the accept). It does NOT cover a genuinely later
+    // keystroke — a real double-Enter with key-travel time between the two
+    // presses: `emitKeypressEvents`'s permanent `data` handler already
+    // consumed and dropped a same-tick trailing byte before this ever runs
+    // (nothing to drain), and a byte that lands after `pause()` below is held
+    // in the KERNEL queue, invisible to `read()` until something resumes the
+    // stream. `menuLeftovers` + `ask`'s one-shot `drainNow` are what close
+    // THAT window, on the very next question asked on this stream.
+    drainBufferedInput(raw.input);
+    // Marked AFTER the drain above and BEFORE `pause()`: whatever this menu
+    // leaves behind from here on is exactly the kernel-queued case `drainNow`
+    // exists for, and `ask` reads this mark on the next question this same
+    // stream is asked, whichever prompt kind that turns out to be.
+    menuLeftovers.add(raw.input);
     raw.output.write(CURSOR_SHOW);
     // Paused, so nothing is read off the stream between here and whoever reads
     // next: bytes typed into a paused stream wait in its buffer, bytes read with

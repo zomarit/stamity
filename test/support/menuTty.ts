@@ -77,3 +77,42 @@ export async function waitForOutput(
   }
   throw new Error(`timed out waiting for ${what} (marker: ${JSON.stringify(marker)})`);
 }
+
+/**
+ * One macrotask turn — the harness's synchronization unit for everything
+ * below, and for `runMenu`'s own drains (`src/cli/kit/prompts.ts::drainNow`,
+ * which resumes, waits exactly one `setImmediate` tick, then discards and
+ * pauses again).
+ *
+ * THE CONTRACT this file's callers all lean on: a menu's real first keystroke
+ * has to arrive at least one event-loop turn after the call that starts the
+ * menu, never in the same synchronous turn. `runMenu` drains whatever the
+ * stream is holding on entry precisely because a real terminal can be holding
+ * a stray leftover byte from BEFORE the menu started reading — and that drain
+ * runs by resuming the stream, which (for the same reason) also consumes and
+ * discards anything written in that same window. No human keystroke can ever
+ * land inside one tick of a function call returning; only a synthetic write
+ * issued in the same synchronous turn can, which is why every caller here
+ * awaits a `tick()` (or `press`, which already ends on one) before writing a
+ * menu's FIRST key.
+ */
+export const tick = (): Promise<void> =>
+  new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+
+/**
+ * Drives keys into a {@link MenuTtyInput}. All writes land first and one turn
+ * of the loop delivers them: the keypress decoder is fed per byte, so a burst
+ * decodes in order — verified against `node:readline` before this harness was
+ * written.
+ *
+ * Ends on {@link tick} for the reason `tick`'s own doc states: it is both "let
+ * the decoder process what was just written" AND, for whichever call happens
+ * to be a menu's first press, the synchronization point the entry drain needs
+ * to have already cleared before a real keystroke can be trusted to land.
+ */
+export async function press(input: MenuTtyInput, ...keys: readonly string[]): Promise<void> {
+  for (const key of keys) input.write(key);
+  await tick();
+}

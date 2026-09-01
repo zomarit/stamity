@@ -506,9 +506,17 @@ async function createOfferedWorkspace(
   };
 }
 
-/** Candidate paths for a one-line disclosure, capped and honest about the tail. */
+/**
+ * Candidate paths for a one-line disclosure, capped and honest about the tail.
+ *
+ * B9: `repo.path` is a directory NAME off the filesystem, exactly the content
+ * `askWorkspaceMembers` already runs through `sanitizeLabel` before it reaches
+ * a menu row — this is the non-interactive twin of that same sink (every
+ * non-interactive run with an armed offer prints this line), so it gets the
+ * same guard.
+ */
 function candidateSummary(candidates: readonly DetectedRepo[]): string {
-  const shown = candidates.slice(0, MAX_DISCLOSED_CANDIDATES).map((repo) => repo.path);
+  const shown = candidates.slice(0, MAX_DISCLOSED_CANDIDATES).map((repo) => sanitizeLabel(repo.path));
   const omitted = candidates.length - shown.length;
   return omitted > 0 ? `${shown.join(", ")}, … and ${String(omitted)} more` : shown.join(", ");
 }
@@ -532,15 +540,23 @@ function workspaceOfferNote(candidates: readonly DetectedRepo[]): string {
   );
 }
 
-/** What the answered offer did, on both surfaces. */
+/**
+ * What the answered offer did, on both surfaces.
+ *
+ * B9: `created.members` is `manifest.repos.map((entry) => entry.path)` — the
+ * same directory names {@link candidateSummary} sanitizes, carried through
+ * `createOfferedWorkspace`'s composed manifest rather than off the raw scan,
+ * but still filesystem content this process did not author.
+ */
 function workspaceCreatedNote(
   created: { path: string; members: string[]; tools: Tool[] },
   dryRun: boolean,
 ): string {
   const tense = dryRun ? "would be created" : "was created";
+  const members = created.members.map((member) => sanitizeLabel(member));
   return (
     `workspace: ${created.path} ${tense}, registering ${String(created.members.length)} ` +
-    `member${created.members.length === 1 ? "" : "s"} (${created.members.join(", ")}) with ` +
+    `member${created.members.length === 1 ? "" : "s"} (${members.join(", ")}) with ` +
     `tools ${created.tools.join(", ")}. Run \`stamity workspace sync\` to apply this policy ` +
     `to every member.`
   );
@@ -882,17 +898,25 @@ export const initCommand: CommandModule = {
     // earlier: init writes the files whose revert path git IS, so the question
     // belongs here rather than in the verb that inspects the result.
     const git = readWorkingTreeStatus(rootDir);
+    // Already-initialised pre-flight, AHEAD of `buildInitDecisions` (B10):
+    // without --force the apply below refuses, so asking two questions first
+    // would waste the user's answers — and `buildInitDecisions` runs a
+    // depth-4 `detectSubRepos` walk whenever this directory is standalone,
+    // which a run about to refuse never uses (every consumer of the
+    // candidate list below is gated on `!alreadyInitialised`). Checking here
+    // costs one manifest read; `skipWorkspaceProbe` below is what actually
+    // saves the walk. The refusal itself stays `applyInit`'s (single source
+    // of the message); a corrupt manifest surfaces `readManifest`'s own
+    // repair guidance here.
+    const alreadyInitialised = !force && (await readManifest(rootDir)) !== null;
     const [decisions, predecessor] = await Promise.all([
-      buildInitDecisions(rootDir, readOverrides(opts), { history }),
+      buildInitDecisions(rootDir, readOverrides(opts), {
+        history,
+        skipWorkspaceProbe: alreadyInitialised,
+      }),
       detectPredecessorState(rootDir),
     ]);
     ctx.spinner.stop();
-
-    // Already-initialised pre-flight: without --force the apply below refuses,
-    // so asking two questions first would waste the user's answers. The
-    // refusal itself stays `applyInit`'s (single source of the message); a
-    // corrupt manifest surfaces `readManifest`'s own repair guidance here.
-    const alreadyInitialised = !force && (await readManifest(rootDir)) !== null;
 
     const gate = promptGate({
       stdinIsTTY: ctx.terminal.stdinIsTTY,

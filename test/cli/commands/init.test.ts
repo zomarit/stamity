@@ -5,6 +5,7 @@ import { PassThrough, Writable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../../src/adapters/claude.ts";
 import { initCommand } from "../../../src/cli/commands/init.ts";
+import { buildInitDecisions } from "../../../src/cli/commands/init/plan.ts";
 import { planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { runCli, type CommandIo } from "../../../src/cli/kit/program.ts";
 import type { TerminalFacts } from "../../../src/cli/kit/terminal.ts";
@@ -1559,6 +1560,30 @@ function readWorkspaceBack(root: string): ReturnType<typeof readWorkspaceManifes
   return readWorkspaceManifest(root);
 }
 
+// B10: `buildInitDecisions` runs the workspace probe's depth-4 `detectSubRepos`
+// walk unconditionally, including on a run about to refuse as
+// already-initialised (`init.ts`'s refusal used to be consulted AFTER this
+// call). `skipWorkspaceProbe` is what `init.ts` now sets ahead of that walk;
+// unit-tested directly here rather than through the CLI because the refusal
+// path prints the same output whether the walk ran and was discarded or never
+// ran at all — the observable difference is in what `buildInitDecisions`
+// itself reports, not in a byte of stdout.
+describe("buildInitDecisions — B10: skipWorkspaceProbe skips the walk", () => {
+  it("reports an unarmed offer without scanning, even though real sibling repositories exist on disk", async () => {
+    const root = await makeRepoWithCandidates(["api", "docs", "web"]);
+
+    const skipped = await buildInitDecisions(root, {}, { history: null, skipWorkspaceProbe: true });
+    expect(skipped.workspaceCandidates).toEqual([]);
+    expect(skipped.workspaceSource).toBe("standalone");
+
+    // Same repository, scanned normally: the siblings ARE there, which is what
+    // proves the empty result above is the skip taking effect rather than a
+    // genuine "nothing found".
+    const scanned = await buildInitDecisions(root, {}, { history: null });
+    expect(scanned.workspaceCandidates).toHaveLength(3);
+  });
+});
+
 const OFFER_QUESTION =
   "3 repositories found under this directory. Create a workspace.json so one policy " +
   "reaches all of them? [y/N] ";
@@ -1754,6 +1779,26 @@ describe("init — an answered workspace offer", () => {
     expect(existsSync(join(root, WORKSPACE_MANIFEST_FILE))).toBe(false);
   });
 
+  // B9: `workspaceCreatedNote` prints `created.members` raw — the composed
+  // manifest's own repo paths, sourced from the same directory names
+  // `candidateSummary`'s non-interactive twin sanitizes.
+  it.skipIf(process.platform === "win32")(
+    "sanitizes a control-byte member directory name in the created-workspace note (B9)",
+    async () => {
+      const esc = String.fromCharCode(27);
+      const bel = String.fromCharCode(7);
+      const hostileName = `web${esc}]0;pwned${bel}`;
+      const root = await makeRepoWithCandidates(["api", hostileName]);
+
+      const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["", "", "y", ""] });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("workspace:");
+      expect(result.stdout).not.toContain(`${esc}]0;`);
+      expect(result.stdout).not.toContain(bel);
+    },
+  );
+
   it("clearing every box creates nothing and says so — an answer, not a refusal", async () => {
     // The empty selection is only reachable on the raw menu: the typed path
     // reads a blank answer as "keep the defaults", which is every candidate.
@@ -1841,6 +1886,29 @@ describe("init — a non-interactive run never creates a workspace and always di
       "workspace: 5 repositories found under this directory (api, docs, infra, … and 2 more).",
     );
   });
+
+  // B9: `candidateSummary` (behind this non-interactive offer note) prints a
+  // candidate's directory NAME raw — the same content `askWorkspaceMembers`
+  // already sanitizes on the interactive path, but this sink has no menu to
+  // fall back to; every non-interactive run with an armed offer reaches it.
+  // Windows-gated: control bytes are illegal in an NTFS filename, so the
+  // fixture itself is POSIX-only.
+  it.skipIf(process.platform === "win32")(
+    "sanitizes a control-byte candidate directory name before the offer note renders it (B9)",
+    async () => {
+      const esc = String.fromCharCode(27);
+      const bel = String.fromCharCode(7);
+      const hostileName = `web${esc}]0;pwned${bel}`;
+      const root = await makeRepoWithCandidates(["api", hostileName]);
+
+      const result = await runInit(root, ["-y"], { ttyStdin: true });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("workspace: 2 repositories found under this directory");
+      expect(result.stdout).not.toContain(`${esc}]0;`);
+      expect(result.stdout).not.toContain(bel);
+    },
+  );
 });
 
 describe("init — the offer never widens the ordinary prompt ceiling", () => {
