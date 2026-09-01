@@ -462,9 +462,13 @@ function overlayFailure(
   cause: unknown,
 ): ValidateFinding | undefined {
   const message = messageOf(cause);
+  // The engine renders the half paths it names in forward-slash (POSIX) form, so
+  // the match normalises the native half path the same way before testing
+  // containment — otherwise a Windows backslash path would never be found in a
+  // forward-slash message and the refusal would misattribute to the base.
   const named = overlays
     .flatMap(halfPaths)
-    .find((path) => message.includes(path));
+    .find((path) => message.includes(path.replaceAll("\\", "/")));
   return named === undefined
     ? undefined
     : finding("user-content", repoPath(rootDir, named), "error", message);

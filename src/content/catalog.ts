@@ -386,6 +386,24 @@ const defaultFs: CatalogFs = { readdir, readFile };
  * filenames from them, so an id carrying a traversal segment is a write outside
  * the target tree waiting for a consumer, not a naming nit.
  */
+/**
+ * Force an absolute file path to forward-slash form for display inside a
+ * user-facing message. Content paths read as plain relative POSIX paths
+ * everywhere the engine talks about them, and the absolute paths a message
+ * carries for disambiguation are composed with the native `join`, so on Windows
+ * they would otherwise leak backslash separators that no test — and no user
+ * expecting a POSIX content path — should see. Rewriting every backslash (rather
+ * than only the platform `sep`) matches the display-normalisation convention the
+ * rest of the tree already uses and, unlike a `sep`-split, converts a Windows
+ * absolute like `\repo\...` on any platform, so the behaviour is provable off
+ * Windows too. The real stored path (`item.filePath`) is left native — only its
+ * rendering here is normalised. A backslash is refused in a content id
+ * (`assertSafePath`) before it could reach here as data.
+ */
+export function toPosixDisplayPath(p: string): string {
+  return p.replaceAll("\\", "/");
+}
+
 export function assertSafePath(relativePath: string, label: string): void {
   const refuse = (why: string): never => {
     throw new EngineError(
@@ -764,7 +782,7 @@ function mergeOverlay(base: CatalogItem, halves: OverlayHalves): MergedOverlay {
     frontmatter,
     body,
     raw: composeFrontmatter(frontmatter, body),
-    source: `${base.filePath} (patched by ${applied.join(", ")})`,
+    source: `${toPosixDisplayPath(base.filePath)} (patched by ${applied.map(toPosixDisplayPath).join(", ")})`,
   };
 }
 
@@ -773,7 +791,7 @@ function readOverlayFrontmatter(half: OverlayHalf): Record<string, unknown> {
   // The document IS the block, so it goes through the frontmatter module's own
   // strict parser: one parser, one re-coding of a YAML failure into a content
   // defect, and no second implementation to disagree with the first.
-  const patch = parseFrontmatterBlock(half.text, half.path);
+  const patch = parseFrontmatterBlock(half.text, toPosixDisplayPath(half.path));
 
   for (const key of OVERLAY_IDENTITY_KEYS) {
     // `hasOwn`, not a value read: `id:` with no value is a removal request, and
@@ -782,7 +800,7 @@ function readOverlayFrontmatter(half: OverlayHalf): Record<string, unknown> {
     // from a working one to the author who wrote it.
     if (!Object.hasOwn(patch, key)) continue;
     throw new EngineError(
-      `${half.path}: an overlay must not declare \`${key}\`. That is the identity the overlay ` +
+      `${toPosixDisplayPath(half.path)}: an overlay must not declare \`${key}\`. That is the identity the overlay ` +
         `is addressed BY — a patch that moved it would re-target itself and orphan its own ` +
         `base. Remove the \`${key}\` key.`,
       { code: "VALIDATION_ERROR" },
@@ -811,7 +829,7 @@ function readOverlayFrontmatter(half: OverlayHalf): Record<string, unknown> {
 function readOverlayBody(half: OverlayHalf): string {
   if (half.text.length > MAX_OVERLAY_BODY_LENGTH) {
     throw new EngineError(
-      `${half.path}: the body patch is ${half.text.length} characters, over the ` +
+      `${toPosixDisplayPath(half.path)}: the body patch is ${half.text.length} characters, over the ` +
         `${MAX_OVERLAY_BODY_LENGTH}-character ceiling on user-authored content. Text past it is ` +
         `truncated where the artifact re-enters agent context, so the patch on disk stops being ` +
         `the patch the client gets — split the patch, or move the material into a skill support ` +
@@ -822,7 +840,7 @@ function readOverlayBody(half: OverlayHalf): string {
   const text = half.text.charCodeAt(0) === BOM ? half.text.slice(1) : half.text;
   if (OVERLAY_OPENING_FENCE.test(text)) {
     throw new EngineError(
-      `${half.path}: a body overlay carries a body and nothing else, but this one opens with a ` +
+      `${toPosixDisplayPath(half.path)}: a body overlay carries a body and nothing else, but this one opens with a ` +
         `\`---\` frontmatter fence. Frontmatter is patched by the other half of the pair — move ` +
         `those keys into the matching \`${OVERLAY_FRONTMATTER_SUFFIX}\` file.`,
       { code: "VALIDATION_ERROR" },
@@ -887,7 +905,7 @@ function appendOverlayBody(base: string, appended: string): string {
  */
 function refuseOrphanOverlay(paths: readonly string[], type: ContentClass, id: string): never {
   throw new EngineError(
-    `Overlay ${paths.join(" and ")} patches ${type} "${id}", but no artifact of that id exists ` +
+    `Overlay ${paths.map(toPosixDisplayPath).join(" and ")} patches ${type} "${id}", but no artifact of that id exists ` +
       `in any layer — not the corpus, not an installed pack, not the override tree. An overlay ` +
       `is addressed by its filename, so this is usually a typo in it. Correct the filename, or ` +
       `remove the file.`,
@@ -934,9 +952,9 @@ function refusePrefixedOverlaySpelling(
   halfPaths: readonly string[] = [],
 ): never {
   const bare = stripEngineContentPrefix(base);
-  const halves = halfPaths.length > 0 ? ` (${halfPaths.join(" and ")})` : "";
+  const halves = halfPaths.length > 0 ? ` (${halfPaths.map(toPosixDisplayPath).join(" and ")})` : "";
   throw new EngineError(
-    `${path}${halves}: an overlay filename carries the engine content prefix, which names the ` +
+    `${toPosixDisplayPath(path)}${halves}: an overlay filename carries the engine content prefix, which names the ` +
       `generated corpus, not a repo's own patch. Save it under the bare spelling ` +
       `${JSON.stringify(bare)} instead — the canonical form the save gate's own reserved-prefix ` +
       `rule also requires.`,
@@ -945,12 +963,13 @@ function refusePrefixedOverlaySpelling(
 }
 
 function refuseOverlayExclusivity(overridePath: string, overlayPaths: readonly string[]): never {
-  const overlays = overlayPaths.join(" and ");
+  const overlays = overlayPaths.map(toPosixDisplayPath).join(" and ");
+  const override = toPosixDisplayPath(overridePath);
   throw new EngineError(
-    `The override at ${overridePath} and the overlay ${overlays} claim one identity. An artifact ` +
+    `The override at ${override} and the overlay ${overlays} claim one identity. An artifact ` +
       `is either REPLACED by a full override or PATCHED by an overlay, never both — a full ` +
       `override is your own file, so patch it by editing it. Remove ${overlays}, or remove ` +
-      `${overridePath}.`,
+      `${override}.`,
     { code: "VALIDATION_ERROR" },
   );
 }
@@ -1379,7 +1398,7 @@ async function scanClass(
     // that names it sends the author to whichever twin they open first. Each layer
     // has its own root, so `filePath` distinguishes them by construction — and it
     // still ends in the relative path, so nothing downstream loses that spelling.
-    const parsed = parseFrontmatter(raw, candidate.filePath);
+    const parsed = parseFrontmatter(raw, toPosixDisplayPath(candidate.filePath));
     // No frontmatter block: a README, a support file, a rule's `.mdc` twin read
     // by a future layout change. Not an artifact, not a defect.
     if (!parsed.hadFrontmatter) continue;
@@ -1435,7 +1454,7 @@ function buildItem(input: BuildItemInput): { item: CatalogItem; collision: Conte
   // walk labels its parse with it: only the root tells a corpus artifact apart
   // from a pack copy or an override of the same name. `relativePath` stays the
   // indexed identity — it is what collisions and shadows are reported under.
-  const source = input.source ?? input.filePath;
+  const source = toPosixDisplayPath(input.source ?? input.filePath);
 
   const declared = requireString(frontmatter, "id", { source, optional: true })?.trim();
   const bareId = declared === undefined || declared === "" ? slug : declared;

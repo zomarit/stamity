@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { isAbsolute, resolve, sep } from "node:path";
+import { isAbsolute, join, normalize, resolve, sep } from "node:path";
 import { EngineError } from "../types/errors.ts";
 import type { GitPathClass } from "./policy.ts";
 
@@ -233,8 +233,13 @@ export async function assertWorktreeName(
  * outside its farm would put a checkout somewhere nobody named.
  */
 export function worktreePathFor(farmDir: string, name: string): string {
-  const farm = resolve(farmDir);
-  const target = resolve(farm, name);
+  // Compose with join, not resolve: the farm is already an absolute native path
+  // from resolveFarmDir, and resolve would re-anchor a drive-less absolute onto
+  // the current drive on Windows — turning `\farm` into `C:\farm` and moving the
+  // result off the farm the caller named. join nests `name` under the farm and
+  // normalises away any `.`/`..`, which is all the containment guard below needs.
+  const farm = normalize(farmDir);
+  const target = join(farm, name);
   if (target !== farm && target.startsWith(`${farm}${sep}`)) return target;
   refuse(
     `The worktree name ${JSON.stringify(name)} resolves to ${target}, which is outside the farm at ${farm}.`,
@@ -326,7 +331,17 @@ export async function listWorktrees(
 ): Promise<WorktreeInventoryEntry[]> {
   const outcome = await run({ args: ["worktree", "list", "--porcelain", "-z"], cwd: repoRoot });
   if (outcome.status !== 0) gitFailed("reading the worktree inventory", outcome);
-  return parseWorktreeList(outcome.stdout);
+  // git prints worktree paths in forward-slash form on every platform, including
+  // Windows, where a real checkout is a backslash path everywhere else this lane
+  // talks about it (the farm from resolveFarmDir, the receipt location, the
+  // refusal an operator reads to cd there). Normalise each to the native form at
+  // this seam so a reported path compares equal to a `join`-composed one and an
+  // operator is handed a path their shell accepts. `parseWorktreeList` stays a
+  // pure grammar parser, verbatim over its input, so its own unit cases keep
+  // asserting the bytes git emitted.
+  return parseWorktreeList(outcome.stdout).map((entry) =>
+    Object.assign({}, entry, { path: resolve(entry.path) }),
+  );
 }
 
 /**
