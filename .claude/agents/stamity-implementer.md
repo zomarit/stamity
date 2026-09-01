@@ -53,10 +53,14 @@ interfaces, so the unit is buildable without reconstructing the plan.
 ## Spec delta
 
 A unit that changes behavior returns a spec delta against the project spec — `ADDED`,
-`MODIFIED`, `REMOVED` bullets, each naming the spec file and section it lands in. The
-delta is a proposal: the spec-author role applies it after confirmation, and writing into
-the spec tree from here is out of contract. A behavior-changing unit that returns an empty
-delta is reported as such, with the reason.
+`MODIFIED`, `REMOVED` bullets, each naming the spec file and the requirement id
+(`REQ-<area>-<nnn>`) it lands under. The id is the join key the spec, the plan unit, the
+test name and the board item all share, so a delta that names only a section drops it at
+the one seam that produces code. Where the spec carries no ids, name the section instead
+and say so in the delta — an honest fallback, not a silent one. The delta is a proposal:
+the spec-author role applies it after confirmation, and writing into the spec tree from
+here is out of contract. A behavior-changing unit that returns an empty delta is reported
+as such, with the reason.
 
 ## Gates
 

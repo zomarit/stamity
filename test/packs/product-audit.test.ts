@@ -535,9 +535,9 @@ describe("benchmark — the artifact key and what may be promoted from it", () =
     // The frame's item shape is built on a module taxonomy benchmark never
     // establishes, and its Guardrails demand `path:line` evidence a metric
     // regression cannot have — which demoted every regression to an open question.
-    expect(flat).toMatch(/Epic scaffold: `stamity-epic-audit-frame` → Board sync\./);
+    expect(flat).toMatch(/Epic scaffold: `stamity-epic-audit-frame` → Board write-back\./);
     expect(flat).not.toMatch(/Epic scaffold: `stamity-epic-audit-frame` → Epic and sub-issue shape/);
-    expect(flat).not.toMatch(/Board sync and Guardrails/);
+    expect(flat).not.toMatch(/Board write-back and Guardrails/);
     expect(flat).toMatch(/Only that block is cited/i);
     expect(flat).toMatch(/one sub-issue per regressed benchmark, no dependency edges/i);
     expect(flat).toMatch(/It has no `path:line`/);
@@ -820,13 +820,200 @@ describe("assesses, never modifies", () => {
   });
 });
 
-describe("board-less repos degrade to a report", () => {
-  it("the degradation and its output path are stated in the body", async () => {
+describe("board-less repos still produce the whole output", () => {
+  it("the unlinked-board case and the report path are stated in the body", async () => {
     const body = flow((await packFile("commands/st-product-audit.md")).parsed.body);
 
     expect(body).toMatch(/no board linked/i);
     expect(body).toMatch(/not an error/i);
     expect(body).toContain(".stamity/audits/<axis>-<sha>.md");
+  });
+});
+
+describe("the pack claims no board capability the write-back contract withholds", () => {
+  /**
+   * `/st-board` defines the write-back contract every flow that reaches a board
+   * is bound by — this pack included, since it owns no board primitive of its
+   * own. Four channels, and two capabilities named as explicitly outside them:
+   * "Creating an item and writing labels are not among them: a new item is a
+   * proposal in the run report and its labels travel with it." The abstract
+   * contract packs implement is `list`, `get`, `update`, `comment`, `link-PR`
+   * — there is no `create` verb in it to call.
+   *
+   * The pack published both refused capabilities anyway. Its command said it
+   * "opens one epic with a sub-issue per module", its write set was "Board
+   * items", the frame said "Create the epic … then create and link each
+   * sub-issue", it carried an "Item creation fails" failure row, its guardrail
+   * read "The command creates items", and it named two `meta:` labels it would
+   * apply. Nothing in this suite tied the pack to the contract, so six
+   * fabricated channels drifted silently green.
+   *
+   * The epic and sub-issue STRUCTURE is kept — it is a good report shape. What
+   * is pinned here is that the structure leaves as a proposal.
+   */
+  const BOARD_CHANNELS: readonly string[] = [
+    "progress comment",
+    "PR link",
+    "status transition",
+    "PR-thread reply",
+  ];
+
+  /** The contract's own refusal sentence. It is what makes the channels a closed set. */
+  const FIFTH_CHANNEL_REFUSAL = /Creating an item and writing labels are not among them/i;
+
+  /**
+   * Literal claims the pack used to publish, retired by name. Exact strings
+   * rather than patterns, in the idiom `RETIRED_SEVERITIES` already uses: a
+   * regression that re-types one of these verbatim is the likeliest one.
+   */
+  const RETIRED_BOARD_CLAIMS: readonly string[] = [
+    "opens one epic",
+    "creates items",
+    "create and link each sub-issue",
+    "Item creation fails",
+    "carries the finding label",
+    "outputs are board items",
+  ];
+
+  /**
+   * The generalizing half: a verb-level scan, so a re-introduction phrased
+   * some other way is caught too.
+   *
+   * A claim is a creation or label verb standing near its object. It is NOT a
+   * claim when a negation leads it — the pack may, and must, talk about
+   * creation and labels in the negative, which is the whole point of the fix.
+   * The negation has to come BEFORE the verb, inside a short window: a trailing
+   * "no product code" three clauses later exempted "The command creates items"
+   * when the window was the whole sentence, which is exactly the defect this
+   * probe exists to catch.
+   */
+  const BOARD_NOUN = /\b(?:epics?|sub-issues?|issues?|items?)\b/i;
+  /** Hyphen-guarded, so the frame's `<epic-label>` slot token is not a label write. */
+  const LABEL_NOUN = /(?<![-\w])labels?\b/i;
+  const CREATION_VERB = /\bcreat\w*/gi;
+  const LABEL_VERB = /\b(?:carr|appl|writ|add|attach|stamp)\w*/gi;
+  const NEGATION = /\b(?:no|none|not|never|nothing|neither|nor|outside|without)\b/i;
+  const NEGATION_WINDOW = 60;
+  const CREATION_OBJECT_WINDOW = 80;
+  const LABEL_OBJECT_WINDOW = 45;
+
+  /**
+   * Prose blocks: blank-line separated, with table rows split to cells. Blocks
+   * keep the paragraph boundaries that `flow()` over a whole body erases —
+   * without them a verb in one paragraph pairs with a noun in the next.
+   */
+  function claimBlocks(body: string): string[] {
+    const blocks: string[] = [];
+    for (const block of body.split(/\n\s*\n/)) {
+      if (/^\s*\|/.test(block)) {
+        for (const row of block.split("\n")) blocks.push(...row.split("|"));
+      } else {
+        blocks.push(flow(block));
+      }
+    }
+    return blocks.map((block) => block.trim()).filter((block) => block !== "");
+  }
+
+  function boardClaims(text: string): string[] {
+    const hits: string[] = [];
+    const probe = (verbs: RegExp, object: RegExp, reach: number, kind: string): void => {
+      for (const block of claimBlocks(text)) {
+        for (const match of block.matchAll(verbs)) {
+          const start = match.index;
+          const end = start + match[0].length;
+          if (!object.test(block.slice(Math.max(0, start - reach), end + reach))) continue;
+          if (NEGATION.test(block.slice(Math.max(0, start - NEGATION_WINDOW), start))) continue;
+          hits.push(`${kind}: ${JSON.stringify(block.slice(Math.max(0, start - 40), end + 60))}`);
+        }
+      }
+    };
+    probe(CREATION_VERB, BOARD_NOUN, CREATION_OBJECT_WINDOW, "board-item creation");
+    probe(LABEL_VERB, LABEL_NOUN, LABEL_OBJECT_WINDOW, "label write");
+    return hits;
+  }
+
+  it("the four channels this pack is bound by are the ones /st-board defines", async () => {
+    const board = (await coreFiles).find((file) => file.relPath === "commands/st-board.md");
+    expect(board, "core corpus has no commands/st-board.md to bind against").toBeDefined();
+    if (board === undefined) return;
+
+    const contract = section(board.parsed.body, "Write-back contract");
+    expect(contract, "/st-board carries no write-back contract section").not.toBe("");
+    for (const channel of BOARD_CHANNELS) {
+      expect(flow(contract).toLowerCase()).toContain(channel.toLowerCase());
+    }
+    // The closure clause. Without it the four are a list, not a contract.
+    expect(flow(contract)).toMatch(FIFTH_CHANNEL_REFUSAL);
+    expect(flow(contract)).toMatch(/BLOCKED_DEPENDENCY` rather than improvising one/);
+  });
+
+  it("the frame wraps those channels instead of inventing a fifth", async () => {
+    const frame = flow((await packFile(RULE_PATH)).parsed.body);
+
+    for (const channel of BOARD_CHANNELS) {
+      expect(frame.toLowerCase(), `the frame does not name the ${channel} channel`).toContain(
+        channel.toLowerCase(),
+      );
+    }
+    expect(frame).toMatch(/Neither creating an item nor writing a label is among them/i);
+    expect(frame).toMatch(/leave as a proposal/i);
+    expect(frame).toMatch(/would need a fifth channel stops/i);
+    expect(frame).toContain("BLOCKED_DEPENDENCY");
+  });
+
+  it("both commands emit the epic as a proposal, not as a board write", async () => {
+    const audit = flow((await packFile("commands/st-product-audit.md")).parsed.body);
+    const benchmark = flow((await packFile("commands/st-benchmark.md")).parsed.body);
+
+    expect(audit).toMatch(/no write-back channel creates a board item, and none writes a label/i);
+    expect(audit).toMatch(/stays a proposal in every repo, linked board or not/i);
+    // The write set names the two channels it does use and refuses the two it does not.
+    expect(audit).toMatch(/No board item is created and no label is written/i);
+    expect(benchmark).toMatch(/proposed, never filed/i);
+    expect(benchmark).toMatch(/no channel there creates an item/i);
+  });
+
+  it("no pack body or description claims it creates a board item or writes a label", async () => {
+    const problems: string[] = [];
+    for (const file of await packFiles) {
+      for (const claim of RETIRED_BOARD_CLAIMS) {
+        if (file.parsed.body.includes(claim) || description(file).includes(claim)) {
+          problems.push(`${file.relPath}: republishes the retired claim ${JSON.stringify(claim)}`);
+        }
+      }
+      for (const hit of boardClaims(`${description(file)}\n\n${file.parsed.body}`)) {
+        problems.push(`${file.relPath}: ${hit}`);
+      }
+    }
+
+    expect(problems).toEqual([]);
+  });
+
+  it("fixture: the probe flags every claim the pack used to publish, and clears the fix", () => {
+    const before = [
+      "Create the epic, record its identifier, then create and link each sub-issue to it.",
+      "- **The command creates items; it changes no product code.** No source file is touched.",
+      "Labels: the epic carries `meta:<x>`; every sub-issue carries the finding label `meta:<x>-findings` so the set is recoverable later by query rather than by memory.",
+      "| Item creation fails | Retry once, then present the drafted body for manual creation |",
+    ].join("\n\n");
+
+    // Four seeded claims, one per authored block; a block with two verbs reports
+    // both, so the assertion is on what was caught rather than on a hit count.
+    // The trailing "no product code" in the second must NOT exempt it: the
+    // negation has to lead the verb, which is the rule the old sentence broke.
+    const caught = boardClaims(before).join(" | ");
+    expect(caught).toMatch(/board-item creation: [^|]*Create the epic/);
+    expect(caught).toMatch(/board-item creation: [^|]*creates items/);
+    expect(caught).toMatch(/board-item creation: [^|]*Item creation fails/);
+    expect(caught).toMatch(/label write: [^|]*carries the finding label/);
+
+    const after = [
+      "Neither creating an item nor writing a label is among them.",
+      "Labels ride with the proposal and are never written by the run: the proposed epic names `meta:<x>`.",
+      "| The board source is not linked | The report is the whole output; this is not an error |",
+    ].join("\n\n");
+
+    expect(boardClaims(after)).toEqual([]);
   });
 });
 

@@ -164,6 +164,23 @@ intent is feature or migration: re-route rather than carrying a contract change 
 
 ## Migration
 
+**Resolve the graph first — delegate it, do not re-derive it.** This intent's whole trigger set is
+dependency movement, and both of its judgement inputs — the manual-class count in the table below,
+and the two breaking-change axes at the end — are claims about packages nobody has listed yet.
+Invoke the dep-audit skill before the approach is chosen: it resolves the installed graph from the
+lockfile, scans advisories, flags licences, and returns one update-risk class per package (`patch` ·
+`minor` · `major` · `pinned-back` · `unmaintained`). That report is an input to this section, never
+something the section computes for itself — advisories and licences already have one owner, and a
+second derivation is a second answer that can disagree with the first.
+
+How the classes land here: `major` is where the breaking changes come from, so each one's
+per-package migration note is what the severity and codemod axes below are applied to, and the
+`Manual` count that falls out is what the incremental-vs-direct table reads. `pinned-back` names a
+pin phase 0 either lifts or records a reason for. `unmaintained` is a replacement question rather
+than a bump, so it is scoped as its own change instead of being carried inside a phase. A report the
+skill marked `partial` carries that word into the artifact head: an approach chosen over a graph one
+source could not be read for is a decision short an input, and the artifact says which.
+
 **Incremental or direct — decide before decomposing:**
 
 | Input | Favors incremental | Favors direct |

@@ -10,8 +10,15 @@ import {
   REGENERATE_COMMAND,
   frontmatterBlock,
   generatedBanner,
+  renderMcpPageFrom,
   renderReferencePages,
 } from "../../../src/cli/docs/referencePages.ts";
+import {
+  CATALOG_VERIFIED_ON,
+  CURATED_MCP_SERVERS,
+  pinnedPackageSpec,
+  type McpServerMeta,
+} from "../../../src/mcp/catalog.ts";
 import {
   COMMAND_ID_PREFIX,
   buildContentIndex,
@@ -142,8 +149,17 @@ describe("renderReferencePages — drift gate", () => {
     }
   });
 
-  it("covers every content class with a page, plus the pack inventory", () => {
-    expect(REFERENCE_PAGES.map((page) => page.covers)).toEqual([...CONTENT_CLASSES, "packs"]);
+  it("covers every content class with a page, plus the pack and MCP inventories", () => {
+    // Changed expectation (not a weakening): the lane grew a third projection —
+    // the curated MCP catalog — so the list it is held to grew by exactly that
+    // one entry. The claim is unchanged: REFERENCE_PAGES is the complete,
+    // ordered set of pages this renderer produces, and a page added without a
+    // row here fails rather than shipping unlisted.
+    expect(REFERENCE_PAGES.map((page) => page.covers)).toEqual([
+      ...CONTENT_CLASSES,
+      "packs",
+      "mcp",
+    ]);
   });
 });
 
@@ -162,7 +178,8 @@ describe("frontmatter projection", () => {
   it("puts every corpus artifact on its class page exactly once, in id order", async () => {
     const [pages, index] = await Promise.all([live(), buildContentIndex()]);
     for (const spec of REFERENCE_PAGES) {
-      if (spec.covers === "packs") continue;
+      // The two pages that project something other than corpus frontmatter.
+      if (spec.covers === "packs" || spec.covers === "mcp") continue;
       const page = pages.get(spec.path) ?? "";
       // Changed expectation (not a weakening): the headings were the raw catalog
       // ids and are now the invoked spellings, because a reader who types
@@ -306,6 +323,185 @@ describe("pack inventory", () => {
     await expect(
       renderReferencePages({ packsRoot: join(tmpdir(), "stamity-p6u03-absent-packs") }),
     ).rejects.toThrowError(/Cannot read the pack directory/);
+  });
+});
+
+/**
+ * The MCP catalog page: the operator-facing accepted-value set for
+ * `mcp.servers`.
+ *
+ * Three pages sent a reader to an id nothing published — `docs/configuration.md`
+ * calls the value set "curated", `docs/cli-reference.md` documents
+ * `config mcp add <id>`, `docs/troubleshooting.md` tells them to run it — while
+ * the ids lived only in `src/mcp/catalog.ts`. The claim these cases hold is that
+ * the published set IS that table, rather than a copy of it that can drift.
+ */
+describe("MCP catalog page", () => {
+  const MCP_PATH = "docs/reference/mcp-servers.md";
+
+  /**
+   * A valid curated row; every defect case below blanks exactly one field.
+   * `docsUrl` is empty because the page never renders it — this lane's
+   * links-nothing-outside-the-tree gate is what keeps every URL off these
+   * pages, so a fixture carrying one would only be able to prove that.
+   */
+  const PROBE_SERVER: McpServerMeta = {
+    id: "probe",
+    description: "A probing server.",
+    command: "npx",
+    args: ["-y", "probe-mcp@1.0.0"],
+    transport: "stdio",
+    pinnedVersion: "1.0.0",
+    pinReviewedOn: "2026-01-02",
+    packageNameLock: "probe-mcp",
+    firstParty: true,
+    blastRadius: "Low — a probe.",
+    docsUrl: "",
+  };
+
+  const probeWith = (patch: Partial<McpServerMeta> = {}): Record<string, McpServerMeta> => ({
+    probe: { ...PROBE_SERVER, ...patch },
+  });
+
+  /** The three row fields whose absence the page refuses to paper over. */
+  const BLANKABLE: readonly (readonly [string, Partial<McpServerMeta>])[] = [
+    ["description", { description: "  " }],
+    ["blastRadius", { blastRadius: "  " }],
+    ["pinReviewedOn", { pinReviewedOn: "  " }],
+  ];
+
+  it("publishes every curated id and no other, so the page is the accepted-value set", async () => {
+    const page = (await live()).get(MCP_PATH) ?? "";
+    const headings = page
+      .split("\n")
+      .filter((line) => line.startsWith("### "))
+      .map((line) => line.slice(5, -1));
+
+    expect(headings).toEqual(Object.keys(CURATED_MCP_SERVERS));
+    expect(headings.length).toBeGreaterThan(1);
+    expect(page).toContain(`${String(headings.length)} servers.`);
+  });
+
+  it("keeps the catalog's own curated order rather than sorting by id", () => {
+    // The one page in this lane that does NOT sort: the table's order is a
+    // curated fact (systems-of-record first, ascending blast radius within a
+    // group), so sorting it would discard something the source states. The
+    // guard is that the two orders actually differ — on a table that happened
+    // to be alphabetical this case would pass while asserting nothing.
+    const declared = Object.keys(CURATED_MCP_SERVERS);
+    expect(declared).not.toEqual([...declared].toSorted());
+  });
+
+  it("renders each row's pin from the launcher table emission uses", async () => {
+    const page = (await live()).get(MCP_PATH) ?? "";
+    for (const server of Object.values(CURATED_MCP_SERVERS)) {
+      const spec = pinnedPackageSpec(server);
+      if (spec === undefined) {
+        // A host-installed launcher: the version lives on the operator's
+        // machine, so the page states what the row is verified against instead
+        // of claiming a pin this catalog cannot hold.
+        expect(page, `${server.id} pin`).toContain(
+          `\`${server.command}\` — a launcher you install yourself`,
+        );
+        expect(page).toContain(`verified against \`${server.pinnedVersion}\``);
+      } else {
+        expect(page, `${server.id} pin`).toContain(`- **Pin:** \`${spec}\`, fetched by`);
+      }
+    }
+  });
+
+  it("keeps the sweep date and the per-row pin dates as two separate claims", async () => {
+    const page = (await live()).get(MCP_PATH) ?? "";
+    expect(page).toContain(`Row set last swept on \`${CATALOG_VERIFIED_ON}\``);
+    for (const server of Object.values(CURATED_MCP_SERVERS)) {
+      expect(server.pinReviewedOn, `${server.id} carries no pin-review date`).toBeDefined();
+    }
+    // A page carrying one date for both readings is exactly the false green the
+    // catalog's two-date split exists to prevent, so the prose has to say which
+    // is which.
+    expect(page).toContain("Reading the first as pin freshness");
+  });
+
+  it("names the variables a server needs, and says so when it needs none", async () => {
+    const page = (await live()).get(MCP_PATH) ?? "";
+    for (const server of Object.values(CURATED_MCP_SERVERS)) {
+      for (const variable of server.requiresEnv ?? []) {
+        expect(page, `${server.id} omits ${variable.name}`).toContain(`\`${variable.name}\``);
+        expect(page).toContain(variable.comment);
+      }
+    }
+    const credentialless = Object.values(CURATED_MCP_SERVERS).filter(
+      (server) => (server.requiresEnv ?? []).length === 0,
+    );
+    expect(
+      credentialless.length,
+      "no credential-free row to check the other branch on",
+    ).toBeGreaterThan(0);
+    expect(page).toContain("- **Credentials:** none — this server holds no credential");
+  });
+
+  it("states that a pack can add a server but never redefine a curated id", async () => {
+    // The security property the catalog resolves by, published where the
+    // operator chooses a value: a curated id always resolves to its reviewed
+    // row, so pack supply widens the set and never redirects it.
+    const page = (await live()).get(MCP_PATH) ?? "";
+    expect(page).toContain("can never redefine one of these");
+    expect(page).toContain("refused at install");
+  });
+
+  it("keeps credentials out of the emitted config and names the file they live in", async () => {
+    const page = (await live()).get(MCP_PATH) ?? "";
+    expect(page).toContain("`.env.mcp`");
+    expect(page).toContain("No credential is written into a client config");
+  });
+
+  it.each(BLANKABLE)("refuses a curated row with no %s, naming the server and the field", (field, patch) => {
+    const call = (): string => renderMcpPageFrom(probeWith(patch), "2026-01-01");
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/"probe"/);
+    expect(call).toThrowError(new RegExp(`\`${field}\``));
+    expect(call).toThrowError(/src\/mcp\/catalog\.ts/);
+  });
+
+  it("renders a well-formed probe row, so the cases above isolate one defect each", () => {
+    const page = renderMcpPageFrom(probeWith(), "2026-01-01");
+    expect(page).toContain("### `probe`");
+    expect(page).toContain("1 server. Row set last swept on `2026-01-01`.");
+    expect(page).toContain("- **Runs as:** a local child process");
+    expect(page).toContain("- **Published by:** the vendor of the service it fronts");
+  });
+
+  it("marks a community row as a re-implementation rather than vendor-published", () => {
+    const page = renderMcpPageFrom(probeWith({ firstParty: false }), "2026-01-01");
+    expect(page).toContain("- **Published by:** a community re-implementation");
+  });
+
+  it("refuses an empty catalog rather than publishing a set of nothing", () => {
+    // `config set mcp.servers` still resolves curated ids, so a page claiming
+    // there are none would be false rather than merely empty — and the shared
+    // count line's empty phrasing says "in the corpus", which this table is not
+    // part of.
+    const emptyCatalog: Record<string, McpServerMeta> = {};
+    const call = (): string => renderMcpPageFrom(emptyCatalog, "2026-01-01");
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/accepted-value set of nothing/);
+    expect(call).toThrowError(/CURATED_MCP_SERVERS/);
+  });
+
+  it("refuses a blank sweep date rather than printing an empty currency claim", () => {
+    const call = (): string => renderMcpPageFrom(probeWith(), "   ");
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/no currency claim/);
+    expect(call).toThrowError(/CATALOG_VERIFIED_ON/);
+  });
+
+  it("classifies the refusal as VALIDATION_ERROR", () => {
+    try {
+      renderMcpPageFrom(probeWith({ description: "" }), "2026-01-01");
+      expect.unreachable("a description-less server row must refuse");
+    } catch (err) {
+      expect((err as EngineError).code).toBe("VALIDATION_ERROR");
+    }
   });
 });
 

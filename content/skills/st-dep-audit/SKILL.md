@@ -12,8 +12,9 @@ obsolete_when: dependency risk reporting is fully covered by native tooling
 Report-only. It reads the dependency graph and reports risk; it edits no
 manifest, no lockfile, and no source file. Acting on a finding — a version bump,
 a replacement, a removal — routes to `/st-work`, which plans the change,
-delegates it, and proves it against the gates. A dependency change is a code
-change, and it earns the same treatment.
+delegates it, and proves it against the gates, or to `/st-plan` when the set is
+a sweep that has to be sequenced before any of it is executed. A dependency
+change is a code change, and it earns the same treatment.
 
 ## Quick Start
 
@@ -96,6 +97,15 @@ and target versions, the risk class, and the advisory identifier where there is
 one. An item that is neither routed nor deferred is dropped, and the report says
 which items those were.
 
+A third route, for the sweep too large to be one scoped change: `/st-plan` at
+its migration intent. `/st-work` executes a change that is already decided, and
+the inbox is where an item waits — neither of them is where a sequence gets
+decided. A set spanning several packages, or one `major` bump whose call sites
+need phasing, is a planning question: the migration intent reads the classes
+from Step 4 as its inputs and produces the phase skeleton and rollback points,
+then `/st-work` executes that plan. Route there rather than splitting one sweep
+into a queue of scoped changes nobody sequenced.
+
 ## Output artifact
 
 The report is the deliverable — returned to the caller, not written to a new
@@ -107,7 +117,7 @@ artifact family. Sections, in order:
 | Advisories | identifier, severity, package, direct or transitive, shortest path, fixed version |
 | Licences | licence, package count, and the two flag classes above |
 | Risk | package, current and latest versions, class from the table above |
-| Routing | per item: routed to `/st-work`, deferred to `.stamity/inbox.md`, or dropped |
+| Routing | per item: routed to `/st-work`, routed to `/st-plan` for a sweep that needs sequencing, deferred to `.stamity/inbox.md`, or dropped |
 
 Counts per class lead each section, so a graph with nothing to report is one
 line rather than five empty tables.

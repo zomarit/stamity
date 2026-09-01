@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -328,6 +328,45 @@ describe("key coverage", () => {
     const page = renderConfigReference();
     expect(page).toContain("[the CLI reference](cli-reference.md)");
     expect(page).toContain("stamity sync");
+  });
+
+  /**
+   * `mcp.servers` is the one row whose accepted values are a closed set, and its
+   * hint calls that set "curated" while the ids lived only in
+   * `src/mcp/catalog.ts`. Three pages sent a reader at an id none of them
+   * published. The pointer belongs in the generator, not the page bytes — the
+   * committed file is byte-compared against this render.
+   */
+  it("sends the `mcp.servers` row at the page that lists the curated ids", () => {
+    const page = renderConfigReference();
+    expect(page).toContain("[the MCP server reference](reference/mcp-servers.md)");
+    // Resolved from the page's own directory, which is where a reader follows it.
+    const target = join(REPO_ROOT, "docs", "reference", "mcp-servers.md");
+    expect(existsSync(target), "the configuration page links a missing MCP reference").toBe(true);
+  });
+
+  /**
+   * The model rows name RUNGS, and the top rung is addressable while mapping to
+   * nothing on any client. Its unset cell reads `(client default)` — the same
+   * string the clients with no alias table publish for the other rows — so
+   * without the paragraph this asserts, the one opt-in-only row is
+   * indistinguishable from a row that merely has no alias yet.
+   */
+  it("declares that the top model rung ships mapped nowhere, so pinning it is the opt-in", () => {
+    const page = renderConfigReference();
+    expect(page).toContain("classes, not model ids");
+    expect(page).toContain("The top rung ships mapped nowhere");
+    expect(page).toContain("pinning `model.frontier`");
+
+    // The claim is measured, not narrated: every client really does resolve the
+    // frontier rung to its own default on the unset probe. A client that grew a
+    // frontier alias would make the paragraph false, and this is what catches it.
+    for (const tool of TOOLS) {
+      expect(
+        CLIENT_MODEL_PROJECTION[tool].aliases.frontier,
+        `${tool} now publishes a frontier alias, so the page's claim is stale`,
+      ).toBeUndefined();
+    }
   });
 });
 

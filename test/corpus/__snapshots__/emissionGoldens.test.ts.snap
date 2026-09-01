@@ -3390,8 +3390,11 @@ Three review lenses run beside the loop: \`security\`, \`design-quality\`,
 \`performance\`. A lens is pulled in by a changed path or by the task's topic —
 the trigger roster is the single source of those patterns and each specialist
 body names the surfaces it answers for, so this text carries the mechanism and
-no copy of the rows. Deep runs the full pass; standard runs a lens only on a
-match; light runs none.
+no copy of the rows. Deep runs the full pass; standard and light run the
+\`security\` lens on a trigger-path match; light runs no other lens. The
+charter's universal floor holds at every tier, so a tier that skipped the
+security lens outright made that floor false — a trigger-path match is the
+narrowest shape that keeps it true.
 
 - **Read-only.** A specialist returns findings and edits nothing. Repair is the
   fixer's, so no lens answers its own finding in the following round.
@@ -3473,7 +3476,9 @@ Run after gates pass; each lands in the run report:
   append/merge-only; the spec-author sub-agent applies the merge on
   confirmation, and a converged spec is a byte-stable no-op.
 - **Dependency-audit note.** Each new or bumped dependency gets a one-line
-  note: source, license, advisory-check result.
+  note, and the dep-audit skill owns the fields it carries — advisories,
+  licences, the path to a transitive package. Invoke it for them; deriving
+  them here again is a second answer to a question that already has an owner.
 - **Learnings capture.** Failures met and resolved during the run land in
   \`.stamity/learnings/\`.
 - **Pull-request emission.** Where a platform is linked and the change sits on
@@ -3526,9 +3531,9 @@ Every spawn in every phase runs under these contracts:
 
 | Tier | When | What changes |
 |---|---|---|
-| light | small diff, low risk, familiar ground | Skips: researcher fan-out (one inline context read instead), the plan-gate ASK (auto-continues), specialist passes, and the whole-branch deep review. Keeps: unit decomposition, at least one reviewer round, every gate, the QA checkpoint, the proof block. |
+| light | small diff, low risk, familiar ground | Skips: researcher fan-out (one inline context read instead), the plan-gate ASK (auto-continues), the \`design-quality\` and \`performance\` specialist lenses, and the whole-branch deep review. Keeps: unit decomposition, at least one reviewer round, the \`security\` specialist lens on a trigger-path match, every gate, the QA checkpoint, the proof block. |
 | standard | the default | Full spine: researcher fan-out sized to independent questions; plan gate asks (execute-now default); review loop to the cap; a specialist lens on a trigger match. |
-| deep | high risk surface, novel territory, wide diff | standard plus the full specialist pass and a whole-branch multi-lens review on the frontier class at Prove-final. |
+| deep | high risk surface, novel territory, wide diff | standard plus the full specialist pass and a whole-branch multi-lens review on the frontier class, run once the review loop converges and before the QA checkpoint. |
 
 Auto-derived at Frame; \`--effort\` wins. Gates, QA checkpoint, and proof block
 hold at every tier — intensity prunes roles and fan-out, not floors.
@@ -3557,7 +3562,7 @@ flow's own escalation and drop, marked as such below.
 
 | Class | Assigned to |
 |---|---|
-| frontier | \`reviewer\`, escalated for the whole-branch deep review at Prove-final — a flow placement, declared by no agent file |
+| frontier | \`reviewer\`, escalated for the whole-branch deep review that runs once the review loop converges and before the QA checkpoint — a flow placement, declared by no agent file |
 | advanced | \`reviewer\` every round; \`implementer\`; \`spec-author\`; the \`security\` and \`design-quality\` specialists |
 | standard | \`researcher\`; \`creator\`; the \`performance\` specialist; \`fixer\` on rounds that still need judgement — its declared class |
 | economy | \`test-runner\`; \`fixer\` dropped here once a round is mechanical — lint, format, rename sweeps — a flow placement |

@@ -7,7 +7,7 @@ name: stamity-reviewer
 
 Reads a change set and returns a verdict: `approve`, `request-changes`, or `blocked`, with
 confidence and findings graded `Critical` / `Warning` / `Minor`. Reads only — no edits, no
-commands, no branch or board state. Fixes belong to the fixer role; this role decides
+commands, no branch or board mutation. Fixes belong to the fixer role; this role decides
 whether the change is right.
 
 ## Rubric
@@ -15,6 +15,11 @@ whether the change is right.
 Ten lenses, applied to the diff and to what the diff touches. Not every lens fires on
 every change; a lens with no surface in the diff is recorded as not applicable, so the
 list of applied lenses is always explicit.
+
+Default scope is that diff. At deep intensity the flow invokes this role once more over the
+whole branch against its merge base — the same rubric, a wider change set — as a distinct
+pass rather than a re-review round, because a defect spanning two units surfaces in neither
+unit's own diff.
 
 | Lens | What a finding looks like |
 |---|---|

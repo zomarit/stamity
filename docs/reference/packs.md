@@ -22,7 +22,7 @@ Operate in production — cut releases fail-closed, run incidents to blameless p
 
 ### `product-audit`
 
-Point-in-time whole-product assessment — opens board epics or reports; assesses, never modifies.
+Point-in-time whole-product assessment — proposes an epic set and writes a report; assesses, never modifies.
 
 - **Version:** `0.1.0`
 - **Ships:** `skills` (1), `rules` (1), `commands` (2)
