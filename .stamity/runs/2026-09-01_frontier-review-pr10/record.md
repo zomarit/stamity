@@ -115,3 +115,26 @@ evidence (the flip is true; the stale documents were corrected).
 
 NOT merged: PR #10 remains open for the operator. Merge-readiness = CI green at the
 pushed head on all three legs.
+
+## CI addendum (post-record)
+
+The record above was committed before the push; the CI outcome for the fix set:
+
+- Push 1 (184724c): floor + windows GREEN; LTS red on knip — `mkfifo` (the FIFO
+  regression test's binary) unlisted. knip runs ONLY on the LTS leg and no local gate
+  invokes it: a third local-vs-CI divergence axis beyond coverage and the windows leg.
+  Fixed by declaring the binary in knip.json (0ed50df), verified by the runner.
+- Push 2 (0ed50df) attempt 1: LTS green; windows red — test/hooks/scripts.test.ts
+  review-gate counter lost 1 of 30 concurrent rounds. Attempt 2 (identical code):
+  windows red on a DIFFERENT test — syncDriftProof e2e at the 20s timeout. Both files
+  untouched by the branch and the fixes; the hooks test's own comment records this exact
+  "green to red with no source change" Windows history. Diagnosis: slow-runner flake
+  class, pre-existing. Attempt 3: ALL GREEN including windows and all-ci-checks.
+- Final: head 0ed50df green on floor / LTS / windows + DCO, PR-title, dist-size.
+  PR #10 OPEN, NOT merged — the operator merges.
+
+Operator notes carried out of the ledger: only ~133 KiB of logic dist-budget headroom
+remains; the Windows runner flake class in hooks/scripts + syncDriftProof e2e deserves a
+timing-margin pass of its own; the pty-lane drain proof and the farm-containment realpath
+half are the two tracked engineering residuals; a learning candidate exists for the knip
+divergence and for stash-before-checkout on shared uncommitted trees.
