@@ -169,15 +169,34 @@ const TOOL_INSTRUCTION_FILES: Record<Tool, readonly string[]> = {
  * git history", a {@link HistoryFacts} to seed from, or omit the field to read
  * the live repository. The git identity probe (platform) is likewise total —
  * a non-git directory yields an absent platform, never a failure.
+ *
+ * `deps.skipWorkspaceProbe` (B10) skips {@link probeWorkspace}'s stage-2
+ * fan-out (`detectSubRepos`' depth-4 walk) and reports an unarmed offer
+ * instead — `workspaceCandidates: []`, `workspaceSource: "standalone"`. The
+ * ONE caller that sets it is `../init.ts`'s already-initialised pre-flight: a
+ * run refusing for cause (no `--force`, a manifest already on disk) never
+ * reads the candidate list — `workspaceOfferArmed` and every downstream
+ * consumer of it in `../init.ts::run` are gated on `!alreadyInitialised` — so
+ * paying for the walk and discarding the result was pure waste on exactly the
+ * run where the operator is about to be told "already initialised" and
+ * nothing else.
  */
 export async function buildInitDecisions(
   rootDir: string,
   overrides: InitOverrides,
-  deps: { history?: HistoryFacts | null } = {},
+  deps: { history?: HistoryFacts | null; skipWorkspaceProbe?: boolean } = {},
 ): Promise<InitDecisions> {
   // Two independent walks of the same tree, so they run concurrently under the
   // spinner the command already started rather than one after the other.
-  const [info, workspace] = await Promise.all([analyzeRepo(rootDir), probeWorkspace(rootDir)]);
+  const [info, workspace] = await Promise.all([
+    analyzeRepo(rootDir),
+    deps.skipWorkspaceProbe === true
+      ? Promise.resolve<Pick<InitDecisions, "workspaceCandidates" | "workspaceSource">>({
+          workspaceCandidates: [],
+          workspaceSource: "standalone",
+        })
+      : probeWorkspace(rootDir),
+  ]);
 
   // The `agents` trace (a bare AGENTS.md) is cross-tool and maps to no Tool;
   // filtering through the closed enum drops it, and TOOLS order makes the
@@ -257,7 +276,7 @@ export function fullCoreSelection(index: ContentIndex): ContentSelection {
   const seen = new Set<string>();
   for (const item of index.items) {
     // Ids are unique per class, not globally — the key mirrors the catalog's.
-    const key = `${item.type} ${item.id}`;
+    const key = `${item.type}\0${item.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
     items[item.type].push(item.id);

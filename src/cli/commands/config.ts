@@ -1080,7 +1080,17 @@ export const configCommand: CommandModule = {
         json: ctx.json,
         env: ctx.app.runtime.env,
       });
-      return gate.interactive ? runPicker(ctx, rootDir, gate) : runList(ctx, rootDir);
+      // B8, scoped to THIS branch only: `promptGate` reads stdin alone, so a
+      // TTY stdin piped into a non-TTY stdout (`stamity config | less`, a
+      // script capturing output while attended) still opened the picker and
+      // wrote its typed prompt into the pipe, hanging the run — contradicting
+      // this file's own header and docs/configuration.md ("Scripts, pipes and
+      // CI see no prompt — bare config is config list"). `promptGate` itself
+      // stays untouched (`init`'s gate reads through it too, and its
+      // semantics are unrelated to this one bare-verb branch); the extra
+      // condition lives here, at the one call site the picker even could open.
+      const interactive = gate.interactive && ctx.terminal.stdoutIsTTY;
+      return interactive ? runPicker(ctx, rootDir, gate) : runList(ctx, rootDir);
     }
 
     switch (subcommand) {
