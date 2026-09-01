@@ -31,7 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Work landed on `main` since the `v1.0.1` tag, not yet cut into a released version.
+Work landed on `main` since the `v1.1.0` tag, not yet cut into a released version.
+
+## [1.1.0] - 2026-09-01
 
 ### Added
 
@@ -51,6 +53,8 @@ Work landed on `main` since the `v1.0.1` tag, not yet cut into a released versio
 - Security: `SECURITY.md` ("Publishing this package") now records the three platform release
   controls (required reviewer, `v*` tag ruleset, npm trusted publisher) as in force, rather
   than as not yet armed.
+- CLI reference: mutating commands are described as "May write when it runs" — the previous
+  blanket "Writes when it runs" was wrong for the commands whose bare invocation is a read.
 
 ## [1.0.1] - 2026-08-31
 
@@ -79,6 +83,7 @@ Work landed on `main` since the `v1.0.1` tag, not yet cut into a released versio
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/zomarit/stamity/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/zomarit/stamity/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/zomarit/stamity/releases/tag/v1.0.0
