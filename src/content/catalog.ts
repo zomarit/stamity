@@ -1069,8 +1069,12 @@ async function scanSkillOverlays(
 ): Promise<DiscoveredOverlay[]> {
   const { dir } = CLASS_LAYOUT[type];
   const skillDirs = entries.filter((entry) => entry.isDirectory());
-  const listings = await Promise.all(
-    skillDirs.map((entry) => listDir(fs, join(root, dir, entry.name))),
+  // Bounded like every other fan-out over this tree's own entries
+  // (`READ_CONCURRENCY`, below): a repo's skill count is small by design, not
+  // by guarantee, and an unbounded `Promise.all` here was the one directory
+  // listing pass in this module that did not share that ceiling.
+  const listings = await pLimit(READ_CONCURRENCY).map(skillDirs, (entry) =>
+    listDir(fs, join(root, dir, entry.name)),
   );
   const skillBase = basename(SKILL_FILE);
 

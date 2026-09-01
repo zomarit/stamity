@@ -18,7 +18,7 @@ import {
   type UserContentArtifact,
   type UserContentOverlay,
 } from "../../src/content/userContent.ts";
-import { buildContentIndex } from "../../src/content/catalog.ts";
+import { buildContentIndex, toPosixDisplayPath } from "../../src/content/catalog.ts";
 import { CONTENT_CLASSES } from "../../src/types/content.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -314,11 +314,22 @@ describe("saveUserContent", () => {
 
     expect(result.saved).toBe(false);
     expect(result.path).toBeUndefined();
+    // Rendered through `toPosixDisplayPath`, the shape the describe block below
+    // models: on a native `join`, Windows yields backslashes the message's
+    // forward-slash rendering would never contain, which is a pass on POSIX and
+    // a Windows-CI-only failure — exactly the gap `stamity-learn` recorded as
+    // "the local gate is weaker than CI".
     expect(joined(result.errors)).toContain(
-      join(userContentRoot(repo.dir), "agents", "reviewer.customize.yaml"),
+      toPosixDisplayPath(join(userContentRoot(repo.dir), "agents", "reviewer.customize.yaml")),
     );
     expect(joined(result.errors)).toContain(
-      join(userContentRoot(repo.dir), "agents", "reviewer.customize.md"),
+      toPosixDisplayPath(join(userContentRoot(repo.dir), "agents", "reviewer.customize.md")),
+    );
+    // The save's own WRITE target is named too, and normalised the same way —
+    // the one part of this message that used to stay native while the overlay
+    // halves beside it were already POSIX-rendered.
+    expect(joined(result.errors)).toContain(
+      toPosixDisplayPath(join(userContentRoot(repo.dir), "agents", "reviewer.md")),
     );
     // Refused before any filesystem call: nothing landed.
     await expect(discover()).resolves.toEqual([]);

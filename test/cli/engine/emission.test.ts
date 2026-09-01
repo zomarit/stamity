@@ -20,6 +20,7 @@ import { buildContentIndex } from "../../../src/content/catalog.ts";
 import { composeEmissionPlanner } from "../../../src/emit/planner.ts";
 import { createManifest } from "../../../src/manifest/manifest.ts";
 import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
+import { resolveInstalledPackContent } from "../../../src/pack/projection.ts";
 import {
   CONTENT_CLASSES,
   type AdapterOutput,
@@ -887,15 +888,18 @@ describe("override content layer", () => {
   });
 
   /**
-   * The converse `ProjectSkillsOptions.contentRoot`'s own comment names:
-   * `packRoots` staying out of the widened skills index (so pack skills are
-   * never double-projected) means an override skill can claim a pack skill's
-   * directory or catalog id with nothing upstream positioned to refuse it —
-   * `buildContentIndex` for this walk never saw the pack half, and the
-   * generic directory-collision throw in `mergeSkillProjections` (below) used
-   * to name the corpus skill and tell the operator to rename or remove the
-   * PACK, which is backwards when the row sharing the directory is the
-   * override rather than a corpus skill.
+   * The converse `ProjectSkillsOptions.contentRoot`'s own comment names: the
+   * widened skills-index LOOKUP now carries pack roots (so an overlay
+   * addressed at a pack artifact resolves instead of orphan-refusing), but
+   * `buildCoreEmissionPlan` filters pack-origin rows back out before this
+   * function's own return reaches `mergeSkillProjections`, so a pack skill
+   * still projects exactly once, through the pack lane alone. An override
+   * skill claiming a pack skill's directory or catalog id is a DIFFERENT
+   * case — a shadow this lookup resolves in the override's favour, not a
+   * lookup miss — and the generic directory-collision throw in
+   * `mergeSkillProjections` (below) used to name the corpus skill and tell
+   * the operator to rename or remove the PACK, which is backwards when the
+   * row sharing the directory is the override rather than a corpus skill.
    *
    * Both fixtures install a real pack (through the real install path, as the
    * rule/pack case above does) supplying a skill named `triage`, directory
@@ -1035,6 +1039,9 @@ describe("overlay content layer", () => {
 
   /** The description the frontmatter half installs over the shipped one. */
   const OVERLAY_DESCRIPTION = "The house testing rule, patched in this repository.";
+
+  /** Body text an overlay on a PACK-supplied rule appends, present nowhere else. */
+  const PACK_RULE_OVERLAY_MARKER = "House addendum: page the on-call before the second retry.";
 
   /** A repo context for all four clients with the patched rule selected. */
   function overlayContext(rootDir: string): EmissionContext {
@@ -1245,6 +1252,275 @@ describe("overlay content layer", () => {
     // compared over a plan the pack lane built.
     expect(withLayer.some((row) => row.path.includes("opsguard"))).toBe(true);
     expect(digestOf(withLayer)).toBe(digestOf(reference));
+  });
+
+  /**
+   * The crash `buildCoreEmissionPlan`'s skills-index lookup used to throw for
+   * ANY overlay on a pack-supplied artifact, not only a skill: that lookup
+   * discovers an overlay under every class the override tree holds
+   * (`buildContentIndex`), but its own `byKey` used to carry the corpus and
+   * override layers alone — no pack roots — so a pack-supplied base was
+   * always an orphan by that index's lights, and `applyOverlays` refuses an
+   * orphan outright. The refusal fired before the residue planners (whose own
+   * indexes already carried the pack layer and would have resolved it) ever
+   * ran, so the whole plan died on an overlay the repo's own tree had nothing
+   * wrong with.
+   */
+  it("resolves an overlay on a PACK-supplied rule instead of throwing an orphan refusal", async () => {
+    const repo = getRepo();
+    const packFiles = {
+      "rules/stamity-opsguard.md": [
+        "---",
+        "id: opsguard",
+        "type: rule",
+        "description: Pack-supplied deployment guard rule.",
+        "tags:",
+        "  - devops",
+        "load: on-demand",
+        "obsolete_when: the deploy pipeline enforces it",
+        "scope: conditional",
+        'globs: ["**/*.md"]',
+        "---",
+        "",
+        "Watch the rollout counters before declaring the deploy done.",
+        "",
+      ].join("\n"),
+    };
+    await repo.seedFiles(
+      Object.fromEntries(
+        Object.entries(packFiles).map(([rel, body]) => [`pack-src/opspack/${rel}`, body]),
+      ),
+    );
+    await repo.seedFiles({
+      "pack-src/opspack/pack.json": `${JSON.stringify(
+        {
+          name: "opspack",
+          version: "1.0.0",
+          integrity: Object.fromEntries(
+            Object.entries(packFiles).map(([rel, body]) => [
+              rel,
+              createHash("sha256").update(body, "utf8").digest("hex"),
+            ]),
+          ),
+        },
+        null,
+        2,
+      )}\n`,
+    });
+    // The overlay addresses the PACK rule, not a corpus one: `opsguard` names
+    // no corpus artifact, so a resolution that reached the pack layer is the
+    // only way this base is ever found.
+    await repo.seedFiles({
+      ".stamity/overrides/rules/opsguard.customize.md": `${PACK_RULE_OVERLAY_MARKER}\n`,
+    });
+
+    const base = overlayContext(repo.dir);
+    const plan = await planPackInstall(repo.dir, join(repo.dir, "pack-src", "opspack"), {
+      allowUntrusted: true,
+    });
+    const applied = await applyPackInstall(repo.dir, plan, base.manifest, {
+      engineVersion: base.engineVersion,
+      now: FIXED_NOW,
+    });
+    expect(applied.result.installed).toBe(true);
+
+    const ctx = { ...base, manifest: applied.manifest };
+    // The bug plans an EngineError refusal here; the fix plans clean.
+    const rows = await getEmissionPlanner().plan(ctx);
+
+    const carrying = rows.filter((row) => row.content.includes(PACK_RULE_OVERLAY_MARKER));
+    expect(carrying.length).toBeGreaterThan(0);
+    // The pack base still flows — a merge that shipped the patch alone would
+    // pass the assertion above and have thrown the pack body away.
+    expect(carrying.every((row) => row.content.includes("Watch the rollout counters"))).toBe(true);
+  });
+
+  /**
+   * The skill-class half of the same regression, held to the design's other
+   * requirement: a pack skill projects exactly once. Fixing the orphan
+   * refusal by widening the skills-index lookup to the pack layer must not
+   * ALSO widen what that lookup admits into the projection — `resolvedPacks`
+   * (`../../src/pack/projection.ts`) is still the only lane that emits a pack
+   * skill's own rows, and it never reads the override tree, so the overlay
+   * resolves without being reflected in what gets projected. The plan simply
+   * has to stop throwing and keep the pack skill single-sourced.
+   */
+  it("resolves an overlay on a PACK-supplied skill without throwing or double-projecting it", async () => {
+    const repo = getRepo();
+    const packFiles = {
+      "skills/stamity-triage/SKILL.md": [
+        "---",
+        "id: triage",
+        "type: skill",
+        "description: Pack-supplied triage skill.",
+        "tags:",
+        "  - implementation",
+        "load: on-demand",
+        "obsolete_when: never",
+        "---",
+        "",
+        "Triage the report.",
+        "",
+      ].join("\n"),
+    };
+    await repo.seedFiles(
+      Object.fromEntries(
+        Object.entries(packFiles).map(([rel, body]) => [`pack-src/triagepack/${rel}`, body]),
+      ),
+    );
+    await repo.seedFiles({
+      "pack-src/triagepack/pack.json": `${JSON.stringify(
+        {
+          name: "triagepack",
+          version: "1.0.0",
+          integrity: Object.fromEntries(
+            Object.entries(packFiles).map(([rel, body]) => [
+              rel,
+              createHash("sha256").update(body, "utf8").digest("hex"),
+            ]),
+          ),
+        },
+        null,
+        2,
+      )}\n`,
+    });
+    // A skill's overlay lives in a CARRIER directory named after the slug —
+    // `skills/<slug>/SKILL.customize.md` — never a loose file straight in the
+    // class directory. Skills are directory-layout, so `scanSkillOverlays` and
+    // `scanClass` both filter on `isDirectory()`; a loose
+    // `skills/triage.customize.md` is invisible to both and no orphan lookup
+    // is ever reached, which would make this case pass identically pre-fix.
+    await repo.seedFiles({
+      ".stamity/overrides/skills/triage/SKILL.customize.md": "Escalate within the hour.\n",
+    });
+
+    const base = overlayContext(repo.dir);
+    const plan = await planPackInstall(repo.dir, join(repo.dir, "pack-src", "triagepack"), {
+      allowUntrusted: true,
+    });
+    const applied = await applyPackInstall(repo.dir, plan, base.manifest, {
+      engineVersion: base.engineVersion,
+      now: FIXED_NOW,
+    });
+    expect(applied.result.installed).toBe(true);
+
+    const ctx = { ...base, manifest: applied.manifest };
+    // Pre-fix, this call itself throws `refuseOrphanOverlay` — the discovered
+    // carrier-directory overlay is what forces the orphan lookup, and every
+    // assertion below is unreached until the call resolves.
+    const rows = await getEmissionPlanner().plan(ctx);
+
+    const projected = rows.filter((row) => row.path.endsWith("stamity-triage/SKILL.md"));
+    // Exactly one projection per target tree (`.agents/skills`, and the
+    // Claude native retarget) — never two rows racing for the same path.
+    expect(projected.map((row) => row.path).toSorted()).toEqual([
+      ".agents/skills/stamity-triage/SKILL.md",
+      ".claude/skills/stamity-triage/SKILL.md",
+    ]);
+    expect(projected.every((row) => row.content.includes("Triage the report."))).toBe(true);
+  });
+
+  /**
+   * R2 evidence gap: the "plans byte-identically with a pack installed" case
+   * above never carries a pack SKILL — only a pack rule (`opsguard`) — so it
+   * never exercised the one path this round's fix widened. Its digest
+   * comparison is also a post-fix-vs-post-fix compare (both sides run through
+   * the SAME `buildCoreEmissionPlan`), which cannot show whether admitting
+   * pack roots to the skills-index LOOKUP leaked a pack-origin row into the
+   * PROJECTION.
+   *
+   * The manifest this suite otherwise seeds carries `skill: []`, under which
+   * the widened lookup's own selection filter already drops the pack item —
+   * a leak could not surface either way, which is not evidence the guard
+   * works, only that this shape never reaches it. This case selects the pack
+   * skill explicitly (the shape `selectionWithInstalledPacks`, `./planner.ts`,
+   * produces for the residue lanes downstream of this one), so the widened
+   * lookup's admitted filter and `resolveInstalledPackContent`'s own lane BOTH
+   * see the item as live — the one condition under which the
+   * `row.origin !== "pack"` filter (`./planner.ts`, beside `mergeSkillProjections`)
+   * has anything to do. Without it, `mergeSkillProjections` throws a
+   * directory-collision error naming two claimants of one path; this case
+   * proves the plan resolves clean AND the surviving row is byte-identical to
+   * `resolveInstalledPackContent`'s own rendering — the pack lane's, not a
+   * second, corpus-lane render of the same bytes.
+   */
+  it("keeps a SELECTED pack skill single-sourced from the pack lane, with no overlay in play", async () => {
+    const repo = getRepo();
+    const packFiles = {
+      "skills/stamity-triage/SKILL.md": [
+        "---",
+        "id: triage",
+        "type: skill",
+        "description: Pack-supplied triage skill.",
+        "tags:",
+        "  - implementation",
+        "load: on-demand",
+        "obsolete_when: never",
+        "---",
+        "",
+        "Triage the report.",
+        "",
+      ].join("\n"),
+    };
+    await repo.seedFiles(
+      Object.fromEntries(
+        Object.entries(packFiles).map(([rel, body]) => [`pack-src/triagepack/${rel}`, body]),
+      ),
+    );
+    await repo.seedFiles({
+      "pack-src/triagepack/pack.json": `${JSON.stringify(
+        {
+          name: "triagepack",
+          version: "1.0.0",
+          integrity: Object.fromEntries(
+            Object.entries(packFiles).map(([rel, body]) => [
+              rel,
+              createHash("sha256").update(body, "utf8").digest("hex"),
+            ]),
+          ),
+        },
+        null,
+        2,
+      )}\n`,
+    });
+    // No `.customize.*` file anywhere: the ordinary pack-having case the
+    // widened lookup must leave untouched.
+
+    const base = overlayContext(repo.dir);
+    const plan = await planPackInstall(repo.dir, join(repo.dir, "pack-src", "triagepack"), {
+      allowUntrusted: true,
+    });
+    const applied = await applyPackInstall(repo.dir, plan, base.manifest, {
+      engineVersion: base.engineVersion,
+      now: FIXED_NOW,
+    });
+    expect(applied.result.installed).toBe(true);
+
+    const ctx = {
+      ...base,
+      manifest: {
+        ...applied.manifest,
+        selection: {
+          items: { ...applied.manifest.selection.items, skill: ["triage"] },
+        },
+      },
+    };
+    const [rows, independent] = await Promise.all([
+      getEmissionPlanner().plan(ctx),
+      resolveInstalledPackContent(repo.dir, ctx.manifest),
+    ]);
+
+    const projected = rows.filter((row) => row.path.endsWith("stamity-triage/SKILL.md"));
+    expect(projected.map((row) => row.path).toSorted()).toEqual([
+      ".agents/skills/stamity-triage/SKILL.md",
+      ".claude/skills/stamity-triage/SKILL.md",
+    ]);
+
+    const expectedContent = independent.skillRows.find((row) =>
+      row.path.endsWith("stamity-triage/SKILL.md"),
+    )?.content;
+    expect(expectedContent).toBeDefined();
+    expect(projected.every((row) => row.content === expectedContent)).toBe(true);
   });
 });
 
