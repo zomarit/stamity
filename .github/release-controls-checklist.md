@@ -157,3 +157,12 @@ This section now doubles as the re-check procedure: if any control is ever disar
 matches `SECURITY.md`. `test/docsPages.test.ts` reads `SECURITY.md` structurally (the "Publishing
 this package" section and its control claims); any future edit to that sentence must be checked
 against that suite in the same change that makes it.
+
+---
+
+## Per-release record currency
+
+One line of upkeep rides every version cut: after the tag is published and verified, re-sync the
+private layer's record in its side-by-side checkout — append the release to its continuity log and
+regenerate its kickoff prompt — so the record never trails the registry. (Added 2026-09-01, the
+day the record was found two releases stale.)
