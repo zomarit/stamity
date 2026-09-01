@@ -151,7 +151,7 @@ function ctxOf(
       ...(over.importChoice === undefined ? {} : { importChoice: over.importChoice }),
     }),
     engineVersion: ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: over.packages ?? [] },
+    facts: { monorepoPackages: over.packages ?? [] },
     contentRoot,
   };
 }

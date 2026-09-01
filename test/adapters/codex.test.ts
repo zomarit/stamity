@@ -202,7 +202,7 @@ function ctxOf(options: CtxOptions): EmissionContext {
     // same shape a repo carries after `stamity config` writes a pin.
     manifest: options.models === undefined ? manifest : { ...manifest, models: options.models },
     engineVersion: ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: options.packages ?? [] },
+    facts: { monorepoPackages: options.packages ?? [] },
     contentRoot: options.contentRoot,
   };
 }

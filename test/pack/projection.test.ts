@@ -326,7 +326,7 @@ function ctxOf(fixture: Fixture, manifest: SetupManifest, tools?: Tool[]): Emiss
     rootDir: fixture.repoRoot,
     manifest: tools === undefined ? manifest : { ...manifest, tools },
     engineVersion: ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
     contentRoot: fixture.corpusRoot,
   };
 }

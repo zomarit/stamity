@@ -414,7 +414,7 @@ describe("add — install", () => {
     expect(rows.every((row) => row.artifactType === "infra")).toBe(true);
   });
 
-  it("renders the gate table, the trust line, the footprint, and a validate next-step", async () => {
+  it("renders the gate table, the trust line, the footprint, and a check next-step", async () => {
     await initProject();
     await seedPack();
 
@@ -430,13 +430,22 @@ describe("add — install", () => {
     // The trust line names the resolved tier and its basis, replacing the old
     // bare unsigned note.
     expect(result.stdout).toMatch(/trust\s+pinned-unsigned — /);
-    expect(result.stdout).toContain("stamity validate");
-    // TEST CHANGE, justified: the old assertion pinned the exact defect.
+    // TEST CHANGE, justified: the assertion moved because the contract did.
+    // The review step used to name `validate`, and `validate` never opens an
+    // installed pack body — its scanned set is the overrides, user hooks,
+    // learnings, `.env.mcp` and the workspace file — so it answered all-clear on
+    // a pack whose files had been rewritten since install. The verb that
+    // actually answers the question the step asks is `check`: its
+    // `pack-integrity` row re-hashes every installed byte against the recorded
+    // hashes. The old spelling is banned outright, because a page that names
+    // both verbs is the same misdirection with a second option.
+    expect(result.stdout).toContain("stamity check");
+    expect(result.stdout).toContain("pack-integrity");
+    expect(result.stdout).not.toContain("stamity validate");
     // Installed pack bytes under the pack directory are read by no client — the
     // pack's commands, agents and rules reach a tool only once sync projects
-    // them — so an install that named `validate` and never named `sync` left an
-    // operator with an inert pack that `validate` then reported as all-clear.
-    // Sync is step one, and the dim line no longer reads as "sync is
+    // them — so an install that never named `sync` left an operator with an
+    // inert pack. Sync is step one, and the dim line no longer reads as "sync is
     // irrelevant here".
     expect(result.stdout).toContain("1. stamity sync");
     expect(result.stdout).toContain("sync projects it into your tool directories");

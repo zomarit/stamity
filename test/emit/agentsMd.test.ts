@@ -148,7 +148,6 @@ describe("renderAgentsMd over a fixture charter", () => {
     setup: SetupManifest,
     packages: readonly PackageEntry[] = [],
     raw: string = FIXTURE_CHARTER,
-    greenfield = false,
   ): Promise<AgentsMdPlan> {
     const temp = getTemp();
     await temp.seedFiles({ [CHARTER_RELATIVE_PATH]: raw });
@@ -156,7 +155,7 @@ describe("renderAgentsMd over a fixture charter", () => {
       rootDir: temp.dir,
       manifest: setup,
       engineVersion: "0.0.0",
-      facts: { greenfield, monorepoPackages: [...packages] },
+      facts: { monorepoPackages: [...packages] },
     };
     return renderAgentsMd({ ...ctx, contentRoot: temp.dir });
   }
@@ -427,7 +426,7 @@ describe("renderAgentsMd edge cases", () => {
       rootDir: temp.dir,
       manifest: manifest(),
       engineVersion: "0.0.0",
-      facts: { greenfield: true, monorepoPackages: [] },
+      facts: { monorepoPackages: [] },
     };
 
     const { root } = await renderAgentsMd({ ...ctx, contentRoot: temp.dir });

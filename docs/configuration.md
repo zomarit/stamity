@@ -60,6 +60,10 @@ clients your own manifest selects.
 | `effort.economy` | one of low \| medium \| high — carried on claude, cursor, codex, omitted on copilot | `claude=low, cursor=(not expressed), copilot=(not expressed), codex=low` |
 | `review.maxIterations` | a whole number of review rounds within 1..10 | `4` |
 
+One row is recorded but not yet consumed. `communicationStyle` is validated, persisted and
+carried through migrations, and no generated file reads it, so setting it changes what the
+manifest records rather than how any emitted file asks an agent to write.
+
 ## Changing one
 
 Config edits state; it never regenerates output. Apply a change with `stamity sync`.

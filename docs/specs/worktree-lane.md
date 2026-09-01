@@ -389,7 +389,7 @@ no entry**:
   are written but **not committed** do not travel; that is stated as a fact of
   the lane, not worked around (REQ-WORKTREE-015).
 - `.stamity/generated/`, `.stamity/packs/`, `AGENTS.md`, `.agents/`, and the
-  client trees — committed (`docs/getting-started.md:148-155`).
+  client trees — committed (`docs/getting-started.md:149-156`).
 - `.stamity/review-gate.json` — untracked and un-ignored, so REQ-WORKTREE-003
   refuses it as an entry. That is the right outcome: it is a per-run counter
   whose absence means "the gate is open" (`src/hooks/scripts.ts:153`, and the

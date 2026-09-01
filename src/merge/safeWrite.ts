@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { constants as FS } from "node:fs";
 import type { Stats } from "node:fs";
 // `open` is aliased: `readPrefixFrontmatterField` already binds that name to its
@@ -51,8 +52,10 @@ import {
  *
  * - **User content is never destroyed silently.** Every byte outside the
  *   managed block survives a merge verbatim, and each path that must overwrite
- *   user bytes (marker corruption repair, `force` on an unmanaged file) takes a
- *   size+SHA-256-verified `.bak` first and names it in the returned warning.
+ *   user bytes (marker corruption repair, `force` on an unmanaged file, an
+ *   engine-owned file that DRIFTED from what the ledger recorded —
+ *   {@link hasLedgerDrift}) takes a size+SHA-256-verified `.bak` first and names
+ *   it in the returned warning.
  * - **Only-when-stale.** A block whose stamped version is semver-equal
  *   to `options.version` and whose body is otherwise identical is reported
  *   `unchanged` and not rewritten — no mtime bump, no diff churn.
@@ -120,8 +123,26 @@ export interface SafeWriteFileOptions {
    * refuse to update without `force` — i.e. the engine cannot maintain its own
    * output. That is the safe half of the trade (a refusal, not a silent
    * overwrite), but it is a degraded mode, not a supported one.
+   *
+   * Ownership licenses a whole-file overwrite without `force`. It no longer
+   * licenses one without a BACKUP on its own: see {@link ledgerHashes}.
    */
   ledgerPaths?: ReadonlySet<string>;
+  /**
+   * SHA-256 of the bytes the engine last wrote at each ledgered path, keyed
+   * exactly as {@link ledgerPaths} is and built with {@link ledgerHashIndex}
+   * from the same manifest rows. Pass it wherever {@link ledgerPaths} is passed.
+   *
+   * This is the drift signal, and drift is what decides whether ownership still
+   * means "regenerable". A managed file is reproducible from the corpus only
+   * while it still matches what was generated; once the bytes on disk disagree
+   * with the recorded hash they are an operator edit that exists nowhere else,
+   * and the whole-file lane replaces the file outright. Supplying this makes
+   * that case take the verified `.bak` the unmanaged `force` lane already takes
+   * ({@link hasLedgerDrift}); omitting it leaves the writer with no way to tell
+   * a regeneration from an overwrite of hand-edited bytes.
+   */
+  ledgerHashes?: ReadonlyMap<string, ReadonlySet<string>>;
   /**
    * Absolute directory every byte of this write must land inside — the repo
    * root, for a caller that emits into one. Pass it whenever the caller knows
@@ -589,6 +610,11 @@ function terminateHealablePrefix(existingContent: string, filePath?: string): st
  * `updated` (the writer rebuilds it from a verified backup). The deny scan is
  * not run — a refusal is not an action; {@link predictDenyRefusal} owns that
  * axis.
+ *
+ * Ledger DRIFT is likewise not an axis here, and needs no input for it. It
+ * decides whether the writer takes a `.bak` before an overwrite it was already
+ * going to perform, so a drifted write is `updated` exactly like an undrifted
+ * one and this prediction stays exact ({@link hasLedgerDrift}).
  */
 export function predictMergeAction(
   existingContent: string | null,
@@ -655,8 +681,8 @@ function displayPath(filePath: string, boundaryDir: string | undefined): string 
 
 /**
  * True when the engine can PROVE it owns `filePath`, which is what licenses a
- * whole-file overwrite without `force` — and without a backup. Two proofs, and
- * a filename is not one of them:
+ * whole-file overwrite without `force`. Two proofs, and a filename is not one
+ * of them:
  *
  * 1. **Ledger membership.** `ledgerPaths` records what the engine wrote. It is
  *    the authority; pass it whenever a manifest is loaded.
@@ -680,6 +706,11 @@ function displayPath(filePath: string, boundaryDir: string | undefined): string 
  * `existingContent` is optional because the predicate is also asked about paths
  * with no file behind them yet; absent or `null`, only the ledger can prove
  * ownership.
+ *
+ * What ownership does NOT settle is whether the bytes on disk are still the
+ * engine's. It answers "the engine wrote this path", not "nobody has edited it
+ * since" — a `true` here no longer licenses a backup-free overwrite by itself.
+ * {@link hasLedgerDrift} answers the second question.
  */
 export function isManagedPath(
   filePath: string,
@@ -695,6 +726,16 @@ export function isManagedPath(
 }
 
 /**
+ * The lookup key for one repo-relative ledger path under `rootDir`. Shared by
+ * both index builders below so the ownership set and the hash index can never
+ * key a path two different ways — a drift check that silently never hits would
+ * hand back "undrifted" for every file.
+ */
+function ledgerKeyUnder(rootDir: string, path: string): string {
+  return toLedgerKey(join(rootDir, ...path.split("/")));
+}
+
+/**
  * Build the {@link SafeWriteFileOptions.ledgerPaths} set from a manifest's
  * repo-relative ledger paths, keyed the way {@link isManagedPath} looks a path
  * up. Writers address files by absolute path, so the join happens here rather
@@ -702,7 +743,92 @@ export function isManagedPath(
  * function, which is what keeps the membership test from silently never hitting.
  */
 export function ledgerPathSet(rootDir: string, paths: readonly string[]): ReadonlySet<string> {
-  return new Set(paths.map((path) => toLedgerKey(join(rootDir, ...path.split("/")))));
+  return new Set(paths.map((path) => ledgerKeyUnder(rootDir, path)));
+}
+
+/** The two ledger fields the drift check reads. Structurally a `LedgerEntry`,
+ *  spelled locally so the merge substrate keeps depending on no manifest type. */
+export interface LedgerHashRow {
+  /** Repo-relative POSIX path, as the ledger spells it. */
+  path: string;
+  /** SHA-256 hex of the bytes the engine last wrote there, where recorded. */
+  contentHash?: string;
+}
+
+/**
+ * Build the {@link SafeWriteFileOptions.ledgerHashes} index from the same
+ * manifest rows {@link ledgerPathSet} is built from — pass both, from one
+ * `manifest.ledger`, or the ownership half proves a path the drift half cannot
+ * answer for.
+ *
+ * A path maps to a SET of hashes rather than one, and matching ANY of them
+ * proves the bytes are the engine's. Co-owners record what each of them last
+ * wrote (`../manifest/ledger.ts` keeps one row per `(adapter, path)`), and a
+ * tool-set change rebuilds one owner's rows without touching the other's — so
+ * two rows for one path can legitimately carry different hashes, and agreement
+ * with either is agreement. Same reading the reclaim sweep takes of the same
+ * field (`./reclaim.ts::CandidateGroup.recordedHashes`).
+ *
+ * A row with no `contentHash` contributes no key at all, which is the honest
+ * answer and not a gap this builder can close: nothing was recorded, so nothing
+ * can be compared. Such a path keeps the pre-drift behaviour (see
+ * {@link hasLedgerDrift}). Both shipped producers — `sync/engine.ts` and
+ * `init/apply.ts` — record a hash on every row they write, so this is a
+ * manifest written by an engine that predates the field, not a live state.
+ */
+export function ledgerHashIndex(
+  rootDir: string,
+  rows: readonly LedgerHashRow[],
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const index = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (row.contentHash === undefined) continue;
+    const key = ledgerKeyUnder(rootDir, row.path);
+    const hashes = index.get(key) ?? new Set<string>();
+    hashes.add(row.contentHash);
+    index.set(key, hashes);
+  }
+  return index;
+}
+
+/**
+ * True when the bytes at `filePath` are NOT the bytes the engine recorded
+ * writing there — an operator edit sitting in a file the ledger says the engine
+ * owns.
+ *
+ * This is the whole difference between "regenerable" and "the only copy".
+ * Ownership was reading as both: a marker-less engine output — a hook script,
+ * one of the plain-JSON outputs (`../cli/commands/sync/engine.ts`) — is
+ * ledgered, so it is `managed`, so the whole-file lane replaced it outright on
+ * a plain flagless `sync`. No flag, no `.bak`, no warning, and the operator's
+ * hand-edit gone. The ledger already knew: it records the SHA-256 of what was
+ * written at each path, so "still what we wrote" is a lookup, not a guess.
+ *
+ * `false` when the caller supplies no index, and `false` for a path the index
+ * has no entry for. Absence of a record is not evidence of an edit, and reading
+ * it as one would mint a `.bak` beside every generated file on the first
+ * content-changing sync after an engine upgrade — the hot path, where the file
+ * genuinely is regenerable. The cost of that choice is stated on
+ * {@link ledgerHashIndex}: a row that never recorded a hash is not
+ * drift-checkable and keeps the fast path.
+ *
+ * The hash is taken over the string exactly as {@link readIfExists} read it and
+ * exactly as both producers wrote it (`createHash("sha256").update(content)`,
+ * utf-8), because a comparison between two spellings of the same bytes would
+ * report drift on every file.
+ *
+ * Drift changes whether a `.bak` is taken, never WHICH disposition is returned
+ * — a drifted overwrite is `updated` like any other — so
+ * {@link predictMergeAction} needs no drift input to stay byte-accurate.
+ */
+function hasLedgerDrift(
+  filePath: string,
+  existingContent: string,
+  ledgerHashes: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+): boolean {
+  const recorded = ledgerHashes?.get(toLedgerKey(filePath));
+  if (recorded === undefined) return false;
+  return !recorded.has(createHash("sha256").update(existingContent).digest("hex"));
 }
 
 // ── Frontmatter prefix reader ──────────────────────────────────────────────
@@ -943,26 +1069,47 @@ async function safeWriteFileLocked(
     };
   }
 
-  // A managed file is regenerable from the corpus, so it keeps the no-backup
-  // fast path; forcing over unmanaged content destroys the only copy of it,
-  // which is what the verified `.bak` protects.
-  if (managed || options.backup === false) {
+  // A managed file is regenerable from the corpus ONLY while it still matches
+  // what was generated, and that qualifier is the whole gate. Once it has
+  // drifted it holds bytes that exist nowhere else — the operator edited a file
+  // the engine happens to own — which is exactly what the verified `.bak`
+  // protects, the same way it protects unmanaged content under `force`.
+  //
+  // `managed` gates the drift lookup rather than the other way round: drift is a
+  // statement about a file the engine CLAIMS, and a hash index handed over
+  // without the matching ownership set must not turn an unowned path into an
+  // owned-but-drifted one.
+  //
+  // `backup === false` still wins over both. It is the explicit opt-out for
+  // engine-owned, machine-local, regenerable state where the copy is litter
+  // rather than protection (`../pack/install.ts` rollback), and a caller that
+  // states that has stated it about drift too.
+  const drifted = managed && hasLedgerDrift(filePath, existingContent, options.ledgerHashes);
+  if ((managed && !drifted) || options.backup === false) {
     await atomicWriteFileUnlocked(filePath, content, writeOpts);
     return { path: filePath, action: "updated" };
   }
   const bakPath = await backupBeforeOverwrite(
     filePath,
     existingContent,
-    "force overwrite",
+    drifted ? "drifted overwrite" : "force overwrite",
     options.boundaryDir,
   );
   await atomicWriteFileUnlocked(filePath, content, writeOpts);
   return {
     path: filePath,
     action: "updated",
-    warning:
-      `Force-overwrote ${filePath}: it carries no STAMITY:BEGIN/END markers, so the whole file ` +
-      `was replaced with generated output. Your previous file is at ${bakPath}.`,
+    warning: drifted
+      ? // Says nothing about markers, deliberately: this lane writes whole
+        // files, and a drifted target may carry a block the incoming content no
+        // longer has. The reason it was replaced is the lane, not the markers.
+        `Overwrote ${displayPath(filePath, options.boundaryDir)}: the engine owns this file, but ` +
+        `its contents no longer match what it last wrote there — it was edited by hand since. ` +
+        `This output is written whole rather than merged, so the file was regenerated in full. ` +
+        `Your previous file is at ${bakPath}. To keep the change, move it into the source the ` +
+        `engine generates from.`
+      : `Force-overwrote ${filePath}: it carries no STAMITY:BEGIN/END markers, so the whole file ` +
+        `was replaced with generated output. Your previous file is at ${bakPath}.`,
   };
 }
 

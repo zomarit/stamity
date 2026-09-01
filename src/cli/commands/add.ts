@@ -84,9 +84,14 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * this package, a local directory (`./packs/ops`), or the name of a package
  * the operator already installed under `node_modules/`. Nothing fetches.
  *
- * Installed content is written once, not regenerated, so nothing here points
- * the operator at `sync` — the closing next-step names the pack's own directory
- * and `stamity validate`.
+ * Installed content is written once, not regenerated — but written is not
+ * reachable, so the closing next-step opens with `sync`, which is what projects
+ * the pack into a client's own directories. The second step names the pack's
+ * own directory and `stamity check`: its `pack-integrity` row re-hashes every
+ * installed byte against the hashes recorded at install, so an edited or
+ * deleted pack file is a finding. `validate` is deliberately not named — its
+ * scanned set is the overrides, user hooks, learnings, `.env.mcp` and the
+ * workspace file, and installed pack bodies are not in it.
  */
 
 /** Repo-relative manifest path, for the un-initialised refusal. */
@@ -701,14 +706,20 @@ export const addCommand: CommandModule = {
     // installed bytes under `.stamity/packs/` are not what any client reads: the
     // pack's commands, agents and rules reach a tool only when sync projects
     // them into that tool's own directories. Without it the pack is installed
-    // and inert — and the step this line used to recommend, `validate`, reports
-    // all-clear on exactly that state, because the installed files are intact.
-    // The dim line below said "sync never rewrites it", which is true of the
-    // installed copy and read by every operator as "sync has nothing to do
-    // here".
+    // and inert. The dim line below said "sync never rewrites it", which is true
+    // of the installed copy and read by every operator as "sync has nothing to
+    // do here".
+    //
+    // Step TWO names `check`, not `validate`. `validate` never opens an
+    // installed pack body — its scanned set is fixed at the overrides, user
+    // hooks, learnings, `.env.mcp` and the workspace file — so it reported
+    // all-clear on a pack whose files had been rewritten since install, which is
+    // the one thing an operator reviewing that directory wants told. `check`'s
+    // `pack-integrity` row re-hashes every installed byte against the hashes the
+    // receipt recorded, so an edit or a deletion is a finding with a remedy.
     const nextSteps = [
       "stamity sync — projects this pack into your tool directories; until it runs, nothing in the pack is reachable from a client",
-      `review ${facts.targetDir}, then run stamity validate`,
+      `review ${facts.targetDir}, then run stamity check — its pack-integrity row re-hashes every installed byte and reports any edit or deletion`,
     ];
     ctx.io.out("\n  next:\n");
     for (const [index, step] of nextSteps.entries()) {

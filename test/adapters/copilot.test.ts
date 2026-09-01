@@ -133,7 +133,7 @@ function ctxOf(over: CtxOptions = {}): EmissionContext {
       ...(over.pins === undefined ? {} : { models: { pins: over.pins } }),
     },
     engineVersion: ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: over.packages ?? [] },
+    facts: { monorepoPackages: over.packages ?? [] },
     contentRoot: over.contentRoot ?? CORPUS_ROOT,
   };
 }
@@ -1142,12 +1142,16 @@ describe("ownership and determinism", () => {
 
     expect(paths).toContain(COPILOT_SETUP_STEPS_PATH);
     // The `floor:*` artifacts resist deselection by design — an empty selection
-    // is the hand-edited-manifest case they exist for.
+    // is the hand-edited-manifest case they exist for. `stamity-security` joined
+    // the agent list when it took `floor:security`: the three rules it reads
+    // were floored and it was not, so a trimmed setup could ship the security
+    // guidance with nothing that applies it.
     expect(paths.filter((path) => path.startsWith(".github/agents/"))).toEqual([
       ".github/agents/stamity-fixer.agent.md",
       ".github/agents/stamity-implementer.agent.md",
       ".github/agents/stamity-researcher.agent.md",
       ".github/agents/stamity-reviewer.agent.md",
+      ".github/agents/stamity-security.agent.md",
       ".github/agents/stamity-test-runner.agent.md",
     ]);
     expect(paths.filter((path) => path.startsWith(".github/instructions/"))).toEqual([

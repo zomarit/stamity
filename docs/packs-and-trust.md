@@ -168,6 +168,47 @@ Entries name a pack id (`ops`, `@acme/ops`), a scope wildcard (`@acme/*`), every
   refuses every install until it is fixed. "Could not read it, so allowed everything" is
   the one outcome the file exists to prevent.
 
+### Writing one
+
+`stamity config policy` is the writer. Do not hand-author the file: every pattern is
+checked against the grammar above *before* anything is written, and fail-closed is exactly
+why that matters — a typo in a hand-edited policy refuses every install in the repository
+until somebody finds it.
+
+```sh
+stamity config policy list                    # the standing rules, and the mode they put you in
+stamity config policy init                    # an empty, inert policy to start from
+stamity config policy deny local-path         # no unreviewed directory installs
+stamity config policy allow catalog-pinned    # nothing but the curated catalog
+stamity config policy remove local-path       # drop a rule from wherever it sits
+```
+
+`allow` and `deny` create the file if there is none and are idempotent; `--dry-run` prints
+the document instead of writing it. Those two middle lines produce:
+
+```json
+{
+  "version": 1,
+  "packs": {
+    "deny": [
+      "local-path"
+    ],
+    "allow": [
+      "catalog-pinned"
+    ]
+  }
+}
+```
+
+Two consequences are printed as they happen, because both are repository-wide. Adding the
+**first** `allow` entry switches the repo into allowlist mode, where a source matching no
+allow entry is refused — installed packs included, which stop projecting at the next
+`sync`. Removing the **last** one switches it back, and drops the key rather than leaving
+`"allow": []` behind, which is a valid document that denies everything.
+
+If a policy is already on disk and does not parse, every action refuses with the defect
+named, and `stamity config policy init --force` is the way back out.
+
 ## After the install
 
 `add` records a SHA-256 for every byte it writes. `stamity check` re-hashes those files on
