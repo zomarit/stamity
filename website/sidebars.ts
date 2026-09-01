@@ -64,6 +64,7 @@ const categories = [
       'reference/rules',
       'reference/commands',
       'reference/packs',
+      'reference/mcp-servers',
     ]),
   },
   {

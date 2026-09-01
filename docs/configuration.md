@@ -64,6 +64,20 @@ One row is recorded but not yet consumed. `communicationStyle` is validated, per
 carried through migrations, and no generated file reads it, so setting it changes what the
 manifest records rather than how any emitted file asks an agent to write.
 
+The four `model.*` rows are classes, not model ids. Each names a rung, and each selected
+client's own projection maps that rung to an id it accepts, so one setting travels across
+clients instead of being restated per client. The top rung ships mapped nowhere: with
+`model.frontier` unset, every supported client resolves it to that client's default, which is
+what its cell above says. Nothing is broken by that — the deepest work simply runs on whatever
+the client would have picked anyway — and pinning `model.frontier` to an id your client accepts
+is how an operator opts into the rung.
+
+`mcp.servers` is the one row whose accepted values are a closed list, and
+[the MCP server reference](reference/mcp-servers.md) is that list: every id this repo resolves
+on its own, with the version each is pinned to, the credentials it needs and the blast radius
+of handing it to an agent. An id absent from that page resolves only when an installed pack
+supplies it.
+
 ## Changing one
 
 Config edits state; it never regenerates output. Apply a change with `stamity sync`.

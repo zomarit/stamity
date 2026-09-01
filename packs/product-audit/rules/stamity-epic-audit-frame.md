@@ -1,11 +1,11 @@
 ---
 id: epic-audit-frame
 type: rule
-description: Carries the assessment-epic scaffold the pack's commands share — module taxonomy, epic and sub-issue shape, board sync, failure handling, and the guardrails that keep an assessment from turning into a change.
+description: Carries the assessment-epic scaffold the pack's commands share — module taxonomy, epic and sub-issue shape, the proposal-versus-write-back split, failure handling, and the guardrails that keep an assessment from turning into a change.
 tags: [board, review]
 load: on-demand
 scope: agent-requested
-obsolete_when: board platforms accept a whole dependency-ordered assessment epic in one call
+obsolete_when: the board write-back contract opens an item-creation channel a pack command can call
 ---
 
 # Epic-Audit Frame
@@ -27,7 +27,7 @@ repo rather than from a convention:
 2. **Map to specs.** Where a spec directory exists, map each module to the
    `<spec-kind>` documents it answers to. A module with no spec is recorded as
    a taxonomy gap; the gap is itself reportable.
-3. **Table it.** Present the taxonomy before anything is created, and let the
+3. **Table it.** Present the taxonomy before anything is proposed, and let the
    operator confirm, add, or drop rows.
 
 | # | Module | Directories | Specs |
@@ -40,7 +40,8 @@ scope.
 
 ## Epic and sub-issue shape
 
-One epic per run. Two levels, and the levels are the dependency order:
+One epic per run, authored as a proposal the run report carries. Two levels,
+and the levels are the dependency order:
 
 - **Level 1 — per module.** One sub-issue per taxonomy row. No dependencies:
   the rows are disjoint, so they are worked in any order or in parallel.
@@ -54,39 +55,48 @@ level lists with their sub-issue references, the dependency order, and
 acceptance criteria stated as outcomes — every sub-issue closed, every
 critical and high finding carrying a route.
 
-Labels: the epic carries `meta:<epic-label>`; every sub-issue carries the
-finding label `meta:<epic-label>-findings` so the set is recoverable later by
-query rather than by memory.
+Labels ride with the proposal and are never written by the run: the proposed
+epic names `meta:<epic-label>` and each proposed sub-issue names
+`meta:<epic-label>-findings`, so the set is recoverable by query rather than
+from memory once it exists on a board.
 
-## Board sync
+## Board write-back
 
-The board primitive lives in `/st-board`, and this block is the wrapper
-around it — not a second definition of it.
+The board primitive lives in `/st-board`, and its write-back contract is four
+channels wide — progress comment, PR link, status transition, PR-thread reply.
+Neither creating an item nor writing a label is among them. This block is the
+wrapper around what those channels already allow — not a second definition of
+them, and not a fifth one.
 
-1. Create the epic, record its identifier, then create and link each sub-issue
-   to it. A link that fails is reported and left for a manual fix; the created
-   sub-issue is not deleted, because deleting it loses the authored body.
-2. Sync the epic and every sub-issue to the linked board with status ready.
-3. Refresh whatever board overview the source maintains, using the item set
-   already read in step 1 rather than re-querying it.
+1. **The epic and its sub-issues leave as a proposal.** The report holds the
+   authored bodies and the dependency order, ready for a person to apply.
+   Nothing is created from here, and an assessment that named work nobody has
+   filed yet has still delivered its result.
+2. **What is written is written on an item the board already has.** One
+   progress comment per run, naming the findings that land on that item, and a
+   status transition where the phase map covers it. Both are channels the
+   contract already opens.
+3. **A write that would need a fifth channel stops.** It returns
+   `BLOCKED_DEPENDENCY` naming the channel it wanted, and the intent travels in
+   the proposal instead.
 
 A board write that fails is a warning, not a run failure: the assessment is
-finished, and the sync is repeatable afterwards.
+finished, and the write is repeatable afterwards.
 
 ## Failure handling
 
 | Failure | Response |
 |---|---|
 | Item search fails | Retry once, then continue on the assumption that no `<epic-kind>` epic is open, and say so |
-| Item creation fails | Retry once, then present the drafted body for manual creation |
-| Sub-issue linking fails | Report the orphan and name it; the body survives |
-| Board sync fails | Warn and continue; the sync is re-runnable |
-| The board source is not linked | Degrade to the command's report output; this is not an error |
+| A progress comment or status write fails | Retry once, then warn and continue; the assessment stands and the write is re-runnable |
+| A write would need a channel the contract does not open | Return `BLOCKED_DEPENDENCY` for that write alone; the proposal carries the intent and the run still reports |
+| The board source is not linked | The command's report is the whole output and the proposal rides in it; this is not an error |
 
 ## Guardrails
 
-- **The command creates items; it changes no product code.** No source file, no
-  configuration, no dependency manifest is touched by an assessment run.
+- **The command proposes items; it changes no product code.** No source file,
+  no configuration, no dependency manifest is touched by an assessment run, and
+  no board item is created or labelled — those leave as proposals.
 - **Scope is the taxonomy.** Exactly the confirmed modules plus the named
   cross-cutting assessments. A run does not grow new item types mid-flight.
 - **Severity survives the pipeline.** A severity is reduced only by an operator

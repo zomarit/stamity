@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.1.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-01T20:07:42.410Z",
+  "updatedAt": "2026-09-01T20:40:09.167Z",
   "tools": [
     "claude"
   ],
@@ -85,7 +85,7 @@
       "adapter": "claude",
       "artifactId": "implementer",
       "artifactType": "agent",
-      "contentHash": "28b3873750f75df097f76232cfc9ea4ffbf0c1e838041dc912f9c090bcaf1ebe",
+      "contentHash": "b736f2a2eafe5e1d8dd04a4d5cd333cb6c1edcd843134072251b0cb99f017326",
       "path": ".claude/agents/stamity-implementer.md"
     },
     {
@@ -106,7 +106,7 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "a04a23695c92ecbf176e72938178adfdfa2888d0af3cce81e653fb3ed679ffad",
+      "contentHash": "b3c408c9dd30ebb25309c5367f8d96ec2ba47a2fef284d73674ea92f31912c62",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
@@ -155,7 +155,7 @@
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "ed2559b9052a473b7422249aa39db90dc4d49d38f5aec3006c2a8a320b92ea09",
+      "contentHash": "9c27890f166644cd5430c654085f84527dd6c1447e96b9294a8f84dd76334d47",
       "path": ".claude/commands/st-plan.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "887ad65f73a503da0ed6abb0e47f18a43b3475ed71b2a848e48cd97fed337f37",
+      "contentHash": "c1ed45fba035ad9d49a6823c6ca66d79f46ecd967306ceba5892f64e96506bb0",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -295,7 +295,7 @@
       "adapter": "claude",
       "artifactId": "dep-audit",
       "artifactType": "skill",
-      "contentHash": "019dfd2df9c3d8eaffa55744cc83bed51afa6f8e045f9987f7e8bbcc8172fccf",
+      "contentHash": "07c4dc67a5648ec8821b51d522452b5ce5973f360204986dfa558bd6b426ffc0",
       "path": ".claude/skills/st-dep-audit/SKILL.md"
     },
     {

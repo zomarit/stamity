@@ -1,12 +1,18 @@
 /**
- * The per-class content reference pages, projected from artifact frontmatter.
+ * The reference pages projected from what this repository already declares:
+ * one per content class from artifact frontmatter, one pack inventory, and one
+ * curated MCP server catalog.
  *
  * The drift class this closes: a hand-written page listing what the
  * corpus ships is true on the day it is typed and silently false the first
  * time an artifact is added, renamed, retired, or re-tagged. Every line here
  * is a projection of a frontmatter field the catalog already parsed — id,
  * description, tags, `load`, `obsolete_when` — so the pages cannot claim an
- * artifact the corpus does not carry, or miss one it does.
+ * artifact the corpus does not carry, or miss one it does. The MCP page is the
+ * same discipline over a different source of truth: it projects
+ * `src/mcp/catalog.ts`, which is what `config set mcp.servers` validates
+ * against, so the accepted-value set a reader is shown and the set the binary
+ * accepts cannot disagree.
  *
  * **Frontmatter only; bodies are never restated.** The artifact IS its body;
  * a reference page that paraphrased it would become a second, staler copy of
@@ -44,6 +50,12 @@ import {
   type CatalogItem,
   type ContentIndex,
 } from "../../content/catalog.ts";
+import {
+  CATALOG_VERIFIED_ON,
+  CURATED_MCP_SERVERS,
+  pinnedPackageSpec,
+  type McpServerMeta,
+} from "../../mcp/catalog.ts";
 import { lookupCatalogEntry } from "../../pack/curated.ts";
 import {
   PACK_MANIFEST_FILE,
@@ -123,8 +135,11 @@ export interface ReferencePageSpec {
   readonly path: string;
   /** H1 of the page. */
   readonly title: string;
-  /** The corpus class it projects, or `"packs"` for the pack inventory. */
-  readonly covers: ContentClass | "packs";
+  /**
+   * What the page projects: a corpus class, `"packs"` for the pack inventory,
+   * or `"mcp"` for the curated MCP server catalog.
+   */
+  readonly covers: ContentClass | "packs" | "mcp";
   /** One-line description of the page — reused verbatim by the llms.txt index. */
   readonly blurb: string;
   /** Opening paragraph: what this class is and how a client loads it. */
@@ -216,6 +231,54 @@ const PACKS_PAGE: ReferencePageSpec = {
 };
 
 /**
+ * The curated MCP catalog page — the accepted-value set for `mcp.servers`.
+ *
+ * The gap it closes: three pages sent a reader to an id they were never shown.
+ * `docs/configuration.md` documents `mcp.servers` as a list of curated ids,
+ * `docs/cli-reference.md` documents `config mcp add <id>`, and
+ * `docs/troubleshooting.md` tells them to run it — while the ids lived only in
+ * `src/mcp/catalog.ts`. Rendering them here rather than typing them out is what
+ * keeps the published set and the set `config set` validates against identical:
+ * the table IS the validator's table.
+ *
+ * The prose lives in the generator for the same reason the pack page's does —
+ * the committed page is byte-compared against this render, so a fact typed into
+ * the file is erased by the next regeneration.
+ */
+const MCP_PAGE: ReferencePageSpec = {
+  path: `${REFERENCE_DOC_DIR}/mcp-servers.md`,
+  title: "MCP servers",
+  covers: "mcp",
+  blurb:
+    "every curated MCP server id `mcp.servers` accepts, with its pin, credentials and blast radius.",
+  intro:
+    "An MCP server is a tool endpoint a client launches beside the agent. The ids below are what " +
+    "`stamity config set mcp.servers` and `stamity config mcp add <id>` accept, and this is the " +
+    "whole curated set — any other id resolves only when an installed pack supplies it. A pack " +
+    "may ADD a server under a new id and can never redefine one of these: a curated id always " +
+    "resolves to its reviewed row, so a pack claiming one is refused at install rather than " +
+    "merged.\n\n" +
+    "**Two ways a server runs, and each row says which.** A local child process runs with the " +
+    "editor's own privileges — no authentication and no encryption between the two, and the " +
+    "absence of a URL is not a security property. A remote endpoint is reached over TLS, but " +
+    "through a bridge process launched on the same machine, and that bridge sees every " +
+    "request.\n\n" +
+    "**Every row pins an exact version.** npm forbids republishing a version with different " +
+    "bytes, so an exact pin is effectively content-addressed — a maintainer cannot reach a " +
+    "pinned consumer without a reviewable version bump. What a pin cannot give you is currency: " +
+    "a version that was clean on the day it was read stays byte-identical while the world learns " +
+    "it is vulnerable. That is why two dates appear below and mean different things. The sweep " +
+    "date covers the row SET — every row present, every row still wanted — and each row " +
+    "carries the day its own version was last read off its upstream. Reading the first as pin " +
+    "freshness is the specific misreading the split exists to prevent.\n\n" +
+    "**No credential is written into a client config.** A row names the variables it needs, the " +
+    "emitted config carries a reference to each, and the literal values live in `.env.mcp` — " +
+    "gitignored, created private to the operator, and never committed. `stamity config mcp add " +
+    "<id>` writes the variable names that server needs into that file, with the value left blank " +
+    "for you to fill in.",
+};
+
+/**
  * Every page this renderer produces, in emission order. The llms.txt index
  * reads this list rather than restating the paths, so a page can never be
  * generated without being indexed, or indexed without being generated.
@@ -226,6 +289,7 @@ export const REFERENCE_PAGES: readonly ReferencePageSpec[] = [
     return { path: page.path, title: page.title, blurb: page.blurb, intro: page.intro, covers };
   }),
   PACKS_PAGE,
+  MCP_PAGE,
 ];
 
 // ── Class pages ──────────────────────────────────────────────────
@@ -436,6 +500,137 @@ function renderPacksPage(spec: ReferencePageSpec, packs: readonly PackInventory[
   return `${lines.join("\n")}\n`;
 }
 
+// ── MCP catalog page ─────────────────────────────────────────────
+
+/**
+ * How each transport is named on a row. The enum value is not rendered, and
+ * that is the point twice over: `stdio` tells a reader nothing about the
+ * privileges they are handing out, and the other literal is a token the lane's
+ * links-nothing-outside-the-tree gate reads as a URL. What each of these means
+ * is stated once in the page intro rather than eight times down the page.
+ *
+ * Total over the transport union on purpose: a third transport fails to compile
+ * here rather than rendering as a blank clause.
+ */
+const TRANSPORT_LABEL: Record<McpServerMeta["transport"], string> = {
+  stdio: "a local child process",
+  http: "a remote endpoint, through a bridge launched locally",
+};
+
+/** A catalog string that must be present for the row to say anything. */
+function requireServerField(id: string, field: string, value: string | undefined): string {
+  if (value === undefined || value.trim() === "") {
+    fail(
+      `The curated MCP server "${id}" declares no \`${field}\`, so its catalog entry would ` +
+        `render an empty ${field}. Add \`${field}\` to its row in src/mcp/catalog.ts.`,
+    );
+  }
+  return value.trim().replace(/\s*\r?\n\s*/g, " ");
+}
+
+/**
+ * The pin line, split by how the launcher gets its bytes. A fetch launcher
+ * carries the exact package token in its own argument vector, so that is what
+ * the reader is shown; a host-installed launcher's version lives on the
+ * operator's machine, and printing a pin for it would claim a guarantee this
+ * catalog cannot make. {@link pinnedPackageSpec} decides which — the same call
+ * emission makes, so the page and the refusal agree about what is pinned.
+ */
+function pinLine(server: McpServerMeta): string {
+  const reviewed = requireServerField(server.id, "pinReviewedOn", server.pinReviewedOn);
+  const spec = pinnedPackageSpec(server);
+  const version = tick(server.pinnedVersion);
+  const launcher = tick(server.command);
+  return spec === undefined
+    ? `${launcher} — a launcher you install yourself, so its version is yours to keep current; ` +
+        `this row is verified against ${version}, read on ${tick(reviewed)}`
+    : `${tick(spec)}, fetched by ${launcher} at every launch — read off its registry on ` +
+        `${tick(reviewed)}`;
+}
+
+/** The variables the operator supplies before the server starts. */
+function credentialLine(server: McpServerMeta): string {
+  const required = server.requiresEnv ?? [];
+  if (required.length === 0) return "none — this server holds no credential";
+  return required
+    .map((variable) => `${tick(variable.name)} (${variable.comment.trim()})`)
+    .join(", ");
+}
+
+/** One server's block, blank-line separated like {@link artifactBlock}. */
+function serverBlock(server: McpServerMeta): string[] {
+  return [
+    "",
+    `### ${tick(server.id)}`,
+    "",
+    requireServerField(server.id, "description", server.description),
+    "",
+    `- **Runs as:** ${TRANSPORT_LABEL[server.transport]}`,
+    `- **Published by:** ${
+      server.firstParty
+        ? "the vendor of the service it fronts"
+        : "a community re-implementation, held to the same pin discipline"
+    }`,
+    `- **Pin:** ${pinLine(server)}`,
+    `- **Credentials:** ${credentialLine(server)}`,
+    `- **Blast radius:** ${requireServerField(server.id, "blastRadius", server.blastRadius)}`,
+  ];
+}
+
+/**
+ * Render the catalog page from an explicit table, so the refusals above are
+ * reachable from a test without a defective checkout.
+ *
+ * Rows keep the catalog's DECLARATION order rather than sorting by id, and that
+ * is the one place this page departs from its siblings. A class page sorts
+ * because its walk order is filenames, which carry no meaning; this table's
+ * order is itself curated — systems-of-record first, then general-purpose, then
+ * the ones that reach production data, roughly ascending blast radius within
+ * each group — so sorting it would discard a fact the source states. Insertion
+ * order over string keys is stable, so the render stays byte-identical.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) on a row missing a description, a
+ * blast radius, or its own pin-review date.
+ */
+export function renderMcpPageFrom(
+  servers: Readonly<Record<string, McpServerMeta>>,
+  verifiedOn: string,
+  spec: ReferencePageSpec = MCP_PAGE,
+): string {
+  const rows = Object.values(servers);
+  // Two states this page must not render past. An empty table would publish an
+  // accepted-value set of nothing while `config set mcp.servers` still resolves
+  // curated ids — and {@link countLine}'s empty phrasing says "in the corpus",
+  // which this table is not part of. A blank sweep date would print an empty
+  // code span where the currency claim goes, which reads as no claim at all.
+  if (rows.length === 0) {
+    fail(
+      `The curated MCP catalog is empty, so ${MCP_PAGE.path} would publish an accepted-value set ` +
+        `of nothing. Check \`CURATED_MCP_SERVERS\` in src/mcp/catalog.ts.`,
+    );
+  }
+  if (verifiedOn.trim() === "") {
+    fail(
+      `The curated MCP catalog states no sweep date, so ${MCP_PAGE.path} would publish its row ` +
+        `set with no currency claim. Check \`CATALOG_VERIFIED_ON\` in src/mcp/catalog.ts.`,
+    );
+  }
+
+  const lines = [
+    frontmatterBlock(spec.title),
+    "",
+    generatedBanner(),
+    "",
+    `# ${spec.title}`,
+    "",
+    spec.intro,
+    "",
+    `${countLine(rows.length, "server")} Row set last swept on ${tick(verifiedOn)}.`,
+    ...rows.flatMap((server) => serverBlock(server)),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
 // ── Render ───────────────────────────────────────────────────────
 
 /** Where the renderer reads from; both default to this checkout. */
@@ -470,10 +665,10 @@ export async function renderReferencePages(
 
   const pages = new Map<string, string>();
   for (const spec of REFERENCE_PAGES) {
-    pages.set(
-      spec.path,
-      spec.covers === "packs" ? renderPacksPage(spec, packs) : renderClassPage(spec, index),
-    );
+    if (spec.covers === "packs") pages.set(spec.path, renderPacksPage(spec, packs));
+    else if (spec.covers === "mcp") {
+      pages.set(spec.path, renderMcpPageFrom(CURATED_MCP_SERVERS, CATALOG_VERIFIED_ON, spec));
+    } else pages.set(spec.path, renderClassPage(spec, index));
   }
   return pages;
 }

@@ -41,4 +41,5 @@ hand-written or corpus source. Nothing here links outside this tree.
 - [Rules](docs/reference/rules.md): every rule in the corpus — its trigger, tags, load mode and retirement condition. Regenerate with `node scripts/generate-docs.mjs`.
 - [Commands](docs/reference/commands.md): every command in the corpus — its trigger, tags, load mode and retirement condition. Regenerate with `node scripts/generate-docs.mjs`.
 - [Packs](docs/reference/packs.md): the first-party packs `add` can install, and what each one ships. Regenerate with `node scripts/generate-docs.mjs`.
+- [MCP servers](docs/reference/mcp-servers.md): every curated MCP server id `mcp.servers` accepts, with its pin, credentials and blast radius. Regenerate with `node scripts/generate-docs.mjs`.
 - [Charter](content/charter/stamity-charter.md): the always-on context every generated setup carries: repo facts, floor invariants, touchpoint index.

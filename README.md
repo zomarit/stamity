@@ -27,8 +27,10 @@ npx @zomarit/stamity init
 ```
 
 `init` reads the repository, asks what it cannot infer, and writes the setup plus a manifest
-that every later command works from. Node `>= 22.12` is the only prerequisite: nothing is
-installed globally, and the engine contacts no service to do its work. The package is
+that every later command works from. Node `>= 22.12` is the engine's only prerequisite:
+nothing is installed globally, and the engine contacts no service to do its work. Two of
+the nine touchpoints reach further — `/st-board` and `/st-pr-resolve` shell out to the
+GitHub CLI (`gh`), authenticated, when they work a real board or pull request. The package is
 `@zomarit/stamity` and it installs two names for the same binary — `stamity` and the short
 alias `st` — so an installed copy runs as `stamity sync` or `st sync`.
 
