@@ -66,10 +66,14 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * inherit this identically, because the `.claude/skills/` copy is a path
  * re-target of these same rendered bytes (`retargetProjection`).
  *
- * Pack skills are the one thing that stays out of that widened spec: they reach
- * the same projection through their own resolution lane and are merged under a
- * directory-collision check, so indexing them a second time here would
- * double-project them into it.
+ * Pack roots join that index too, but a pack skill still projects exactly
+ * once, through its own resolution lane, merged under a directory-collision
+ * check (`mergeSkillProjections`, `../../emit/planner.ts`). The pack roots
+ * ride along on the LOOKUP so an overlay addressed at any pack-supplied
+ * artifact — not only a skill — resolves against it instead of throwing an
+ * orphan refusal; `buildCoreEmissionPlan` filters pack-origin rows back out
+ * of what that lookup admits before merging, so the second, pack-aware lane
+ * stays the only one that emits a pack skill's own rows.
  *
  * The pinned cases in `test/cli/engine/emission.test.ts` hold the text and the
  * mechanism together: one asserts the three residue classes arrive, one asserts

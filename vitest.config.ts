@@ -78,11 +78,19 @@ export default defineConfig({
         // unique by construction, so no comparison returns zero. The
         // no-frontmatter return in `toSpecFrontmatter` (L203) and the
         // empty-metadata skip (L227): a skill reaches this module only after the
-        // catalog read an `id` and a `type` out of its frontmatter, so the head
-        // always parses AND always contributes at least those two non-spec keys
-        // to the hoisted map. Both guards enforce that invariant rather than
-        // assume it — verified 2026-08-16 by projecting a frontmatter-less
-        // SKILL.md, which the selection drops before projection (0 rows).
+        // catalog read an `id` and a `type` out of its frontmatter — true of a
+        // corpus OR a pack skill alike, since both walk through the same
+        // `scanClass` (`../content/catalog.ts`), which drops a frontmatter-less
+        // document before any item reaches this module — so the head always
+        // parses AND always contributes at least those two non-spec keys to the
+        // hoisted map. Both guards enforce that invariant rather than assume it.
+        // `test/emit/skillsProjection.test.ts`'s "toSpecFrontmatter document-shape
+        // edges" now exercises both arms directly as calls to the exported
+        // function — real coverage, not a gap — but they stay DEFENSIVE by this
+        // floor's own accounting: no production call path (corpus walk or pack
+        // walk) can still hand this function either shape, so the floor is not
+        // raised to 100 on the strength of a direct call proving what the walk
+        // already refuses to produce.
         "src/emit/skillsProjection.ts": {
           statements: 98,
           branches: 90,

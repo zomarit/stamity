@@ -777,9 +777,13 @@ describe("the overlay layer", () => {
       // The fence is refused (REQ-OVERLAY-007) and points at the yaml half.
       expect(refusal.message).toContain("overrides/rules/security.customize.md");
       expect(refusal.message).toContain(".customize.yaml");
-      // And the phantom id is unreachable in every code path, not merely
-      // shadowed: the walk stops before any item is assembled.
-      expect(refusal.message).not.toContain("security.customize.md indexed");
+      // FIXER REMOVAL (fixer batch F-C, finding m2, cited in review): a
+      // tautological `not.toContain("security.customize.md indexed")`
+      // assertion sat here — the fence-refusal message this case pins never
+      // constructs that phrase in the first place, so no code path could ever
+      // turn it red. The real "unreachable in every code path" claim this
+      // docblock makes is already pinned by the case above and by "treats a
+      // corpus-side `.customize.md` as no artifact and no overlay" below.
     });
 
     it("treats a corpus-side `.customize.md` as no artifact and no overlay", async () => {

@@ -278,22 +278,46 @@ export async function buildCoreEmissionPlan(
   const contentRoot = corpusRoot === undefined ? {} : { contentRoot: corpusRoot };
   // The skills projection takes the corpus root AND the repo's override tree,
   // never the corpus half alone: narrowing here is what left a user `SKILL.md`
-  // winning its id in the index and emitting the shipped body anyway. Pack
-  // roots stay out on purpose — packs reach the projection through
-  // `resolveInstalledPackContent` and `mergeSkillProjections` below, and
-  // indexing them here too would double-project every pack skill straight into
-  // that merge's directory-collision refusal. The converse — an override
-  // claiming a pack skill's id or directory, invisible to this index because it
-  // never saw the pack half — is `mergeSkillProjections`' to refuse; see its
-  // comment for why an override-origin row gets a different remedy than a
-  // corpus-origin one.
-  const skillsContentRoot: ContentRoots = {
+  // winning its id in the index and emitting the shipped body anyway.
+  //
+  // Pack roots join too, for a reason that has nothing to do with skills:
+  // `buildContentIndex` discovers an overlay under EVERY class directory the
+  // override tree holds, not only the class this call cares about, and
+  // `applyOverlays` refuses any overlay whose base it cannot find in `byKey`.
+  // Leaving pack roots out of this index — as an earlier revision did — made
+  // an overlay on ANY pack-supplied artifact (a rule, an agent, a command; not
+  // only a skill) an orphan by this index's lights alone, throwing here and
+  // blocking sync before the residue planners (whose own indexes already carry
+  // both roots) ever got a chance to resolve it correctly.
+  //
+  // Admitting pack roots to the LOOKUP does not admit pack skills to the
+  // PROJECTION: `corpusSkills` below is filtered back down to non-pack rows
+  // before it reaches `mergeSkillProjections`, so a pack skill still reaches
+  // `.agents/skills/` exactly once, through `resolveInstalledPackContent` and
+  // that merge — which is also why a pack skill overlay is resolved (no more
+  // false refusal) without being reflected in what gets projected: the
+  // pack-skill lane below never sees the override tree, only this lookup does.
+  const skillsContentRootBase = {
     ...(corpusRoot === undefined ? {} : { root: corpusRoot }),
     ...(roots.overrideRoot === undefined ? {} : { overrideRoot: roots.overrideRoot }),
   };
   // Pack resolution gates hooks planning (pack hook files are read through the
-  // user-hook lane) and nothing else, so it is a dependency EDGE inside the
-  // parallel fan — the charter and skills reads never wait on it.
+  // user-hook lane) the same way it now gates the skills-index lookup above —
+  // installed-pack roots live on the RESOLVED set, not on `ctx.contentRoot`
+  // (that spec is what the residue planners widen separately, in
+  // `residueContext`; this function is handed `ctx` unwidened), so the lookup
+  // has to wait on this promise rather than reading `roots.packRoots`, which
+  // is always empty here. The charter read is the one that still does not.
+  //
+  // This is a real dependency EDGE, not a cosmetic reorder: `projectSkills` is
+  // now serialized behind pack resolution (`packsPromise.then(...)` below)
+  // wherever it used to start alongside the charter read in the same
+  // `Promise.all`. A repo with no installed packs pays nothing extra —
+  // `resolveInstalledPackContent` resolves to an empty pack set fast, and
+  // `packRoots.length === 0` below then hands `projectSkills` the same
+  // pack-free spec it always read — but a pack-having repo's skills read now
+  // waits on the pack discovery walk finishing first, where it used to run
+  // concurrently with it.
   const packsPromise =
     packs === undefined
       ? resolveInstalledPackContent(ctx.rootDir, ctx.manifest, corpusRoot)
@@ -304,9 +328,16 @@ export async function buildCoreEmissionPlan(
       facts: { monorepoPackages: ctx.facts.monorepoPackages },
       ...contentRoot,
     }),
-    projectSkills(
-      { manifest: ctx.manifest, engineVersion: ctx.engineVersion },
-      { contentRoot: skillsContentRoot },
+    packsPromise.then((resolved) =>
+      projectSkills(
+        { manifest: ctx.manifest, engineVersion: ctx.engineVersion },
+        {
+          contentRoot: {
+            ...skillsContentRootBase,
+            ...(resolved.packRoots.length === 0 ? {} : { packRoots: resolved.packRoots }),
+          },
+        },
+      ),
     ),
     packsPromise.then(async (resolved) =>
       planHooksInfra({
@@ -321,7 +352,17 @@ export async function buildCoreEmissionPlan(
     ),
     packsPromise,
   ]);
-  const skills = mergeSkillProjections(corpusSkills, resolvedPacks);
+  // `corpusSkills` now indexes pack roots too (above), so a pack skill with no
+  // colliding id or directory is ADMITTED here alongside the corpus and
+  // override ones — this filter is what keeps it from reaching emission
+  // twice. `mergeSkillProjections` is the one place a pack skill projects,
+  // and it still runs against `resolvedPacks`, whose own index never saw the
+  // override tree — an overlay on a pack skill resolves (no orphan refusal)
+  // without changing what that lane emits.
+  const skills = mergeSkillProjections(
+    corpusSkills.filter((row) => row.origin !== "pack"),
+    resolvedPacks,
+  );
 
   const serverIds = [...(ctx.manifest.mcp?.servers ?? [])];
   const protocolVersion = ctx.manifest.mcp?.protocolVersion;
@@ -378,13 +419,19 @@ export async function buildCoreEmissionPlan(
  * artifact claimed the path first.
  *
  * `corpusSkills` is not corpus-only despite the name: it is `projectSkills`'
- * output over the corpus root AND the repo's override tree
- * (`buildCoreEmissionPlan`'s `skillsContentRoot`), so a row in it can be
- * `origin: "user"`. `packRoots` staying out of that index (see
- * `ProjectSkillsOptions.contentRoot`'s comment) means an override claiming a
- * pack skill's id or directory is invisible to every check upstream of here —
- * this is the one place both sides are in hand at once. Two shapes, caught
- * before the generic directory-collision throw above ever fires on them:
+ * output over the corpus root, the repo's override tree AND the installed
+ * pack roots (`buildCoreEmissionPlan`'s `skillsContentRoot`), filtered back
+ * down to non-pack rows before it reaches this function — the pack roots ride
+ * along so that index can resolve an overlay addressed at a pack artifact
+ * (any class, not only a skill; see `buildCoreEmissionPlan`'s comment), not so
+ * a pack skill projects from here. A row that survives the filter can still be
+ * `origin: "user"`, and because the lookup DID see the pack roots, an override
+ * claiming a pack skill's id or directory was already resolved (shadow or
+ * collision) inside that index — but the PROJECTION check below is still what
+ * catches it, because `resolvedPacks.skillRows` (this function's other input)
+ * comes from a lane that never saw the override tree at all and would emit
+ * the pack skill's own rows regardless. Two shapes, caught before the generic
+ * directory-collision throw above ever fires on them:
  *
  * - **Same directory.** An override skill's DIRECTORY is also a pack skill's
  *   directory. Falling through to the directory-collision throw would name

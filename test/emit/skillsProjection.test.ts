@@ -340,13 +340,18 @@ describe("projectSkills transforms", () => {
 /**
  * `toSpecFrontmatter` is exported and reused verbatim by the installed-pack
  * skill lane (`../pack/projection.ts` → `projectOnePackSkill`), so its two
- * document-shape edges are exercised directly here rather than only through the
- * corpus walk, which never feeds it either shape: the walk only reaches this
- * transform for a skill the catalog already read an `id` and `type` out of, so a
- * frontmatter-less document and an all-spec-keys document (empty hoisted
- * metadata) are unreachable that way but are real inputs the pack lane can hand
- * it. Both are documented contracts of the function, and both are the branch
- * arms that keep this module under its own coverage floor without a direct case.
+ * document-shape edges are exercised directly here as calls to the exported
+ * function, rather than through either production call path. NEITHER path
+ * can actually hand it a frontmatter-less document or an all-spec-keys one
+ * (empty hoisted metadata): corpus and pack skills alike are indexed through
+ * the same `scanClass` (`../../src/content/catalog.ts`), which drops a
+ * frontmatter-less document before any item reaches this module and always
+ * reads an `id` and a `type` out of what remains. These two cases are
+ * defensive arms of a function this module exports and the pack lane also
+ * calls directly — real, documented contracts of the function's own
+ * signature, worth pinning at that level — not inputs either walk can
+ * produce today. Both are the branch arms that keep this module under its
+ * own coverage floor without a direct case (`vitest.config.ts`).
  */
 describe("toSpecFrontmatter document-shape edges", () => {
   it("returns a document with no frontmatter untouched, inventing no head", () => {

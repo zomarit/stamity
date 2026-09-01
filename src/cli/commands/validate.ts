@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
-import type { ContentIndex, PackContentRoot } from "../../content/catalog.ts";
+import { toPosixDisplayPath, type ContentIndex, type PackContentRoot } from "../../content/catalog.ts";
 import type { UserContentOverlay } from "../../content/userContent.ts";
 import type { EngineRegistry } from "../../index.ts";
 import type { ContentClass } from "../../types/content.ts";
@@ -303,12 +303,13 @@ async function collectUserContent(
   manifest: SetupManifest | null,
 ): Promise<SectionReport> {
   const { userContent } = engine.content;
-  // Four disjoint walks of one small tree, plus the per-artifact judgements.
-  const [artifacts, skipped, support, overlays] = await Promise.all([
+  // Five disjoint walks of one small tree, plus the per-artifact judgements.
+  const [artifacts, skipped, support, overlays, carrierExtras] = await Promise.all([
     userContent.discoverUserContent(rootDir),
     userContent.discoverSkippedUserEntries(rootDir),
     userContent.scanUserSkillSupportFiles(rootDir),
     userContent.discoverUserOverlays(rootDir),
+    userContent.discoverSkillOverlayCarrierExtras(rootDir),
   ]);
   const judged = await Promise.all(
     artifacts.map(async (artifact) => ({
@@ -341,6 +342,25 @@ async function collectUserContent(
     ...support.findings.map((row) =>
       finding("user-content", repoPath(rootDir, row.filePath), row.severity, row.detail),
     ),
+    // A carrier directory's own halves patch the base; anything else in it is
+    // silently dropped from every sync — the projection walks the BASE's
+    // directory, never this one — so it is loud here rather than nowhere.
+    // Warning, not error: nothing is broken, the bytes just do not ship.
+    ...carrierExtras.map((extra) =>
+      finding(
+        "user-content",
+        repoPath(rootDir, extra.filePath),
+        "warning",
+        extra.count === 1
+          ? `sits beside overlay "${extra.slug}"'s halves but is not one of them, so it is never ` +
+            `emitted: the skills projection walks the BASE artifact's own directory, not this ` +
+            `carrier one. Move it into the base's pack or corpus source to ship it, or remove it.`
+          : `is a directory of ${extra.count} files sitting beside overlay "${extra.slug}"'s ` +
+            `halves — none of them one of the halves — so none of it is ever emitted: the ` +
+            `skills projection walks the BASE artifact's own directory, not this carrier one. ` +
+            `Move the directory into the base's pack or corpus source to ship it, or remove it.`,
+      ),
+    ),
     ...customization.findings,
   ];
 
@@ -356,13 +376,23 @@ async function collectUserContent(
   // it has, and calling it an artifact would misreport what the tree holds — the
   // artifact it patches is not in this tree at all.
   const overlayUnits = overlays.length;
+  // Carrier extras are their own noun too, for the same reason: they are
+  // neither an artifact nor a support file that ships, so folding them into
+  // either count would misreport what the tree holds.
+  const carrierExtraUnits = carrierExtras.length;
   const summary = [
     ...(artifactUnits > 0 ? [plural(artifactUnits, "artifact")] : []),
     ...(overlayUnits > 0 ? [plural(overlayUnits, "overlay")] : []),
     ...(supportUnits > 0 ? [plural(supportUnits, "skill support file")] : []),
+    ...(carrierExtraUnits > 0 ? [plural(carrierExtraUnits, "unemitted carrier file")] : []),
   ].join(" and ");
   return {
-    ...section("user-content", findings, artifactUnits + overlayUnits + supportUnits, summary),
+    ...section(
+      "user-content",
+      findings,
+      artifactUnits + overlayUnits + supportUnits + carrierExtraUnits,
+      summary,
+    ),
     ...(customization.note === undefined ? {} : { note: customization.note }),
     shadows: customization.shadows,
   };
@@ -466,9 +496,11 @@ function overlayFailure(
   // the match normalises the native half path the same way before testing
   // containment — otherwise a Windows backslash path would never be found in a
   // forward-slash message and the refusal would misattribute to the base.
-  const named = overlays
-    .flatMap(halfPaths)
-    .find((path) => message.includes(path.replaceAll("\\", "/")));
+  // `toPosixDisplayPath` rather than a restated `.replaceAll` — this is the one
+  // seam in this file that parses a path back out of a message, and a second,
+  // drifted copy of the engine's own display normalisation is how that parse
+  // silently stops matching (a finding degrading to a note at exit 0).
+  const named = overlays.flatMap(halfPaths).find((path) => message.includes(toPosixDisplayPath(path)));
   return named === undefined
     ? undefined
     : finding("user-content", repoPath(rootDir, named), "error", message);
@@ -517,11 +549,16 @@ async function judgePatched(
     filePath: item.filePath,
     frontmatter: item.frontmatter,
     body: item.body,
-    // The merged artifact sits on its BASE's file, whose name carries the engine
-    // prefix its id does not. Its identity is the base's by construction — an
-    // overlay may not move `id` or `type` — and a base whose declared id
-    // disagrees with its own filename is the walk's finding, in its own terms.
-    fileSlug: item.id,
+    // The merged artifact sits on its BASE's file, so identity has to be judged
+    // against the ADDRESS the overlay was authored under, not the base's real
+    // filename (which a corpus rule prefixes with `stamity-` and a corpus
+    // command never carries the engine's `cmd-` prefix on at all) and not
+    // `item.id` (the catalog id, `cmd-`-prefixed for a command) — both would
+    // report a mismatch against every merged command's bare declared id.
+    // `overlay.slug` is that address: the bare filename slug the override tree
+    // resolves the pair by, engine prefix already stripped, exactly the id an
+    // author's frontmatter is expected to declare.
+    fileSlug: overlay.slug,
   });
 
   const findings = [...check.errors, ...check.warnings].map((violation) =>

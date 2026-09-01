@@ -161,19 +161,32 @@ export interface ProjectSkillsOptions {
    * `.stamity/overrides/skills/<dir>/SKILL.md` reaches emission the way a user
    * agent, rule or command already does. Defaults to the package-bundled corpus.
    *
-   * `packRoots` is deliberately NOT supplied by this projection's caller
-   * (`./planner.ts` → `buildCoreEmissionPlan`), even though the spec has the
-   * slot. Installed packs keep their own resolution lane —
+   * `packRoots` IS now supplied by this projection's caller (`./planner.ts` →
+   * `buildCoreEmissionPlan`) — but only into the LOOKUP, not into what this
+   * function admits into its own return. `buildContentIndex` discovers an
+   * overlay under every class the override tree holds, not only `skill`, and
+   * refuses one whose base it cannot find in `byKey`; without pack roots in
+   * that lookup, an overlay addressed at ANY pack-supplied artifact (a rule,
+   * an agent, a command — not only a skill) was an orphan by this index's
+   * lights alone, throwing here and blocking every plan. Installed packs still
+   * keep their own resolution and rendering lane for what actually PROJECTS —
    * `resolveInstalledPackContent` produces pack skill rows and
    * `mergeSkillProjections` folds them in under a directory-collision check —
-   * so indexing them here as well would project every pack skill twice and
-   * trip that check against rows this projection itself laid down.
+   * so indexing pack roots here only for lookup purposes and then admitting
+   * them into this function's return too would project every pack skill twice
+   * and trip that check against rows this projection itself laid down. The
+   * caller (`buildCoreEmissionPlan`) is what keeps the two separated: it
+   * filters this function's own output back down to non-pack rows
+   * (`row.origin !== "pack"`) before handing it to `mergeSkillProjections`, so
+   * a pack-origin row that survives admission here (first claimant of its own
+   * key, unrelated to any override) never reaches emission from this lane.
    *
-   * The exclusion opens a converse case `mergeSkillProjections` also has to
-   * close: an override in the corpus-plus-override index above can claim a
-   * catalog id or a directory a pack skill supplies, because this index never
-   * sees the pack half to refuse it. `mergeSkillProjections` is where the two
-   * sides finally meet, so it is where that refusal has to live — see its own
+   * The override-vs-pack collision `mergeSkillProjections` also has to close
+   * stays real regardless: an override in the corpus-plus-override-plus-pack
+   * index above can still claim a catalog id or a directory a pack skill
+   * supplies from a DIFFERENT layer's resolution (a shadow, not a lookup
+   * miss), and `mergeSkillProjections` is where the two sides finally meet
+   * for emission, so it is where that refusal has to live — see its own
    * comment.
    */
   contentRoot?: string | ContentRoots;

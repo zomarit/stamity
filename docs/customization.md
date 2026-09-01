@@ -150,9 +150,18 @@ override of the same id would use:
 | command | `commands/<slug>.customize.yaml` | `commands/<slug>.customize.md` |
 | skill | `skills/<slug>/SKILL.customize.yaml` | `skills/<slug>/SKILL.customize.md` |
 
-`<slug>` is the bundled file's name with the engine prefix off — `st-qa` is patched as `qa`, a
-command by its bare slug rather than its `cmd-` id — and a skill's halves compose onto `SKILL`
-the way its readable file does, in a directory that needs no `SKILL.md` of its own.
+`<slug>` addresses the base artifact's DECLARED `id`, with the engine's internal `cmd-` prefix off
+for a command — not the bundled file's name. The two agree for every artifact this repo ships
+today (`st-qa.md` declares `id: qa`, `st-plan.md` declares `id: plan`), which is corpus convention
+rather than a rule the resolver enforces: an artifact whose filename disagrees with its own
+declared `id` is still addressed by the id, because that is the identity the walk resolves an
+overlay against. A skill's halves compose onto `SKILL` the way its readable file does, in a
+directory that needs no `SKILL.md` of its own.
+
+That skill directory is a **carrier**, not a skill directory: the artifact it patches lives in the
+corpus or in a pack, so nothing beside the two halves ever ships. Any other file dropped in there
+— a `references/*.md`, an image — is silently passed over at emission and reported by
+`stamity validate` as a warning naming it, never emitted and never an error.
 
 **The merge.** The frontmatter half is a shallow key set: a key it declares replaces the base
 value whole, a key written `key:` with no value is removed from the merged head, and a key it
@@ -171,11 +180,15 @@ condition: a `.customize.yaml` that is not valid YAML or whose root is not a map
 `type` key in it, which is the identity the patch is addressed by; a `---` fence at the head of a
 `.customize.md`, whose keys belong in the other half; a slug matching no artifact in any layer,
 which is almost always a typo in the filename; a body patch over the 250 000-character ceiling on
-user-authored content; and a merged artifact failing any check an authored one would fail.
-`stamity validate` reports those same defects against the half that carries them, and prints one
-`patched` line per healthy pair — the base still supplying the body, the layer it comes from, and
-every half applied. That line is information and never moves the exit code, exactly as a
-shadowing line does not.
+user-authored content; and a merged artifact failing the safe-path, closed-vocabulary and
+field-shape checks the index build runs (`buildItem`) — the same checks a bundled or
+full-override artifact is held to at index time. `stamity validate` runs a WIDER gate over the
+merged artifact — the same one it holds a full override to, including the deny scan, the lifecycle
+declarations and the lean-line threshold — and reports what it finds against the half that carries
+it; sync itself does not run that wider gate, so an overlay can pass sync and still be flagged by
+`validate`. `stamity validate` also prints one `patched` line per healthy pair — the base still
+supplying the body, the layer it comes from, and every half applied. That line is information and
+never moves the exit code, exactly as a shadowing line does not.
 
 ## Where to go next
 

@@ -15,6 +15,7 @@ import {
 import { safeWriteFile } from "../merge/safeWrite.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../types/content.ts";
 import { ENGINE_CONTENT_PREFIXES, STATE_DIR, stripEngineContentPrefix } from "../types/markers.ts";
+import { toPosixDisplayPath } from "./catalog.ts";
 import { parseFrontmatter } from "./frontmatter.ts";
 
 /**
@@ -600,6 +601,112 @@ async function withBodyLengths(
   });
 }
 
+/**
+ * One row sitting in a skill overlay's CARRIER directory that will never be
+ * emitted — a single dropped file, or a whole subdirectory collapsed to one
+ * row naming it and how many files it holds.
+ */
+export interface UserSkillOverlayCarrierExtra {
+  /** Slug the overlay is addressed by (prefix stripped, matching {@link UserContentOverlay.slug}). */
+  slug: string;
+  /** Absolute path — a file's own path, or a subdirectory's path when collapsed. */
+  filePath: string;
+  /** Regular files this row accounts for: 1 for a direct file, N for a collapsed subdirectory. */
+  count: number;
+}
+
+/**
+ * Every regular file (and collapsed subdirectory) sitting beside a skill
+ * overlay's two halves in its CARRIER directory —
+ * `.stamity/overrides/skills/<slug>/`, holding `SKILL.customize.yaml` and/or
+ * `SKILL.customize.md` and no `SKILL.md` of its own — other than the halves
+ * themselves.
+ *
+ * A carrier directory is not a skill directory: the base it patches lives in
+ * the corpus or a pack, so {@link scanUserSkillSupportFiles}'s "every regular
+ * file beside `SKILL.md` ships" promise does not hold here — there is no
+ * `SKILL.md` here for a support file to sit beside. The skills PROJECTION
+ * (`../emit/skillsProjection.ts`) walks the merge identity's base directory,
+ * never the override tree, so a `references/*.md` an author drops beside a
+ * carrier's halves is silently dropped from every sync: it neither emits nor
+ * errors, and nothing short of this scan says so. `stamity validate` turns
+ * each row here into an informational finding naming what will not ship, so
+ * an author who believes those bytes ship finds out before they go looking
+ * for them in agent context and do not find them there.
+ *
+ * Two shapes keep that finding from becoming noise a repo learns to ignore:
+ *
+ * - **Dotfiles are excluded, at any depth.** `.DS_Store`, `.gitkeep`, an
+ *   editor's dotfile swap — none of them is an author dropping content beside
+ *   an overlay on purpose, and a permanent warning on each is a floor nobody
+ *   asked for and nobody can clear.
+ * - **A subdirectory collapses to one row.** A `references/` tree the author
+ *   actually meant to ship earns ONE row naming the directory and how many
+ *   files it holds, not one row per file — a 40-file tree is one line, not
+ *   forty, and the row still names exactly where to look.
+ *
+ * A symlink is not reported here at any level: it is not emitted either way,
+ * and reporting it as "dropped" would suggest a fix (moving the bytes) that
+ * does not apply to it.
+ */
+export async function discoverSkillOverlayCarrierExtras(
+  rootDir: string,
+): Promise<UserSkillOverlayCarrierExtra[]> {
+  const classDir = join(userContentRoot(rootDir), CLASS_LAYOUT.skill.dir);
+  const entries = await listDir(classDir);
+  if (entries === null) return [];
+
+  const dirs = entries.filter((entry) => entry.isDirectory());
+  const perDir = await Promise.all(
+    dirs.map(async (entry) => {
+      const dirPath = join(classDir, entry.name);
+      const inner = (await listDir(dirPath)) ?? [];
+      const hasHalf = inner.some(
+        (candidate) =>
+          candidate.isFile() &&
+          (candidate.name === `${SKILL_BASE}${OVERLAY_FRONTMATTER_SUFFIX}` ||
+            candidate.name === `${SKILL_BASE}${OVERLAY_BODY_SUFFIX}`),
+      );
+      const hasSkillFile = inner.some(
+        (candidate) => candidate.isFile() && candidate.name === SKILL_FILE,
+      );
+      // Not a carrier: either no overlay half at all (an unrelated or empty
+      // directory) or a full override sits here too, which is a different
+      // refusal's territory (`refuseOverlayExclusivity`), not this scan's.
+      if (!hasHalf || hasSkillFile) return [];
+
+      const found = (await walkSupportEntries(dirPath, "")).filter(
+        (item) =>
+          !item.linked &&
+          item.relative !== `${SKILL_BASE}${OVERLAY_FRONTMATTER_SUFFIX}` &&
+          item.relative !== `${SKILL_BASE}${OVERLAY_BODY_SUFFIX}` &&
+          // Dotfile at ANY path segment — the file's own name or a directory
+          // it sits under — is excluded, not merely the file's own name: a
+          // `.git/` or `.obsidian/` subtree dropped here is tooling debris at
+          // its root, not content an author placed one file at a time.
+          !item.relative.split("/").some((segment) => segment.startsWith(".")),
+      );
+
+      const slug = stripEngineContentPrefix(entry.name);
+      const byTop = new Map<string, SupportEntry[]>();
+      for (const item of found) {
+        const top = item.relative.split("/")[0]!;
+        byTop.set(top, [...(byTop.get(top) ?? []), item]);
+      }
+      // A single file — whether directly in the carrier or the lone file
+      // under an otherwise-empty subdirectory — is still named by its OWN
+      // path: collapsing exists for a tree an author actually populated, not
+      // for turning one precise file path into a vaguer directory one.
+      return [...byTop.entries()].map(([top, items]) =>
+        items.length === 1
+          ? { slug, filePath: join(dirPath, ...items[0]!.relative.split("/")), count: 1 }
+          : { slug, filePath: join(dirPath, top), count: items.length },
+      );
+    }),
+  );
+  return perDir.flat();
+}
+
 /** Which half — if either — a filename is, and the base name under the suffix. */
 function overlayHalfOf(
   name: string,
@@ -735,8 +842,21 @@ interface SupportEntry {
 }
 
 async function scanSkillSupport(skillDir: string): Promise<UserSkillSupportScan> {
+  // The two overlay halves are excluded alongside the artifact itself: a
+  // carrier directory (no `SKILL.md`, one or both halves present) has no
+  // `SKILL.md` for this filter to catch, so without the second exclusion its
+  // own `SKILL.customize.yaml`/`SKILL.customize.md` were screened here AS a
+  // support file — deny-scanned a second time, under a "support file" label
+  // that misattributes an authored overlay line to a file it never violated
+  // in that role. The overlay-aware gate (`../cli/commands/validate.ts` →
+  // `judgePatched`) already deny-scans the MERGED artifact these halves
+  // become part of, addressed to the half that plausibly carries the text —
+  // one authored line, one finding.
   const entries = (await walkSupportEntries(skillDir, "")).filter(
-    (entry) => entry.relative !== SKILL_FILE,
+    (entry) =>
+      entry.relative !== SKILL_FILE &&
+      entry.relative !== `${SKILL_BASE}${OVERLAY_FRONTMATTER_SUFFIX}` &&
+      entry.relative !== `${SKILL_BASE}${OVERLAY_BODY_SUFFIX}`,
   );
   const absolute = (entry: SupportEntry): string => join(skillDir, ...entry.relative.split("/"));
 
@@ -1290,12 +1410,17 @@ function saveIdDefect(id: string): string | undefined {
  * editing it.
  */
 function overlayExclusivityDefect(filePath: string, overlayPaths: readonly string[]): string {
-  const overlays = overlayPaths.join(" and ");
+  const overlays = overlayPaths.map(toPosixDisplayPath).join(" and ");
+  // `filePath` is rendered through the same normalisation as `overlayPaths`:
+  // without it, one sentence mixed POSIX-rendered overlay paths with a native
+  // one on Windows, which is both a display inconsistency and a path an
+  // attribution match (this module's own `refuseOverlayExclusivity` twin, and
+  // any caller comparing this text) would fail to find in forward-slash form.
   return (
     `The overlay ${overlays} already patches this id. An artifact is either REPLACED by a full ` +
     `override or PATCHED by an overlay, never both — a tree holding both stops indexing, so ` +
-    `this save would break the next sync. Remove ${overlays} to write ${filePath}, or drop the ` +
-    `save and edit the overlay instead.`
+    `this save would break the next sync. Remove ${overlays} to write ${toPosixDisplayPath(filePath)}, ` +
+    `or drop the save and edit the overlay instead.`
   );
 }
 

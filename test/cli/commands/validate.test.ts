@@ -878,6 +878,102 @@ describe("validate — the overlay layer", () => {
     expect(human.stdout).toContain("1 overlay");
   });
 
+  it("names a file dropped beside a skill overlay's halves in its carrier directory", async () => {
+    // The carrier directory `.stamity/overrides/skills/qa/` holds the two
+    // overlay halves and NOTHING ELSE gets read from it at emission: the
+    // skills projection walks the BASE artifact's own directory
+    // (`skillsProjection.ts:384`), never this one, so a hand-placed
+    // `references/house.md` here is dropped from every sync silently unless
+    // this scan names it.
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/skills/qa/SKILL.customize.md": "Then read the failing case.\n",
+      ".stamity/overrides/skills/qa/references/house.md": "House context that never ships.\n",
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    // Advisory only: nothing is broken, the bytes just do not ship.
+    expect(code).toBe(0);
+    const dropped = doc.findings.find((row) =>
+      row.path.endsWith("skills/qa/references/house.md"),
+    );
+    expect(dropped).toMatchObject({ severity: "warning", source: "user-content" });
+    expect(dropped?.message).toContain("never emitted");
+    expect(doc.warningCount).toBe(1);
+
+    const human = await runHuman(repo.dir);
+    expect(human.stdout).toContain("references/house.md");
+    expect(human.stdout).toContain("never emitted");
+  });
+
+  it("collapses a populated carrier subtree to one row naming the directory and its file count", async () => {
+    // A 40-file `references/` tree earning 40 permanent warning rows is noise
+    // a repo learns to ignore. A directory an author actually populated
+    // collapses to ONE row naming it and how many files it holds — the
+    // single-file case above stays precise about which file, because
+    // collapsing exists for a populated tree, not to turn one exact path into
+    // a vaguer directory one.
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/skills/qa/SKILL.customize.md": "Then read the failing case.\n",
+      ".stamity/overrides/skills/qa/references/one.md": "First.\n",
+      ".stamity/overrides/skills/qa/references/two.md": "Second.\n",
+      ".stamity/overrides/skills/qa/references/three.md": "Third.\n",
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(0);
+    const dropped = doc.findings.filter((row) => row.path.includes("skills/qa/references"));
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatchObject({
+      severity: "warning",
+      source: "user-content",
+      path: ".stamity/overrides/skills/qa/references",
+    });
+    expect(dropped[0]?.message).toContain("3 files");
+    expect(dropped[0]?.message).toContain("none of it is ever emitted");
+  });
+
+  it("excludes a dotfile from the carrier scan at every depth, never a permanent warning", async () => {
+    // `.DS_Store`, `.gitkeep`, an editor's dotfile swap — none of them is an
+    // author dropping content on purpose, and a permanent warning on each is
+    // a floor nobody asked for and nobody can clear.
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/skills/qa/SKILL.customize.md": "Then read the failing case.\n",
+      ".stamity/overrides/skills/qa/.DS_Store": "junk\n",
+      ".stamity/overrides/skills/qa/references/.gitkeep": "",
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(0);
+    expect(doc.findings.filter((row) => row.path.includes("skills/qa"))).toEqual([]);
+  });
+
+  it("reports a block-severity hit in a SKILL overlay half exactly once, not twice under two labels", async () => {
+    // `SKILL.customize.md`/`SKILL.customize.yaml` sit inside the carrier
+    // directory the skill support-file walk also reads. Before the two
+    // overlay filenames joined `SKILL.md` in that walk's exclusion, one
+    // authored deny hit in the body half surfaced BOTH as the correct
+    // "patched" finding (addressed to the half, via the merged-artifact
+    // gate) AND a second one mislabelled as a "support file" — the same
+    // text, reported under a role the file was never emitted in.
+    const repo = getRepo();
+    const bodyHalf = ".stamity/overrides/skills/qa/SKILL.customize.md";
+    await repo.seedFiles({ [bodyHalf]: `Then ${DENY_SPAN} in the report.\n` });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(1);
+    expect(doc.errorCount).toBe(1);
+    expect(doc.findings).toHaveLength(1);
+    expect(doc.findings[0]).toMatchObject({ path: bodyHalf, severity: "error" });
+    expect(doc.findings[0]?.message).toContain("`ignore-findings`");
+  });
+
   it("refuses a block-severity hit in the MERGED body, naming the half and not the span", async () => {
     // The gate judges what the client will read, which is the base body with the
     // patch appended — text neither file carries on its own.
@@ -927,6 +1023,40 @@ describe("validate — the overlay layer", () => {
       expect.stringContaining("Frontmatter `id`"),
     );
     expect(doc.findings).toEqual([]);
+  });
+
+  it("keeps the id/filename check off the base's own filename for a command overlay", async () => {
+    // Commands carry a THIRD naming split rules and skills do not: the catalog
+    // id is `cmd-`-prefixed (`applyCommandPrefix`) but the overlay address and
+    // the declared frontmatter `id` are both the bare slug (`ask`, not
+    // `cmd-ask` or the `st-ask` filename). Judging identity against the
+    // catalog id reports every patched command as a false mismatch —
+    // REQ-OVERLAY-011's own acceptance case, uncovered until now: the suite
+    // above only exercised rule and skill overlays. `st-ask` is picked for its
+    // line count — under the command lean threshold, so this case stays about
+    // identity alone.
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/commands/ask.customize.yaml": "tags: [review]\n",
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+    expect(code).toBe(0);
+    expect(doc.findings.map((row) => row.message)).not.toContain(
+      expect.stringContaining("Frontmatter `id`"),
+    );
+    expect(doc.findings).toEqual([]);
+    expect(doc.shadows).toEqual([
+      {
+        outcome: "patched",
+        type: "command",
+        id: "cmd-ask",
+        base: "commands/st-ask.md",
+        origin: "corpus",
+        overlays: [".stamity/overrides/commands/ask.customize.yaml"],
+        emits: true,
+      },
+    ]);
   });
 
   it("warns without failing when the merged body crosses its class's lean threshold", async () => {

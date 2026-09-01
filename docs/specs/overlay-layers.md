@@ -229,6 +229,15 @@ carrier, not work in progress. A skill directory holding neither remains work in
 progress and is still passed over in silence
 (`src/content/userContent.ts:418-420`).
 
+A carrier's own halves are the only bytes the merge ever reads: the skills
+projection composes the merged `SKILL.md` from the BASE artifact's directory
+(corpus or pack), never from the carrier, so anything else an author drops
+beside the two halves — a `references/*.md`, an image — is silently dropped at
+every emission. `discoverSkillOverlayCarrierExtras`
+(`src/content/userContent.ts`) names each such file and `stamity validate`
+reports it as a warning, never an error: nothing is broken, the bytes just do
+not ship.
+
 **Rationale.** Without the narrowing, the body patch is simultaneously an
 overlay and a phantom artifact at id `<slug>.customize` — the defect evidenced
 in the context section. The filter change is not an optimisation; it is what
@@ -238,6 +247,23 @@ makes the two files mean one thing each.
 (`<slug>.customize.patch`, `<slug>.overlay.txt`). The `.customize.` infix is
 what three module headers already promise, and a doc-visible surface is cheaper
 to implement than to rename.
+
+**Known silent no-ops, documented rather than refused.** Two placements the
+walk neither discovers nor rejects, left silent by design rather than by
+omission: a `.customize.yaml`/`.customize.md` pair filed under a NESTED
+directory inside a class (`rules/team/my-rule.customize.yaml`) is not
+discovered as an overlay at all — overlay discovery lists each class
+directory one level deep, matching every other content walk in this tree — so
+the author sees neither a patch nor a refusal, only an artifact that never
+changed. A skill overlay half spelled in the wrong CASE
+(`skill.customize.md` for `SKILL.customize.md`) is likewise a silent no-op, on
+any filesystem: `pathOf` (`src/content/catalog.ts`) matches a listed
+directory entry's name by exact string equality, so a case-only misspelling
+is not a lookup a case-insensitive filesystem could normalise — it is a
+comparison that simply never matches, and the walk reports nothing rather
+than a typo it never compared against. Neither shape is refused today; this
+line is the fix this round takes — making the silence a documented one
+rather than an undocumented one.
 
 ### REQ-OVERLAY-003 — An overlay targets the shadow-resolved item
 
