@@ -453,6 +453,7 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/commands/add.ts": { unit: "p2-08", wave: 14 },
   "src/cli/commands/config.ts": { unit: "p2-09", wave: 14 },
   "src/cli/commands/config/mcp.ts": { unit: "p2-09", wave: 14 },
+  "src/cli/commands/config/policy.ts": { unit: "p2-09", wave: 14 },
   "src/cli/commands/clean.ts": { unit: "p2-10", wave: 14 },
   "src/cli/commands/learn.ts": { unit: "p2-11", wave: 14 },
   "src/cli/notice/updateNotice.ts": { unit: "p2-12", wave: 14 },

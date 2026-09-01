@@ -70,7 +70,7 @@ Reviews a change set across ten quality lenses and returns a verdict with confid
 
 Reviews the security surface of a change set — authentication, authorization, cryptography, trust boundaries, and the dependency set — when a change lands on those paths, returning graded findings with path:line evidence and making no edits.
 
-- **Tags:** `review`
+- **Tags:** `review`, `floor:security`
 - **Load:** `on-demand`
 - **Obsolete when:** target clients decide resource-level authorization, trust-boundary validation, and dependency advisories on a diff at a measured false-positive rate below 10%
 

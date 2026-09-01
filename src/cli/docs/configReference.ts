@@ -224,6 +224,20 @@ export function renderConfigReferenceFrom(specs: readonly ConfigKeySpec[]): stri
     "",
     ...table(["Key", "Accepted value", "Effective when unset"], rows),
     "",
+    // The one row whose stored value reaches nothing. `communicationStyle` is
+    // settable, validated, persisted and carried across a migration, and no
+    // emission path reads it: its only renderer, `communicationStyleDirective`
+    // in src/manifest/manifest.ts, has no caller outside that module's own
+    // suite. The source already says so at src/types/core.ts, which is a file
+    // no operator opens — and a table row that looks exactly like the fifteen
+    // rows around it is precisely how a reader concludes that setting the key
+    // does something. Published here so the page states it where the decision
+    // to set it is actually made. The key stays: removing it is a manifest
+    // migration, not a documentation change.
+    "One row is recorded but not yet consumed. `communicationStyle` is validated, persisted and",
+    "carried through migrations, and no generated file reads it, so setting it changes what the",
+    "manifest records rather than how any emitted file asks an agent to write.",
+    "",
     "## Changing one",
     "",
     `Config edits state; it never regenerates output. Apply a change with ${code("stamity sync")}.`,

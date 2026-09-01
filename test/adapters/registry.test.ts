@@ -56,7 +56,7 @@ async function minimalCtx(tools: Tool[]): Promise<EmissionContext> {
       now: FIXED_NOW,
     }),
     engineVersion: ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
     contentRoot: temp.path("corpus"),
   };
 }

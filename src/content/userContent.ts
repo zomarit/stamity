@@ -329,6 +329,13 @@ const LOAD_CLASSES: readonly string[] = ["always", "on-demand", "reference"];
  * writer takes a size- and hash-verified `.bak` before it overwrites and names
  * it in the warning it returns, so overwriting a hand-edited file stays
  * recoverable; byte-identical content is left alone entirely.
+ *
+ * `boundaryDir` is `rootDir` — the same root {@link artifactPath} joined this
+ * target onto, so the writer's containment check answers the exact question
+ * this caller can answer: a save lands inside this repo's state directory and
+ * nowhere else. Omitting it left the write on the substrate's structural
+ * fallback, which is the weaker rule every other emission path already declines
+ * (`cli/commands/sync/engine.ts`, `cli/commands/init/apply.ts` state why).
  */
 export async function saveUserContent(
   rootDir: string,
@@ -352,7 +359,7 @@ export async function saveUserContent(
   const warnings = check.warnings.map(describeViolation);
   if (errors.length > 0) return { saved: false, errors, warnings };
 
-  const result = await safeWriteFile(filePath, content, { force: true });
+  const result = await safeWriteFile(filePath, content, { force: true, boundaryDir: rootDir });
   if (result.warning !== undefined) warnings.push(result.warning);
   return { saved: true, path: filePath, errors: [], warnings };
 }

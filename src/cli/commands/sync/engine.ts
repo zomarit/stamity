@@ -3,7 +3,7 @@ import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
 import { buildContentIndex, type ContentIndex } from "../../../content/catalog.ts";
-import { analyzeRepo, isGreenfield, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
+import { analyzeRepo, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
 import {
   assertLedgerContainment,
   computeReclaimCandidates,
@@ -29,6 +29,7 @@ import { isSharedRegularFile } from "../../../merge/atomicWrite.ts";
 import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
 import { sweepReclaimCandidates, type ReclaimReport } from "../../../merge/reclaim.ts";
 import {
+  ledgerHashIndex,
   ledgerPathSet,
   predictMergeAction,
   predictPreservedContentRefusal,
@@ -260,6 +261,15 @@ function fullCorpusSelection(index: ContentIndex): ContentSelection {
  * substrate falls back to its structural rule, which cannot tell a monorepo's
  * in-repo alias (`.cursor/rules` → `shared/rules`) from a planted redirect and
  * refuses both.
+ *
+ * `ledgerHashes` rides alongside `ledgerPaths` and is built from the same rows.
+ * Ownership alone told the writer the path is regenerable; the recorded hash is
+ * what tells it whether the bytes STILL are. Without it a marker-less output
+ * this engine owns — a hook script, one of the plain-JSON documents — that the
+ * operator hand-edited is replaced outright on a plain flagless sync, with no
+ * `.bak` and no warning (`../../../merge/safeWrite.ts::hasLedgerDrift`). The
+ * plan lane needs no equivalent: drift moves the backup, never the disposition,
+ * so `predictMergeAction` still answers for this write exactly.
  */
 function writeOptions(
   managedBody: string | null,
@@ -267,6 +277,7 @@ function writeOptions(
   force: boolean,
   rootDir: string,
   ledgerPaths?: ReadonlySet<string>,
+  ledgerHashes?: ReadonlyMap<string, ReadonlySet<string>>,
 ): SafeWriteFileOptions {
   const base: SafeWriteFileOptions = {
     version: engineVersion,
@@ -274,6 +285,7 @@ function writeOptions(
     backup: true,
     boundaryDir: rootDir,
     ...(ledgerPaths === undefined ? {} : { ledgerPaths }),
+    ...(ledgerHashes === undefined ? {} : { ledgerHashes }),
   };
   return managedBody === null ? base : { ...base, managedContent: managedBody, appendIfNoBlock: true };
 }
@@ -486,7 +498,6 @@ export async function planSync(
     manifest: planningManifest,
     engineVersion,
     facts: {
-      greenfield: isGreenfield(repoInfo),
       monorepoPackages: repoInfo.monorepoPackages,
     },
   });
@@ -733,7 +744,11 @@ export async function applySync(
 
   // Ownership as of BEFORE this run (the ledger apply is about to rebuild), so
   // the write lane judges each path the same way the plan above predicted it.
+  // The hash index comes off the SAME rows: ownership says the engine wrote the
+  // path, the recorded hash says whether the bytes there are still the ones it
+  // wrote, and only the pair licenses replacing a file with no `.bak`.
   const ownedPaths = ledgerPathSet(rootDir, plan.manifest.ledger.map((row) => row.path));
+  const ownedHashes = ledgerHashIndex(rootDir, plan.manifest.ledger);
 
   const wrote: MergeResult[] = [];
   const emitted: EmittedArtifact[] = [];
@@ -789,7 +804,7 @@ export async function applySync(
       result = merged;
       if (writtenContent !== null) written = writtenContent;
     } else {
-      result = await safeWriteFile(absPath, output.content, writeOptions(managedBody, engineVersion, force, rootDir, ownedPaths));
+      result = await safeWriteFile(absPath, output.content, writeOptions(managedBody, engineVersion, force, rootDir, ownedPaths, ownedHashes));
     }
     wrote.push({ ...result, path: output.path });
     // A skipped write left someone else's bytes in place — the engine did not

@@ -2,7 +2,7 @@
 id: security
 type: agent
 description: "Reviews the security surface of a change set — authentication, authorization, cryptography, trust boundaries, and the dependency set — when a change lands on those paths, returning graded findings with path:line evidence and making no edits."
-tags: [review]
+tags: [review, floor:security]
 load: on-demand
 obsolete_when: target clients decide resource-level authorization, trust-boundary validation, and dependency advisories on a diff at a measured false-positive rate below 10%
 capabilities: [read]

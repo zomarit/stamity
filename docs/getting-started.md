@@ -153,6 +153,7 @@ Everything the setup knows about itself is under `.stamity/`:
 | `.stamity/handoffs/` | handoff records between sessions and clients |
 | `.stamity/generated/` | hook scripts and the agent tool policy, written from code |
 | `.stamity/packs/` | content installed by `add`, one directory per pack |
+| `.stamity/review-gate.json` | the per-run review-round counter the generated review-gate hook writes |
 
 Commit it. The manifest is the provenance record, and a teammate who clones the
 repository gets the same setup without re-running init. Everything init writes outside
@@ -161,10 +162,16 @@ trees `.claude/`, `.cursor/`, `.github/prompts/` and `.codex/` — because that 
 makes the clone arrive with working commands and skills already on disk, and because
 generated content earns no exemption from review: it lands as an ordinary diff, and
 `check` is what catches it drifting from what the engine would emit today. The one file
-that is **not** committed is `.env.mcp` — MCP credentials — and it is the single entry
-init adds to `.gitignore` for you. Because everything above it is committed, a second
+init keeps **out** of the repository is `.env.mcp` — MCP credentials — and it is the single
+entry it adds to `.gitignore` for you. Because everything above it is committed, a second
 checkout of this repository arrives with the whole setup already in place and that one file
 missing, which is exactly what `stamity worktree setup` places for you when it creates one.
+
+`review-gate.json` is the one path that is neither: a run writes it, nothing commits it, and
+nothing ignores it either. Leave it in that state. It is runtime state for the run that wrote
+it — its absence simply means the gate is open — and a path that is untracked and un-ignored
+is one `stamity worktree setup` refuses to carry across, so a review round counted in one
+worktree never gates another.
 
 ## Keeping it current
 

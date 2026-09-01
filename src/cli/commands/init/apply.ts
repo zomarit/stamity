@@ -22,6 +22,7 @@ import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.t
 import { ensureGitignoreEntry } from "../../../mcp/env.ts";
 import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
 import {
+  ledgerHashIndex,
   ledgerPathSet,
   predictMergeAction,
   safeWriteFile,
@@ -186,13 +187,19 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     rootDir,
     manifest,
     engineVersion,
-    facts: { greenfield: decisions.greenfield, monorepoPackages: decisions.monorepoPackages },
+    facts: { monorepoPackages: decisions.monorepoPackages },
   });
 
   // Ownership carried in from any previous run: on a `--force` re-init the
   // existing manifest's ledger is what marks platform-named artifacts
   // (AGENTS.md, .claude/settings.json, …) engine-owned rather than user-owned.
+  // The hash index rides with it, off the same rows: ownership says the engine
+  // wrote the path, the recorded hash says whether the bytes there are still the
+  // ones it wrote, and a re-init that replaces an engine-owned file the operator
+  // has since hand-edited must take the verified `.bak` rather than the
+  // no-backup fast path (`merge/safeWrite.ts::hasLedgerDrift`).
   const ownedPaths = ledgerPathSet(rootDir, manifest.ledger.map((row) => row.path));
+  const ownedHashes = ledgerHashIndex(rootDir, manifest.ledger);
 
   // `replace` is the one mode that executes in the WRITE lane rather than in
   // the plan: the bytes are the ordinary generated document, and what the user
@@ -263,6 +270,7 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
         force || replacePaths.has(output.path),
         ownedPaths,
         rootDir,
+        ownedHashes,
       );
     }
     wrote.push(result);
@@ -399,16 +407,25 @@ async function writeOutput(
   force: boolean,
   ledgerPaths: ReadonlySet<string>,
   boundaryDir: string,
+  ledgerHashes: ReadonlyMap<string, ReadonlySet<string>>,
 ): Promise<MergeResult> {
   const managedBody = extractManagedBlock(content, target);
   // `boundaryDir` is the repo root every `target` was joined onto, so the
   // writer checks containment against the tree init is setting up rather than
   // falling back to its structural rule — which cannot tell an in-repo alias
   // from a planted redirect and refuses both.
+  //
+  // `ledgerHashes` is built from the same rows as `ledgerPaths` and is what
+  // separates "regenerable" from "the only copy": ownership alone let the
+  // whole-file lane replace a marker-less engine output the operator had edited,
+  // with no `.bak` (`merge/safeWrite.ts::hasLedgerDrift`). The dry-run leg below
+  // shares these options deliberately and needs no drift input of its own —
+  // drift changes whether a backup is taken, never which action is returned.
   const writeOptions: SafeWriteFileOptions = {
     version: engineVersion,
     force,
     ledgerPaths,
+    ledgerHashes,
     boundaryDir,
     ...(managedBody === null ? {} : { managedContent: managedBody, appendIfNoBlock: true }),
   };

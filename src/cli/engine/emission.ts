@@ -147,10 +147,15 @@ export const OVERRIDE_EMITTING_CLASSES: readonly ContentClass[] = Object.freeze(
  * and read from there by the emission planner. A per-run fact could not survive
  * the run that made it, which is exactly how the choice ended up recorded but
  * never executed.
+ *
+ * A `greenfield` flag sat here too and is gone. Both command paths
+ * computed it and handed it over, the planner forwarded only
+ * `monorepoPackages`, and no adapter ever read it — a fork with a live input
+ * and no branch, which reads to the next author as a supported switch. The
+ * `isGreenfield` predicate itself stays: it still answers for the init
+ * `--json` decisions document, which is where the question has a consumer.
  */
 export interface EmissionFacts {
-  /** True when the repo had no agentic setup before this run. */
-  greenfield: boolean;
   /** Live monorepo package layout; empty for single-package repos. */
   monorepoPackages: readonly PackageEntry[];
 }

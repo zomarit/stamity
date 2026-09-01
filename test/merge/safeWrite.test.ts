@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { chmod, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   isManagedPath,
+  ledgerHashIndex,
   ledgerPathSet,
   predictDenyRefusal,
   predictMergeAction,
@@ -58,6 +60,16 @@ function generated(body: string, filePath?: string, version = VERSION): string {
   return wrapInManagedBlock(body, filePath, version);
 }
 
+/**
+ * What a ledger row records for the bytes the engine wrote — the same spelling
+ * both producers use (`sync/engine.ts::sha256`, `init/apply.ts::sha256`) and the
+ * one the drift check compares against. A different encoding here would report
+ * drift on every file and prove nothing about the gate.
+ */
+function sha256(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
 /** Every `.bak`-family entry left in the temp directory. */
 async function bakFiles(): Promise<string[]> {
   const entries = await readdir(tempDir().dir);
@@ -78,22 +90,131 @@ describe("safeWriteFile — creation and whole-file writes", () => {
     await expect(readFile(target, "utf-8")).resolves.toBe("hello\n");
   });
 
-  // Retitled from "rewrites an engine-owned file by name without a backup" and
-  // re-fixtured onto a ledger row. Justification: the behaviour moved — a
-  // basename prefix is no longer an ownership proof (see the `isManagedPath`
-  // suite for why) — and this case's subject is the no-backup fast path for a
-  // file the engine PROVABLY owns, which the ledger states directly. Every
-  // assertion is preserved; only the proof supplied to the writer changed.
-  it("rewrites a ledgered file without a backup", async () => {
+  // TEST CHANGE, justified: the no-backup fast path narrowed, so the case that
+  // pins it had to say WHICH ledgered file keeps it. It was "rewrites a ledgered
+  // file without a backup", asserting that ownership alone is enough — and that
+  // was the defect: ownership says the engine wrote the path, never that nobody
+  // edited it since (see the drift cases below). The subject is now the hot
+  // path this change had to leave alone — an UNDRIFTED ledgered file, whose
+  // bytes still hash to what the ledger recorded — so an ordinary sync still
+  // mints no `.bak` per file. Every assertion is preserved; the fixture gained
+  // the recorded hash that makes the file provably regenerable.
+  it("rewrites an UNDRIFTED ledgered file without a backup", async () => {
+    const target = tempDir().path("stamity-agent.md");
+    const lastWritten = "old\n";
+    await writeFile(target, lastWritten, "utf-8");
+
+    const result = await safeWriteFile(target, "new\n", {
+      ledgerPaths: ledgerPathSet(tempDir().dir, ["stamity-agent.md"]),
+      ledgerHashes: ledgerHashIndex(tempDir().dir, [
+        { path: "stamity-agent.md", contentHash: sha256(lastWritten) },
+      ]),
+    });
+
+    expect(result).toEqual({ path: target, action: "updated" });
+    await expect(readFile(target, "utf-8")).resolves.toBe("new\n");
+    await expect(bakFiles()).resolves.toEqual([]);
+  });
+
+  it("backs up a ledgered marker-less file the operator edited, before replacing it", async () => {
+    // THE exposure this drift gate closes. A marker-less engine output — a hook
+    // script, one of the plain-JSON outputs — is ledgered, so it was `managed`,
+    // so the whole-file lane replaced it outright on a plain flagless `sync`:
+    // no flag, no `.bak`, no warning, and the operator's only copy of the edit
+    // gone. The ledger already recorded the SHA-256 of what the engine wrote
+    // there, so the disagreement is a lookup rather than a guess.
+    const target = tempDir().path("stamity-config.json");
+    const engineWrote = '{"v":1}\n';
+    const operatorEdited = '{"v":1,"mine":true}\n';
+    await writeFile(target, operatorEdited, "utf-8");
+
+    const result = await safeWriteFile(target, '{"v":2}\n', {
+      ledgerPaths: ledgerPathSet(tempDir().dir, ["stamity-config.json"]),
+      ledgerHashes: ledgerHashIndex(tempDir().dir, [
+        { path: "stamity-config.json", contentHash: sha256(engineWrote) },
+      ]),
+    });
+
+    expect(result.action).toBe("updated");
+    const bak = `${target}.bak`;
+    await expect(bakFiles()).resolves.toEqual(["stamity-config.json.bak"]);
+    expect(result.warning).toContain("no longer match what it last wrote");
+    expect(result.warning).toContain(bak);
+    await expect(readFile(target, "utf-8")).resolves.toBe('{"v":2}\n');
+    // The verified `.bak` is the whole point: the hand-edit is recoverable.
+    await expect(readFile(bak, "utf-8")).resolves.toBe(operatorEdited);
+    // Drift moves the BACKUP, never the disposition — so the dry run that
+    // predicted this write still names the same action the apply returned.
+    expect(predictMergeAction(operatorEdited, '{"v":2}\n', {}, target)).toBe("skipped");
+    expect(
+      predictMergeAction(
+        operatorEdited,
+        '{"v":2}\n',
+        { ledgerPaths: ledgerPathSet(tempDir().dir, ["stamity-config.json"]) },
+        target,
+      ),
+    ).toBe("updated");
+  });
+
+  it("accepts any co-owner's recorded hash as proof the bytes are the engine's", async () => {
+    // One path, several adapters, one row each — and a tool-set change rebuilds
+    // one owner's rows without touching the other's, so two rows for one path
+    // can legitimately carry different hashes. Agreement with either is
+    // agreement; requiring the newest would back up a file nobody edited.
+    const target = tempDir().path("stamity-agent.md");
+    const lastWritten = "old\n";
+    await writeFile(target, lastWritten, "utf-8");
+
+    const result = await safeWriteFile(target, "new\n", {
+      ledgerPaths: ledgerPathSet(tempDir().dir, ["stamity-agent.md"]),
+      ledgerHashes: ledgerHashIndex(tempDir().dir, [
+        { path: "stamity-agent.md", contentHash: sha256("what the other owner wrote\n") },
+        { path: "stamity-agent.md", contentHash: sha256(lastWritten) },
+      ]),
+    });
+
+    expect(result).toEqual({ path: target, action: "updated" });
+    await expect(bakFiles()).resolves.toEqual([]);
+  });
+
+  it("keeps the fast path for a ledger row that recorded no hash", async () => {
+    // The stated residual, pinned so it stays deliberate. A row with no
+    // `contentHash` is a manifest written before the field existed: nothing was
+    // recorded, so nothing can be compared, and absence of a record is not
+    // evidence of an edit. Reading it as drift would mint a `.bak` beside every
+    // generated file on the first content-changing sync after an upgrade. Both
+    // shipped producers record a hash on every row, so this is a legacy
+    // manifest, not a live state.
     const target = tempDir().path("stamity-agent.md");
     await writeFile(target, "old\n", "utf-8");
 
     const result = await safeWriteFile(target, "new\n", {
       ledgerPaths: ledgerPathSet(tempDir().dir, ["stamity-agent.md"]),
+      ledgerHashes: ledgerHashIndex(tempDir().dir, [{ path: "stamity-agent.md" }]),
     });
 
     expect(result).toEqual({ path: target, action: "updated" });
-    await expect(readFile(target, "utf-8")).resolves.toBe("new\n");
+    await expect(bakFiles()).resolves.toEqual([]);
+  });
+
+  it("lets backup:false opt out of the drift backup as well", async () => {
+    // The explicit opt-out keeps its meaning: engine-owned, machine-local,
+    // regenerable state (`pack/install.ts` rollback) where the copy is litter
+    // rather than protection. A caller that states that has stated it about
+    // drift too — this is the one lane that may replace drifted bytes silently,
+    // and it is silent because the caller said so, not because ownership did.
+    const target = tempDir().path("stamity-config.json");
+    await writeFile(target, '{"v":1,"mine":true}\n', "utf-8");
+
+    const result = await safeWriteFile(target, '{"v":2}\n', {
+      backup: false,
+      ledgerPaths: ledgerPathSet(tempDir().dir, ["stamity-config.json"]),
+      ledgerHashes: ledgerHashIndex(tempDir().dir, [
+        { path: "stamity-config.json", contentHash: sha256('{"v":1}\n') },
+      ]),
+    });
+
+    expect(result).toEqual({ path: target, action: "updated" });
     await expect(bakFiles()).resolves.toEqual([]);
   });
 
@@ -825,14 +946,20 @@ describe.skipIf(process.platform === "win32")("mode preservation across the merg
 
   it("keeps the file's mode through a whole-file replace", async () => {
     const target = tempDir().path("stamity-config.json");
-    await writeFile(target, '{"v":1}\n', "utf8");
+    const lastWritten = '{"v":1}\n';
+    await writeFile(target, lastWritten, "utf8");
     await chmod(target, 0o600);
 
-    // Ledgered, so this is the no-backup fast path — the one that replaces the
-    // bytes outright and has no `.bak` carrying the source mode. (The proof used
-    // to come from the filename; the lane under test is unchanged.)
+    // Ledgered AND undrifted, so this is the no-backup fast path — the one that
+    // replaces the bytes outright and has no `.bak` carrying the source mode.
+    // (The proof used to come from the filename, then from ownership alone; the
+    // lane under test is unchanged, and the recorded hash is what still routes
+    // it here now that a drifted file diverts to the backup lane instead.)
     const result = await safeWriteFile(target, '{"v":2}\n', {
       ledgerPaths: ledgerPathSet(tempDir().dir, ["stamity-config.json"]),
+      ledgerHashes: ledgerHashIndex(tempDir().dir, [
+        { path: "stamity-config.json", contentHash: sha256(lastWritten) },
+      ]),
     });
 
     expect(result.action).toBe("updated");

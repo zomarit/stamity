@@ -109,7 +109,11 @@ const SPECIALISTS: readonly Specialist[] = [
   {
     id: "security",
     relPath: "agents/stamity-security.md",
-    tags: ["review"],
+    // The one specialist on the protected floor. `floor:security` is not a
+    // capability tag — it is the inclusion marker that keeps this agent out of
+    // a trimmed selection, alongside the three security rules it reads. Without
+    // it the rules ship floored and the agent that applies them does not.
+    tags: ["review", "floor:security"],
     capabilities: ["read"],
     modelClass: "advanced",
     axisReferences: ["references/security.md"],

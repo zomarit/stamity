@@ -189,7 +189,7 @@ async function emittedAskSurfaces(): Promise<
     rootDir: getEmissionRoot().path("repo"),
     manifest,
     engineVersion: EMISSION_ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
     contentRoot: CORPUS_ROOT,
   };
   const core = await buildCoreEmissionPlan(ctx);

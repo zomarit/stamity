@@ -145,7 +145,7 @@ function ctxOf(
     rootDir: getTemp().path("repo"),
     manifest: manifestFor(tools, mcp, importChoice),
     engineVersion: ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
     contentRoot,
   };
 }

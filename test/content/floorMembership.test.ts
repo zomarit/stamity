@@ -21,6 +21,22 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const SPINE_AGENTS = ["researcher", "implementer", "reviewer", "fixer", "test-runner"];
 const SECURITY_RULES = ["secrets", "security-patterns", "injection-screening"];
+/**
+ * The security floor is not rules-only. The `security` agent is the thing that
+ * READS those three rules against a change set, so a setup that keeps them and
+ * sheds it ships the guidance with nothing to apply it — the same permit-level
+ * loss the rules are floored against. It sits here rather than on `floor:spine`
+ * because it is trigger-fired: no shipped command routes through it, which is
+ * the line `floor:spine` draws.
+ */
+const SECURITY_AGENTS = ["security"];
+
+/** Every floored artifact, `type:id`, so a cross-class id clash cannot read as a pass. */
+const SECURITY_FLOOR = [
+  ...SECURITY_RULES.map((id) => `rule:${id}`),
+  ...SECURITY_AGENTS.map((id) => `agent:${id}`),
+];
+const FLOOR_SIZE = SPINE_AGENTS.length + SECURITY_FLOOR.length;
 
 async function index() {
   return buildContentIndex(resolveBundledContentRoot());
@@ -36,13 +52,17 @@ describe("protected floor membership", () => {
     expect(floored).toEqual([...SPINE_AGENTS].toSorted());
   });
 
-  it("binds the security rules whose removal changes what a setup permits", async () => {
+  it("binds the security artifacts whose removal changes what a setup permits", async () => {
     const { items } = await index();
+    // Deliberately NOT narrowed to `type === "rule"`: the floor is a property of
+    // the tag, not of a class, and a rules-only filter would have gone on
+    // reporting a whole floor while the agent that acts on those rules was
+    // freely deselectable.
     const floored = items
-      .filter((item) => item.type === "rule" && item.tags.includes("floor:security"))
-      .map((item) => item.id)
+      .filter((item) => item.tags.includes("floor:security"))
+      .map((item) => `${item.type}:${item.id}`)
       .toSorted();
-    expect(floored).toEqual([...SECURITY_RULES].toSorted());
+    expect(floored).toEqual([...SECURITY_FLOOR].toSorted());
   });
 
   it("survives a manifest that selects nothing at all", async () => {
@@ -58,7 +78,7 @@ describe("protected floor membership", () => {
       .filter((item) => item.tags.some(isFloorTag))
       .map((item) => ({ id: item.id, verdict: classifySelection(item, allowlist) }));
 
-    expect(protectedIds.length).toBe(SPINE_AGENTS.length + SECURITY_RULES.length);
+    expect(protectedIds.length).toBe(FLOOR_SIZE);
     for (const row of protectedIds) {
       expect(row.verdict, row.id).toBe("keep-protected-missing");
     }
@@ -109,7 +129,7 @@ describe("a repo override on a floor artifact", () => {
     const flagged = items
       .filter((item) => item.tags.some(isFloorTag))
       .map((item) => classifySelection(item, allowlist));
-    expect(flagged).toHaveLength(SPINE_AGENTS.length + SECURITY_RULES.length - 1);
+    expect(flagged).toHaveLength(FLOOR_SIZE - 1);
     expect(flagged.every((verdict) => verdict === "keep-protected-missing")).toBe(true);
     expect((shadows ?? []).map((shadow) => [shadow.type, shadow.id])).toEqual([["rule", "secrets"]]);
     expect((shadows ?? [])[0]?.shadowed.map((item) => item.relativePath)).toEqual([
