@@ -337,14 +337,12 @@ describe("st-board — platform reference table", () => {
     const table = tables(text)[0];
 
     expect(flat(text)).toMatch(/Verified 2026-08/);
-    expect(table?.rows.map((row) => row[0])).toEqual([
-      "GitHub",
-      "GitLab",
-      "Azure DevOps",
-      "Anything else",
-    ]);
-    // GitHub is first-class in core; the other platforms arrive as packs.
-    expect(table?.rows.map((row) => row.at(-1))).toEqual(["core", "pack", "pack", "pack"]);
+    // The named GitLab / Azure DevOps rows were dropped 2026-09-01: each advertised
+    // `Availability: pack` for a pack that does not exist, and a platform row is a
+    // promise — it appears when its pack ships. GitHub stays first-class in core;
+    // every other platform routes through the pack-declared extension row.
+    expect(table?.rows.map((row) => row[0])).toEqual(["GitHub", "Anything else"]);
+    expect(table?.rows.map((row) => row.at(-1))).toEqual(["core", "pack"]);
     for (const row of table?.rows ?? []) expect(row.every((cell) => cell !== "")).toBe(true);
   });
 

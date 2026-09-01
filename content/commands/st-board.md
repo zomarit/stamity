@@ -224,8 +224,6 @@ audit cycle.
 | Platform | MCP tools | CLI fallback | Access check | Status field | Availability |
 |---|---|---|---|---|---|
 | GitHub | `mcp__github__list_issues`, `mcp__github__get_issue`, `mcp__github__update_issue`, `mcp__github__add_issue_comment` | `gh issue list/view/edit/comment`, `gh pr view`, `gh project item-list` | `gh auth status` | issue `state` (`open`/`closed`); a project board adds its own `Status` single-select | core |
-| GitLab | `mcp__gitlab__*`, pack-declared — one tool per board-contract verb | `glab issue list/view/update/note`, `glab mr view` | `glab auth status` | issue `state` (`opened`/`closed`); board columns are label-backed | pack |
-| Azure DevOps | `mcp__azure-devops__*`, pack-declared — one tool per board-contract verb | `az boards work-item show/update`, `az repos pr show` (the `azure-devops` extension) | `az account show` | `System.State`, whose values come from the project's process template | pack |
 | Anything else | `mcp__<server>__*`, pack-declared | pack-supplied | pack-declared | pack-declared | pack |
 
 **Tool naming and fallback direction.** Content names the canonical
