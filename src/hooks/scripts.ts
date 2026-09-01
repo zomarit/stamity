@@ -1458,12 +1458,41 @@ const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
  * a loaded machine — a process descheduled past the wall-clock window would
  * otherwise give up having looked exactly once, which is the starvation case
  * this is most likely to meet. LOCK_CEILING_MS bounds the whole wait regardless,
- * so a pathological hand-off storm still terminates well inside any client's
- * hook timeout.
+ * so a pathological hand-off storm still terminates.
+ *
+ * That ceiling is the one constant here that is NOT queue-shaped, and it is
+ * checked unconditionally — it overrides the progress detector, so a wait that
+ * is demonstrably draining gives up anyway once it fires. At 10s it was
+ * therefore still the binding constraint on the exact case the progress
+ * detector was added for. Thirty reviewers finishing together serialise; the
+ * tail one needs twenty-nine critical sections' worth of wall clock; 10s split
+ * twenty-nine ways is ~330ms per section, which an NTFS
+ * create+read+rename+unlink cycle behind an on-access scanner on an
+ * oversubscribed runner reaches. It did reach it — the herd case dropped one
+ * round of thirty on the windows leg with no source change between runs, on
+ * the same STATE_LOCKED path that still exits 0.
+ *
+ * 25s instead, derived from the budget rather than from a guess about how long
+ * a queue is. This script rides SubagentStop and TaskCompleted, and it is
+ * wired with no per-entry timeout, so it inherits the client default for those
+ * events: 600s (code.claude.com/docs/en/hooks-guide, Limitations, accessed
+ * 2026-09-01). 25s is 4% of that, and it also sits under the 30s that
+ * same client allows its tightest hook class, so re-wiring this gate onto
+ * another event could not silently put the wait outside its budget. What the
+ * number buys is ~860ms per critical section at thirty writers instead of
+ * ~330ms.
+ *
+ * Raising it costs nothing on the failure it does not govern. A holder that
+ * DIED holding the lock produces no hand-off, so the idle detector returns in
+ * ~1s and the ceiling is never consulted; the ceiling only ever fires while
+ * the lock is genuinely changing hands, and waiting longer for a queue that is
+ * visibly draining is the whole point of watching for progress. The fail-open
+ * drop is unchanged either way: a wait that does expire still reports
+ * STATE_LOCKED and exits 0, because a counter is not worth wedging a run over.
  */
 const LOCK_IDLE_MS = 1_000;
 const LOCK_IDLE_POLLS = 24;
-const LOCK_CEILING_MS = 10_000;
+const LOCK_CEILING_MS = 25_000;
 const LOCK_WAIT_MIN_MS = 4;
 const LOCK_WAIT_MAX_MS = 24;
 const LOCK_STALE_MS = 30_000;

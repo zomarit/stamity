@@ -441,6 +441,19 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/kit/program.ts": { unit: "p2-01", wave: 13 },
   "src/cli/kit/banner.ts": { unit: "p2-01", wave: 13 },
   "src/cli/engine/emission.ts": { unit: "p2-03", wave: 13 },
+  // The write contract the two regeneration verbs share (EW-U1): the ledger
+  // hash, the row shape, the write-lane selection, and the pack-MCP ownership
+  // question. Wave 13 is a REQUIREMENT here, not a convenience — `init/apply.ts`
+  // (p2-05) and `sync/engine.ts` (p2-06) both sit at wave 14 in different units,
+  // so an edge between them is a layering violation in either direction and the
+  // only place code they must BOTH execute can live is strictly below them.
+  // Its own imports bottom out at the wave-8 pack projection, so 13 is a ceiling
+  // it does not use rather than a depth it needs.
+  //
+  // Its own unit rather than p2-03's: nothing here reaches the emission seam or
+  // the git-status reader beside it, and folding it into their unit would grant
+  // same-wave edges in both directions that no call site wants.
+  "src/cli/engine/emissionWrite.ts": { unit: "ew-u1", wave: 13 },
   "src/cli/engine/gitStatus.ts": { unit: "p2-03", wave: 13 },
   "src/migration/detect.ts": { unit: "p2-04", wave: 13 },
   "src/migration/carry.ts": { unit: "p2-04", wave: 13 },

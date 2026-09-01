@@ -1,6 +1,6 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLAUDE_MD_PATH } from "../../src/adapters/claude.ts";
 import { CODEX_CONFIG_FILE, CODEX_HOOKS_FILE } from "../../src/adapters/codex.ts";
 import { COPILOT_SETUP_STEPS_PATH } from "../../src/adapters/copilot.ts";
@@ -51,6 +51,41 @@ import {
  * kept and disclosed as salvage. That asymmetry — provable authorship deletes,
  * drifted bytes survive — is the guarantee, so the tests assert both halves.
  */
+
+/**
+ * This file runs on its own timeout, and the number is measured rather than
+ * picked.
+ *
+ * The global 20s (`vitest.config.ts`) is reasoned about a cold CHILD-PROCESS
+ * CLI start: spawn node, load the entry, do one thing. Nothing in this file
+ * fits that shape. Every case here runs IN-PROCESS and pays for a full
+ * four-client emission before its first assertion — `makeGoldenRepo` writes
+ * ~185 managed paths, and each `planSync` then walks the corpus, re-analyses
+ * the repo, re-emits all four clients and stats every one of those paths
+ * again. Measured on an idle developer machine: 1.9-2.1s for the fixture
+ * alone, rising to ~3.5s when the whole file runs, against ~0.1s for a warm
+ * `plan()`. The fixture is the cost, and it is charged to `hookTimeout`, which
+ * is why both numbers move rather than just the test one.
+ *
+ * That leaves the global budget at roughly 6x the fixture's loaded cost, and a
+ * CI runner oversubscribed by its own parallel workers — with an on-access
+ * scanner in the path of every one of those writes — closes 6x. It did: the
+ * drift-detection case below went red on the 20s ceiling across three pushes
+ * with no source change between them.
+ *
+ * 60s is ~17x the loaded local cost and ~30x the isolated one, so a runner
+ * would have to be an order of magnitude slower than a developer machine
+ * before this reads as a failure — while a genuine hang still fails inside a
+ * minute instead of stalling the suite.
+ *
+ * What is deliberately NOT done to buy the time back: the per-test
+ * `beforeEach` stays per-test (see the note above — these cases mutate the
+ * repo, and a shared fixture makes the net order-dependent), the drift cases
+ * keep all four tools, and no assertion is relaxed. A slow honest test is
+ * worth more than a fast one that proves less.
+ */
+const SUITE_TIMEOUT_MS = 60_000;
+vi.setConfig({ testTimeout: SUITE_TIMEOUT_MS, hookTimeout: SUITE_TIMEOUT_MS });
 
 /** Tools the proof runs with; codex is the one deselected mid-flight. */
 const ALL_TOOLS: readonly Tool[] = TOOLS;

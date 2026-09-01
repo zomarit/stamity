@@ -1082,6 +1082,25 @@ function reviewerStop(runId: string, verdict: string, confidence = "high"): stri
   });
 }
 
+/**
+ * The gate's own give-up ceiling, as the emitted script carries it. Pinned by a
+ * test below rather than trusted, because the herd case's budget has to outlast
+ * it: a herd that is slower than the ceiling drops a round (the defect), and a
+ * herd that is slower than the vitest budget times out (a red that proves
+ * nothing). If the two ever cross, the suite stops being able to tell those
+ * apart.
+ */
+const GATE_LOCK_CEILING_MS = 25_000;
+
+/**
+ * The herd case's own budget. It must clear {@link GATE_LOCK_CEILING_MS} with
+ * room for thirty concurrent node starts on top, because on the runner that
+ * produced this flake the process ramp — not the lock — was most of the wall
+ * clock. 196ms locally for all thirty; the margin here is for a runner an order
+ * of magnitude slower than that, which is exactly the one that went red.
+ */
+const HERD_TIMEOUT_MS = 60_000;
+
 /** How long the lock churner keeps handing the lock on — past the old flat budget. */
 const LOCK_CHURN_MS = 2_500;
 
@@ -1484,6 +1503,24 @@ describe("buildReviewGateScript", () => {
   // read-modify-write that lost 30 of 30 increments. An undercounted loop keeps
   // holding a run it should have released, or reaches its cap a round late — so
   // the counter is now taken under an exclusive lock and every round lands.
+  //
+  // Thirty writers and every assertion below are UNCHANGED; what moved is the
+  // budget this case runs on. It went red at 29 of 30 on the windows leg, and
+  // the cause was the gate's own 10s give-up ceiling, which overrode the
+  // progress detector while the queue was still draining — fixed in the script
+  // (`src/hooks/scripts.ts`, LOCK_CEILING_MS) rather than here, because a real
+  // reviewer herd on a slow filesystem lost the same round for the same reason
+  // and no assertion in a test file protects that. Shrinking the herd or
+  // skipping it off windows would have hidden the production defect behind a
+  // greener suite; the deterministic companion below stays the case that cannot
+  // be fooled by a fast machine, and this one stays the case that measures the
+  // real thing.
+  //
+  // The explicit timeout is the second half of that, not a loosened assertion:
+  // once the gate is allowed to wait 25s for a draining queue, a herd slow
+  // enough to need it would blow vitest's 20s default and fail as a timeout
+  // instead of reporting the dropped round it exists to catch. The budget has to
+  // sit above the ceiling for the failure it reports to still mean what it says.
   it("counts every round under concurrent writers, losing none", async () => {
     const gate = await placeGate();
     const writers = 30;
@@ -1508,6 +1545,30 @@ describe("buildReviewGateScript", () => {
       (name) => name.includes(".tmp-") || name.endsWith(".lock"),
     );
     expect(residue).toEqual([]);
+  }, HERD_TIMEOUT_MS);
+
+  it("gives up on a busy counter lock only well inside the events' hook budget", () => {
+    const body = buildReviewGateScript(GATE_OPTIONS);
+
+    // Asserted on the emitted text because the constant lives in the script this
+    // module BUILDS, not in this module — and because the number is a contract
+    // with two readers that would otherwise drift apart silently. The gate reads
+    // it as "how long a draining queue is worth waiting for"; the herd case above
+    // reads it as "the budget I have to outlast". Crossing them turns a dropped
+    // round into a vitest timeout and the regression net stops reporting the
+    // defect it was written for.
+    // The script spells its constants with a numeric separator, so the pin has
+    // to as well — derived from the same constant the herd's budget is measured
+    // against rather than re-typed beside it.
+    const emittedCeiling = `${GATE_LOCK_CEILING_MS / 1_000}_000`;
+    expect(body).toContain(`const LOCK_CEILING_MS = ${emittedCeiling};`);
+    expect(HERD_TIMEOUT_MS).toBeGreaterThan(GATE_LOCK_CEILING_MS);
+
+    // The ceiling bounds waiting; it is never a reason to block. Matched as one
+    // span rather than as two independent substrings, because `blocked: false`
+    // appears on every fail-open path in this script and finding it somewhere
+    // would say nothing about THIS one.
+    expect(body).toMatch(/blocked: false,[\s\S]{0,160}reasonCode: "STATE_LOCKED"/);
   });
 
   // The companion to the case above, and the one that does not depend on how

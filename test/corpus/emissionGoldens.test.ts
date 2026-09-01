@@ -82,6 +82,28 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-01, the closure run. Two refreshes, recorded together because
+ *     they landed in one arc and only one of them reached this suite:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` alone, from the content
+ *     batch. Three edits: the light intensity row stopped claiming it skips
+ *     "specialist passes" wholesale and now names the two lenses it drops and
+ *     the security lens it keeps on a trigger-path match — the charter's
+ *     universal floor holds at every tier, so a tier that shed the security
+ *     lens outright made that floor false; the deep row and the frontier
+ *     ladder cell stopped citing "Prove-final", a stage name defined nowhere
+ *     in the tree, and now place the whole-branch pass where it runs, once the
+ *     review loop converges and before the QA checkpoint; and the
+ *     dependency-audit note stopped restating the dep-audit skill's own fields
+ *     and points at the skill that owns them. Nothing else in the substitution
+ *     set moved.
+ *
+ *     NOTHING moved from the timing-margin pass in the same arc, recorded so
+ *     the two ledgers stay in step: the script that changed is
+ *     `stamity-review-gate.mjs`, claude adapter residue this suite does not
+ *     hold, and its three core scripts are byte-identical across that refresh.
+ *     The moved bytes are itemised in the sibling ledger.
+ *
  *   - 2026-08-26, the review-gate lock rewrite (windows leg, round 2). NOTHING
  *     moved here, recorded so the two ledgers stay in step: the script that
  *     changed is `stamity-review-gate.mjs`, claude adapter residue this suite
