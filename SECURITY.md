@@ -119,8 +119,11 @@ check are properties of that file rather than of a maintainer's laptop:
 What no file here can do is the platform half, and it is maintainer setup rather than code: a
 required reviewer on the `npm-publish` deployment environment, a `v*` tag ruleset, and the
 trusted-publisher entry on the registry naming this repository, this workflow file and that
-environment. Until each of those exists, the control it represents is not in force. Every step
-that depends on one says so where it depends on it.
+environment. Each of those is now in force: the `npm-publish` environment requires a reviewer before a
+publish runs, the `v*` tag ruleset governs release-tag creation, update and deletion, and the
+registry's trusted-publisher entry is configured, so published versions authenticate over OIDC
+and carry npm provenance rather than a stored token. Every step that depends on one says so
+where it depends on it.
 
 ## What it does not defend
 
