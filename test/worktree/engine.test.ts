@@ -14,6 +14,7 @@ import {
   fetchBranch,
   classifyRepoPaths,
   assertWorktreeName,
+  listWorktrees,
   parseWorktreeList,
   readStashCount,
   runGit,
@@ -21,6 +22,7 @@ import {
   worktreePathFor,
   type GitInvocation,
   type GitOutcome,
+  type WorktreeGitRunner,
 } from "../../src/worktree/git.ts";
 import {
   planWorktreeSetup,
@@ -259,6 +261,26 @@ describe("git output parsing (REQ-WORKTREE-007, REQ-WORKTREE-014)", () => {
 
   it("returns nothing for empty output rather than a half-built record", () => {
     expect(parseWorktreeList("")).toEqual([]);
+  });
+
+  it("normalises the git-reported worktree path to the native form at the listWorktrees seam", async () => {
+    // git prints forward-slash paths on every platform, and on a POSIX runner
+    // that IS the native form, so the Windows backslash conversion is invisible
+    // here. This case instead proves the seam applies `resolve` at all: it feeds
+    // a non-normalised, non-canonical path (a `.` segment) that a verbatim
+    // passthrough would leave untouched, and asserts the reported path is the
+    // resolved one — the same operation that rewrites separators on Windows.
+    const gitPath = "/farm/repo/./held";
+    // A stub runner: the real git binary is not the unit under test, and driving
+    // it would only re-derive the porcelain grammar the parser already owns.
+    const runner: WorktreeGitRunner = (invocation) => {
+      expect(invocation.args).toEqual(["worktree", "list", "--porcelain", "-z"]);
+      return Promise.resolve({ status: 0, stdout: `worktree ${gitPath}\0HEAD abc\0\0`, stderr: "" });
+    };
+
+    const [entry] = await listWorktrees(runner, "/farm/repo");
+    expect(entry?.path).toBe(join("/farm", "repo", "held"));
+    expect(entry?.path).not.toBe(gitPath);
   });
 
   it("reduces refs/heads/<name> and leaves anything else alone", () => {

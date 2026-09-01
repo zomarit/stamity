@@ -10,6 +10,7 @@ import {
   SKILLS_PROJECTION_DIR,
   projectSkills,
   retargetProjection,
+  toSpecFrontmatter,
   type ProjectedFile,
   type ProjectSkillsOptions,
 } from "../../src/emit/skillsProjection.ts";
@@ -334,6 +335,39 @@ describe("projectSkills transforms", () => {
     });
   });
 
+});
+
+/**
+ * `toSpecFrontmatter` is exported and reused verbatim by the installed-pack
+ * skill lane (`../pack/projection.ts` → `projectOnePackSkill`), so its two
+ * document-shape edges are exercised directly here rather than only through the
+ * corpus walk, which never feeds it either shape: the walk only reaches this
+ * transform for a skill the catalog already read an `id` and `type` out of, so a
+ * frontmatter-less document and an all-spec-keys document (empty hoisted
+ * metadata) are unreachable that way but are real inputs the pack lane can hand
+ * it. Both are documented contracts of the function, and both are the branch
+ * arms that keep this module under its own coverage floor without a direct case.
+ */
+describe("toSpecFrontmatter document-shape edges", () => {
+  it("returns a document with no frontmatter untouched, inventing no head", () => {
+    const raw = "Just a body, no fence here.\n";
+    expect(toSpecFrontmatter(raw, "alpha", "skills/stamity-alpha/SKILL.md")).toBe(raw);
+  });
+
+  it("omits the metadata block entirely when every authored key is a spec key", () => {
+    // name + description are both spec keys, so nothing hoists — the merged
+    // metadata map is empty and the projected head must carry no `metadata:`.
+    const raw = "---\nname: ignored\ndescription: A one-line summary.\n---\nBody.\n";
+
+    const projected = toSpecFrontmatter(raw, "alpha", "skills/stamity-alpha/SKILL.md");
+
+    const match = /^---\n([\s\S]*?)\n---\n/.exec(projected);
+    expect(match, "projected SKILL.md must carry a frontmatter block").not.toBeNull();
+    const head = parse(match![1]!) as Record<string, unknown>;
+    expect(head).not.toHaveProperty("metadata");
+    // The description is a spec key, so it stays a top-level slot, not hoisted.
+    expect(head["description"]).toBe("A one-line summary.");
+  });
 });
 
 describe("projectSkills selection edges", () => {

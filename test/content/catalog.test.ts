@@ -12,6 +12,7 @@ import {
   getAllItemsById,
   originOf,
   resolveArtifactFilePath,
+  toPosixDisplayPath,
   typeIdKey,
   type CatalogFs,
   type CatalogItem,
@@ -1483,6 +1484,36 @@ describe("assertSafePath", () => {
 
     expect(error.message).toContain(reason);
     expect(error.message).toContain("content walk");
+  });
+});
+
+describe("toPosixDisplayPath", () => {
+  // The Windows failures are invisible on a POSIX runner — both separators
+  // collapse to "/" there — so these cases feed literal backslash paths (the
+  // exact shape a native `join` composes on Windows) and assert the forward-slash
+  // rendering the catalog's messages carry. A backslash is built with
+  // String.fromCharCode(92) in one case to prove the input is a real backslash
+  // and not an escape the reader has to decode.
+  const BACKSLASH = String.fromCharCode(92);
+
+  it("rewrites a drive-less Windows absolute to forward slashes", () => {
+    const windowsPath = `${BACKSLASH}repo${BACKSLASH}agents${BACKSLASH}stamity-implementer.md`;
+    expect(windowsPath.includes(BACKSLASH)).toBe(true);
+    expect(toPosixDisplayPath(windowsPath)).toBe("/repo/agents/stamity-implementer.md");
+  });
+
+  it("rewrites a drive-lettered Windows absolute, exposing the POSIX content tail", () => {
+    const windowsPath = String.raw`C:\Users\runneradmin\overrides\rules\security.customize.yaml`;
+    const posixForm = toPosixDisplayPath(windowsPath);
+    expect(posixForm).toBe("C:/Users/runneradmin/overrides/rules/security.customize.yaml");
+    // The tail is what a message asserts on — a POSIX relative content path.
+    expect(posixForm).toContain("overrides/rules/security.customize.yaml");
+  });
+
+  it("leaves an already-POSIX path untouched, so a POSIX runner is a no-op", () => {
+    expect(toPosixDisplayPath("/repo/agents/stamity-implementer.md")).toBe(
+      "/repo/agents/stamity-implementer.md",
+    );
   });
 });
 
