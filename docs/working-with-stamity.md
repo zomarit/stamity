@@ -29,7 +29,7 @@ repository-level command home, so on those two you ask for the flow by name in p
 | `/st-board` | work a task board: chat, a referenced file, or a linked platform board | the input is a backlog rather than one change |
 | `/st-ask` | read-only codebase Q&A; writes nothing | you need to understand something before deciding anything |
 | `/st-debug` | reproduce, root-cause, and fix a defect | behaviour is wrong and the cause is not yet known |
-| `/st-quick` | Tier-1 small-change lane; gates still run | the change is small, obvious, and lands in one file |
+| `/st-quick` | Tier-1 small-change lane; gates still run | the change is small, obvious, and touches five files or fewer |
 | `/st-rework` | apply structured feedback to agent-implemented work | delivered work came back with comments |
 | `/st-pr-resolve` | resolve pull-request review comments | those comments live on a pull request |
 

@@ -44,11 +44,15 @@ by the file.
 
 ## Control 1 — Required reviewer on the `npm-publish` environment
 
-**What it closes.** A human approval gate in front of every real publish. The `publish` job
-declares `environment: npm-publish`; without a required reviewer configured on that environment,
-the job runs unattended and the approval the release design assumes does not exist. The
-seven-day artifact retention in `release.yml` exists precisely so the artifact outlives this
-human approval.
+**What it closes.** A human approval gate in front of every real publish, and a restriction on
+which refs may even request that gate. The `publish` job declares `environment: npm-publish`;
+without a required reviewer configured on that environment, the job runs unattended and the
+approval the release design assumes does not exist. Without a `v*` deployment tag policy on the
+same environment, any ref satisfying the in-file job `if:` condition can request the environment —
+the tag policy is what makes "request" mean "a governed release tag" rather than "any branch a
+dispatch names." The seven-day artifact retention in `release.yml` exists precisely so the
+artifact outlives this human approval. `release.yml`'s own comment on the `publish` job (near line
+420) names both halves of this control together.
 
 **Steps (GitHub).**
 
@@ -58,11 +62,16 @@ human approval.
 3. Under **Deployment protection rules**, enable **Required reviewers** and add the maintainer(s)
    who must approve a publish.
 4. Optionally set a **wait timer** of 0 (the reviewer gate is the control; a timer is not).
-5. Save.
+5. Under **Deployment branches and tags**, restrict to **Selected branches and tags**, then add a
+   tag rule matching **`v*`** — this is the deployment tag policy the job comment above expects to
+   already exist.
+6. Save.
 
 **Verify it is armed.**
 
 - The `npm-publish` environment lists at least one required reviewer.
+- The `npm-publish` environment's deployment branch/tag policies list shows one tag-type policy
+  named `v*`.
 - Dispatch the release workflow as a rehearsal (`dry_run` left at its `true` default): the
   `publish` job does not run, so no approval prompt appears — expected, a rehearsal never
   publishes.
@@ -126,30 +135,25 @@ failure; it is never a reason to add a stored token).
 
 ---
 
-## After all three are confirmed — the one reserved documentation edit
+## The reserved documentation edit — made and verified, 2026-09-01
 
-Once, and only once, an operator has confirmed **all three** controls are armed (each "Verify it
-is armed" block above passes), the `SECURITY.md` wording that currently states the controls are
-**not** in force should be updated to assert they are.
+All three controls were confirmed armed on 2026-09-01 (re-verified via the GitHub API and the npm
+registry: `npm-publish` carries a required reviewer; the `release-tags` ruleset is Active on
+`refs/tags/v*` with creation, update, and deletion restricted; and both `1.0.0` and `1.0.1` were
+published by GitHub Actions with SLSA provenance naming this repository and `release.yml`). On
+that confirmation, commit `7da37fc` made the reserved `SECURITY.md` edit: the "Publishing this
+package" section now states the three controls are in force rather than pending.
 
-**This edit is NOT made by this checklist and NOT made in the same change that prepares it.** It
-is reserved for the operator after arming is confirmed, because a page that claims a control is in
-force before the console step exists is a false claim in the security document.
+**Sentence now in `SECURITY.md` ("Publishing this package" section):**
 
-**Exact current sentence in `SECURITY.md` ("Publishing this package" section):**
-
-> Until each of those exists, the control it represents is not in force. Every step that depends
-> on one says so where it depends on it.
-
-**Draft replacement (apply only after all three are confirmed armed):**
-
-> Each of those is now in force: a required reviewer gates the `npm-publish` environment, a `v*`
-> tag ruleset governs release-tag creation, and the registry's trusted-publisher entry names this
-> repository, this workflow file and that environment. Every step that depends on one says so
+> Each of those is now in force: the `npm-publish` environment requires a reviewer before a
+> publish runs, the `v*` tag ruleset governs release-tag creation, update and deletion, and the
+> registry's trusted-publisher entry is configured, so published versions authenticate over OIDC
+> and carry npm provenance rather than a stored token. Every step that depends on one says so
 > where it depends on it.
 
-**Before making that edit, re-read the docs-page test.** `test/docsPages.test.ts` reads
-`SECURITY.md` structurally (the "Publishing this package" section and its control claims), so the
-flip must be checked against that suite in the same change that makes it — the wording change may
-interact with an assertion there. Do not edit `SECURITY.md` or `test/docsPages.test.ts` as part
-of preparing this checklist.
+This section now doubles as the re-check procedure: if any control is ever disarmed, re-run each
+"Verify it is armed" block above and, once all three pass again, confirm the sentence above still
+matches `SECURITY.md`. `test/docsPages.test.ts` reads `SECURITY.md` structurally (the "Publishing
+this package" section and its control claims); any future edit to that sentence must be checked
+against that suite in the same change that makes it.

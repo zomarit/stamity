@@ -48,6 +48,9 @@ Work landed on `main` since the `v1.0.1` tag, not yet cut into a released versio
   published the overlay, workspace-surface, and worktree lane designs; and re-attested the
   customization, workspace, and lifecycle pages against the landed engine work.
 - The docs-site deploy is armed only by a succeeded real release, rather than by any push.
+- Security: `SECURITY.md` ("Publishing this package") now records the three platform release
+  controls (required reviewer, `v*` tag ruleset, npm trusted publisher) as in force, rather
+  than as not yet armed.
 
 ## [1.0.1] - 2026-08-31
 
@@ -68,7 +71,7 @@ Work landed on `main` since the `v1.0.1` tag, not yet cut into a released versio
   the artifact-only publish job had no git directory to infer the repository from.
 - Site: `llms.txt` is served at the site root, and the homepage points at stamity.dev.
 
-## [1.0.0] - 2026-08-26
+## [1.0.0] - 2026-08-31
 
 ### Added
 

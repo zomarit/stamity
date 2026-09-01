@@ -376,21 +376,26 @@ function commandSection(command: CommandFacts): string[] {
 
   lines.push(
     command.mutating
-      ? // NOT "writes to the repository". That blanket sentence was printed on
-        // every mutating command's section and was false for at least two of
-        // them: `worktree setup` materializes a checkout into the FARM — a
-        // directory OUTSIDE this repository, named by the lane policy — and
-        // `workspace sync` rewrites MEMBER repositories' manifests. A reader
-        // who took it at face value would go looking for the change in a
-        // working tree that never gained one.
+      ? // NOT "writes to the repository" and NOT "writes when it runs". Both
+        // blanket sentences were printed on every mutating command's section
+        // and were false for at least two classes of cases: `worktree setup`
+        // materializes a checkout into the FARM — a directory OUTSIDE this
+        // repository, named by the lane policy — and `workspace sync` rewrites
+        // MEMBER repositories' manifests, while `config`, `workspace`, and
+        // `worktree`'s bare invocations (list / status / list) are reads that
+        // never write at all. A reader who took either claim at face value
+        // would go looking for a change that never happened.
         //
-        // Nothing on a `CommandModule` says where its writes land, and a
-        // hand-kept table of destinations here would be exactly the second,
-        // unversioned copy this page exists to retire. So the sentence claims
-        // only what `mutating` actually asserts — that the command writes, and
-        // that the shared flag previews it — and leaves WHERE to the command's
-        // own arguments and flags below.
-        `Writes when it runs, so ${code("--dry-run")} previews the change without making it.`
+        // Nothing on a `CommandModule` says where its writes land or whether a
+        // *given invocation* writes, only that `--dry-run` is registered for
+        // it (see `mutating` at kit/program.ts). A hand-kept table of
+        // destinations or per-invocation write conditions here would be
+        // exactly the second, unversioned copy this page exists to retire. So
+        // the sentence claims only what `mutating` actually asserts — that the
+        // command MAY write, and that the shared flag previews any change
+        // before it lands — and leaves WHERE and WHEN to the command's own
+        // arguments and flags below.
+        `May write when it runs, so ${code("--dry-run")} previews any change without making it.`
       : "Reads only. Nothing is written, so there is no preview mode to need.",
     "",
   );
