@@ -200,7 +200,9 @@ describe.skipIf(!gitAvailable)("worktree list", () => {
     expect(doc["stash"]).toEqual({ entries: 2 });
     const rows = doc["worktrees"] as Record<string, unknown>[];
     expect(rows).toHaveLength(3);
-    const feat = rows.find((row) => String(row["path"]).endsWith(`${WORKTREE_FARM_DIR_NAME}/repo/feat`));
+    // Native separator: the row path is a real filesystem location (backslash on
+    // Windows), so the suffix must be join-composed, not a forward-slash literal.
+    const feat = rows.find((row) => String(row["path"]).endsWith(join(WORKTREE_FARM_DIR_NAME, "repo", "feat")));
     expect(feat).toMatchObject({ managed: true, branch: "feat", setup: "present", handoffs: 1 });
     // `.gitkeep` is the scaffold's placeholder, not a record.
     expect(feat?.["handoffs"]).toBe(1);
