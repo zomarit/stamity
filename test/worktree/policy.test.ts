@@ -157,6 +157,14 @@ describe("worktree policy — document refusals (REQ-WORKTREE-003)", () => {
     ["a backslash", "state\\file"],
     ["a current-directory segment", "./.env.mcp"],
     ["an empty segment", "state//file"],
+    // [secfix NEW-1] `.env.mcp::$DATA` names the credential's default NTFS
+    // alternate-data-stream alias — `git check-ignore` matches `.env*` and
+    // echoes it back, admitting it with `secret: false` (the identity check
+    // is basename-only and never saw the colon). A colon is illegal in a
+    // Windows filename regardless, so refusing it costs nothing on ANY
+    // platform and closes the whole alias class structurally rather than by
+    // enumerating known stream names.
+    ["a colon (a Windows alternate-data-stream alias)", ".env.mcp::$DATA"],
   ])("refuses %s, naming the file and the path field", (_label, path) => {
     const error = refuses(
       () => parseWorktreePolicy(policyText({ version: 1, entries: [{ path, strategy: "copy" }] }), POLICY_PATH),
@@ -521,6 +529,19 @@ describe("worktree policy — farm resolution (REQ-WORKTREE-002)", () => {
     // literal, which the backslash-and-drive message never contains on Windows.
     expect(error.message).toContain(resolve("/home/dev/projects/myrepo"));
   });
+
+  // [m2] `farmDir: ".."` resolves to the repository's OWN PARENT — the
+  // directory the repository itself sits inside. That passes both existing
+  // guards (it does not escape past the parent, and it is not inside the
+  // repository), but it puts every OTHER sibling directory "inside the farm"
+  // and makes the repository's own root a child of the farm setup would
+  // `mkdir(..., { mode: 0o700 })` and `chmod` — tightening permissions on the
+  // directory that holds the repository itself.
+  it("refuses a farmDir that resolves to the repository's own parent directory", () => {
+    const policy = parseWorktreePolicy(policyText({ version: 1, farmDir: ".." }), POLICY_PATH);
+    const error = refuses(() => resolveFarmDir(policy, "/home/dev/projects/myrepo"), "VALIDATION_ERROR");
+    expect(error.message).toContain(resolve("/home/dev/projects"));
+  });
 });
 
 // A present policy replaces DEFAULT_WORKTREE_RULES wholesale, so a committed
@@ -571,9 +592,30 @@ describe("known-credential paths are secret by identity, not by the boolean [sec
     ["upper-case", ".ENV.MCP"],
     ["mixed-case", ".Env.Mcp"],
     ["trailing dot (Windows drops it)", ".env.mcp."],
-  ])("forces `secret` true on a case/dot variant of the credential basename: %s [secfix C1]", (_label, path) => {
+    // [secfix A3] Windows strips ALL trailing dots AND spaces from a filename,
+    // not just one of each — `.env.mcp..` and `.env.mcp ` both address the
+    // SAME file on disk as `.env.mcp` there, and both are admissible spellings
+    // (`.env*` still matches the ignore glob, `git check-ignore` echoes them
+    // back), so a normalizer stripping only one trailing dot let these two
+    // evade the known-credential identity check entirely.
+    ["two trailing dots (Windows drops both)", ".env.mcp.."],
+    ["trailing space (Windows drops it)", ".env.mcp "],
+    ["mixed case with trailing dot and space", ".ENV.MCP. ."],
+  ])("forces `secret` true on a case/dot/space variant of the credential basename: %s [secfix C1]", (_label, path) => {
     const policy = parseWorktreePolicy(policyText({ version: 1, entries: [{ path, strategy: "copy" }] }), POLICY_PATH);
     expect(policy.entries[0]?.secret).toBe(true);
+  });
+
+  // [secfix A3] A basename that normalizes to the EMPTY string (all dots and
+  // spaces) must not be swept into the credential set — the strip is bounded
+  // to trailing dots/spaces of an otherwise-matching name, not a rule that
+  // makes an empty string match everything.
+  it("a basename reducing to empty after normalization matches nothing [secfix]", () => {
+    const policy = parseWorktreePolicy(
+      policyText({ version: 1, entries: [{ path: "... .", strategy: "copy" }] }),
+      POLICY_PATH,
+    );
+    expect(policy.entries[0]?.secret).toBe(false);
   });
 
   // A basename that merely CONTAINS the credential name is a different file

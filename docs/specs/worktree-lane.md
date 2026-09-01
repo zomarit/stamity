@@ -158,9 +158,14 @@ Floors for this lane. They hold whatever the verbs do.
    or a path git neither tracks nor ignores, is refused
    (REQ-WORKTREE-003). Tracked content arrives with the checkout; un-ignored
    content would dirty the new worktree on creation.
-3. **The receipt is the only teardown authority.** Cleanup removes what the
-   receipt names and nothing else. A worktree with no readable receipt is
-   reported and left alone (REQ-WORKTREE-007).
+3. **The receipt is the only PER-FILE teardown authority.** Cleanup inverts
+   what the receipt names and nothing else — never a pattern replay. A worktree
+   inside the farm with no readable receipt (a managed-orphan) is reported and
+   left alone by DEFAULT; under `--force` it is removable as a WHOLE tree,
+   because with no receipt there is nothing left to scope a file-by-file
+   inversion to (REQ-WORKTREE-007.6). "Left alone" is this floor's default, not
+   an absolute — the receipt still governs every file-level removal that does
+   happen.
 4. **A branch is never deleted.** Not by `setup`, not by `cleanup`, not under
    `--force`. The lane manages directories and files; refs are the operator's.
 5. **Fail closed, name the file and the flag.** Parity with the settled posture
@@ -783,8 +788,15 @@ project deliberately (`src/types/errors.ts:1-13`).
 with no prompt ever printed to stdout — the funnel's existing guarantee
 (`src/cli/kit/program.ts:39-46`). `setup` carries `status`, `worktree`,
 `branchPlan` (`attach` | `track` | `create`), `entries[]`, `notices[]`;
-`cleanup` carries `removed[]`, `kept[]`, `skipped[]`, `pruned[]`, `branches[]`;
-`list` carries `worktrees[]` and `stash`.
+`cleanup` carries `status`, `worktrees[]` (each row its own `removed`, `files[]`,
+`skipped`, `branchCommand`, `classification`, `droppedRows[]`, `treeFailure`
+[secfix NEW-2 — set when the tree-level `git worktree remove` itself failed,
+distinct from a `files[]` row, which is always receipt-relative]), `pruned`
+(a count, not an array), `notices[]`, `stash` [secfix A12 — corrected to the
+shipped and tested shape, `src/worktree/cleanup.ts` `WorktreeCleanupResult` /
+`src/cli/commands/worktree.ts:797-803`; there is no separate `removed[]`,
+`kept[]`, `skipped[]`, or `branches[]` array at the top level, and pruning is
+reported as a count]; `list` carries `worktrees[]` and `stash`.
 
 `--dry-run` stops before the first write — before the lock, before
 `git worktree add`, before any fetch — and prints the plan: the resolved farm
@@ -944,9 +956,16 @@ at that moment — with no lock spanning the two and no conflict rule.
    `WINDOWS` const, or `CAN_TEST_PERMISSIONS` where a case also needs a non-root
    runner, in `test/worktree/engine.test.ts` and `test/worktree/materialize.test.ts`),
    so they keep running — and gating — on darwin and Linux while standing down on
-   Windows. On Windows a copied secret's protection is the farm's LOCATION —
-   outside the repository, under the user's own directory, with the ACL
-   inheritance that location carries — not a chmod bit. The production copy path
+   Windows. On Windows a copied secret's protection is the farm's LOCATION, not
+   a chmod bit — but the guarantee is only as wide as what the code actually
+   places the farm under. [secfix A11] The farm is
+   `dirname(repoRoot)/.stamity-worktrees/<repo>` (`src/worktree/policy.ts` →
+   `resolveFarmDir`): a sibling of the repository, inheriting whatever ACL that
+   PARENT directory carries — the user's own profile only when the repository
+   itself sits there, which is the common case but not a property this lane
+   verifies or enforces. A repository cloned somewhere with a wider ACL (a
+   shared drive, a multi-user checkout root) puts the farm under that same
+   wider ACL; nothing here narrows it. The production copy path
    attempts no `chmod` on win32 (`src/worktree/materialize.ts` → `applyMode`) and
    the farm's own `chmod(0o700)` is a non-throwing no-op there, so a setup run does
    not fail on Windows; it reports the file's permissions as whatever the platform
@@ -1463,11 +1482,18 @@ and the surrounding symbol is the durable address.
   resolution an assertion (REQ-WORKTREE-006's first criterion) rather than an
   assumption, so the day it changes is the day a test goes red rather than the
   day a receipt appears in someone's `git status`.
-- **Windows is designed for and not verified.** No Windows CI job exists, so the
-  symlink fallback and the un-hardened secret copy are covered by injected
-  errnos only. The honest posture is that the first Windows report is evidence
-  this project does not yet have, and REQ-WORKTREE-016 says so in the spec rather
-  than in a commit message.
+- **Windows is designed for, and a CI leg now runs the suite there too**
+  [secfix A11]. `ci.yml` carries a required `windows-latest` leg (added
+  2026-08-26) that installs, builds, and runs the suite — including this
+  lane's — on real Windows, gated on `check` and the leak gate. The symlink
+  fallback and the un-hardened secret copy are still exercised through
+  injected `platform`/`symlinkImpl` seams rather than a real refused symlink
+  (a POSIX runner cannot make one raise `EPERM` on demand), but the mode
+  assertions that platform-gate to POSIX-only (`test/worktree/*.test.ts`,
+  `WINDOWS`) now gate at the LINE level rather than the whole-case level
+  where doing so was trivial, so a Windows report is no longer this project's
+  only source of evidence for the platform-independent claims in the same
+  cases.
 - **`node_modules: skip` makes a fresh worktree unable to run the gates until an
   install completes.** That is a real cost, taken deliberately over the
   alternative in which a package manager writes through a symlink into the main

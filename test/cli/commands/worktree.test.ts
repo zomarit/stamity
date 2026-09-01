@@ -1,7 +1,8 @@
 import { chmod, lstat, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { worktreeCommand } from "../../../src/cli/commands/worktree.ts";
+import { partialCleanupErrorDocument, worktreeCommand } from "../../../src/cli/commands/worktree.ts";
+import type { CleanupWorktreeReport, WorktreeCleanupResult } from "../../../src/worktree/cleanup.ts";
 import { runGit } from "../../../src/worktree/git.ts";
 import { WORKTREE_FARM_DIR_NAME, WORKTREE_POLICY_FILE } from "../../../src/worktree/policy.ts";
 import { runInProcess, type InProcessResult } from "../../support/inProcess.ts";
@@ -544,6 +545,106 @@ describe.skipIf(!gitAvailable)("worktree cleanup", () => {
     expect(other?.skipped).toContain("outside the farm");
     expect(await exists(outside)).toBe(true);
     expect(await exists(join(farm, "managed"))).toBe(false);
+  });
+});
+
+// [secfix A5] The dirty rows are already in hand when the --all preamble is
+// built (they gate `needsConsent`); naming only a count discarded them.
+describe.skipIf(!gitAvailable)("worktree cleanup --all preamble names the dirty trees [secfix A5]", () => {
+  it("names the dirty tree's path in the --all consent preamble, not just a count", async () => {
+    const { root, farm } = await seedRepo(getTemp().dir);
+    await runWorktree(root, ["setup", "feat", "-y"]);
+    await writeFile(join(farm, "feat", "dirty.txt"), "x\n", "utf8");
+
+    const result = await runWorktree(root, ["cleanup", "--all"], {
+      tty: { stdin: true },
+      stdinLines: ["y"],
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(join(farm, "feat"));
+  });
+});
+
+/**
+ * [secfix NEW-2] `partialCleanupErrorDocument` — a pure classifier, tested
+ * directly against hand-built results the way `classifyFetchFailure` and
+ * `classifyReceiptEntry` already are elsewhere in this codebase, rather than
+ * through a git-backed integration case: forcing a real, portable,
+ * non-"contains modified" `git worktree remove` failure through the CLI's
+ * un-injectable `resolveLane` (it hardcodes the real `runGit`) is not
+ * achievable on demand the way the engine-level suite's injected runner
+ * makes it for `runWorktreeCleanup` directly.
+ */
+function fileReport(overrides: Partial<CleanupWorktreeReport> = {}): CleanupWorktreeReport {
+  return {
+    path: "/farm/feat",
+    branch: "feat",
+    classification: "managed",
+    files: [],
+    droppedRows: [],
+    removed: false,
+    branchCommand: null,
+    skipped: null,
+    treeFailure: null,
+    ...overrides,
+  };
+}
+function partialResult(worktrees: readonly CleanupWorktreeReport[]): WorktreeCleanupResult {
+  return { status: "partial", worktrees, pruned: 0, notices: [], stash: { entries: 0 } };
+}
+
+const RERUN = "stamity worktree cleanup --all -y";
+
+describe("partial cleanup error document names what actually failed, message and next in agreement [secfix NEW-2]", () => {
+  it("names receipt rows in both message and next when only a FILE-level removal failed", () => {
+    const document = partialCleanupErrorDocument(
+      partialResult([
+        fileReport({
+          files: [{ path: ".env.mcp", outcome: "failed", reason: "failed", detail: "EACCES" }],
+        }),
+      ]),
+      RERUN,
+    );
+    expect(document.message).toContain("receipt rows");
+    expect(document.message).not.toContain("worktrees could not be fully removed");
+    // `files[]` is real here, so "remove the remaining files by hand" points
+    // at rows that actually exist above.
+    expect(document.next).toContain("remove the remaining files by hand");
+    // The tree-only wording ("no remaining receipt-row files") would be
+    // false in this case — there ARE some, named in `files[]`.
+    expect(document.next).not.toContain("no remaining receipt-row files");
+  });
+
+  it("names the worktree in both message and next when only a TREE-level removal failed, never pointing at files[] rows that do not exist", () => {
+    const document = partialCleanupErrorDocument(
+      partialResult([fileReport({ treeFailure: "removing the worktree at /farm/feat failed (git exited 1)." })]),
+      RERUN,
+    );
+    expect(document.message).toContain("worktrees could not be fully removed");
+    expect(document.message).not.toContain("receipt rows");
+    // `files[]` is `[]` for a tree-level failure — "remove the remaining
+    // files by hand — the rows above name each one" would point at rows
+    // that do not exist, which is the residual this fix closes.
+    expect(document.next).not.toContain("remove the remaining files by hand");
+    expect(document.next).toContain("git worktree remove");
+  });
+
+  it("names both in message and next when a tree-level AND a file-level failure land in the same run", () => {
+    const document = partialCleanupErrorDocument(
+      partialResult([
+        fileReport({ path: "/farm/a", treeFailure: "removing the worktree at /farm/a failed." }),
+        fileReport({
+          path: "/farm/b",
+          files: [{ path: ".env.mcp", outcome: "failed", reason: "failed", detail: "EACCES" }],
+        }),
+      ]),
+      RERUN,
+    );
+    expect(document.message).toContain("receipt rows");
+    expect(document.message).toContain("worktrees could not be fully removed");
+    expect(document.next).toContain("git worktree remove");
+    expect(document.next).toContain("removing by hand");
   });
 });
 

@@ -139,23 +139,39 @@ export function builtInWorktreePolicy(): WorktreePolicy {
 const KNOWN_CREDENTIAL_BASENAMES: ReadonlySet<string> = new Set([normalizeCredentialBasename(ENV_MCP_FILE)]);
 
 /**
- * Case-folds and strips a trailing dot from a basename before the
- * known-credential lookup. A case-insensitive filesystem (macOS APFS default)
- * and a filesystem that drops a trailing dot (Windows) both make a variant
- * spelling — `.ENV.MCP`, `.env.mcp.` — address the SAME file on disk as
- * `.env.mcp`, and `git check-ignore` honors `core.ignorecase` too, so an
- * exact-string comparison would let the variant evade the identity check,
- * resolve `secret:false`, and skip the `--copy-secrets` consent gate. This
- * only RAISES what counts as the credential's spelling — it never changes
- * which file the identity check is about.
+ * Case-folds and strips every trailing dot AND space from a basename before
+ * the known-credential lookup. A case-insensitive filesystem (macOS APFS
+ * default) and a filesystem that drops trailing dots/spaces (Windows) both
+ * make a variant spelling — `.ENV.MCP`, `.env.mcp.`, `.env.mcp..`,
+ * `.env.mcp ` — address the SAME file on disk as `.env.mcp`, and
+ * `git check-ignore` honors `core.ignorecase` too, so an exact-string
+ * comparison would let the variant evade the identity check, resolve
+ * `secret:false`, and skip the `--copy-secrets` consent gate. Windows strips
+ * ALL trailing dots and spaces, not just one of each, so the strip here is a
+ * loop rather than a single slice. This only RAISES what counts as the
+ * credential's spelling — it never changes which file the identity check is
+ * about, and a name reducing to the empty string matches nothing.
+ *
+ * [secfix NEW-1] Not a general Windows-aliasing defence: this function
+ * normalizes the DECLARED string, and an NTFS 8.3 short name (`ENV~1.MCP`)
+ * addresses the same file through a spelling this normalizer never sees —
+ * name-based matching has no reach into a filesystem-internal alias table.
+ * `normalizeRulePath`'s colon refusal closes the alternate-data-stream alias
+ * specifically, because that one IS spelled in the declared path; 8.3
+ * short-name aliasing is a different, structurally unreachable class.
  */
 function normalizeCredentialBasename(name: string): string {
-  const lower = name.toLowerCase();
-  return lower.endsWith(".") ? lower.slice(0, -1) : lower;
+  return name.toLowerCase().replace(/[. ]+$/, "");
 }
 
-/** True when `relPath`'s basename is one this repository treats as a credential. */
-function isKnownCredentialPath(relPath: string): boolean {
+/**
+ * True when `relPath`'s basename is one this repository treats as a
+ * credential — exported [secfix A2] so the materializer can elevate a
+ * credential found by IDENTITY inside a copied directory (a `copy` row
+ * naming a directory that turns out to contain `.env.mcp`), not only a
+ * top-level policy row.
+ */
+export function isKnownCredentialPath(relPath: string): boolean {
   return KNOWN_CREDENTIAL_BASENAMES.has(normalizeCredentialBasename(basename(relPath)));
 }
 
@@ -360,6 +376,22 @@ function normalizeRulePath(declared: string, label: string, filePath: string): s
         `Paths are repo-relative POSIX paths — spell them with \`/\`.`,
     );
   }
+  // [secfix NEW-1] `.env.mcp::$DATA` names the credential's default NTFS
+  // alternate-data-stream alias on Windows — the SAME file's data, addressed
+  // through a colon-qualified name the identity check (basename only) never
+  // sees, and `git check-ignore` still matches `.env*` and echoes it back
+  // admissible. A colon is illegal in a Windows filename regardless of what
+  // it names, so refusing it here costs nothing on any platform and closes
+  // the whole alias class structurally — no enumeration of stream names, no
+  // Windows-only branch.
+  if (declared.includes(":")) {
+    refuse(
+      `${filePath}: ${label} \`path\` ${JSON.stringify(declared)} carries a colon. A colon is not a ` +
+        `valid character in a filename on Windows — including inside an alternate-data-stream alias ` +
+        `such as \`name::$DATA\`, which addresses the SAME file's bytes under a spelling this policy's ` +
+        `credential-identity check does not see.`,
+    );
+  }
   for (const character of GLOB_CHARACTERS) {
     if (!declared.includes(character)) continue;
     refuse(
@@ -527,6 +559,21 @@ export function resolveFarmDir(policy: WorktreePolicy, repoRoot: string): string
           `directory ${parent} via \`..\`. The farm must sit beside the repository, not at an ` +
           `arbitrary location.`,
         `Point \`farmDir\` at a directory under ${parent}.`,
+      );
+    }
+    // [m2] `farmDir: ".."` resolves EXACTLY to `parent` — the repository's own
+    // parent directory. That is not an escape (it does not go past `parent`)
+    // and it is not inside the repository, so neither guard above or below
+    // catches it, but it makes the repository's OWN root a child of "the
+    // farm": setup's `mkdir(farm, { mode: 0o700 })` and `chmod(farm, 0o700)`
+    // would tighten permissions on the directory holding every sibling of the
+    // repository, the repository included.
+    if (farm === parent) {
+      refuse(
+        `${policy.source}: \`farmDir\` resolves to ${farm}, which is the repository's OWN parent ` +
+          `directory. The farm must be a directory BESIDE the repository, not the directory that ` +
+          `holds it — the repository itself would sit inside the farm.`,
+        `Point \`farmDir\` at a new directory under ${parent}, such as \`../worktrees/${basename(root)}\`.`,
       );
     }
   }

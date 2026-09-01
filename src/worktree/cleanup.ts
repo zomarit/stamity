@@ -1,5 +1,5 @@
 import { readdir, rm, rmdir } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { acquireWriteLock } from "../merge/atomicWrite.ts";
 import { EngineError } from "../types/errors.ts";
 import {
@@ -24,7 +24,7 @@ import {
   type WorktreeReceipt,
   type WorktreeReceiptDroppedRow,
 } from "./receipt.ts";
-import { worktreeLockPath, type ConsentAnswer } from "./setup.ts";
+import { isGranted, worktreeLockPath, type ConsentAnswer } from "./setup.ts";
 
 /**
  * `stamity worktree cleanup`: the inversion of a receipt, and the inventory it
@@ -117,6 +117,11 @@ export interface CleanupWorktreeReport {
   readonly path: string;
   readonly branch: string | null;
   readonly classification: WorktreeClass;
+  /**
+   * Every `path` here is RECEIPT-RELATIVE — the same spelling the receipt
+   * entry itself carries — never the absolute worktree path. A `--json`
+   * consumer joins this against the receipt, or against nothing at all.
+   */
   readonly files: readonly CleanupFileReport[];
   readonly droppedRows: readonly WorktreeReceiptDroppedRow[];
   readonly removed: boolean;
@@ -124,6 +129,14 @@ export interface CleanupWorktreeReport {
   readonly branchCommand: string | null;
   /** Why this worktree was skipped, when it was. */
   readonly skipped: string | null;
+  /**
+   * [secfix NEW-2] Set when the tree-level removal itself failed — a
+   * `git worktree remove` that errored for a reason other than a classified
+   * refusal, after any file-level inversion above already ran. Distinct from
+   * `files[]`: this failure is not ABOUT any one receipt entry, so it does
+   * not fabricate a file row (with no relative path to give it) to carry it.
+   */
+  readonly treeFailure: string | null;
 }
 
 /** What `cleanup` returns. */
@@ -157,10 +170,37 @@ function refuse(message: string, next: string): never {
   throw new EngineError(message, { code: "VALIDATION_ERROR", next });
 }
 
-/** True when `child` is `parent` or sits underneath it. */
-function isInside(child: string, parent: string): boolean {
-  const rel = relative(resolve(parent), resolve(child));
-  return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !rel.startsWith("/"));
+/**
+ * The four path primitives {@link isInside} needs, injectable so the win32
+ * containment rule can be exercised on every platform (`path.win32` in a
+ * test), not only on a real Windows runner.
+ */
+export interface PathContainmentOps {
+  readonly relative: (from: string, to: string) => string;
+  readonly resolve: (...paths: string[]) => string;
+  readonly sep: string;
+  readonly isAbsolute: (path: string) => boolean;
+}
+
+const nativePathOps: PathContainmentOps = { relative, resolve, sep, isAbsolute };
+
+/**
+ * True when `child` is `parent` or sits underneath it.
+ *
+ * The single source of truth for this lane's containment check — the CLI's
+ * `worktree.ts` imports this rather than keeping its own copy, so the rule
+ * cannot drift between the two callers.
+ *
+ * `isAbsolute`, not `rel.startsWith("/")`: on win32, `path.relative` between
+ * two paths on different drives returns the SECOND path unchanged (e.g.
+ * `path.win32.relative('C:\\src\\repo', 'D:\\work\\hotfix')` ===
+ * `'D:\\work\\hotfix'`), which never starts with `/` and would misclassify a
+ * cross-drive or UNC worktree as "inside" the farm — turning a `cleanup --all`
+ * into a force-removal of a tree this lane never created.
+ */
+export function isInside(child: string, parent: string, pathOps: PathContainmentOps = nativePathOps): boolean {
+  const rel = pathOps.relative(pathOps.resolve(parent), pathOps.resolve(child));
+  return rel === "" || (!rel.startsWith(`..${pathOps.sep}`) && rel !== ".." && !pathOps.isAbsolute(rel));
 }
 
 // ---------------------------------------------------------------------------
@@ -291,7 +331,7 @@ export async function runWorktreeCleanup(
     );
   }
 
-  if (all && opts.force !== "granted" && candidates.length > 0) {
+  if (all && !isGranted(opts.force ?? "unanswered") && candidates.length > 0) {
     refuse(
       `\`--all\` would take down ${candidates.length} worktree${candidates.length === 1 ? "" : "s"}, and this run cannot ask.`,
       `Re-run with the decision made: ${rerunWith(rerun, "--all", "-y")}`,
@@ -303,8 +343,22 @@ export async function runWorktreeCleanup(
   const commonDir = await resolveGitCommonDir(run, opts.repoRoot);
 
   for (const row of candidates) {
-    // oxlint-disable-next-line no-await-in-loop -- one name lock at a time; holding several at once is the repo-wide lock this design refuses
-    reports.push(await cleanOne(row, opts, run, commonDir, rerun));
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- one name lock at a time; holding several at once is the repo-wide lock this design refuses
+      reports.push(await cleanOne(row, opts, run, commonDir, rerun));
+    } catch (error) {
+      // [secfix A7] A pre-mutation VALIDATION_ERROR (dirty without consent, an
+      // orphan without --force) is a refusal by design and still aborts the
+      // whole sweep — the gate exists precisely so an unanswered consent
+      // question is never silently skipped past for one tree while others in
+      // the same sweep proceed. Anything else — a `git worktree remove` that
+      // failed for an unexpected reason, a lock timeout — is a failure DURING
+      // an authorised removal, not a withheld consent, and must not discard
+      // the reports this sweep already computed for earlier trees: it lands as
+      // that tree's own failure row, and the run comes back `partial`.
+      if (error instanceof EngineError && error.code === "VALIDATION_ERROR") throw error;
+      reports.push(failedTreeReport(row, error));
+    }
   }
 
   for (const row of inventory.worktrees) {
@@ -336,7 +390,9 @@ export async function runWorktreeCleanup(
     );
   }
 
-  const failed = reports.some((report) => report.files.some((file) => file.outcome === "failed"));
+  const failed = reports.some(
+    (report) => report.treeFailure !== null || report.files.some((file) => file.outcome === "failed"),
+  );
   return {
     status: failed ? "partial" : "complete",
     worktrees: reports,
@@ -374,6 +430,35 @@ function skippedReport(row: WorktreeInventoryRow): CleanupWorktreeReport {
     removed: false,
     branchCommand: null,
     skipped: row.reason ?? "not managed by this lane",
+    treeFailure: null,
+  };
+}
+
+/**
+ * The report for a tree whose removal FAILED mid-sweep, rather than being
+ * refused before it started (see the `VALIDATION_ERROR` carve-out above).
+ * [secfix A7]
+ *
+ * [secfix NEW-2] `files: []`, not a synthetic row: this failure is about the
+ * TREE — the `git worktree remove` call itself — not about any one receipt
+ * entry, and every `CleanupFileReport.path` elsewhere is receipt-relative.
+ * Fabricating a file row here with the absolute worktree path would build
+ * nonsense for a `--json` consumer joining `worktrees[].path` against
+ * `files[].path`. The message lands on `treeFailure` instead.
+ */
+function failedTreeReport(row: WorktreeInventoryRow, error: unknown): CleanupWorktreeReport {
+  const branch = row.entry.branch;
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    path: row.entry.path,
+    branch: branch === "" ? null : branch,
+    classification: row.classification,
+    files: [],
+    droppedRows: row.droppedRows,
+    removed: false,
+    branchCommand: null,
+    skipped: null,
+    treeFailure: message,
   };
 }
 
@@ -387,7 +472,16 @@ async function cleanOne(
   const name = relative(resolve(opts.farmDir), resolve(row.entry.path)).split(sep).join("/");
   const release = await acquireWriteLock(worktreeLockPath(commonDir, name), commonDir);
   try {
-    return await invertOne(row, name, opts, run, rerun);
+    // [secfix A8] The disposition on `row` was classified BEFORE this lock was
+    // taken. A same-name `setup` racing this cleanup can flip receipt-presence
+    // (no receipt yet -> a real one written) and dirtiness in that exact
+    // window: cleanup reads "no receipt yet", classifies managed-orphan, waits
+    // out the lock a concurrent setup holds, and — acting on the stale read —
+    // force-removes the tree that setup just finished building. Re-deriving
+    // the disposition here, under the lock, is what closes that window: no
+    // destructive act below is decided from a read taken before the lock.
+    const fresh = await classifyInventoryEntry(run, row.entry, opts.farmDir, opts.repoRoot);
+    return await invertOne(fresh, name, opts, run, rerun);
   } finally {
     await release();
   }
@@ -419,6 +513,7 @@ function orphanRemovedReport(row: WorktreeInventoryRow): CleanupWorktreeReport {
     // Named, never run. Invariant 4: a branch is never deleted by this lane.
     branchCommand: branch !== null && branch !== "" ? `git branch -d ${branch}` : null,
     skipped: null,
+    treeFailure: null,
   };
 }
 
@@ -436,7 +531,7 @@ async function invertOrphan(
   rerun: string,
 ): Promise<CleanupWorktreeReport> {
   if (opts.filesOnly === true) return skippedReport(row);
-  if (opts.force !== "granted") {
+  if (!isGranted(opts.force ?? "unanswered")) {
     refuse(
       `${row.entry.path} sits inside the farm but carries no readable receipt, so this run cannot ` +
         `verify what it placed. Removing it takes the WHOLE tree and needs --force.`,
@@ -464,7 +559,7 @@ async function invertOne(
   // going to refuse a dirty tree must mutate NOTHING. Previously the receipt was
   // inverted first, so a refused dirty cleanup had already deleted the copied
   // credential it was refusing to remove.
-  if (opts.filesOnly !== true && dirty && opts.force !== "granted") {
+  if (opts.filesOnly !== true && dirty && !isGranted(opts.force ?? "unanswered")) {
     refuse(
       `${row.entry.path} carries uncommitted changes (${row.dirty?.modified ?? 0} modified, ${row.dirty?.untracked ?? 0} untracked), and this run cannot ask.`,
       `Re-run with the decision made: ${rerunWith(rerun, name, "--force")}`,
@@ -533,6 +628,7 @@ function cleanupReport(
     // Named, never run. Invariant 4: a branch is never deleted by this lane.
     branchCommand: removed && branch !== "" ? `git branch -d ${branch}` : null,
     skipped,
+    treeFailure: null,
   };
 }
 
