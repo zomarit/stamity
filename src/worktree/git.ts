@@ -336,11 +336,15 @@ export async function listWorktrees(
   // talks about it (the farm from resolveFarmDir, the receipt location, the
   // refusal an operator reads to cd there). Normalise each to the native form at
   // this seam so a reported path compares equal to a `join`-composed one and an
-  // operator is handed a path their shell accepts. `parseWorktreeList` stays a
+  // operator is handed a path their shell accepts. `normalize`, not `resolve`:
+  // git already reports an absolute path, and on Windows `resolve` would anchor
+  // the process's current drive onto a drive-less absolute (`/farm/x` -> `D:\farm\x`),
+  // disagreeing with the `join`-composed paths this lane and its tests use — the
+  // same drive-anchoring trap `worktreePathFor` avoids. `parseWorktreeList` stays a
   // pure grammar parser, verbatim over its input, so its own unit cases keep
   // asserting the bytes git emitted.
   return parseWorktreeList(outcome.stdout).map((entry) =>
-    Object.assign({}, entry, { path: resolve(entry.path) }),
+    Object.assign({}, entry, { path: normalize(entry.path) }),
   );
 }
 
