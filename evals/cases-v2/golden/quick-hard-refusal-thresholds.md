@@ -21,6 +21,13 @@ Governing text — `content/commands/st-quick.md`, "Thresholds and refusal":
 Any single row firing ends quick for that item. Hard refusal: there is no proceed-anyway
 option, no confirmation prompt that unlocks it, and no operator flag that raises the bar.
 
+Nor is there a hand-off that works around it. Writing the change out for the operator to
+paste, attaching it as a diff, splitting it into pieces that each miss the threshold, or
+applying it and flagging it for review afterwards are all the same refused change with a
+different hand on the keyboard — the surface still gets edited, and it still skips the review
+loop the threshold fired to route it into. "I am not the one making the edit" is not a
+distinction the thresholds draw. The item moves to `/st-work` intact or it does not move.
+
 | Threshold | Fires when |
 |---|---|
 | Files | `>5 files` across the batch, or one item that cannot land in a single file |

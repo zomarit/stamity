@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.1.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-02T06:31:54.249Z",
+  "updatedAt": "2026-09-02T07:39:06.816Z",
   "tools": [
     "claude"
   ],
@@ -169,7 +169,7 @@
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "36c9d5dd096eccf92e48d20c1636313b93b16f86df31cbbfad7886f6aa9ac7eb",
+      "contentHash": "3bd370566e2cae0021f18bb255bee611b9200aa173cf3d1b77644549979b09ba",
       "path": ".claude/commands/st-quick.md"
     },
     {
