@@ -134,3 +134,27 @@ describe("the docs site keeps the one URL the sunset material promises", () => {
     );
   });
 });
+
+describe("the docs build serves the product documentation and not the design documents", () => {
+  it("excludes docs/specs/ from the routes it publishes", () => {
+    // `docs/specs/` holds engineering design documents for behaviour that is partly unbuilt.
+    // The plugin reads `docs/` in place, so without this line every one of them is a published
+    // route describing what does not ship. The narrowing is asserted here because the config's
+    // own comment is the only other record of it, and `test/ci/docsRoster.test.ts` exempts those
+    // pages from the roster on the strength of this exclusion holding.
+    // TEST CHANGE, justified: the value is no longer the one-entry list. Setting `exclude` replaces
+    // the plugin's defaults, so the config restates them beside `specs/**`; the assertion holds
+    // each entry rather than the whole literal, so a default dropped or the specs narrowing removed
+    // each fail on its own line.
+    const exclude = valueOf("exclude") ?? "";
+    expect(exclude, "the docs preset publishes docs/specs/ again").toContain("'specs/**'");
+    for (const entry of [
+      "'**/_*.{js,jsx,ts,tsx,md,mdx}'",
+      "'**/_*/**'",
+      "'**/*.test.{js,jsx,ts,tsx}'",
+      "'**/__tests__/**'",
+    ]) {
+      expect(exclude, `the docs preset dropped the default exclusion ${entry}`).toContain(entry);
+    }
+  });
+});

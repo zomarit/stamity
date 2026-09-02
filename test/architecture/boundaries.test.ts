@@ -469,6 +469,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/commands/config/policy.ts": { unit: "p2-09", wave: 14 },
   "src/cli/commands/clean.ts": { unit: "p2-10", wave: 14 },
   "src/cli/commands/learn.ts": { unit: "p2-11", wave: 14 },
+  // The handoff verb, beside `learn.ts` because it is the same shape: a hidden
+  // plumbing command whose modes call engine modules through the kit and reach
+  // no wave-14 command engine. Its only direct import below the kit is the
+  // wave-2 handoff schema, as a type.
+  "src/cli/commands/handoff.ts": { unit: "b5-u1", wave: 14 },
   "src/cli/notice/updateNotice.ts": { unit: "p2-12", wave: 14 },
   // The worktree verb (WT-U2), at the leaf-command wave rather than beside
   // `workspace.ts` one above it. Wave 14 is its true depth: everything it calls

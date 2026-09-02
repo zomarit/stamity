@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6865e31. -->
 <!-- Re-open when: any `file::symbol` address below stops resolving, a named control loses its
      last production caller, a new install source or execution surface ships, a control named
      under "Publishing this package" changes in `.github/workflows/release.yml`, or the external
@@ -22,9 +22,10 @@ address is published for this: the advisory form is the channel.
 
 Expect an acknowledgement within seven days. That is an estimate, not a funded SLA — one
 person maintains this repository, and an honest number beats a response window nobody is on
-call for. A useful report names the command you ran, the repository state you ran it in, what
-happened, and what you expected instead. The CLI only writes into a repository you control,
-so a scratch repo plus one command is usually the whole reproduction.
+call for. There is no bug bounty either: a report is acknowledged and fixed, not paid. A
+useful report names the command you ran, the repository state you ran it in, what happened,
+and what you expected instead. The CLI only writes into a repository you control, so a
+scratch repo plus one command is usually the whole reproduction.
 
 ## Supported versions
 

@@ -8,11 +8,11 @@ import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 
 /**
- * The gate on the ten hand-written pages: three at the root, seven guides
+ * The gate on the eleven hand-written pages: three at the root, eight guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * ten are typed by a human, so the only guard is this file.
+ * eleven are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -44,7 +44,7 @@ import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all ten pages because the hand bucket is
+ * Two properties are asserted on all eleven pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -96,6 +96,7 @@ const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
 // the array below is the sidebar's sequence, so the customization guide sits first here and
 // fourth there, and the workspaces guide last here and fifth there.
 const CUSTOMIZATION = "docs/customization.md";
+const DOCTRINE = "docs/doctrine.md";
 const GETTING_STARTED = "docs/getting-started.md";
 const MIGRATION = "docs/migration.md";
 const PACKS_AND_TRUST = "docs/packs-and-trust.md";
@@ -104,14 +105,20 @@ const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 const WORKSPACES = "docs/workspaces.md";
 
 /**
- * The seven hand-written guides under `docs/`.
+ * The eight hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these seven are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these eight are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
+ *
+ * `docs/specs/` is outside the bucket and outside the site: three engineering
+ * design documents, excluded from the build by `website/docusaurus.config.ts`
+ * and from the roster by `test/ci/docsRoster.test.ts`. They are not published
+ * pages, so the published-page contract does not apply to them.
  */
 const GUIDES: readonly string[] = [
   GETTING_STARTED,
+  DOCTRINE,
   MIGRATION,
   WORKING_WITH_STAMITY,
   CUSTOMIZATION,
@@ -344,7 +351,7 @@ describe("hand pages", () => {
   // eight" when the customization guide did, "all nine" when the workspaces guide did: the name
   // states the membership count, and the loop below is unchanged through all of them and still
   // runs over every member.
-  it("all ten exist and carry real content", () => {
+  it("all eleven exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -549,7 +556,7 @@ describe("README", () => {
   // that joins the CLI and not these two arrays leaves both pages understating the surface with
   // nothing failing — which is exactly how README went on saying "seven verbs" while `workspace`
   // shipped. A verb lands in `src/cli.ts` and in both arrays, in that order.
-  it("states the command surface — nine verbs plus the plumbing verb", () => {
+  it("states the command surface — nine verbs plus the plumbing verbs", () => {
     const text = read(README);
     for (const command of [
       "init",
@@ -565,6 +572,10 @@ describe("README", () => {
       expect(text, `README omits \`${command}\``).toContain(`\`${command}\``);
     }
     expect(text).toContain("`learn`");
+    // TEST CHANGE, justified: `handoff` joined `learn` behind the advertised surface, so
+    // "the plumbing verb" is no longer one verb. The `learn` pin still holds and stays; this
+    // mirrors it so a README that drops either hidden verb fails the way dropping `learn` did.
+    expect(text).toContain("`handoff`");
   });
 
   it("links the map and the local-use entry points", () => {
@@ -918,13 +929,13 @@ describe("CONTRIBUTING.md", () => {
  *
  * The block above proves a guide is datable, linkable and leak-free. It cannot
  * prove the page still SAYS the thing it was written to say, and four of these
- * seven make a claim about a mechanism that can move underneath it: the doctor's
+ * eight make a claim about a mechanism that can move underneath it: the doctor's
  * probe set, the trust ladder's rungs, whether signature verification is armed,
  * and what the predecessor's own uninstall verb destroys. So each assertion
  * below reads the mechanism rather than a second copy of it, the way the README
  * corpus counts do.
  *
- * Three guides have no bespoke case here yet, for two different reasons. The
+ * Four guides have no bespoke case here yet, for three different reasons. The
  * workflow guide narrates which touchpoint to open and what each writes, which
  * `AGENTS.md` owns rather than any symbol this file can read — a case pinning it
  * to the touchpoint index belongs with whichever change makes that index
@@ -934,8 +945,13 @@ describe("CONTRIBUTING.md", () => {
  * `src/content/userContent.ts`; the workspace subcommand set, the status row
  * states and the three-field bridge from `src/cli/commands/workspace.ts` and
  * `src/workspace/` — so their gap is a case nobody has written, not a claim
- * nothing can reach. All three are held to the bucket-wide contract above and to
- * their own re-open triggers meanwhile.
+ * nothing can reach. The doctrine page is the third shape: it states the
+ * reasoning behind the corpus and cites the surfaces that enforce it, and each
+ * of those surfaces is already pinned where it lives — the charter cap and the
+ * always-on ratchet in `test/corpus/invariants.test.ts`, the currency headers
+ * above, the roster in `test/ci/docsRoster.test.ts` — so a case here would
+ * re-assert them from a page rather than from the mechanism. All four are held
+ * to the bucket-wide contract above and to their own re-open triggers meanwhile.
  */
 describe("the guides", () => {
   it("carves the predecessor's name out for exactly one page, coupled to the leak gate", () => {
@@ -995,7 +1011,8 @@ describe("the guides", () => {
     // Hand-maintained, in the order `src/cli.ts` advertises, and it is the DRIVER: a verb joins
     // the surface here first and the page is then obliged to name it, which is what made
     // `workspace` a required word on that page rather than an optional one, and `worktree` after
-    // it. The plumbing verb is deliberately absent — `learn` is not something a reader types.
+    // it. The plumbing verbs are deliberately absent — `learn` and `handoff` are not something a
+    // reader types.
     for (const command of [
       "init",
       "sync",

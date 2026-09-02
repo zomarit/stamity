@@ -12,7 +12,7 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the seven guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the eight guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
  * The guides are held to the same dated hand-page contract as three of those
  * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
@@ -151,6 +151,13 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Getting started",
         description:
           "prerequisites, what init asks and writes per client, the guided first change, and where state lives.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/doctrine.md",
+        title: "Doctrine",
+        description:
+          "the root question every artifact answers, the four pillars and their public enforcement surfaces, and how an artifact is deleted.",
         regenerateCommand: null,
       },
       {

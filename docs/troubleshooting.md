@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6865e31. -->
 <!-- Re-open when: a doctor probe is added or removed, an error code starts or stops being
      thrown, or the three-status exit model changes. `test/docsPages.test.ts` holds this page
      to the hand-page contract; `src/cli/commands/check.ts` owns the probes and
@@ -54,7 +54,7 @@ full table, including the two codes that exist only at the CLI edge, is in
 
 ## What `check` prints
 
-Nine probes, then the drift gate, then a provenance rollup. A `fail` gates the exit code;
+Ten probes, then the drift gate, then a provenance rollup. A `fail` gates the exit code;
 a `warn` is advisory and exits 0 — a missing state subdirectory or an absent git binary is
 a legal repository, and a pipeline that failed on those would train you to ignore the
 command.
@@ -71,6 +71,7 @@ Only three rows can fail: `node-version`, `manifest`, `pack-integrity`.
 | `tmp-hygiene` | Warns on a live concurrent write, or on `.tmp.<hex>` litter from a write interrupted between the temp file and the rename. The row reports; it never deletes. |
 | `env-mcp` | Warns when MCP servers are selected but `.env.mcp` is absent or a credential is still blank — a server whose credential is empty fails at start-up. `config mcp add <id>` recreates the file with the names it needs. |
 | `tool-traces` | Warns when a client the manifest targets has nothing emitted for it in the ledger. `sync` writes its files and records them. |
+| `preserved-duplicate` | Warns when a managed file repeats its own managed block below the END marker, so this repository loads that content twice. Delete the copy at the line the row names; the block itself is regenerated on every sync. |
 | `pack-integrity` | **Can fail.** An installed pack's bytes no longer match what was recorded at install. Re-install that pack — do **not** reach for `sync`, which would carry the edited bytes into your emitted setup. |
 
 Below the rows, one question: **would a sync change anything?** That is the drift gate, and

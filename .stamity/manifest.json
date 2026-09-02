@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.1.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-02T07:39:06.816Z",
+  "updatedAt": "2026-09-02T18:52:24.013Z",
   "tools": [
     "claude"
   ],
@@ -148,7 +148,7 @@
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "c996b617c286c9d82ccde655eb92bea46f47995afc4d9d98b5d7b79dde2217c0",
+      "contentHash": "29b62f1c9c3073367f2f04e60eeb82c4a9954eea7aa7df43f3c15cca68ab26bb",
       "path": ".claude/commands/st-debug.md"
     },
     {
@@ -162,14 +162,14 @@
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "d5289faf2c137b89dedf64a22c1b2ed1df80dbce5304ff6a0008e7d60a6f59d2",
+      "contentHash": "4c0d308aacd15f083148472557b87ebb2c87ebcfc990fa535b456741eacda95b",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "3bd370566e2cae0021f18bb255bee611b9200aa173cf3d1b77644549979b09ba",
+      "contentHash": "bf9a110746c30d888f9a7ed4fed35246ac36928c47c8f4772b568442735ae218",
       "path": ".claude/commands/st-quick.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "367c7265053441b40bb48a4957f190c39a75bf10859f70333feae13876446945",
+      "contentHash": "ab2e03b023afe434f01fe8e6d13f6dab6e3c04584ce312ce67205c906ed0731e",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -218,14 +218,14 @@
       "adapter": "claude",
       "artifactId": "injection-screening",
       "artifactType": "rule",
-      "contentHash": "ecab56fb5a919c0e18dfe228929a32ccee7c5ab9a010165f0f7ead3b01fe9fde",
+      "contentHash": "fbe6f8284058c19d1fd3a4c37de767422ff5902167c66e33fe3ceb8a0d0f484b",
       "path": ".claude/rules/stamity-injection-screening.md"
     },
     {
       "adapter": "claude",
       "artifactId": "learnings-schema",
       "artifactType": "rule",
-      "contentHash": "d4311568e4f2e0fbd4b1161dee7333acfddc1e942ff60a0d7bd358ef473bc502",
+      "contentHash": "f82f64d6f54091945258b016c8380cd6a09396e53dd0727a61ed6ae074d815a1",
       "path": ".claude/rules/stamity-learnings-schema.md"
     },
     {
@@ -295,7 +295,7 @@
       "adapter": "claude",
       "artifactId": "dep-audit",
       "artifactType": "skill",
-      "contentHash": "07c4dc67a5648ec8821b51d522452b5ce5973f360204986dfa558bd6b426ffc0",
+      "contentHash": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3",
       "path": ".claude/skills/st-dep-audit/SKILL.md"
     },
     {
@@ -309,14 +309,14 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "ca775c278c3a10168e90abf6c8b6f4f6dfd011235c6d2ea3108e5d14bbf955fe",
+      "contentHash": "1b20c00a6755f49958c50d0bb794f792c768f48d9b5d112af160cf0822e9b086",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "handoff",
       "artifactType": "skill",
-      "contentHash": "63f192628d00f36dae837691adb87f3ac1d2d769e549ebc518bf7a55d0363148",
+      "contentHash": "eaf6d65eeb40a4f7b4c6c7fc0b4067910929fcad1202460a5455d2ee312111be",
       "path": ".claude/skills/st-handoff/SKILL.md"
     },
     {
@@ -337,7 +337,7 @@
       "adapter": "claude",
       "artifactId": "qa",
       "artifactType": "skill",
-      "contentHash": "8b91f27c07a436047e5672bde678e6cdd4894ede20ba0cc2a78253c1f0cd8444",
+      "contentHash": "86fbfb7e78f660c4b92626de46828c0da7fb4ea3a602cdcdeaadee23cbdfb183",
       "path": ".claude/skills/st-qa/SKILL.md"
     },
     {
@@ -428,7 +428,7 @@
       "adapter": "claude",
       "artifactId": "stamity-config-tamper-notice",
       "artifactType": "infra",
-      "contentHash": "11fdc97888fb0bd5df4bcbd203f5ccb18bd4430ca2e8ec6c2c5ec37c1842841e",
+      "contentHash": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f",
       "path": ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"
     },
     {
@@ -449,7 +449,7 @@
       "adapter": "claude",
       "artifactId": "stamity-session-start",
       "artifactType": "infra",
-      "contentHash": "7b96217d0198934001c9fddea0824c98c3c507d1e353f38868aa68889a6bf141",
+      "contentHash": "02e6e473b0f8b35b498a8cc1559d5f423e73d54631e5ea82a03daa82d3607517",
       "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs"
     },
     {

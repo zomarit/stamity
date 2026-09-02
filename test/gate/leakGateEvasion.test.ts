@@ -77,6 +77,16 @@ const OPENSSH_HEADER = ["-----BEGIN OPENSSH PRIVATE", "KEY-----"].join(" ");
 const DSN = `postgres://admin:${["hunter", "2"].join("")}@db.internal/app`;
 const GITHUB_TOKEN = `gh${"p"}_${"A".repeat(36)}`;
 
+/**
+ * Private-layer references, assembled the same way and for the same reason.
+ *
+ * A row identifier out of the private layer's decision ledger, and the name of the repository
+ * that holds those ledgers. Both are what the third rule family exists to keep out of this tree,
+ * so a literal here would be the leak the family catches — in the suite proving it catches it.
+ */
+const LEDGER_ID = `${"A"}${"D"}-0${"7"}${"7"}`;
+const PRIVATE_REPO = ["stam", "ity", "-gov", "ernance"].join("");
+
 /** PNG's 8-byte magic — a real signature, so the sniff has something true to find. */
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -584,5 +594,65 @@ describe("leak-gate — credential shapes", () => {
     // The canary it IS exempt from stays exempt, and the exemption is printed.
     expect(result.stderr).not.toContain("pem-private-key]");
     expect(result.stderr).toContain("not scanned (rule pem-private-key allowlisted)");
+  });
+});
+
+describe("leak-gate — private-layer references", () => {
+  it("fails a row identifier out of the private layer's ledgers", () => {
+    // The class an audit found by reading a committed run ledger here, once. The public tree
+    // names those rows descriptively, and until this rule the convention had no gate behind it.
+    const scratch = new Scratch();
+    const file = scratch.write(".stamity/runs/ledger.md", `resolved by ${LEDGER_ID} last week\n`);
+
+    const result = scratch.run();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(file);
+    expect(result.stderr).toContain("[private-ledger-id]");
+  });
+
+  it("fails the private repository's name in a body", () => {
+    const scratch = new Scratch();
+    const file = scratch.write("docs/note.md", `the record lives in ~/Projects/${PRIVATE_REPO}\n`);
+
+    const result = scratch.run();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(file);
+    expect(result.stderr).toContain("[private-repo-name]");
+  });
+
+  it("fails the private repository's name in a PATH segment", () => {
+    // A checkout path is readable out of the path whatever the bytes say, which is why every
+    // rule scans the path before anything can route the file elsewhere.
+    const scratch = new Scratch();
+    const file = scratch.write(`docs/${PRIVATE_REPO}/setup.md`, "nothing private in the bytes\n");
+
+    const result = scratch.run();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(file);
+    expect(result.stderr).toContain("(path)");
+  });
+
+  it("leaves the near-misses alone, so the rule is not matching every hyphenated code", () => {
+    // The false-positive control, one line per way a real identifier is nearly spelled: a
+    // four-digit number, a lower-case prefix (the rows are upper-case, and the rule is
+    // case-sensitive for exactly this reason), a prefix no ledger uses, and a number that does
+    // not start with the zero every row carries.
+    const scratch = new Scratch();
+    scratch.write(
+      "docs/near-misses.md",
+      [
+        `${"A"}${"D"}-0${"7"}${"7"}${"3"}`,
+        `${"a"}${"d"}-0${"7"}${"7"}`,
+        `${"X"}${"Y"}-0${"7"}${"7"}`,
+        `${"A"}${"D"}-1${"7"}${"7"}`,
+      ].join("\n"),
+    );
+
+    const result = scratch.run();
+
+    expect(result.status, result.stderr).toBe(0);
   });
 });

@@ -58,6 +58,7 @@
 import { createHash } from "node:crypto";
 import { buildContentIndex, typeIdKey, type CatalogItem } from "../content/catalog.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
+import { isFloorTag } from "../content/tags.ts";
 import { AGENTS_MD_FILE, verificationGatesFromManifest } from "../emit/agentsMd.ts";
 import {
   CHARTER_ARTIFACT_ID,
@@ -789,25 +790,22 @@ export function composeConfigToml(core: CoreEmissionPlan, ctx: EmissionContext):
  * frontmatter key would be an unledgered spec extension, and every rule would
  * need re-authoring to carry it.
  *
- * `securityClass` is the `floor:security` tag, whose declared membership is
- * already "the rules whose removal changes what the generated setup permits
- * rather than how it reads" (`../content/selection.ts`). That is the same
- * question the shaper is asking, so it is read rather than restated.
+ * `floorTagged` is FLOOR membership — any `floor:*` tag, read through
+ * {@link isFloorTag}. A floor tag is the corpus saying "content reduction must
+ * not drop this" (`../content/tags.ts`, `../content/selection.ts`), and the
+ * budget shaper IS content reduction, so a rule that encodes a charter floor is
+ * the last to leave. The rank was `floor:security` alone before, which made the
+ * ordering true of one floor and silent about the rest: a future `floor:*`
+ * value would have ranked with unflagged prose the day it was authored. Reading
+ * the facet keeps the ordering a property of the floor idea rather than of one
+ * spelling of it, and the security floor stays covered by construction.
  */
 interface RuleRisk {
   /** The one flag the rules layer sanctions. Survives everything else. */
   readonly critical: boolean;
-  /** `floor:security` membership — permission-bearing rather than prose. */
-  readonly securityClass: boolean;
+  /** `floor:*` membership — a declared floor, not prose the reduction may shed. */
+  readonly floorTagged: boolean;
 }
-
-/**
- * The tag whose members change what the setup permits. Declared by the content
- * (`../content/selection.ts` → floor membership), matched literally here rather
- * than through the tag helper, which answers for the whole `floor:*` facet and
- * would rank `floor:spine` as a security class.
- */
-const SECURITY_FLOOR_TAG = "floor:security";
 
 /** One rule prepared for inlining. */
 interface RuleSection {
@@ -870,8 +868,8 @@ const WILDCARD_PATTERN = /[*?[\]{}!]/;
  *
  * Budget: each file is shaped independently to
  * {@link CODEX_AGENTS_MD_BUDGET_BYTES}, dropping sections lowest-RISK first
- * ({@link compareDropOrder}: critical flag, then security-floor membership,
- * then declared precedence, then id) and naming every dropped rule — and the
+ * ({@link compareDropOrder}: critical flag, then floor-tag membership, then
+ * declared precedence, then id) and naming every dropped rule — and the
  * ordering — in the file that dropped it. A file already under budget drops
  * nothing and carries no notice.
  *
@@ -947,7 +945,7 @@ function toSection(item: CatalogItem): RuleSection {
     precedence,
     risk: {
       critical: precedence === "critical",
-      securityClass: item.tags.includes(SECURITY_FLOOR_TAG),
+      floorTagged: item.tags.some(isFloorTag),
     },
     globs,
     description: item.description,
@@ -1095,7 +1093,7 @@ function shapeToBudget(
  * Drop order, biggest number first — the section with the largest key is the
  * next to go, so the rule most expensive to lose is the last to leave.
  *
- * Four components, in this order: not-critical, not-security-class, then the
+ * Four components, in this order: not-critical, not-floor-tagged, then the
  * declared precedence, then the id. Risk before precedence is the fix for that
  * spec defect (see {@link RuleRisk}); alphabet survives only as the final
  * tiebreak, which
@@ -1109,8 +1107,8 @@ function shapeToBudget(
 function compareDropOrder(a: RuleSection, b: RuleSection): number {
   const critical = rank(a.risk.critical) - rank(b.risk.critical);
   if (critical !== 0) return critical;
-  const security = rank(a.risk.securityClass) - rank(b.risk.securityClass);
-  if (security !== 0) return security;
+  const floor = rank(a.risk.floorTagged) - rank(b.risk.floorTagged);
+  if (floor !== 0) return floor;
   const precedence = PRECEDENCE_RANK[a.precedence] - PRECEDENCE_RANK[b.precedence];
   if (precedence !== 0) return precedence;
   return compareText(a.id, b.id);
@@ -1220,7 +1218,7 @@ function renderDroppedNotice(dropped: readonly string[], level: number): string 
     `Codex reads at most ${CODEX_AGENTS_MD_BUDGET_BYTES} bytes (32 KiB) of instruction text, and ` +
       `this setup shapes each ${AGENTS_MD_FILE} to that ceiling on its own. These rules did not ` +
       `fit THIS file and were dropped, lowest risk first — rules marked critical are kept ` +
-      `longest, then security-floor rules, then by declared precedence, then by id: ` +
+      `longest, then floor-tagged rules, then by declared precedence, then by id: ` +
       `${dropped.map((id) => `\`${id}\``).join(", ")}. Narrow the content selection to bring ` +
       `them back.`,
     `**Per-file shaping only — the aggregate is not enforced.** The ceiling applies to the ` +

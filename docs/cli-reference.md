@@ -28,6 +28,7 @@ mistake.
 | `stamity worktree` | yes | writes | parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown |
 | `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
+| `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 
 ## What every command shares
 
@@ -46,7 +47,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 10 of the commands above, success and
+run that reaches a command — all 11 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -238,6 +239,31 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--title <text>` | what the learning is about; also its file-name slug | required |
 | `--summary <text>` | one index line, under 200 characters | required |
 | `--confidence <level>` | how much evidence backs the finding — one of `low`, `medium`, `high` | `medium` |
+| `--body-file <path>` | read the body from a file instead of stdin | — |
+
+## `stamity handoff`
+
+prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing)
+
+Plumbing. This verb is not listed in `stamity --help` because its caller is generated
+agent content rather than a person. Hidden is not secret — `stamity learn --help` prints
+in full — and it is documented here because a verb that exists and is undocumented is
+worse than one that is merely unadvertised.
+
+May write when it runs, so `--dry-run` previews any change without making it.
+
+| Argument | What it is |
+|---|---|
+| `<mode>` | which handoff mode to run — one of `prepare`, `resume`, `list`, `complete`, `prune` |
+| `[id]` | handoff id, for resume and complete |
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--title <text>` | what the work is about; also the id's slug source | — |
+| `--summary <text>` | one line the next session reads first, under 200 characters | — |
+| `--from-tool <tool>` | the client writing the handoff — one of `claude`, `cursor`, `copilot`, `codex` | — |
+| `--to-tool <tool>` | the client meant to resume it — one of `claude`, `cursor`, `copilot`, `codex` | — |
+| `--git-ref <ref>` | the ref the work sat on, as <branch>@<sha> | — |
 | `--body-file <path>` | read the body from a file instead of stdin | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

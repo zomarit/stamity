@@ -125,7 +125,10 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   cursor: 97,
   claude: 240,
   copilot: 240,
-  codex: 1082,
+  // 1082 -> 1065 on 2026-09-02: the closure run folded the learnings-schema
+  // authoring contract into the writer that enforces it, and the rule set is
+  // what this client loads whole.
+  codex: 1065,
 };
 
 /**
@@ -135,39 +138,31 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * Selecting codex does not add a codex file: it rewrites the file every other
  * selected client already reads, so a claude+codex repo hands claude the codex
  * rules appendix too. Against {@link ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX} that
- * is ≈7.3x the always-on bytes every co-selected client pays — a today-measured
+ * is ≈6.6x the always-on bytes every co-selected client pays — a today-measured
  * figure like the ceilings above, not a target.
  *
- * **A tripwire, not a published figure.** Its one consumer is the corpus suite,
- * which re-reads both numbers off the cross-client emission golden
- * (`test/emit/__snapshots__/crossClientGoldens.test.ts.snap`) and fails when the
- * two diverge, so the cost cannot move without a maintainer editing this line
- * and meeting the number. Nothing else reads either constant — no module under
- * `src/`, no script, and no page: `docs/capability-matrix.md` renders from
- * adapter declarations and carries neither figure.
+ * **A tripwire AND a published figure**, which are two different jobs.
  *
- * That leaves the DISCLOSURE half of this cost — publishing the figure where a
- * reader choosing a client sees it — OPEN rather than delivered, and it is
- * named here because the previous wording claimed the opposite — that the
- * capability matrix rendered these constants. The page a reader consults to
- * choose a client still does not state what co-selecting codex costs the
- * clients already there. Closing it means rendering both figures from
- * `src/emit/capabilityMatrix.ts` and re-generating the page; neither file is
- * writable from this module, so this comment records the gap instead of
- * asserting it closed.
+ * The tripwire: the corpus suite re-reads both numbers off the cross-client
+ * emission golden (`test/emit/__snapshots__/crossClientGoldens.test.ts.snap`)
+ * and fails when the two diverge, so the cost cannot move without a maintainer
+ * editing this line and meeting the number. A golden refresh that moves the
+ * cost is a two-line edit here plus a regeneration of the page below.
  *
- * The "no page carries it" half is asserted, not just written down: the corpus
- * suite reads `docs/capability-matrix.md` and fails if either figure appears
- * there, naming this comment as the thing to correct. So the day the page does
- * render them, this paragraph cannot quietly stay false — which is the failure
- * the previous wording already had once. Until then, a golden refresh that
- * moves the cost is a two-line edit HERE and nowhere else.
+ * The disclosure: `src/emit/capabilityMatrix.ts` renders both figures under
+ * `## Always-on cost by client` on `docs/capability-matrix.md`, the page a
+ * reader consults when choosing a client, with the sentence saying what
+ * co-selecting codex costs the clients already there. DELIVERED, not open — the
+ * corpus suite asserts the page carries both numbers and that heading, so the
+ * day a regeneration drops them this paragraph cannot quietly stay false. That
+ * is the failure an earlier wording of this comment had twice: first claiming a
+ * disclosure that did not exist, then claiming its absence after it did.
  */
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 32_361;
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 28_956;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
- * Same tripwire, and the same open disclosure, as
+ * Same tripwire, and the same delivered disclosure, as
  * {@link ALWAYS_ON_SHARED_BYTES_WITH_CODEX}.
  */
 export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 4_404;

@@ -1,3 +1,9 @@
+---
+id: worktree-lane
+# A design document, authored outside the spec command and excluded from the site build.
+status: design
+obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
+---
 # The managed worktree lane
 
 `stamity worktree setup <name>` creates a parallel-branch checkout with the

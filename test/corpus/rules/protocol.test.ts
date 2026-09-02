@@ -3,14 +3,6 @@ import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { planMdcCompanions } from "../../../src/content/mdcCompanions.ts";
 import { CONTENT_DENY_PATTERNS, scanForDeniedPatterns } from "../../../src/denyscan/denyScan.ts";
 import {
-  DEFAULT_LEARNING_FILE_COUNT,
-  LEARNING_CONFIDENCE_LEVELS,
-  MAX_LEARNING_FILE_BYTES,
-  MAX_LEARNING_SUMMARY_LENGTH,
-  MIN_LEARNING_FILE_COUNT,
-  REQUIRED_LEARNING_SECTIONS,
-} from "../../../src/learnings/validation.ts";
-import {
   assertDenyClean,
   assertLineCap,
   filenameSlug,
@@ -40,12 +32,11 @@ import {
  *     to be useful.
  *   - **Named degradations.** The behaviours that are easy to drop in an edit
  *     and expensive to lose at runtime: the unattended-run default, the
- *     expired-review skip, the do-not-echo posture, the vendor-neutral eval
- *     floor.
- *   - **Engine parity where the rule states a number.** Every cap and enum the
- *     learnings rule quotes is compared against the engine constant, so a
- *     threshold change in `src/learnings/` fails this suite rather than
- *     silently leaving the shipped prose wrong.
+ *     do-not-echo posture, the vendor-neutral eval floor.
+ *   - **Curation posture where no gate decides.** The learnings rule quotes no
+ *     cap, enum, or field tier any more — the write gate reports each one
+ *     inline — so what is bound here is the residual it does carry: what earns
+ *     a file, and what a refusal at the cap is answered with.
  *
  * Prose assertions run against a whitespace-flattened view ({@link flow}) so a
  * reflowed paragraph is not a failure; structural assertions (headings, caps,
@@ -370,56 +361,22 @@ describe("injection-screening — survives its own subject", () => {
 });
 
 describe("learnings-schema — states the contract, never the shapes", () => {
-  it("names every frontmatter field in the tier the engine enforces", async () => {
-    // TEST CHANGE, justified: this pinned five rows —
-    // id/summary/confidence/reviewBy/integrity — as "author-supplied", and the
-    // list was wrong on four counts against `src/learnings/validation.ts`:
-    // `date` is required and was missing, `reviewBy` and `validatedAgainst` are
-    // WARNED (`checkTrustFields` pushes to `warnings`, so the file still lands),
-    // `validatedAgainst` was absent entirely, and `integrity` is stamped by the
-    // write path, never typed by an author. The row set moved, so the assertion
-    // moves with it — and now reads the tier column, which is the part that was
-    // silently wrong before.
-    const file = await load("rules/stamity-learnings-schema.md");
-    const rows = [...file.parsed.body.matchAll(/^\| `([A-Za-z]+)` \| (\w+) \|/gm)].map(
-      (match) => [match[1], match[2]] as const,
-    );
-
-    expect(rows).toEqual([
-      ["id", "required"],
-      ["date", "required"],
-      ["confidence", "required"],
-      ["summary", "required"],
-      ["reviewBy", "warned"],
-      ["validatedAgainst", "warned"],
-      ["integrity", "stamped"],
-    ]);
-
-    // The tiers are the engine's, not the rule's: a required field pushes to
-    // `errors` and a warned one to `warnings`.
-    const required = rows.filter(([, tier]) => tier === "required").map(([field]) => field);
-    expect(required).toEqual(["id", "date", "confidence", "summary"]);
-    expect(flow(file)).toMatch(/the write gate owns the full shape/i);
-    expect(flow(file)).toMatch(/four fields are required and refuse the\s+write when absent/i);
-    expect(flow(file)).toMatch(/the engine writes it; an author never types one/i);
-  });
-
-  it("routes a broken digest to retire-and-recapture, the only route that exists", async () => {
-    // The rule sent the operator to `stamity validate` to be "re-stamped".
-    // Nothing re-stamps — `validate` reports and the read path skips
-    // (`src/learnings/store.ts` returns `integrity-mismatch`), and capture is
-    // append-only, refusing a slug that already exists. The recovery the engine
-    // itself names is retiring the file and recapturing the note.
-    const file = await load("rules/stamity-learnings-schema.md");
-    const text = flow(file);
-
-    expect(text).toMatch(/nothing re-stamps a note edited by hand/i);
-    expect(text).toMatch(/the route back is to retire the learning and recapture it/i);
-    expect(text).toMatch(/captures are\s+append-only/i);
-    // The phantom recovery path is gone, in every spelling.
-    expect(file.raw).not.toMatch(/re-stamped/i);
-    expect(file.raw).not.toMatch(/and re-stamp/i);
-  });
+  // TEST CHANGE, justified: four cases retired here in one edit. They pinned the
+  // schema half of this rule — the frontmatter field table and its tiers, the broken-
+  // digest recovery route, the caps and enums quoted against the engine constants, and
+  // the integrity/expired-`reviewBy` posture. The rule was folded to its curation
+  // residual because `src/learnings/validation.ts` now reports every schema
+  // requirement inline at the write gate: `stamity learn capture` names the
+  // requirement a draft failed and the rewrite it wants, and `stamity validate`
+  // reports each one by file and reason. Prose restating that could only go stale
+  // against the gate that decides it, so the rule stopped carrying it and the cases
+  // lost their subject.
+  //
+  // The engine-parity intent of the numbers case — a cap change under `src/learnings/`
+  // failing a test rather than leaving stale prose behind — is retired with it, not
+  // relocated: the rule quotes no number any more, so there is no prose left to go
+  // stale and nothing for a parity assertion to compare. The engine's own suites cover
+  // the constants. The two cases below are untouched; each still has its premise.
 
   it("triggers consolidation on something a run can observe", async () => {
     // The gate instructed consolidation "at 80% of the file cap". The
@@ -435,30 +392,6 @@ describe("learnings-schema — states the contract, never the shapes", () => {
     expect(gates).toMatch(/nothing reports a percentage/i);
     expect(file.raw).not.toContain("80%");
     expect(file.raw).not.toMatch(/\b80 percent\b/i);
-  });
-
-  it("quotes only numbers and enums the engine actually enforces", async () => {
-    const text = flow(await load("rules/stamity-learnings-schema.md"));
-
-    expect(text).toContain(`${MAX_LEARNING_SUMMARY_LENGTH} characters`);
-    expect(text).toContain(`${DEFAULT_LEARNING_FILE_COUNT} files`);
-    expect(text).toContain(`floor ${MIN_LEARNING_FILE_COUNT}`);
-    expect(text).toContain(`${MAX_LEARNING_FILE_BYTES / 1024} KiB`);
-    for (const level of LEARNING_CONFIDENCE_LEVELS) {
-      expect(text).toContain(`\`${level}\``);
-    }
-    for (const heading of REQUIRED_LEARNING_SECTIONS) {
-      expect(text).toContain(`\`${heading}\``);
-    }
-  });
-
-  it("states the integrity posture and the expired-review skip", async () => {
-    const text = flow(await load("rules/stamity-learnings-schema.md"));
-
-    expect(text).toMatch(/detects tampering; it does not sign/i);
-    expect(text).toMatch(/skipped on read rather than loaded on trust/i);
-    expect(text).toMatch(/a passed `reviewBy` is not loaded/i);
-    expect(text).toMatch(/unverified, not wrong/i);
   });
 
   it("keeps a curation posture at the cap and promotes on verified outcomes", async () => {

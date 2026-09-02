@@ -8,7 +8,7 @@ metadata:
     - maintenance
     - devops
   load: on-demand
-  obsolete_when: dependency risk reporting is fully covered by native tooling
+  obsolete_when: a target client documents native reporting of advisories, licenses, and update-risk classes over the lockfile-resolved graph
 ---
 
 # Dependency audit

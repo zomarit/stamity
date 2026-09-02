@@ -1,5 +1,5 @@
 ---
-description: Builds the human QA walk-through for a change — a risk-ordered table of scenarios, steps, and expected results, with rows auto-proven from existing evidence first — and records the shippability sign-off. Triggers at the closing checkpoint of a work run, before a merge or release decision, or when someone asks what a person should manually test before shipping.
+description: Builds the human QA walk-through for a change — a risk-ordered table of scenarios, steps, and expected results, with rows auto-proven from existing evidence first — and records the shippability sign-off. Called by name from a work run's own QA checkpoint and never selected there on its own. Triggers on its own only before a merge or release decision, or when someone asks what a person should manually test before shipping.
 name: st-qa
 metadata:
   id: qa
@@ -7,7 +7,7 @@ metadata:
   tags:
     - review
   load: on-demand
-  obsolete_when: automated evidence covers observable behavior end to end, leaving no judgment a person adds by walking the change
+  obsolete_when: three consecutive release runs close with every QA checkpoint row auto-proven from existing evidence, so the walk added no row a person judged
 ---
 
 # QA walk-through
