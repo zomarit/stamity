@@ -2,7 +2,7 @@
 id: work-proof-block-fields
 class: golden
 claim: "Every work run ends with a proof block carrying six required fields, and no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning."
-source: content/commands/st-work.md:195-238
+source: content/commands/st-work.md:178-184,205-256
 metric: rubric
 ---
 
@@ -35,6 +35,26 @@ A row is appended `open` before the finding is acted on and rewritten in place
 as its state moves; the id is what makes the rewrite converge instead of
 appending a second row. Run-exit invariant: no finding ends the run pending —
 every row closes as fixed, deferred with rationale, or rejected with reasoning.
+
+The invariant binds at exit, and a run holding a live question has not exited.
+Where closing a row means choosing between dispositions that differ materially
+in cost or blast radius, the ambiguity floor applies and the run asks — asking
+is not a pending finding, it is the run declining to invent an answer it does
+not have. The run then closes on the reply. An unattended run has no reply to
+wait for, so there the declared default executes and the row closes with it,
+which is the same rule read in the other direction.
+```
+
+Governing text — the same file, "Review loop", the severity floor:
+
+```text
+- **Severity floor.** Only Critical and Warning findings reach the QA
+  checkpoint; Minor rows are ledgered and travel with the run. Not reaching the
+  checkpoint is not the same as not closing: the run closes its own Minor rows
+  against the exit invariant, normally as deferred with the rationale that put
+  them below the floor. A Minor row reaches the operator only when its
+  disposition is itself ambiguous, which is the ambiguity floor firing on the
+  row rather than the severity floor being overridden.
 ```
 
 Scenario state — the run so far, given to you as fact:
@@ -73,6 +93,11 @@ each list.
 3. Both review rounds appear with their verdict and confidence.
 4. The open ledger row `r7/review/2` does NOT end the run pending: it is closed as fixed,
    deferred with a rationale, or rejected with reasoning, and the response says which.
+   The governing text settles which way for a row like this one — a Minor finding is
+   closed by the run itself, normally as deferred with the rationale that put it below
+   the checkpoint floor — so suspending the run to ask about it does not satisfy this
+   criterion. Asking is only the right move where the disposition is genuinely
+   ambiguous, and the text names Minor rows as the case where it is not.
 5. The deferred row `r7/security/1` carries its rationale.
 6. The recommended next step is derived from this run's own state — the deferred finding,
    the appended inbox row, or the Minor row's disposition — and is not a generic suggestion
