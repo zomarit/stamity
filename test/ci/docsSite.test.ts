@@ -156,5 +156,12 @@ describe("the docs build serves the product documentation and not the design doc
     ]) {
       expect(exclude, `the docs preset dropped the default exclusion ${entry}`).toContain(entry);
     }
+    // The link rewriter must know the same directory is off the routes: a guide that cites a
+    // design document (docs/customization.md does) would otherwise fail the build as a broken
+    // link the moment the exclusion landed — which is how the first docs-site run on this
+    // change failed.
+    expect(config, "the repo-link rewriter does not treat docs/specs/ as off the routes").toMatch(
+      /repoLinks, \{[^}]*excluded: \['specs'\]/,
+    );
   });
 });

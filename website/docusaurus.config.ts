@@ -124,7 +124,9 @@ const config: Config = {
           // the docs tree. See src/remark/repoLinks.ts for what it rewrites and what it
           // deliberately leaves for `onBrokenLinks` to catch.
           beforeDefaultRemarkPlugins: [
-            [repoLinks, {docsDir: DOCS_DIR, repoRoot: REPO_ROOT, repoUrl: REPO_URL}],
+            // `excluded` mirrors the `exclude` below: a link into a directory that is off the
+            // routes is rewritten to the repository file rather than reported as broken.
+            [repoLinks, {docsDir: DOCS_DIR, repoRoot: REPO_ROOT, repoUrl: REPO_URL, excluded: ['specs']}],
           ],
         },
         blog: false,
