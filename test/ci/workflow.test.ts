@@ -1518,9 +1518,13 @@ describe("docs-site.yml — builds on every change, deploys only when armed", ()
   });
 
   it("names the arming condition in the file, where whoever arms it will read it", () => {
-    // Pages is not enabled and the domain is not claimed. A deploy path whose preconditions live
-    // only in someone's memory is a deploy path that gets tried and fails, or worse, succeeds at
-    // a URL nobody meant to publish.
+    // The site is live at the claimed domain, and the deploy's preconditions are stated in the
+    // file: what arms a deploy (a dispatch with the input set, or a succeeded real release) and
+    // what happens on a fork or a repository where Pages is not enabled (the configure step
+    // fails). A deploy path whose preconditions live only in someone's memory is a deploy path
+    // that gets tried and fails, or worse, succeeds at a URL nobody meant to publish. The
+    // "not enabled" pin below holds the file to naming that failure case, not to a claim that
+    // Pages is off.
     expect(docsSite.source).toContain("ARMING CONDITION");
     expect(docsSite.source).toContain("stamity.dev");
     expect(docsSite.source.toLowerCase()).toContain("not enabled");

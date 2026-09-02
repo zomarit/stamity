@@ -24,7 +24,7 @@ Reviews rendered surfaces and the flows through them when a component, view, or 
 
 - **Tags:** `review`
 - **Load:** `on-demand`
-- **Obsolete when:** target clients decide success-criterion conformance and token adherence on a rendered surface from source alone, at a measured false-positive rate below 10%
+- **Obsolete when:** a target client documents a review pass that decides named success criteria and design-token adherence on a rendered surface from source alone
 
 ### `stamity-fixer`
 
@@ -72,7 +72,7 @@ Reviews the security surface of a change set — authentication, authorization, 
 
 - **Tags:** `review`, `floor:security`
 - **Load:** `on-demand`
-- **Obsolete when:** target clients decide resource-level authorization, trust-boundary validation, and dependency advisories on a diff at a measured false-positive rate below 10%
+- **Obsolete when:** a target client documents a review pass that decides resource-level authorization, trust-boundary validation, and dependency advisories on a diff
 
 ### `stamity-spec-author`
 

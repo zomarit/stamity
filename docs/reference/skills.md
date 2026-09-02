@@ -24,7 +24,7 @@ Produces a standalone dependency audit over the installed graph — advisories, 
 
 - **Tags:** `maintenance`, `devops`
 - **Load:** `on-demand`
-- **Obsolete when:** dependency risk reporting is fully covered by native tooling
+- **Obsolete when:** a target client documents native reporting of advisories, licenses, and update-risk classes over the lockfile-resolved graph
 
 ### `st-design-system-detect`
 
@@ -60,11 +60,11 @@ Guides the first real change in a repository this setup was just installed into 
 
 ### `st-qa`
 
-Builds the human QA walk-through for a change — a risk-ordered table of scenarios, steps, and expected results, with rows auto-proven from existing evidence first — and records the shippability sign-off. Triggers at the closing checkpoint of a work run, before a merge or release decision, or when someone asks what a person should manually test before shipping.
+Builds the human QA walk-through for a change — a risk-ordered table of scenarios, steps, and expected results, with rows auto-proven from existing evidence first — and records the shippability sign-off. Called by name from a work run's own QA checkpoint and never selected there on its own. Triggers on its own only before a merge or release decision, or when someone asks what a person should manually test before shipping.
 
 - **Tags:** `review`
 - **Load:** `on-demand`
-- **Obsolete when:** automated evidence covers observable behavior end to end, leaving no judgment a person adds by walking the change
+- **Obsolete when:** three consecutive release runs close with every QA checkpoint row auto-proven from existing evidence, so the walk added no row a person judged
 
 ### `st-verify`
 

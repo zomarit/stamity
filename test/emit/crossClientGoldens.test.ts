@@ -144,6 +144,53 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-02, the identity-casing fix, refreshed after the content-wave
+  //     refresh below had already landed. HOOK SCRIPTS moved, nothing else:
+  //     three operator-facing prose strings in `src/hooks/scripts.ts` opened
+  //     with the product name capitalised at sentence start, which the identity
+  //     rule forbids; they now open lowercase. Byte lengths unchanged
+  //     (session-start 22872, config-tamper-notice 2383 per client), digests
+  //     moved — so the five tree goldens moved on those two paths per client,
+  //     and the codex and all-four residue documents moved only in the manifest
+  //     hash rows that record those scripts. The sibling suite's byte-exact
+  //     hook-script golden took the same refresh with its own row.
+  //
+  //     What did NOT move: every corpus body, every generated page, every
+  //       client entry file.
+  //
+  //   - 2026-09-02, the closure run's content wave plus the codex floor ranking.
+  //     The widest corpus movement of the run, and the first refresh that changes
+  //     WHICH rules one client receives:
+  //
+  //     CHANGED nine corpus artifacts, each in every dialect that carries it —
+  //       `rules/stamity-injection-screening.md` (+1409 bytes: run-time ingress
+  //       that never lands in the state directory is screened at the same tier),
+  //       `rules/stamity-learnings-schema.md` (-2448: the authoring contract
+  //       folded into the writer that enforces it, leaving the curation posture),
+  //       `commands/st-work.md` (+467), `commands/st-pr-resolve.md` (+501),
+  //       `commands/st-debug.md` (+312), `commands/st-quick.md` (+16, one
+  //       threshold row renamed to what it measures), `skills/st-handoff`
+  //       (+687), `skills/st-qa` (+92) and `skills/st-dep-audit` (+64, an
+  //       `obsolete_when` line rewritten to a condition somebody can check —
+  //       three more of those moved on artifacts whose emitted copies strip the
+  //       field, so they show here only as unchanged rows).
+  //     CHANGED the codex root `AGENTS.md`, 32361 -> 28956 bytes, and this is a
+  //       DELIVERY change rather than a size one: the appendix pays for the
+  //       larger `injection-screening` (a `floor:security` rule, so it holds its
+  //       rank) out of its tail, and `api-versioning` — no floor tag, `normal`
+  //       precedence — is now dropped whole. Codex receives five rules where it
+  //       received six. `test/adapters/codex.test.ts` re-pins both sets, and
+  //       `ALWAYS_ON_SHARED_BYTES_WITH_CODEX` moves with the byte figure.
+  //     CHANGED the omission notice's ordering sentence in every file that
+  //       carries one: "then security-floor rules" -> "then floor-tagged rules",
+  //       following the shaper's rank from the one `floor:security` tag to
+  //       `floor:*` membership. No rule changes rank today — the security floor
+  //       is the only floor the rules corpus declares — so this half moved text
+  //       and nothing else.
+  //
+  //     What did NOT move: every generated file, every hook script, and every
+  //       corpus body outside the nine above.
+  //
   //   - 2026-09-02, the eval-driven refusal fix. CORPUS PROSE moved on
   //     `commands/st-quick.md` alone, in every dialect that carries it
   //     (6956 -> 7830 bytes claude/copilot, 7000 -> 7874 cursor, codex likewise):

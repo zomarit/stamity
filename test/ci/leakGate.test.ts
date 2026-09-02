@@ -77,6 +77,22 @@ describe("leak-gate against the repository as it stands", () => {
     expect(summary).not.toMatch(/rule predecessor-project allowlisted\)[^\n]*secretScan/);
   });
 
+  it("carries the private-layer family, and counts it in the summary", () => {
+    // The third family: a row identifier out of one of the private layer's ledgers, and the name
+    // of the repository holding them. Neither is legal anywhere here, so both carry an empty
+    // allowlist and are counted in the run's rule total like every other rule.
+    const ids = (RULES as { id: string }[]).map((rule) => rule.id);
+    expect(ids).toContain("private-ledger-id");
+    expect(ids).toContain("private-repo-name");
+    // 5 reserved names + 2 private-layer references + 11 credential shapes. A literal, because a
+    // count derived from the thing it counts would agree with any drift.
+    expect(RULES.length).toBe(18);
+
+    const summary = runGate().stdout;
+
+    expect(summary).toContain("PASS - 0 hits for 18 rule(s)");
+  });
+
   it("scans its own file by its own rules, with no self-exemption", () => {
     // Every reserved token in the gate is assembled from fragments at run time, which is what
     // lets the gate be an ordinary file in its own scan. A literal in here would fail the run.
@@ -103,6 +119,7 @@ describe("credential-shape rules mirror the engine's scanner", () => {
         (id) =>
           !id.startsWith("candidate-name") &&
           !id.startsWith("predecessor-") &&
+          !id.startsWith("private-") &&
           id !== "retired-name",
       );
 

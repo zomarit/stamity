@@ -21,14 +21,15 @@ import { useCliFixture } from "../support/cliHarness.ts";
 const packageJson = createRequire(import.meta.url)("../../package.json") as { version: string };
 
 /**
- * The advertised surface, in the SoT help order. `learn` is hidden plumbing.
+ * The advertised surface, in the SoT help order. `learn` and `handoff` are
+ * hidden plumbing.
  *
  * `workspace` joined between `config` and `clean` with the multi-repo verb, and
  * `worktree` joined directly after it with the managed parallel-checkout lane —
  * the two sit together because they differ at the fifth character and a reader
  * scanning `--help` should meet them side by side. The assertions below are
- * unchanged in shape through both — exact list equality, help order, `learn`
- * last and hidden — and only the enumerated surface moved, because the surface
+ * unchanged in shape through both — exact list equality, help order, the hidden
+ * verbs last — and only the enumerated surface moved, because the surface
  * itself grew a command rather than an assertion being loosened.
  */
 const ADVERTISED = [
@@ -43,6 +44,9 @@ const ADVERTISED = [
   "clean",
 ] as const;
 
+/** The plumbing verbs, in registration order: off `--help`, on the surface. */
+const HIDDEN = ["learn", "handoff"] as const;
+
 /** A minimal CommandModule under the given name, for the uniqueness guard. */
 const twin = (name: string): CommandModule => ({
   name,
@@ -52,11 +56,11 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 10 uniquely-named commands in help order, learn last and hidden", () => {
-    expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, "learn"]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(10);
+  it("registers exactly 11 uniquely-named commands in help order, the hidden two last", () => {
+    expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, ...HIDDEN]);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(11);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
-      "learn",
+      ...HIDDEN,
     ]);
   });
 
@@ -82,7 +86,7 @@ describe("COMMANDS enumeration (in-process)", () => {
 describe("advertised surface (child process)", () => {
   const getFixture = useCliFixture();
 
-  it("--help lists exactly the 9 advertised commands and not learn", async () => {
+  it("--help lists exactly the 9 advertised commands and neither plumbing verb", async () => {
     const result = await getFixture().run(["--help"]);
 
     expect(result.code).toBe(0);
@@ -92,6 +96,7 @@ describe("advertised surface (child process)", () => {
     expect(listed).toEqual([...ADVERTISED, "help"]);
     // Line-anchored: validate's summary legitimately contains "learnings".
     expect(result.stdout).not.toMatch(/^ {2}learn\b/m);
+    expect(result.stdout).not.toMatch(/^ {2}handoff\b/m);
   });
 
   it("--version prints the package version and exits 0", async () => {
@@ -132,7 +137,7 @@ describe("advertised surface (child process)", () => {
     expect(result.stderr).toContain("run stamity sync --help for usage");
   });
 
-  it.each([...ADVERTISED, "learn"])("%s --help answers with exit 0", async (name) => {
+  it.each([...ADVERTISED, ...HIDDEN])("%s --help answers with exit 0", async (name) => {
     const result = await getFixture().run([name, "--help"]);
 
     expect(result.code).toBe(0);
@@ -166,6 +171,13 @@ describe("exit-code matrix on an empty fixture", () => {
     [
       "learn capture refuses uninitialised",
       ["learn", "capture", "--title", "t", "--summary", "s"],
+      1,
+      "npx @zomarit/stamity init",
+    ],
+    ["handoff without its mode is a usage error", ["handoff"], 2, "run stamity handoff --help"],
+    [
+      "handoff prepare refuses uninitialised",
+      ["handoff", "prepare", "--title", "t", "--summary", "s", "--from-tool", "claude"],
       1,
       "npx @zomarit/stamity init",
     ],

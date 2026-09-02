@@ -141,16 +141,19 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   nits are suppressed: only regressions on prior findings and new
   Critical/Warning findings count.
 
-Two client events sit under this loop and they do different jobs. The
-task-completion event is the one that HOLDS: a gate emitted there can refuse
-the completion, so the cap binds mechanically. The sub-agent-completion event
-only COUNTS — it carries the round number and the finishing verdict, and it
-never blocks, so a gate emitted there is telemetry. Exactly one of the four
-supported clients publishes either event. Each is an additional check on top of
-this text, not a replacement for it. On clients without those events the ladder
-and the cap are prompt-carried only, and nothing outside this body enforces
-them. The enforcement is uneven by construction, and the flow says so rather
-than promising one bar everywhere.
+Two client events sit under this loop and they do different jobs, and the gate
+rides both, fail-closed. The task-completion event is the one that HOLDS: a
+gate emitted there can refuse the completion, so the cap binds mechanically.
+The sub-agent-completion event only COUNTS — it carries the round number and
+the finishing verdict, and the gate emitted there never blocks: it records the
+round and lets the sub-agent go. The client honours a blocking status on either
+event, and the gate spends one on the completion alone, because holding a
+sub-agent open speaks to the operator rather than to the loop. Exactly one of
+the four supported clients publishes either event. Each is an additional check
+on top of this text, not a replacement for it. On clients without those events
+the ladder and the cap are prompt-carried only, and nothing outside this body
+enforces them. The enforcement is uneven by construction, and the flow says so
+rather than promising one bar everywhere.
 
 ### Specialist pass
 
@@ -190,7 +193,10 @@ The mandatory closing checkpoint, human-facing, at every intensity:
 
 1. Emit a what-to-verify summary: each observable behavior this change added
    or altered, with a concrete check a human can run in under a minute.
-2. Invoke the qa skill for the guided pass.
+2. Invoke the qa skill by name for the guided pass. The step belongs to the
+   command already running, not to a trigger match: a request arriving here —
+   "what should I check by hand?" — is what this checkpoint answers, and stays
+   with this command.
 3. When the change has a user-facing surface, offer a browser-evidence skill
    run; captured screenshots and console output attach to the proof block.
 

@@ -598,3 +598,84 @@ describe("scripts/generate-capability-matrix.mjs", () => {
     expect(result.stderr).toContain("--out");
   });
 });
+
+describe("always-on cost section", () => {
+  // The section renders the pinned ratchet ceilings and the two shared-bytes figures, and
+  // refuses inputs that would state a load nobody measured. Both refusals are exercised here
+  // because a discipline gate with no test is a comment: the emit lane's coverage floor is
+  // what holds this section to its own contract.
+  const page = renderCapabilityMatrixFrom(LIVE_CAPABILITY_INPUTS);
+
+  it("renders one row per client with its ceiling and what it loads unconditionally", () => {
+    expect(page).toContain("## Always-on cost by client");
+    for (const tool of TOOLS) {
+      expect(page).toMatch(
+        new RegExp(`^\\| \`${tool}\` \\| ${LIVE_CAPABILITY_INPUTS.alwaysOn.ceilings[tool]} \\| `, "m"),
+      );
+    }
+    // Three distinct reasons — appendix client, description-pull client, and the rest.
+    expect(page).toContain("the charter plus EVERY selected rule");
+    expect(page).toContain("the charter alone");
+    expect(page).toContain("the charter plus every rule with no globs");
+    expect(page).toContain(`${LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithCodex} bytes`);
+    expect(page).toContain(`${LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithoutCodex} without it`);
+    expect(page).toContain(`${LIVE_CAPABILITY_INPUTS.alwaysOn.codexDroppedRuleCount} rules`);
+  });
+
+  it("refuses a client with no measured ceiling", () => {
+    const zeroed = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: {
+        ...LIVE_CAPABILITY_INPUTS.alwaysOn,
+        ceilings: { ...LIVE_CAPABILITY_INPUTS.alwaysOn.ceilings, copilot: 0 },
+      },
+    };
+    const call = (): string => renderCapabilityMatrixFrom(zeroed);
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/`copilot`/);
+    expect(call).toThrowError(/no measured ceiling/);
+
+    const unmeasured = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: {
+        ...LIVE_CAPABILITY_INPUTS.alwaysOn,
+        ceilings: { ...LIVE_CAPABILITY_INPUTS.alwaysOn.ceilings, cursor: Number.NaN },
+      },
+    };
+    expect(() => renderCapabilityMatrixFrom(unmeasured)).toThrowError(/`cursor`/);
+  });
+
+  it("refuses shared-bytes figures the wrong way round", () => {
+    const inverted = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: {
+        ...LIVE_CAPABILITY_INPUTS.alwaysOn,
+        sharedBytesWithCodex: LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithoutCodex,
+      },
+    };
+    const call = (): string => renderCapabilityMatrixFrom(inverted);
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/wrong way round or one of them is stale/);
+  });
+});
+
+describe("client section edges the floor holds", () => {
+  // Two branches the live declarations never take: a citation with an empty URL, and a
+  // client declaring no caps. Both are reachable by any adapter edit, so both are exercised
+  // rather than left to the coverage floor to notice one day.
+  it("refuses a citation with no URL", () => {
+    const facts = factsFor("cursor");
+    const call = (): string =>
+      renderCapabilityMatrixFrom(
+        withFacts("cursor", { citations: [{ ...facts.citations[0]!, url: "   " }] }),
+      );
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/`cursor`/);
+    expect(call).toThrowError(/no URL/);
+  });
+
+  it("renders a client with no declared caps as exactly that", () => {
+    const page = renderCapabilityMatrixFrom(withFacts("cursor", { caps: [] }));
+    expect(page).toContain("Declared caps: none.");
+  });
+});

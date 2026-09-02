@@ -16,6 +16,7 @@ import {
 import { frontmatterField } from "../../src/content/frontmatter.ts";
 import { cursorCompanionFrontmatter } from "../../src/content/mdcCompanions.ts";
 import { isContextTag } from "../../src/content/tags.ts";
+import { REGENERATE_COMMAND } from "../../src/emit/capabilityMatrix.ts";
 import { REPO_SUBSTITUTION_TOKENS } from "../../src/emit/substitution.ts";
 import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
 import { TOOLS } from "../../src/types/core.ts";
@@ -601,11 +602,10 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
     // Selecting codex rewrites the SHARED root AGENTS.md, so every co-selected
     // client inherits the rules appendix — a 7.3x file for a repo that added
     // codex beside claude (32_361 / 4_404, the two constants asserted below).
-    // Those constants are a TRIPWIRE, not a published figure: this suite is
-    // their only consumer, so when the golden is refreshed and the number
-    // moves, the constants move with it or this fails. Nothing renders them to
-    // a reader — the case below pins that half, which is what the charter's
-    // doc comment claims and what this message used to contradict.
+    // Those constants are a TRIPWIRE as well as a published figure: this suite
+    // holds them to the golden, so when the golden is refreshed and the number
+    // moves, the constants move with it or this fails. The case below holds the
+    // other half — that the page a reader consults actually carries them.
     const snapshot = readFileSync(
       join(REPO_ROOT, "test", "emit", "__snapshots__", "crossClientGoldens.test.ts.snap"),
       "utf8",
@@ -620,39 +620,48 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
       [...recorded].toSorted((a, b) => a - b),
       "the shared root AGENTS.md byte figures in the cross-client golden no longer match the " +
         "disclosure constants in src/content/charter.ts. Update the two constants there to the " +
-        "measured figures; no module, script, or page renders them, so the two lines are the " +
+        "measured figures, then regenerate docs/capability-matrix.md — the page publishes both " +
+        "numbers under `## Always-on cost by client`, so the constants alone are no longer the " +
         "whole of the edit (see the doc comment on ALWAYS_ON_SHARED_BYTES_WITH_CODEX).",
     ).toEqual([ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX, ALWAYS_ON_SHARED_BYTES_WITH_CODEX]);
     expect(ALWAYS_ON_SHARED_BYTES_WITH_CODEX).toBeGreaterThan(ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX);
   });
 
-  it("the capability matrix renders neither shared-bytes figure, as the charter states", () => {
-    // The charter documents these constants as a tripwire whose DISCLOSURE half
-    // is open: `docs/capability-matrix.md` renders from adapter declarations
-    // and carries neither number. That is a prose claim about another
-    // file, and the kind that rots — the residual this case closes was the
-    // failure message above still ordering a maintainer to update a matrix
-    // figure the charter states does not exist. Assert the claim instead of
-    // repeating it: if the page ever does carry a figure, this fails and names
-    // the comment to correct.
+  it("the capability matrix publishes both shared-bytes figures, as the charter states", () => {
+    // FLIPPED 2026-09-02. This case used to assert the opposite — that the page
+    // carried NEITHER figure — because the charter's doc comment recorded the
+    // disclosure half of the cost as open: the constants existed as a tripwire
+    // and nothing published them where a reader choosing a client would look.
+    // `src/emit/capabilityMatrix.ts` now renders both under a named section, so
+    // the old assertion would have failed on the delivery it was waiting for.
+    // The claim moved, so its gate moved with it: what is asserted here is
+    // still "the page and the charter's doc comment agree", in the direction
+    // that is now true.
     const page = readFileSync(join(REPO_ROOT, "docs", "capability-matrix.md"), "utf8");
 
-    // Non-degenerate: an absent-substring check over a missing or renamed file
-    // is vacuously green, so pin that the codex section really is being read.
+    // Non-degenerate: a substring check over a missing or renamed file would
+    // fail loudly, but pin the codex section too so a half-rendered page is
+    // caught by the same case.
     expect(page).toContain("### `codex`");
+    expect(
+      page,
+      "the always-on section heading named by the doc comment on " +
+        "ALWAYS_ON_SHARED_BYTES_WITH_CODEX in src/content/charter.ts is gone from " +
+        "docs/capability-matrix.md. Either restore it in src/emit/capabilityMatrix.ts and " +
+        "regenerate the page, or correct that comment — it states the disclosure is delivered.",
+    ).toContain("## Always-on cost by client");
 
-    // Separators stripped so `32,406` / `32_406` cannot smuggle a rendered
-    // figure past a bare-digit search; digit boundaries so the 32768-byte codex
-    // AGENTS.md cap the page DOES carry is not a false positive.
+    // Separators stripped so `28,956` / `28_956` reads the same as the bare
+    // form; digit boundaries so a longer number carrying these digits is not a
+    // false positive.
     const digits = page.replace(/(?<=\d)[,_](?=\d)/g, "");
     for (const figure of [ALWAYS_ON_SHARED_BYTES_WITH_CODEX, ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX]) {
       expect(
         new RegExp(String.raw`(?<!\d)${figure}(?!\d)`).test(digits),
-        `docs/capability-matrix.md now carries ${figure}. A page that renders the shared ` +
-          "always-on byte cost DELIVERS the disclosure still open: update the doc comment on " +
-          "ALWAYS_ON_SHARED_BYTES_WITH_CODEX in src/content/charter.ts, which states that no " +
-          "page carries either figure, and retire this case.",
-      ).toBe(false);
+        `docs/capability-matrix.md does not carry ${figure}. The page is the disclosure half ` +
+          "of this cost, so a refreshed constant that never reached it leaves a reader choosing " +
+          `a client on a stale number: run \`${REGENERATE_COMMAND}\`.`,
+      ).toBe(true);
     }
   });
 });

@@ -4,6 +4,8 @@ title: leak gate scans stamity state files
 date: 2026-08-31
 confidence: high
 summary: an agent-written file under .stamity/ spelling the predecessor's reserved name turns the suite red — the leak gate lists untracked-not-ignored files and .stamity/ is neither skipped nor allowlisted
+reviewBy: 2026-12-01
+validatedAgainst: test/ci/leakGate.test.ts and test/docsPages.test.ts
 integrity: sha256:60f99ed63583c7376f2672ca1b0ea383b38eb00092453c30725f0718bb762b94
 ---
 

@@ -366,7 +366,7 @@ const handoffs = handoffDocs
 
 function render() {
   if (learnings.length === 0 && handoffDocs.length === 0) {
-    return ["Stamity: no learnings and no resumable handoffs in this repo yet."];
+    return ["stamity: no learnings and no resumable handoffs in this repo yet."];
   }
 
   const bytes = loaded.reduce((total, doc) => total + doc.size, 0);

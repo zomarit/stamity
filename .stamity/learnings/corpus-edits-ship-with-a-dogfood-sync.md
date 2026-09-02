@@ -4,6 +4,8 @@ title: corpus edits ship with a dogfood sync
 date: 2026-08-31
 confidence: high
 summary: a change under content/<class>/ must run npm run build && node dist/cli.js sync so the tracked emitted .claude/.apm copies regenerate — no gate reads them, so a stale dogfood copy passes green
+reviewBy: 2026-12-01
+validatedAgainst: npm run build && node dist/cli.js sync
 integrity: sha256:8fedc7507824d2d446dd0f18635c1357b5a22cd6967a44d39b8e5118c1b5a9ee
 ---
 

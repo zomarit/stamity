@@ -14,6 +14,7 @@ import {
 } from "../../src/adapters/codex.ts";
 import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
 import { resolveBundledContentRoot } from "../../src/content/contentRoot.ts";
+import { LIVE_CAPABILITY_INPUTS } from "../../src/emit/capabilityMatrix.ts";
 import {
   buildCoreEmissionPlan,
   composeEmissionPlanner,
@@ -1115,15 +1116,22 @@ describe("the shipped Codex emission, rule by rule", () => {
     const { inlined, omitted } = deliveredAndOmitted(await shippedRoot());
 
     // `Verification gates` is an H3 of the charter head, not a rule section.
+    //
+    // MOVED 2026-09-02, re-measured rather than widened: the closure run grew
+    // `content/rules/stamity-injection-screening.md` by ~29 lines, and that rule
+    // carries `floor:security`, so it holds its place and the appendix pays for
+    // it out of the tail. `api-versioning` — no floor tag, `normal` precedence —
+    // is the next id down and is now omitted. Codex therefore receives five
+    // rules where it received six.
     expect(inlined).toEqual([
       "Verification gates",
       "ai-evals",
-      "api-versioning",
       "injection-screening",
       "secrets",
       "security-patterns",
     ]);
     expect(omitted).toEqual([
+      "api-versioning",
       "contract-census",
       "learnings-schema",
       "migrations",
@@ -1132,6 +1140,16 @@ describe("the shipped Codex emission, rule by rule", () => {
       "testing",
       "ui-states",
     ]);
+
+    // The capability matrix publishes this count as the cross-client cost of
+    // co-selecting codex, and it is the one figure on that page with no
+    // constant behind it — the renderer is synchronous and cannot run an
+    // emission. This is the pin that keeps the published number honest.
+    expect(
+      LIVE_CAPABILITY_INPUTS.alwaysOn.codexDroppedRuleCount,
+      "docs/capability-matrix.md states how many rules the appendix drops; update " +
+        "`codexDroppedRuleCount` in src/emit/capabilityMatrix.ts and regenerate the page.",
+    ).toBe(omitted.length);
   });
 
   it("records that the rerouted rule itself is delivered nowhere", async () => {
@@ -1165,6 +1183,35 @@ describe("the shipped Codex emission, rule by rule", () => {
     for (const id of ["injection-screening", "secrets", "security-patterns"]) {
       expect(inlined, id).toContain(id);
     }
+  });
+
+  it("delivers every floor-tagged rule, and says the floor ranks ahead of precedence", async () => {
+    const index = await buildContentIndex();
+    const floorTagged = index.items
+      .filter((item) => item.type === "rule" && item.tags.some((tag) => tag.startsWith("floor:")))
+      .map((item) => item.id);
+    const root = await shippedRoot();
+    const { inlined, omitted } = deliveredAndOmitted(root);
+
+    // Derived from the corpus rather than listed, so a rule that gains or loses
+    // a `floor:*` tag is measured here instead of drifting past a literal. The
+    // case above pins the three ids today's ordering spends the budget on; this
+    // one pins the PROPERTY — a rule that encodes a charter floor is the last to
+    // leave, whatever the floor is called.
+    expect(floorTagged.length, "the corpus declares at least one floor-tagged rule").toBeGreaterThan(
+      0,
+    );
+    for (const id of floorTagged) {
+      expect(inlined, `${id} carries a floor tag and must survive budget shaping`).toContain(id);
+      expect(omitted, id).not.toContain(id);
+    }
+
+    // The notice is the operator-facing half: an ordering nobody can read off
+    // the file it shaped is an ordering nobody can check.
+    expect(root).toContain(
+      "rules marked critical are kept longest, then floor-tagged rules, then by declared " +
+        "precedence, then by id",
+    );
   });
 });
 
@@ -1332,7 +1379,7 @@ describe("budget drops are ordered by risk before alphabet", () => {
     // worse than the alphabetical one; the file states the rank it applied.
     expect(root).toContain("lowest risk first");
     expect(root).toContain("critical");
-    expect(root).toContain("security-floor");
+    expect(root).toContain("floor-tagged");
     expect(root).toContain("`ai-evals`");
   });
 

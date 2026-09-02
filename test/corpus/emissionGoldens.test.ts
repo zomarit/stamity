@@ -82,6 +82,34 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-02, the identity casing fix. HOOK SCRIPTS moved, and only on the
+ *     three operator-facing lines that speak the product name: the session-start
+ *     "no learnings and no resumable handoffs" line and the config-tamper
+ *     notice's two, each of which opened `Stamity:` and now opens `stamity:`.
+ *     The name is written lowercase wherever it is spoken, sentence-initial
+ *     included, and these were the last three places in `src/hooks/scripts.ts`
+ *     that capitalised it. Twelve lines across the four clients — the same three
+ *     strings, goldened once per client — and nothing else in either script
+ *     body moved.
+ *
+ *   - 2026-09-02, the closure run's content wave plus the codex floor ranking.
+ *     SUBSTITUTION moved on `commands/st-work.md` again — the review-loop
+ *     paragraph now says the gate rides both client events fail-closed and
+ *     spends its one blocking status on the completion event, and the QA
+ *     checkpoint says the qa skill is invoked BY NAME because the step belongs
+ *     to the command already running rather than to a trigger match. MDC
+ *     COMPANION heads moved for two rules: `injection-screening` (its
+ *     description now covers run-time ingress that never lands in the state
+ *     directory) and `learnings-schema` (the authoring contract folded into the
+ *     writer that enforces it, leaving the curation posture the description now
+ *     states). Nothing else in either set moved.
+ *
+ *     The same wave moved eight more corpus artifacts and changed WHICH rules
+ *     the codex appendix delivers — `api-versioning` is dropped whole so the
+ *     larger `floor:security` screening rule can hold its rank — none of which
+ *     this suite holds. Recorded so the two ledgers stay in step; the moved
+ *     bytes are itemised in the sibling ledger.
+ *
  *   - 2026-09-02, the closure run's close-out. SUBSTITUTION moved on
  *     `commands/st-work.md` again: the run-exit invariant gained the sentence
  *     that it binds at exit and that a run holding a live question has not

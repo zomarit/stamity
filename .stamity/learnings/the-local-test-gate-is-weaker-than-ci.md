@@ -4,6 +4,8 @@ title: the local test gate is weaker than CI
 date: 2026-09-01
 confidence: high
 summary: "npm run test misses two CI-required checks: per-file coverage floors (CI runs npm test -- --coverage) and a Windows leg — POSIX-only local runs pass while coverage/path/mode gaps fail required CI"
+reviewBy: 2026-12-01
+validatedAgainst: npm test -- --coverage
 integrity: sha256:6b49fc6c208727dfd99b14e2f1b983eedcbd92406c50459b25f7eb9bc3eb297d
 ---
 

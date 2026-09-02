@@ -4,7 +4,7 @@ type: skill
 description: "Produces a standalone dependency audit over the installed graph — advisories, licenses, and update-risk classes — and reports without editing a manifest, a lockfile, or a source file. Triggers when someone asks what the installed packages are exposed to, before a release or an upgrade sweep, or when a lockfile change needs its risk stated."
 tags: [maintenance, devops]
 load: on-demand
-obsolete_when: dependency risk reporting is fully covered by native tooling
+obsolete_when: a target client documents native reporting of advisories, licenses, and update-risk classes over the lockfile-resolved graph
 ---
 
 # Dependency audit

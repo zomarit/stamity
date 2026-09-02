@@ -1,3 +1,9 @@
+---
+id: overlay-layers
+# A design document, authored outside the spec command and excluded from the site build.
+status: design
+obsolete_when: the customization layers ship and the published customization page carries their behaviour, or a decision cuts the surface
+---
 # Overlay customization layers
 
 Field-level customization of a shipped artifact: `.customize.yaml` patches its

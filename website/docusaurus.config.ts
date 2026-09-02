@@ -13,11 +13,12 @@ import repoLinks from './src/remark/repoLinks';
  * plugin reads the repository's `docs/` directory directly, so a page edited (or regenerated) in
  * the tree is the page the site serves, and `git diff` is the only place a docs change appears.
  *
- * The site is NOT deployed by merging. `stamity.dev` is not claimed and GitHub Pages is not
- * enabled on the repository; `.github/workflows/docs-site.yml` builds on every pull request and
- * push, and only a deliberate, armed `workflow_dispatch` can deploy. Until that is armed, `url`
- * below is a declaration of intent that only affects canonical/sitemap metadata in the build
- * output.
+ * The site is NOT deployed by merging. `stamity.dev` is claimed and serves this site, and
+ * `.github/workflows/docs-site.yml` builds on every pull request and push and stops there;
+ * publishing takes an armed run — a `workflow_dispatch` that sets `deploy` to true, or a Release
+ * run that succeeded on a real `v*` tag push. So `url` below is the address readers are already
+ * served at, not a declaration of intent: the canonical and sitemap metadata it feeds point at a
+ * live site, and moving it moves where every published page claims to live.
  */
 /**
  * This directory, resolved without assuming the working directory.
@@ -46,7 +47,8 @@ const config: Config = {
   // every reference below is `/img/<file>`.
   favicon: 'img/favicon.svg',
 
-  // The deploy target. Not claimed yet — see the header note and the workflow's arming condition.
+  // The deploy target, claimed and serving. `website/static/CNAME` claims the same host, and
+  // test/ci/docsSite.test.ts holds the two together; see the header note for what arms a publish.
   url: 'https://stamity.dev',
   baseUrl: '/',
   organizationName: 'zomarit',
@@ -99,9 +101,19 @@ const config: Config = {
       'classic',
       {
         docs: {
-          // The repository's docs directory, read in place. No `include`/`exclude` narrowing: a
-          // page added to `docs/` should appear without editing this file.
+          // The repository's docs directory, read in place. The only narrowing is the `exclude`
+          // below: a page added anywhere else under `docs/` appears without editing this file.
           path: '../docs',
+          // `docs/specs/` holds three engineering design documents for behaviour that is partly
+          // unbuilt. They are written for whoever implements the remainder, not for a reader of
+          // the product documentation, and a published route would read as a description of what
+          // ships. They stay in the tree, under review like any other file, and off the routes.
+          // `test/ci/docsRoster.test.ts` exempts them from the roster on the strength of this line.
+          // Setting `exclude` REPLACES the plugin's default list rather than extending it, so the
+          // defaults — partial files and tests — are restated here; without them a future
+          // `docs/_draft.md` would publish. Kept on one line because `test/ci/docsSite.test.ts`
+          // reads the value off this line.
+          exclude: ['specs/**', '**/_*.{js,jsx,ts,tsx,md,mdx}', '**/_*/**', '**/*.test.{js,jsx,ts,tsx}', '**/__tests__/**'],
           routeBasePath: 'docs',
           sidebarPath: './sidebars.ts',
           // No `editUrl` on purpose. Five of these pages are rendered from code and carry a

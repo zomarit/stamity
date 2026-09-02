@@ -528,8 +528,13 @@ describe("handoff — five modes over the engine's store", () => {
     expect(text).toContain(`${MAX_ACTIVE_HANDOFFS_PER_REPO} unfinished handoffs`);
     expect(text).toContain(`${HANDOFF_DEFAULT_EXPIRY_DAYS} days`);
     expect(text).toContain(`${DEFAULT_ARCHIVE_RETENTION_DAYS} days`);
-    // No CLI owns this write, so the shape check is the skill's own job.
-    expect(text).toMatch(/No CLI writes handoffs/i);
+    // TEST CHANGE, justified: `/No CLI writes handoffs/i` pinned a body that owned
+    // the write itself, because no verb did. `stamity handoff <mode>` now does, so the
+    // skill names it as the owner of the mechanics and keeps only the judgment. The
+    // caps above still belong here — the body quotes them so a reader knows what a
+    // refusal will say — and so does the consequence below: a file placed by a file
+    // tool instead of the verb is invisible, not merely unvalidated.
+    expect(text).toContain("`stamity handoff <mode>` owns the mechanics");
     expect(text).toMatch(/it produces an invisible file/i);
   });
 

@@ -4,7 +4,7 @@ type: agent
 description: "Reviews rendered surfaces and the flows through them when a component, view, or style file changes, deciding named accessibility success criteria and design-token adherence, and returning graded findings with path:line evidence and no edits."
 tags: [review]
 load: on-demand
-obsolete_when: target clients decide success-criterion conformance and token adherence on a rendered surface from source alone, at a measured false-positive rate below 10%
+obsolete_when: a target client documents a review pass that decides named success criteria and design-token adherence on a rendered surface from source alone
 capabilities: [read]
 model_class: advanced
 ---

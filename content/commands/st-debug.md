@@ -101,8 +101,12 @@ lines, and what would have to be true for the chain to be wrong.
 
 When the user cannot reproduce — intermittent, environment-only, or the scenario is not
 available to them — the loop stalls at step 3 and returns `BLOCKED_DEPENDENCY` naming exactly
-what it needs: environment, data, access, or a longer capture window. Instrumentation stays
-in place only when the user agrees to capture later; otherwise step 8 runs immediately.
+what it needs: environment, data, access, or a longer capture window. That return carries one
+question with it — hold the step-2 instrumentation for a capture window, or strip it now — and
+declares stripping now as the default. Silence, an unattended run, and an ambiguous reply all
+take the default: step 8 runs immediately. Only an explicit yes holds the instrumentation,
+and then the reply names the date the window ends and the run records the agreement with the
+sites left in place.
 
 A fix written without a reproduced observation is speculation. Record the ranked hypotheses
 and the observation each one still needs, and stop there.

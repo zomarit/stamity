@@ -795,7 +795,7 @@ const handoffs = handoffDocs
 
 function render() {
   if (learnings.length === 0 && handoffDocs.length === 0) {
-    return ["Stamity: no learnings and no resumable handoffs in this repo yet."];
+    return ["stamity: no learnings and no resumable handoffs in this repo yet."];
   }
 
   const bytes = loaded.reduce((total, doc) => total + doc.size, 0);
@@ -1213,10 +1213,10 @@ const changed = clean(
 const lines =
   changed === ""
     ? [
-        "Stamity: agent configuration is generated and managed. Run \`stamity check\` to diff the on-disk files against the engine's own output.",
+        "stamity: agent configuration is generated and managed. Run \`stamity check\` to diff the on-disk files against the engine's own output.",
       ]
     : [
-        "Stamity: agent configuration changed — " + changed + ".",
+        "stamity: agent configuration changed — " + changed + ".",
         "That file is generated and managed. Run \`stamity check\` to diff it against the engine's own output before trusting the change.",
       ];
 

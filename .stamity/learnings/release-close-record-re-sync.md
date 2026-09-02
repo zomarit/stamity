@@ -4,6 +4,8 @@ title: release-close record re-sync
 date: 2026-09-01
 confidence: medium
 summary: the private layer's side-by-side record fell two releases stale because closes ran only in this repo — release-sized closes end with a record re-sync (see .github/release-controls-checklist.md)
+reviewBy: 2026-12-01
+validatedAgainst: .github/release-controls-checklist.md
 integrity: sha256:877559d43286d5c032aa9c23dd2f42447d8cb8fdda6f30ad3e1cee0e5aa5fb5d
 ---
 

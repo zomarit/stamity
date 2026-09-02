@@ -299,14 +299,23 @@ describe("requireObsoleteWhen", () => {
     expect(problems).toEqual([]);
   });
 
-  it("the three deletion triggers each state their own number", async () => {
-    // The three artifacts whose triggers used to end in a deictic pointer. Their
-    // numbers come from the bodies that already stated them: the specialists' 10%
-    // false-positive bar, and the reviewer's recorded catch-rate baseline plus the
-    // declared 10% dismissal ceiling. The rewrite moved WHERE the bar is written.
+  it("the three deletion triggers each end in a condition a sweep can decide", async () => {
+    // The three artifacts whose triggers used to end in a deictic pointer, each
+    // re-pointed at something readable from outside the artifact.
+    //
+    // TEST CHANGE, justified: the security and design-quality rows pinned
+    // /false-positive rate below 10%$/, and that number stopped being what those two
+    // triggers state. Nothing measures a false-positive rate, so a trigger phrased in
+    // one named a deletion condition the horizon-scan sweep could never decide; both
+    // were rewritten to name a documented client feature instead. The rows move with
+    // them rather than being dropped: what each pins is still the tail of the trigger,
+    // anchored on the documented-feature phrase the sweep actually reads. The reviewer
+    // row is untouched — its baseline and ceiling are recorded, so its number stands.
     const expected: Readonly<Record<string, RegExp>> = {
-      "agents/stamity-security.md": /false-positive rate below 10%$/,
-      "agents/stamity-design-quality.md": /false-positive rate below 10%$/,
+      "agents/stamity-security.md":
+        /documents a review pass that decides .*dependency advisories on a diff$/,
+      "agents/stamity-design-quality.md":
+        /documents a review pass that decides .*on a rendered surface from source alone$/,
       "agents/stamity-reviewer.md": /recorded seeded-defect baseline .* declared 10% per-cycle ceiling$/,
     };
 

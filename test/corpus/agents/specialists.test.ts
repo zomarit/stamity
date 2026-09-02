@@ -192,14 +192,21 @@ describe("specialist agents — frontmatter contract", () => {
   });
 
   it.each(SPECIALISTS.filter((agent) => agent.id !== "performance"))(
-    "$id's deletion trigger carries the bar itself, not a pointer at prose",
+    "$id's deletion trigger points at no prose below it",
     async (agent) => {
       const trigger = String(frontmatterField((await load(agent.relPath)).parsed, "obsolete_when"));
 
-      // docs/reference/agents.md renders this value as a frontmatter-only row, so
-      // "the bar stated below" resolved there to the NEXT agent's block. The number
-      // the body already states now travels with the trigger.
-      expect(trigger).toContain(`below ${FALSE_POSITIVE_BAR_PERCENT}%`);
+      // TEST CHANGE, justified: the positive half pinned the trigger to carry
+      // `below <bar>%` itself. The security and design-quality triggers were rewritten
+      // to name a documented client feature instead, because nothing ever measured a
+      // false-positive rate — a trigger stated in that number named a deletion
+      // condition the horizon-scan sweep could never decide, so the premise the
+      // assertion rested on is gone. The bar itself is untouched: it is still pinned
+      // where it is enforceable, in the Precision contract cases below.
+      //
+      // The negative half's premise still holds. docs/reference/agents.md renders
+      // `obsolete_when` as a frontmatter-only row, so "the bar stated below" resolves
+      // there to the NEXT agent's block; a trigger may not point at prose it loses.
       expect(trigger).not.toMatch(/stated below|gate below|the bar\b(?!\s+of)/i);
     },
   );

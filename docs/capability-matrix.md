@@ -32,6 +32,36 @@ page, under Currency and revisit triggers.
 | `copilot` | none — `AGENTS.md` is native | yes | none emitted | `fail-open` — never blocks | `vscode-json` |
 | `codex` | none — `AGENTS.md` is native | yes | `.codex/hooks.json` | `fail-closed` — blocks on exit `2` | `codex-toml` |
 
+## Always-on cost by client
+
+What a session pays before it has done anything: the charter every client reads, plus every
+rule that client cannot attach conditionally. The charter TEMPLATE is capped at 150 physical
+lines, and on three of the four clients that cap is not the number a session loads.
+
+| Client | Always-on lines | What it loads unconditionally |
+|---|---|---|
+| `claude` | 240 | the charter plus every rule with no globs — those carry no attach trigger, so they load every session |
+| `cursor` | 97 | the charter alone — a rule with no globs is pulled in when the conversation matches it |
+| `copilot` | 240 | the charter plus every rule with no globs — those carry no attach trigger, so they load every session |
+| `codex` | 1065 | the charter plus EVERY selected rule — no per-rule attach mechanism, so the whole set is folded into the one instruction file |
+
+The line figures are the ratchet ceilings in `src/content/charter.ts`, each pinned at the load
+measured on the last corpus refresh: a client's real composite is at or under its cell, never
+over it, because the corpus suite fails the build when one grows past its ceiling. They are a
+bound a reader can plan against, not a reading this page took as it rendered.
+
+**What co-selecting codex costs every other client.** Selecting `codex` does not add a
+codex-only file. It rewrites the root `AGENTS.md` that every other selected client already
+reads, so a claude+codex repository hands claude the codex rules appendix too: 28956 bytes of
+shared instruction text against 4404 without it — ≈6.6x the always-on bytes every co-selected
+client pays.
+
+That appendix does not fit the client's own 32 KiB ceiling: budget shaping drops 8 rules from
+it on the full selection, lowest risk first — rules marked critical are kept longest, then
+floor-tagged rules, then declared precedence, then id. The emitted file names the dropped rules
+in its own omission notice, so the current set is read there rather than here. Re-measure with
+`node scripts/generate-capability-matrix.mjs` after a corpus change.
+
 ## Dialect facts by client
 
 ### `claude`
@@ -120,6 +150,7 @@ Declared caps:
 | `rule-activation` | glob only; no description-pull mode, so an agent-requested rule emits applyTo: "**" |
 | `rule-precedence` | not expressible — Copilot has no ordering primitive |
 | `mcp-documents` | two — the editor `vscode-json` document plus the coding agent's `copilot-env` repo settings |
+| `mcp-approval` | configuration-time — a coding-agent server is approved by a repository administrator when it is entered in the repository's Copilot settings, so a server's trust is decided when it is configured, not when the agent runs; the editor `vscode-json` document is the user's own and that approval does not cover it (coding-agent MCP configuration docs, re-read 2026-08-22 for this claim alone) |
 
 Sources:
 

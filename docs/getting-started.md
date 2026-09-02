@@ -2,11 +2,11 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6477e37. -->
-<!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, or a
-     verb joins or leaves the command surface. `test/docsPages.test.ts` holds this page to the
-     hand-page contract, and `docs/cli-reference.md` plus `docs/capability-matrix.md` are the
-     generated pages it must never contradict. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6865e31. -->
+<!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, a
+     verb joins or leaves the command surface, or a path joins or leaves `.stamity/`.
+     `test/docsPages.test.ts` holds this page to the hand-page contract; the generated
+     `docs/cli-reference.md` and `docs/capability-matrix.md` are what it must not contradict. -->
 
 # Getting started
 
@@ -120,14 +120,15 @@ checkout cannot carry, `worktree list` says what exists and what state each one 
 `worktree cleanup <name>` removes exactly what setup recorded — never the branch.
 `clean` removes all of it.
 
-There is a tenth, `learn`, which agents call to record a learning through the engine's
-write gates. It is plumbing, not something you type. The gates exist because a learning is
-text that re-enters an agent's context on a later session: anything with write access to
-the repository can author a file that is read back into a prompt, which makes a note a
-security surface rather than a scratch file. So the CLI is the one write path, and every
-note passes it — a name shape that cannot address anything but a file in place, per-file
-and per-directory caps, content checks (frontmatter schema, required sections, injection
-screening), and an integrity digest stamped over the body.
+There are two more, hidden: `learn`, which agents call to record a learning through the
+engine's write gates, and `handoff`, which prepares, resumes, lists, completes and prunes
+handoffs through those same gates. Both are plumbing, not something you type. The gates
+exist because a learning is text that re-enters an agent's context on a later session:
+anything with write access to the repository can author a file that is read back into a
+prompt, which makes a note a security surface rather than a scratch file. So the CLI is the
+one write path, and every note passes it — a name shape that cannot address anything but a
+file in place, per-file and per-directory caps, content checks (frontmatter schema, required
+sections, injection screening), and an integrity digest stamped over the body.
 
 Every flag and every exit status is in [the CLI reference](cli-reference.md); every
 settable key is in [the configuration reference](configuration.md).
@@ -138,7 +139,7 @@ settable key is in [the configuration reference](configuration.md).
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs nine environment probes, then asks one question that
+`check` is the diagnosis. It runs ten environment probes, then asks one question that
 matters more than the rest: **would a sync change anything?** If the answer is yes, disk
 and the engine's output disagree — a managed file was hand-edited, a generated file was
 deleted, a pack's content no longer matches what was installed. A failing probe or any
@@ -157,6 +158,12 @@ Everything the setup knows about itself is under `.stamity/`:
 | `.stamity/handoffs/` | handoff records between sessions and clients |
 | `.stamity/generated/` | hook scripts and the agent tool policy, written from code |
 | `.stamity/packs/` | content installed by `add`, one directory per pack |
+| `.stamity/overrides/` | agents, rules, commands and skills of your own, merged above the bundled content |
+| `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it |
+| `.stamity/verify/` | one artifact per quality axis per commit, written by the verify skill |
+| `.stamity/inbox.md` | deferred rows, one dated block per run that filed them |
+| `.stamity/worktree.json` | the worktree lane's policy — yours to write; absent, its two defaults apply |
+| `.stamity/workspace-sync-journal.jsonl` | at a workspace root: the cascade's crash trail, two lines per attempted member per run |
 | `.stamity/review-gate.json` | the per-run review-round counter the generated review-gate hook writes |
 
 Commit it. The manifest is the provenance record, and a teammate who clones the

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Repository leak gate: reserved names, and credential shapes.
+// Repository leak gate: reserved names, credential shapes, and private-layer references.
 //
-// Two rule families, one traversal. The reserved-name family fails if a RESERVED name reaches the
+// Three rule families, one traversal. The reserved-name family fails if a RESERVED name reaches the
 // published tree — the names this project was built or considered under before the rename, and the
 // predecessor project whose name is legal only inside the migration-detection module that has to
 // spell it to find the old tree. A retired name in a public repository is a SECOND name for one
@@ -10,7 +10,11 @@
 // any of these names is legal, and each prints the files it dropped on every run. The secret-shape
 // family fails if a credential shape lands in a tracked file — the tree had no secret detection of
 // any kind, no scan lane, no push-protection assertion, while the walk a shape pass needs was
-// already running here every push.
+// already running here every push. The private-layer family fails if a reference to the operator's
+// private governance layer reaches this tree — a row identifier out of one of its ledgers, or the
+// name of the repository that holds them. A committed run ledger in this tree carried both classes
+// until an audit found them by reading. The public tree carries neither by convention, and a
+// convention with no gate is a sweep that runs when somebody remembers.
 //
 // Usage: node scripts/leak-gate.mjs [--root <dir>] [--include-build]
 //   --root           scan a tree other than this script's repository (the extracted publish
@@ -388,6 +392,32 @@ const NAME_RULES = [
 ].map((rule) => ({ id: rule.id, source: rule.parts.join(''), flags: 'gi', allow: rule.allow }))
 
 /**
+ * Row-identifier prefixes the private layer's ledgers use, each assembled from single-character
+ * fragments so this file spells none of them: the decision ledger, the question channel, the audit
+ * ledger, the evidence ledger, the directive ledger, the question batch and the audit cycle.
+ *
+ * Two-letter prefixes come first in the alternation only for readability — the trailing `-0` and
+ * the word boundaries decide every match, so order changes nothing.
+ */
+const LEDGER_PREFIXES = [
+  ['A', 'D'], ['Q'], ['A', 'L'], ['E', 'V'], ['D', 'R'], ['B'], ['C'],
+].map((fragments) => fragments.join(''))
+
+/**
+ * Private-layer references, with no path where either is legal.
+ *
+ * A row identifier is matched CASE-SENSITIVELY: the rows are upper-case, and a lower-case
+ * near-miss is ordinary prose that a fold would turn into a weekly false alarm. The repository
+ * name is the product's own package name with `-governance` after it, matched case-insensitively
+ * and — like every rule here — against paths as well as content, so a home-directory path naming
+ * that checkout is caught the same way a sentence naming it is.
+ */
+const PRIVATE_RULES = [
+  { id: 'private-ledger-id', source: `\\b(?:${LEDGER_PREFIXES.join('|')})-0\\d\\d\\b`, flags: 'g', allow: [] },
+  { id: 'private-repo-name', source: ['stam', 'ity', '-gov', 'ernance'].join(''), flags: 'gi', allow: [] },
+]
+
+/**
  * Credential shapes, mirroring the high-confidence half of `src/mcp/secretScan.ts`
  * (`SECRET_PATTERNS`) — every id here exists there, asserted by `test/ci/leakGate.test.ts`
  * so the two cannot drift.
@@ -421,13 +451,14 @@ function secretRule(id, source, flags) {
 }
 
 /** Every rule, each carrying its own compiled matcher and its own path exemptions. */
-export const RULES = [...NAME_RULES, ...SECRET_RULES].map((rule) => ({
+export const RULES = [...NAME_RULES, ...PRIVATE_RULES, ...SECRET_RULES].map((rule) => ({
   id: rule.id,
   pattern: new RegExp(rule.source, rule.flags),
   // The normalized view lower-cases as it folds, so a case-sensitive rule keeps its meaning
   // there only if it is matched case-sensitively against a lower-cased string — which would
-  // change what it means. Credential shapes are case-sensitive by construction, so they run on
-  // the raw views only; reserved names are case-insensitive already and run on both.
+  // change what it means. Credential shapes and the private-layer row ids are case-sensitive by
+  // construction, so they run on the raw views only; the name rules and the private repository
+  // name are case-insensitive already and run on both.
   normalizable: rule.flags.includes('i'),
   allow: rule.allow.map(toMatcher),
 }))
@@ -706,6 +737,8 @@ function run() {
     console.error('  legitimately needs the literal marker.')
     console.error('  A credential-shape hit: rotate the credential FIRST — it is in the working tree and')
     console.error('  may already be in history — then remove it and re-run.')
+    console.error('  A private-layer hit: this tree refers to those rows and that checkout descriptively')
+    console.error('  ("the intake decision", "the private layer"), so respell the reference.')
     return 1
   }
 

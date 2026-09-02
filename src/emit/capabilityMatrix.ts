@@ -6,7 +6,9 @@
  * disagree with no signal at all — the page keeps reading as true. Here every
  * cell is a projection of a code constant: the four residue planners'
  * {@link AdapterDialectFacts}, the shared `CLIENT_HOOK_GUARANTEES` ladder the
- * emitters read, and `ADAPTER_ALLOWLIST_COVERAGE` from the tool translator.
+ * emitters read, `ADAPTER_ALLOWLIST_COVERAGE` from the tool translator, and the
+ * always-on ratchet pins from `../content/charter.ts`
+ * ({@link AlwaysOnDisclosure}).
  * The committed {@link CAPABILITY_MATRIX_DOC_PATH} is rewritten by
  * {@link REGENERATE_COMMAND}, and a test re-renders in-process and
  * byte-compares against it, so the page cannot be hand-edited and cannot lag a
@@ -45,6 +47,14 @@ import { claudeResiduePlanner } from "../adapters/claude.ts";
 import { codexResiduePlanner } from "../adapters/codex.ts";
 import { copilotResiduePlanner } from "../adapters/copilot.ts";
 import { cursorResiduePlanner } from "../adapters/cursor.ts";
+import {
+  ALWAYS_ON_BUDGET_LINES,
+  ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
+  ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
+  CHARTER_MAX_LINES,
+  DESCRIPTION_PULL_TOOLS,
+  RULE_APPENDIX_TOOLS,
+} from "../content/charter.ts";
 import { CLIENT_HOOK_GUARANTEES, type ClientHookGuarantee } from "../hooks/model.ts";
 import {
   ADAPTER_ALLOWLIST_COVERAGE,
@@ -63,6 +73,9 @@ export const REGENERATE_COMMAND = "node scripts/generate-capability-matrix.mjs";
 
 /** An access date is an ISO calendar date; anything else is undated prose. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Column at which {@link paragraph} wraps, matching the page's hand-wrapped prose. */
+const PROSE_WIDTH = 95;
 
 // ── Inputs ───────────────────────────────────────────────────────
 
@@ -86,6 +99,44 @@ export interface CapabilityMatrixInputs {
   readonly coverage: readonly AdapterAllowlistCoverage[];
   /** The currency process's named revisit conditions, in declared order. */
   readonly triggers: readonly RevisitTrigger[];
+  /** What a session loads before it has done anything, per client. */
+  readonly alwaysOn: AlwaysOnDisclosure;
+}
+
+/**
+ * The always-on cost, as data this renderer projects rather than measures.
+ *
+ * The measurement itself is a corpus read — charter lines plus the rule files a
+ * client cannot attach conditionally — and this module is a synchronous, pure
+ * function of its inputs with no filesystem behind it. So the figures arrive as
+ * the ratchet constants `src/content/charter.ts` already pins, and the page
+ * says which they are: a ceiling measured at the last refresh, not a reading
+ * taken as the page rendered.
+ *
+ * That is a real limit, stated rather than hidden. The pins are held to the
+ * corpus by `test/corpus/invariants.test.ts` (every client's measured composite
+ * must sit under its ceiling) and to the emission by the cross-client golden
+ * (both byte figures), so a stale cell here means a ratchet nobody lowered — a
+ * number that is too high — never a number that is too low.
+ */
+export interface AlwaysOnDisclosure {
+  /** Physical-line ceiling per client, pinned at the last measured load. */
+  readonly ceilings: Readonly<Record<Tool, number>>;
+  /** The charter TEMPLATE's own cap, which the composite is read against. */
+  readonly charterCap: number;
+  /** Bytes of the shared root instruction file with codex among the selection. */
+  readonly sharedBytesWithCodex: number;
+  /** The same file without it — the charter alone. */
+  readonly sharedBytesWithoutCodex: number;
+  /**
+   * How many rules the codex budget shaper drops from the appendix on the full
+   * selection. A count rather than the ids: the ids are only knowable by
+   * running the emission, which this renderer cannot do, and a hand-kept list
+   * would be a second place for them to be wrong. The emitted file names them,
+   * and `test/adapters/codex.test.ts` pins both this number and that set
+   * against the real emission.
+   */
+  readonly codexDroppedRuleCount: number;
 }
 
 /**
@@ -169,6 +220,22 @@ export const REVISIT_TRIGGERS: readonly RevisitTrigger[] = [
   },
 ];
 
+/**
+ * The always-on figures as `src/content/charter.ts` pins them today.
+ *
+ * `codexDroppedRuleCount` is the one value with no constant behind it, because
+ * the drop set is a property of the corpus and the 32 KiB ceiling together
+ * rather than of any declaration. It is re-measured on every golden refresh and
+ * held to the emission by the codex adapter suite.
+ */
+const LIVE_ALWAYS_ON: AlwaysOnDisclosure = {
+  ceilings: ALWAYS_ON_BUDGET_LINES,
+  charterCap: CHARTER_MAX_LINES,
+  sharedBytesWithCodex: ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
+  sharedBytesWithoutCodex: ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
+  codexDroppedRuleCount: 8,
+};
+
 /** What the shipped page is made of: the live declarations, nothing else. */
 export const LIVE_CAPABILITY_INPUTS: CapabilityMatrixInputs = {
   facts: [
@@ -180,6 +247,7 @@ export const LIVE_CAPABILITY_INPUTS: CapabilityMatrixInputs = {
   guarantees: CLIENT_HOOK_GUARANTEES,
   coverage: ADAPTER_ALLOWLIST_COVERAGE,
   triggers: REVISIT_TRIGGERS,
+  alwaysOn: LIVE_ALWAYS_ON,
 };
 
 // ── Validation ───────────────────────────────────────────────────
@@ -227,6 +295,32 @@ function requireCitations(facts: AdapterDialectFacts): void {
           `"${citation.accessDate}", which is not an ISO calendar date (YYYY-MM-DD).`,
       );
     }
+  }
+}
+
+/**
+ * Every client carries a ceiling, both byte figures are real, and the with-codex
+ * figure is the larger of the two. A zero or a missing client would render a
+ * cost claim the corpus never measured, which is the one thing this section is
+ * for.
+ */
+function requireAlwaysOnFigures(alwaysOn: AlwaysOnDisclosure): void {
+  for (const tool of TOOLS) {
+    const ceiling = alwaysOn.ceilings[tool];
+    if (!Number.isFinite(ceiling) || ceiling <= 0) {
+      fail(
+        `The always-on disclosure carries no measured ceiling for \`${tool}\`, so its row would ` +
+          `state a load nobody took.`,
+      );
+    }
+  }
+  if (alwaysOn.sharedBytesWithCodex <= alwaysOn.sharedBytesWithoutCodex) {
+    fail(
+      `The always-on disclosure puts the shared instruction file at ` +
+        `${alwaysOn.sharedBytesWithCodex} bytes with codex and ` +
+        `${alwaysOn.sharedBytesWithoutCodex} without it. The rules appendix only adds bytes, so ` +
+        `these two are the wrong way round or one of them is stale.`,
+    );
   }
 }
 
@@ -305,6 +399,29 @@ function table(headers: readonly string[], rows: readonly (readonly string[])[])
     `|${headers.map(() => "---").join("|")}|`,
     ...rows.map((row) => `| ${row.map(cell).join(" | ")} |`),
   ];
+}
+
+/**
+ * One paragraph as page lines, greedily wrapped at {@link PROSE_WIDTH}.
+ *
+ * Used only where a sentence carries an interpolated figure: a hand-wrapped
+ * literal would keep its line breaks where the OLD number ended, so a figure
+ * that gained a digit would leave a ragged paragraph behind on every refresh.
+ * Deterministic — one input, one wrapping — so the byte-compare still holds.
+ */
+function paragraph(text: string): string[] {
+  const lines: string[] = [];
+  let current = "";
+  for (const word of text.split(" ").filter((part) => part !== "")) {
+    if (current === "") current = word;
+    else if (current.length + 1 + word.length <= PROSE_WIDTH) current = `${current} ${word}`;
+    else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current !== "") lines.push(current);
+  return lines;
 }
 
 /** Inline code, or a plain word when the value is a rendered absence. */
@@ -474,6 +591,72 @@ function currencySection(rows: readonly DatedTrigger[]): string[] {
   ];
 }
 
+/**
+ * What one client loads unconditionally, read off the two attach-primitive sets
+ * rather than restated here. A client that gains or loses the primitive moves
+ * this cell with it, so the reason and the number cannot disagree.
+ */
+function alwaysOnReasonCell(tool: Tool): string {
+  if (RULE_APPENDIX_TOOLS.has(tool)) {
+    return (
+      "the charter plus EVERY selected rule — no per-rule attach mechanism, so the whole set " +
+      "is folded into the one instruction file"
+    );
+  }
+  if (DESCRIPTION_PULL_TOOLS.has(tool)) {
+    return "the charter alone — a rule with no globs is pulled in when the conversation matches it";
+  }
+  return (
+    "the charter plus every rule with no globs — those carry no attach trigger, so they load " +
+    "every session"
+  );
+}
+
+function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
+  const ratio = (alwaysOn.sharedBytesWithCodex / alwaysOn.sharedBytesWithoutCodex).toFixed(1);
+  return [
+    "## Always-on cost by client",
+    "",
+    ...paragraph(
+      "What a session pays before it has done anything: the charter every client reads, plus " +
+        "every rule that client cannot attach conditionally. The charter TEMPLATE is capped at " +
+        `${alwaysOn.charterCap} physical lines, and on three of the four clients that cap is ` +
+        "not the number a session loads.",
+    ),
+    "",
+    ...table(
+      ["Client", "Always-on lines", "What it loads unconditionally"],
+      TOOLS.map((tool) => [code(tool), String(alwaysOn.ceilings[tool]), alwaysOnReasonCell(tool)]),
+    ),
+    "",
+    ...paragraph(
+      "The line figures are the ratchet ceilings in `src/content/charter.ts`, each pinned at " +
+        "the load measured on the last corpus refresh: a client's real composite is at or under " +
+        "its cell, never over it, because the corpus suite fails the build when one grows past " +
+        "its ceiling. They are a bound a reader can plan against, not a reading this page took " +
+        "as it rendered.",
+    ),
+    "",
+    ...paragraph(
+      "**What co-selecting codex costs every other client.** Selecting `codex` does not add a " +
+        "codex-only file. It rewrites the root `AGENTS.md` that every other selected client " +
+        "already reads, so a claude+codex repository hands claude the codex rules appendix too: " +
+        `${alwaysOn.sharedBytesWithCodex} bytes of shared instruction text against ` +
+        `${alwaysOn.sharedBytesWithoutCodex} without it — ≈${ratio}x the always-on bytes every ` +
+        "co-selected client pays.",
+    ),
+    "",
+    ...paragraph(
+      "That appendix does not fit the client's own 32 KiB ceiling: budget shaping drops " +
+        `${alwaysOn.codexDroppedRuleCount} rules from it on the full selection, lowest risk ` +
+        "first — rules marked critical are kept longest, then floor-tagged rules, then declared " +
+        "precedence, then id. The emitted file names the dropped rules in its own omission " +
+        "notice, so the current set is read there rather than here. Re-measure with " +
+        `\`${REGENERATE_COMMAND}\` after a corpus change.`,
+    ),
+  ];
+}
+
 function coverageSection(coverage: readonly AdapterAllowlistCoverage[]): string[] {
   return [
     "## Agent tool-allowlist enforcement coverage",
@@ -494,8 +677,10 @@ function coverageSection(coverage: readonly AdapterAllowlistCoverage[]): string[
  * declared order, guarantees in the ladder's own order.
  *
  * Throws `EngineError` (`ADAPTER_ERROR`) when a data set does not cover the
- * clients exactly once, when a client's facts carry no dated citation, or when
- * a revisit trigger is half-stated or watches a client with no facts here.
+ * clients exactly once, when a client's facts carry no dated citation, when a
+ * revisit trigger is half-stated or watches a client with no facts here, or when
+ * the always-on disclosure is missing a client's ceiling or carries the two
+ * shared-byte figures the wrong way round.
  */
 export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): string {
   requireExactToolCoverage("The dialect-facts set", inputs.facts);
@@ -510,6 +695,7 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
     return facts;
   });
   const dated = resolveTriggers(inputs.triggers, ordered);
+  requireAlwaysOnFigures(inputs.alwaysOn);
 
   const lines = [
     // Frontmatter first, banner second: the site generator parses the block only
@@ -543,6 +729,8 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
     "page, under Currency and revisit triggers.",
     "",
     ...glanceSection(ordered, inputs.guarantees),
+    "",
+    ...alwaysOnSection(inputs.alwaysOn),
     "",
     "## Dialect facts by client",
     "",

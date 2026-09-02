@@ -27,10 +27,10 @@ artifact lands.
 
 ## 1. Preconditions
 
-Read `evals/SET-v2.md` first. It is the contract this runner executes: the case
+Read `evals/SET-v3.md` first. It is the contract this runner executes: the case
 roster, the declared thresholds, the run-artifact shape, and the versioned
 inputs — prompt text, the model-under-test id, the judge id, decoding settings,
-tool schemas, retrieval corpus. Read `evals/rubric-v2.md` next for the written
+tool schemas, retrieval corpus. Read `evals/rubric-v3.md` next for the written
 grading rubric and its calibration fixtures.
 
 Then pin the run:
@@ -46,21 +46,32 @@ Then pin the run:
 
 ## 2. Calibration gate
 
-Spawn one judge agent, pinned to the judge id declared in `evals/SET-v2.md`,
-over the rubric's calibration fixtures. Hand it the rubric and the fixtures'
-inputs; withhold the fixtures' labels.
+Spawn one judge agent, pinned to the judge id `evals/SET-v3.md` declares —
+the explicit model id, never a tier alias, because a verdict role dispatched
+by alias grades on a model the set never named. Grade **every fixture the
+rubric declares**: read them out of `evals/rubric-v3.md` rather than working to
+a remembered count, since the rubric is the only place that number lives. Hand
+the judge the rubric and the fixtures' inputs; withhold the fixtures' labels.
 
 Every fixture's returned label matches its expected label, or the run stops
 here. A partial match is a miss: report the fixture, the label expected, and
 the label returned, then stop. Grading real transcripts with an uncalibrated
 judge produces numbers that describe the instrument instead of the change.
 
-Record the calibration outcome — fixtures run, matches, judge id — because the
-artifact in step 6 carries it.
+A calibration call that errors, truncates, or comes back off the declared judge
+id is **redone, up to three attempts, and never recorded as a mismatch** — an
+errored call and a disagreeing call are different failures and are reported
+separately.
+
+Record the calibration outcome — the fixtures run, the matches, and the judge
+id the agent attested rather than the id requested — because the artifact in
+step 6 carries it. A calibration result is valid only for the judge model and
+rubric version that produced it, so a judge-model change re-runs this gate
+before any score behind it counts.
 
 ## 3. Scenario fan-out
 
-One sub-agent per case file under `evals/cases-v2/**`, all dispatched together:
+One sub-agent per case file under `evals/cases-v3/**`, all dispatched together:
 the cases are independent, so only a dependency edge would justify serialising
 them, and there is none.
 
@@ -69,7 +80,7 @@ Each scenario agent gets exactly what the case seals and no more.
 | Handed in | Withheld |
 |---|---|
 | the case's `## Brief`, verbatim and whole | the case's `## Expected` |
-| the model-under-test id declared in `evals/SET-v2.md` | the rubric |
+| the model-under-test id `evals/SET-v3.md` declares, explicit and never a tier alias | the rubric |
 | the decoding settings that set declares | tools, repo reads, the rest of the case file |
 
 Four rules keep a transcript worth grading:
@@ -90,7 +101,7 @@ produces no scenario output, and no transcript is graded by the agent that
 wrote it.
 
 Per transcript, hand the judge three things: the rubric from
-`evals/rubric-v2.md`, that case's `## Expected` block, and the transcript
+`evals/rubric-v3.md`, that case's `## Expected` block, and the transcript
 verbatim.
 
 The judge returns, per case, the metric values the rubric defines, and for each
@@ -106,7 +117,7 @@ them. Position preference alone can flip a verdict.
 
 ## 5. Aggregate
 
-Compute exactly the metrics `evals/SET-v2.md` declares, by its own definitions:
+Compute exactly the metrics `evals/SET-v3.md` declares, by its own definitions:
 
 | Metric | Aggregation | Bar |
 |---|---|---|
@@ -123,11 +134,12 @@ and a score with no decoding note beside it cannot be reproduced or compared.
 ## 6. Run artifact
 
 Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
-`evals/SET-v2.md` declares for it. At minimum it records:
+`evals/SET-v3.md` declares for it. At minimum it records:
 
 - the set version and the rubric version,
 - the repo sha,
-- the model-under-test id, the judge id, and the decoding settings,
+- the model-under-test id and the judge id **as each agent attested them**,
+  not as the dispatch requested them, plus the decoding settings,
 - run counts, re-runs from steps 3 and 4 included,
 - the calibration result from step 2,
 - a per-case table — case id, class, verdict, cited span,
@@ -149,6 +161,10 @@ A clean run reports the artifact path and one line per metric.
 
 - Manual harness sessions only. No scheduler, no unattended lane, no automation
   that starts a run on its own.
+- Every role runs at the explicit model id `evals/SET-v3.md` declares — the
+  model under test and the judge alike. A tier alias is never sufficient, and
+  the run records the id each agent attests rather than the id it was asked
+  for.
 - A content edit re-runs the affected cases, found by the `source` field each
   case declares, and carries their result.
 - Every release runs the full set rather than the affected slice.

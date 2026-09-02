@@ -4,7 +4,7 @@ type: agent
 description: "Reviews the security surface of a change set — authentication, authorization, cryptography, trust boundaries, and the dependency set — when a change lands on those paths, returning graded findings with path:line evidence and making no edits."
 tags: [review, floor:security]
 load: on-demand
-obsolete_when: target clients decide resource-level authorization, trust-boundary validation, and dependency advisories on a diff at a measured false-positive rate below 10%
+obsolete_when: a target client documents a review pass that decides resource-level authorization, trust-boundary validation, and dependency advisories on a diff
 capabilities: [read]
 model_class: advanced
 ---

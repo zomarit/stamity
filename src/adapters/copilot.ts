@@ -251,6 +251,25 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
       name: "mcp-documents",
       value: "two — the editor `vscode-json` document plus the coding agent's `copilot-env` repo settings",
     },
+    // The two MCP documents differ in who vouches for a server, not in shape.
+    // A coding-agent server is entered in the repository's Copilot settings —
+    // the surface a repository administrator holds — so the decision to trust
+    // it is taken once, when it is configured, and the agent's own run asks
+    // nobody. The editor document is a working-tree file the user owns, and no
+    // repository-side approval reaches it. Placement is read from the
+    // coding-agent MCP configuration page recorded in `../mcp/emit.ts`'s
+    // header (re-read 2026-08-22 for this claim alone; {@link ACCESS_DATE}
+    // stays the all-or-nothing currency stamp for the citation list below and
+    // a single-claim read does not re-stamp it).
+    {
+      name: "mcp-approval",
+      value:
+        "configuration-time — a coding-agent server is approved by a repository administrator when it " +
+        "is entered in the repository's Copilot settings, so a server's trust is decided when it is " +
+        "configured, not when the agent runs; the editor `vscode-json` document is the user's own and " +
+        "that approval does not cover it (coding-agent MCP configuration docs, re-read 2026-08-22 for " +
+        "this claim alone)",
+    },
   ],
   citations: [
     // Agent frontmatter vocabulary: `target` (`vscode` | `github-copilot`,

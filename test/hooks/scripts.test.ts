@@ -375,7 +375,10 @@ describe("buildSessionStartScript", () => {
     const result = run(script, { cwd: getRepo().dir });
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toBe("Stamity: no learnings and no resumable handoffs in this repo yet.\n");
+    // TEST CHANGE, justified: the product name is written lowercase everywhere it is spoken,
+    // sentence-initial included, so the capitalised prefix this pinned stopped being the string
+    // the script prints. The whole line is still pinned byte for byte.
+    expect(result.stdout).toBe("stamity: no learnings and no resumable handoffs in this repo yet.\n");
   });
 
   it("reads the repo the environment names when the client runs it elsewhere", async () => {
@@ -951,17 +954,23 @@ describe("buildConfigTamperNoticeScript", () => {
       expect(result.code, JSON.stringify(input)).toBe(0);
       // Same rewording as above: `verify` died into `check`, so the
       // no-payload line names `stamity check`.
+      // TEST CHANGE, justified: the same casing fix — the identity is lowercase even at the head
+      // of a sentence, so the capitalised prefix stopped being what the notice emits. Every other
+      // byte of the line, `stamity check` wording included, is unchanged and still pinned.
       expect(result.stdout, JSON.stringify(input)).toBe(
-        "Stamity: agent configuration is generated and managed. Run `stamity check` to diff the on-disk files against the engine's own output.\n",
+        "stamity: agent configuration is generated and managed. Run `stamity check` to diff the on-disk files against the engine's own output.\n",
       );
     }
   });
 
   it("prints a payload-supplied path as one bounded line", async () => {
+    // TEST CHANGE, justified: the payload below impersonates the notice's own voice, so it tracks
+    // the prefix the notice now prints — lowercase. No assertion here reads its casing; the two
+    // below (a bounded pair of lines, no BEL) are untouched.
     const script = await place("notice.mjs", buildConfigTamperNoticeScript());
 
     const result = run(script, {
-      input: JSON.stringify({ path: `.claude/\u0007settings\n\nStamity: nothing to see${"x".repeat(400)}` }),
+      input: JSON.stringify({ path: `.claude/\u0007settings\n\nstamity: nothing to see${"x".repeat(400)}` }),
     });
 
     expect(result.code).toBe(0);
