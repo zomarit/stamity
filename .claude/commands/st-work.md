@@ -61,7 +61,9 @@ silently dropped.
   lines and ≤8 files. The 400 is a ceiling, not a target — typical units land
   well below it. Split oversized concerns here at Plan, not mid-build. Each
   unit carries complete interfaces so a context-free implementer can execute
-  it.
+  it, and names the spec requirement ids it implements — or records that the
+  spec carries none — the join key the plan unit, the implementer's delta and
+  the test name share.
 - **Plan gate.** light: auto-continue. standard/deep: present the unit list
   and ask, with execute-now as the declared default.
 
@@ -168,7 +170,12 @@ narrowest shape that keeps it true.
   cannot be located is dropped rather than posted — it spends a fix round on an
   assertion nobody can check.
 - **Severity floor.** Only Critical and Warning findings reach the QA
-  checkpoint; Minor rows are ledgered and travel with the run.
+  checkpoint; Minor rows are ledgered and travel with the run. Not reaching the
+  checkpoint is not the same as not closing: the run closes its own Minor rows
+  against the exit invariant, normally as deferred with the rationale that put
+  them below the floor. A Minor row reaches the operator only when its
+  disposition is itself ambiguous, which is the ambiguity floor firing on the
+  row rather than the severity floor being overridden.
 - **Precision kill switch.** Each lens measures its own false-positive rate at
   the checkpoint against the bar its body states, and downgrades itself to
   advisory for the following run once it reaches that bar: findings recorded,
@@ -227,6 +234,14 @@ A row is appended `open` before the finding is acted on and rewritten in place
 as its state moves; the id is what makes the rewrite converge instead of
 appending a second row. Run-exit invariant: no finding ends the run pending —
 every row closes as fixed, deferred with rationale, or rejected with reasoning.
+
+The invariant binds at exit, and a run holding a live question has not exited.
+Where closing a row means choosing between dispositions that differ materially
+in cost or blast radius, the ambiguity floor applies and the run asks — asking
+is not a pending finding, it is the run declining to invent an answer it does
+not have. The run then closes on the reply. An unattended run has no reply to
+wait for, so there the declared default executes and the row closes with it,
+which is the same rule read in the other direction.
 
 Both persist under the state directory, in `.stamity/runs/` — one record per run
 carrying the fields above, with that run's ledger rows beside it. That is the

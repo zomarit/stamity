@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -984,6 +984,87 @@ describe("init --dry-run", () => {
     expect(await readManifest(root)).toBeNull();
     expect(await readFile(join(root, "CLAUDE.md"), "utf8")).toBe(MARKED_DOC);
   });
+
+  /**
+   * The two verbs previewing ONE tree, at the command layer and through the
+   * shipped planner. `init --force --dry-run` and a sync plan are two previews
+   * of the same regeneration, and they disagreed about the three merged MCP
+   * documents: sync's plan ran the ownership merge and reported `unchanged` for
+   * an already-current document, while init's dry run predicted from the
+   * target's mere EXISTENCE and reported `updated`. A re-init over a tree the
+   * previous init had just written previewed work that would never happen.
+   *
+   * `--migrate full` is what puts `.mcp.json` in the emission set at all — the
+   * predecessor manifest carries `mcp.servers`, so the carried selection is what
+   * makes a document to merge into.
+   */
+  it("previews an already-current .mcp.json as unchanged, the answer a sync plan gives", async () => {
+    const root = await seedPredecessorRepo();
+    expect((await runInit(root, ["-y", "--migrate", "full"])).code).toBe(0);
+    expect(existsSync(join(root, ".mcp.json"))).toBe(true);
+    const landed = await readFile(join(root, ".mcp.json"), "utf8");
+
+    // Same engine version init stamped with, so staleness cannot be what moves
+    // the disposition.
+    const persisted = await readManifest(root);
+    const plan = await planSync(root, persisted?.generatedBy ?? "0.0.0", { runner: () => "" });
+    expect(plan.entries.find((row) => row.path === ".mcp.json")?.action).toBe("unchanged");
+
+    const preview = await runInit(root, [
+      "--force",
+      "--dry-run",
+      "--json",
+      "-y",
+      "--migrate",
+      "full",
+    ]);
+    expect(preview.code).toBe(0);
+    const report = (JSON.parse(preview.stdout) as { report: { wrote: { path: string; action: string }[] } })
+      .report;
+    const mcpRow = report.wrote.find((row) => row.path === join(root, ".mcp.json"));
+    expect(mcpRow?.action).toBe("unchanged");
+    // A preview writes nothing, on this lane too.
+    await expect(readFile(join(root, ".mcp.json"), "utf8")).resolves.toBe(landed);
+  });
+
+  /**
+   * The refusal the preview surface could not print. Init's apply raises
+   * FS_ERROR on a hard-linked `.mcp.json` — the merge preserves the document's
+   * own top-level fields and republishes them through temp+rename, which on a
+   * shared name copies a credentials file into the tree — and the preview of
+   * that run used to report it as an ordinary write. Both halves are asserted:
+   * the operator is told, and nothing of what the link points at is echoed back.
+   */
+  it.skipIf(process.platform === "win32")(
+    "names a hard-linked .mcp.json in the preview instead of promising to write it",
+    async () => {
+      const canary = "GOCSPX-CANARY-PRIVATE-KEY-MATERIAL";
+      const root = await seedPredecessorRepo();
+      // Outside the repo: a sibling of `repo/` in the temp dir, which is what
+      // makes the second name one this tree cannot see.
+      const cred = getTemp().path("adc.json");
+      await writeFile(
+        cred,
+        `${JSON.stringify({ client_secret: canary, type: "authorized_user" }, null, 2)}\n`,
+        "utf8",
+      );
+      await link(cred, join(root, ".mcp.json"));
+
+      const result = await runInit(root, ["--dry-run", "-y", "--migrate", "full"]);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("Dry run");
+      expect(result.stdout).toContain("warning:");
+      expect(result.stdout).toContain("hard link");
+      expect(result.stdout).toContain(".mcp.json");
+      // The remedy, and not a byte of the linked document.
+      expect(result.stdout).toContain("--force does not help");
+      expect(result.stdout).not.toContain(canary);
+      // Preview only: no manifest, and the link is still a link.
+      expect(await readManifest(root)).toBeNull();
+      await expect(readFile(join(root, ".mcp.json"), "utf8")).resolves.toContain(canary);
+    },
+  );
 
   it("previews the gitignore edit it would make, even though gitignoreEnsured is false", async () => {
     // Disclosure edge case: `report.gitignoreEnsured` is false under --dry-run by

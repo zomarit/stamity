@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 7e89ce2. -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or
      loses a regeneration command, or either Node floor moves. `test/docsPages.test.ts` asserts
      the gate steps and the regeneration commands against this page. -->
@@ -116,12 +116,12 @@ need no edit at all.
 
 `content/` is model-executed prose: what it does is decided at execution by a model, so a diff
 review does not establish behaviour the way it does for `src/`. A change under `content/` re-runs
-the eval cases it affects — find them by the `source` field in `evals/cases/**`, where every case
+the eval cases it affects — find them by the `source` field in `evals/cases-v2/**`, where every case
 names the corpus path and line range its claim comes from, and move a case's `source` and its
 inlined brief in the same diff when the claim itself moves. A change of the model under test
 re-runs every adversarial case at a zero-break bar, because guardrail behaviour is a property of
 the model-and-prose pair rather than of the prose alone. Thresholds, the run-artifact contract and
-the case index live in `evals/SET-v1.md`; runs are manual, in a harness session, on the operator's
+the case index live in `evals/SET-v2.md`; runs are manual, in a harness session, on the operator's
 word.
 
 ## Commits

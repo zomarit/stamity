@@ -13,11 +13,7 @@ import {
   type ReclaimCandidate,
 } from "../../../manifest/ledger.ts";
 import { manifestPath, readManifest, writeManifest } from "../../../manifest/manifest.ts";
-import {
-  materializeUserMcpJson,
-  planUserMcpJson,
-  predictMcpMergeRefusal,
-} from "../../../manifest/mcpFilter.ts";
+import { materializeUserMcpJson } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import {
   engineOwnedServerIds,
@@ -52,6 +48,7 @@ import {
   installedPackServers,
   ledgerRowsForOutput,
   outputWriteOptions,
+  predictMcpDocumentMerge,
   readIfExists,
 } from "../../engine/emissionWrite.ts";
 import { readWorkingTreeStatus, type WorkingTreeStatus } from "../../engine/gitStatus.ts";
@@ -233,7 +230,8 @@ function plannedRows(outputs: readonly AdapterOutput[]): EmittedArtifact[] {
  * predictor of its own to read the shape off: the whole-file lane, whose writer
  * refuses later, inside the backup. The managed lane previews
  * `predictPreservedContentRefusal` and the merged-MCP lane
- * `predictMcpMergeRefusal`, each single-sourced from the writer that throws it.
+ * `../../engine/emissionWrite.ts::predictMcpDocumentMerge` (which previews
+ * `predictMcpMergeRefusal`), each single-sourced from the writer that throws it.
  *
  * A path that vanished between this call and the write is not a shared name —
  * the apply lane will report whatever it then finds — and an absent path is not
@@ -311,34 +309,28 @@ export async function planOutputEntries(
     // managed and backup lanes refuse, and this lane reached
     // `materializeUserMcpJson` past both of their guards.
     if (MERGED_MCP_JSON_PATHS.has(output.path)) {
-      // Ahead of the read, not after it: `planUserMcpJson` reports a parse
-      // failure by quoting the parser's message, which carries a fragment of
-      // whatever it read — the same leak one step short of disk that
-      // `refusePreservedContent` orders its own checks to avoid. The predicate
-      // and the text both come from the writer that throws them, so this row
-      // cannot drift from the refusal it previews.
-      const linkedMcp = await predictMcpMergeRefusal(absPath);
-      if (linkedMcp !== null) {
+      // The prediction runs the real merge over the bytes, so an already-current
+      // document reports `unchanged` and the drift gate stays clean; the
+      // refusal check inside it runs ahead of the read, so no linked byte is
+      // read or quoted. Both are `../../engine/emissionWrite.ts`'s now rather
+      // than this lane's: `init`'s dry run has to preview these three paths the
+      // same way, and it predicted them from mere existence for as long as the
+      // mechanism lived here.
+      const predicted = await predictMcpDocumentMerge(
+        absPath,
+        output.path,
+        output.content,
+        mcpServers ?? [],
+        packServers ?? [],
+      );
+      if (predicted.refusal !== null) {
         return {
           ...base,
           action: "collision" as const,
           collisionKind: "shared-name" as const,
-          detail: linkedMcp,
+          detail: predicted.refusal,
         };
       }
-      // The prediction runs the real merge over the bytes, so an already-current
-      // document reports `unchanged` and the drift gate stays clean. Pack supply
-      // rides along for the same reason the apply lane carries it — see
-      // {@link installedPackServers}; predicting from a narrower ownership set
-      // than the write will use is how a removal gets performed but not
-      // previewed, which is the one disagreement this pair may not have.
-      const existingMcp = await readIfExists(absPath);
-      const predicted = planUserMcpJson(
-        absPath,
-        output.content,
-        engineOwnedServerIds(output.path, mcpServers ?? [], existingMcp, packServers ?? []),
-        existingMcp,
-      );
       return { ...base, action: ACTION_OF[predicted.result.action] };
     }
     const existing = await readIfExists(absPath);

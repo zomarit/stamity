@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit f5a451b. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6477e37. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, or a
      verb joins or leaves the command surface. `test/docsPages.test.ts` holds this page to the
      hand-page contract, and `docs/cli-reference.md` plus `docs/capability-matrix.md` are the
@@ -10,8 +10,12 @@ title: Getting started
 
 # Getting started
 
-From nothing to one proven change on your own code. Fifteen minutes for the guided
-first run, plus however long `npx` takes to fetch the package.
+From nothing to one proven change on your own code. The guided first run is sized for
+fifteen minutes — six phases with a budget each, so it degrades in a planned direction
+rather than quietly overrunning — and how long yours takes depends on your repository and
+the decisions you make in it. The mechanical part underneath, installing the package and
+running `init` and `check`, is seconds; the time goes into the walk, plus however long
+`npx` takes to fetch the package.
 
 ## Before you start
 

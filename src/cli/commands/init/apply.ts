@@ -45,6 +45,7 @@ import {
   installedPackServers,
   ledgerRowsForOutput,
   outputWriteOptions,
+  predictMcpDocumentMerge,
   readIfExists,
 } from "../../engine/emissionWrite.ts";
 import { fullCoreSelection, type InitDecisions } from "./plan.ts";
@@ -343,6 +344,16 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
  * the ids it can prove the engine wrote. An id it cannot render is an unowned
  * user row that is kept, never removed — which is the safe direction here, and
  * the reason the argument is threaded rather than defaulted at the call site.
+ *
+ * The `dryRun` leg runs the REAL merge and discards its bytes
+ * (`../../engine/emissionWrite.ts::predictMcpDocumentMerge`, the one prediction
+ * `sync`'s plan lane previews these three paths with). It used to predict from
+ * the target's mere EXISTENCE — file there, therefore `updated` — which is a
+ * different answer from the one `sync --dry-run` gives for the same tree: an
+ * already-current document is `unchanged`, not work about to happen, and a
+ * hard-linked one is a refusal this preview could not express at all while the
+ * apply it was previewing raises FS_ERROR on that path. That module carries the
+ * account; what belongs here is that both legs now ask it.
  */
 async function writeMcpDocument(
   target: string,
@@ -352,16 +363,19 @@ async function writeMcpDocument(
   dryRun: boolean,
   packServers: readonly PackSuppliedServer[],
 ): Promise<McpMergeResult> {
-  const existing = await readIfExists(target);
   // A dry run writes nothing, so there are no written bytes to report; the
   // ledger it computes is discarded with the rest of the preview.
   if (dryRun) {
-    return {
-      path: target,
-      action: existing === null ? "created" : "updated",
-      writtenContent: null,
-    };
+    const { result } = await predictMcpDocumentMerge(
+      target,
+      relPath,
+      content,
+      selectedServers,
+      packServers,
+    );
+    return { ...result, writtenContent: null };
   }
+  const existing = await readIfExists(target);
   return materializeUserMcpJson(
     target,
     content,

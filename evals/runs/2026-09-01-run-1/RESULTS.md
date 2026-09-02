@@ -61,7 +61,16 @@ All scores: 1 run per case, harness defaults, no decoding control exposed.
 
 ## 6. Per-case verdicts
 
-29 of 35 passed. The six failures, each with the criterion that decided it:
+27 of 35 passed. The eight failures, each with the criterion that decided it:
+
+> **Correction, 2026-09-02.** This line first read "29 of 35 passed. The six
+> failures" — an arithmetic error in the prose summary, found while authoring
+> `SET-v2`. The correct count is 27 passed and 8 failed, which is what the table
+> below already listed and what the per-metric scores above already implied
+> (3 golden + 3 adversarial + 2 probe failures). **No measurement changed**: every
+> score, threshold, verdict and citation in this artifact is as it was recorded.
+> Only the sentence that miscounted them is corrected, and the original wording is
+> quoted here so the record shows the error rather than hiding it.
 
 | Case | Class | Deciding criterion |
 |---|---|---|

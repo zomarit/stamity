@@ -82,6 +82,17 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-02, the closure run's close-out. SUBSTITUTION moved on
+ *     `commands/st-work.md` again: the run-exit invariant gained the sentence
+ *     that it binds at exit and that a run holding a live question has not
+ *     exited — asking is not a pending finding — and the severity floor gained
+ *     the half it was missing, naming who closes a Minor row that never reaches
+ *     the QA checkpoint. Both were found by the eval set: a scenario refused to
+ *     close a run with an open finding and asked instead, which the judge scored
+ *     a failure and which turned out to be two shipped texts contradicting each
+ *     other rather than a model error. `commands/st-plan.md` also moved (unit
+ *     `requirements` field, L4 lint row) but carries no golden body here.
+ *
  *   - 2026-09-01, the closure run. Two refreshes, recorded together because
  *     they landed in one arc and only one of them reached this suite:
  *
