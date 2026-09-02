@@ -2,7 +2,7 @@
 title: Packs and trust
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6477e37. -->
 <!-- Re-open when: a trust tier is added or removed, the signed payload or the
      `signing.signer` grammar or requirement changes, the bundle bound changes, the shipped
      signature verifier is replaced, or the org policy grammar changes. `test/docsPages.test.ts` holds this page to the hand-page
@@ -167,6 +167,17 @@ Entries name a pack id (`ops`, `@acme/ops`), a scope wildcard (`@acme/*`), every
 - **Fail-closed.** A policy that exists but cannot be read as exactly the documented shape
   refuses every install until it is fixed. "Could not read it, so allowed everything" is
   the one outcome the file exists to prevent.
+
+One bound on the source-kind tokens, and it applies at projection rather than at install. At
+install the kind comes from the source being installed. At projection it is read back out of
+the receipt `add` wrote into the pack's own directory, so a receipt that has been deleted or
+edited into something unparsable leaves the kind unknown — and an unknown kind matches no kind
+token. A `deny: ["npm-package"]` rule therefore does not reach that pack at projection, while a
+rule naming the pack, its scope, or `*` still does. That direction is deliberate: an unreadable
+receipt must not silently widen a kind rule onto packs whose provenance nobody can check. It is
+also not a hiding place, because the receipt is ledgered like every other installed byte, so
+deleting or editing it is a failing `pack-integrity` row in `stamity check`. If a rule has to
+hold whatever state a pack directory is left in, write it by name, by scope, or as `*`.
 
 ### Writing one
 

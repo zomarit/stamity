@@ -274,6 +274,7 @@ plan-review sub-agent loop at this seam produced no measured quality gain, so no
 | L1 | **Testable acceptance criteria** | every criterion names an observable subject and a verifiable condition — Given/When/Then, or a threshold with units plus the command that measures it. Bare adjectives ("works", "is fast", "handles errors") fail. | rewrite each failing criterion in place, re-run the pass |
 | L2 | **Dependencies resolve** | every `depends_on` names a unit in this plan, a path that exists on disk, or an external prerequisite with a named owner. Zero dangling references. | add the missing prerequisite or correct the reference, re-run the pass |
 | L3 | **Edge cases non-empty** | every unit lists at least one edge case with its expected behavior. `none` is admissible only with a one-line reason. | derive the missing cases from the unit's inputs and failure modes, re-run the pass |
+| L4 | **Requirement ids cited** | every unit's `requirements` names at least one `REQ-<area>-<nnn>` carried by the spec, or states `spec carries no ids`. A blank field fails; an id absent from `docs/specs/` fails as a dangling reference. | cite the requirement the unit implements, or record that the spec carries none, re-run the pass |
 
 A failing check blocks the write. Three consecutive failed passes on the same check means the
 request is under-specified: stop and return `BLOCKED_AMBIGUITY` naming the check and the unit that
@@ -312,6 +313,7 @@ Sections, in order:
 | Field | Content |
 |---|---|
 | `id` | stable slug, the target of `depends_on` |
+| `requirements` | the spec requirement ids (`REQ-<area>-<nnn>`) this unit implements — the join key it shares with the spec, the test name and the board item. Where the spec carries no ids, the literal `spec carries no ids`; never blank |
 | `files` | paths this unit writes; disjoint from every unit that can run beside it |
 | `interfaces` | the exact signatures, schemas, props, and error shapes the implementer needs, inline |
 | `testCriteria` | the assertions that prove the unit, each testable under L1 |
@@ -357,7 +359,7 @@ Close the run with:
 - `status` plus a one-line outcome.
 - `intent chosen: <intent> because <matched signals>`.
 - Artifact path(s) written, with the unit count.
-- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail`.
+- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail`.
 - `sub_agents_spawned: <count> · task_structure: parallelizable | sequential | mixed`.
 - Open questions carried; a non-empty list blocks handoff.
 - Learnings written, with their paths; `none` when the run met no qualifying failure.

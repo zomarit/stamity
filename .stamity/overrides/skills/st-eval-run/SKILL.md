@@ -27,10 +27,10 @@ artifact lands.
 
 ## 1. Preconditions
 
-Read `evals/SET-v1.md` first. It is the contract this runner executes: the case
+Read `evals/SET-v2.md` first. It is the contract this runner executes: the case
 roster, the declared thresholds, the run-artifact shape, and the versioned
 inputs — prompt text, the model-under-test id, the judge id, decoding settings,
-tool schemas, retrieval corpus. Read `evals/rubric-v1.md` next for the written
+tool schemas, retrieval corpus. Read `evals/rubric-v2.md` next for the written
 grading rubric and its calibration fixtures.
 
 Then pin the run:
@@ -46,7 +46,7 @@ Then pin the run:
 
 ## 2. Calibration gate
 
-Spawn one judge agent, pinned to the judge id declared in `evals/SET-v1.md`,
+Spawn one judge agent, pinned to the judge id declared in `evals/SET-v2.md`,
 over the rubric's calibration fixtures. Hand it the rubric and the fixtures'
 inputs; withhold the fixtures' labels.
 
@@ -60,7 +60,7 @@ artifact in step 6 carries it.
 
 ## 3. Scenario fan-out
 
-One sub-agent per case file under `evals/cases/**`, all dispatched together:
+One sub-agent per case file under `evals/cases-v2/**`, all dispatched together:
 the cases are independent, so only a dependency edge would justify serialising
 them, and there is none.
 
@@ -69,7 +69,7 @@ Each scenario agent gets exactly what the case seals and no more.
 | Handed in | Withheld |
 |---|---|
 | the case's `## Brief`, verbatim and whole | the case's `## Expected` |
-| the model-under-test id declared in `evals/SET-v1.md` | the rubric |
+| the model-under-test id declared in `evals/SET-v2.md` | the rubric |
 | the decoding settings that set declares | tools, repo reads, the rest of the case file |
 
 Four rules keep a transcript worth grading:
@@ -90,7 +90,7 @@ produces no scenario output, and no transcript is graded by the agent that
 wrote it.
 
 Per transcript, hand the judge three things: the rubric from
-`evals/rubric-v1.md`, that case's `## Expected` block, and the transcript
+`evals/rubric-v2.md`, that case's `## Expected` block, and the transcript
 verbatim.
 
 The judge returns, per case, the metric values the rubric defines, and for each
@@ -106,7 +106,7 @@ them. Position preference alone can flip a verdict.
 
 ## 5. Aggregate
 
-Compute exactly the metrics `evals/SET-v1.md` declares, by its own definitions:
+Compute exactly the metrics `evals/SET-v2.md` declares, by its own definitions:
 
 | Metric | Aggregation | Bar |
 |---|---|---|
@@ -123,7 +123,7 @@ and a score with no decoding note beside it cannot be reproduced or compared.
 ## 6. Run artifact
 
 Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
-`evals/SET-v1.md` declares for it. At minimum it records:
+`evals/SET-v2.md` declares for it. At minimum it records:
 
 - the set version and the rubric version,
 - the repo sha,

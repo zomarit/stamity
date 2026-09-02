@@ -185,6 +185,23 @@ The controls it would map already exist and are addressed above.
 
 ## Known gaps
 
+One item on this page is an **accepted risk** rather than tracked work, and it is separated
+from the table below so the difference is visible.
+
+The documentation site under `website/` builds with Docusaurus, which reaches `image-size`
+through its MDX loader. Two high-severity advisories describe denial of service through
+infinite loops in that package's ICNS, JXL and HEIF parsers, and **no fixed version exists**:
+both advisories publish no patched release, every published version including the newest is
+in range, the upstream project is archived, and no Docusaurus release moves off it. It is
+accepted rather than fixed because the exposure does not reach anyone installing this
+package: `image-size` is a build-time dependency of the documentation site, absent from the
+published npm package entirely, and the only images it parses are files committed to this
+repository. Neither advisory has a remote-input path here. A community republish of the
+package would silence the alert, and is deliberately not used — it carries no provenance
+attestation, which is a bar this package meets for its own artifacts and will not waive for a
+transitive one. **Re-open when** Docusaurus drops the dependency, an advisory publishes a
+patched version, or the site starts parsing images it did not author.
+
 Three gaps, tracked as work rather than accepted as risk:
 
 | Gap | Why it is deferred |

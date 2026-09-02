@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { chmod, link, lstat, readFile, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { createManifest } from "../../../src/manifest/manifest.ts";
+import { materializeUserMcpJson } from "../../../src/manifest/mcpFilter.ts";
 import {
   ledgerHashIndex,
   ledgerPathSet,
@@ -12,6 +13,7 @@ import {
   installedPackServers,
   ledgerRowsForOutput,
   outputWriteOptions,
+  predictMcpDocumentMerge,
   readIfExists,
   sha256,
 } from "../../../src/cli/engine/emissionWrite.ts";
@@ -379,6 +381,176 @@ describe("ledgerRowsForOutput — the row shape both writers persist", () => {
         contentHash: sha256('{"mcpServers":{}}\n'),
       },
     ]);
+  });
+});
+
+/**
+ * The fifth shared rule, and the one whose divergence was a live defect rather
+ * than a latent one: what a DRY RUN of the three merged MCP documents predicts.
+ *
+ * `sync`'s plan ran the real ownership merge; `init`'s dry run predicted from
+ * the target's mere EXISTENCE — file there, therefore `updated`. Two previews of
+ * one regeneration, disagreeing about one tree, and a dry run is a promise about
+ * what the apply will do. Every case here therefore asserts the prediction
+ * against the WRITER it predicts (`materializeUserMcpJson`) rather than against
+ * a restatement of the merge, so the promise is what goes red when it breaks.
+ */
+describe("predictMcpDocumentMerge — the dry-run answer both verbs give", () => {
+  const getTemp = useTempDir("emission-write-mcp-predict");
+
+  /** The emitted document, in the exact 2-space + newline shape the emitter writes. */
+  const EMITTED = `${JSON.stringify({ mcpServers: { github: { command: "npx" } } }, null, 2)}\n`;
+  const SELECTED = ["github"] as const;
+
+  async function predict(absPath: string) {
+    return predictMcpDocumentMerge(absPath, ".mcp.json", EMITTED, SELECTED, []);
+  }
+
+  it("predicts created for a path nothing occupies, and creates nothing", async () => {
+    const temp = getTemp();
+    const target = temp.path(".mcp.json");
+
+    const predicted = await predict(target);
+
+    expect(predicted).toEqual({ result: { path: target, action: "created" }, refusal: null });
+    await expect(readIfExists(target)).resolves.toBeNull();
+  });
+
+  /**
+   * The disagreement's own tree, in one assertion. An already-current document
+   * is not work about to happen, and predicting `updated` for it is what made
+   * `init --force --dry-run` and `sync --dry-run` describe one tree two ways.
+   * The writer is then run against the same bytes to show the prediction was
+   * right: it reports `unchanged` too.
+   */
+  it("predicts unchanged for a document the merge would leave exactly as it is", async () => {
+    const temp = getTemp();
+    const target = temp.path(".mcp.json");
+    await writeFile(target, EMITTED, "utf8");
+
+    const predicted = await predict(target);
+    expect(predicted.result.action).toBe("unchanged");
+    expect(predicted.refusal).toBeNull();
+
+    const written = await materializeUserMcpJson(target, EMITTED, new Set(SELECTED));
+    expect(written.action).toBe("unchanged");
+  });
+
+  /**
+   * The non-degenerate half: `unchanged` has to be computed, not constant. A
+   * hand-added server means the merge genuinely rewrites the file, and the
+   * prediction has to say so before the writer proves it.
+   */
+  it("predicts updated where the merge really rewrites the document", async () => {
+    const temp = getTemp();
+    const target = temp.path(".mcp.json");
+    await writeFile(
+      target,
+      `${JSON.stringify({ mcpServers: { mine: { command: "own" } } }, null, 2)}\n`,
+      "utf8",
+    );
+
+    expect((await predict(target)).result.action).toBe("updated");
+
+    const written = await materializeUserMcpJson(target, EMITTED, new Set(SELECTED));
+    expect(written.action).toBe("updated");
+    const merged = JSON.parse(await readFile(target, "utf8")) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(Object.keys(merged.mcpServers).toSorted()).toEqual(["github", "mine"]);
+  });
+
+  /**
+   * A document that cannot be parsed is left untouched by the writer, so the
+   * preview reports `skipped` with the writer's own sentence — and `refusal`
+   * stays null, because this is not the hard-link class a caller types as
+   * `shared-name`. A preview that classified it as one would print the
+   * copy-and-move remedy for a file whose fix is to repair the JSON.
+   */
+  it("predicts skipped with the writer's sentence for a document it cannot read", async () => {
+    const temp = getTemp();
+    const target = temp.path(".mcp.json");
+    await writeFile(target, "{not json\n", "utf8");
+
+    const predicted = await predict(target);
+
+    expect(predicted.result.action).toBe("skipped");
+    expect(predicted.result.warning).toContain("not valid JSON");
+    expect(predicted.refusal).toBeNull();
+  });
+
+  describe.skipIf(process.platform === "win32")("hard-linked target", () => {
+    const getOutside = useTempDir("emission-write-mcp-outside");
+    const CANARY = "GOCSPX-CANARY-PRIVATE-KEY-MATERIAL";
+
+    /** A 0600 credentials file outside the tree. Valid JSON, which is what makes
+     *  the ownership merge keep its fields one by one — and publish them. */
+    async function plantCredentials(): Promise<string> {
+      const credPath = getOutside().path("adc.json");
+      await writeFile(
+        credPath,
+        `${JSON.stringify({ client_secret: CANARY, type: "authorized_user" }, null, 2)}\n`,
+        "utf8",
+      );
+      await chmod(credPath, 0o600);
+      return credPath;
+    }
+
+    /**
+     * The refusal a preview could not previously express. Both halves matter:
+     * the disposition is `skipped` so no caller counts it as a write, and
+     * `refusal` carries the text so the caller that types collisions can label
+     * it `shared-name` without string-matching a warning.
+     */
+    it("predicts the refusal the write raises, as a skipped row carrying its text", async () => {
+      const temp = getTemp();
+      const cred = await plantCredentials();
+      const target = temp.path(".mcp.json");
+      await link(cred, target);
+
+      const predicted = await predict(target);
+
+      expect(predicted.result.action).toBe("skipped");
+      expect(predicted.refusal).toContain("hard link");
+      expect(predicted.refusal).toContain("--force does not help");
+      // One text, one source: the row's warning IS the refusal, so the two
+      // surfaces cannot say different things about the same file.
+      expect(predicted.result.warning).toBe(predicted.refusal);
+
+      // And it is a prediction OF the writer: the same target refuses.
+      await expect(materializeUserMcpJson(target, EMITTED, new Set(SELECTED))).rejects.toMatchObject(
+        { code: "FS_ERROR" },
+      );
+    });
+
+    /**
+     * Order, not merely outcome. The refusal runs AHEAD of the read because the
+     * parse-failure sentence quotes the parser's message, which carries a
+     * fragment of whatever was read — so a `.mcp.json` linked to a key file
+     * would print part of that key at the one moment nothing has been written
+     * yet. The message names the path and the remedy and nothing else, and the
+     * link keeps its inode, its link count and its mode.
+     */
+    it("names the path and the remedy without reading a byte of what the link points at", async () => {
+      const temp = getTemp();
+      const cred = await plantCredentials();
+      const target = temp.path(".mcp.json");
+      await link(cred, target);
+      const before = await lstat(target);
+      const original = await readFile(cred, "utf8");
+
+      const predicted = await predict(target);
+
+      expect(predicted.refusal).not.toContain(CANARY);
+      expect(predicted.refusal).not.toContain("authorized_user");
+      expect(predicted.refusal).toContain(target);
+
+      const after = await lstat(target);
+      expect(after.ino).toBe(before.ino);
+      expect(after.nlink).toBe(2);
+      expect(after.mode & 0o777).toBe(0o600);
+      await expect(readFile(cred, "utf8")).resolves.toBe(original);
+    });
   });
 });
 

@@ -728,12 +728,21 @@ function migrateNote(
  * is false under `--dry-run` by construction (nothing was written), so the row
  * is keyed off the mode rather than off that flag and states what WOULD land.
  *
- * The planner warnings are here for the same reason and are the ONLY warning
- * source a preview has: `report.wrote[].warning` is a writer verdict, and a dry
- * run runs no writer (`./init/apply.ts::writeOutput` predicts an action and
- * returns no warning). A hook rejected at parse time is found by PLANNING,
- * which a dry run does in full — so this is the run where saying so is worth
- * most, while the operator is still deciding whether to apply.
+ * Warnings come from BOTH channels, in the panel's own order — writer rows
+ * first, then the planner. The planner's are the ones a dry run always has: a
+ * hook rejected at parse time is found by PLANNING, which a dry run does in
+ * full, so this is the run where saying so is worth most, while the operator is
+ * still deciding whether to apply.
+ *
+ * `report.wrote[].warning` used to be empty here by construction — a dry run
+ * runs no writer, and `./init/apply.ts::writeOutput` predicts an action and
+ * returns no warning — so this loop read the planner channel alone. That stopped
+ * being true when the three merged MCP documents began previewing through the
+ * real merge (`./init/apply.ts::writeMcpDocument`): a hard-linked `.mcp.json` is
+ * refused before that merge and an unreadable one is left untouched, and both
+ * come back as a `skipped` row whose warning is the only place the preview says
+ * so. Dropping them would preview a refusal as `1 left alone (already yours)`,
+ * which is the reading it is least like.
  */
 function renderDryRun(
   ctx: CliContext,
@@ -753,7 +762,12 @@ function renderDryRun(
   io.out(`  write: ${emissionSummary(report, true)}\n`);
   io.out(`  manifest: ${report.manifestPath}\n`);
   io.out(`  ${gitignoreLine(true, gitAvailable)}\n`);
-  for (const warning of report.warnings) io.out(`  ${palette.yellow(`warning: ${warning}`)}\n`);
+  for (const warning of [
+    ...report.wrote.flatMap((row) => (row.warning === undefined ? [] : [row.warning])),
+    ...report.warnings,
+  ]) {
+    io.out(`  ${palette.yellow(`warning: ${warning}`)}\n`);
+  }
   if (carry !== null) {
     for (const line of migrationLines(carry, residue)) io.out(`  ${line}\n`);
   }

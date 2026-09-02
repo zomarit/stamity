@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
+import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
+import { engineOwnedServerIds } from "../../mcp/emit.ts";
 import type { SafeWriteFileOptions } from "../../merge/safeWrite.ts";
 import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
-import { outputOwners, type AdapterOutput } from "../../types/content.ts";
+import { outputOwners, type AdapterOutput, type MergeResult } from "../../types/content.ts";
 import type { SetupManifest } from "../../types/manifest.ts";
 
 /**
@@ -27,8 +29,14 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * writers spell differently is a claim that changes meaning depending on which
  * verb ran last.
  *
- * Nothing here touches the filesystem except {@link readIfExists}, which reads.
- * The write itself stays with the caller: this module decides, the loops act.
+ * A fifth question joined them: what a DRY RUN of one of the three merged MCP
+ * documents predicts ({@link predictMcpDocumentMerge}). It belongs here for the
+ * same reason and by the same evidence — the two verbs answered it differently,
+ * and the answers were both previews of the same regeneration.
+ *
+ * Nothing here touches the filesystem except {@link readIfExists} and
+ * {@link predictMcpDocumentMerge}, which read. The write itself stays with the
+ * caller: this module decides, the loops act.
  */
 
 /**
@@ -167,6 +175,77 @@ export function ledgerRowsForOutput(
     });
   }
   return rows;
+}
+
+/** What a merge into one of the three shared MCP documents WOULD do. */
+export interface McpMergePrediction {
+  /**
+   * The disposition, in the writer's own vocabulary — the same
+   * {@link MergeResult} `materializeUserMcpJson` returns for these bytes, so a
+   * caller reporting per-output can report the prediction verbatim.
+   *
+   * On a refusal it is `skipped` carrying {@link refusal} as its `warning`: the
+   * write does not happen and the run does not stand behind the path, which is
+   * what `skipped` already means to both writers' ledger loops.
+   */
+  result: MergeResult;
+  /**
+   * Why the write would refuse before merging at all — today, only a hard-linked
+   * target. `null` when the merge would proceed. Carried beside the result
+   * rather than left to be dug out of `result.warning`, because a caller that
+   * classifies refusals (sync's plan lane types them) must not have to
+   * string-match to tell one apart from a merge that merely warned.
+   */
+  refusal: string | null;
+}
+
+/**
+ * What a merge into `absPath` would do, computed by running the REAL merge over
+ * the bytes on disk and writing nothing.
+ *
+ * The one prediction both regeneration verbs preview these three paths with.
+ * They used to answer it separately and differently, which made two previews of
+ * one tree disagree: sync's plan ran this merge, so it reported `unchanged` for
+ * an already-current document and a `shared-name` collision for one the write
+ * would refuse, while init's dry run predicted from the target's mere EXISTENCE
+ * — file there, therefore `updated`. So `init --force --dry-run` over a tree a
+ * previous init had just written previewed work that would not happen, and no
+ * init preview could show the hard-link refusal that init's own apply raises.
+ * A dry run is a promise about the apply, and two verbs promising different
+ * things about one tree means at least one promise is false.
+ *
+ * Order is load-bearing and is the reason the refusal check is inside this
+ * function rather than left to each caller. `planUserMcpJson` reports a parse
+ * failure by quoting the parser's message, which carries a fragment of whatever
+ * it read, so a `.mcp.json` hard-linked to a binary key file would print part of
+ * that key. Refusing ahead of the read means no linked byte is read, let alone
+ * printed — the same ordering `../../manifest/mcpFilter.ts::refuseLinkedMcpTarget`
+ * imposes on the write lane, mirrored here for the preview of it.
+ *
+ * `packServers` is threaded rather than defaulted for the reason it is
+ * everywhere else on this lane ({@link installedPackServers}): predicting from a
+ * narrower ownership set than the write will use is how a removal gets performed
+ * but not previewed.
+ */
+export async function predictMcpDocumentMerge(
+  absPath: string,
+  relPath: string,
+  emitted: string,
+  selectedServers: readonly string[],
+  packServers: readonly PackSuppliedServer[],
+): Promise<McpMergePrediction> {
+  const refusal = await predictMcpMergeRefusal(absPath);
+  if (refusal !== null) {
+    return { result: { path: absPath, action: "skipped", warning: refusal }, refusal };
+  }
+  const existing = await readIfExists(absPath);
+  const { result } = planUserMcpJson(
+    absPath,
+    emitted,
+    engineOwnedServerIds(relPath, selectedServers, existing, packServers),
+    existing,
+  );
+  return { result, refusal: null };
 }
 
 /**

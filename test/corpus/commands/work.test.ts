@@ -464,6 +464,19 @@ describe("/st-work — Frame and Plan", () => {
     expect(plan).toContain("light: auto-continue");
     expect(plan).toContain("execute-now");
   });
+
+  it("carries the requirement id onto each decomposed unit, matching the plan artifact's field", async () => {
+    const plan = collapse(section(await body(), "## Phase 2 — Plan"));
+
+    // `/st-plan` pins a `requirements` field per unit and lints it; this phase
+    // decomposes in-flow, so without the same clause an in-flow unit would
+    // reach the implementer with no id — and the implementer's spec delta is
+    // required to name one. The fallback matches, so a spec-less repository
+    // records the absence instead of stalling the build flow.
+    expect(plan).toContain("names the spec requirement ids it implements");
+    expect(plan).toContain("records that the spec carries none");
+    expect(plan).toContain("the join key the plan unit, the implementer's delta and the test name share");
+  });
 });
 
 describe("/st-work — contract census", () => {

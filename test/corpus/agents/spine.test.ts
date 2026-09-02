@@ -507,9 +507,13 @@ describe("implementer — single unit, single writer", () => {
     // The spec author states the mandate — "Ids are the join key every other artifact
     // uses — a plan unit, a test name, a board item" — and `/st-plan` already emits its
     // delta as requirement ids. The build seam named the spec file and its SECTION, so
-    // the join key went missing at the one place that produces code, and nothing on the
-    // work path re-derives it (`spec-requirement-coverage` is a verify criterion, and
-    // `/st-work` does not invoke that skill).
+    // the join key went missing at the one place that produces code. The other two
+    // surfaces the mandate names now carry it as well: `/st-plan`'s unit table has a
+    // `requirements` field checked by its L4 lint row, and `/st-work`'s in-flow decompose
+    // names the ids, so a unit cannot reach this delta with nothing to cite. What still
+    // does not exist is a MECHANICAL check on the work path — `spec-requirement-coverage`
+    // is a verify criterion and `/st-work` does not invoke that skill — so the mandate is
+    // carried by prose at every seam and enforced by none.
     expect(delta).toMatch(/requirement id/i);
     expect(delta).toContain("REQ-<area>-<nnn>");
     expect(delta).toMatch(/join key/i);

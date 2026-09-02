@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.1.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-01T21:07:55.548Z",
+  "updatedAt": "2026-09-02T06:31:54.249Z",
   "tools": [
     "claude"
   ],
@@ -155,7 +155,7 @@
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "9c27890f166644cd5430c654085f84527dd6c1447e96b9294a8f84dd76334d47",
+      "contentHash": "24377631652768030241fa5ef65a691fc7c7927e4913bf5b7815d9340a0bffda",
       "path": ".claude/commands/st-plan.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "c1ed45fba035ad9d49a6823c6ca66d79f46ecd967306ceba5892f64e96506bb0",
+      "contentHash": "367c7265053441b40bb48a4957f190c39a75bf10859f70333feae13876446945",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -309,7 +309,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "97354abc924c588b4a943ca1cf94ced97cc420ed79a19c57c9bb3cfd86248107",
+      "contentHash": "ca775c278c3a10168e90abf6c8b6f4f6dfd011235c6d2ea3108e5d14bbf955fe",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
