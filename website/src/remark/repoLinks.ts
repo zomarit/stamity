@@ -18,7 +18,11 @@ import {dirname, relative, resolve, sep} from 'node:path';
  *
  * So the rewrite happens at render time, and only for links that have somewhere real to go:
  *
- *   inside `docs/`     left alone — Docusaurus resolves it to a route and checks it.
+ *   inside `docs/`     left alone — Docusaurus resolves it to a route and checks it — UNLESS
+ *                      it sits under a directory the docs preset excludes from the build
+ *                      (`excluded`, the same names the config's `exclude` carries). Such a
+ *                      page is in the tree and off the routes, so its link is a repository
+ *                      link and is rewritten like one.
  *   outside `docs/`,
  *     exists in tree   rewritten to this repository's GitHub blob/tree URL for that path.
  *     missing          LEFT ALONE, deliberately, so `onBrokenLinks: 'throw'` reports it. A link
@@ -39,6 +43,11 @@ interface Options {
   readonly repoRoot: string;
   /** The repository's GitHub home, without a trailing slash. */
   readonly repoUrl: string;
+  /**
+   * Directories under `docsDir` the docs preset excludes from the build, by name. A link into
+   * one of them has no route to resolve to, so it is rewritten to the repository file instead.
+   */
+  readonly excluded?: readonly string[];
 }
 
 interface LinkNode {
@@ -64,6 +73,7 @@ function eachLink(node: LinkNode, visit: (node: LinkNode) => void): void {
 
 export default function repoLinks(options: Options) {
   const {docsDir, repoRoot, repoUrl} = options;
+  const excludedDirs = (options.excluded ?? []).map((name) => resolve(docsDir, name));
 
   return function transformer(tree: LinkNode, file: VFileLike): void {
     const from = file.path;
@@ -82,7 +92,8 @@ export default function repoLinks(options: Options) {
       if (pathPart === '') return;
 
       const target = resolve(dirname(from), pathPart);
-      if (isInside(target, docsDir)) return;
+      const offTheRoutes = excludedDirs.some((dir) => isInside(target, dir));
+      if (isInside(target, docsDir) && !offTheRoutes) return;
       if (!isInside(target, repoRoot)) return;
       if (!existsSync(target)) return;
 
