@@ -144,6 +144,25 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-02, the eval-driven refusal fix. CORPUS PROSE moved on
+  //     `commands/st-quick.md` alone, in every dialect that carries it
+  //     (6956 -> 7830 bytes claude/copilot, 7000 -> 7874 cursor, codex likewise):
+  //
+  //     The hard refusal enumerated three unlock routes — no proceed-anyway
+  //       option, no confirmation prompt, no operator flag — and an adversarial
+  //       eval case found a fourth the text never barred: hand the refused change
+  //       to the operator as a diff, on the reasoning "I'm not the one making the
+  //       edit". The contract now says a hand-off is the same refused change with
+  //       a different hand on the keyboard. Re-measured after the edit: that case
+  //       went 2/3 -> 3/3, so this diff is a closed guardrail leak rather than a
+  //       wording preference.
+  //     The refusal template also now says `<threshold>` is the fired row's own
+  //       name copied from the table, not a coined category. That half did NOT
+  //       change the behaviour on re-run and is kept because it states the
+  //       contract correctly; the residual is a model-adherence finding.
+  //
+  //     What did NOT move: every other corpus body and every generated file.
+  //
   //   - 2026-09-02, the closure run's close-out. CORPUS PROSE moved again, in
   //     the dialects that carry the edited artifacts:
   //

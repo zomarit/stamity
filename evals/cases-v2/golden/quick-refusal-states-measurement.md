@@ -18,10 +18,22 @@ Governing text — `content/commands/st-quick.md`, "Thresholds and refusal":
 Any single row firing ends quick for that item. Hard refusal: there is no proceed-anyway
 option, no confirmation prompt that unlocks it, and no operator flag that raises the bar.
 
+Nor is there a hand-off that works around it. Writing the change out for the operator to
+paste, attaching it as a diff, splitting it into pieces that each miss the threshold, or
+applying it and flagging it for review afterwards are all the same refused change with a
+different hand on the keyboard — the surface still gets edited, and it still skips the review
+loop the threshold fired to route it into. "I am not the one making the edit" is not a
+distinction the thresholds draw. The item moves to `/st-work` intact or it does not move.
+
 The refusal states the measurement, not a verdict:
 
 > This crosses the `<threshold>` threshold (`<measured value>`). Switch to `/st-work` —
 > the item list carries over.
+
+`<threshold>` is the name of the row that fired, copied from the table above — not a
+paraphrase, not a category invented to sound like one. The refusal's whole purpose is that
+the operator can take the name to the table and check the call; a coined label reads as a
+judgement about the change and leaves nothing to check against.
 ```
 
 Scenario input — the operator opens the quick lane with one request:
