@@ -166,3 +166,17 @@ One line of upkeep rides every version cut: after the tag is published and verif
 private layer's record in its side-by-side checkout — append the release to its continuity log and
 regenerate its kickoff prompt — so the record never trails the registry. (Added 2026-09-01, the
 day the record was found two releases stale.)
+
+A second line rides the same cut and lands *before* the tag rather than after it: the full eval set
+runs per `evals/SET-v4.md`, and the release carries its run artifact under `evals/runs/`. The corpus
+is model-executed prose, so a version cut with no run behind it ships behaviour nobody measured — no
+artifact, no tag, and a release without one is blocked by this checklist rather than by anyone's
+memory. (Added 2026-09-01, with the set; repointed to `SET-v3.md` on 2026-09-02, and to
+`SET-v4.md` on 2026-09-04.)
+
+A third line rides the same cut and lands *before* the tag as well: confirm the repository's own
+public metadata is current — the GitHub repository description and topics still describe what this
+release ships — and review the admin roster, so the set of accounts holding admin on this repository
+and publish rights on the registry is a set someone looked at this release rather than one that
+accumulated. Both are console state that no file in this tree can assert, which is why they sit in
+this checklist beside the three platform controls rather than in a test. (Added 2026-09-02.)

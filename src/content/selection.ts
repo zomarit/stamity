@@ -42,11 +42,16 @@
  *   `creator` sit outside — they serve specific workflows (`/st-spec`,
  *   scaffolding), so a setup that does not use those workflows can legitimately
  *   drop them.
- * - **`floor:security`** — the rules whose removal changes what the generated
- *   setup permits rather than how it reads: secrets handling, security
- *   patterns, and injection screening. These are the reason the mechanism
+ * - **`floor:security`** — the artifacts whose removal changes what the
+ *   generated setup permits rather than how it reads: the three rules (secrets
+ *   handling, security patterns, injection screening) and the `security` agent
+ *   that reviews a change against them. These are the reason the mechanism
  *   exists; a "lean" setup that quietly shed them would be the failure mode the
- *   floor was built to prevent.
+ *   floor was built to prevent. The agent is on this floor and not on
+ *   `floor:spine` deliberately: no command flow routes through it — it is
+ *   trigger-fired — so it fails the spine test above, while shedding it leaves
+ *   the three floored rules with nothing that reads them, which is the same
+ *   permit-level loss the rules themselves are floored against.
  *
  * `test/content/floorMembership.test.ts` pins both sets, so widening or
  * narrowing the floor is a deliberate edit with a visible diff.

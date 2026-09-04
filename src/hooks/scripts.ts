@@ -795,7 +795,7 @@ const handoffs = handoffDocs
 
 function render() {
   if (learnings.length === 0 && handoffDocs.length === 0) {
-    return ["Stamity: no learnings and no resumable handoffs in this repo yet."];
+    return ["stamity: no learnings and no resumable handoffs in this repo yet."];
   }
 
   const bytes = loaded.reduce((total, doc) => total + doc.size, 0);
@@ -1213,10 +1213,10 @@ const changed = clean(
 const lines =
   changed === ""
     ? [
-        "Stamity: agent configuration is generated and managed. Run \`stamity check\` to diff the on-disk files against the engine's own output.",
+        "stamity: agent configuration is generated and managed. Run \`stamity check\` to diff the on-disk files against the engine's own output.",
       ]
     : [
-        "Stamity: agent configuration changed — " + changed + ".",
+        "stamity: agent configuration changed — " + changed + ".",
         "That file is generated and managed. Run \`stamity check\` to diff it against the engine's own output before trusting the change.",
       ];
 
@@ -1458,25 +1458,105 @@ const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
  * a loaded machine — a process descheduled past the wall-clock window would
  * otherwise give up having looked exactly once, which is the starvation case
  * this is most likely to meet. LOCK_CEILING_MS bounds the whole wait regardless,
- * so a pathological hand-off storm still terminates well inside any client's
- * hook timeout.
+ * so a pathological hand-off storm still terminates.
+ *
+ * That ceiling is the one constant here that is NOT queue-shaped, and it is
+ * checked unconditionally — it overrides the progress detector, so a wait that
+ * is demonstrably draining gives up anyway once it fires. At 10s it was
+ * therefore still the binding constraint on the exact case the progress
+ * detector was added for. Thirty reviewers finishing together serialise; the
+ * tail one needs twenty-nine critical sections' worth of wall clock; 10s split
+ * twenty-nine ways is ~330ms per section, which an NTFS
+ * create+read+rename+unlink cycle behind an on-access scanner on an
+ * oversubscribed runner reaches. It did reach it — the herd case dropped one
+ * round of thirty on the windows leg with no source change between runs, on
+ * the same STATE_LOCKED path that still exits 0.
+ *
+ * 25s instead, derived from the budget rather than from a guess about how long
+ * a queue is. This script rides SubagentStop and TaskCompleted, and it is
+ * wired with no per-entry timeout, so it inherits the client default for those
+ * events: 600s (code.claude.com/docs/en/hooks-guide, Limitations, accessed
+ * 2026-09-01). What the number buys is ~860ms per critical section at thirty
+ * writers instead of ~330ms.
+ *
+ * Read the margin as the ceiling PLUS the retry budgets, not as the ceiling.
+ * The ceiling bounds the wait for the lock and nothing after it, and the
+ * reviewer's path spends four more budgets inside one invocation: the ceiling
+ * itself plus a final jittered pause (25,024 ms), the counter read under the
+ * lock (a stat and a read, 300 ms each), the publish rename (win32 3,750 ms of
+ * base delay at up to a quarter of jitter = 4,687.5 ms; 750 ms on POSIX) and
+ * the unlock (300 ms). That totals ~30.6s on win32 and ~26.7s on POSIX against
+ * the 600s the wired events allow — 5.1% of it, with no breach anywhere on the
+ * shipped surface. What it does rule out is the earlier claim here that the
+ * wait also fits the 30s the same client allows its tightest hook class:
+ * re-wiring this gate onto that class now needs LOCK_CEILING_MS lowered first,
+ * because the compound worst case has overtaken that budget even though the
+ * ceiling alone still sits inside it.
+ *
+ * Raising it costs nothing on the failure it does not govern. A holder that
+ * DIED holding the lock produces no hand-off, so the idle detector returns in
+ * ~1s and the ceiling is never consulted; the ceiling only ever fires while
+ * the lock is genuinely changing hands, and waiting longer for a queue that is
+ * visibly draining is the whole point of watching for progress. The fail-open
+ * drop is unchanged either way: a wait that does expire still reports
+ * STATE_LOCKED and exits 0, because a counter is not worth wedging a run over.
  */
 const LOCK_IDLE_MS = 1_000;
 const LOCK_IDLE_POLLS = 24;
-const LOCK_CEILING_MS = 10_000;
+const LOCK_CEILING_MS = 25_000;
 const LOCK_WAIT_MIN_MS = 4;
 const LOCK_WAIT_MAX_MS = 24;
 const LOCK_STALE_MS = 30_000;
 
-/* Rename retries for transient Windows sharing violations, mirroring the
- * engine's own writer: a concurrent reader of the counter (every invocation
- * loads it before it decides) can hold a handle across this rename, and an
- * on-access scanner opens files without FILE_SHARE_DELETE, so MoveFileEx comes
- * back EBUSY/EPERM for a few ms at a time. Unretried, that lands as
- * STATE_UNWRITABLE: the round is reported but never stored, which is the same
- * lost round by a different route. */
-const RENAME_RETRIES = 4;
-const RENAME_BACKOFF_MS = 50;
+/*
+ * Errnos this script waits out rather than reads as an answer.
+ *
+ * Every one of them means the same thing on Windows: somebody else is holding
+ * the name for a moment. ERROR_ACCESS_DENIED and ERROR_SHARING_VIOLATION reach
+ * node as EPERM and EBUSY, EACCES is the third code that family of access
+ * refusals arrives under, and a name being unlinked stays delete-pending until
+ * the last handle on it closes. An on-access scanner opens every freshly
+ * written file on a CI runner without FILE_SHARE_DELETE, and this script
+ * creates, reads, renames and unlinks three names in the same directory.
+ *
+ * None of the three is an answer about whether the lock is free or whether the
+ * counter is readable, and every site that read one as an answer dropped a
+ * round while exiting 0. On POSIX none of them can come from contention at all:
+ * open(O_CREAT|O_EXCL) answers EEXIST, rename(2) is defined on the inode and
+ * never loses to a reader, and unlink is atomic. So the same set applies on
+ * both platforms, and what it costs on POSIX is the wait budget on a durable
+ * fault the gate already fails open on.
+ */
+const SHARING_FAULTS = ["EACCES", "EBUSY", "EPERM"];
+const IS_WINDOWS = process.platform === "win32";
+
+/*
+ * Rename retries for a destination held across the publish, carried from the
+ * engine's own writer rather than re-derived: see RENAME_RETRY_DELAYS_MS in
+ * src/merge/atomicWrite.ts, where the concurrent-reader case took ~790 ms on
+ * the runs it passed and spent the whole 750 ms four-retry budget on the runs
+ * it failed. This script shipped that pre-fix budget; it now carries the same
+ * schedule the engine settled on — 3750 ms of base delay on win32, flattened at
+ * 800 ms so a quarter of jitter keeps the ceiling near 4.7 s, and the original
+ * 750 ms on POSIX where a longer budget buys a slower failure rather than a
+ * landed write. Unretried, a held destination lands as STATE_UNWRITABLE: the
+ * round is reported but never stored, which is the same lost round the lock
+ * exists to prevent, reached by the other door.
+ */
+const RENAME_WAITS_MS = IS_WINDOWS ? [50, 100, 200, 400, 600, 800, 800, 800] : [50, 100, 200, 400];
+const RENAME_JITTER = IS_WINDOWS ? 0.25 : 0;
+
+/* Retries for a read or an unlink that lost to the same family of holds. Both
+ * are short operations on a name this process is racing its own peers for, so
+ * the budget is 20+40+80+160 = 300 ms rather than the rename's: past that the
+ * hold is not the millisecond-scale one this waits out. */
+const RETRY_ATTEMPTS = 4;
+const RETRY_BACKOFF_MS = 20;
+
+/** Whether an errno is one of the momentary holds above, rather than an answer. */
+function sharing(error) {
+  return error !== null && error !== undefined && SHARING_FAULTS.includes(error.code);
+}
 
 const NOW = Date.now();
 
@@ -1553,21 +1633,43 @@ function returned(payload, names, pattern, vocabulary) {
  * unreasonable.
  */
 function load() {
+  // Absence and a fault are different answers, and the stat is where they used
+  // to be collapsed: every errno mapped to "no file", which the caller reads as
+  // "no runs yet". Under the lock that publishes a one-round document over every
+  // round counted so far — the silent reset the fault guard below exists to
+  // prevent, reached through the one door it did not cover. So only ENOENT, and
+  // a name that is not a regular file, is absence; a momentary hold is waited
+  // out on the same 20/40/80/160 ms schedule the read uses, and any other errno
+  // is STATE_UNREADABLE, which drops the round rather than resetting it.
   let size = -1;
-  try {
-    const stats = statSync(STATE_FILE);
-    if (stats.isFile()) size = stats.size;
-  } catch {
-    size = -1;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const stats = statSync(STATE_FILE);
+      size = stats.isFile() ? stats.size : 0;
+      break;
+    } catch (error) {
+      if (error !== null && error !== undefined && error.code === "ENOENT") break;
+      if (!sharing(error) || attempt >= RETRY_ATTEMPTS) return { fault: "STATE_UNREADABLE", runs: null };
+      pause(RETRY_BACKOFF_MS * 2 ** attempt);
+    }
   }
   if (size <= 0) return { fault: "STATE_ABSENT", runs: null };
   if (size > MAX_STATE_BYTES) return { fault: "STATE_TOO_LARGE", runs: null };
 
+  // Retried on a momentary hold and on nothing else. The publish is
+  // temp+rename, so a reader is never handed partial bytes: a parse that fails
+  // or a size past the cap is what the file SAYS, and waiting cannot change it.
+  // A read that loses to a hold has been told nothing yet, and reading that as
+  // STATE_UNREADABLE drops the round this invocation came to count.
   let raw = "";
-  try {
-    raw = readFileSync(STATE_FILE, "utf8");
-  } catch {
-    return { fault: "STATE_UNREADABLE", runs: null };
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      raw = readFileSync(STATE_FILE, "utf8");
+      break;
+    } catch (error) {
+      if (!sharing(error) || attempt >= RETRY_ATTEMPTS) return { fault: "STATE_UNREADABLE", runs: null };
+      pause(RETRY_BACKOFF_MS * 2 ** attempt);
+    }
   }
   let document = null;
   try {
@@ -1648,7 +1750,15 @@ function lock() {
       closeSync(openSync(LOCK_FILE, FS.O_WRONLY | FS.O_CREAT | FS.O_EXCL | FS.O_NOFOLLOW, 0o600));
       return true;
     } catch (error) {
-      if (!error || error.code !== "EEXIST") return false;
+      // EEXIST is the answer "somebody holds it", and a sharing fault is no
+      // answer at all — the name was momentarily unopenable, most often because
+      // the previous holder's unlink left it delete-pending. Both go round the
+      // loop; every other errno is this filesystem's own refusal and gives up.
+      // A name that stays unopenable therefore costs the idle window instead of
+      // returning at once — 1.05s measured on darwin against a lock create
+      // rigged to raise EACCES every time, against 31ms before — and still ends
+      // fail-open at STATE_LOCKED with nothing written.
+      if (!error || (error.code !== "EEXIST" && !sharing(error))) return false;
     }
 
     // Who holds it now, and since when. A stat that raises is a lock released
@@ -1698,11 +1808,26 @@ function lock() {
   }
 }
 
+/**
+ * Release the lock, retrying the holds that are not a refusal.
+ *
+ * A swallowed unlink is not one round: it strands the name for the stale window
+ * (LOCK_STALE_MS), and no waiter already in the herd can clear it, because
+ * LOCK_STALE_MS is longer than LOCK_CEILING_MS and every waiter's ceiling is
+ * armed from its own start. So the sweep only ever rescues a LATER invocation,
+ * and one dropped unlink costs every remaining round in this run rather than
+ * this one. Anything else — the file already gone to a stale sweep in another
+ * process — is the same outcome as a release and returns.
+ */
 function unlock() {
-  try {
-    unlinkSync(LOCK_FILE);
-  } catch {
-    // Already gone: a stale-lock sweep in another process got there first.
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      unlinkSync(LOCK_FILE);
+      return;
+    } catch (error) {
+      if (!sharing(error) || attempt >= RETRY_ATTEMPTS) return;
+      pause(RETRY_BACKOFF_MS * 2 ** attempt);
+    }
   }
 }
 
@@ -1731,19 +1856,21 @@ function save(runs) {
     writeSync(handle, JSON.stringify({ schema: SCHEMA, runs: Object.fromEntries(kept) }));
     closeSync(handle);
     handle = -1;
-    // The rename is retried on the two errnos Windows raises when something
-    // else holds a handle to the destination for a moment — a concurrent
-    // reader, or an on-access scanner that opened it without FILE_SHARE_DELETE.
-    // Every other failure is raised on the first try and reported by the catch
-    // below, because a write that cannot land is not worth holding a run for.
+    // The rename is retried on the errnos Windows raises when something else
+    // holds a handle to the destination for a moment — a concurrent reader, or
+    // an on-access scanner that opened it without FILE_SHARE_DELETE. The
+    // schedule runs out when RENAME_WAITS_MS does, so the budget is the array
+    // and there is no second count to drift from it. Every other failure is
+    // raised on the first try and reported by the catch below, because a write
+    // that cannot land is not worth holding a run for.
     for (let attempt = 0; ; attempt += 1) {
       try {
         renameSync(temp, STATE_FILE);
         break;
       } catch (error) {
-        const code = error === null || error === undefined ? "" : error.code;
-        if ((code !== "EBUSY" && code !== "EPERM") || attempt >= RENAME_RETRIES) throw error;
-        pause(RENAME_BACKOFF_MS * 2 ** attempt);
+        const wait = RENAME_WAITS_MS[attempt];
+        if (!sharing(error) || wait === undefined) throw error;
+        pause(wait + Math.floor(Math.random() * wait * RENAME_JITTER));
       }
     }
     return true;
@@ -1817,6 +1944,30 @@ function record() {
   let stored = false;
   try {
     const current = load();
+    // A fault under the lock is not "no runs". Treating it as one makes
+    // \`rounds\` 1 and publishes a one-round document over a file this script was
+    // told not to repair — every round counted so far, gone, on a path that
+    // exits 0. So the round is dropped instead and the fault is named. The
+    // return sits inside the try, so the finally below still releases the lock.
+    //
+    // The wording is the unlocked path's, deliberately: this branch is the only
+    // report a reviewer ever sees, since the round is counted before the
+    // unlocked read that used to carry it. "Cannot be trusted" rather than
+    // "could not be read" because STATE_INVALID parsed a file it did read, and
+    // the delete sentence is what the operator needs — one remedy for one
+    // fault, whichever path names it.
+    if (current.fault !== "" && current.fault !== "STATE_ABSENT") {
+      return {
+        blocked: false,
+        runId,
+        maxRounds: MAX_ROUNDS,
+        reasonCode: current.fault,
+        message:
+          "The review-gate counter at " + STATE_FILE + " cannot be trusted, so this round was not " +
+          "counted and the gate is open. Deleting the file restarts the counter; it is not " +
+          "overwritten from here.",
+      };
+    }
     // Null prototype for the same reason the completion path uses one: a run id
     // of "__proto__" would otherwise reach the inherited setter and vanish.
     const runs = Object.assign(Object.create(null), current.runs === null ? {} : current.runs);
@@ -1853,6 +2004,15 @@ function decide() {
   // that held it would hold every run this setup never opened.
   if (runId === "") return null;
 
+  // A finishing reviewer IS a review round: count it, record what it returned,
+  // and let it go — the round has already happened. Answered BEFORE the read
+  // below, because \`record()\` re-reads the counter under the lock and never
+  // looks at this one: on the reviewer's path the unlocked read decided
+  // nothing and could only lose the round, since a read that momentarily lost
+  // to another writer's publish returned here instead of reaching the lock.
+  // The fault it used to shield \`record()\` from is handled under the lock now.
+  if (agentId === REVIEWER_AGENT) return record();
+
   const state = load();
   if (state.fault !== "" && state.fault !== "STATE_ABSENT") {
     return {
@@ -1864,9 +2024,6 @@ function decide() {
         "Deleting the file restarts the counter; it is not overwritten from here.",
     };
   }
-  // A finishing reviewer IS a review round: count it, record what it returned,
-  // and let it go — the round has already happened.
-  if (agentId === REVIEWER_AGENT) return record();
 
   if (!isCompletion()) return null;
 

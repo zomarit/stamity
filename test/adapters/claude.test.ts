@@ -135,7 +135,7 @@ async function ctxOf(over: PlanOverrides = {}): Promise<EmissionContext> {
     rootDir: over.rootDir ?? getTemp().path("repo"),
     manifest,
     engineVersion: ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
     contentRoot: over.contentRoot ?? CONTENT_ROOT,
   };
 }
@@ -560,13 +560,17 @@ describe("claude residue over the real corpus", () => {
     expect(paths).toContain(CLAUDE_MD_PATH);
     expect(paths).toContain(CLAUDE_REVIEW_GATE_PATH);
     // ...and so is the floor. An empty selection is the hand-edited-manifest
-    // case the `floor:*` mechanism exists for: the five spine agents and the
-    // security rules survive it, and nothing else does.
+    // case the `floor:*` mechanism exists for: the five spine agents, the
+    // security agent, and the security rules survive it, and nothing else does.
+    // `stamity-security.md` joined the list when the agent took `floor:security`
+    // — the three rules it reads were floored and it was not, so a trimmed setup
+    // could ship the security guidance with nothing that applies it.
     expect(paths.filter((path) => path.startsWith(".claude/agents/"))).toEqual([
       ".claude/agents/stamity-fixer.md",
       ".claude/agents/stamity-implementer.md",
       ".claude/agents/stamity-researcher.md",
       ".claude/agents/stamity-reviewer.md",
+      ".claude/agents/stamity-security.md",
       ".claude/agents/stamity-test-runner.md",
     ]);
     expect(paths.filter((path) => path.startsWith(".claude/rules/"))).toEqual([

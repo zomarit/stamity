@@ -170,6 +170,23 @@ intent is feature or migration: re-route rather than carrying a contract change 
 
 ## Migration
 
+**Resolve the graph first — delegate it, do not re-derive it.** This intent's whole trigger set is
+dependency movement, and both of its judgement inputs — the manual-class count in the table below,
+and the two breaking-change axes at the end — are claims about packages nobody has listed yet.
+Invoke the dep-audit skill before the approach is chosen: it resolves the installed graph from the
+lockfile, scans advisories, flags licences, and returns one update-risk class per package (`patch` ·
+`minor` · `major` · `pinned-back` · `unmaintained`). That report is an input to this section, never
+something the section computes for itself — advisories and licences already have one owner, and a
+second derivation is a second answer that can disagree with the first.
+
+How the classes land here: `major` is where the breaking changes come from, so each one's
+per-package migration note is what the severity and codemod axes below are applied to, and the
+`Manual` count that falls out is what the incremental-vs-direct table reads. `pinned-back` names a
+pin phase 0 either lifts or records a reason for. `unmaintained` is a replacement question rather
+than a bump, so it is scoped as its own change instead of being carried inside a phase. A report the
+skill marked `partial` carries that word into the artifact head: an approach chosen over a graph one
+source could not be read for is a decision short an input, and the artifact says which.
+
 **Incremental or direct — decide before decomposing:**
 
 | Input | Favors incremental | Favors direct |
@@ -263,6 +280,7 @@ plan-review sub-agent loop at this seam produced no measured quality gain, so no
 | L1 | **Testable acceptance criteria** | every criterion names an observable subject and a verifiable condition — Given/When/Then, or a threshold with units plus the command that measures it. Bare adjectives ("works", "is fast", "handles errors") fail. | rewrite each failing criterion in place, re-run the pass |
 | L2 | **Dependencies resolve** | every `depends_on` names a unit in this plan, a path that exists on disk, or an external prerequisite with a named owner. Zero dangling references. | add the missing prerequisite or correct the reference, re-run the pass |
 | L3 | **Edge cases non-empty** | every unit lists at least one edge case with its expected behavior. `none` is admissible only with a one-line reason. | derive the missing cases from the unit's inputs and failure modes, re-run the pass |
+| L4 | **Requirement ids cited** | every unit's `requirements` names at least one `REQ-<area>-<nnn>` carried by the spec, or states `spec carries no ids`. A blank field fails; an id absent from `docs/specs/` fails as a dangling reference. | cite the requirement the unit implements, or record that the spec carries none, re-run the pass |
 
 A failing check blocks the write. Three consecutive failed passes on the same check means the
 request is under-specified: stop and return `BLOCKED_AMBIGUITY` naming the check and the unit that
@@ -301,6 +319,7 @@ Sections, in order:
 | Field | Content |
 |---|---|
 | `id` | stable slug, the target of `depends_on` |
+| `requirements` | the spec requirement ids (`REQ-<area>-<nnn>`) this unit implements — the join key it shares with the spec, the test name and the board item. Where the spec carries no ids, the literal `spec carries no ids`; never blank |
 | `files` | paths this unit writes; disjoint from every unit that can run beside it |
 | `interfaces` | the exact signatures, schemas, props, and error shapes the implementer needs, inline |
 | `testCriteria` | the assertions that prove the unit, each testable under L1 |
@@ -316,6 +335,11 @@ Sections, in order:
 **Fresh-context criteria.** The artifact is executable by an implementer holding no session
 history. Two checks before the write: (1) every unit's `interfaces` resolve without opening another
 document; (2) the artifact plus the files it names fits a fresh context window.
+
+A unit whose `interfaces` cannot be filled from what this run already holds is not written with a
+placeholder: the run reads the paths in its own `reads` and fills the field before the write, or
+it returns `BLOCKED_DEPENDENCY` naming the document it has to open. `not yet resolvable`, `see
+below`, and a pointer to another file are not values this field takes.
 
 **Oversized plan.** When check (2) fails, split into sequenced files `<NNN>-<slug>-01.md`,
 `-02.md`, … — each self-complete, with its own context, units, spec-delta slice, and stamp. Each
@@ -346,7 +370,7 @@ Close the run with:
 - `status` plus a one-line outcome.
 - `intent chosen: <intent> because <matched signals>`.
 - Artifact path(s) written, with the unit count.
-- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail`.
+- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail`.
 - `sub_agents_spawned: <count> · task_structure: parallelizable | sequential | mixed`.
 - Open questions carried; a non-empty list blocks handoff.
 - Learnings written, with their paths; `none` when the run met no qualifying failure.

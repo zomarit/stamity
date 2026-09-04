@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit f5a451b. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 4607a76. -->
 <!-- Re-open when: the corpus counts, the nine-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives all three from the content
      catalog and the generated capability matrix and fails here first. -->
@@ -27,8 +27,10 @@ npx @zomarit/stamity init
 ```
 
 `init` reads the repository, asks what it cannot infer, and writes the setup plus a manifest
-that every later command works from. Node `>= 22.12` is the only prerequisite: nothing is
-installed globally, and the engine contacts no service to do its work. The package is
+that every later command works from. Node `>= 22.12` is the engine's only prerequisite:
+nothing is installed globally, and the engine contacts no service to do its work. Two of
+the nine touchpoints reach further — `/st-board` and `/st-pr-resolve` shell out to the
+GitHub CLI (`gh`), authenticated, when they work a real board or pull request. The package is
 `@zomarit/stamity` and it installs two names for the same binary — `stamity` and the short
 alias `st` — so an installed copy runs as `stamity sync` or `st sync`.
 
@@ -48,15 +50,10 @@ learnings, handoffs.
 ## Commands
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`clean` — nine verbs, plus the hidden `learn` plumbing verb agents call to record a
-learning through the engine's write gates. `init` sets a repo up, `sync` regenerates every
-managed file from the manifest, `check` diagnoses the environment and fails on drift
-between disk and what the engine would write now, `validate` checks the content this repo
-authored, `add` installs a pack once its trust gates pass, `config` reads and changes the
-setup, `workspace` puts one policy over many repositories, `worktree` runs several branches
-of one repository side by side — creating each checkout with the machine-local state a
-checkout cannot carry, and tearing it back down from the receipt that says what was placed
-— `clean` removes all of it.
+`clean` — nine verbs, and behind them two plumbing verbs an agent calls and nobody types,
+`learn` and `handoff`. What each one does, every flag it takes and every status it exits
+with is [the CLI reference](docs/cli-reference.md)'s to state: that page renders from the
+program itself, so it cannot describe a verb the CLI does not have or miss one it does.
 
 ## Working on this repository
 
@@ -104,6 +101,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and the two channels a report goes through. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Prerequisites, what `init` asks and writes per client, and the guided first change. |
 | [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | The nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once. |
+| [`docs/doctrine.md`](docs/doctrine.md) | The root question every artifact answers, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
 | [`docs/customization.md`](docs/customization.md) | Where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries. |
 | [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — the manifest, the init offer, the status rows, and the cascade. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |

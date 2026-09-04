@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
 import {
+  extractManagedBlock,
+  hasManagedBlock,
+  splitAtManagedBlock,
+} from "../../merge/managedBlocks.ts";
+import {
   describePackIntegrityFinding,
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
@@ -25,7 +30,7 @@ import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts"
  *
  * Three parts, one exit code:
  *
- * 1. **DOCTOR** — nine environment and state probes, each a
+ * 1. **DOCTOR** — ten environment and state probes, each a
  *    {@link DoctorCheck} row. Every probe is total: it answers, or it warns
  *    about why it could not, but it never takes the command down with it.
  * 2. **DRIFT** — {@link runDriftGate} runs the sync engine's read-only PLAN
@@ -418,6 +423,156 @@ function checkToolTraces(manifest: SetupManifest | null): DoctorCheck {
 }
 
 /**
+ * One preserved slice of a managed file, normalized for comparison, carrying
+ * the source line each surviving character came from.
+ */
+interface PreservedSlice {
+  /** Whitespace-collapsed, end-trimmed text of the slice. */
+  text: string;
+  /** 1-based source line of the character at the same index in {@link text}. */
+  lines: number[];
+}
+
+/**
+ * Normalize `content[start, end)` the way the duplicate comparison needs it:
+ * every run of whitespace becomes one space and both ends are trimmed, so a
+ * copy that was re-wrapped or re-indented still reads as the same text. The
+ * parallel `lines` array is what lets the detail name a line the operator can
+ * jump to, which a normalized string alone cannot say.
+ */
+function normalizePreserved(content: string, start: number, end: number): PreservedSlice {
+  const chars: string[] = [];
+  const lines: number[] = [];
+  let line = 1;
+  for (let i = 0; i < start; i++) if (content.charAt(i) === "\n") line++;
+  let gap = false;
+  for (let i = start; i < end; i++) {
+    const ch = content.charAt(i);
+    const at = line;
+    if (ch === "\n") line++;
+    if (/\s/.test(ch)) {
+      gap = chars.length > 0;
+      continue;
+    }
+    if (gap) {
+      chars.push(" ");
+      lines.push(at);
+      gap = false;
+    }
+    chars.push(ch);
+    lines.push(at);
+  }
+  return { text: chars.join(""), lines };
+}
+
+/**
+ * One ledgered file after the scan. `line` is the 1-based line where the
+ * preserved region repeats the managed body, or `null` when it does not.
+ */
+interface ScannedFile {
+  path: string;
+  line: number | null;
+}
+
+/**
+ * The line where {@link body} is repeated inside a managed file, or `null` when
+ * it is not.
+ *
+ * `splitAtManagedBlock` rather than `extractCustomContent` because the detail
+ * has to name a line: the joined custom content answers "is it duplicated" and
+ * discards the offsets that answer "where". The two preserved slices are
+ * searched separately so a match can never be assembled across the block, which
+ * is not a duplicate anybody wrote.
+ */
+function findPreservedDuplicate(content: string, filePath: string, body: string): number | null {
+  const split = splitAtManagedBlock(content, filePath);
+  if (split === null) return null;
+  const needle = body.trim().replace(/\s+/g, " ");
+  // An empty managed body is a substring of everything; it is not a duplicate.
+  if (needle === "") return null;
+  const afterStart = content.length - split.after.length;
+  for (const slice of [
+    normalizePreserved(content, 0, split.before.length),
+    normalizePreserved(content, afterStart, content.length),
+  ]) {
+    const at = slice.text.indexOf(needle);
+    if (at !== -1) return slice.lines[at] ?? 1;
+  }
+  return null;
+}
+
+/**
+ * Read one ledgered path and place it: `null` when there is no readable file
+ * or the file carries no managed block (it is not this row's subject), a
+ * {@link ScannedFile} otherwise.
+ */
+async function scanManagedFile(rootDir: string, path: string): Promise<ScannedFile | null> {
+  const content = await readIfPresent(join(rootDir, path));
+  if (content === null || !hasManagedBlock(content, path)) return null;
+  const body = extractManagedBlock(content, path);
+  return { path, line: body === null ? null : findPreservedDuplicate(content, path, body) };
+}
+
+/**
+ * Managed content that also sits in the preserved region, where the engine
+ * cannot see it.
+ *
+ * The failure this row exists for: an operator (or an agent) pastes the
+ * generated block's body below the END marker, and the repository then loads
+ * that content twice on every turn — once from the block, once from the copy.
+ * Nothing else on this screen can see it. The drift gate cannot: the managed
+ * block still matches byte for byte, so a sync writes nothing and reports
+ * nothing, and the copy is user content the engine is contractually forbidden
+ * to touch. That is also why this row can only warn — deleting the copy is the
+ * operator's call, and a duplicated charter is a legal file, just a wasteful
+ * one.
+ *
+ * Comparison is whitespace-insensitive so a re-indented or re-wrapped paste
+ * still matches, and requires the WHOLE body: a preserved region quoting one
+ * paragraph of the block is a reference, not a second copy.
+ */
+async function checkPreservedDuplicate(
+  rootDir: string,
+  manifest: SetupManifest | null,
+): Promise<DoctorCheck> {
+  const id = "preserved-duplicate";
+  // Two owners may claim one path; the file is read once, not twice.
+  const paths = [...new Set((manifest?.ledger ?? []).map((row) => row.path))];
+  const scanned = (await Promise.all(paths.map((path) => scanManagedFile(rootDir, path)))).filter(
+    (entry): entry is ScannedFile => entry !== null,
+  );
+  const findings = scanned.flatMap((entry) =>
+    entry.line === null ? [] : [{ path: entry.path, line: entry.line }],
+  );
+  const checked = scanned.length;
+
+  if (checked === 0) {
+    return { id, status: "pass", detail: "no managed block is recorded in the ledger" };
+  }
+  if (findings.length === 0) {
+    return {
+      id,
+      status: "pass",
+      detail: `${checked} managed file(s) carry their block once`,
+    };
+  }
+  const named = findings
+    .slice(0, MAX_NAMES_INLINE)
+    .map((finding) => `${finding.path}:${finding.line}`)
+    .join(", ");
+  const overflow =
+    findings.length > MAX_NAMES_INLINE ? ` (and ${findings.length - MAX_NAMES_INLINE} more)` : "";
+  return {
+    id,
+    status: "warn",
+    detail:
+      `${findings.length} of ${checked} managed file(s) repeat the managed block inside the ` +
+      `preserved region, so this repository loads that content twice: ${named}${overflow} — ` +
+      `delete the copy at each line; the block itself is regenerated on every sync`,
+  };
+}
+
+/**
  * Installed pack content, re-hashed against what the install recorded.
  *
  * The distinct failure this row exists for: a pack body edited after `add`
@@ -472,7 +627,7 @@ async function checkPackIntegrity(
 /**
  * Every doctor probe, in report order.
  *
- * The manifest is read once, up front, because four probes are conditioned on
+ * The manifest is read once, up front, because five probes are conditioned on
  * it; the rest are independent reads issued together, and the destructuring
  * order below — not whichever probe finished first — is what makes the report
  * deterministic.
@@ -489,13 +644,15 @@ export async function runDoctor(
   const state = await readManifestState(rootDir, engine);
   const { manifest } = state;
 
-  const [range, learnings, tmpHygiene, envMcp, packIntegrity] = await Promise.all([
-    requiredNodeRange(),
-    guarded("learnings", () => checkLearnings(rootDir, engine, manifest)),
-    guarded("tmp-hygiene", () => checkTmpHygiene(rootDir, engine)),
-    guarded("env-mcp", () => checkEnvMcp(rootDir, engine, manifest)),
-    guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
-  ]);
+  const [range, learnings, tmpHygiene, envMcp, preservedDuplicate, packIntegrity] =
+    await Promise.all([
+      requiredNodeRange(),
+      guarded("learnings", () => checkLearnings(rootDir, engine, manifest)),
+      guarded("tmp-hygiene", () => checkTmpHygiene(rootDir, engine)),
+      guarded("env-mcp", () => checkEnvMcp(rootDir, engine, manifest)),
+      guarded("preserved-duplicate", () => checkPreservedDuplicate(rootDir, manifest)),
+      guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
+    ]);
 
   return [
     checkNodeVersion(process.versions.node, range),
@@ -506,6 +663,7 @@ export async function runDoctor(
     tmpHygiene,
     envMcp,
     checkToolTraces(manifest),
+    preservedDuplicate,
     packIntegrity,
   ];
 }
@@ -827,7 +985,7 @@ interface ManifestState {
 /**
  * Read the manifest once for the probes that need it. A defective manifest is
  * carried as a message rather than thrown: it is one row's verdict, and the
- * other seven probes still have work to do.
+ * other nine probes still have work to do.
  */
 async function readManifestState(
   rootDir: string,
@@ -860,7 +1018,7 @@ async function readProvenance(
 /**
  * Run one probe, converting anything it throws into a warn row for that probe.
  * A sealed directory or an unreadable file is worth saying out loud; it is not
- * worth losing the other seven verdicts over.
+ * worth losing the other nine verdicts over.
  */
 async function guarded(id: string, run: () => Promise<DoctorCheck>): Promise<DoctorCheck> {
   try {

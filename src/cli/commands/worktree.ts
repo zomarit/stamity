@@ -560,6 +560,7 @@ async function runSetup(
     yes: ctx.yes,
     json: ctx.json,
     env: ctx.app.runtime.env,
+    palette: ctx.palette,
   });
   const rerun = rerunLine("setup", name, opts);
   const planOptions = {
@@ -799,6 +800,7 @@ async function runCleanup(
     yes: ctx.yes,
     json: ctx.json,
     env: ctx.app.runtime.env,
+    palette: ctx.palette,
   });
   const dirty = candidates.filter((row) => row.dirty !== null && isDirty(row.dirty));
   const orphans = candidates.filter((row) => row.classification === "managed-orphan");

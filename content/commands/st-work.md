@@ -67,7 +67,9 @@ silently dropped.
   lines and ≤8 files. The 400 is a ceiling, not a target — typical units land
   well below it. Split oversized concerns here at Plan, not mid-build. Each
   unit carries complete interfaces so a context-free implementer can execute
-  it.
+  it, and names the spec requirement ids it implements — or records that the
+  spec carries none — the join key the plan unit, the implementer's delta and
+  the test name share.
 - **Plan gate.** light: auto-continue. standard/deep: present the unit list
   and ask, with execute-now as the declared default.
 
@@ -145,16 +147,19 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   nits are suppressed: only regressions on prior findings and new
   Critical/Warning findings count.
 
-Two client events sit under this loop and they do different jobs. The
-task-completion event is the one that HOLDS: a gate emitted there can refuse
-the completion, so the cap binds mechanically. The sub-agent-completion event
-only COUNTS — it carries the round number and the finishing verdict, and it
-never blocks, so a gate emitted there is telemetry. Exactly one of the four
-supported clients publishes either event. Each is an additional check on top of
-this text, not a replacement for it. On clients without those events the ladder
-and the cap are prompt-carried only, and nothing outside this body enforces
-them. The enforcement is uneven by construction, and the flow says so rather
-than promising one bar everywhere.
+Two client events sit under this loop and they do different jobs, and the gate
+rides both, fail-closed. The task-completion event is the one that HOLDS: a
+gate emitted there can refuse the completion, so the cap binds mechanically.
+The sub-agent-completion event only COUNTS — it carries the round number and
+the finishing verdict, and the gate emitted there never blocks: it records the
+round and lets the sub-agent go. The client honours a blocking status on either
+event, and the gate spends one on the completion alone, because holding a
+sub-agent open speaks to the operator rather than to the loop. Exactly one of
+the four supported clients publishes either event. Each is an additional check
+on top of this text, not a replacement for it. On clients without those events
+the ladder and the cap are prompt-carried only, and nothing outside this body
+enforces them. The enforcement is uneven by construction, and the flow says so
+rather than promising one bar everywhere.
 
 ### Specialist pass
 
@@ -162,8 +167,11 @@ Three review lenses run beside the loop: `security`, `design-quality`,
 `performance`. A lens is pulled in by a changed path or by the task's topic —
 the trigger roster is the single source of those patterns and each specialist
 body names the surfaces it answers for, so this text carries the mechanism and
-no copy of the rows. Deep runs the full pass; standard runs a lens only on a
-match; light runs none.
+no copy of the rows. Deep runs the full pass; standard and light run the
+`security` lens on a trigger-path match; light runs no other lens. The
+charter's universal floor holds at every tier, so a tier that skipped the
+security lens outright made that floor false — a trigger-path match is the
+narrowest shape that keeps it true.
 
 - **Read-only.** A specialist returns findings and edits nothing. Repair is the
   fixer's, so no lens answers its own finding in the following round.
@@ -171,7 +179,12 @@ match; light runs none.
   cannot be located is dropped rather than posted — it spends a fix round on an
   assertion nobody can check.
 - **Severity floor.** Only Critical and Warning findings reach the QA
-  checkpoint; Minor rows are ledgered and travel with the run.
+  checkpoint; Minor rows are ledgered and travel with the run. Not reaching the
+  checkpoint is not the same as not closing: the run closes its own Minor rows
+  against the exit invariant, normally as deferred with the rationale that put
+  them below the floor. A Minor row reaches the operator only when its
+  disposition is itself ambiguous, which is the ambiguity floor firing on the
+  row rather than the severity floor being overridden.
 - **Precision kill switch.** Each lens measures its own false-positive rate at
   the checkpoint against the bar its body states, and downgrades itself to
   advisory for the following run once it reaches that bar: findings recorded,
@@ -186,7 +199,10 @@ The mandatory closing checkpoint, human-facing, at every intensity:
 
 1. Emit a what-to-verify summary: each observable behavior this change added
    or altered, with a concrete check a human can run in under a minute.
-2. Invoke the qa skill for the guided pass.
+2. Invoke the qa skill by name for the guided pass. The step belongs to the
+   command already running, not to a trigger match: a request arriving here —
+   "what should I check by hand?" — is what this checkpoint answers, and stays
+   with this command.
 3. When the change has a user-facing surface, offer a browser-evidence skill
    run; captured screenshots and console output attach to the proof block.
 
@@ -231,6 +247,14 @@ as its state moves; the id is what makes the rewrite converge instead of
 appending a second row. Run-exit invariant: no finding ends the run pending —
 every row closes as fixed, deferred with rationale, or rejected with reasoning.
 
+The invariant binds at exit, and a run holding a live question has not exited.
+Where closing a row means choosing between dispositions that differ materially
+in cost or blast radius, the ambiguity floor applies and the run asks — asking
+is not a pending finding, it is the run declining to invent an answer it does
+not have. The run then closes on the reply. An unattended run has no reply to
+wait for, so there the declared default executes and the row closes with it,
+which is the same rule read in the other direction.
+
 Both persist under the state directory, in `.stamity/runs/` — one record per run
 carrying the fields above, with that run's ledger rows beside it. That is the
 baseline `/st-rework` reads and the directory `/st-pr-resolve` appends
@@ -245,7 +269,9 @@ Run after gates pass; each lands in the run report:
   append/merge-only; the spec-author sub-agent applies the merge on
   confirmation, and a converged spec is a byte-stable no-op.
 - **Dependency-audit note.** Each new or bumped dependency gets a one-line
-  note: source, license, advisory-check result.
+  note, and the dep-audit skill owns the fields it carries — advisories,
+  licences, the path to a transitive package. Invoke it for them; deriving
+  them here again is a second answer to a question that already has an owner.
 - **Learnings capture.** Failures met and resolved during the run land in
   `.stamity/learnings/`.
 - **Pull-request emission.** Where a platform is linked and the change sits on
@@ -298,9 +324,9 @@ Every spawn in every phase runs under these contracts:
 
 | Tier | When | What changes |
 |---|---|---|
-| light | small diff, low risk, familiar ground | Skips: researcher fan-out (one inline context read instead), the plan-gate ASK (auto-continues), specialist passes, and the whole-branch deep review. Keeps: unit decomposition, at least one reviewer round, every gate, the QA checkpoint, the proof block. |
+| light | small diff, low risk, familiar ground | Skips: researcher fan-out (one inline context read instead), the plan-gate ASK (auto-continues), the `design-quality` and `performance` specialist lenses, and the whole-branch deep review. Keeps: unit decomposition, at least one reviewer round, the `security` specialist lens on a trigger-path match, every gate, the QA checkpoint, the proof block. |
 | standard | the default | Full spine: researcher fan-out sized to independent questions; plan gate asks (execute-now default); review loop to the cap; a specialist lens on a trigger match. |
-| deep | high risk surface, novel territory, wide diff | standard plus the full specialist pass and a whole-branch multi-lens review on the frontier class at Prove-final. |
+| deep | high risk surface, novel territory, wide diff | standard plus the full specialist pass and a whole-branch multi-lens review on the frontier class, run once the review loop converges and before the QA checkpoint. |
 
 Auto-derived at Frame; `--effort` wins. Gates, QA checkpoint, and proof block
 hold at every tier — intensity prunes roles and fan-out, not floors.
@@ -329,7 +355,7 @@ flow's own escalation and drop, marked as such below.
 
 | Class | Assigned to |
 |---|---|
-| frontier | `reviewer`, escalated for the whole-branch deep review at Prove-final — a flow placement, declared by no agent file |
+| frontier | `reviewer`, escalated for the whole-branch deep review that runs once the review loop converges and before the QA checkpoint — a flow placement, declared by no agent file |
 | advanced | `reviewer` every round; `implementer`; `spec-author`; the `security` and `design-quality` specialists |
 | standard | `researcher`; `creator`; the `performance` specialist; `fixer` on rounds that still need judgement — its declared class |
 | economy | `test-runner`; `fixer` dropped here once a round is mechanical — lint, format, rename sweeps — a flow placement |

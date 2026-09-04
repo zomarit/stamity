@@ -134,3 +134,37 @@ describe("the docs site keeps the one URL the sunset material promises", () => {
     );
   });
 });
+
+describe("the docs build serves the product documentation and not the design documents", () => {
+  it("excludes docs/specs/ and docs/plans/ from the routes it publishes", () => {
+    // `docs/specs/` holds engineering design documents for behaviour that is partly unbuilt.
+    // The plugin reads `docs/` in place, so without this line every one of them is a published
+    // route describing what does not ship. The narrowing is asserted here because the config's
+    // own comment is the only other record of it, and `test/ci/docsRoster.test.ts` exempts those
+    // pages from the roster on the strength of this exclusion holding.
+    // TEST CHANGE, justified: the value is no longer the one-entry list. Setting `exclude` replaces
+    // the plugin's defaults, so the config restates them beside `specs/**`; the assertion holds
+    // each entry rather than the whole literal, so a default dropped or the specs narrowing removed
+    // each fail on its own line.
+    const exclude = valueOf("exclude") ?? "";
+    expect(exclude, "the docs preset publishes docs/specs/ again").toContain("'specs/**'");
+    // The plan command writes `docs/plans/<NNN>-<slug>.md`; the first one to land in this
+    // repository would otherwise publish as a route and fail the roster gate in the same commit.
+    expect(exclude, "the docs preset publishes docs/plans/").toContain("'plans/**'");
+    for (const entry of [
+      "'**/_*.{js,jsx,ts,tsx,md,mdx}'",
+      "'**/_*/**'",
+      "'**/*.test.{js,jsx,ts,tsx}'",
+      "'**/__tests__/**'",
+    ]) {
+      expect(exclude, `the docs preset dropped the default exclusion ${entry}`).toContain(entry);
+    }
+    // The link rewriter must know the same directory is off the routes: a guide that cites a
+    // design document (docs/customization.md does) would otherwise fail the build as a broken
+    // link the moment the exclusion landed — which is how the first docs-site run on this
+    // change failed.
+    expect(config, "the repo-link rewriter does not treat docs/specs/ and docs/plans/ as off the routes").toMatch(
+      /repoLinks, \{[^}]*excluded: \['specs', 'plans'\]/,
+    );
+  });
+});

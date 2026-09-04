@@ -98,7 +98,7 @@ export default defineConfig({
           lines: 100,
         },
 
-        // `releaseInProcessLock`'s `if (entry)` else (L179): every caller reserves
+        // `releaseInProcessLock`'s `if (entry)` else: every caller reserves
         // before releasing and the release closure is idempotent-guarded, so a
         // release for a path holding no reservation has no path to it.
         "src/merge/atomicWrite.ts": { statements: 100, branches: 98, functions: 100, lines: 100 },

@@ -49,16 +49,18 @@ const INTENT_HEADINGS = [
   "## Roadmap",
 ] as const;
 
-/** The three deterministic plan-lint checks, named verbatim in the gate table. */
+/** The four deterministic plan-lint checks, named verbatim in the gate table. */
 const PLAN_LINT_CHECKS = [
   "Testable acceptance criteria",
   "Dependencies resolve",
   "Edge cases non-empty",
+  "Requirement ids cited",
 ] as const;
 
 /** Per-unit fields a context-free implementer needs; the fresh-context criteria rest on them. */
 const UNIT_FIELDS = [
   "`id`",
+  "`requirements`",
   "`files`",
   "`interfaces`",
   "`testCriteria`",
@@ -410,9 +412,24 @@ describe("/st-plan — plan-lint gate", () => {
     }
     expect(gate).toMatch(phrase("deterministic single pass"));
     expect(gate).toMatch(phrase("every intent"));
-    for (const row of ["| L1 |", "| L2 |", "| L3 |"]) {
+    for (const row of ["| L1 |", "| L2 |", "| L3 |", "| L4 |"]) {
       expect(gate).toContain(row);
     }
+  });
+
+  it("checks every unit cites a requirement id, with a stated escape for a spec that has none", () => {
+    const gate = sectionOf(plan.parsed.body, "## Plan-lint gate");
+
+    // The requirement-id mandate was stated by the spec author (ids are the
+    // join key) and honoured by the implementer's delta, but no lint row read
+    // the plan's own units — so a plan could cite nothing and still pass. L4
+    // is the check; the literal escape is what keeps a spec-less repository's
+    // plan passing instead of failing on a mandate its spec cannot satisfy.
+    expect(gate).toMatch(phrase("Requirement ids cited"));
+    expect(gate).toMatch(phrase("every unit's `requirements` names at least one"));
+    expect(gate).toContain("REQ-<area>-<nnn>");
+    expect(gate).toMatch(phrase("or states `spec carries no ids`"));
+    expect(gate).toMatch(phrase("A blank field fails"));
   });
 
   it("runs inline — no plan-review sub-agent loop", () => {
@@ -463,6 +480,22 @@ describe("/st-plan — plan artifact shape", () => {
     expect(shape).toMatch(phrase("fresh-context criteria"));
     expect(shape).toMatch(phrase("no session history"));
     expect(shape).toMatch(phrase("without opening another document"));
+  });
+
+  it("carries the requirement id per unit, with the same honest fallback the implementer states", () => {
+    const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
+
+    // The spec author calls the id "the join key every other artifact uses — a
+    // plan unit, a test name, a board item", yet the unit table named no field
+    // for it: the delta half of the plan emitted ids and the unit half did not.
+    // The fallback is the load-bearing half — a plan against a spec with no ids
+    // says so rather than leaving the field blank, which is what a bare
+    // requirement would have forced.
+    expect(shape).toContain("| `requirements` |");
+    expect(shape).toContain("REQ-<area>-<nnn>");
+    expect(shape).toMatch(phrase("the join key it shares with the spec, the test name and the board item"));
+    expect(shape).toMatch(phrase("Where the spec carries no ids, the literal `spec carries no ids`"));
+    expect(shape).toMatch(phrase("never blank"));
   });
 
   it("declares head-level depends_on, the key two sections already required", () => {
@@ -548,6 +581,9 @@ describe("/st-plan — return contract", () => {
     expect(returns).toContain("intent chosen:");
     expect(returns).toMatch(phrase("artifact path"));
     expect(returns).toContain("L1 pass|fail");
+    // The lint gate grew a fourth check; a return contract that still reports
+    // three would hide L4's verdict at the only seam an operator reads.
+    expect(returns).toContain("L4 pass|fail");
     expect(returns).toContain("sub_agents_spawned:");
     expect(returns).toContain("task_structure: parallelizable | sequential | mixed");
   });

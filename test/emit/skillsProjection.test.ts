@@ -82,7 +82,7 @@ function contextOf(skillIds: readonly string[], detected?: DetectedSummary): Emi
       ...(detected === undefined ? {} : { detected }),
     }),
     engineVersion: "0.0.0-test",
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
   };
 }
 

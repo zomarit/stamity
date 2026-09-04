@@ -180,7 +180,7 @@ function ctxOf(manifest: SetupManifest, contentRoot?: ContentRoots): EmissionCon
     rootDir: getRepo().dir,
     manifest,
     engineVersion: ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
     ...(contentRoot === undefined ? {} : { contentRoot }),
   };
 }

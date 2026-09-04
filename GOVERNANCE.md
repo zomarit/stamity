@@ -1,12 +1,13 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.0.0 release cut (2026-08-30). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6865e31. -->
 <!-- Re-open when: a gate named under Landing rules is added, renamed or removed in
-     `.github/workflows/`, the required-approval count changes, or the private layer's scope
-     changes. `test/docsPages.test.ts` resolves the link README makes to this page;
-     `test/ci/workflow.test.ts` holds the required-context names below to the workflows. -->
+     `.github/workflows/`, the required-approval count changes, the private layer's scope
+     changes, or the regulatory statement's own trigger fires. `test/docsPages.test.ts` resolves
+     the link README makes to this page; `test/ci/workflow.test.ts` holds the required-context
+     names below to the workflows. -->
 
 # Governance
 
-> Last updated: 2026-08-30
+> Last updated: 2026-09-02
 
 How this project is run and how a change lands. Contribution mechanics — the loop, the test lanes,
 regeneration — are in [CONTRIBUTING.md](CONTRIBUTING.md); the product, in
@@ -70,15 +71,26 @@ declared version, on a commit reachable from `main`, or the run fails before it 
 ## The private governance layer
 
 Not all of this project is in this repository, and pretending otherwise would be the easier lie.
-A private repository holds the product strategy, the audit machinery that grades the corpus, and
-the process that decides what changes next. It is private because it is the expensive half to
-rebuild — not because the output needs hiding.
+A private repository holds a decision ledger and an evidence ledger, a constitution built around
+one root question, the product strategy and the competitive analysis beside it, a manual audit
+cycle with its findings ledger and a question channel back to the maintainer, the clause register
+the completeness program is measured against, and a process pack sized for shifts from a one-line
+correction to a change of direction. It is private because it is the expensive half to rebuild —
+not because the output needs hiding.
 
 What that layer produces is public and checkable, which is the half that should decide whether
 anyone depends on this: the CI gates above; the leak gate, which refuses a retired name or a
 credential shape anywhere in the tree; the capability matrix, rendered from adapter code rather
 than typed; and this repository running its own generated setup, so an emission regression fails
 a check here before it reaches anyone.
+
+## Regulatory statements
+
+The transparency obligations of EU AI Act Article 50, applicable since 2026-08-02, do not apply
+to this project, because it is not an AI system placed on the market: it generates configuration
+text for AI coding clients and runs no model of its own. Re-open that reading if either of two
+things becomes true — the project ships a hosted model-backed service, or it publishes
+model-generated output to end users as its own.
 
 ## Continuity
 

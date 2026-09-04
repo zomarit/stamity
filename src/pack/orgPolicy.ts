@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isPlainObject, parseJsonStrict, unknownFields } from "../config/parse.ts";
+import { atomicWriteFile } from "../merge/atomicWrite.ts";
 import { mapFsErrno } from "../merge/fsErrors.ts";
 import { EngineError } from "../types/errors.ts";
 import { STATE_DIR } from "../types/markers.ts";
@@ -115,6 +116,19 @@ const NOT_IN_ALLOW_LIST = "not in allow list";
 const ROOT_FIELDS = ["version", "packs"] as const;
 const PACKS_FIELDS = ["allow", "deny"] as const;
 
+/**
+ * The whole pattern grammar in one sentence — what a refusal points at.
+ *
+ * Extracted rather than re-spelled: the load-time refusal below and the writer
+ * surface that refuses a pattern BEFORE it reaches the file both have to state
+ * it, and two copies of a vocabulary derived from {@link KIND_TOKENS} is
+ * exactly the drift that would let one of them go on naming a kind the
+ * evaluator dropped.
+ */
+export const ORG_POLICY_PATTERN_GRAMMAR =
+  `Patterns are an exact pack id, "@scope/*", "*", or a source kind ` +
+  `(${KIND_TOKENS.join(", ")}).`;
+
 /** Human-readable value class for refusal messages; never dumps a large value. */
 function describeValue(value: unknown): string {
   if (value === undefined) return "absent";
@@ -196,9 +210,7 @@ function readPatternList(
     if (defect !== null) {
       throw policyError(
         path,
-        `packs.${list}[${index}] ${JSON.stringify(entry)} ${defect} ` +
-          `Patterns are an exact pack id, "@scope/*", "*", or a source kind ` +
-          `(${KIND_TOKENS.join(", ")}).`,
+        `packs.${list}[${index}] ${JSON.stringify(entry)} ${defect} ${ORG_POLICY_PATTERN_GRAMMAR}`,
       );
     }
     return entry;
@@ -284,6 +296,68 @@ export async function loadOrgPolicy(rootDir: string): Promise<OrgTrustPolicy | n
     );
   }
   return parseOrgPolicy(raw, path);
+}
+
+/** Absolute path of the org trust policy under `rootDir`. */
+export function orgPolicyPath(rootDir: string): string {
+  return join(rootDir, ORG_POLICY_REL_PATH);
+}
+
+/**
+ * Why `pattern` falls outside the documented grammar, or `null` when it is
+ * valid.
+ *
+ * The load-time check itself, published rather than re-implemented. A writer
+ * that spelled its own admissibility rule would eventually admit a pattern
+ * {@link loadOrgPolicy} refuses — and because the loader is fail-closed, that
+ * writer's own output would then refuse every pack install in the repository.
+ * One function decides, so the two cannot disagree.
+ */
+export function orgPolicyPatternDefect(pattern: string): string | null {
+  return patternDefect(pattern);
+}
+
+/**
+ * An empty policy: version 1, no rules. Valid and completely inert — no `allow`
+ * list means denylist mode, and an empty deny list denies nothing — so writing
+ * one changes what installs and what projects in no way at all. That is what
+ * makes it the right starting document: adopting the artifact is not the same
+ * act as adopting a restriction.
+ */
+export function emptyOrgPolicy(): OrgTrustPolicy {
+  return { version: 1, packs: {} };
+}
+
+/**
+ * The policy as bytes: two-space JSON with a trailing newline, the shape
+ * `../workspace/manifest.ts` writes its own checked-in artifact in. This file
+ * is committed, reviewed and diffed by people, so it is formatted for them.
+ */
+export function serializeOrgPolicy(policy: OrgTrustPolicy): string {
+  return `${JSON.stringify(policy, null, 2)}\n`;
+}
+
+/**
+ * Write the org trust policy to {@link ORG_POLICY_REL_PATH} under `rootDir`,
+ * through the same atomic temp+rename substrate every other engine artifact
+ * takes (a missing `.stamity/` is created).
+ *
+ * **It parses what it is about to write, and refuses on any defect.** The bytes
+ * go through {@link loadOrgPolicy}'s own parser first, so nothing this writer
+ * produces can be a document that command then refuses to read. That matters
+ * more here than anywhere else in the tree: the loader is fail-closed, so a
+ * writer that emitted one bad pattern would not corrupt one feature — it would
+ * refuse every pack install and stop every denied-pack projection in the
+ * repository, with the fix reachable only by hand-editing the file this writer
+ * exists to spare an operator. The throw happens BEFORE the temp file is
+ * opened, so a refused document leaves the previous policy byte-for-byte
+ * intact.
+ */
+export async function writeOrgPolicy(rootDir: string, policy: OrgTrustPolicy): Promise<void> {
+  const path = orgPolicyPath(rootDir);
+  const serialized = serializeOrgPolicy(policy);
+  parseOrgPolicy(serialized, path);
+  await atomicWriteFile(path, serialized);
 }
 
 /**

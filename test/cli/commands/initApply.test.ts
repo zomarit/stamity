@@ -14,6 +14,10 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyInit, type InitApplyOptions } from "../../../src/cli/commands/init/apply.ts";
 import type { InitDecisions } from "../../../src/cli/commands/init/plan.ts";
+import {
+  planOutputEntries,
+  type SyncPlanEntry,
+} from "../../../src/cli/commands/sync/engine.ts";
 import type * as emissionModule from "../../../src/cli/engine/emission.ts";
 import {
   __resetContentRootCacheForTests,
@@ -577,6 +581,92 @@ function mcpOutput(): AdapterOutput {
   };
 }
 
+/**
+ * The two verbs previewing ONE tree. `init --dry-run` and `sync --dry-run` are
+ * two previews of the same regeneration, so a tree they disagree about is a tree
+ * where at least one of them is lying about what its apply will do.
+ *
+ * Init's dry-run leg used to predict these three documents from EXISTENCE alone
+ * — file there, therefore `updated` — while sync's plan lane ran the real
+ * ownership merge and answered `unchanged` for an already-current document and
+ * `collision` for one it would refuse. So a re-init over a tree a previous init
+ * had just written previewed work that would not happen, and no init preview
+ * could ever show the hard-link refusal its own apply raises.
+ *
+ * Both halves are asserted against `planOutputEntries` — sync's own
+ * classification, not a restatement of it — so the case fails if either verb
+ * moves. The shared prediction they now both call is
+ * `src/cli/engine/emissionWrite.ts::predictMcpDocumentMerge`, unit-tested in
+ * `test/cli/engine/emissionWrite.test.ts`.
+ */
+describe("applyInit — merged MCP documents previewed the way sync previews them", () => {
+  /** Init with a predecessor carrying `mcp.servers` — the `--migrate full`
+   *  shape, and the only one that puts `.mcp.json` in the emission set. */
+  function migrateOptions(root: string, overrides: Partial<InitApplyOptions> = {}): InitApplyOptions {
+    const defaults: PredecessorDefaults = { mcpServers: ["github"] };
+    return optionsFor(root, { defaults, ...overrides });
+  }
+
+  /** Sync's own plan-lane verdict for the same output over the same tree. */
+  async function syncEntry(root: string): Promise<SyncPlanEntry | undefined> {
+    const [entry] = await planOutputEntries(root, [mcpOutput()], ENGINE_VERSION, undefined, [
+      "github",
+    ]);
+    return entry;
+  }
+
+  it("previews an already-current document as unchanged, the answer sync's plan gives", async () => {
+    plannerOutputs.value = [mcpOutput()];
+    const root = await makeRepo();
+    // Land the document for real first: the tree under both previews is exactly
+    // what a completed init leaves, which is the tree a `--force` re-init meets.
+    await applyInit(migrateOptions(root));
+    const target = join(root, ".mcp.json");
+    const landed = await readFile(target, "utf8");
+
+    const preview = await applyInit(migrateOptions(root, { force: true, dryRun: true }));
+
+    expect(preview.wrote).toEqual([{ path: target, action: "unchanged" }]);
+    expect((await syncEntry(root))?.action).toBe("unchanged");
+    // A preview writes nothing, on this lane too.
+    await expect(readFile(target, "utf8")).resolves.toBe(landed);
+    expect((await readManifest(root))?.updatedAt).toBe(FIXED_NOW.toISOString());
+  });
+
+  it("previews a document the merge would really change as updated", async () => {
+    // The non-degenerate half: `unchanged` must be a computed answer, not a
+    // constant. Same tree shape, one hand-added server, so the merge genuinely
+    // rewrites the file and both verbs have to say so.
+    plannerOutputs.value = [mcpOutput()];
+    const root = await makeRepo();
+    await writeFile(
+      join(root, ".mcp.json"),
+      `${JSON.stringify({ mcpServers: { mine: { command: "own" } } }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const preview = await applyInit(migrateOptions(root, { dryRun: true }));
+
+    expect(preview.wrote).toEqual([{ path: join(root, ".mcp.json"), action: "updated" }]);
+    expect((await syncEntry(root))?.action).toBe("update");
+  });
+
+  it("previews an unreadable document as skipped, naming what the apply would refuse to apply", async () => {
+    plannerOutputs.value = [mcpOutput()];
+    const root = await makeRepo();
+    await writeFile(join(root, ".mcp.json"), "{not json\n", "utf8");
+
+    const preview = await applyInit(migrateOptions(root, { dryRun: true }));
+
+    expect(preview.wrote[0]?.action).toBe("skipped");
+    expect(preview.wrote[0]?.warning).toContain("not valid JSON");
+    // Skipped means the run does not stand behind the path, so the predicted
+    // ledger does not claim it either.
+    expect(preview.ledgerCount).toBe(0);
+    expect((await syncEntry(root))?.action).toBe("collision");
+  });
+});
+
 describe.skipIf(process.platform === "win32")("applyInit — linked MCP documents", () => {
   const getOutside = useTempDir("init-mcp-outside");
   const CANARY = "GOCSPX-CANARY-PRIVATE-KEY-MATERIAL";
@@ -605,9 +695,9 @@ describe.skipIf(process.platform === "win32")("applyInit — linked MCP document
 
   /** Init with a predecessor carrying `mcp.servers` — the `--migrate full`
    *  shape, and the only one that puts `.mcp.json` in the emission set. */
-  function migrateOptions(root: string): InitApplyOptions {
+  function migrateOptions(root: string, overrides: Partial<InitApplyOptions> = {}): InitApplyOptions {
     const defaults: PredecessorDefaults = { mcpServers: ["github"] };
-    return optionsFor(root, { defaults });
+    return optionsFor(root, { defaults, ...overrides });
   }
 
   it("refuses a hard-linked .mcp.json instead of publishing the twin's bytes", async () => {
@@ -636,6 +726,48 @@ describe.skipIf(process.platform === "win32")("applyInit — linked MCP document
     expect(await readFile(target, "utf8")).not.toContain("mcpServers");
     // The manifest is the commit point and is written last, so a refusal on the
     // way there must leave no manifest claiming ownership of this path.
+    expect(await readManifest(root)).toBeNull();
+  });
+
+  /**
+   * The refusal init's preview could not reach. The dry-run leg returned before
+   * the merge, so a hard-linked `.mcp.json` previewed as an ordinary `updated`
+   * — and the apply the preview was describing raises FS_ERROR on that exact
+   * path (the case above). A preview that promises a write the run refuses is
+   * the failure this whole pairing exists to prevent, and sync's plan already
+   * reported it as a `shared-name` collision for the same tree.
+   */
+  it("previews a hard-linked document as refused, where sync's plan reports the collision", async () => {
+    plannerOutputs.value = [mcpOutput()];
+    const root = await makeRepo();
+    const cred = await plantCredentials("preview-adc.json");
+    const target = join(root, ".mcp.json");
+    await link(cred, target);
+    const before = await lstat(target);
+    const original = await readFile(cred, "utf8");
+
+    const preview = await applyInit(migrateOptions(root, { dryRun: true }));
+
+    expect(preview.wrote[0]?.action).toBe("skipped");
+    expect(preview.wrote[0]?.warning).toContain("hard link");
+    // The remedy the operator can act on, not merely the diagnosis.
+    expect(preview.wrote[0]?.warning).toContain("--force does not help");
+    // Nothing the preview says leaks a byte of what the link points at.
+    expect(preview.wrote[0]?.warning).not.toContain(CANARY);
+    expect(preview.ledgerCount).toBe(0);
+
+    // Sync answers the same tree the same way, in its own vocabulary.
+    const [entry] = await planOutputEntries(root, [mcpOutput()], ENGINE_VERSION, undefined, [
+      "github",
+    ]);
+    expect(entry?.action).toBe("collision");
+    expect(entry?.collisionKind).toBe("shared-name");
+
+    // A preview reads; it does not publish the twin's bytes.
+    const after = await lstat(target);
+    expect(after.ino).toBe(before.ino);
+    expect(after.nlink).toBe(2);
+    await expect(readFile(target, "utf8")).resolves.toBe(original);
     expect(await readManifest(root)).toBeNull();
   });
 

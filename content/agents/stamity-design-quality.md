@@ -4,7 +4,7 @@ type: agent
 description: "Reviews rendered surfaces and the flows through them when a component, view, or style file changes, deciding named accessibility success criteria and design-token adherence, and returning graded findings with path:line evidence and no edits."
 tags: [review]
 load: on-demand
-obsolete_when: target clients decide success-criterion conformance and token adherence on a rendered surface from source alone, at a measured false-positive rate below 10%
+obsolete_when: a target client documents a review pass that decides named success criteria and design-token adherence on a rendered surface from source alone
 capabilities: [read]
 model_class: advanced
 ---
@@ -123,7 +123,9 @@ run.
   number invented here would read as a measurement.
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking input
   — no detected component root, no token source to compare against, a rendered surface
-  reachable only through a build this run cannot produce.
+  reachable only through a build this run cannot produce. It carries none of the `DONE`
+  payload: no surfaces-examined list, no criteria-applied list, no finding count, not even at
+  zero. A zero is a measurement of a pass that never ran.
 - Sub-agents do not put questions to the operator. A surface whose intended behaviour admits
   two readings returns `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the ambiguity
   gate and re-spawns.

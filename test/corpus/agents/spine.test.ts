@@ -498,6 +498,30 @@ describe("implementer — single unit, single writer", () => {
     expect(delta).toMatch(/out of contract/i);
   });
 
+  it("names the requirement id the delta lands under, with an honest no-ids fallback", async () => {
+    const delta = section(await load("agents/stamity-implementer.md"), "Spec delta").replace(
+      /\s+/g,
+      " ",
+    );
+
+    // The spec author states the mandate — "Ids are the join key every other artifact
+    // uses — a plan unit, a test name, a board item" — and `/st-plan` already emits its
+    // delta as requirement ids. The build seam named the spec file and its SECTION, so
+    // the join key went missing at the one place that produces code. The other two
+    // surfaces the mandate names now carry it as well: `/st-plan`'s unit table has a
+    // `requirements` field checked by its L4 lint row, and `/st-work`'s in-flow decompose
+    // names the ids, so a unit cannot reach this delta with nothing to cite. What still
+    // does not exist is a MECHANICAL check on the work path — `spec-requirement-coverage`
+    // is a verify criterion and `/st-work` does not invoke that skill — so the mandate is
+    // carried by prose at every seam and enforced by none.
+    expect(delta).toMatch(/requirement id/i);
+    expect(delta).toContain("REQ-<area>-<nnn>");
+    expect(delta).toMatch(/join key/i);
+    // A repo whose spec carries no ids is not blocked; it falls back and says which.
+    expect(delta).toMatch(/where the spec carries no ids/i);
+    expect(delta).toMatch(/name the section instead and say so/i);
+  });
+
   it("runs the repo's gate tokens locally without replacing the runner", async () => {
     const gates = section(await load("agents/stamity-implementer.md"), "Gates");
 
@@ -537,6 +561,28 @@ describe("reviewer — multi-lens verdict", () => {
       ).toBe(true);
     }
     expect(rubric.replace(/\s+/g, " ")).toMatch(/recorded as not applicable/i);
+  });
+
+  it("scopes itself to the diff by default and carves out the whole-branch deep pass", async () => {
+    const file = await load("agents/stamity-reviewer.md");
+    const rubric = section(file, "Rubric").replace(/\s+/g, " ");
+    const intro = file.parsed.body.split("\n## ")[0]?.replace(/\s+/g, " ") ?? "";
+
+    // The work flow escalates this role to the top model class for one review
+    // that reads a finished branch end to end. Nothing here admitted a
+    // branch-scoped input: the head said "no branch or board state", the
+    // rubric said "the diff", and the nit policy scopes re-review to the
+    // delta — so the flow's only justification for that rung contradicted the
+    // agent it escalates. The carve-out is pinned as a DEFAULT plus one named
+    // exception, not as a widened default.
+    expect(rubric).toMatch(/default scope is that diff/i);
+    expect(rubric).toMatch(/at deep intensity the flow invokes this role once more/i);
+    expect(rubric).toMatch(/whole branch against its merge base/i);
+    // A distinct invocation, so the delta-scoped re-review rule still holds.
+    expect(rubric).toMatch(/distinct pass rather than a re-review round/i);
+    // Read-only is unchanged; what the head forbids is MUTATION, which is what
+    // it always meant — a branch the reviewer reads is not a branch it writes.
+    expect(intro).toMatch(/reads only — no edits, no commands, no branch or board mutation/i);
   });
 
   it("loads verify axes on demand and embeds no runnable check", async () => {

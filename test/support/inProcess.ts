@@ -28,6 +28,14 @@ export async function runInProcess(
     env?: Record<string, string | undefined>;
     stdinLines?: readonly string[];
     tty?: { stdout?: boolean; stderr?: boolean; stdin?: boolean };
+    /**
+     * The stdout width, for the surfaces that gate on it (the wordmark refuses
+     * to print into a window narrower than itself). Omitted means "unknown",
+     * the shape `detectTerminalFacts` produces off a pipe — the fact is absent
+     * from the object rather than present and undefined, so a reader's
+     * `=== undefined` and its `in` check agree.
+     */
+    columns?: number;
   },
 ): Promise<InProcessResult> {
   const stdoutChunks: string[] = [];
@@ -59,6 +67,7 @@ export async function runInProcess(
     stdoutIsTTY: opts?.tty?.stdout === true,
     stderrIsTTY: opts?.tty?.stderr === true,
     stdinIsTTY: opts?.tty?.stdin === true,
+    ...(opts?.columns === undefined ? {} : { stdoutColumns: opts.columns }),
   };
 
   const code = await runCli(argv, commands, {

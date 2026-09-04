@@ -61,6 +61,7 @@ import {
   runMcpList,
   runMcpRemove,
 } from "./config/mcp.ts";
+import { runPolicy } from "./config/policy.ts";
 
 /**
  * `stamity config` — the reconfigure verb: read what binds, change one key,
@@ -75,6 +76,15 @@ import {
  *   config detect          re-run repo analysis + git identity and refresh
  *                          `detected` / `platform`, printing a before->after diff
  *   config mcp <action>    server management (see ./config/mcp.ts)
+ *   config policy <action> the org trust policy at `.stamity/policy.json`
+ *                          (see ./config/policy.ts)
+ *
+ * The two sub-surfaces are the same shape for the same reason: `mcp` selects
+ * which servers a repo resolves and `policy` decides which pack sources it
+ * accepts, and both are configuration rather than verbs of their own. `policy`
+ * is the one that does NOT write the manifest — its artifact is a separate
+ * checked-in file — which is why the closing line it shares with everything
+ * else here still holds: a policy edit changes what the next `sync` projects.
  *
  * Three properties hold across the whole surface.
  *
@@ -1058,13 +1068,39 @@ export const configCommand: CommandModule = {
     // change that edits this string.
     {
       name: "subcommand",
-      description: "list | get | set | detect | mcp — omit on a terminal for the interactive picker",
+      description:
+        "list | get | set | detect | mcp | policy — omit on a terminal for the interactive picker",
       required: false,
     },
-    { name: "key", description: "config key, or the mcp action (list | add | remove)", required: false },
-    { name: "value", description: "new value, or the MCP server id", required: false },
+    {
+      name: "key",
+      description:
+        "config key, the mcp action (list | add | remove), or the policy action (list | init | allow | deny | remove)",
+      required: false,
+    },
+    {
+      name: "value",
+      description: "new value, the MCP server id, or the policy pattern",
+      required: false,
+    },
   ],
-  run: async (ctx, _opts, args): Promise<CommandResult> => {
+
+  /**
+   * Commander registers flags per COMMAND, so `--force` is visible on every
+   * subcommand and read by exactly one — the `workspace` precedent, and its
+   * description says which, rather than leaving a reader of `--help` (and of
+   * the generated reference page, which copies this string verbatim) to find
+   * out by trying. Editing it is a docs change: regenerate
+   * `docs/cli-reference.md` in the same commit.
+   */
+  configure(cmd) {
+    cmd.option(
+      "--force",
+      "config policy init: replace an existing .stamity/policy.json — including a defective one, which is the way out of a fail-closed policy",
+    );
+  },
+
+  run: async (ctx, opts, args): Promise<CommandResult> => {
     const rootDir = ctx.app.runtime.cwd;
     const [subcommand, first, second] = args;
 
@@ -1079,6 +1115,7 @@ export const configCommand: CommandModule = {
         yes: ctx.yes,
         json: ctx.json,
         env: ctx.app.runtime.env,
+        palette: ctx.palette,
       });
       // B8, scoped to THIS branch only: `promptGate` reads stdin alone, so a
       // TTY stdin piped into a non-TTY stdout (`stamity config | less`, a
@@ -1104,12 +1141,14 @@ export const configCommand: CommandModule = {
         return runDetect(ctx, rootDir);
       case "mcp":
         return runMcp(ctx, rootDir, first, second);
+      case "policy":
+        return runPolicy(ctx, rootDir, first, second, opts["force"] === true);
       default:
         throw new CliFailure({
           code: "USAGE",
           message: `unknown config subcommand ${JSON.stringify(subcommand)}`,
-          why: "config takes one of five subcommands",
-          next: "use one of: list, get, set, detect, mcp",
+          why: "config takes one of six subcommands",
+          next: "use one of: list, get, set, detect, mcp, policy",
         });
     }
   },

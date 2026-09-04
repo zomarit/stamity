@@ -133,6 +133,10 @@ Automation is graded by what a wrong merge would cost.
 | T2 | Converge gap scan and delta merge at Prove | Auto-proposed, confirm-gated, append/merge-only. New sections and additions are shown as a diff; the operator confirms before any write. |
 | T3 | Requirement-text mutation — changing what a requirement says, or retiring one | Never silent. Each mutation is presented with its requirement id, before/after text, and the evidence that prompted it. |
 
+A T2 proposal is shown, not described. The operator reads the exact lines that would be added,
+verbatim, before confirming: a paraphrase of an addition is not the addition, and a confirmation
+given against a paraphrase confirms text nobody saw.
+
 A converged spec makes `sync` a **byte-stable no-op**: the scan finds no gap, no
 file is opened for writing, and the run reports `no changes`. Re-running `sync`
 against an unchanged tree yields an identical report. A run that rewrites a
@@ -190,6 +194,9 @@ per-file counts and names every criterion that is neither. A criterion whose
 test exists is confirmed through a `test-runner` spawn running the repo's test
 gate, `npm run test`, and returning its per-gate result; a
 criterion pointing at a test that does not exist is reported as a gap.
+
+The spawn is part of the census, not a step after it: the census dispatches `test-runner` in the
+turn it classifies, and does not hold the dispatch for the operator's go-ahead.
 
 **Inferred ADR:** when `create` or `extract` meets a decision baked into the
 code with no written record, it writes an ADR stub under `docs/adr/` carrying
@@ -255,6 +262,11 @@ Every run closes with:
 - Manifest delta: rows added, changed, retired — or `none`.
 - Open markers: every `[NEEDS CLARIFICATION]` in the touched files — or `none`.
 - Not done: each gap the run left open — or `none`.
+- Next step — derived from this run's own state, never a fixed menu: an open
+  `[NEEDS CLARIFICATION]` marker makes resolving it the step, since a marked
+  spec is not handed to `/st-work`; an unconfirmed T2 or T3 proposal makes that
+  confirmation the step; a census gap makes the criterion it named the step. A
+  run that closed with none of those says so in the same line.
 
 `create` against a repo that already holds a hand-authored spec asks before
 writing anything:

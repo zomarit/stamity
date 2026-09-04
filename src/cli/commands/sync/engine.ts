@@ -1,9 +1,8 @@
-import { createHash } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
 import { buildContentIndex, type ContentIndex } from "../../../content/catalog.ts";
-import { analyzeRepo, isGreenfield, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
+import { analyzeRepo, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
 import {
   assertLedgerContainment,
   computeReclaimCandidates,
@@ -14,11 +13,7 @@ import {
   type ReclaimCandidate,
 } from "../../../manifest/ledger.ts";
 import { manifestPath, readManifest, writeManifest } from "../../../manifest/manifest.ts";
-import {
-  materializeUserMcpJson,
-  planUserMcpJson,
-  predictMcpMergeRefusal,
-} from "../../../manifest/mcpFilter.ts";
+import { materializeUserMcpJson } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import {
   engineOwnedServerIds,
@@ -29,14 +24,13 @@ import { isSharedRegularFile } from "../../../merge/atomicWrite.ts";
 import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
 import { sweepReclaimCandidates, type ReclaimReport } from "../../../merge/reclaim.ts";
 import {
+  ledgerHashIndex,
   ledgerPathSet,
   predictMergeAction,
   predictPreservedContentRefusal,
   safeWriteFile,
   type MergeAction,
-  type SafeWriteFileOptions,
 } from "../../../merge/safeWrite.ts";
-import { discoverInstalledPacks, packMcpServers } from "../../../pack/projection.ts";
 import {
   outputOwners,
   type AdapterOutput,
@@ -50,6 +44,13 @@ import { EngineError } from "../../../types/errors.ts";
 import type { SetupManifest } from "../../../types/manifest.ts";
 import { ensureStateScaffold } from "../../../emit/stateScaffold.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
+import {
+  installedPackServers,
+  ledgerRowsForOutput,
+  outputWriteOptions,
+  predictMcpDocumentMerge,
+  readIfExists,
+} from "../../engine/emissionWrite.ts";
 import { readWorkingTreeStatus, type WorkingTreeStatus } from "../../engine/gitStatus.ts";
 import type { GitRunner } from "../../../workspace/git.ts";
 
@@ -179,20 +180,6 @@ const ACTION_OF: Record<MergeAction, SyncPlanEntry["action"]> = {
   skipped: "collision",
 };
 
-function sha256(content: string): string {
-  return createHash("sha256").update(content).digest("hex");
-}
-
-/** File content, or `null` when the file does not exist. Other errnos propagate. */
-async function readIfExists(filePath: string): Promise<string | null> {
-  try {
-    return await readFile(filePath, "utf-8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException | null)?.code !== "ENOENT") throw err;
-    return null;
-  }
-}
-
 /**
  * The manifest `version` as it sits on disk, read leniently — planSync calls
  * this only after `readManifest` succeeded, so parse failures cannot happen on
@@ -210,34 +197,6 @@ async function readOnDiskManifestVersion(rootDir: string): Promise<string | null
 }
 
 /**
- * Every MCP server this repo's installed packs supply, read through the seam
- * emission resolves ids from (`../config/mcp.ts` asks the identical question of
- * the identical pair, and asking it a second way here would be a second answer
- * waiting to disagree).
- *
- * BOTH lanes call this, off the same ledger, because ownership is what the
- * answer decides. `engineOwnedServerIds` proves authorship of an UNSELECTED
- * entry by re-rendering it, and it can only render an id it can resolve — so a
- * pack-supplied entry the engine itself wrote is judged an unowned USER row
- * without these rows, and `../../../manifest/mcpFilter.ts` then preserves it
- * verbatim. A deselected third-party server would never leave `.mcp.json`,
- * `.cursor/mcp.json` or `.vscode/mcp.json`, and would keep launching with the
- * credentials in `.env.mcp`. The PLAN lane asking the same question is the
- * other half: an empty answer there predicts `unchanged` for a document the
- * apply lane is about to rewrite, so `check` reports no drift across a
- * revocation that silently failed.
- *
- * Reads nothing when the ledger carries no pack rows (`../../../pack/projection.ts`),
- * so a repo with no packs installed pays for none of this.
- */
-async function installedPackServers(
-  rootDir: string,
-  manifest: SetupManifest,
-): Promise<PackSuppliedServer[]> {
-  return packMcpServers(await discoverInstalledPacks(rootDir, manifest), rootDir);
-}
-
-/**
  * v1 selection semantics: the full corpus, derived fresh each sync. The
  * manifest's selection field is refreshed from this — it is the future
  * narrowing hook, not yet a filter.
@@ -246,36 +205,6 @@ function fullCorpusSelection(index: ContentIndex): ContentSelection {
   const items: Record<ContentClass, string[]> = { agent: [], skill: [], rule: [], command: [] };
   for (const item of index.items) items[item.type].push(item.id);
   return { items };
-}
-
-/**
- * The safe-write options one output gets — single-sourced so the plan's
- * prediction and the apply's write can never diverge. An output whose content
- * carries a managed block takes the managed-merge lane; one without (plain
- * JSON and other comment-less formats) is a whole-file write.
- *
- * `boundaryDir` is the repo root — the same root every output path is joined
- * onto, so the writer's containment check answers the exact question this
- * caller can answer: sync emits into this tree and nowhere else. Without it the
- * substrate falls back to its structural rule, which cannot tell a monorepo's
- * in-repo alias (`.cursor/rules` → `shared/rules`) from a planted redirect and
- * refuses both.
- */
-function writeOptions(
-  managedBody: string | null,
-  engineVersion: string,
-  force: boolean,
-  rootDir: string,
-  ledgerPaths?: ReadonlySet<string>,
-): SafeWriteFileOptions {
-  const base: SafeWriteFileOptions = {
-    version: engineVersion,
-    force,
-    backup: true,
-    boundaryDir: rootDir,
-    ...(ledgerPaths === undefined ? {} : { ledgerPaths }),
-  };
-  return managedBody === null ? base : { ...base, managedContent: managedBody, appendIfNoBlock: true };
 }
 
 /**
@@ -301,7 +230,8 @@ function plannedRows(outputs: readonly AdapterOutput[]): EmittedArtifact[] {
  * predictor of its own to read the shape off: the whole-file lane, whose writer
  * refuses later, inside the backup. The managed lane previews
  * `predictPreservedContentRefusal` and the merged-MCP lane
- * `predictMcpMergeRefusal`, each single-sourced from the writer that throws it.
+ * `../../engine/emissionWrite.ts::predictMcpDocumentMerge` (which previews
+ * `predictMcpMergeRefusal`), each single-sourced from the writer that throws it.
  *
  * A path that vanished between this call and the write is not a shared name —
  * the apply lane will report whatever it then finds — and an absent path is not
@@ -379,40 +309,34 @@ export async function planOutputEntries(
     // managed and backup lanes refuse, and this lane reached
     // `materializeUserMcpJson` past both of their guards.
     if (MERGED_MCP_JSON_PATHS.has(output.path)) {
-      // Ahead of the read, not after it: `planUserMcpJson` reports a parse
-      // failure by quoting the parser's message, which carries a fragment of
-      // whatever it read — the same leak one step short of disk that
-      // `refusePreservedContent` orders its own checks to avoid. The predicate
-      // and the text both come from the writer that throws them, so this row
-      // cannot drift from the refusal it previews.
-      const linkedMcp = await predictMcpMergeRefusal(absPath);
-      if (linkedMcp !== null) {
+      // The prediction runs the real merge over the bytes, so an already-current
+      // document reports `unchanged` and the drift gate stays clean; the
+      // refusal check inside it runs ahead of the read, so no linked byte is
+      // read or quoted. Both are `../../engine/emissionWrite.ts`'s now rather
+      // than this lane's: `init`'s dry run has to preview these three paths the
+      // same way, and it predicted them from mere existence for as long as the
+      // mechanism lived here.
+      const predicted = await predictMcpDocumentMerge(
+        absPath,
+        output.path,
+        output.content,
+        mcpServers ?? [],
+        packServers ?? [],
+      );
+      if (predicted.refusal !== null) {
         return {
           ...base,
           action: "collision" as const,
           collisionKind: "shared-name" as const,
-          detail: linkedMcp,
+          detail: predicted.refusal,
         };
       }
-      // The prediction runs the real merge over the bytes, so an already-current
-      // document reports `unchanged` and the drift gate stays clean. Pack supply
-      // rides along for the same reason the apply lane carries it — see
-      // {@link installedPackServers}; predicting from a narrower ownership set
-      // than the write will use is how a removal gets performed but not
-      // previewed, which is the one disagreement this pair may not have.
-      const existingMcp = await readIfExists(absPath);
-      const predicted = planUserMcpJson(
-        absPath,
-        output.content,
-        engineOwnedServerIds(output.path, mcpServers ?? [], existingMcp, packServers ?? []),
-        existingMcp,
-      );
       return { ...base, action: ACTION_OF[predicted.result.action] };
     }
     const existing = await readIfExists(absPath);
     // The prediction is pure — `boundaryDir` is inert here — but it is built
     // from the same call so the plan and the apply cannot drift apart.
-    const action = predictMergeAction(existing, output.content, writeOptions(managedBody, engineVersion, false, rootDir, ledgerPaths), absPath);
+    const action = predictMergeAction(existing, output.content, outputWriteOptions(managedBody, engineVersion, false, rootDir, ledgerPaths), absPath);
     if (action === "skipped") {
       // The whole-file lane's own hard-link case, re-labelled rather than
       // discovered: this path was already a collision, and the only thing that
@@ -486,7 +410,6 @@ export async function planSync(
     manifest: planningManifest,
     engineVersion,
     facts: {
-      greenfield: isGreenfield(repoInfo),
       monorepoPackages: repoInfo.monorepoPackages,
     },
   });
@@ -733,7 +656,11 @@ export async function applySync(
 
   // Ownership as of BEFORE this run (the ledger apply is about to rebuild), so
   // the write lane judges each path the same way the plan above predicted it.
+  // The hash index comes off the SAME rows: ownership says the engine wrote the
+  // path, the recorded hash says whether the bytes there are still the ones it
+  // wrote, and only the pair licenses replacing a file with no `.bak`.
   const ownedPaths = ledgerPathSet(rootDir, plan.manifest.ledger.map((row) => row.path));
+  const ownedHashes = ledgerHashIndex(rootDir, plan.manifest.ledger);
 
   const wrote: MergeResult[] = [];
   const emitted: EmittedArtifact[] = [];
@@ -758,11 +685,12 @@ export async function applySync(
     // Writing the emitted document whole would delete all of it with no backup,
     // so these three paths merge by ownership instead (`manifest/mcpFilter.ts`).
     let result: MergeResult;
-    // The bytes this run actually put on disk for `output.path`. Identical to
-    // the emission for every whole-file write; on the merged MCP documents it
-    // is emission ∪ the operator's preserved content, and hashing the emission
-    // there would record a document that was never written (see below).
-    let written = output.content;
+    // The bytes this run actually put on disk for `output.path` WHERE THEY
+    // DIFFER from the emission — `null` for every whole-file write, and the
+    // merged document (emission ∪ the operator's preserved content) on the three
+    // MCP paths. It is the ledger's hash input below, and hashing the emission
+    // there would record a document that was never written.
+    let written: string | null = null;
     if (MERGED_MCP_JSON_PATHS.has(output.path)) {
       // The plan's `shared-name` collision is gated by `--force` above, and on
       // this lane force clears nothing real: the other two lanes survive a
@@ -789,34 +717,19 @@ export async function applySync(
       result = merged;
       if (writtenContent !== null) written = writtenContent;
     } else {
-      result = await safeWriteFile(absPath, output.content, writeOptions(managedBody, engineVersion, force, rootDir, ownedPaths));
+      result = await safeWriteFile(absPath, output.content, outputWriteOptions(managedBody, engineVersion, force, rootDir, ownedPaths, ownedHashes));
     }
     wrote.push({ ...result, path: output.path });
     // A skipped write left someone else's bytes in place — the engine did not
-    // write the path this run, so it must not claim ownership of it. A written
-    // co-owned output records one row PER owner (duplicate adapters collapsed
-    // by `outputOwners`), all carrying the same hash of the single write —
-    // the ledger's multi-owner rows keep a shared path alive until every
-    // owner stops emitting it (src/manifest/ledger.ts).
+    // write the path this run, so it must not claim ownership of it. That gate
+    // is here, in the loop that knows the disposition; everything the row itself
+    // says — the per-owner expansion, the hash-off-WRITTEN-bytes rule, the
+    // conditional version stamp — is
+    // `../../engine/emissionWrite.ts::ledgerRowsForOutput`, the one builder
+    // `init` records through as well, so the same emission yields the same
+    // ledger whichever verb produced it.
     if (result.action === "skipped") continue;
-    // Hashed off `written`, not off the emission. `contentHash` is consumed by
-    // one reader — the reclaim sweep (`../../../merge/reclaim.ts` gates 2b/4) —
-    // which re-hashes the file on disk to prove the engine wrote it and nobody
-    // edited it since. For the three merged MCP documents the bytes on disk are
-    // the merge's, so recording the emission's hash made the sweep read the
-    // engine's own document as "edited since": a deselected client doc could
-    // never be auto-reclaimed and stayed behind as user content forever.
-    const contentHash = sha256(written);
-    for (const owner of outputOwners(output)) {
-      emitted.push({
-        path: output.path,
-        adapter: owner.adapter,
-        artifactId: owner.artifactId,
-        artifactType: owner.artifactType,
-        contentHash,
-        ...(managedBody !== null ? { stampedVersion: engineVersion } : {}),
-      });
-    }
+    emitted.push(...ledgerRowsForOutput(output, written, managedBody, engineVersion));
   }
 
   // Rebuild the ledger over the full closed tool set: an active tool's rows

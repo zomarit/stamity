@@ -1,3 +1,9 @@
+---
+id: workspace-surface
+# A design document, authored outside the spec command and excluded from the site build.
+status: design
+obsolete_when: the workspace door ships and the CLI reference plus the workspace guide carry its behaviour, or a decision cuts the surface
+---
 # The workspace surface
 
 A multi-repo workspace engine ships whole and is reachable from nothing. This

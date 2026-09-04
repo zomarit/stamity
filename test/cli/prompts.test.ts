@@ -1,9 +1,11 @@
 import { PassThrough, Writable } from "node:stream";
+import { stripVTControlCharacters } from "node:util";
 import { describe, expect, it } from "vitest";
 import {
   closePrompts,
   confirm,
   promptGate,
+  sanitizeLabel,
   selectMany,
   selectOne,
   textInput,
@@ -11,6 +13,12 @@ import {
   type PromptIo,
 } from "../../src/cli/kit/prompts.ts";
 import { CliFailure } from "../../src/cli/kit/output.ts";
+import {
+  makePalette,
+  resolveAccentDepth,
+  resolveColorEnabled,
+  type Palette,
+} from "../../src/cli/kit/terminal.ts";
 import type { CommandModule } from "../../src/cli/kit/program.ts";
 import { runInProcess } from "../support/inProcess.ts";
 // The raw-TTY double, the terminal's own key bytes, and the shared
@@ -863,7 +871,7 @@ describe("the raw menu — label geometry and injection floor (F3/W1/W2/SW1)", (
   });
 
   // B3: the question line is `question + " " + MOVE_HINT/TOGGLE_HINT`, never
-  // width-clamped — MOVE_HINT alone is 51 columns, so a modest question at the
+  // width-clamped — MOVE_HINT alone is 52 columns, so a modest question at the
   // default 80-column width wraps onto a second physical line and desyncs
   // `rewind(height)`, which only walks back over the rows it thinks it drew.
   // Reproduced with a plain (non-hostile) question long enough to push the
@@ -1258,6 +1266,101 @@ describe("selectMany (typed fallback)", () => {
     expect(output()).not.toContain(bel);
     closePrompts(io);
   });
+
+  // The re-ask quotes the operator's own rejected tokens back at them, inside a
+  // colour run. Self-typed or not, an ESC in that text is a live escape
+  // sequence written mid-frame — the identical sink the labels above are
+  // guarded at, on the one string in this path that is not authored here.
+  it("does not echo an invalid token's ESC byte raw on the re-ask", async () => {
+    const { io, input, output } = makeTtyPromptIo({ rawMode: false });
+    const bel = String.fromCharCode(7);
+    const esc = String.fromCharCode(27);
+    // `.end()`, so the re-ask meets EOF and settles rather than hanging.
+    input.end(`${esc}]0;pwned${bel}\n`);
+    expect(
+      await selectMany(interactive, io, {
+        question: "Which tools?",
+        choices: TOOL_CHOICES,
+        defaultValues: ["a"],
+      }),
+    ).toEqual(["a"]);
+    expect(output()).toContain("not a valid choice: ");
+    expect(output()).not.toContain(`${esc}]0;`);
+    expect(output()).not.toContain(bel);
+    closePrompts(io);
+  });
+
+  // The other half of the same fix: sanitising must not restyle an ordinary
+  // token. These two lines are pinned verbatim elsewhere in this suite, and the
+  // point of choosing `sanitizeLabel` over `JSON.stringify` here was that they
+  // stay byte-identical.
+  it("still quotes an ordinary invalid token unadorned", async () => {
+    const { io, input, output } = makeTtyPromptIo({ rawMode: false });
+    input.end("x,9\n");
+    await selectMany(interactive, io, {
+      question: "Which tools?",
+      choices: TOOL_CHOICES,
+      defaultValues: ["a"],
+    });
+    expect(output()).toContain(
+      "not a valid choice: x, 9 — enter numbers 1-3 separated by commas",
+    );
+    closePrompts(io);
+  });
+});
+
+describe("sanitizeLabel — what a label may not smuggle onto a terminal", () => {
+  // C0/C1 and the whitespace collapse are the guard's original behaviour, and
+  // neither moved when the class was widened. Pinned here so a later edit to
+  // the character class cannot quietly drop them.
+  it("keeps its C0/C1 behaviour", () => {
+    const esc = String.fromCharCode(27);
+    const bel = String.fromCharCode(7);
+    const c1 = String.fromCharCode(0x9b);
+    expect(sanitizeLabel(`a${esc}]0;x${bel}b${c1}c`)).toBe("a]0;xbc");
+  });
+
+  it("collapses \\r, \\n and \\t to a single space each, rather than dropping them", () => {
+    expect(sanitizeLabel("a\r\nb\tc")).toBe("a  b c");
+  });
+
+  // Bidi OVERRIDES: RLO reverses the run that follows it, so the label reads
+  // one way on screen and is another string in the value being consented to.
+  it("drops bidi override controls (U+202A-U+202E)", () => {
+    const rlo = "\u202E";
+    const pdf = "\u202C";
+    expect(sanitizeLabel(`invoice${rlo}fdp.exe${pdf}`)).toBe("invoicefdp.exe");
+    for (const code of [0x202a, 0x202b, 0x202c, 0x202d, 0x202e]) {
+      expect(sanitizeLabel(`a${String.fromCharCode(code)}b`)).toBe("ab");
+    }
+  });
+
+  // Bidi ISOLATES: the newer spelling of the same reordering trick.
+  it("drops bidi isolate controls (U+2066-U+2069)", () => {
+    for (const code of [0x2066, 0x2067, 0x2068, 0x2069]) {
+      expect(sanitizeLabel(`a${String.fromCharCode(code)}b`)).toBe("ab");
+    }
+  });
+
+  // ZERO-WIDTH: no reordering, but two different values paint identically, so
+  // a row the operator reads as one string is another.
+  it("drops zero-width and invisible formatting characters", () => {
+    for (const code of [0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2060, 0xfeff]) {
+      expect(sanitizeLabel(`a${String.fromCharCode(code)}b`)).toBe("ab");
+    }
+    // The point of dropping rather than spacing: a zero-width character has no
+    // width of its own, so replacing it with a space would invent a difference
+    // the source did not carry.
+    expect(sanitizeLabel("core\u200Bpack")).toBe(sanitizeLabel("corepack"));
+  });
+
+  // The class is a strip list, not an allow list: ordinary text — including
+  // non-ASCII a manifest may legitimately carry — passes through untouched.
+  it("leaves ordinary text, including non-ASCII, alone", () => {
+    expect(sanitizeLabel("Claude Code — ~/Projects/app (näyttö, 日本語)")).toBe(
+      "Claude Code — ~/Projects/app (näyttö, 日本語)",
+    );
+  });
 });
 
 describe("the raw menu and the readline session", () => {
@@ -1513,5 +1616,197 @@ describe("C1-residual: a byte left behind by a menu does not silently answer the
     input.write("n\n");
     expect(await carried).toBe(false);
     closePrompts(io);
+  });
+});
+
+/**
+ * The palette exactly as `../../src/cli/kit/program.ts:264-275` builds one for
+ * a command: the colour decision first, then the accent depth resolved from
+ * the same env. Nothing here decides colour on its own — that is the point of
+ * the leg that uses it, which measures what the funnel hands the prompts.
+ *
+ * Module scope rather than inside the describe below, because a describe-scoped
+ * helper that captures nothing from that scope is an oxlint error here
+ * (`unicorn/consistent-function-scoping`).
+ */
+const funnelPalette = (env: Record<string, string | undefined>): Palette => {
+  const colorEnabled = resolveColorEnabled({ noColorFlag: false, env, stdoutIsTTY: true });
+  return makePalette(colorEnabled, resolveAccentDepth({ colorEnabled, env }));
+};
+
+/**
+ * The typed fallback driven through both bad answers, as the terminal saw it.
+ * `makePromptIo`'s input is a plain PassThrough, so `rawMenuIo` refuses on
+ * `input.isTTY !== true` and this is the typed path on every env.
+ */
+async function typedTranscript(env: Record<string, string | undefined>): Promise<string> {
+  const { io, input, output } = makePromptIo();
+  input.end("9\n9\n");
+  const gate: PromptGate = { interactive: true, env, palette: funnelPalette(env) };
+  const picked = await selectOne(gate, io, {
+    question: "Which tool?",
+    choices: TOOL_CHOICES,
+    defaultValue: "c",
+  });
+  expect(picked).toBe("c");
+  closePrompts(io);
+  return output();
+}
+
+describe("the design language on the menus: escapes are ADDED, never substituted", () => {
+  /**
+   * The UI accent at 24-bit depth (`#8A52FF`), and the mark's own violet
+   * (`#6B24FF`) which must never reach a menu: the wordmark's accent is
+   * decoration on a picture whose ink carries the shape, where a menu cursor is
+   * a state indicator and has a 3:1 floor to clear on a dark ground.
+   */
+  const UI_ACCENT = `${ESC}[38;2;138;82;255m`;
+  const MARK_VIOLET = `${ESC}[38;2;107;36;255m`;
+
+  const truecolor: Palette = makePalette(true, "truecolor");
+  /** The suite's own bare gate when no palette is named — the identity path. */
+  const paintedGate: PromptGate = { interactive: true, palette: truecolor };
+
+  const escapeCount = (transcript: string): number => transcript.split(ESC).length - 1;
+
+  /** One `selectOne` menu drawn once and accepted, as the terminal saw it. */
+  async function selectOneTranscript(palette?: Palette): Promise<string> {
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectOne(palette === undefined ? interactive : paintedGate, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "b",
+    });
+    await tick();
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("b");
+    return output();
+  }
+
+  /** The same for `selectMany`, opening with row 1 checked and under the cursor. */
+  async function selectManyTranscript(palette?: Palette): Promise<string> {
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectMany(palette === undefined ? interactive : paintedGate, io, {
+      question: "Which tools?",
+      choices: TOOL_CHOICES,
+      defaultValues: ["a"],
+    });
+    await tick();
+    await press(input, KEYS.enter);
+    expect(await pending).toEqual(["a"]);
+    return output();
+  }
+
+  it("renders the arrow menu identically once escapes are stripped, adding exactly two per painted token", async () => {
+    const plain = await selectOneTranscript();
+    const painted = await selectOneTranscript(truecolor);
+
+    // Same rendering, byte for byte, with every escape removed — including the
+    // renderer's own CURSOR_HIDE/CLEAR_LINE/CURSOR_SHOW, which is why this is
+    // strip-vs-strip rather than strip-vs-plain.
+    expect(stripVTControlCharacters(painted)).toBe(stripVTControlCharacters(plain));
+
+    // The identity path adds none of its own: CURSOR_HIDE + one CLEAR_LINE per
+    // drawn line (question, hint, three rows) + CURSOR_SHOW.
+    expect(escapeCount(plain)).toBe(1 + (2 + TOOL_CHOICES.length) + 1);
+    // Three painted tokens — question (bold), hint (dim), active marker
+    // (accent) — at one opening and one closing escape each. Labels, inactive
+    // markers and the settled frame add none.
+    expect(escapeCount(painted) - escapeCount(plain)).toBe(2 * 3);
+
+    expect(painted).toContain(UI_ACCENT);
+    expect(painted).not.toContain(MARK_VIOLET);
+  });
+
+  it("paints the checked box as its own run, so the checkbox menu adds exactly one token more", async () => {
+    const plain = await selectManyTranscript();
+    const painted = await selectManyTranscript(truecolor);
+
+    expect(stripVTControlCharacters(painted)).toBe(stripVTControlCharacters(plain));
+    expect(escapeCount(plain)).toBe(1 + (2 + TOOL_CHOICES.length) + 1);
+    // Question, hint, the active marker, and one checked box: the marker and
+    // the box are two independent runs, so the accented `[x]` is a fourth token
+    // rather than an extension of the third.
+    expect(escapeCount(painted) - escapeCount(plain)).toBe(2 * 4);
+    expect(painted).toContain(`${UI_ACCENT}>${ESC}[39m ${UI_ACCENT}[x]${ESC}[39m Claude Code`);
+    // The two unchecked boxes stay unpainted, so the accent appears twice in
+    // the frame and no more.
+    expect(painted.split(UI_ACCENT).length - 1).toBe(2);
+    expect(painted).not.toContain(MARK_VIOLET);
+  });
+
+  it("writes no escape at all on the typed path under the identity palette", async () => {
+    // The cleanest statement of the whole property: this path has no CSI of its
+    // own, so it covers the `Choose ...` line, the re-ask and both disclosure
+    // lines in one assertion.
+    const { io, input, output } = makePromptIo();
+    input.end("9\n9\n");
+    const picked = await selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "c",
+    });
+    expect(picked).toBe("c");
+    expect(output()).toContain("not a valid choice");
+    expect(output()).toContain("still not a valid choice — keeping the default (3)");
+    expect(output()).not.toContain(ESC);
+    closePrompts(io);
+  });
+
+  it("writes zero escape bytes on the typed path under TERM=dumb, re-ask included", async () => {
+    // A dumb terminal renders no SGR, so every escape the funnel's palette
+    // would add lands in the transcript as literal bytes. stdoutIsTTY is true
+    // in all three legs: TERM is the only input that differs.
+    const dumb = await typedTranscript({ TERM: "dumb" });
+    // Both painted lines of this path are in the transcript: the question
+    // (bold, `src/cli/kit/prompts.ts:330`) and the first re-ask (yellow,
+    // `:368`). The second disclosure is unpainted on every env.
+    expect(dumb).toContain("Which tool?");
+    expect(dumb).toContain("not a valid choice");
+    expect(dumb).toContain("still not a valid choice — keeping the default (3)");
+    expect(dumb).not.toContain(ESC);
+
+    // Byte-equal to the frame NO_COLOR produces on a colour-capable terminal:
+    // the same content, reached by the two routes that both mean "colour off".
+    expect(dumb).toBe(await typedTranscript({ TERM: "xterm-256color", NO_COLOR: "1" }));
+
+    // The control, so this measures the TERM read rather than a palette that
+    // never paints: drop `dumb` and the same frame comes back painted, with
+    // identical text underneath.
+    const painted = await typedTranscript({ TERM: "xterm-256color" });
+    expect(painted).toContain(`${ESC}[1mWhich tool?${ESC}[22m`);
+    expect(painted).toContain(`${ESC}[33mnot a valid choice`);
+    expect(stripVTControlCharacters(painted)).toBe(dumb);
+  });
+
+  it("clamps on plain text and paints afterwards, so a coloured row is no shorter than a plain one", async () => {
+    // `check.ts`'s rule, restated as a test: escape bytes counted toward the
+    // budget would clamp this label to fewer than 18 columns.
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true, columns: 20 });
+    const pending = selectOne(paintedGate, io, {
+      question: "Which tool?",
+      choices: [{ value: "x", label: "x".repeat(40) }],
+      defaultValue: "x",
+    });
+    await tick();
+    const stripped = stripVTControlCharacters(output());
+    expect(stripped).toContain(`> ${"x".repeat(18)}\n`);
+    expect(stripped).not.toContain("x".repeat(19));
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("x");
+  });
+
+  it("leaves the EOF disclosure in theme ink: a default the run applied is a decision record, not an aside", async () => {
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectOne(paintedGate, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "b",
+    });
+    await tick();
+    input.end();
+    expect(await pending).toBe("b");
+    // Unpainted on both sides, newlines included — no dim run, no accent.
+    expect(output()).toContain("\nno answer — keeping the default (Cursor)\n");
   });
 });

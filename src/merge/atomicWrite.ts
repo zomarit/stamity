@@ -171,6 +171,49 @@ function resolveLockStaleMs(): number {
 }
 
 /**
+ * Cadence for the mtime refresh a lock this process HOLDS re-stamps itself
+ * with, as a fraction of the staleness threshold and capped in absolute terms.
+ *
+ * Staleness is a race between one process's refresh timer and another
+ * process's clock, and the refresh loses that race by however much the holder
+ * is descheduled. proper-lockfile derives `update` from `stale / 2` when the
+ * caller says nothing, and it runs the refresh on an `unref()`d `setTimeout` —
+ * a timer with no claim on the event loop at all. A holder that spends the
+ * window awaiting child processes (`git worktree add`, a spawn fan-out, a
+ * loaded CI runner oversubscribed by its own suite) can therefore miss ONE
+ * refresh and immediately read as abandoned to a competitor, which steals the
+ * lock and runs the critical section the lock exists to serialise. Two
+ * concurrent same-name worktree setups is exactly that shape, and it is how
+ * this was found: both runners got past a check that is only correct while
+ * held.
+ *
+ * What the cadence really sets is how many CHANCES a busy holder gets to prove
+ * it is alive inside one staleness window. At the default threshold the
+ * derived value gives it two (7.5s, 15s); this gives it five (3s, 6s, 9s, 12s,
+ * 15s), for the cost of three extra `utimes` calls per window. The lock still
+ * only reads stale if the holder fails to stamp for the whole window — the
+ * difference is that an intermittently starved process now has four more
+ * moments in which a single scheduled slice is enough to save it. The absolute
+ * cap keeps the cadence bounded when an operator raises the threshold:
+ * refreshing every few seconds is the point, not refreshing proportionally to
+ * a large window.
+ *
+ * Deliberately NOT fixed by raising {@link LOCK_STALE_DEFAULT_MS}: that same
+ * number is how long a genuinely dead holder blocks every other writer, so
+ * widening it trades one failure for a slower one. The holder's own liveness
+ * signal is the half that was wrong.
+ *
+ * The library clamps the result into `[1000, stale / 2]`, so a small operator
+ * override lands on its 1000ms floor rather than on a value derived here.
+ */
+const LOCK_REFRESH_DIVISOR = 3;
+const LOCK_REFRESH_CAP_MS = 3_000;
+
+function resolveLockRefreshMs(staleMs: number): number {
+  return Math.min(Math.floor(staleMs / LOCK_REFRESH_DIVISOR), LOCK_REFRESH_CAP_MS);
+}
+
+/**
  * Who holds an in-process lock entry: an exported {@link acquireWriteLock}
  * caller keeping a multi-step critical section open (`"external"`), or one of
  * this module's own writers holding it for a single write (`"internal-write"`).
@@ -291,7 +334,9 @@ export function isCrossProcessLockingEnabled(): boolean {
  * `LOCK_TIMEOUT`). Cross-process contention exhausts the retry schedule
  * (~{@link LOCK_RETRY_TOTAL_BACKOFF_MS}ms) into `LOCK_TIMEOUT`; a lock
  * untouched for the staleness threshold (default 15s, STAMITY_LOCK_STALE_MS to
- * raise) is stolen as abandoned. A symlink standing at the lockfile name is
+ * raise) is stolen as abandoned, and a lock this process holds re-stamps
+ * itself on the cadence {@link resolveLockRefreshMs} sets so a busy holder is
+ * not mistaken for a dead one. A symlink standing at the lockfile name is
  * refused up front as `FS_ERROR` rather than mistaken for a held lock.
  */
 export async function acquireWriteLock(
@@ -356,10 +401,33 @@ async function acquireWriteLockImpl(
         { code: "FS_ERROR" },
       );
     }
+    const staleMs = resolveLockStaleMs();
     const release = await lock(filePath, {
       lockfilePath,
       realpath: false,
-      stale: resolveLockStaleMs(),
+      stale: staleMs,
+      // Stated, never derived. Left unset, the library refreshes at `stale / 2`
+      // on an unref'd timer, so ONE descheduled window makes a live holder look
+      // abandoned to a competitor — see {@link resolveLockRefreshMs} for why
+      // the holder's refresh, and not the staleness threshold, is the half that
+      // has to move.
+      update: resolveLockRefreshMs(staleMs),
+      // Stated for the same reason, from the other side: the library's default
+      // handler RETHROWS, and it is called from inside that unref'd refresh
+      // timer, so a compromised lock arrives as an uncaught exception on an
+      // empty stack — a process-killing crash with no relation to the caller's
+      // work, over an ADVISORY lock whose critical section has usually already
+      // finished. Report it on this module's existing diagnostic channel
+      // instead. Not rethrown, and not re-surfaced through the release closure:
+      // every caller releases in a `finally`, where a throw REPLACES the error
+      // already in flight and hides the failure the caller was reporting.
+      onCompromised: (err: Error) => {
+        console.error(
+          `The write lock on ${filePath} was compromised before it was released: ` +
+            `${describeError(err)}. Another process may have taken ${lockfilePath} as stale and ` +
+            `written concurrently — re-check the file, and re-run once no other process is active.`,
+        );
+      },
       retries: {
         retries: LOCK_RETRIES,
         minTimeout: LOCK_RETRY_MIN_MS,

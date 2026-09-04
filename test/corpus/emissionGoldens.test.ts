@@ -82,6 +82,141 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-04, the closure run's eval-repair wave. SUBSTITUTION moved on
+ *     `charter/stamity-charter.md` alone, 4513 -> 4655 bytes at an unchanged
+ *     91 lines: invariant 1 now says that a hand-off framed so the operator can
+ *     close without the floor is itself the relaxation, and names invariant 4's
+ *     `Not done:` report as the honest exit. The paragraph took the line that
+ *     invariant 3 freed by rewrapping from three lines to two, which is why the
+ *     line count holds. Of the +142, +140 is the content edit byte for byte and
+ *     +2 is this snapshot's own escaping of the two new backticks — the golden
+ *     diff is the content edit and nothing else, so substitution passed the new
+ *     prose through and left no token behind.
+ *
+ *     NOTHING else moved here. `commands/st-work.md` and
+ *     `agents/stamity-test-runner.md` — the other two substitution targets —
+ *     are byte-identical, and so are the catalog, the MDC companion heads, the
+ *     policy document and the three core hook scripts. The wave's second corpus
+ *     edit, `rules/stamity-security-patterns.md`'s floor item 9, reaches this
+ *     suite only through the MDC companion head, which is frontmatter and did
+ *     not move; its body lands in the sibling suite's three rule dialects and
+ *     in the codex appendix, itemised there.
+ *
+ *   - 2026-09-04, the closure run's Minor-findings fix pass. NOTHING moved in
+ *     this snapshot, and that is the reviewed result rather than a skipped
+ *     refresh. The pass changed two emitted surfaces — `commands/st-rework.md`
+ *     (the persistence guard's secret-scan step gains the clause that the
+ *     secrets floor still governs what the run itself writes, net-zero in lines
+ *     inside the guard) and the claude review-gate hook script (33820 -> 34294
+ *     bytes, the reviewer's under-lock content-fault report now carrying the
+ *     same recovery hint the unlocked path gives). This suite holds neither: it
+ *     carries no command bodies, and the review gate is claude adapter residue
+ *     goldened in the sibling suite. The three core hook scripts and every
+ *     charter body are byte-identical across the pass, which is the containment
+ *     claim rather than an absence of evidence; the sibling ledger itemises the
+ *     moved bytes.
+ *
+ *   - 2026-09-04, the closure run's review round 1 fix pass. NOTHING moved in
+ *     this snapshot, and that is the reviewed result rather than a skipped
+ *     refresh: the round's only emitted-surface change is the claude review-gate
+ *     hook script (32108 -> 33820 bytes, the counter's stat now distinguishing a
+ *     sharing hold from an absent file), which is a generated script and not a
+ *     corpus body, so it appears in the sibling suite alone. Its ledger row
+ *     there carries the reasoning; this entry exists so a reader comparing the
+ *     two ledgers sees the refresh was run against both.
+ *
+ *   - 2026-09-04, the closure run's execution wave. SUBSTITUTION moved on
+ *     `charter/stamity-charter.md` alone, 4443 -> 4513 bytes at an unchanged
+ *     91 lines: invariant 7 now says that handing the operator a line, diff,
+ *     or file body to paste is the same protocol violation as an orchestrator
+ *     editing product files inline, and the paragraph rewrapped inside its own
+ *     four lines. The golden diff is that content edit byte for byte, so
+ *     substitution passed the new prose through and left no token behind.
+ *
+ *     NOTHING else moved here. `commands/st-work.md` and
+ *     `agents/stamity-test-runner.md` — the other two substitution targets —
+ *     are byte-identical, and so are the catalog, the MDC companion heads, the
+ *     policy document and the three core hook scripts. The wave also edited
+ *     six corpus bodies this suite does not hold (`st-ask`, `st-plan`,
+ *     `st-rework`, `st-spec`, `agents/stamity-design-quality.md` and
+ *     `agents/stamity-performance.md`) and rewrote the lock handling in
+ *     `stamity-review-gate.mjs`, which is claude adapter residue goldened in
+ *     the sibling suite; the three core scripts staying byte-identical across
+ *     that rewrite is the containment claim, not an absence of evidence. The
+ *     moved bytes for all of it are itemised in the sibling ledger.
+ *
+ *   - 2026-09-04, the recommended-next-step close-out — Package 8, carried from
+ *     the last package's register sweep by name. NOTHING moved here, and the
+ *     row exists so the two ledgers stay in step. The wave changed six corpus
+ *     command bodies — `st-ask`, `st-debug`, `st-quick`, `st-spec`, `st-rework`
+ *     and `st-pr-resolve` — each gaining one closing paragraph that names a
+ *     recommended next step derived from the run's own state, which makes all
+ *     nine touchpoints carry the line. This suite holds none of the six bodies:
+ *     its substitution golden is `commands/st-work.md` and its MDC companion
+ *     heads are rules, so no golden here has a byte to move. The moved bytes
+ *     are itemised in the sibling ledger.
+ *
+ *   - 2026-09-02, the identity casing fix. HOOK SCRIPTS moved, and only on the
+ *     three operator-facing lines that speak the product name: the session-start
+ *     "no learnings and no resumable handoffs" line and the config-tamper
+ *     notice's two, each of which opened `Stamity:` and now opens `stamity:`.
+ *     The name is written lowercase wherever it is spoken, sentence-initial
+ *     included, and these were the last three places in `src/hooks/scripts.ts`
+ *     that capitalised it. Twelve lines across the four clients — the same three
+ *     strings, goldened once per client — and nothing else in either script
+ *     body moved.
+ *
+ *   - 2026-09-02, the closure run's content wave plus the codex floor ranking.
+ *     SUBSTITUTION moved on `commands/st-work.md` again — the review-loop
+ *     paragraph now says the gate rides both client events fail-closed and
+ *     spends its one blocking status on the completion event, and the QA
+ *     checkpoint says the qa skill is invoked BY NAME because the step belongs
+ *     to the command already running rather than to a trigger match. MDC
+ *     COMPANION heads moved for two rules: `injection-screening` (its
+ *     description now covers run-time ingress that never lands in the state
+ *     directory) and `learnings-schema` (the authoring contract folded into the
+ *     writer that enforces it, leaving the curation posture the description now
+ *     states). Nothing else in either set moved.
+ *
+ *     The same wave moved eight more corpus artifacts and changed WHICH rules
+ *     the codex appendix delivers — `api-versioning` is dropped whole so the
+ *     larger `floor:security` screening rule can hold its rank — none of which
+ *     this suite holds. Recorded so the two ledgers stay in step; the moved
+ *     bytes are itemised in the sibling ledger.
+ *
+ *   - 2026-09-02, the closure run's close-out. SUBSTITUTION moved on
+ *     `commands/st-work.md` again: the run-exit invariant gained the sentence
+ *     that it binds at exit and that a run holding a live question has not
+ *     exited — asking is not a pending finding — and the severity floor gained
+ *     the half it was missing, naming who closes a Minor row that never reaches
+ *     the QA checkpoint. Both were found by the eval set: a scenario refused to
+ *     close a run with an open finding and asked instead, which the judge scored
+ *     a failure and which turned out to be two shipped texts contradicting each
+ *     other rather than a model error. `commands/st-plan.md` also moved (unit
+ *     `requirements` field, L4 lint row) but carries no golden body here.
+ *
+ *   - 2026-09-01, the closure run. Two refreshes, recorded together because
+ *     they landed in one arc and only one of them reached this suite:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` alone, from the content
+ *     batch. Three edits: the light intensity row stopped claiming it skips
+ *     "specialist passes" wholesale and now names the two lenses it drops and
+ *     the security lens it keeps on a trigger-path match — the charter's
+ *     universal floor holds at every tier, so a tier that shed the security
+ *     lens outright made that floor false; the deep row and the frontier
+ *     ladder cell stopped citing "Prove-final", a stage name defined nowhere
+ *     in the tree, and now place the whole-branch pass where it runs, once the
+ *     review loop converges and before the QA checkpoint; and the
+ *     dependency-audit note stopped restating the dep-audit skill's own fields
+ *     and points at the skill that owns them. Nothing else in the substitution
+ *     set moved.
+ *
+ *     NOTHING moved from the timing-margin pass in the same arc, recorded so
+ *     the two ledgers stay in step: the script that changed is
+ *     `stamity-review-gate.mjs`, claude adapter residue this suite does not
+ *     hold, and its three core scripts are byte-identical across that refresh.
+ *     The moved bytes are itemised in the sibling ledger.
+ *
  *   - 2026-08-26, the review-gate lock rewrite (windows leg, round 2). NOTHING
  *     moved here, recorded so the two ledgers stay in step: the script that
  *     changed is `stamity-review-gate.mjs`, claude adapter residue this suite

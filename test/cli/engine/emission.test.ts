@@ -93,13 +93,20 @@ function composedContextOf(tools: Tool[]): EmissionContext {
       now: FIXED_NOW,
     }),
     engineVersion: "0.0.0-test",
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
   };
 }
 
 /**
- * One context per shape the CLI can hand a planner: greenfield, each import
- * decision taken, monorepo.
+ * One context per shape the CLI can hand a planner: no import decision, each
+ * import decision taken, monorepo.
+ *
+ * TEST CHANGE, justified: these four also carried a `facts.greenfield`
+ * flag, and it is gone from `EmissionFacts`. It is the same defect the note
+ * below describes, one field over — both command paths computed it, the planner
+ * forwarded only `monorepoPackages`, and no emitter ever branched on it. The
+ * four shapes are unchanged in kind: what separated them was the import
+ * decision and the package list, never the flag, so no assertion moves.
  *
  * TEST CHANGE, justified: the import choice used to ride `facts.importChoice`,
  * a per-run field no caller ever set and no emitter ever read. It now lives on
@@ -109,10 +116,10 @@ function composedContextOf(tools: Tool[]): EmissionContext {
  * stronger in fact: these contexts now reach code that acts on the field.
  */
 const CONTEXTS: EmissionContext[] = [
-  contextOf({ greenfield: true, monorepoPackages: [] }),
-  contextOf({ greenfield: false, monorepoPackages: [] }, [{ path: "AGENTS.md", mode: "supplement" }]),
-  contextOf({ greenfield: false, monorepoPackages: PACKAGES }, [{ path: "AGENTS.md", mode: "replace" }]),
-  contextOf({ greenfield: false, monorepoPackages: PACKAGES }, [{ path: "AGENTS.md", mode: "skip" }]),
+  contextOf({ monorepoPackages: [] }),
+  contextOf({ monorepoPackages: [] }, [{ path: "AGENTS.md", mode: "supplement" }]),
+  contextOf({ monorepoPackages: PACKAGES }, [{ path: "AGENTS.md", mode: "replace" }]),
+  contextOf({ monorepoPackages: PACKAGES }, [{ path: "AGENTS.md", mode: "skip" }]),
 ];
 
 describe("noopEmissionPlanner", () => {
@@ -135,7 +142,7 @@ describe("noopEmissionPlanner", () => {
   });
 
   it("resolves a fresh array per call, so a caller mutating its plan cannot bleed into the next run", async () => {
-    const ctx = contextOf({ greenfield: true, monorepoPackages: [] });
+    const ctx = contextOf({ monorepoPackages: [] });
     const first = await noopEmissionPlanner.plan(ctx);
     const second = await noopEmissionPlanner.plan(ctx);
     expect(first).not.toBe(second);
@@ -151,7 +158,7 @@ describe("noopEmissionPlanner", () => {
   });
 
   it("answers the findings view too, with both halves fresh per call", async () => {
-    const ctx = contextOf({ greenfield: true, monorepoPackages: [] });
+    const ctx = contextOf({ monorepoPackages: [] });
 
     const first = await noopEmissionPlanner.planWithWarnings(ctx);
     expect(first).toEqual({ outputs: [], warnings: [] });
@@ -436,7 +443,7 @@ describe("override content layer", () => {
         now: FIXED_NOW,
       }),
       engineVersion: "0.0.0-test",
-      facts: { greenfield: true, monorepoPackages: [] },
+      facts: { monorepoPackages: [] },
     };
   }
 
@@ -1054,7 +1061,7 @@ describe("overlay content layer", () => {
         now: FIXED_NOW,
       }),
       engineVersion: "0.0.0-test",
-      facts: { greenfield: true, monorepoPackages: [] },
+      facts: { monorepoPackages: [] },
     };
   }
 
@@ -1142,7 +1149,7 @@ describe("overlay content layer", () => {
         now: FIXED_NOW,
       }),
       engineVersion: "0.0.0-test",
-      facts: { greenfield: true, monorepoPackages: [] },
+      facts: { monorepoPackages: [] },
     };
   }
 

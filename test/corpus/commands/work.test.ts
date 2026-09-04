@@ -187,6 +187,19 @@ function restatedCensusCounts(text: string, noun: "reader" | "writer"): string[]
   return [...collapse(text).matchAll(pattern)].map((match) => match[0]);
 }
 
+/**
+ * One row of the `### Intensity` table, whole, by its tier name.
+ *
+ * Row-scoped rather than section-scoped on purpose: the three tiers describe
+ * one mechanism from three sides, so an assertion about light has to fail when
+ * light's own cell drifts, not merely when the word appears anywhere in Dials.
+ */
+function intensityRow(dials: string, tier: string): string {
+  const found = dials.split("\n").find((line) => line.startsWith(`| ${tier} `));
+  if (found === undefined) throw new Error(`${tier} row missing from the intensity table`);
+  return found;
+}
+
 /** Every role the ladder places, deduped — the token universe a ladder cell is read for. */
 const LADDER_ROLES = [...new Set(MODEL_LADDER.flatMap((row) => [...row.roles]))];
 
@@ -451,6 +464,19 @@ describe("/st-work — Frame and Plan", () => {
     expect(plan).toContain("light: auto-continue");
     expect(plan).toContain("execute-now");
   });
+
+  it("carries the requirement id onto each decomposed unit, matching the plan artifact's field", async () => {
+    const plan = collapse(section(await body(), "## Phase 2 — Plan"));
+
+    // `/st-plan` pins a `requirements` field per unit and lints it; this phase
+    // decomposes in-flow, so without the same clause an in-flow unit would
+    // reach the implementer with no id — and the implementer's spec delta is
+    // required to name one. The fallback matches, so a spec-less repository
+    // records the absence instead of stalling the build flow.
+    expect(plan).toContain("names the spec requirement ids it implements");
+    expect(plan).toContain("records that the spec carries none");
+    expect(plan).toContain("the join key the plan unit, the implementer's delta and the test name share");
+  });
 });
 
 describe("/st-work — contract census", () => {
@@ -634,6 +660,24 @@ describe("/st-work — Prove", () => {
     expect(pass).toContain("blocks only on a breached budget");
   });
 
+  it("runs the security lens at light intensity, so the universal floor holds at every tier", async () => {
+    const pass = collapse(section(await body(), "### Specialist pass"));
+
+    // This sentence is where the per-tier mechanism is declared; the Dials rows
+    // restate it. It used to read "light runs none", which made the charter's
+    // universal floor — security never relaxes, at no tier — false for any
+    // light-intensity change landing on an auth, crypto, trust-boundary, or
+    // dependency path. A trigger-path match is the narrowest shape that keeps
+    // the floor true: light gains no lens it did not need, and loses none the
+    // floor requires. Pinned per tier, plus the retired claim asserted absent.
+    expect(pass).toContain("Deep runs the full pass");
+    expect(pass).toContain("standard and light run the `security` lens on a trigger-path match");
+    expect(pass).toContain("light runs no other lens");
+    expect(pass).not.toContain("light runs none");
+    // The reason travels with the rule, so a later trim reads it as load-bearing.
+    expect(pass).toContain("universal floor holds at every tier");
+  });
+
   it("names the persisted home of the proof block and its ledger", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
     // The resumability pillar had no stated location, so the two
@@ -703,9 +747,13 @@ describe("/st-work — Prove", () => {
   it("closes with a next step derived from the run's own state", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
 
-    // Every closing contract was surveyed and none carried one, so the
-    // forward pointer into the next touchpoint dangled. Derivation is the
-    // point — a fixed suggestion would satisfy the words and not the finding.
+    // The finding that opened this: every closing contract was surveyed and
+    // none carried one, so the forward pointer into the next touchpoint
+    // dangled. That is history now — all nine touchpoints carry the line, this
+    // one plus `st-board` and `st-plan`, then `st-ask`, `st-debug`, `st-quick`,
+    // `st-spec`, `st-rework` and `st-pr-resolve`, each asserted by its own
+    // suite. Derivation is the point — a fixed suggestion would satisfy the
+    // words and not the finding.
     expect(proof).toContain("recommended next step");
     expect(proof).toContain("derived from this run's own state");
     expect(proof).toContain("never a generic suggestion");
@@ -781,12 +829,13 @@ describe("/st-work — dispatch contract", () => {
 
 describe("/st-work — dials", () => {
   it("states what light intensity skips, not only what deep adds", async () => {
-    const dials = section(await body(), "## Dials");
-    const lightRow = dials.split("\n").find((line) => line.startsWith("| light"));
-    if (lightRow === undefined) throw new Error("light row missing from the intensity table");
+    const lightRow = intensityRow(section(await body(), "## Dials"), "light");
     expect(lightRow).toContain("Skips:");
     expect(lightRow).toContain("auto-continues");
-    expect(lightRow).toContain("specialist");
+    // Named lenses, not a wholesale "specialist passes": the row has to say
+    // WHICH lenses light drops, because the one it does not drop is the
+    // security lens the charter's universal floor holds at every tier.
+    expect(lightRow).toContain("`design-quality` and `performance` specialist lenses");
     // Pruning is bounded: the row also names what light keeps.
     expect(lightRow).toContain("Keeps:");
   });
@@ -807,18 +856,52 @@ describe("/st-work — dials", () => {
 
   it("keeps the three intensity rows consistent about the specialist pass", async () => {
     const dials = section(await body(), "## Dials");
-    const rowFor = (tier: string): string => {
-      const found = dials.split("\n").find((line) => line.startsWith(`| ${tier}`));
-      if (found === undefined) throw new Error(`${tier} row missing from the intensity table`);
-      return found;
-    };
-    // The tier the pass is defined by, the tier that runs it on a match, and
-    // the tier that runs none. Three rows, one mechanism — a row that drifts
-    // promises a lens the flow does not spawn, or hides one it does.
-    expect(rowFor("deep")).toContain("the full specialist pass");
-    expect(rowFor("standard")).toContain("specialist lens on a trigger match");
-    expect(rowFor("light")).toContain("specialist passes");
-    expect(rowFor("light")).toContain("Skips:");
+    // The tier the pass is defined by, the tier that runs a lens on a match,
+    // and the tier that runs the security lens and nothing else. Three rows,
+    // one mechanism — a row that drifts promises a lens the flow does not
+    // spawn, or hides one it does.
+    //
+    // Light used to skip "specialist passes" wholesale. That voided the
+    // charter's universal security floor at one tier, silently, on exactly the
+    // surfaces the security specialist exists for. The row is now pinned in
+    // both halves: the two lenses it drops by name, and the security lens it
+    // keeps on a trigger-path match. The wholesale phrase is asserted absent so
+    // a re-broadening reads as a failure rather than a reword.
+    expect(intensityRow(dials, "deep")).toContain("the full specialist pass");
+    expect(intensityRow(dials, "standard")).toContain("specialist lens on a trigger match");
+    expect(intensityRow(dials, "light")).toContain("Skips:");
+    expect(intensityRow(dials, "light")).toContain(
+      "`design-quality` and `performance` specialist lenses",
+    );
+    expect(intensityRow(dials, "light")).not.toContain("specialist passes");
+    expect(intensityRow(dials, "light")).toContain(
+      "`security` specialist lens on a trigger-path match",
+    );
+  });
+
+  it("places the whole-branch deep review inside Phase 4's own sub-section order", async () => {
+    const raw = await body();
+    const dials = section(raw, "## Dials");
+
+    // "Prove-final" named a stage this file never defines: Phase 4 ships
+    // Gates, Review loop, Specialist pass, QA checkpoint, Proof block and Side
+    // effects, and nothing called Prove-final. Two rows pointed at it — the
+    // deep intensity row and the ladder's frontier rung — so the one placement
+    // justifying the top model class resolved against nothing a reader could
+    // find. The anchor is now stated in terms of sub-sections that exist, and
+    // the dead term is asserted absent so it cannot come back as a reword.
+    expect(raw).not.toContain("Prove-final");
+
+    const anchor = "once the review loop converges and before the QA checkpoint";
+    expect(intensityRow(dials, "deep")).toContain(anchor);
+    expect(intensityRow(dials, "deep")).toContain("whole-branch multi-lens review");
+    const frontierRow = ladderRoleCells(dials).get("frontier") ?? "";
+    expect(frontierRow).toContain("whole-branch deep review");
+    expect(frontierRow).toContain(anchor);
+    // The anchor names real sub-sections, in the order Phase 4 declares them.
+    const prove = section(raw, "## Phase 4 — Prove");
+    expect(prove.indexOf("### Review loop")).toBeGreaterThanOrEqual(0);
+    expect(prove.indexOf("### QA checkpoint")).toBeGreaterThan(prove.indexOf("### Review loop"));
   });
 
   it("binds the ladder table's role column to MODEL_LADDER", async () => {

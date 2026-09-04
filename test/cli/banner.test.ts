@@ -48,13 +48,13 @@ function fixtureCommand(name: string): CommandModule {
 describe("wordmark — the plain rendering", () => {
   it("draws stamity in block characters, and nothing else", () => {
     expect(renderWordmark()).toMatchInlineSnapshot(`
-      "        ██                      ██  ██
-      ▄▄▄▄▄▄ ▄██▄▄ ▄▄▄▄▄▄▄ ▄▄▄▄▄▄▄▄▄▄ ▄▄ ▄██▄▄ ▄▄  ▄▄
-      ██▀▀▀▀ ▀██▀▀ ██▀▀▀██ ██▀▀██▀▀██ ██ ▀██▀▀ ██  ██
-      ██████  ██   ██   ██ ██  ██  ██ ██  ██   ██  ██
-      ▄▄▄▄██  ██▄▄ ██▄▄▄██ ██  ██  ██ ██  ██▄▄ ██▄▄██
-      ▀▀▀▀▀▀  ▀▀▀▀ ▀▀▀▀▀▀▀ ▀▀  ▀▀  ▀▀ ▀▀  ▀▀▀▀ ▀▀▀▀██
-                                                 ▄▄██"
+      "           ███                             ███  ███
+        ▄▄▄▄▄▄▄ ▄███▄▄   ▄▄▄▄▄▄▄▄▄   ▄▄▄▄ ▄▄▄▄   ▄▄▄ ▄███▄▄ ▄▄▄  ▄▄▄
+      ▄██▀▀▀▀▀▀ ▀███▀▀ ▄███▀▀█████ ▄██▀█████▀██▄ ███ ▀███▀▀ ███  ███
+      █████████  ███   ███    ████ ███  ███  ███ ███  ███   ███  ███
+      ▄▄▄▄▄▄██▀  ███▄▄ ▀███▄▄█████ ███  ███  ███ ███  ███▄▄ ▀███████
+      ▀▀▀▀▀▀▀     ▀▀▀▀   ▀▀▀▀▀▀▀▀▀ ▀▀▀  ▀▀▀  ▀▀▀ ▀▀▀   ▀▀▀▀   ▀█████
+                                                               ███▀"
     `);
   });
 
@@ -130,8 +130,19 @@ describe("wordmark — the single accent", () => {
     // instead of leaning on the renderer's accent-wins fallback — which is what
     // keeps "no cell mixes two inks" literally true of the grid.
     //
-    // Five cells per text row, the crossbar's width: arm, stem, stem, arm, arm.
-    expect(colored).toEqual(["▄██▄▄", "▀██▀▀"]);
+    // Six cells per text row, the crossbar's width: arm, stem, stem, stem, arm,
+    // arm.
+    //
+    // TEST CHANGE, justified: the expected run grew from five cells to six
+    // because the mark was re-derived at 62 columns, where the `t`'s 23.2-unit
+    // stem is THREE columns rather than two. What is coloured did not move: it
+    // is the same single continuous violet path (x 75.96 -> 122.96,
+    // `website/static/img/wordmark.svg:11`), left arm through stem crossing to
+    // right arm. Only the stem's column count changed, so arm/stem/stem/arm/arm
+    // became arm/stem/stem/stem/arm/arm. The assertion is not weakened — it is
+    // still an exact equality on the full set of coloured runs, so a second
+    // coloured run or a cell mixing accent with ink still fails it.
+    expect(colored).toEqual(["▄███▄▄", "▀███▀▀"]);
   });
 });
 
@@ -191,6 +202,47 @@ describe("bannerBlock — who gets the mark", () => {
 
   it("spends the 24-bit violet when the terminal advertises it", () => {
     expect(bannerBlock({ ...tty, env: { COLORTERM: "truecolor" } })).toContain(VIOLET.truecolor);
+  });
+
+  it("stays out of a window too narrow for the mark, rather than wrapping it", () => {
+    // The mark is a fixed-width picture: a window narrower than the art plus
+    // its indent does not shrink it, it wraps every row into a scramble of half
+    // blocks. Same stay-out rule as the pipe and the --json run. The art
+    // (BANNER_COLUMNS, 62) plus the default indent (2) is 64, and the guard
+    // demands one column MORE than that, so 64 gets nothing and 65 draws.
+    //
+    // TEST CHANGE, justified: the boundary moved from 63/64 to 64/65 because
+    // the guard now requires a column of slack. Four rendered rows are exactly
+    // 64 characters with the indent, and a line that exactly fills the window
+    // is where terminals disagree: an xterm-family terminal defers the wrap
+    // (DECAWM pending wrap), so the mark drew correctly there and the old
+    // boundary was fine; conhost and some other Windows hosts wrap eagerly, so
+    // the newline after the 64th character consumed a second row and those
+    // four rows came out with blank lines between them. The assertion is not
+    // weakened — the same two legs are pinned, one column over — and the
+    // absent-columns leg below is unchanged.
+    expect(bannerBlock({ ...tty, env: {}, columns: 64 })).toBe("");
+    const fits = bannerBlock({ ...tty, env: {}, columns: 65 });
+    expect(stripVTControlCharacters(fits).trimEnd()).toBe(renderWordmark({ indent: "  " }));
+    // Absent means the caller does not know the width; the mark prints, which
+    // is what every call site did before the fact existed.
+    const unknown = bannerBlock({ ...tty, env: {} });
+    expect(stripVTControlCharacters(unknown).trimEnd()).toBe(renderWordmark({ indent: "  " }));
+    // The boundary is derived, not typed: if the mark ever changes width, this
+    // is the arithmetic the guard uses — the mark's own width plus the indent,
+    // and the guard admits only a window WIDER than that sum.
+    expect(BANNER_COLUMNS + "  ".length).toBe(64);
+  });
+
+  it("never renders a row that exactly fills the narrowest window it admits", () => {
+    // The invariant behind the slack, pinned on the art rather than on the
+    // guard: at the narrowest admitted window (65), every physical row is at
+    // least one column short of the terminal's width, so no host — deferred
+    // wrap or eager — can turn the newline after a row into a blank line.
+    const rows = renderWordmark({ indent: "  " }).split("\n");
+    const widest = Math.max(...rows.map((row) => row.length));
+    expect(widest).toBe(BANNER_COLUMNS + "  ".length);
+    expect(widest).toBeLessThan(65);
   });
 });
 

@@ -155,7 +155,7 @@ export const CURATED_PACKS: readonly CatalogEntry[] = validateCatalogFormat(
     ),
     firstParty(
       "product-audit",
-      "Point-in-time whole-product assessment — opens board epics or reports; assesses, never modifies.",
+      "Point-in-time whole-product assessment — proposes an epic set and writes a report; assesses, never modifies.",
     ),
     firstParty(
       "scaffold",

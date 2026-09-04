@@ -13,11 +13,12 @@ import repoLinks from './src/remark/repoLinks';
  * plugin reads the repository's `docs/` directory directly, so a page edited (or regenerated) in
  * the tree is the page the site serves, and `git diff` is the only place a docs change appears.
  *
- * The site is NOT deployed by merging. `stamity.dev` is not claimed and GitHub Pages is not
- * enabled on the repository; `.github/workflows/docs-site.yml` builds on every pull request and
- * push, and only a deliberate, armed `workflow_dispatch` can deploy. Until that is armed, `url`
- * below is a declaration of intent that only affects canonical/sitemap metadata in the build
- * output.
+ * The site is NOT deployed by merging. `stamity.dev` is claimed and serves this site, and
+ * `.github/workflows/docs-site.yml` builds on every pull request and push and stops there;
+ * publishing takes an armed run — a `workflow_dispatch` that sets `deploy` to true, or a Release
+ * run that succeeded on a real `v*` tag push. So `url` below is the address readers are already
+ * served at, not a declaration of intent: the canonical and sitemap metadata it feeds point at a
+ * live site, and moving it moves where every published page claims to live.
  */
 /**
  * This directory, resolved without assuming the working directory.
@@ -43,10 +44,14 @@ const config: Config = {
   // structural rather than a choice, and the thing to know is which direction it flows: a mark is
   // re-cut outside and copied here, never edited here. README's banner reads the two wordmarks
   // from this directory too, by repo-relative path. `static/` is served from the site root, so
-  // every reference below is `/img/<file>`.
+  // every reference below is `/img/<file>`. That rule governs the product's MARKS and only those:
+  // a page-owned decorative glyph — the two Primer octicons `src/pages/index.tsx` inlines — is
+  // not one, so it lives as path data in the page that draws it, attributed beside that path, and
+  // is never the product's mark wearing another licence.
   favicon: 'img/favicon.svg',
 
-  // The deploy target. Not claimed yet — see the header note and the workflow's arming condition.
+  // The deploy target, claimed and serving. `website/static/CNAME` claims the same host, and
+  // test/ci/docsSite.test.ts holds the two together; see the header note for what arms a publish.
   url: 'https://stamity.dev',
   baseUrl: '/',
   organizationName: 'zomarit',
@@ -81,6 +86,10 @@ const config: Config = {
     // angle bracket opens a JSX tag, so those pages would fail to parse — and the fix would be to
     // escape the generators' output, which would corrupt the repo-local pages to suit the site.
     format: 'detect',
+    // A ```mermaid fence becomes a diagram instead of a code block. It is a remark transform,
+    // not MDX syntax, so it works under `detect` in a `.md` page — and it is gated on this flag
+    // alone: unset, the same fence stays an ordinary code block rather than failing the build.
+    mermaid: true,
     hooks: {
       // WARN, not throw, and the reason is specific. Every page in `docs/` is written to be read
       // in the repository first, so its links are repo-relative — `[CONTRIBUTING.md](../CONTRIBUTING.md)`,
@@ -99,9 +108,22 @@ const config: Config = {
       'classic',
       {
         docs: {
-          // The repository's docs directory, read in place. No `include`/`exclude` narrowing: a
-          // page added to `docs/` should appear without editing this file.
+          // The repository's docs directory, read in place. The only narrowing is the `exclude`
+          // below: a page added anywhere else under `docs/` appears without editing this file.
           path: '../docs',
+          // `docs/specs/` holds three engineering design documents for behaviour that is partly
+          // unbuilt. They are written for whoever implements the remainder, not for a reader of
+          // the product documentation, and a published route would read as a description of what
+          // ships. They stay in the tree, under review like any other file, and off the routes.
+          // `docs/plans/` is the plan command's output — a run's decomposition, written for the
+          // work run that consumes it — and is off the routes for the same reason before the first
+          // one lands. `test/ci/docsRoster.test.ts` derives its exemptions from this list, so a
+          // directory excluded here is exempt there and the two cannot disagree.
+          // Setting `exclude` REPLACES the plugin's default list rather than extending it, so the
+          // defaults — partial files and tests — are restated here; without them a future
+          // `docs/_draft.md` would publish. Kept on one line because `test/ci/docsSite.test.ts`
+          // reads the value off this line.
+          exclude: ['specs/**', 'plans/**', '**/_*.{js,jsx,ts,tsx,md,mdx}', '**/_*/**', '**/*.test.{js,jsx,ts,tsx}', '**/__tests__/**'],
           routeBasePath: 'docs',
           sidebarPath: './sidebars.ts',
           // No `editUrl` on purpose. Five of these pages are rendered from code and carry a
@@ -112,7 +134,9 @@ const config: Config = {
           // the docs tree. See src/remark/repoLinks.ts for what it rewrites and what it
           // deliberately leaves for `onBrokenLinks` to catch.
           beforeDefaultRemarkPlugins: [
-            [repoLinks, {docsDir: DOCS_DIR, repoRoot: REPO_ROOT, repoUrl: REPO_URL}],
+            // `excluded` mirrors the `exclude` below: a link into a directory that is off the
+            // routes is rewritten to the repository file rather than reported as broken.
+            [repoLinks, {docsDir: DOCS_DIR, repoRoot: REPO_ROOT, repoUrl: REPO_URL, excluded: ['specs', 'plans']}],
           ],
         },
         blog: false,
@@ -122,6 +146,11 @@ const config: Config = {
       } satisfies Preset.Options,
     ],
   ],
+
+  // The only theme this site adds to the preset. It supplies the `mermaid` component the flag
+  // above rewrites those fences into; without it the fences compile to a component that does not
+  // exist, so the flag and this line move together.
+  themes: ['@docusaurus/theme-mermaid'],
 
   themeConfig: {
     // The card a link to this site unfurls as, in a chat client or a social post. 1280×640, the
@@ -154,6 +183,83 @@ const config: Config = {
     footer: {
       style: 'dark',
       copyright: '© zomarit · MIT',
+    },
+    // Required, not cosmetic, and it is one palette rather than two presets.
+    //
+    // ONE THEME NAME IN BOTH MODES, AND `base` RATHER THAN A PRESET. `base` is the theme whose
+    // variables are all overridable: its `calculate()` copies the overrides in, runs its own
+    // derivation pass, then copies them in again, so nothing derived can beat an explicit value
+    // (mermaid 11.17.2, `src/themes/theme-base.js`, extracted from the bundle's sourcemap). The
+    // two modes carry the same name deliberately — the theme spreads `theme` last over a single
+    // shared `options` object (`@docusaurus/theme-mermaid/lib/client/index.js:15-21`), so there
+    // is no per-mode `themeVariables` slot and a palette that differs by mode is not expressible
+    // here at all. What follows is therefore ground-independent by construction.
+    //
+    // THE TWO LIVE FAILURES IT FIXES. Computed styles read off the built site at 1280 in both
+    // schemes, against the grounds `html` actually paints — paper #FBFBFD (`--ifm-background-color`
+    // in `src/css/custom.css`) and ink #09090C. `neutral` drew a light-mode node border of
+    // #999999 at 2.76:1 on paper, below WCAG 1.4.11's 3:1 for the boundary of a component; `dark`
+    // drew a dark-mode edge label of #CCCCCC on a #585858 chip at 4.43:1, below 1.4.3's 4.5:1 for
+    // text. Both are failures on the shipped page. Alongside them the node plane was invisible on
+    // both grounds — #EEEEEE at 1.12:1 on paper, #1F2020 at 1.22:1 on ink.
+    //
+    // EVERY PAIR, ON BOTH GROUNDS. #6B24FF is the mark's own violet, unmodified — the value
+    // `--ifm-color-primary` carries in light mode: 6.12:1 on paper and 3.15:1 on ink, so the node
+    // plane and the edge-label chip clear 3:1 without knowing which ground they landed on.
+    // #8A52FF draws every border, line and arrowhead: 4.29:1 on paper, 4.48:1 on ink. White on
+    // #6B24FF is 6.32:1 — the same pair `--ifm-button-color` already rides — and it carries every
+    // label, node and edge alike, because NO colour reaches 4.5:1 against both #FBFBFD and
+    // #09090C: the paper ceiling is relative luminance 0.175768 and the ink floor is 0.187600, an
+    // empty band. That is why no text here sits on the page ground and why the edge label is a
+    // chip rather than bare text. The border on its own fill is 1.42:1 and is decorative only —
+    // 1.4.11's boundary duty is discharged by the fill itself at 3.15:1 and 6.12:1.
+    //
+    // THE CONSTRAINT THAT COMES WITH THE EMPTY BAND. "Ground-independent by construction" is a
+    // claim about text on an OWNED fill, which is every string this palette paints today. Text
+    // mermaid draws straight onto the page ground is outside it: white is 1.03:1 on paper, and
+    // base's derived #333333 would be 1.57:1 on ink, so neither value — nor any third one —
+    // clears 4.5:1 in both modes. Every white below is load-bearing on a chip and stays; what
+    // does not follow it is a diagram whose text sits on the ground. A `title:` line, a sequence
+    // diagram's messages, a gantt's axis labels: each needs a per-mode palette, which the single
+    // shared `options` object above cannot express, so no such diagram is added to this site until
+    // that lands — the fix is a per-mode theme, never a compromise colour picked here.
+    //
+    // NO `classDef` IN THE FENCE. mermaid paints a decision diamond through the same rule as
+    // every rectangle — `polygon` shares the selector list with `rect` in its flowchart styles —
+    // so no theme variable separates it, and the only lever that would is a `classDef` in
+    // `docs/working-with-stamity.md`. That page is at the 150 lines this run budgeted for it, and
+    // the diamond is already separated by its shape, so those two lines stay unspent and the
+    // diamond renders violet among violet rectangles rather than near-black among near-black.
+    mermaid: {
+      theme: {light: 'base', dark: 'base'},
+      options: {
+        themeVariables: {
+          // The plane every label sits on.
+          primaryColor: '#6B24FF',
+          mainBkg: '#6B24FF',
+          nodeBkg: '#6B24FF',
+          primaryTextColor: '#FFFFFF',
+          nodeTextColor: '#FFFFFF',
+          textColor: '#FFFFFF',
+          // Borders and lines, never text: 4.29/4.48:1 is over 3:1 on both grounds and under
+          // 4.5:1 on both, which is exactly the band a boundary may occupy and a label may not.
+          primaryBorderColor: '#8A52FF',
+          nodeBorder: '#8A52FF',
+          lineColor: '#8A52FF',
+          arrowheadColor: '#8A52FF',
+          edgeLabelBackground: '#6B24FF',
+          // Unused by the one diagram on the site today — it has no subgraph and no title — and
+          // set anyway so the next one cannot inherit base's cream defaults. It is NOT a licence
+          // to add a title: mermaid paints one on the page ground, where the empty band above says
+          // no single value works. See THE CONSTRAINT THAT COMES WITH THE EMPTY BAND.
+          titleColor: '#FFFFFF',
+          clusterBkg: '#6B24FF',
+          clusterBorder: '#8A52FF',
+          // `background` is deliberately absent: base reads it only as the fallback `lineColor`
+          // and `arrowheadColor` derive from, and both are set above, so a value would be inert
+          // on this diagram and misleading on the next.
+        },
+      },
     },
     prism: {
       theme: prismThemes.github,

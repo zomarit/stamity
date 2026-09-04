@@ -21,8 +21,9 @@ hand-written or corpus source. Nothing here links outside this tree.
 ## Guides
 
 - [Getting started](docs/getting-started.md): prerequisites, what init asks and writes per client, the guided first change, and where state lives.
-- [Migration](docs/migration.md): moving a repository off the predecessor setup — the guided path, the manual path, and what does not transfer.
 - [Working with stamity](docs/working-with-stamity.md): the nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once.
+- [Doctrine](docs/doctrine.md): the root question every artifact answers, the four pillars and their public enforcement surfaces, and how an artifact is deleted.
+- [Migration](docs/migration.md): moving a repository off the predecessor setup — the guided path, the manual path, and what does not transfer.
 - [Customization](docs/customization.md): where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries.
 - [Workspaces](docs/workspaces.md): one policy across several repositories — the manifest, the init offer, the status rows, and the cascade.
 - [Packs and trust](docs/packs-and-trust.md): what a pack is, the four-rung trust ladder, what a verified signature does and does not prove, the org policy, and how to remove one.
@@ -41,4 +42,5 @@ hand-written or corpus source. Nothing here links outside this tree.
 - [Rules](docs/reference/rules.md): every rule in the corpus — its trigger, tags, load mode and retirement condition. Regenerate with `node scripts/generate-docs.mjs`.
 - [Commands](docs/reference/commands.md): every command in the corpus — its trigger, tags, load mode and retirement condition. Regenerate with `node scripts/generate-docs.mjs`.
 - [Packs](docs/reference/packs.md): the first-party packs `add` can install, and what each one ships. Regenerate with `node scripts/generate-docs.mjs`.
+- [MCP servers](docs/reference/mcp-servers.md): every curated MCP server id `mcp.servers` accepts, with its pin, credentials and blast radius. Regenerate with `node scripts/generate-docs.mjs`.
 - [Charter](content/charter/stamity-charter.md): the always-on context every generated setup carries: repo facts, floor invariants, touchpoint index.

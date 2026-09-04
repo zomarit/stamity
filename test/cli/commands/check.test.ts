@@ -278,15 +278,16 @@ describe("check — a healthy repository", () => {
     expect(result.stderr).toBe("");
   });
 
-  it("returns the nine doctor rows in a fixed order", async () => {
+  it("returns the ten doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root }));
 
-    // Grew by one: `pack-integrity` re-hashes installed pack content
-    // against what the install recorded. It is last because it is the only row
-    // whose cost scales with what the repo installed, and reading order puts
-    // the environment probes first.
+    // Grew by one again: `preserved-duplicate` reads the ledgered managed files
+    // and asks whether any of them repeats its block below the END marker. It
+    // sits beside `tool-traces` because both answer off the ledger, and
+    // `pack-integrity` stays last — it is the row whose cost scales with what
+    // the repo installed, and reading order puts the environment probes first.
     expect(doctor.map((entry) => entry.id)).toEqual([
       "node-version",
       "git-available",
@@ -296,6 +297,7 @@ describe("check — a healthy repository", () => {
       "tmp-hygiene",
       "env-mcp",
       "tool-traces",
+      "preserved-duplicate",
       "pack-integrity",
     ]);
   });
@@ -597,6 +599,126 @@ describe("check — advisory warnings", () => {
     expect(code).toBe(0);
     expect(row(doc, "learnings").status).toBe("warn");
     expect(row(doc, "learnings").detail).toContain("npx @zomarit/stamity validate");
+  });
+});
+
+describe("check — a managed block copied into the preserved region", () => {
+  /** The body of the block, and therefore the text a duplicate has to repeat. */
+  const BODY = [
+    "# Charter",
+    "",
+    "First paragraph of the block.",
+    "",
+    "Second paragraph of the block.",
+  ].join("\n");
+
+  /**
+   * A managed file: the stamped block, then whatever the operator kept below
+   * the END marker. The stamp is deliberately not this build's version — the
+   * comparison strips the BEGIN line, so a duplicate is found whatever the
+   * block was stamped with.
+   */
+  function managedFile(preserved: string): string {
+    return [
+      "<!-- STAMITY:BEGIN v0.0.1 -->",
+      BODY,
+      "<!-- STAMITY:END -->",
+      "",
+      preserved,
+      "",
+    ].join("\n");
+  }
+
+  /**
+   * A pack-owned row, so the extra ledger entry is excluded from the reclaim
+   * sweep and carries no recorded hash for `pack-integrity` to check. The
+   * fixture's only finding is then the one each test names.
+   */
+  const managedRow: LedgerEntry = {
+    path: "docs/managed-note.md",
+    adapter: packOwner("demo"),
+    artifactId: "note",
+    artifactType: "rule",
+  };
+
+  function seedManagedNote(preserved: string): Promise<string> {
+    return seedRepo(getRepo(), {
+      ledger: [managedRow],
+      files: { "docs/managed-note.md": managedFile(preserved) },
+    });
+  }
+
+  it("warns naming the file, the line the copy starts at, and the remedy", async () => {
+    const root = await seedManagedNote(BODY);
+
+    const { doc } = await runJson(root);
+
+    // Line 9: the block occupies 1-7 (BEGIN, five body lines, END), line 8 is
+    // the blank the preserved region opens with, and the copy starts under it.
+    expect(row(doc, "preserved-duplicate").status).toBe("warn");
+    expect(row(doc, "preserved-duplicate").detail).toContain("docs/managed-note.md:9");
+    expect(row(doc, "preserved-duplicate").detail).toContain("delete the copy");
+  });
+
+  it("finds a copy that was re-indented and re-wrapped", async () => {
+    // Whitespace-insensitive on purpose: a paste that picked up indentation, or
+    // a formatter that rewrapped it, is the same duplicate loaded twice.
+    const root = await seedManagedNote(
+      "  # Charter\n\n  First paragraph\n  of the block.\n\n  Second paragraph of the block.",
+    );
+
+    const { doc } = await runJson(root);
+
+    expect(row(doc, "preserved-duplicate").status).toBe("warn");
+    expect(row(doc, "preserved-duplicate").detail).toContain("docs/managed-note.md:9");
+  });
+
+  it("passes a managed file whose preserved region is the operator's own text", async () => {
+    const root = await seedManagedNote("Operator notes the engine never rewrites.");
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "preserved-duplicate").status).toBe("pass");
+    expect(row(doc, "preserved-duplicate").detail).toContain("carry their block once");
+  });
+
+  it("passes a preserved region that quotes one paragraph of the block", async () => {
+    // A reference, not a second copy: the whole body has to appear before the
+    // row speaks, or every file that cites its own charter would warn forever.
+    const root = await seedManagedNote("As the block above says: First paragraph of the block.");
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "preserved-duplicate").status).toBe("pass");
+  });
+
+  it("ignores a ledgered file that carries no managed block at all", async () => {
+    const root = await seedRepo(getRepo(), {
+      ledger: [managedRow],
+      files: { "docs/managed-note.md": `${BODY}\n` },
+    });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(row(doc, "preserved-duplicate").status).toBe("pass");
+    expect(row(doc, "preserved-duplicate").detail).not.toContain("docs/managed-note.md");
+  });
+
+  it("never fails the run — deleting the copy is the operator's call", async () => {
+    // The engine is contractually forbidden to touch the preserved region, so a
+    // row that gated the exit code would be a permanent red nothing here can
+    // clear.
+    const root = await seedManagedNote(BODY);
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    expect(doc.ok).toBe(true);
+    expect(row(doc, "preserved-duplicate").status).not.toBe("fail");
+    expect(doc.doctor.filter((entry) => entry.status === "fail")).toEqual([]);
   });
 });
 

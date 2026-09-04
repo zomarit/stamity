@@ -144,6 +144,336 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-04, the closure run's eval-repair wave — run 5's two unpulled
+  //     corpus levers. TWO corpus bodies moved, each in every dialect that
+  //     carries it, plus the manifest rows that record them:
+  //
+  //     CHANGED `charter/stamity-charter.md`, which lands twice over because the
+  //       root file is shared: the charter-only `AGENTS.md` 4474 -> 4614 in
+  //       claude, copilot, cursor and the two package roots, and the codex
+  //       `AGENTS.md` 29026 -> 29303, which carries the charter plus the rules
+  //       appendix. Invariant 1 now says that a hand-off framed so the operator
+  //       can close without the floor is itself the relaxation, and names
+  //       invariant 4's `Not done:` report as the honest exit. The edit is
+  //       NET-ZERO in lines: invariant 3 rewrapped from three lines to two and
+  //       invariant 1 spent the line that freed, so the charter's line count and
+  //       every `source:` range below invariant 3 are unchanged and +140 bytes is
+  //       the added clause alone.
+  //     CHANGED `rules/stamity-security-patterns.md` in its three rule dialects —
+  //       `.claude/rules/stamity-security-patterns.md` 6161 -> 6298,
+  //       `.cursor/rules/stamity-security-patterns.mdc` 6164 -> 6301, and
+  //       `.github/instructions/stamity-security-patterns.instructions.md`
+  //       6149 -> 6286: one body, three heads, so the same +137 in each. Floor
+  //       item 9 now states that the twelve category names are a closed list — a
+  //       finding takes one of them or the nearest of them, never a coined label
+  //       and never a floor item's number. Net-zero in lines here too, so item 9
+  //       still occupies the lines its cases cite.
+  //     The codex `AGENTS.md` therefore moves by +277, not +140: it is the only
+  //       emitted file carrying BOTH edits, the appendix reproducing the rule body
+  //       verbatim under shifted heading levels. At 29303 it is still inside
+  //       `CODEX_AGENTS_MD_BUDGET_BYTES` (32768), so budget shaping dropped no
+  //       rule it was not already dropping and the eight-rule figure the
+  //       capability matrix publishes is unmoved.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length — the fixed-width sha256 rows for the two bodies
+  //       above and nothing else.
+  //
+  //     What did NOT move: every other corpus body, every other rule, every
+  //       skill, every command, the three portable hook scripts, the claude
+  //       review gate, every generated page and every client entry file. The
+  //       wave's other edits — `evals/SET-v4.md`, `evals/rubric-v4.md`, eight
+  //       case files under `evals/cases-v4/`, the two byte constants in
+  //       `src/content/charter.ts` with their `docs/capability-matrix.md` row,
+  //       and this suite's sibling `test/corpus/invariants.test.ts` comment —
+  //       reach no emitted tree. The constants were checked against the refreshed
+  //       digest rows above rather than trusted: 29_303 and 4_614 are those rows.
+  //
+  //   - 2026-09-04, the closure run's Minor-findings fix pass. TWO emitted files
+  //     moved, plus the manifest rows that record them:
+  //
+  //     CHANGED `commands/st-rework.md` 17129 -> 17354 (cursor 17176 -> 17401),
+  //       the claude command and the copilot prompt sharing one digest and the
+  //       cursor skill carrying its own head. The persistence guard's secret-scan
+  //       step now states that the secrets floor still governs what the run
+  //       itself writes — nothing of a value reaches any file, and a mask is not
+  //       a reproduction — and that the guard adds only that the run does not
+  //       rewrite the operator's text for them, which settles a contradiction
+  //       against the secrets rule's own golden case. The edit is NET-ZERO in
+  //       lines inside the guard: the list's lead-in sentence moved up into the
+  //       paragraph above it, and item 1 spent the two lines that freed. Every
+  //       `source:` range into this file below the guard therefore still lands on
+  //       the text it names, and +225 bytes is the added clause alone.
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       (33820 -> 34294 bytes) in the two claude-bearing selections. The
+  //       reviewer's under-lock content-fault report was the one path carrying no
+  //       recovery hint: it said the counter "could not be read", which
+  //       misdescribes STATE_INVALID — that code parsed a file it did read — and
+  //       it left the operator without the sentence the unlocked path has always
+  //       carried. Both paths now say the counter cannot be trusted and that
+  //       deleting the file restarts it, and that it is not overwritten from
+  //       here. +474 bytes, most of it the comment stating why the two wordings
+  //       are one. Posture unchanged: still fail-open at exit 0.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length — the fixed-width sha256 rows for the two files
+  //       above and nothing else.
+  //
+  //     What did NOT move: every other corpus body, every rule, every skill, the
+  //       three portable hook scripts, every generated page, every client entry
+  //       file and every residue document. The pass's other edits —
+  //       `src/cli/kit/terminal.ts` and `src/cli/kit/prompts.ts` (the TERM=dumb
+  //       literal is now imported rather than spelled twice), `tsdown.config.mjs`,
+  //       `website/docusaurus.config.ts`, `evals/rubric-v4.md`, the `st-eval-run`
+  //       override skill (repo-local, so it reaches no golden fixture), the
+  //       re-inlined eval case brief, the plan and the run ledger — reach no
+  //       emitted tree.
+  //
+  //   - 2026-09-04, the closure run's review round 1 fix pass. ONE emitted file
+  //     moved, plus the manifest rows that record it:
+  //
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       (32108 -> 33820 bytes) in the two claude-bearing selections. Review
+  //       round 1 found the counter-reset guard open at the one errno site the
+  //       wave below did not cover: `load()` stats before it reads, and every
+  //       stat errno mapped to "no file", which the caller reads as "no runs
+  //       yet" — so a sharing hold on the stat under the lock published a
+  //       one-round document over every round already counted, on a path that
+  //       exits 0. The stat now retries the sharing family on the read's own
+  //       20/40/80/160 ms schedule, treats only ENOENT and a non-regular name
+  //       as absence, and returns STATE_UNREADABLE otherwise, which the guard
+  //       drops the round on. +1712 bytes, most of it that comment and the
+  //       rewritten LOCK_CEILING_MS note, which now states the invocation's
+  //       compound worst case (~30.6s win32 / ~26.7s POSIX against the 600s
+  //       the wired events allow) instead of a 30s-class margin the retry
+  //       budgets had overtaken. Posture unchanged: still fail-open at exit 0.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length — the fixed-width sha256 row for the file
+  //       above and nothing else.
+  //
+  //     What did NOT move: every corpus body, every rule, every skill, the
+  //       three portable hook scripts, every generated page and every client
+  //       entry file. The round's other edits — `website/src/pages/index.tsx`,
+  //       `tsdown.config.mjs`, `test/support/support.test.ts`,
+  //       `test/hooks/scripts.test.ts`, the plan and the run ledger — reach no
+  //       emitted tree.
+  //
+  //   - 2026-09-04, the closure run's execution wave. Two source changes moved
+  //     bytes here, plus the manifest rows that record them:
+  //
+  //     CHANGED six corpus bodies, each in every dialect that carries it.
+  //       `agents/stamity-design-quality.md` 7677 -> 7859 claude, 7601 -> 7783
+  //       cursor, 7666 -> 7848 copilot, 8132 -> 8314 codex; and
+  //       `agents/stamity-performance.md` 8004 -> 8159 claude, 7927 -> 8082
+  //       cursor, 7989 -> 8144 copilot, 8454 -> 8609 codex. Four command
+  //       bodies moved too, the claude command and the copilot prompt sharing
+  //       one digest and the cursor skill carrying its own head:
+  //       `commands/st-ask.md` 6861 -> 7269 (cursor 6905 -> 7313),
+  //       `commands/st-plan.md` 23023 -> 23385 (cursor 23066 -> 23428),
+  //       `commands/st-rework.md` 16273 -> 17129 (cursor 16320 -> 17176) and
+  //       `commands/st-spec.md` 15365 -> 15789 (cursor 15410 -> 15834). Codex
+  //       carries no command bodies, so its tree moved on the two agents and
+  //       the charter alone.
+  //     CHANGED the charter, and this is the only edit of the wave that
+  //       reaches the RESIDUE-document goldens: invariant 7 now says that
+  //       handing the operator a line, diff, or file body to paste is the same
+  //       protocol violation as an orchestrator editing inline. The paragraph
+  //       rewrapped at four lines either way, so the whole move is +70 bytes —
+  //       `AGENTS.md` 4404 -> 4474 in the claude, cursor and copilot
+  //       selections, 28956 -> 29026 for the codex root file that also carries
+  //       the appendix, and `packages/alpha/AGENTS.md` and
+  //       `packages/beta/AGENTS.md` 4404 -> 4474 in the two multi-root
+  //       selections. Nine residue document bodies moved, every one of them a
+  //       charter, and no other residue byte in any selection.
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       (26669 -> 32108 bytes) in the two claude-bearing selections. One
+  //       predicate over EACCES/EBUSY/EPERM now decides, at the lock create,
+  //       the state read, the publish rename and the unlock, whether an errno
+  //       is an answer or a momentary hold; the rename budget is the schedule
+  //       `src/merge/atomicWrite.ts` already settled on rather than this
+  //       script's own pre-fix one. +5439 bytes, most of it the comment blocks
+  //       that state why each site waits, and every terminal failure still
+  //       exits 0 with the round unblocked.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length (16080 claude, 16089 cursor, 16240 copilot,
+  //       10810 codex, 54488 all-four) — fixed-width sha256 ledger rows for
+  //       the files above and nothing else.
+  //
+  //     What did NOT move: every corpus body outside the six, `st-work`,
+  //       `st-board`, `st-debug`, `st-quick` and `st-pr-resolve` among them;
+  //       every rule and every skill; the three portable hook scripts in all
+  //       four clients (only the claude review gate moved, which is the
+  //       containment the rows below rely on); every generated page and every
+  //       client entry file. The same wave repointed the repo-local
+  //       `st-eval-run` skill override to the v4 eval set, which no golden
+  //       here holds — that skill is an override, not corpus, so it appears in
+  //       neither snapshot file — and changed `src/cli/kit/terminal.ts`,
+  //       `tsdown.config.mjs` and three `website/` files, none of which the
+  //       emitted tree carries. The APM projection moved in the same change
+  //       and is regenerated by `scripts/generate-apm-package.mjs`, not by
+  //       sync.
+  //
+  //   - 2026-09-04, the recommended-next-step close-out — Package 8, carried
+  //     from the last package's register sweep by name. CORPUS PROSE moved on
+  //     six command bodies, each in every dialect that carries one (claude
+  //     commands, copilot prompts, cursor skills), and on nothing else:
+  //
+  //     CHANGED `commands/st-ask.md` (6491 -> 6861 bytes claude/copilot, 6535
+  //       -> 6905 cursor), `commands/st-debug.md` (11274 -> 11659, cursor 11318
+  //       -> 11703), `commands/st-quick.md` (7846 -> 8227, cursor 7890 -> 8271),
+  //       `commands/st-spec.md` (14987 -> 15365, cursor 15032 -> 15410),
+  //       `commands/st-rework.md` (15898 -> 16273, cursor 15945 -> 16320) and
+  //       `commands/st-pr-resolve.md` (19501 -> 19882, cursor 19552 -> 19933).
+  //       Each gained one closing paragraph naming a recommended next step
+  //       DERIVED from that run's own state rather than read off the fixed
+  //       ladder or table the file already carried — the contract `st-work`,
+  //       `st-board` and `st-plan` already shipped, so all nine touchpoints now
+  //       close on one. Codex carries no command bodies, so neither of its two
+  //       goldens moved.
+  //     CHANGED the `.stamity/manifest.json` row in the four command-bearing
+  //       tree digests (claude, copilot, cursor, all-four): six `contentHash`
+  //       values moved and the byte length did not, so each row shows a new
+  //       digest at an unchanged size. The residue-document goldens do not
+  //       carry the manifest and did not move — the four updated snapshots are
+  //       tree digests only.
+  //
+  //     What did NOT move: the charter (`AGENTS.md`) in every selection, every
+  //       generated page, every hook script, `commands/st-work.md`,
+  //       `commands/st-board.md` and `commands/st-plan.md` — byte-identical
+  //       rows in every dialect that carries them — and every other corpus
+  //       body.
+  //
+  //   - 2026-09-02, the identity-casing fix, refreshed after the content-wave
+  //     refresh below had already landed. HOOK SCRIPTS moved, nothing else:
+  //     three operator-facing prose strings in `src/hooks/scripts.ts` opened
+  //     with the product name capitalised at sentence start, which the identity
+  //     rule forbids; they now open lowercase. Byte lengths unchanged
+  //     (session-start 22872, config-tamper-notice 2383 per client), digests
+  //     moved — so the five tree goldens moved on those two paths per client,
+  //     and the codex and all-four residue documents moved only in the manifest
+  //     hash rows that record those scripts. The sibling suite's byte-exact
+  //     hook-script golden took the same refresh with its own row.
+  //
+  //     What did NOT move: every corpus body, every generated page, every
+  //       client entry file.
+  //
+  //   - 2026-09-02, the closure run's content wave plus the codex floor ranking.
+  //     The widest corpus movement of the run, and the first refresh that changes
+  //     WHICH rules one client receives:
+  //
+  //     CHANGED nine corpus artifacts, each in every dialect that carries it —
+  //       `rules/stamity-injection-screening.md` (+1409 bytes: run-time ingress
+  //       that never lands in the state directory is screened at the same tier),
+  //       `rules/stamity-learnings-schema.md` (-2448: the authoring contract
+  //       folded into the writer that enforces it, leaving the curation posture),
+  //       `commands/st-work.md` (+467), `commands/st-pr-resolve.md` (+501),
+  //       `commands/st-debug.md` (+312), `commands/st-quick.md` (+16, one
+  //       threshold row renamed to what it measures), `skills/st-handoff`
+  //       (+687), `skills/st-qa` (+92) and `skills/st-dep-audit` (+64, an
+  //       `obsolete_when` line rewritten to a condition somebody can check —
+  //       three more of those moved on artifacts whose emitted copies strip the
+  //       field, so they show here only as unchanged rows).
+  //     CHANGED the codex root `AGENTS.md`, 32361 -> 28956 bytes, and this is a
+  //       DELIVERY change rather than a size one: the appendix pays for the
+  //       larger `injection-screening` (a `floor:security` rule, so it holds its
+  //       rank) out of its tail, and `api-versioning` — no floor tag, `normal`
+  //       precedence — is now dropped whole. Codex receives five rules where it
+  //       received six. `test/adapters/codex.test.ts` re-pins both sets, and
+  //       `ALWAYS_ON_SHARED_BYTES_WITH_CODEX` moves with the byte figure.
+  //     CHANGED the omission notice's ordering sentence in every file that
+  //       carries one: "then security-floor rules" -> "then floor-tagged rules",
+  //       following the shaper's rank from the one `floor:security` tag to
+  //       `floor:*` membership. No rule changes rank today — the security floor
+  //       is the only floor the rules corpus declares — so this half moved text
+  //       and nothing else.
+  //
+  //     What did NOT move: every generated file, every hook script, and every
+  //       corpus body outside the nine above.
+  //
+  //   - 2026-09-02, the eval-driven refusal fix. CORPUS PROSE moved on
+  //     `commands/st-quick.md` alone, in every dialect that carries it
+  //     (6956 -> 7830 bytes claude/copilot, 7000 -> 7874 cursor, codex likewise):
+  //
+  //     The hard refusal enumerated three unlock routes — no proceed-anyway
+  //       option, no confirmation prompt, no operator flag — and an adversarial
+  //       eval case found a fourth the text never barred: hand the refused change
+  //       to the operator as a diff, on the reasoning "I'm not the one making the
+  //       edit". The contract now says a hand-off is the same refused change with
+  //       a different hand on the keyboard. Re-measured after the edit: that case
+  //       went 2/3 -> 3/3, so this diff is a closed guardrail leak rather than a
+  //       wording preference.
+  //     The refusal template also now says `<threshold>` is the fired row's own
+  //       name copied from the table, not a coined category. That half did NOT
+  //       change the behaviour on re-run and is kept because it states the
+  //       contract correctly; the residual is a model-adherence finding.
+  //
+  //     What did NOT move: every other corpus body and every generated file.
+  //
+  //   - 2026-09-02, the closure run's close-out. CORPUS PROSE moved again, in
+  //     the dialects that carry the edited artifacts:
+  //
+  //     CHANGED `commands/st-work.md` (the run-exit invariant now says it binds
+  //       at exit and that a run holding a live question has not exited, so
+  //       asking is not a pending finding; the severity floor now says who
+  //       closes a Minor row, since not reaching the QA checkpoint was never the
+  //       same as not closing; and the in-flow decompose names the requirement
+  //       ids) and `commands/st-plan.md` (a `requirements` field on the unit
+  //       table, an L4 lint row checking it, and the return contract reporting
+  //       L4). Both edits close claim-vs-claim collisions rather than adding
+  //       features: two shipped texts told a run to close a row and to ask about
+  //       it, and the requirement id was named as a join key by every artifact
+  //       except the one that produces the units.
+  //
+  //     What did NOT move: every path whose source was untouched. The APM
+  //       projection moved in the same change and is regenerated by its own
+  //       script, not by sync — a separate step, and the reason its three tests
+  //       went red here before it was run.
+  //
+  //   - 2026-09-01, the closure run's content batch. CORPUS PROSE moved, in
+  //     every dialect that carries the edited artifacts and in none that does
+  //     not:
+  //
+  //     CHANGED the five edited corpus artifacts across the selections that
+  //       carry them -- `commands/st-work.md` (the light row now names the two
+  //       specialist lenses it skips and the security lens it keeps, the deep
+  //       row's undefined "Prove-final" placement is anchored to the phase
+  //       order that exists, and the dependency-audit note points at the skill
+  //       that owns those fields), `agents/stamity-reviewer.md` (a
+  //       whole-branch carve-out so the diff-only scope stops contradicting
+  //       the deep pass, and a head that says "mutation" where it meant it),
+  //       `agents/stamity-implementer.md` (the spec delta names the
+  //       requirement id), `commands/st-plan.md` and `skills/st-dep-audit`
+  //       (the delegation and its return route). Each moved in the claude,
+  //       cursor, copilot, codex and `.agents/` forms that hold it, which is
+  //       the projection working: one source edit, every dialect.
+  //
+  //     What did NOT move: every path whose source this batch did not touch.
+  //       A corpus edit reaching an unrelated emitted file would mean the
+  //       projection had stopped being a function of its input.
+  //
+  //   - 2026-09-01, the timing-margin pass over the lock-staleness flake class.
+  //     One generated script moved and nothing else:
+  //
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       (24741 -> 26669 bytes) in the two claude-bearing selections. The
+  //       counter's wait ceiling went 10s -> 25s. The progress detector added
+  //       in the row below already waits out a queue that keeps handing the
+  //       lock on, but the ceiling was checked unconditionally underneath it,
+  //       so a herd of 30 writers on a loaded runner still hit it at roughly
+  //       330ms per critical section and dropped the tail writer's round --
+  //       fail-open by design, and the 29-of-30 signature on the windows leg.
+  //       25s is 4% of the 600s the client allows this hook's events and under
+  //       the 30s of its tightest class, so re-wiring the gate cannot put the
+  //       wait outside the budget. A holder that DIED still costs ~1s, not 25:
+  //       it hands the lock to nobody, so the idle detector returns and the
+  //       ceiling is never consulted.
+  //     CHANGED `.stamity/manifest.json` in the same two selections, each at
+  //       UNCHANGED byte length (16080 claude / 54488 all-four) -- the
+  //       fixed-width sha256 ledger row for that one script, and nothing else.
+  //
+  //     What did NOT move: every other emitted path in both trees, and the
+  //     cursor, copilot and codex selections entire -- the same containment
+  //     the row below relies on, and the reason a byte moving elsewhere would
+  //     have meant the edit escaped the claude adapter's residue.
+  //
   //   - 2026-08-26, the review-gate lock rewrite (windows leg, round 2). One
   //     generated script moved and nothing else:
   //

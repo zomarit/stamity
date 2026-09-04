@@ -189,7 +189,7 @@ async function emittedAskSurfaces(): Promise<
     rootDir: getEmissionRoot().path("repo"),
     manifest,
     engineVersion: EMISSION_ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
     contentRoot: CORPUS_ROOT,
   };
   const core = await buildCoreEmissionPlan(ctx);
@@ -303,6 +303,69 @@ describe("light trio — escalation", () => {
     expect(escalation).toMatch(/never automatic/i);
     // Evidence carried as an artifact rather than a re-investigation.
     expect(escalation).toMatch(/evidence carried|evidence that carries/i);
+  });
+});
+
+/**
+ * The closing recommended-next-step line, one case per light touchpoint.
+ *
+ * `/st-work`, `/st-board` and `/st-plan` already close on a next step that the
+ * run's own state chooses, and each is pinned by its own suite. These three
+ * closed on a switch table instead — a menu the reader picks from, which is
+ * exactly the shape the derivation requirement exists to rule out. So the
+ * derivation phrase, the clause that disowns the menu directly above the line,
+ * and at least one state → step mapping are asserted per command: a line that
+ * kept the words and dropped the mapping would satisfy prose review and leave
+ * the reader back at the menu.
+ */
+describe("light trio — the closing next step", () => {
+  it("ask derives its next step from the run's own state, not the escalation ladder", async () => {
+    const text = flow(await load("commands/st-ask.md"));
+
+    expect(text).toContain("recommended next step");
+    expect(text).toContain("derived from this run's own state");
+    expect(text).toContain("not from the ladder above");
+    // Named states, each drawn from a block this command already produces.
+    expect(text).toContain("a Blocked row makes what unblocks it the step");
+    expect(text).toContain("a Contradiction makes resolving it the step");
+    expect(text).toContain(
+      "a low-confidence claim makes the evidence that would raise it the step",
+    );
+    // The empty case is stated rather than left as a silent omission.
+    expect(text).toContain("with nothing outstanding, the line says so");
+  });
+
+  it("debug derives its next step from the run's own state, not the escalation table", async () => {
+    const text = flow(await load("commands/st-debug.md"));
+
+    expect(text).toContain("recommended next step");
+    expect(text).toContain("derived from this run's own state");
+    expect(text).toContain("not from the table above");
+    // Named states: the regression clause, held instrumentation, a live hypothesis.
+    expect(text).toContain("a regression clause with no test makes writing it the step");
+    expect(text).toContain("makes the strip at the window's end the step");
+    expect(text).toContain(
+      "a surviving hypothesis makes its discriminating observation the step",
+    );
+    expect(text).toContain("None of those, and the line says so");
+  });
+
+  it("quick derives its next step from the batch's own state, not the escalation table", async () => {
+    const text = flow(await load("commands/st-quick.md"));
+
+    expect(text).toContain("recommended next step");
+    // Quick's unit of state is the batch, not the run.
+    expect(text).toContain("derived from this batch's own state");
+    expect(text).toContain("not from the table above");
+    // Named states: refused or deferred items, a `saved` content item, a pre-existing failure.
+    expect(text).toContain(
+      "a refused or deferred item makes carrying that list to `/st-work` the step",
+    );
+    expect(text).toContain(
+      "item reported `saved` makes the `stamity sync` run that publishes it the step",
+    );
+    expect(text).toContain("a pre-existing failure left alone makes naming it the step");
+    expect(text).toContain("A batch with none of those says so in the line");
   });
 });
 

@@ -100,8 +100,6 @@ export interface EmissionContext {
   engineVersion: string;
   /** Live per-run detection decisions. */
   facts: {
-    /** True when the repo had no agentic setup before this run. */
-    greenfield: boolean;
     /** Live monorepo package layout; empty for single-package repos. */
     monorepoPackages: readonly PackageEntry[];
   };

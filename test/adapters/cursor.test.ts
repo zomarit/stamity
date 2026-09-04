@@ -234,7 +234,7 @@ function ctxOf(contentRoot: string, over: CtxOptions = {}): EmissionContext {
     // an operator who set no effort would carry.
     manifest: Object.keys(models).length === 0 ? manifest : { ...manifest, models },
     engineVersion: ENGINE_VERSION,
-    facts: { greenfield: true, monorepoPackages: [] },
+    facts: { monorepoPackages: [] },
     contentRoot,
   };
 }

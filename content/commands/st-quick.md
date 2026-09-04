@@ -44,18 +44,30 @@ conservatively-routed one costs a command switch.
 Any single row firing ends quick for that item. Hard refusal: there is no proceed-anyway
 option, no confirmation prompt that unlocks it, and no operator flag that raises the bar.
 
+Nor is there a hand-off that works around it. Writing the change out for the operator to
+paste, attaching it as a diff, splitting it into pieces that each miss the threshold, or
+applying it and flagging it for review afterwards are all the same refused change with a
+different hand on the keyboard — the surface still gets edited, and it still skips the review
+loop the threshold fired to route it into. "I am not the one making the edit" is not a
+distinction the thresholds draw. The item moves to `/st-work` intact or it does not move.
+
 | Threshold | Fires when |
 |---|---|
 | Files | `>5 files` across the batch, or one item that cannot land in a single file |
 | Size | `~200 lines` changed across the batch, counted as added plus removed |
 | Security-sensitive surface | the item touches authentication, authorization, session or credential handling, key material, payments, or access-control configuration |
 | Dependencies | any added dependency, version bump, or lockfile change |
-| Public contract | API shape, database schema, event payload, or a migration |
+| Schema, API, event or migration | API shape, database schema, event payload, or a migration |
 
 The refusal states the measurement, not a verdict:
 
 > This crosses the `<threshold>` threshold (`<measured value>`). Switch to `/st-work` —
 > the item list carries over.
+
+`<threshold>` is the name of the row that fired, copied from the table above — not a
+paraphrase, not a category invented to sound like one. The refusal's whole purpose is that
+the operator can take the name to the table and check the call; a coined label reads as a
+judgement about the change and leaves nothing to check against.
 
 The security-sensitive row has no size floor. A one-character edit under an authentication or
 credential path is refused regardless of line count: what that surface needs is the review
@@ -139,3 +151,8 @@ Never automatic; user-gated in session, with the batch state as the evidence tha
 | Gates stay red after one retry | `/st-work` | runner output plus the applied-item list |
 | The item needs its cause found first | `/st-debug` | the symptom and the item that would have changed |
 | The item is really a question | `/st-ask` | the question, with the files already identified |
+
+The report closes on one recommended next step, derived from this batch's own state and not from
+the table above: a refused or deferred item makes carrying that list to `/st-work` the step; an
+item reported `saved` makes the `stamity sync` run that publishes it the step; a pre-existing
+failure left alone makes naming it the step. A batch with none of those says so in the line.

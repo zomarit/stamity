@@ -149,6 +149,7 @@ async function confirmDestruction(
     yes: ctx.yes,
     json: ctx.json,
     env: ctx.app.runtime.env,
+    palette: ctx.palette,
   });
   if (!gate.interactive) {
     throw new CliFailure({

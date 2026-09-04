@@ -187,16 +187,20 @@ findings leave this command:
 - A per-module profiling pass, when the regression's cause is not visible from
   the diff, is the `st-perf-audit` skill's subject, not this command's.
 
-When a run opens a regression epic on a linked board rather than a report:
+When a run proposes a regression epic alongside its report:
 
-> Epic scaffold: `stamity-epic-audit-frame` → Board sync. Slot: epic-kind =
-> `benchmark regression`; epic-label = `benchmark`.
+> Epic scaffold: `stamity-epic-audit-frame` → Board write-back. Slot: epic-kind
+> = `benchmark regression`; epic-label = `benchmark`.
 
 Only that block is cited. The frame's item shape is built on a module taxonomy
 this command never establishes — a benchmark suite is a list of named
 benchmarks, not a module map — so the shape is stated here instead: one epic
 per run, one sub-issue per regressed benchmark, no dependency edges, since two
 regressed benchmarks are worked in any order.
+
+The set is proposed, never filed: this command reaches a board through the same
+write-back channels every other flow does, and no channel there creates an
+item.
 
 The frame's evidence guardrail is not cited either, and this row replaces it: a
 metric regression's evidence is the benchmark name, both measurements with their

@@ -1,13 +1,15 @@
 # Docs site — build on every change, deploy only when someone arms it.
 #
-# ARMING CONDITION. Nothing here publishes anything today, and two facts outside this file are
-# why. GitHub Pages is NOT enabled on this repository, and `stamity.dev` — the domain
-# `website/static/CNAME` claims and `website/docusaurus.config.ts` declares as `url` — is NOT
-# registered. Until BOTH are true, a deploy would fail at `actions/configure-pages` or serve the
-# site at a URL nobody can reach. So the deploy job is reachable only from a `workflow_dispatch`
-# that explicitly sets `deploy` to true; merging to `main` builds and stops. Arming it is a
-# deliberate act taken after the domain is claimed and Pages is enabled with "GitHub Actions" as
-# its source — not a side effect of landing a documentation change.
+# ARMING CONDITION. Both facts outside this file that a deploy depends on now hold: GitHub Pages
+# is enabled on this repository with "GitHub Actions" as its source, and `stamity.dev` — the
+# domain `website/static/CNAME` claims and `website/docusaurus.config.ts` declares as `url` — is
+# claimed and serves this site. Neither is a property of the checkout, so a fork or a repository
+# with Pages not enabled still fails at `actions/configure-pages`, which is where that failure
+# belongs. What did NOT change is that publishing stays a deliberate act: the deploy job is
+# reachable from two arming paths and merging to `main` is neither of them — a `workflow_dispatch`
+# that explicitly sets `deploy` to true, and a Release run that completed successfully on a real
+# `v*` tag push (stated with the trigger below, enforced by the `if` on the deploy job). Every
+# other trigger builds and stops.
 #
 # WHAT THE BUILD PROVES. The site renders the repository's own `docs/` directory in place; there
 # is no copy of any page under `website/`. So this workflow is also the gate on those pages: a
@@ -41,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: 'Publish the built site to GitHub Pages. Requires Pages enabled and the domain claimed.'
+        description: 'Publish the built site to GitHub Pages at the claimed domain. This input is the arming switch; a plain run builds and stops.'
         type: boolean
         default: false
   # A completed release also arms the deploy (maintainer decision, 2026-08-31): the site follows

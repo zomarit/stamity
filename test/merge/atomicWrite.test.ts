@@ -1403,3 +1403,101 @@ describe("failure paths that need a stubbed filesystem", () => {
     });
   });
 });
+
+/**
+ * The staleness contract has two halves and only one of them is a threshold.
+ * The other is how often a live holder proves it is still alive, and it is the
+ * half that decides whether a BUSY process reads as a DEAD one — a distinction
+ * no amount of tuning the threshold can make, because both sides read the same
+ * mtime.
+ *
+ * Asserted on the options object rather than on a timing outcome on purpose:
+ * the failure this pins is a starved event loop, which no portable fixture can
+ * stage and no assertion can wait for without becoming the flake it replaces.
+ * What IS checkable, and what a later edit could silently undo, is that the
+ * cadence is stated at the call site instead of left to the library's derived
+ * `stale / 2`.
+ */
+describe("the lock's own liveness cadence", () => {
+  const getDir = useTempDir("lock-cadence");
+
+  afterEach(() => {
+    vi.doUnmock("node:fs/promises");
+    vi.doUnmock("proper-lockfile");
+    vi.resetModules();
+  });
+
+  /** The options object the subject hands the locking library for one acquire. */
+  async function captureLockOptions(target: string): Promise<Record<string, unknown>> {
+    let captured: Record<string, unknown> | undefined;
+    const mod = await importWithFs(
+      {},
+      {
+        lock: async (_file: string, options: Record<string, unknown>) => {
+          captured = options;
+          return async () => {};
+        },
+      },
+    );
+
+    await (await mod.acquireWriteLock(target))();
+
+    if (captured === undefined) throw new Error("the subject never reached the locking library");
+    return captured;
+  }
+
+  it("states the refresh cadence rather than inheriting the derived stale/2", async () => {
+    const options = await captureLockOptions(getDir().path("cadence.md"));
+
+    const stale = options["stale"] as number;
+    const update = options["update"] as number;
+
+    expect(stale).toBe(15_000);
+    // Capped at 3s, so a holder gets FIVE chances to stamp inside one staleness
+    // window where the derived 7.5s would give it two. That count is the whole
+    // guarantee: the refresh runs on an unref'd timer, so a holder awaiting
+    // child processes — two `git worktree add` runs racing for one name is how
+    // this surfaced — fires it late, and with two chances a single late fire
+    // lands past the threshold and hands the lock to a competitor mid-section.
+    expect(update).toBe(3_000);
+    expect(update).toBeLessThan(stale / 2);
+  });
+
+  it("keeps the cadence a fraction of the threshold when an operator lowers it", async () => {
+    process.env.STAMITY_LOCK_STALE_MS = "2000";
+
+    const options = await captureLockOptions(getDir().path("lowered.md"));
+
+    expect(options["stale"]).toBe(2_000);
+    // Proportional below the cap, so the margin does not silently vanish at the
+    // low end. The library floors what it actually uses at 1000ms; what this
+    // pins is that the call site never hands it `stale / 2` or more.
+    expect(options["update"]).toBe(666);
+    expect(options["update"] as number).toBeLessThan(2_000 / 2);
+  });
+
+  it("reports a compromised lock instead of throwing it out of the refresh timer", async () => {
+    const target = getDir().path("compromised.md");
+    const options = await captureLockOptions(target);
+    const onCompromised = options["onCompromised"] as (err: Error) => void;
+    const errorSpy = captureConsoleError();
+
+    try {
+      // The library's default handler is `(err) => { throw err; }`, called from
+      // inside the unref'd refresh timer — an uncaught exception on an empty
+      // stack that kills the process over an ADVISORY lock. It has to become a
+      // diagnostic the operator can act on instead.
+      expect(() => {
+        onCompromised(new Error("Unable to update lock within the stale threshold"));
+      }).not.toThrow();
+
+      const reported = String(errorSpy.mock.calls[0]?.[0] ?? "");
+      expect(reported).toContain("was compromised before it was released");
+      expect(reported).toContain(target);
+      expect(reported).toContain(`${target}.lock`);
+      expect(reported).toContain("Unable to update lock within the stale threshold");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});

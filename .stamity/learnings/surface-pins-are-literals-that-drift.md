@@ -4,6 +4,8 @@ title: surface pins are literals that drift
 date: 2026-08-31
 confidence: high
 summary: adding a verb/guide/criterion moves several hand-maintained pins that are literals, not derivations — a verb touches seven, incl. two separate docsPages verb arrays — each drifts silently green
+reviewBy: 2026-12-01
+validatedAgainst: test/cli/surface.e2e.test.ts and test/docsPages.test.ts
 integrity: sha256:a3cdef09d8e6a7331afa8a098a9459bf8244f09af433176d917994cc3c01d0ad
 ---
 

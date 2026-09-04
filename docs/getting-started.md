@@ -2,16 +2,20 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit f5a451b. -->
-<!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, or a
-     verb joins or leaves the command surface. `test/docsPages.test.ts` holds this page to the
-     hand-page contract, and `docs/cli-reference.md` plus `docs/capability-matrix.md` are the
-     generated pages it must never contradict. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 4607a76. -->
+<!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, a
+     verb joins or leaves the command surface, or a path joins or leaves `.stamity/`.
+     `test/docsPages.test.ts` holds this page to the hand-page contract; the generated
+     `docs/cli-reference.md` and `docs/capability-matrix.md` are what it must not contradict. -->
 
 # Getting started
 
-From nothing to one proven change on your own code. Fifteen minutes for the guided
-first run, plus however long `npx` takes to fetch the package.
+From nothing to one proven change on your own code. The guided first run is sized for
+fifteen minutes — six phases with a budget each, so it degrades in a planned direction
+rather than quietly overrunning — and how long yours takes depends on your repository and
+the decisions you make in it. The mechanical part underneath, installing the package and
+running `init` and `check`, is seconds; the time goes into the walk, plus however long
+`npx` takes to fetch the package.
 
 ## Before you start
 
@@ -105,25 +109,27 @@ invocation. Asking for it by name reaches a file that is genuinely on disk.
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
 `clean`
 
-`init` sets a repo up. `sync` regenerates every managed file from the manifest — run it
-after any config change, because `config` edits state and never regenerates output.
-`check` diagnoses and gates. `validate` checks content this repository authored. `add`
-installs a pack once its trust gates pass. `config` reads and changes the setup.
-`workspace` puts one policy over many repositories — see [workspaces](workspaces.md).
-`worktree` runs several branches of this one repository side by side: `worktree setup
-<name>` creates the checkout beside the repository and copies in the machine-local files a
-checkout cannot carry, `worktree list` says what exists and what state each one is in, and
-`worktree cleanup <name>` removes exactly what setup recorded — never the branch.
-`clean` removes all of it.
+What each one does, every flag it takes and every status it exits with is
+[the CLI reference](cli-reference.md)'s to state: it renders from the program, so it cannot
+describe a verb the CLI does not have or miss one it does. Three things it cannot tell you,
+because each is about how two of them go together rather than about any one verb:
 
-There is a tenth, `learn`, which agents call to record a learning through the engine's
-write gates. It is plumbing, not something you type. The gates exist because a learning is
-text that re-enters an agent's context on a later session: anything with write access to
-the repository can author a file that is read back into a prompt, which makes a note a
-security surface rather than a scratch file. So the CLI is the one write path, and every
-note passes it — a name shape that cannot address anything but a file in place, per-file
-and per-directory caps, content checks (frontmatter schema, required sections, injection
-screening), and an integrity digest stamped over the body.
+- **Run `sync` after any `config` change.** `config` edits state and never regenerates
+  output, so nothing on disk moves until a sync does.
+- **`worktree` is three subcommands** — `setup`, `list` and `cleanup`. What each one places,
+  records and inverts is in [working with stamity](working-with-stamity.md).
+- **`workspace` reaches past this repository**, and has a guide of its own:
+  [workspaces](workspaces.md).
+
+There are two more, hidden: `learn`, which agents call to record a learning through the
+engine's write gates, and `handoff`, which prepares, resumes, lists, completes and prunes
+handoffs through those same gates. Both are plumbing, not something you type. The gates
+exist because a learning is text that re-enters an agent's context on a later session:
+anything with write access to the repository can author a file that is read back into a
+prompt, which makes a note a security surface rather than a scratch file. So the CLI is the
+one write path, and every note passes it — a name shape that cannot address anything but a
+file in place, per-file and per-directory caps, content checks (frontmatter schema, required
+sections, injection screening), and an integrity digest stamped over the body.
 
 Every flag and every exit status is in [the CLI reference](cli-reference.md); every
 settable key is in [the configuration reference](configuration.md).
@@ -134,7 +140,7 @@ settable key is in [the configuration reference](configuration.md).
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs nine environment probes, then asks one question that
+`check` is the diagnosis. It runs ten environment probes, then asks one question that
 matters more than the rest: **would a sync change anything?** If the answer is yes, disk
 and the engine's output disagree — a managed file was hand-edited, a generated file was
 deleted, a pack's content no longer matches what was installed. A failing probe or any
@@ -153,6 +159,13 @@ Everything the setup knows about itself is under `.stamity/`:
 | `.stamity/handoffs/` | handoff records between sessions and clients |
 | `.stamity/generated/` | hook scripts and the agent tool policy, written from code |
 | `.stamity/packs/` | content installed by `add`, one directory per pack |
+| `.stamity/overrides/` | agents, rules, commands and skills of your own, merged above the bundled content |
+| `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it |
+| `.stamity/verify/` | one artifact per quality axis per commit, written by the verify skill |
+| `.stamity/inbox.md` | deferred rows, one dated block per run that filed them |
+| `.stamity/worktree.json` | the worktree lane's policy — yours to write; absent, its two defaults apply |
+| `.stamity/workspace-sync-journal.jsonl` | at a workspace root: the cascade's crash trail, two lines per attempted member per run |
+| `.stamity/review-gate.json` | the per-run review-round counter the generated review-gate hook writes |
 
 Commit it. The manifest is the provenance record, and a teammate who clones the
 repository gets the same setup without re-running init. Everything init writes outside
@@ -161,10 +174,16 @@ trees `.claude/`, `.cursor/`, `.github/prompts/` and `.codex/` — because that 
 makes the clone arrive with working commands and skills already on disk, and because
 generated content earns no exemption from review: it lands as an ordinary diff, and
 `check` is what catches it drifting from what the engine would emit today. The one file
-that is **not** committed is `.env.mcp` — MCP credentials — and it is the single entry
-init adds to `.gitignore` for you. Because everything above it is committed, a second
+init keeps **out** of the repository is `.env.mcp` — MCP credentials — and it is the single
+entry it adds to `.gitignore` for you. Because everything above it is committed, a second
 checkout of this repository arrives with the whole setup already in place and that one file
 missing, which is exactly what `stamity worktree setup` places for you when it creates one.
+
+`review-gate.json` is the one path that is neither: a run writes it, nothing commits it, and
+nothing ignores it either. Leave it in that state. It is runtime state for the run that wrote
+it — its absence simply means the gate is open — and a path that is untracked and un-ignored
+is one `stamity worktree setup` refuses to carry across, so a review round counted in one
+worktree never gates another.
 
 ## Keeping it current
 

@@ -1,7 +1,7 @@
 ---
 id: product-audit
 type: command
-description: "Whole-product assessment at one commit along a named axis — security, health, or all: reads the per-axis verify artifacts, opens one epic with a sub-issue per module or writes one report, and routes every fix back out."
+description: "Whole-product assessment at one commit along a named axis — security, health, or all: reads the per-axis verify artifacts, writes one report proposing an epic with a sub-issue per module, and routes every fix back out."
 tags: [review, board]
 load: on-demand
 obsolete_when: clients natively open evidence-backed assessment epics from machine-readable per-axis verify artifacts
@@ -12,8 +12,11 @@ spawns: [researcher, reviewer]
 
 Assesses the product as it stands at one commit, and turns the result into work
 someone else picks up. **This command assesses; it never modifies product
-code.** Its only outputs are board items and a report file. Every fix routes to
-`/st-work`; a finding that questions the design routes to `/st-plan`.
+code.** Its only file output is a report; on a linked board it also speaks
+through the write-back channels `/st-board` already opens, and no channel there
+creates an item, so the epic it describes travels in the report as a proposal.
+Every fix routes to `/st-work`; a finding that questions the design routes to
+`/st-plan`.
 
 ## Axes
 
@@ -83,10 +86,10 @@ evidence is a summary sentence is not a finding.
 Six steps. Steps 1-3 gather, 4-6 report.
 
 1. **Frame the run.** State the axis, the commit, whether a board source is
-   linked, and the resulting output mode, on one line — `axis: security · sha:
-   a1b2c3d · board: linked · output: epic`. An open epic already carrying this
-   axis stops the run for one question: abort, supersede the open one, or open
-   a second alongside it.
+   linked, and what the run will emit, on one line — `axis: security · sha:
+   a1b2c3d · board: linked · output: report + epic proposal`. An open epic
+   already carrying this axis stops the run for one question: abort, supersede
+   the open one in the proposal, or propose a second alongside it.
 
    > Epic scaffold: `stamity-epic-audit-frame` → Module taxonomy. Slot:
    > spec-kind = security-relevant specs (threat model, permissions, data
@@ -115,7 +118,8 @@ Six steps. Steps 1-3 gather, 4-6 report.
    every `Critical` or `Warning` finding reaches the output — suppression at
    this step would make the whole run unfalsifiable.
 
-5. **Emit.** Board items or a report, per the output modes below.
+5. **Emit.** The report and the proposal it carries, per the output section
+   below.
 
 6. **Close.** One recap: axis, commit, modules assessed, findings by severity,
    artifacts read versus regenerated, and the count of unexamined areas carried
@@ -136,28 +140,37 @@ is not emitted — it goes back to step 4.
 | `evidence` | `path:line`, a verify check id, or the detection fact |
 | `route` | `/st-work` for a change · `/st-plan` when the design is the finding |
 
-## Output modes
+## Output
 
-**Board linked.** One epic for the run, one sub-issue per module, one per
-cross-cutting assessment. Module sub-issues carry no dependencies; cross-cutting
-sub-issues depend on the module set, and the dependency section names them.
-
-> Epic scaffold: `stamity-epic-audit-frame` → Epic and sub-issue shape, then
-> Board sync. Slot: epic-kind = `product audit (<axis>)`; epic-label =
-> `product-audit`.
-
-**No board linked.** The run degrades to a report and says so — an unlinked
-board is a repo state, not an error, and it never blocks an assessment:
+The report always lands, and it is the record of the run:
 
 ```
 .stamity/audits/<axis>-<sha>.md
 ```
 
-The report carries the same sections the epic would have carried: scope, the
-evidence table, findings by module with the full findings contract per row, the
-cross-cutting sections, and the unexamined-area list. Linking a board later
-(`/st-board setup`) makes the next run emit an epic; the report is not
-migrated retroactively.
+It carries scope, the evidence table, findings by module with the full findings
+contract per row, the cross-cutting sections, the unexamined-area list, and the
+epic proposal below.
+
+**The epic proposal.** One epic for the run, one sub-issue per module, one per
+cross-cutting assessment. Module sub-issues carry no dependencies; cross-cutting
+sub-issues depend on the module set, and the dependency section names them. It
+stays a proposal in every repo, linked board or not: no write-back channel
+creates a board item, and none writes a label. The bodies and the dependency
+order are authored here for a person to apply.
+
+> Epic scaffold: `stamity-epic-audit-frame` → Epic and sub-issue shape, then
+> Board write-back. Slot: epic-kind = `product audit (<axis>)`; epic-label =
+> `product-audit`.
+
+**Board linked.** The run additionally speaks through the channels already open
+to it: one progress comment per run on an item the board already has, and a
+status transition where the phase map covers it.
+
+**No board linked.** That is a repo state, not an error, and it never blocks an
+assessment — the report is unchanged and the proposal rides in it. Linking a
+board later (`/st-board setup`) gives the next run something to comment on; it
+does not change what the run emits, and no report is migrated retroactively.
 
 ## Assesses, never modifies
 
@@ -165,15 +178,17 @@ The boundary, stated as rules rather than intent:
 
 - **Spawn set.** `researcher` and `reviewer`. No implementer, no fixer. There
   is no path in this command that reaches a code-mutating role.
-- **Write set.** Board items and `.stamity/audits/<axis>-<sha>.md`. No source
-  file, no configuration, no dependency manifest, no lockfile — not even a
-  formatting change, and not even when the fix is one obvious line.
+- **Write set.** `.stamity/audits/<axis>-<sha>.md`, plus the progress comment
+  and status transition the board contract already opens. No board item is
+  created and no label is written. No source file, no configuration, no
+  dependency manifest, no lockfile — not even a formatting change, and not even
+  when the fix is one obvious line.
 - **Refresh set.** Running `st-verify` for a missing axis writes
   `.stamity/verify/<axis>-<sha>.json`. That artifact is evidence, and it is the
   one write outside the audit output.
 - **Routing.** A finding that is trivially fixable is still a finding. It
-  leaves as a board item or a report row, and `/st-work` applies it under
-  its own gates.
+  leaves as a report row and a proposed sub-issue, and `/st-work` applies it
+  under its own gates.
 
 An assessment that fixes what it finds cannot report what it found: the tree it
 measured no longer exists, and its own evidence stops reproducing.
@@ -186,7 +201,7 @@ measured no longer exists, and its own evidence stops reproducing.
 | Verify artifact absent or stale for a required axis | Run `st-verify` for that axis, then continue |
 | Module taxonomy resolves to nothing | Stop and ask for the module set; do not assess an invented one |
 | A named module's directory does not exist | Report it as a taxonomy defect and continue with the rest |
-| Open epic already carries this axis | Ask: abort · supersede · open alongside |
+| Open epic already carries this axis | Ask: abort · supersede it in the proposal · propose a second alongside |
 | A finding lacks `path:line` or a check id | It is not emitted; it returns to grading as an open question |
 
 > Epic scaffold: `stamity-epic-audit-frame` → Failure handling, then Guardrails.
@@ -198,12 +213,11 @@ measured no longer exists, and its own evidence stops reproducing.
 
 - **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
 - **severity** for findings: `Critical` | `Warning` | `Minor`. One scale end to
-  end — what the reviewer graded is what the epic or the report carries.
-- `DONE` carries the axis, the commit, the output mode and its location, the
-  findings with their evidence and routes, the artifacts read versus
-  regenerated, and the unexamined areas. A run that routed no finding out still
-  returns `DONE` with an empty finding list; an assessment that found nothing
-  produced a result.
+  end — what the reviewer graded is what the report and its proposal carry.
+- `DONE` carries the axis, the commit, the report's location, the findings with
+  their evidence and routes, the artifacts read versus regenerated, and the
+  unexamined areas. A run that routed no finding out still returns `DONE` with
+  an empty finding list; an assessment that found nothing produced a result.
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest
   unblocking input — an unresolvable module taxonomy, a verify axis that will
   not run here, a board the run cannot reach after its one retry.

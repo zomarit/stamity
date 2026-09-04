@@ -68,9 +68,13 @@
  * recorded rather than quietly filled.
  *
  * A rendered catalog page — the operator-facing accepted-value set for
- * `config set mcp.servers` — does not exist yet. It belongs in the generated
- * docs lane beside the capability matrix, which projects adapter constants the
- * same way this table would be projected.
+ * `config set mcp.servers` — is generated from this table into
+ * `docs/reference/mcp-servers.md`, in the generated docs lane beside the
+ * capability matrix, which projects adapter constants the same way. This table
+ * is its only source: a row added here reaches the page through
+ * `node scripts/generate-docs.mjs`, and the page is byte-compared, so a row
+ * whose page was never regenerated fails the docs drift gate rather than
+ * shipping a catalog the operator cannot see.
  */
 
 /**
