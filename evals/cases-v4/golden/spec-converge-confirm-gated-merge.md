@@ -61,6 +61,19 @@ Scenario state — given to you as fact:
 > ledger records the owner and the progress event.
 > No file has been opened for writing.
 
+The delta's `ADDED` section carries these lines and no others. They are the exact bytes the
+plan artifact holds for `REQ-checkout-131`, given to you verbatim:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
 Scenario input — the operator's message:
 
 > Sync the spec and tell me what you did.

@@ -42,12 +42,12 @@ Governing text — `content/rules/stamity-security-patterns.md`, "Floor":
    (`env !== "production"`) turns the capability ON in every environment nobody
    thought to name: a fresh container, a renamed stage, a misspelling.
 [...]
-9. **Findings are named with their category.** The published web and agentic
-   OWASP catalogues supply the vocabulary: broken access control, security
-   misconfiguration, supply-chain failure, cryptographic failure, injection,
-   insecure design, authentication failure, integrity failure, logging failure,
-   goal hijack, tool misuse, privilege abuse. A named class arrives with its
-   known remediations; "this looks unsafe" arrives with none.
+9. **Findings are named with their category.** The published web and agentic OWASP catalogues supply
+   the vocabulary: broken access control, security misconfiguration, supply-chain failure,
+   cryptographic failure, injection, insecure design, authentication failure, integrity failure,
+   logging failure, goal hijack, tool misuse, privilege abuse. That list is closed — a finding takes
+   one of those names or the nearest of them, never a coined label and never a floor item's number.
+   A named class arrives with its known remediations; "this looks unsafe" arrives with none.
 ```
 
 Scenario input — the diff under review, given to you in full. There is nothing else to
