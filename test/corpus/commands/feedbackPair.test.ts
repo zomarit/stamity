@@ -506,6 +506,21 @@ describe("rework — validation and handoff", () => {
     expect(meta).toContain(".stamity/learnings/");
   });
 
+  it("closes phase 6 on a next step derived from the run's own state", () => {
+    const handoff = clause(artifact(REWORK).parsed.body, "## 6. Plan handoff");
+
+    // The closing contract named the proof block and stopped there, so the
+    // forward pointer into the next touchpoint dangled. Derivation is the
+    // point: a fixed menu would satisfy the words and not the finding, so the
+    // named states are asserted alongside the phrase.
+    expect(handoff).toMatch(/recommended next step/);
+    expect(handoff).toMatch(/derived from this run's own state/);
+    expect(handoff).toMatch(/not from a fixed menu/);
+    expect(handoff).toContain("[NEEDS CLARIFICATION]");
+    expect(handoff).toMatch(/a plan persisted on `stop`/);
+    expect(handoff).toMatch(/DEFER rows alone/);
+  });
+
   it("states the three-way routing rule once", () => {
     const rule = clause(artifact(REWORK).parsed.body, "## Routing rule");
 
@@ -790,6 +805,21 @@ describe("pr-resolve — triage, fixes, and replies", () => {
     expect(close).toMatch(/fourth write-back channel/i);
     expect(close).toContain(".stamity/inbox.md");
     expect(close).toMatch(/proof block/i);
+  });
+
+  it("closes on a next step derived from the run's own state", () => {
+    const close = clause(artifact(PR_RESOLVE).parsed.body, "## Close");
+
+    // Same finding as rework's phase 6: the proof block enumerated what the run
+    // recorded and named nothing to do next. The three branches are run states
+    // this command already produces, so the step is read off the run rather
+    // than picked from a menu that would be identical on every close.
+    expect(close).toMatch(/recommended next step/);
+    expect(close).toMatch(/derived from this run's own state/);
+    expect(close).toMatch(/not from a fixed menu/);
+    expect(close).toMatch(/a thread whose reply failed/);
+    expect(close).toContain("`NEEDS_CLARIFICATION`");
+    expect(close).toMatch(/an unspent round under the attempt cap/);
   });
 });
 

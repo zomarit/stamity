@@ -119,3 +119,8 @@ Never automatic. The user switches in session, and the answer is the evidence th
 
 When the destination is implementation, state the line verbatim: **switch to `/st-work`
 to apply**. Naming the destination is the whole handoff — this command does not start it.
+
+Close on one recommended next step, derived from this run's own state and not from the
+ladder above: a Blocked row makes what unblocks it the step, a Contradiction makes resolving
+it the step, and a low-confidence claim makes the evidence that would raise it the step. The
+ladder names the destination once state has chosen; with nothing outstanding, the line says so.

@@ -261,6 +261,11 @@ Every run closes with:
 - Manifest delta: rows added, changed, retired — or `none`.
 - Open markers: every `[NEEDS CLARIFICATION]` in the touched files — or `none`.
 - Not done: each gap the run left open — or `none`.
+- Next step — derived from this run's own state, never a fixed menu: an open
+  `[NEEDS CLARIFICATION]` marker makes resolving it the step, since a marked
+  spec is not handed to `/st-work`; an unconfirmed T2 or T3 proposal makes that
+  confirmation the step; a census gap makes the criterion it named the step. A
+  run that closed with none of those says so in the same line.
 
 `create` against a repo that already holds a hand-authored spec asks before
 writing anything:

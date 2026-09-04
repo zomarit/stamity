@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.1.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-02T18:52:24.013Z",
+  "updatedAt": "2026-09-04T14:38:44.905Z",
   "tools": [
     "claude"
   ],
@@ -134,7 +134,7 @@
       "adapter": "claude",
       "artifactId": "cmd-ask",
       "artifactType": "command",
-      "contentHash": "e8e9572612cbd8a374cb0cb0ba59739229a2e05135fe1a652deef06a525834ed",
+      "contentHash": "0ff5c345f4b1b85686cd5b61b7fc8663999deea86242acddde5f33ebf4c4a774",
       "path": ".claude/commands/st-ask.md"
     },
     {
@@ -148,7 +148,7 @@
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "29b62f1c9c3073367f2f04e60eeb82c4a9954eea7aa7df43f3c15cca68ab26bb",
+      "contentHash": "adb4d32257530d260d780b8f42a8fa2f2abb76d25ac52ec734929d8cbe847909",
       "path": ".claude/commands/st-debug.md"
     },
     {
@@ -162,28 +162,28 @@
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "4c0d308aacd15f083148472557b87ebb2c87ebcfc990fa535b456741eacda95b",
+      "contentHash": "82cf8fc851d39cd6263e80890f1aa546cea7aca9704e000856632aec25d9788a",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "bf9a110746c30d888f9a7ed4fed35246ac36928c47c8f4772b568442735ae218",
+      "contentHash": "206318b5fbf1a08333e523ecd4a5337f0f817ecc4c6f313611b273414cf673a9",
       "path": ".claude/commands/st-quick.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "496959d16c080acdf8dd421dc0835d421e496b95aeff2a825bd89fcf59f3e61f",
+      "contentHash": "ece5f9dbae48cc0d506605a6b56daf2f2f23e9a987e207dbada7f7cfdb7fd1e0",
       "path": ".claude/commands/st-rework.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-spec",
       "artifactType": "command",
-      "contentHash": "43df803612a82e9cdccff33bbc009fd95fb752c9c47ad016231f9387b95c82f0",
+      "contentHash": "47d430d3ed062682edd53f31af69097fd55db26f9f81d55aa4c4dd57e4cc9c9f",
       "path": ".claude/commands/st-spec.md"
     },
     {

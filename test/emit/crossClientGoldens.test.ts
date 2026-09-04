@@ -144,6 +144,36 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-04, the recommended-next-step close-out — Package 8, carried
+  //     from the last package's register sweep by name. CORPUS PROSE moved on
+  //     six command bodies, each in every dialect that carries one (claude
+  //     commands, copilot prompts, cursor skills), and on nothing else:
+  //
+  //     CHANGED `commands/st-ask.md` (6491 -> 6861 bytes claude/copilot, 6535
+  //       -> 6905 cursor), `commands/st-debug.md` (11274 -> 11659, cursor 11318
+  //       -> 11703), `commands/st-quick.md` (7846 -> 8227, cursor 7890 -> 8271),
+  //       `commands/st-spec.md` (14987 -> 15365, cursor 15032 -> 15410),
+  //       `commands/st-rework.md` (15898 -> 16273, cursor 15945 -> 16320) and
+  //       `commands/st-pr-resolve.md` (19501 -> 19882, cursor 19552 -> 19933).
+  //       Each gained one closing paragraph naming a recommended next step
+  //       DERIVED from that run's own state rather than read off the fixed
+  //       ladder or table the file already carried — the contract `st-work`,
+  //       `st-board` and `st-plan` already shipped, so all nine touchpoints now
+  //       close on one. Codex carries no command bodies, so neither of its two
+  //       goldens moved.
+  //     CHANGED the `.stamity/manifest.json` row in the four command-bearing
+  //       tree digests (claude, copilot, cursor, all-four): six `contentHash`
+  //       values moved and the byte length did not, so each row shows a new
+  //       digest at an unchanged size. The residue-document goldens do not
+  //       carry the manifest and did not move — the four updated snapshots are
+  //       tree digests only.
+  //
+  //     What did NOT move: the charter (`AGENTS.md`) in every selection, every
+  //       generated page, every hook script, `commands/st-work.md`,
+  //       `commands/st-board.md` and `commands/st-plan.md` — byte-identical
+  //       rows in every dialect that carries them — and every other corpus
+  //       body.
+  //
   //   - 2026-09-02, the identity-casing fix, refreshed after the content-wave
   //     refresh below had already landed. HOOK SCRIPTS moved, nothing else:
   //     three operator-facing prose strings in `src/hooks/scripts.ts` opened

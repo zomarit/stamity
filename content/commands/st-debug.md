@@ -163,3 +163,8 @@ and reaches the same transition as a switch the user makes.
 | Cause is one mechanical slip inside the quick thresholds | `/st-quick` | the cited line plus the failing test |
 | The symptom turns out to be a question, not a defect | `/st-ask` | the symptom rewritten as the question |
 | The defect arrived as review feedback on delivered work | `/st-rework` | the diagnosis as a triage input |
+
+The closing report ends on one recommended next step, derived from this run's own state and not
+from the table above: a regression clause with no test makes writing it the step; instrumentation
+held under a capture-later agreement makes the strip at the window's end the step; a surviving
+hypothesis makes its discriminating observation the step. None of those, and the line says so.

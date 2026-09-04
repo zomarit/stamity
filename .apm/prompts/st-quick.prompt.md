@@ -145,3 +145,8 @@ Never automatic; user-gated in session, with the batch state as the evidence tha
 | Gates stay red after one retry | `/st-work` | runner output plus the applied-item list |
 | The item needs its cause found first | `/st-debug` | the symptom and the item that would have changed |
 | The item is really a question | `/st-ask` | the question, with the files already identified |
+
+The report closes on one recommended next step, derived from this batch's own state and not from
+the table above: a refused or deferred item makes carrying that list to `/st-work` the step; an
+item reported `saved` makes the `stamity sync` run that publishes it the step; a pre-existing
+failure left alone makes naming it the step. A batch with none of those says so in the line.
