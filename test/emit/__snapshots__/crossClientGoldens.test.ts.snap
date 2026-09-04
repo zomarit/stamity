@@ -612,14 +612,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
@@ -1000,12 +1000,12 @@ Credential handling is the secrets rule's subject and is not restated here.
    refused: an install script executes with the developer's privileges before a
    single test does. Each added dependency carries one line — what it does, and
    why not the standard library.
-9. **Findings are named with their category.** The published web and agentic
-   OWASP catalogues supply the vocabulary: broken access control, security
-   misconfiguration, supply-chain failure, cryptographic failure, injection,
-   insecure design, authentication failure, integrity failure, logging failure,
-   goal hijack, tool misuse, privilege abuse. A named class arrives with its
-   known remediations; "this looks unsafe" arrives with none.
+9. **Findings are named with their category.** The published web and agentic OWASP catalogues supply
+   the vocabulary: broken access control, security misconfiguration, supply-chain failure,
+   cryptographic failure, injection, insecure design, authentication failure, integrity failure,
+   logging failure, goal hijack, tool misuse, privilege abuse. That list is closed — a finding takes
+   one of those names or the nearest of them, never a coined label and never a floor item's number.
+   A named class arrives with its known remediations; "this looks unsafe" arrives with none.
 
 #### Gates
 
@@ -1068,14 +1068,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
@@ -1158,14 +1158,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
@@ -1268,7 +1268,7 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".claude/rules/stamity-question-protocol.md": "0700d055aa85f048345bd57afbfecaece70d985dc798e170600603748d7e74ff 3994 bytes",
   ".claude/rules/stamity-resilience.md": "089a40824f251b2032bc9e2c457ada244dffa6eb3f0ceebe40da15182ee1d26d 5029 bytes",
   ".claude/rules/stamity-secrets.md": "6ad54255c641460292f79b100fb11b0e50dac6420dc3b7f9f0a3ea2114a1cb54 6306 bytes",
-  ".claude/rules/stamity-security-patterns.md": "6ab4727fab6eddde08f9832e27cfa7fd62cca2df9d03b32439d0a38f8b20b55c 6161 bytes",
+  ".claude/rules/stamity-security-patterns.md": "dfe1a5580a47442cefc0785276aca664c43c09d2ff14ec5256986471ee1f9790 6298 bytes",
   ".claude/rules/stamity-testing.md": "bf7500ade30993447b616d498feb7d26b034c18c7db149854460781226088064 4176 bytes",
   ".claude/rules/stamity-ui-states.md": "05a9372861cbfbe588494d72ce28492c1954f06c0db3ce11b1b29ef9d2d89b3e 4405 bytes",
   ".claude/settings.json": "a2cf9e1a0347a337cae332ba2d5543329e657a39ac33842b0b25ab2e2f934713 1603 bytes",
@@ -1325,7 +1325,7 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".cursor/rules/stamity-question-protocol.mdc": "9ae263fc86e6269e23da4c81cc1f6a6dfc1f8eb1fe1adf4093beae2838bb90d1 4013 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "16ca82af86c313b6eac87e5a38fe00f32873f2e9d5aa9c4a2ab0afe80a02b9ed 6309 bytes",
-  ".cursor/rules/stamity-security-patterns.mdc": "003c872c5805f3896776bc878e25789e52e76491433761cfcfbdc127e8134275 6164 bytes",
+  ".cursor/rules/stamity-security-patterns.mdc": "3d235ec738014730178f5e60a027ecfa030c277a92a7f949cb15b58e532794d0 6301 bytes",
   ".cursor/rules/stamity-testing.mdc": "6be05910f96dcd7872779263f35ba66c8928ed3c0b32931a057353d2e7b4bf11 4180 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "254c519142a94c77a78210feaedec26ac3faedc448cf825a4821646b14644e1d 4403 bytes",
   ".cursor/skills/st-ask/SKILL.md": "c54d01dd7744948cc84d16ea225178b0ec600cd84f20ac02be5fa47689d98ba0 7313 bytes",
@@ -1356,7 +1356,7 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".github/instructions/stamity-question-protocol.instructions.md": "1b41f9aa809609eb5b7ae76f643259a1f1f0c1f3f09b88f0f03c4985ca1af1a8 4008 bytes",
   ".github/instructions/stamity-resilience.instructions.md": "777d6e62e82a88a892e368e7f82856a703b7747a3abd09f343aa550412ea7863 5017 bytes",
   ".github/instructions/stamity-secrets.instructions.md": "3d42a7154c286133f8c703568bf0c35ea990e8ab659776004e1be3a490c55028 6294 bytes",
-  ".github/instructions/stamity-security-patterns.instructions.md": "20ab3bff0f4f44fd3a269a927f09f95bfc622a8961e29da96cc68f250197390c 6149 bytes",
+  ".github/instructions/stamity-security-patterns.instructions.md": "dd3f987e6fdd24940e1084f1141826d5a4df9c232785e7a52f91dad599fa2513 6286 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2ead3fd125db409a91b79ef51da9c1620a4b72c5dc0d211ea77af500d2b6624e 4167 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "cf79d11ac6bbc29c5ab16186067261dabbfb92ad414d706000c9424851fbe953 4390 bytes",
   ".github/prompts/st-ask.prompt.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
@@ -1390,17 +1390,17 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "8fde14ccf340389d3e912b502c38f8cdfd71ddc93a58b18f9df8ed08e3251ae8 54488 bytes",
+  ".stamity/manifest.json": "3d2b9af8d329eb077a4e398f0f31eda72f6fd1ce96b3ac07887e382cdda84cac 54488 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "8aa3d47feba6fedb5147f07ba6b82334f663be026e6bf4bddc59b8466da03f66 29026 bytes",
+  "AGENTS.md": "c3470fe5f51095d406ade7cece91b8aea6045f8ddd10da615ba15709948387ec 29303 bytes",
   "CLAUDE.md": "f5bb9ab771f54ed41eaa7ce3aefc96044f33f76184b50a05a1b91b69132c3540 308 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
+  "packages/alpha/AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
+  "packages/beta/AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -1543,14 +1543,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
@@ -1641,7 +1641,7 @@ exports[`emitted tree for 'claude' > matches the tree digest golden > claude tre
   ".claude/rules/stamity-question-protocol.md": "0700d055aa85f048345bd57afbfecaece70d985dc798e170600603748d7e74ff 3994 bytes",
   ".claude/rules/stamity-resilience.md": "089a40824f251b2032bc9e2c457ada244dffa6eb3f0ceebe40da15182ee1d26d 5029 bytes",
   ".claude/rules/stamity-secrets.md": "6ad54255c641460292f79b100fb11b0e50dac6420dc3b7f9f0a3ea2114a1cb54 6306 bytes",
-  ".claude/rules/stamity-security-patterns.md": "6ab4727fab6eddde08f9832e27cfa7fd62cca2df9d03b32439d0a38f8b20b55c 6161 bytes",
+  ".claude/rules/stamity-security-patterns.md": "dfe1a5580a47442cefc0785276aca664c43c09d2ff14ec5256986471ee1f9790 6298 bytes",
   ".claude/rules/stamity-testing.md": "bf7500ade30993447b616d498feb7d26b034c18c7db149854460781226088064 4176 bytes",
   ".claude/rules/stamity-ui-states.md": "05a9372861cbfbe588494d72ce28492c1954f06c0db3ce11b1b29ef9d2d89b3e 4405 bytes",
   ".claude/settings.json": "a2cf9e1a0347a337cae332ba2d5543329e657a39ac33842b0b25ab2e2f934713 1603 bytes",
@@ -1675,8 +1675,8 @@ exports[`emitted tree for 'claude' > matches the tree digest golden > claude tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "c2e7eecfbb35d8aacb9f49e340c66cd9430e4ca5bd37247ab86077fa8288a8a0 16080 bytes",
-  "AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
+  ".stamity/manifest.json": "40fd1b6186419990662202a2263401f0c4b8ea262c6a985fe256b5bd1c8d9106 16080 bytes",
+  "AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
   "CLAUDE.md": "f5bb9ab771f54ed41eaa7ce3aefc96044f33f76184b50a05a1b91b69132c3540 308 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -1803,14 +1803,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
@@ -2191,12 +2191,12 @@ Credential handling is the secrets rule's subject and is not restated here.
    refused: an install script executes with the developer's privileges before a
    single test does. Each added dependency carries one line — what it does, and
    why not the standard library.
-9. **Findings are named with their category.** The published web and agentic
-   OWASP catalogues supply the vocabulary: broken access control, security
-   misconfiguration, supply-chain failure, cryptographic failure, injection,
-   insecure design, authentication failure, integrity failure, logging failure,
-   goal hijack, tool misuse, privilege abuse. A named class arrives with its
-   known remediations; "this looks unsafe" arrives with none.
+9. **Findings are named with their category.** The published web and agentic OWASP catalogues supply
+   the vocabulary: broken access control, security misconfiguration, supply-chain failure,
+   cryptographic failure, injection, insecure design, authentication failure, integrity failure,
+   logging failure, goal hijack, tool misuse, privilege abuse. That list is closed — a finding takes
+   one of those names or the nearest of them, never a coined label and never a floor item's number.
+   A named class arrives with its known remediations; "this looks unsafe" arrives with none.
 
 #### Gates
 
@@ -2253,14 +2253,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
@@ -2343,14 +2343,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
@@ -2447,14 +2447,14 @@ exports[`emitted tree for 'codex' > matches the tree digest golden > codex tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "cde782dc53a7ffa8332d57c3caa735dbd112427314281a0d96a65bedd46696e8 10810 bytes",
-  "AGENTS.md": "8aa3d47feba6fedb5147f07ba6b82334f663be026e6bf4bddc59b8466da03f66 29026 bytes",
+  ".stamity/manifest.json": "4fb4a2cb1b8c5eb60f21e71da54f75d9240603c8c282cb0a9dc7c92233df1d0d 10810 bytes",
+  "AGENTS.md": "c3470fe5f51095d406ade7cece91b8aea6045f8ddd10da615ba15709948387ec 29303 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
+  "packages/alpha/AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
+  "packages/beta/AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -2565,14 +2565,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
@@ -2666,7 +2666,7 @@ exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot t
   ".github/instructions/stamity-question-protocol.instructions.md": "1b41f9aa809609eb5b7ae76f643259a1f1f0c1f3f09b88f0f03c4985ca1af1a8 4008 bytes",
   ".github/instructions/stamity-resilience.instructions.md": "777d6e62e82a88a892e368e7f82856a703b7747a3abd09f343aa550412ea7863 5017 bytes",
   ".github/instructions/stamity-secrets.instructions.md": "3d42a7154c286133f8c703568bf0c35ea990e8ab659776004e1be3a490c55028 6294 bytes",
-  ".github/instructions/stamity-security-patterns.instructions.md": "20ab3bff0f4f44fd3a269a927f09f95bfc622a8961e29da96cc68f250197390c 6149 bytes",
+  ".github/instructions/stamity-security-patterns.instructions.md": "dd3f987e6fdd24940e1084f1141826d5a4df9c232785e7a52f91dad599fa2513 6286 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2ead3fd125db409a91b79ef51da9c1620a4b72c5dc0d211ea77af500d2b6624e 4167 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "cf79d11ac6bbc29c5ab16186067261dabbfb92ad414d706000c9424851fbe953 4390 bytes",
   ".github/prompts/st-ask.prompt.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
@@ -2689,10 +2689,10 @@ exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "de37d98404630a38c4691c29b360cfd61d8589668957b3d54ffae4907e6248f2 16240 bytes",
+  ".stamity/manifest.json": "4442bf2f2356e6984fc8ddbe08610fe969d0040d7ee7c47e33908fd28f00739f 16240 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
+  "AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -3071,14 +3071,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
@@ -3176,7 +3176,7 @@ exports[`emitted tree for 'cursor' > matches the tree digest golden > cursor tre
   ".cursor/rules/stamity-question-protocol.mdc": "9ae263fc86e6269e23da4c81cc1f6a6dfc1f8eb1fe1adf4093beae2838bb90d1 4013 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "16ca82af86c313b6eac87e5a38fe00f32873f2e9d5aa9c4a2ab0afe80a02b9ed 6309 bytes",
-  ".cursor/rules/stamity-security-patterns.mdc": "003c872c5805f3896776bc878e25789e52e76491433761cfcfbdc127e8134275 6164 bytes",
+  ".cursor/rules/stamity-security-patterns.mdc": "3d235ec738014730178f5e60a027ecfa030c277a92a7f949cb15b58e532794d0 6301 bytes",
   ".cursor/rules/stamity-testing.mdc": "6be05910f96dcd7872779263f35ba66c8928ed3c0b32931a057353d2e7b4bf11 4180 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "254c519142a94c77a78210feaedec26ac3faedc448cf825a4821646b14644e1d 4403 bytes",
   ".cursor/skills/st-ask/SKILL.md": "c54d01dd7744948cc84d16ea225178b0ec600cd84f20ac02be5fa47689d98ba0 7313 bytes",
@@ -3198,8 +3198,8 @@ exports[`emitted tree for 'cursor' > matches the tree digest golden > cursor tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "4d3531fa649790b9050b1ce24d89d62a1e3e97a2e431d7bc6952d8a796fee6c3 16089 bytes",
-  "AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
+  ".stamity/manifest.json": "f86e9eee769211a19c599d6360c3b3699e6bb26fa066428647358a56eba39160 16089 bytes",
+  "AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

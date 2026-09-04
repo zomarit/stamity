@@ -67,12 +67,12 @@ Credential handling is the secrets rule's subject and is not restated here.
    refused: an install script executes with the developer's privileges before a
    single test does. Each added dependency carries one line — what it does, and
    why not the standard library.
-9. **Findings are named with their category.** The published web and agentic
-   OWASP catalogues supply the vocabulary: broken access control, security
-   misconfiguration, supply-chain failure, cryptographic failure, injection,
-   insecure design, authentication failure, integrity failure, logging failure,
-   goal hijack, tool misuse, privilege abuse. A named class arrives with its
-   known remediations; "this looks unsafe" arrives with none.
+9. **Findings are named with their category.** The published web and agentic OWASP catalogues supply
+   the vocabulary: broken access control, security misconfiguration, supply-chain failure,
+   cryptographic failure, injection, insecure design, authentication failure, integrity failure,
+   logging failure, goal hijack, tool misuse, privilege abuse. That list is closed — a finding takes
+   one of those names or the nearest of them, never a coined label and never a floor item's number.
+   A named class arrives with its known remediations; "this looks unsafe" arrives with none.
 
 ## Gates
 

@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.1.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-04T20:38:46.866Z",
+  "updatedAt": "2026-09-04T21:49:45.969Z",
   "tools": [
     "claude"
   ],
@@ -260,7 +260,7 @@
       "adapter": "claude",
       "artifactId": "security-patterns",
       "artifactType": "rule",
-      "contentHash": "6ab4727fab6eddde08f9832e27cfa7fd62cca2df9d03b32439d0a38f8b20b55c",
+      "contentHash": "dfe1a5580a47442cefc0785276aca664c43c09d2ff14ec5256986471ee1f9790",
       "path": ".claude/rules/stamity-security-patterns.md"
     },
     {
@@ -456,7 +456,7 @@
       "adapter": "claude",
       "artifactId": "charter",
       "artifactType": "infra",
-      "contentHash": "41b8a2a65303db30b529588c7f08518797fb92b51ee48d90f4f16d1dd5d11077",
+      "contentHash": "72a090f6d9f58398822de7f3df561a9dbba4a5639a5bd326628071904499f835",
       "path": "AGENTS.md",
       "stampedVersion": "1.1.0"
     },
