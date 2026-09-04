@@ -2,7 +2,7 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import CodeBlock from '@theme/CodeBlock';
 import Layout from '@theme/Layout';
-import type {ReactNode} from 'react';
+import {useEffect, useRef, type ReactNode} from 'react';
 
 /**
  * The landing page: name, pitch, the one line that installs it, and the two ways on.
@@ -14,10 +14,101 @@ import type {ReactNode} from 'react';
  */
 export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
+  const mainRef = useRef<HTMLElement>(null);
+  const statusRef = useRef<HTMLParagraphElement>(null);
+
+  /*
+   * THE COPY CONTROL ANNOUNCES NOTHING, AND THIS PAGE FIXES THAT FOR ITS OWN BLOCK.
+   *
+   * The theme's copy button flips its `aria-label` from "Copy code to clipboard" to "Copied" and
+   * back a second later — `CodeBlock/Buttons/CopyButton/index.js:53-62` in
+   * `@docusaurus/theme-classic/lib/theme/` — and ships no live region: a grep for `aria-live`
+   * across that same `theme/` directory returns nothing, and probing the built site returns an
+   * empty list of live regions on every page. A change of accessible name on a control that a
+   * pointer activation may leave unfocused is not a status message, so WCAG 4.1.3 is unmet on the
+   * one line this page exists to hand a reader.
+   *
+   * THE CLICK ARMS; THE THEME'S OWN LABEL CONFIRMS. A click listener alone would announce a
+   * success that did not happen: the theme's handler is `copyToClipboard(code).then(...)` with no
+   * `.catch` — its own comment says errors are left unhandled on purpose, for observability — so
+   * when the write is rejected (a denied permission, an insecure context with the fallback
+   * unavailable) nothing about the button changes, and a click-triggered announcement would be a
+   * lie the reader then acts on. So the click only records the resting label, and the
+   * announcement is emitted when a MutationObserver sees that label move. The theme's own revert
+   * clears the region, which is why this page owns no timer and has no teardown race with one.
+   *
+   * DELEGATION IS NOT A STYLE CHOICE, AND `main` IS THE ONLY SAFE ROOT FOR IT. Two theme
+   * behaviours put every node below it out of reach of a mount-time query. The button group is
+   * rendered inside `<BrowserOnly>` — "Code block buttons are not server-rendered on purpose",
+   * `CodeBlock/Buttons/index.js:13` — so the button does not exist in the first client render.
+   * And the block ITSELF is replaced: `CodeBlock/index.js:29-36` keys the whole subtree on
+   * `String(useIsBrowser())` to force a re-render once the Prism theme is known, so hydration
+   * remounts it and the container element captured at mount is a detached node a moment later.
+   * That was measured, not reasoned about: an earlier revision of this effect held the block, and
+   * a probe against the built site read an empty live region while the button's own `aria-label`
+   * flipped to "Copied" — the listener and the observer were both on a node no longer in the
+   * page. `main` carries the page's own ref, is never remounted, and the block is resolved from
+   * the event target instead. Reading the resting label inside the handler also means no English
+   * string is written down here, so the theme's own `translate()` keeps working in any locale the
+   * site adds.
+   */
+  useEffect(() => {
+    const root = mainRef.current;
+    const status = statusRef.current;
+    if (!root || !status) {
+      return undefined;
+    }
+
+    let resting: string | null = null;
+
+    const onClick = (event: Event) => {
+      const button = (event.target as Element | null)?.closest('button');
+      // Armed from rest only. The theme reverts the label on a 1000 ms timeout that a
+      // repeat click neither clears nor restarts (`CopyButton/index.js:52-61`:
+      // `setIsCopied(true)` is a no-op while already copied, so no attribute mutation
+      // fires and a second `setTimeout` is queued behind the first). Capturing the
+      // CURRENT label on every click would therefore record "Copied" as the resting
+      // name for a click inside that window, and the first timeout's revert would then
+      // read as a new state and announce "Copy code to clipboard" — a status whose text
+      // contradicts the state, to exactly the reader who pressed twice because the first
+      // press gave no feedback. `resting` is nulled by the revert below, so the next
+      // cycle re-arms; until then the original resting label stands and the revert
+      // matches it.
+      if (button?.closest('.landing__install') && resting === null) {
+        resting = button.getAttribute('aria-label');
+      }
+    };
+    root.addEventListener('click', onClick);
+
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.attributeName !== 'aria-label' || resting === null) {
+          continue;
+        }
+        const target = record.target as Element;
+        if (!target.closest('.landing__install')) {
+          continue;
+        }
+        const label = target.getAttribute('aria-label');
+        if (label === resting) {
+          status.textContent = '';
+          resting = null;
+        } else if (label) {
+          status.textContent = label;
+        }
+      }
+    });
+    observer.observe(root, {subtree: true, attributes: true, attributeFilter: ['aria-label']});
+
+    return () => {
+      root.removeEventListener('click', onClick);
+      observer.disconnect();
+    };
+  }, []);
 
   return (
     <Layout title={siteConfig.title} description={siteConfig.tagline}>
-      <main className="landing">
+      <main className="landing" ref={mainRef}>
         <h1 className="landing__title">{siteConfig.title}</h1>
         <p className="landing__pitch">{siteConfig.tagline}</p>
 
@@ -39,6 +130,16 @@ export default function Home(): ReactNode {
         <CodeBlock language="sh" className="landing__install">
           npx @zomarit/stamity init
         </CodeBlock>
+
+        {/*
+         * Rendered empty at mount, not created when the message arrives: a live region inserted
+         * together with its text is the classic way to get silence. `polite` because this is a
+         * status and not an alert; `aria-atomic` so the whole phrase is read rather than the
+         * diff. `.landing__sr-only` is this page's own visually-hidden class, already carrying
+         * the repo link's new-tab cue — clipped rather than hidden, so it stays in the
+         * accessibility tree, which is the one requirement a live region cannot do without.
+         */}
+        <p className="landing__sr-only" aria-live="polite" aria-atomic="true" ref={statusRef} />
 
         {/*
          * Both icons below are Primer Octicons (github/primer/octicons, MIT licence) at their 16px
@@ -73,8 +174,14 @@ export default function Home(): ReactNode {
              * announced it with nothing. The cue is text, clipped by `.landing__sr-only`: it joins
              * the accessible name rather than sitting beside the mark, which GitHub's logo terms
              * would not have it decorated with a second glyph anyway.
+             *
+             * The words are the theme's, not this page's. The navbar's icon carries
+             * `aria-label="(opens in new tab)"` through `translate()`
+             * (`@docusaurus/theme-classic/lib/theme/Icon/ExternalLink/index.js:18-22`), so this
+             * span spells the same phrase and the two links announce the same tab identically
+             * rather than in two wordings a reader has to notice are one thing.
              */}
-            <span className="landing__sr-only"> (opens in a new tab)</span>
+            <span className="landing__sr-only"> (opens in new tab)</span>
           </Link>
         </div>
       </main>

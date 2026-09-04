@@ -184,12 +184,82 @@ const config: Config = {
       style: 'dark',
       copyright: '© zomarit · MIT',
     },
-    // Required, not cosmetic. Mermaid's unset default is a light-ground theme, and this site
-    // defaults to dark (`colorMode` above) while still honouring a light preference — so both
-    // grounds are reachable on the first paint and a single theme name would be unreadable on
-    // one of them. Docusaurus swaps these two by the active color mode.
+    // Required, not cosmetic, and it is one palette rather than two presets.
+    //
+    // ONE THEME NAME IN BOTH MODES, AND `base` RATHER THAN A PRESET. `base` is the theme whose
+    // variables are all overridable: its `calculate()` copies the overrides in, runs its own
+    // derivation pass, then copies them in again, so nothing derived can beat an explicit value
+    // (mermaid 11.17.2, `src/themes/theme-base.js`, extracted from the bundle's sourcemap). The
+    // two modes carry the same name deliberately — the theme spreads `theme` last over a single
+    // shared `options` object (`@docusaurus/theme-mermaid/lib/client/index.js:15-21`), so there
+    // is no per-mode `themeVariables` slot and a palette that differs by mode is not expressible
+    // here at all. What follows is therefore ground-independent by construction.
+    //
+    // THE TWO LIVE FAILURES IT FIXES. Computed styles read off the built site at 1280 in both
+    // schemes, against the grounds `html` actually paints — paper #FBFBFD (`--ifm-background-color`
+    // in `src/css/custom.css`) and ink #09090C. `neutral` drew a light-mode node border of
+    // #999999 at 2.76:1 on paper, below WCAG 1.4.11's 3:1 for the boundary of a component; `dark`
+    // drew a dark-mode edge label of #CCCCCC on a #585858 chip at 4.43:1, below 1.4.3's 4.5:1 for
+    // text. Both are failures on the shipped page. Alongside them the node plane was invisible on
+    // both grounds — #EEEEEE at 1.12:1 on paper, #1F2020 at 1.22:1 on ink.
+    //
+    // EVERY PAIR, ON BOTH GROUNDS. #6B24FF is the mark's own violet, unmodified — the value
+    // `--ifm-color-primary` carries in light mode: 6.12:1 on paper and 3.15:1 on ink, so the node
+    // plane and the edge-label chip clear 3:1 without knowing which ground they landed on.
+    // #8A52FF draws every border, line and arrowhead: 4.29:1 on paper, 4.48:1 on ink. White on
+    // #6B24FF is 6.32:1 — the same pair `--ifm-button-color` already rides — and it carries every
+    // label, node and edge alike, because NO colour reaches 4.5:1 against both #FBFBFD and
+    // #09090C: the paper ceiling is relative luminance 0.175768 and the ink floor is 0.187600, an
+    // empty band. That is why no text here sits on the page ground and why the edge label is a
+    // chip rather than bare text. The border on its own fill is 1.42:1 and is decorative only —
+    // 1.4.11's boundary duty is discharged by the fill itself at 3.15:1 and 6.12:1.
+    //
+    // THE CONSTRAINT THAT COMES WITH THE EMPTY BAND. "Ground-independent by construction" is a
+    // claim about text on an OWNED fill, which is every string this palette paints today. Text
+    // mermaid draws straight onto the page ground is outside it: white is 1.03:1 on paper, and
+    // base's derived #333333 would be 1.57:1 on ink, so neither value — nor any third one —
+    // clears 4.5:1 in both modes. Every white below is load-bearing on a chip and stays; what
+    // does not follow it is a diagram whose text sits on the ground. A `title:` line, a sequence
+    // diagram's messages, a gantt's axis labels: each needs a per-mode palette, which the single
+    // shared `options` object above cannot express, so no such diagram is added to this site until
+    // that lands — the fix is a per-mode theme, never a compromise colour picked here.
+    //
+    // NO `classDef` IN THE FENCE. mermaid paints a decision diamond through the same rule as
+    // every rectangle — `polygon` shares the selector list with `rect` in its flowchart styles —
+    // so no theme variable separates it, and the only lever that would is a `classDef` in
+    // `docs/working-with-stamity.md`. That page is at the 150 lines this run budgeted for it, and
+    // the diamond is already separated by its shape, so those two lines stay unspent and the
+    // diamond renders violet among violet rectangles rather than near-black among near-black.
     mermaid: {
-      theme: {light: 'neutral', dark: 'dark'},
+      theme: {light: 'base', dark: 'base'},
+      options: {
+        themeVariables: {
+          // The plane every label sits on.
+          primaryColor: '#6B24FF',
+          mainBkg: '#6B24FF',
+          nodeBkg: '#6B24FF',
+          primaryTextColor: '#FFFFFF',
+          nodeTextColor: '#FFFFFF',
+          textColor: '#FFFFFF',
+          // Borders and lines, never text: 4.29/4.48:1 is over 3:1 on both grounds and under
+          // 4.5:1 on both, which is exactly the band a boundary may occupy and a label may not.
+          primaryBorderColor: '#8A52FF',
+          nodeBorder: '#8A52FF',
+          lineColor: '#8A52FF',
+          arrowheadColor: '#8A52FF',
+          edgeLabelBackground: '#6B24FF',
+          // Unused by the one diagram on the site today — it has no subgraph and no title — and
+          // set anyway so the next one cannot inherit base's cream defaults. It is NOT a licence
+          // to add a title: mermaid paints one on the page ground, where the empty band above says
+          // no single value works. See THE CONSTRAINT THAT COMES WITH THE EMPTY BAND.
+          titleColor: '#FFFFFF',
+          clusterBkg: '#6B24FF',
+          clusterBorder: '#8A52FF',
+          // `background` is deliberately absent: base reads it only as the fallback `lineColor`
+          // and `arrowheadColor` derive from, and both are set above, so a value would be inert
+          // on this diagram and misleading on the next.
+        },
+      },
     },
     prism: {
       theme: prismThemes.github,
