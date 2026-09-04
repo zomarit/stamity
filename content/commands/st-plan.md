@@ -336,6 +336,11 @@ Sections, in order:
 history. Two checks before the write: (1) every unit's `interfaces` resolve without opening another
 document; (2) the artifact plus the files it names fits a fresh context window.
 
+A unit whose `interfaces` cannot be filled from what this run already holds is not written with a
+placeholder: the run reads the paths in its own `reads` and fills the field before the write, or
+it returns `BLOCKED_DEPENDENCY` naming the document it has to open. `not yet resolvable`, `see
+below`, and a pointer to another file are not values this field takes.
+
 **Oversized plan.** When check (2) fails, split into sequenced files `<NNN>-<slug>-01.md`,
 `-02.md`, … — each self-complete, with its own context, units, spec-delta slice, and stamp. Each
 file names the preceding one in its head `depends_on`. A stub pointing at a sibling for its

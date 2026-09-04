@@ -133,6 +133,10 @@ Automation is graded by what a wrong merge would cost.
 | T2 | Converge gap scan and delta merge at Prove | Auto-proposed, confirm-gated, append/merge-only. New sections and additions are shown as a diff; the operator confirms before any write. |
 | T3 | Requirement-text mutation — changing what a requirement says, or retiring one | Never silent. Each mutation is presented with its requirement id, before/after text, and the evidence that prompted it. |
 
+A T2 proposal is shown, not described. The operator reads the exact lines that would be added,
+verbatim, before confirming: a paraphrase of an addition is not the addition, and a confirmation
+given against a paraphrase confirms text nobody saw.
+
 A converged spec makes `sync` a **byte-stable no-op**: the scan finds no gap, no
 file is opened for writing, and the run reports `no changes`. Re-running `sync`
 against an unchanged tree yields an identical report. A run that rewrites a
@@ -190,6 +194,9 @@ per-file counts and names every criterion that is neither. A criterion whose
 test exists is confirmed through a `test-runner` spawn running the repo's test
 gate, `npm run test`, and returning its per-gate result; a
 criterion pointing at a test that does not exist is reported as a gap.
+
+The spawn is part of the census, not a step after it: the census dispatches `test-runner` in the
+turn it classifies, and does not hold the dispatch for the operator's go-ahead.
 
 **Inferred ADR:** when `create` or `extract` meets a decision baked into the
 code with no written record, it writes an ADR stub under `docs/adr/` carrying

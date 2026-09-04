@@ -138,7 +138,7 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * Selecting codex does not add a codex file: it rewrites the file every other
  * selected client already reads, so a claude+codex repo hands claude the codex
  * rules appendix too. Against {@link ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX} that
- * is ≈6.6x the always-on bytes every co-selected client pays — a today-measured
+ * is ≈6.5x the always-on bytes every co-selected client pays — a today-measured
  * figure like the ceilings above, not a target.
  *
  * **A tripwire AND a published figure**, which are two different jobs.
@@ -158,14 +158,21 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * is the failure an earlier wording of this comment had twice: first claiming a
  * disclosure that did not exist, then claiming its absence after it did.
  */
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 28_956;
+// 28_956 -> 29_026 on 2026-09-04: invariant 7 took the paste-handback clause and
+// was rewrapped around it, net-zero in lines. So the line ceilings above did not
+// move and only the byte figures did — which is exactly the cost this pair
+// measures and that one does not.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_026;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
  * Same tripwire, and the same delivered disclosure, as
  * {@link ALWAYS_ON_SHARED_BYTES_WITH_CODEX}.
  */
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 4_404;
+// 4_404 -> 4_474 on 2026-09-04: the same reflow. Its +70 bytes land on the
+// charter itself, so both figures move by the same amount and the appendix is
+// unchanged.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 4_474;
 
 /**
  * The composite always-on line count one client pays for a plan: the charter,

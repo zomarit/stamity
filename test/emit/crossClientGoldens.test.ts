@@ -144,6 +144,129 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-04, the closure run's Minor-findings fix pass. TWO emitted files
+  //     moved, plus the manifest rows that record them:
+  //
+  //     CHANGED `commands/st-rework.md` 17129 -> 17354 (cursor 17176 -> 17401),
+  //       the claude command and the copilot prompt sharing one digest and the
+  //       cursor skill carrying its own head. The persistence guard's secret-scan
+  //       step now states that the secrets floor still governs what the run
+  //       itself writes — nothing of a value reaches any file, and a mask is not
+  //       a reproduction — and that the guard adds only that the run does not
+  //       rewrite the operator's text for them, which settles a contradiction
+  //       against the secrets rule's own golden case. The edit is NET-ZERO in
+  //       lines inside the guard: the list's lead-in sentence moved up into the
+  //       paragraph above it, and item 1 spent the two lines that freed. Every
+  //       `source:` range into this file below the guard therefore still lands on
+  //       the text it names, and +225 bytes is the added clause alone.
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       (33820 -> 34294 bytes) in the two claude-bearing selections. The
+  //       reviewer's under-lock content-fault report was the one path carrying no
+  //       recovery hint: it said the counter "could not be read", which
+  //       misdescribes STATE_INVALID — that code parsed a file it did read — and
+  //       it left the operator without the sentence the unlocked path has always
+  //       carried. Both paths now say the counter cannot be trusted and that
+  //       deleting the file restarts it, and that it is not overwritten from
+  //       here. +474 bytes, most of it the comment stating why the two wordings
+  //       are one. Posture unchanged: still fail-open at exit 0.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length — the fixed-width sha256 rows for the two files
+  //       above and nothing else.
+  //
+  //     What did NOT move: every other corpus body, every rule, every skill, the
+  //       three portable hook scripts, every generated page, every client entry
+  //       file and every residue document. The pass's other edits —
+  //       `src/cli/kit/terminal.ts` and `src/cli/kit/prompts.ts` (the TERM=dumb
+  //       literal is now imported rather than spelled twice), `tsdown.config.mjs`,
+  //       `website/docusaurus.config.ts`, `evals/rubric-v4.md`, the `st-eval-run`
+  //       override skill (repo-local, so it reaches no golden fixture), the
+  //       re-inlined eval case brief, the plan and the run ledger — reach no
+  //       emitted tree.
+  //
+  //   - 2026-09-04, the closure run's review round 1 fix pass. ONE emitted file
+  //     moved, plus the manifest rows that record it:
+  //
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       (32108 -> 33820 bytes) in the two claude-bearing selections. Review
+  //       round 1 found the counter-reset guard open at the one errno site the
+  //       wave below did not cover: `load()` stats before it reads, and every
+  //       stat errno mapped to "no file", which the caller reads as "no runs
+  //       yet" — so a sharing hold on the stat under the lock published a
+  //       one-round document over every round already counted, on a path that
+  //       exits 0. The stat now retries the sharing family on the read's own
+  //       20/40/80/160 ms schedule, treats only ENOENT and a non-regular name
+  //       as absence, and returns STATE_UNREADABLE otherwise, which the guard
+  //       drops the round on. +1712 bytes, most of it that comment and the
+  //       rewritten LOCK_CEILING_MS note, which now states the invocation's
+  //       compound worst case (~30.6s win32 / ~26.7s POSIX against the 600s
+  //       the wired events allow) instead of a 30s-class margin the retry
+  //       budgets had overtaken. Posture unchanged: still fail-open at exit 0.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length — the fixed-width sha256 row for the file
+  //       above and nothing else.
+  //
+  //     What did NOT move: every corpus body, every rule, every skill, the
+  //       three portable hook scripts, every generated page and every client
+  //       entry file. The round's other edits — `website/src/pages/index.tsx`,
+  //       `tsdown.config.mjs`, `test/support/support.test.ts`,
+  //       `test/hooks/scripts.test.ts`, the plan and the run ledger — reach no
+  //       emitted tree.
+  //
+  //   - 2026-09-04, the closure run's execution wave. Two source changes moved
+  //     bytes here, plus the manifest rows that record them:
+  //
+  //     CHANGED six corpus bodies, each in every dialect that carries it.
+  //       `agents/stamity-design-quality.md` 7677 -> 7859 claude, 7601 -> 7783
+  //       cursor, 7666 -> 7848 copilot, 8132 -> 8314 codex; and
+  //       `agents/stamity-performance.md` 8004 -> 8159 claude, 7927 -> 8082
+  //       cursor, 7989 -> 8144 copilot, 8454 -> 8609 codex. Four command
+  //       bodies moved too, the claude command and the copilot prompt sharing
+  //       one digest and the cursor skill carrying its own head:
+  //       `commands/st-ask.md` 6861 -> 7269 (cursor 6905 -> 7313),
+  //       `commands/st-plan.md` 23023 -> 23385 (cursor 23066 -> 23428),
+  //       `commands/st-rework.md` 16273 -> 17129 (cursor 16320 -> 17176) and
+  //       `commands/st-spec.md` 15365 -> 15789 (cursor 15410 -> 15834). Codex
+  //       carries no command bodies, so its tree moved on the two agents and
+  //       the charter alone.
+  //     CHANGED the charter, and this is the only edit of the wave that
+  //       reaches the RESIDUE-document goldens: invariant 7 now says that
+  //       handing the operator a line, diff, or file body to paste is the same
+  //       protocol violation as an orchestrator editing inline. The paragraph
+  //       rewrapped at four lines either way, so the whole move is +70 bytes —
+  //       `AGENTS.md` 4404 -> 4474 in the claude, cursor and copilot
+  //       selections, 28956 -> 29026 for the codex root file that also carries
+  //       the appendix, and `packages/alpha/AGENTS.md` and
+  //       `packages/beta/AGENTS.md` 4404 -> 4474 in the two multi-root
+  //       selections. Nine residue document bodies moved, every one of them a
+  //       charter, and no other residue byte in any selection.
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       (26669 -> 32108 bytes) in the two claude-bearing selections. One
+  //       predicate over EACCES/EBUSY/EPERM now decides, at the lock create,
+  //       the state read, the publish rename and the unlock, whether an errno
+  //       is an answer or a momentary hold; the rename budget is the schedule
+  //       `src/merge/atomicWrite.ts` already settled on rather than this
+  //       script's own pre-fix one. +5439 bytes, most of it the comment blocks
+  //       that state why each site waits, and every terminal failure still
+  //       exits 0 with the round unblocked.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length (16080 claude, 16089 cursor, 16240 copilot,
+  //       10810 codex, 54488 all-four) — fixed-width sha256 ledger rows for
+  //       the files above and nothing else.
+  //
+  //     What did NOT move: every corpus body outside the six, `st-work`,
+  //       `st-board`, `st-debug`, `st-quick` and `st-pr-resolve` among them;
+  //       every rule and every skill; the three portable hook scripts in all
+  //       four clients (only the claude review gate moved, which is the
+  //       containment the rows below rely on); every generated page and every
+  //       client entry file. The same wave repointed the repo-local
+  //       `st-eval-run` skill override to the v4 eval set, which no golden
+  //       here holds — that skill is an override, not corpus, so it appears in
+  //       neither snapshot file — and changed `src/cli/kit/terminal.ts`,
+  //       `tsdown.config.mjs` and three `website/` files, none of which the
+  //       emitted tree carries. The APM projection moved in the same change
+  //       and is regenerated by `scripts/generate-apm-package.mjs`, not by
+  //       sync.
+  //
   //   - 2026-09-04, the recommended-next-step close-out — Package 8, carried
   //     from the last package's register sweep by name. CORPUS PROSE moved on
   //     six command bodies, each in every dialect that carries one (claude

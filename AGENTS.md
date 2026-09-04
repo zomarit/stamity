@@ -44,10 +44,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 

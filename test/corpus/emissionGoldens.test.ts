@@ -82,6 +82,49 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-04, the closure run's Minor-findings fix pass. NOTHING moved in
+ *     this snapshot, and that is the reviewed result rather than a skipped
+ *     refresh. The pass changed two emitted surfaces — `commands/st-rework.md`
+ *     (the persistence guard's secret-scan step gains the clause that the
+ *     secrets floor still governs what the run itself writes, net-zero in lines
+ *     inside the guard) and the claude review-gate hook script (33820 -> 34294
+ *     bytes, the reviewer's under-lock content-fault report now carrying the
+ *     same recovery hint the unlocked path gives). This suite holds neither: it
+ *     carries no command bodies, and the review gate is claude adapter residue
+ *     goldened in the sibling suite. The three core hook scripts and every
+ *     charter body are byte-identical across the pass, which is the containment
+ *     claim rather than an absence of evidence; the sibling ledger itemises the
+ *     moved bytes.
+ *
+ *   - 2026-09-04, the closure run's review round 1 fix pass. NOTHING moved in
+ *     this snapshot, and that is the reviewed result rather than a skipped
+ *     refresh: the round's only emitted-surface change is the claude review-gate
+ *     hook script (32108 -> 33820 bytes, the counter's stat now distinguishing a
+ *     sharing hold from an absent file), which is a generated script and not a
+ *     corpus body, so it appears in the sibling suite alone. Its ledger row
+ *     there carries the reasoning; this entry exists so a reader comparing the
+ *     two ledgers sees the refresh was run against both.
+ *
+ *   - 2026-09-04, the closure run's execution wave. SUBSTITUTION moved on
+ *     `charter/stamity-charter.md` alone, 4443 -> 4513 bytes at an unchanged
+ *     91 lines: invariant 7 now says that handing the operator a line, diff,
+ *     or file body to paste is the same protocol violation as an orchestrator
+ *     editing product files inline, and the paragraph rewrapped inside its own
+ *     four lines. The golden diff is that content edit byte for byte, so
+ *     substitution passed the new prose through and left no token behind.
+ *
+ *     NOTHING else moved here. `commands/st-work.md` and
+ *     `agents/stamity-test-runner.md` — the other two substitution targets —
+ *     are byte-identical, and so are the catalog, the MDC companion heads, the
+ *     policy document and the three core hook scripts. The wave also edited
+ *     six corpus bodies this suite does not hold (`st-ask`, `st-plan`,
+ *     `st-rework`, `st-spec`, `agents/stamity-design-quality.md` and
+ *     `agents/stamity-performance.md`) and rewrote the lock handling in
+ *     `stamity-review-gate.mjs`, which is claude adapter residue goldened in
+ *     the sibling suite; the three core scripts staying byte-identical across
+ *     that rewrite is the containment claim, not an absence of evidence. The
+ *     moved bytes for all of it are itemised in the sibling ledger.
+ *
  *   - 2026-09-04, the recommended-next-step close-out — Package 8, carried from
  *     the last package's register sweep by name. NOTHING moved here, and the
  *     row exists so the two ledgers stay in step. The wave changed six corpus

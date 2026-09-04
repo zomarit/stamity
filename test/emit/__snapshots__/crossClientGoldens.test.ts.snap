@@ -627,10 +627,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 
@@ -1083,10 +1083,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 
@@ -1173,10 +1173,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 
@@ -1241,23 +1241,23 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".claude/agents/stamity-creator.md": "3793fe36e3fc9e3911550bad8afd0f076841e66708e080236091b43cf036dcb2 13847 bytes",
-  ".claude/agents/stamity-design-quality.md": "800264c792aa7f68ab7873f209977b636c656b7f85fd37298cacce7d8bee2809 7677 bytes",
+  ".claude/agents/stamity-design-quality.md": "248ba102d159693d08473e1f879b6be1051016ff46ed52bfacf31ae7ccbde4a0 7859 bytes",
   ".claude/agents/stamity-fixer.md": "e07245c31b51e0d7e1607add300132de80ee5ea04bce2951adc1213ac7750fbb 6138 bytes",
   ".claude/agents/stamity-implementer.md": "8c83b9fd03e8d4715384e4e300e7dd527a2bf2279ce6da822c9de09b819e31de 5490 bytes",
-  ".claude/agents/stamity-performance.md": "c943de70bcf68d3da6b862a5e4ef371336dfe92a2bdd45f57b6e5e3d2bfcc087 8004 bytes",
+  ".claude/agents/stamity-performance.md": "7528f6f39d838f7f089d42aaf3f7ad0b64d6e48ee66a87bc72686b834d3b09a7 8159 bytes",
   ".claude/agents/stamity-researcher.md": "0938d483dcdf57eb5050735f8060cd2ab1265c93921ab7352755f51026e5755a 7365 bytes",
   ".claude/agents/stamity-reviewer.md": "b3c408c9dd30ebb25309c5367f8d96ec2ba47a2fef284d73674ea92f31912c62 10284 bytes",
   ".claude/agents/stamity-security.md": "c9b70589b551a2d5bdf3ff19cf17b6f2bb77f20df5cbe2b037dd27d73273ee39 7555 bytes",
   ".claude/agents/stamity-spec-author.md": "8e7942d51c0a2e0f782c28a4c9483c4fb23ad45acedaeb3089eda6bf9c4fd8a6 8277 bytes",
   ".claude/agents/stamity-test-runner.md": "6948e5079e30e3ce50b8e317591158120e132fba0a4f051ed6f2334540d1bc69 5672 bytes",
-  ".claude/commands/st-ask.md": "0ff5c345f4b1b85686cd5b61b7fc8663999deea86242acddde5f33ebf4c4a774 6861 bytes",
+  ".claude/commands/st-ask.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
   ".claude/commands/st-board.md": "cfcfc9c08b989ea100b38cfe3df07d28bef575363e8594a21d02726d1bbfeea3 20708 bytes",
   ".claude/commands/st-debug.md": "2ebcf9a75d5d3e602efc801061972034b90d4d476ad64f2c11fef13e988bc1e1 11659 bytes",
-  ".claude/commands/st-plan.md": "24377631652768030241fa5ef65a691fc7c7927e4913bf5b7815d9340a0bffda 23023 bytes",
+  ".claude/commands/st-plan.md": "a0f005ab6ff00604f67a32f675b6f62de90cbfc28de2dabd50325f9c172adbc5 23385 bytes",
   ".claude/commands/st-pr-resolve.md": "876fdd8c5e80c69aa16b5b058b03db30575d0e83d9e6f8a35ad93b42bdf7bf6a 19882 bytes",
   ".claude/commands/st-quick.md": "cdabf1a3793eaff166d083bd6f09d6594b15a23c71907d4ade8e5644c1c0f375 8227 bytes",
-  ".claude/commands/st-rework.md": "cfa416816c1e1559dff22e6ec5325ccf0b21d3da86d539dcce8b3342184cd26d 16273 bytes",
-  ".claude/commands/st-spec.md": "08662e04f307da36a1f788c3d5e5db5bd90e3f8abba0923da436f6d132205957 15365 bytes",
+  ".claude/commands/st-rework.md": "d1227552d04dadaa8afe76646a47e13fc1a1b795c94482a6c9c20ecbccd30e0a 17354 bytes",
+  ".claude/commands/st-spec.md": "6c126b5d120b079a6a2380a06a49b67e10bd640d6eafb143373048b753d2c179 15789 bytes",
   ".claude/commands/st-work.md": "dc83138c836c3d48c5f30276970f58cbc330af47609cbd278b2a930305e10f26 21859 bytes",
   ".claude/rules/stamity-ai-evals.md": "06a295e597264103790775e4dd9da5f36f38e1c454c96b005b5264d4c22d3a2a 3844 bytes",
   ".claude/rules/stamity-api-versioning.md": "4e013575676dee4fec4a84ef4c07c06ad8ea19cafb233a5429f295e2ba5c564d 4852 bytes",
@@ -1291,10 +1291,10 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".claude/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".claude/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".codex/agents/stamity-creator.toml": "196035326c629127cfad44fea2c981380faef79d26d299dbc9536ee8c7b38598 14299 bytes",
-  ".codex/agents/stamity-design-quality.toml": "157fbd1524308fc1740ec88250cd4200d3ecdeb748589949d88c47f22ad7fd26 8132 bytes",
+  ".codex/agents/stamity-design-quality.toml": "9140bd9bf822cb2b2aa446b0afce405e5a6630b7c1234d7ed8051f2775c89a06 8314 bytes",
   ".codex/agents/stamity-fixer.toml": "0d4aaba1dbc60fc18f5b3a4293c2ea4b3138846e738c34f77edab1cb94f09f7f 6588 bytes",
   ".codex/agents/stamity-implementer.toml": "a1083ba39193fa2eaad86dd85472a0f5a985cd049c1108c04c4a5aa232359a70 5948 bytes",
-  ".codex/agents/stamity-performance.toml": "1a377d1d777607d58c25fcb4f31c03b3e9dabf937ba7498b8d8b67ad8e3a2158 8454 bytes",
+  ".codex/agents/stamity-performance.toml": "9940ef34a92f46c00c3069863714efdedbfcb3ca7c3ed937701b878b9c27446f 8609 bytes",
   ".codex/agents/stamity-researcher.toml": "1a8e48161f2be750207a9278e558ad4c4c003406e308718ef306fc1225aeee8a 7814 bytes",
   ".codex/agents/stamity-reviewer.toml": "dd4dcfd9b704a522bed0734e59f1def75010a1256cf2fa9f24dbf669759d54e1 10733 bytes",
   ".codex/agents/stamity-security.toml": "b706029cf5b3b730c252cb398759af6790d660bae9a7e462217a945030d808de 8004 bytes",
@@ -1303,10 +1303,10 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".codex/config.toml": "981a2f3712cf66b87b723c6780b3268f9d9600e7acfac58f10ee4fddd47a7d49 1490 bytes",
   ".codex/hooks.json": "3e1d0fa81c480bcf0dcc8f94dcf204c36983eb5be718605b3363469708ffd1f0 1770 bytes",
   ".cursor/agents/stamity-creator.md": "9cb2a22b302f230ad36e5c6b82fc703e2e5d5b510f4ed5771dd700e268391bbd 13732 bytes",
-  ".cursor/agents/stamity-design-quality.md": "a7279ade07b6b08cc5848614630ecfa29491b84d80151670b8365a02bc10d089 7601 bytes",
+  ".cursor/agents/stamity-design-quality.md": "7c9ff339433878ac8af990b27c594f8c8dc8e3dc10f9ec3b30be92b0f3968df9 7783 bytes",
   ".cursor/agents/stamity-fixer.md": "ce9922531f5adc46f691c5e2e15a0b520f28aaee43985d2d656bbeaf6e8014c4 6007 bytes",
   ".cursor/agents/stamity-implementer.md": "ff370bc7caf2d6519972f3fee3dd57e0d36734c1633e86fd7cac188a5e273d67 5357 bytes",
-  ".cursor/agents/stamity-performance.md": "2f10d7c2f6a648f27d316ef913ac91afa0a81b826e548467e2e561131b4fdcfd 7927 bytes",
+  ".cursor/agents/stamity-performance.md": "c770d5d324032610ceb8a63e8a8633a08560facf85599c009b3b678179c0f11c 8082 bytes",
   ".cursor/agents/stamity-researcher.md": "0219a2ed1f211afca72bc98bea25038f1677c3586e983c99eabf6303857d6d05 7268 bytes",
   ".cursor/agents/stamity-reviewer.md": "901e37a54db2b0371fd45e8f8359ada9e427b8b5902767531f7db8e7ae24d6cc 10214 bytes",
   ".cursor/agents/stamity-security.md": "6817395074d753a68b2c655923c5691d110b7a0147de135abbe2fe533c1d0583 7485 bytes",
@@ -1328,20 +1328,20 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".cursor/rules/stamity-security-patterns.mdc": "003c872c5805f3896776bc878e25789e52e76491433761cfcfbdc127e8134275 6164 bytes",
   ".cursor/rules/stamity-testing.mdc": "6be05910f96dcd7872779263f35ba66c8928ed3c0b32931a057353d2e7b4bf11 4180 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "254c519142a94c77a78210feaedec26ac3faedc448cf825a4821646b14644e1d 4403 bytes",
-  ".cursor/skills/st-ask/SKILL.md": "cf9e651a5ceda6b35c0fcde56793a084fb1e3133e9c6528b6d53b32d07e3387c 6905 bytes",
+  ".cursor/skills/st-ask/SKILL.md": "c54d01dd7744948cc84d16ea225178b0ec600cd84f20ac02be5fa47689d98ba0 7313 bytes",
   ".cursor/skills/st-board/SKILL.md": "c925b34c57a623b290186fcf4423d5b279dcf7a4f3e919db1871a7353b44fb79 20754 bytes",
   ".cursor/skills/st-debug/SKILL.md": "67360f3a67d92364ac87632269d3ee24a4575f5504e01056ad739ddad75667d6 11703 bytes",
-  ".cursor/skills/st-plan/SKILL.md": "2a3167ab58ad47ae71aea76f7aefe953aada0ae7b97a1b17615d25606cf7e92b 23066 bytes",
+  ".cursor/skills/st-plan/SKILL.md": "4a64c14008779e8b2e7b74cf449e2d55b2e2081080707f72ae330c1791ae1e29 23428 bytes",
   ".cursor/skills/st-pr-resolve/SKILL.md": "66beda7c4e0031c0ac523407f0be602c09003ce4df7c20175b88da3ef2ebcad6 19933 bytes",
   ".cursor/skills/st-quick/SKILL.md": "d9c0e2eb254cd9cd9e83b9d9e620ee3e4ac420a7bfd3eb55de0277bda92ff918 8271 bytes",
-  ".cursor/skills/st-rework/SKILL.md": "4f63aff9a6df7f768f12f30648fcb10d28a665801a1a3ab529833c5f78ef087e 16320 bytes",
-  ".cursor/skills/st-spec/SKILL.md": "6171c8a8b557fdc82d9b0119864753dc982467bbf71883924c4d5e8f12667624 15410 bytes",
+  ".cursor/skills/st-rework/SKILL.md": "b2cb34ec353056e83ac7cc3ed2e1fc58116ca9b08ad1049bb9908fd1d327f893 17401 bytes",
+  ".cursor/skills/st-spec/SKILL.md": "3a207681a02833f16a54faf154216e547a56089bb02f55701a66ecf105bfdb9e 15834 bytes",
   ".cursor/skills/st-work/SKILL.md": "ba4d57a26dd8e7fc014427106a330b3f1ea2975595ee43e97c4a8401489a52e3 21904 bytes",
   ".github/agents/stamity-creator.agent.md": "5b968808117a1e8ced84e03a8770b66b5f13029874e50517844ce977a18bee48 13813 bytes",
-  ".github/agents/stamity-design-quality.agent.md": "731c9871e74feb52fe8899a13cd0ff187c3122e513ce50628582645f37b12a5e 7666 bytes",
+  ".github/agents/stamity-design-quality.agent.md": "ee3c885887329b678072ebe0da9c2b568f45ba86f61e4f9b7452454741a837c5 7848 bytes",
   ".github/agents/stamity-fixer.agent.md": "00ec0c786990feb73be1cdeea693cf98f147a33959b7b60f27f31f2638138f1e 6097 bytes",
   ".github/agents/stamity-implementer.agent.md": "b6e23f602c2b180713e988c000107917e0d2b7a9e78d5a7b751cd3df130e664f 5453 bytes",
-  ".github/agents/stamity-performance.agent.md": "08731e5b93dbe14988404e2c045cbe31f777b26bed03ff6aa75b4743d4abcd1f 7989 bytes",
+  ".github/agents/stamity-performance.agent.md": "5a25d80f30663b22ba7bf2cfc257528ab03099ae1b605abaca5a51a5c6d77958 8144 bytes",
   ".github/agents/stamity-researcher.agent.md": "4e23810049c91e4ab5ff331d9c06c30165faec409546218613b4432c9ddb5e28 7336 bytes",
   ".github/agents/stamity-reviewer.agent.md": "fa4d2e9e72f3a444693f7ab4a9b24ef4c3f883a05ab90a465e6c95607bb16148 10273 bytes",
   ".github/agents/stamity-security.agent.md": "edb193fea28b238215eadc63eae65895c14cfe2328f4bf55d675cf0588c7ab44 7544 bytes",
@@ -1359,14 +1359,14 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".github/instructions/stamity-security-patterns.instructions.md": "20ab3bff0f4f44fd3a269a927f09f95bfc622a8961e29da96cc68f250197390c 6149 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2ead3fd125db409a91b79ef51da9c1620a4b72c5dc0d211ea77af500d2b6624e 4167 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "cf79d11ac6bbc29c5ab16186067261dabbfb92ad414d706000c9424851fbe953 4390 bytes",
-  ".github/prompts/st-ask.prompt.md": "0ff5c345f4b1b85686cd5b61b7fc8663999deea86242acddde5f33ebf4c4a774 6861 bytes",
+  ".github/prompts/st-ask.prompt.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
   ".github/prompts/st-board.prompt.md": "cfcfc9c08b989ea100b38cfe3df07d28bef575363e8594a21d02726d1bbfeea3 20708 bytes",
   ".github/prompts/st-debug.prompt.md": "2ebcf9a75d5d3e602efc801061972034b90d4d476ad64f2c11fef13e988bc1e1 11659 bytes",
-  ".github/prompts/st-plan.prompt.md": "24377631652768030241fa5ef65a691fc7c7927e4913bf5b7815d9340a0bffda 23023 bytes",
+  ".github/prompts/st-plan.prompt.md": "a0f005ab6ff00604f67a32f675b6f62de90cbfc28de2dabd50325f9c172adbc5 23385 bytes",
   ".github/prompts/st-pr-resolve.prompt.md": "876fdd8c5e80c69aa16b5b058b03db30575d0e83d9e6f8a35ad93b42bdf7bf6a 19882 bytes",
   ".github/prompts/st-quick.prompt.md": "cdabf1a3793eaff166d083bd6f09d6594b15a23c71907d4ade8e5644c1c0f375 8227 bytes",
-  ".github/prompts/st-rework.prompt.md": "cfa416816c1e1559dff22e6ec5325ccf0b21d3da86d539dcce8b3342184cd26d 16273 bytes",
-  ".github/prompts/st-spec.prompt.md": "08662e04f307da36a1f788c3d5e5db5bd90e3f8abba0923da436f6d132205957 15365 bytes",
+  ".github/prompts/st-rework.prompt.md": "d1227552d04dadaa8afe76646a47e13fc1a1b795c94482a6c9c20ecbccd30e0a 17354 bytes",
+  ".github/prompts/st-spec.prompt.md": "6c126b5d120b079a6a2380a06a49b67e10bd640d6eafb143373048b753d2c179 15789 bytes",
   ".github/prompts/st-work.prompt.md": "dc83138c836c3d48c5f30276970f58cbc330af47609cbd278b2a930305e10f26 21859 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".github/workflows/copilot-setup-steps.yml": "ecbfbddf199468b9cb2bad4e811b6d1b9eef4d810dfb64267a9ec3f4edc4fc9f 881 bytes",
@@ -1375,7 +1375,7 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".stamity/generated/agent-tool-policies.json": "617ddda0eae6052e0bf6d5df88a8ec4a80af8b27e2bbabc02f5e0ff9dceb24b8 3871 bytes",
   ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "7e9b7de0cd0bcc81aa93f6b512cbb607ec9759b6d629c138b9e3a2ca8d3e7db0 7029 bytes",
-  ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "fd6723667ed27394615fd45c2b3a752d4279f1549093bbdc1e415c0189f414a0 26669 bytes",
+  ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "442ae961e09c7129a34539a03b682880bd59c239ad103d1a625eb4de89800c75 34294 bytes",
   ".stamity/generated/hooks/claude/stamity-session-start.mjs": "02e6e473b0f8b35b498a8cc1559d5f423e73d54631e5ea82a03daa82d3607517 22872 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "7e9b7de0cd0bcc81aa93f6b512cbb607ec9759b6d629c138b9e3a2ca8d3e7db0 7029 bytes",
@@ -1390,17 +1390,17 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "2d0486dfd0e6aeafca4d5576f905f4e47cbdb12eb96a57ffc9f6dc191df4d50d 54488 bytes",
+  ".stamity/manifest.json": "8fde14ccf340389d3e912b502c38f8cdfd71ddc93a58b18f9df8ed08e3251ae8 54488 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "9160836f33ccafd96c2d211f02c6386387ebdb39d791d7c6ba483142b061a079 28956 bytes",
+  "AGENTS.md": "8aa3d47feba6fedb5147f07ba6b82334f663be026e6bf4bddc59b8466da03f66 29026 bytes",
   "CLAUDE.md": "f5bb9ab771f54ed41eaa7ce3aefc96044f33f76184b50a05a1b91b69132c3540 308 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
+  "packages/alpha/AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
+  "packages/beta/AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -1558,10 +1558,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 
@@ -1614,23 +1614,23 @@ Skills for this setup are markdown procedures under \`.claude/skills/\`. Claude 
 exports[`emitted tree for 'claude' > matches the tree digest golden > claude tree digest 1`] = `
 {
   ".claude/agents/stamity-creator.md": "3793fe36e3fc9e3911550bad8afd0f076841e66708e080236091b43cf036dcb2 13847 bytes",
-  ".claude/agents/stamity-design-quality.md": "800264c792aa7f68ab7873f209977b636c656b7f85fd37298cacce7d8bee2809 7677 bytes",
+  ".claude/agents/stamity-design-quality.md": "248ba102d159693d08473e1f879b6be1051016ff46ed52bfacf31ae7ccbde4a0 7859 bytes",
   ".claude/agents/stamity-fixer.md": "e07245c31b51e0d7e1607add300132de80ee5ea04bce2951adc1213ac7750fbb 6138 bytes",
   ".claude/agents/stamity-implementer.md": "8c83b9fd03e8d4715384e4e300e7dd527a2bf2279ce6da822c9de09b819e31de 5490 bytes",
-  ".claude/agents/stamity-performance.md": "c943de70bcf68d3da6b862a5e4ef371336dfe92a2bdd45f57b6e5e3d2bfcc087 8004 bytes",
+  ".claude/agents/stamity-performance.md": "7528f6f39d838f7f089d42aaf3f7ad0b64d6e48ee66a87bc72686b834d3b09a7 8159 bytes",
   ".claude/agents/stamity-researcher.md": "0938d483dcdf57eb5050735f8060cd2ab1265c93921ab7352755f51026e5755a 7365 bytes",
   ".claude/agents/stamity-reviewer.md": "b3c408c9dd30ebb25309c5367f8d96ec2ba47a2fef284d73674ea92f31912c62 10284 bytes",
   ".claude/agents/stamity-security.md": "c9b70589b551a2d5bdf3ff19cf17b6f2bb77f20df5cbe2b037dd27d73273ee39 7555 bytes",
   ".claude/agents/stamity-spec-author.md": "8e7942d51c0a2e0f782c28a4c9483c4fb23ad45acedaeb3089eda6bf9c4fd8a6 8277 bytes",
   ".claude/agents/stamity-test-runner.md": "6948e5079e30e3ce50b8e317591158120e132fba0a4f051ed6f2334540d1bc69 5672 bytes",
-  ".claude/commands/st-ask.md": "0ff5c345f4b1b85686cd5b61b7fc8663999deea86242acddde5f33ebf4c4a774 6861 bytes",
+  ".claude/commands/st-ask.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
   ".claude/commands/st-board.md": "cfcfc9c08b989ea100b38cfe3df07d28bef575363e8594a21d02726d1bbfeea3 20708 bytes",
   ".claude/commands/st-debug.md": "2ebcf9a75d5d3e602efc801061972034b90d4d476ad64f2c11fef13e988bc1e1 11659 bytes",
-  ".claude/commands/st-plan.md": "24377631652768030241fa5ef65a691fc7c7927e4913bf5b7815d9340a0bffda 23023 bytes",
+  ".claude/commands/st-plan.md": "a0f005ab6ff00604f67a32f675b6f62de90cbfc28de2dabd50325f9c172adbc5 23385 bytes",
   ".claude/commands/st-pr-resolve.md": "876fdd8c5e80c69aa16b5b058b03db30575d0e83d9e6f8a35ad93b42bdf7bf6a 19882 bytes",
   ".claude/commands/st-quick.md": "cdabf1a3793eaff166d083bd6f09d6594b15a23c71907d4ade8e5644c1c0f375 8227 bytes",
-  ".claude/commands/st-rework.md": "cfa416816c1e1559dff22e6ec5325ccf0b21d3da86d539dcce8b3342184cd26d 16273 bytes",
-  ".claude/commands/st-spec.md": "08662e04f307da36a1f788c3d5e5db5bd90e3f8abba0923da436f6d132205957 15365 bytes",
+  ".claude/commands/st-rework.md": "d1227552d04dadaa8afe76646a47e13fc1a1b795c94482a6c9c20ecbccd30e0a 17354 bytes",
+  ".claude/commands/st-spec.md": "6c126b5d120b079a6a2380a06a49b67e10bd640d6eafb143373048b753d2c179 15789 bytes",
   ".claude/commands/st-work.md": "dc83138c836c3d48c5f30276970f58cbc330af47609cbd278b2a930305e10f26 21859 bytes",
   ".claude/rules/stamity-ai-evals.md": "06a295e597264103790775e4dd9da5f36f38e1c454c96b005b5264d4c22d3a2a 3844 bytes",
   ".claude/rules/stamity-api-versioning.md": "4e013575676dee4fec4a84ef4c07c06ad8ea19cafb233a5429f295e2ba5c564d 4852 bytes",
@@ -1669,14 +1669,14 @@ exports[`emitted tree for 'claude' > matches the tree digest golden > claude tre
   ".stamity/generated/agent-tool-policies.json": "617ddda0eae6052e0bf6d5df88a8ec4a80af8b27e2bbabc02f5e0ff9dceb24b8 3871 bytes",
   ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "7e9b7de0cd0bcc81aa93f6b512cbb607ec9759b6d629c138b9e3a2ca8d3e7db0 7029 bytes",
-  ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "fd6723667ed27394615fd45c2b3a752d4279f1549093bbdc1e415c0189f414a0 26669 bytes",
+  ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "442ae961e09c7129a34539a03b682880bd59c239ad103d1a625eb4de89800c75 34294 bytes",
   ".stamity/generated/hooks/claude/stamity-session-start.mjs": "02e6e473b0f8b35b498a8cc1559d5f423e73d54631e5ea82a03daa82d3607517 22872 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "4ce8fd4990bf516dea10c1d48f879fa7f20aab7c9032dde6de5d9a42b2f635fd 16080 bytes",
-  "AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
+  ".stamity/manifest.json": "c2e7eecfbb35d8aacb9f49e340c66cd9430e4ca5bd37247ab86077fa8288a8a0 16080 bytes",
+  "AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
   "CLAUDE.md": "f5bb9ab771f54ed41eaa7ce3aefc96044f33f76184b50a05a1b91b69132c3540 308 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -1818,10 +1818,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 
@@ -2268,10 +2268,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 
@@ -2358,10 +2358,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 
@@ -2426,10 +2426,10 @@ exports[`emitted tree for 'codex' > matches the tree digest golden > codex tree 
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".codex/agents/stamity-creator.toml": "196035326c629127cfad44fea2c981380faef79d26d299dbc9536ee8c7b38598 14299 bytes",
-  ".codex/agents/stamity-design-quality.toml": "157fbd1524308fc1740ec88250cd4200d3ecdeb748589949d88c47f22ad7fd26 8132 bytes",
+  ".codex/agents/stamity-design-quality.toml": "9140bd9bf822cb2b2aa446b0afce405e5a6630b7c1234d7ed8051f2775c89a06 8314 bytes",
   ".codex/agents/stamity-fixer.toml": "0d4aaba1dbc60fc18f5b3a4293c2ea4b3138846e738c34f77edab1cb94f09f7f 6588 bytes",
   ".codex/agents/stamity-implementer.toml": "a1083ba39193fa2eaad86dd85472a0f5a985cd049c1108c04c4a5aa232359a70 5948 bytes",
-  ".codex/agents/stamity-performance.toml": "1a377d1d777607d58c25fcb4f31c03b3e9dabf937ba7498b8d8b67ad8e3a2158 8454 bytes",
+  ".codex/agents/stamity-performance.toml": "9940ef34a92f46c00c3069863714efdedbfcb3ca7c3ed937701b878b9c27446f 8609 bytes",
   ".codex/agents/stamity-researcher.toml": "1a8e48161f2be750207a9278e558ad4c4c003406e308718ef306fc1225aeee8a 7814 bytes",
   ".codex/agents/stamity-reviewer.toml": "dd4dcfd9b704a522bed0734e59f1def75010a1256cf2fa9f24dbf669759d54e1 10733 bytes",
   ".codex/agents/stamity-security.toml": "b706029cf5b3b730c252cb398759af6790d660bae9a7e462217a945030d808de 8004 bytes",
@@ -2447,14 +2447,14 @@ exports[`emitted tree for 'codex' > matches the tree digest golden > codex tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "54216a9947841d365d5d3e1461e1fa1b7f8702236b87211cb516cfce38185b97 10810 bytes",
-  "AGENTS.md": "9160836f33ccafd96c2d211f02c6386387ebdb39d791d7c6ba483142b061a079 28956 bytes",
+  ".stamity/manifest.json": "cde782dc53a7ffa8332d57c3caa735dbd112427314281a0d96a65bedd46696e8 10810 bytes",
+  "AGENTS.md": "8aa3d47feba6fedb5147f07ba6b82334f663be026e6bf4bddc59b8466da03f66 29026 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
+  "packages/alpha/AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
+  "packages/beta/AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -2580,10 +2580,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 
@@ -2648,10 +2648,10 @@ exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot t
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".github/agents/stamity-creator.agent.md": "5b968808117a1e8ced84e03a8770b66b5f13029874e50517844ce977a18bee48 13813 bytes",
-  ".github/agents/stamity-design-quality.agent.md": "731c9871e74feb52fe8899a13cd0ff187c3122e513ce50628582645f37b12a5e 7666 bytes",
+  ".github/agents/stamity-design-quality.agent.md": "ee3c885887329b678072ebe0da9c2b568f45ba86f61e4f9b7452454741a837c5 7848 bytes",
   ".github/agents/stamity-fixer.agent.md": "00ec0c786990feb73be1cdeea693cf98f147a33959b7b60f27f31f2638138f1e 6097 bytes",
   ".github/agents/stamity-implementer.agent.md": "b6e23f602c2b180713e988c000107917e0d2b7a9e78d5a7b751cd3df130e664f 5453 bytes",
-  ".github/agents/stamity-performance.agent.md": "08731e5b93dbe14988404e2c045cbe31f777b26bed03ff6aa75b4743d4abcd1f 7989 bytes",
+  ".github/agents/stamity-performance.agent.md": "5a25d80f30663b22ba7bf2cfc257528ab03099ae1b605abaca5a51a5c6d77958 8144 bytes",
   ".github/agents/stamity-researcher.agent.md": "4e23810049c91e4ab5ff331d9c06c30165faec409546218613b4432c9ddb5e28 7336 bytes",
   ".github/agents/stamity-reviewer.agent.md": "fa4d2e9e72f3a444693f7ab4a9b24ef4c3f883a05ab90a465e6c95607bb16148 10273 bytes",
   ".github/agents/stamity-security.agent.md": "edb193fea28b238215eadc63eae65895c14cfe2328f4bf55d675cf0588c7ab44 7544 bytes",
@@ -2669,14 +2669,14 @@ exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot t
   ".github/instructions/stamity-security-patterns.instructions.md": "20ab3bff0f4f44fd3a269a927f09f95bfc622a8961e29da96cc68f250197390c 6149 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2ead3fd125db409a91b79ef51da9c1620a4b72c5dc0d211ea77af500d2b6624e 4167 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "cf79d11ac6bbc29c5ab16186067261dabbfb92ad414d706000c9424851fbe953 4390 bytes",
-  ".github/prompts/st-ask.prompt.md": "0ff5c345f4b1b85686cd5b61b7fc8663999deea86242acddde5f33ebf4c4a774 6861 bytes",
+  ".github/prompts/st-ask.prompt.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
   ".github/prompts/st-board.prompt.md": "cfcfc9c08b989ea100b38cfe3df07d28bef575363e8594a21d02726d1bbfeea3 20708 bytes",
   ".github/prompts/st-debug.prompt.md": "2ebcf9a75d5d3e602efc801061972034b90d4d476ad64f2c11fef13e988bc1e1 11659 bytes",
-  ".github/prompts/st-plan.prompt.md": "24377631652768030241fa5ef65a691fc7c7927e4913bf5b7815d9340a0bffda 23023 bytes",
+  ".github/prompts/st-plan.prompt.md": "a0f005ab6ff00604f67a32f675b6f62de90cbfc28de2dabd50325f9c172adbc5 23385 bytes",
   ".github/prompts/st-pr-resolve.prompt.md": "876fdd8c5e80c69aa16b5b058b03db30575d0e83d9e6f8a35ad93b42bdf7bf6a 19882 bytes",
   ".github/prompts/st-quick.prompt.md": "cdabf1a3793eaff166d083bd6f09d6594b15a23c71907d4ade8e5644c1c0f375 8227 bytes",
-  ".github/prompts/st-rework.prompt.md": "cfa416816c1e1559dff22e6ec5325ccf0b21d3da86d539dcce8b3342184cd26d 16273 bytes",
-  ".github/prompts/st-spec.prompt.md": "08662e04f307da36a1f788c3d5e5db5bd90e3f8abba0923da436f6d132205957 15365 bytes",
+  ".github/prompts/st-rework.prompt.md": "d1227552d04dadaa8afe76646a47e13fc1a1b795c94482a6c9c20ecbccd30e0a 17354 bytes",
+  ".github/prompts/st-spec.prompt.md": "6c126b5d120b079a6a2380a06a49b67e10bd640d6eafb143373048b753d2c179 15789 bytes",
   ".github/prompts/st-work.prompt.md": "dc83138c836c3d48c5f30276970f58cbc330af47609cbd278b2a930305e10f26 21859 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".github/workflows/copilot-setup-steps.yml": "ecbfbddf199468b9cb2bad4e811b6d1b9eef4d810dfb64267a9ec3f4edc4fc9f 881 bytes",
@@ -2689,10 +2689,10 @@ exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "744bf9c37bd5d5c79462a17884fa6567d372aa8ab53fa29155e340e150481699 16240 bytes",
+  ".stamity/manifest.json": "de37d98404630a38c4691c29b360cfd61d8589668957b3d54ffae4907e6248f2 16240 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
+  "AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -3086,10 +3086,10 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
-7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to
-   sub-agents; an orchestrator editing product files inline is a protocol
-   violation. One carve-out, and only this one: the Tier-1 small-change lane
-   applies its own edits inline and still delegates verification.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
 
@@ -3154,10 +3154,10 @@ exports[`emitted tree for 'cursor' > matches the tree digest golden > cursor tre
   ".agents/skills/st-verify/references/ui.md": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1 3647 bytes",
   ".agents/skills/st-verify/references/ux.md": "0ac37489423de3cd86642e1947c2e42f9b7e16a1722c12ea5ada7c438bc87e21 3241 bytes",
   ".cursor/agents/stamity-creator.md": "9cb2a22b302f230ad36e5c6b82fc703e2e5d5b510f4ed5771dd700e268391bbd 13732 bytes",
-  ".cursor/agents/stamity-design-quality.md": "a7279ade07b6b08cc5848614630ecfa29491b84d80151670b8365a02bc10d089 7601 bytes",
+  ".cursor/agents/stamity-design-quality.md": "7c9ff339433878ac8af990b27c594f8c8dc8e3dc10f9ec3b30be92b0f3968df9 7783 bytes",
   ".cursor/agents/stamity-fixer.md": "ce9922531f5adc46f691c5e2e15a0b520f28aaee43985d2d656bbeaf6e8014c4 6007 bytes",
   ".cursor/agents/stamity-implementer.md": "ff370bc7caf2d6519972f3fee3dd57e0d36734c1633e86fd7cac188a5e273d67 5357 bytes",
-  ".cursor/agents/stamity-performance.md": "2f10d7c2f6a648f27d316ef913ac91afa0a81b826e548467e2e561131b4fdcfd 7927 bytes",
+  ".cursor/agents/stamity-performance.md": "c770d5d324032610ceb8a63e8a8633a08560facf85599c009b3b678179c0f11c 8082 bytes",
   ".cursor/agents/stamity-researcher.md": "0219a2ed1f211afca72bc98bea25038f1677c3586e983c99eabf6303857d6d05 7268 bytes",
   ".cursor/agents/stamity-reviewer.md": "901e37a54db2b0371fd45e8f8359ada9e427b8b5902767531f7db8e7ae24d6cc 10214 bytes",
   ".cursor/agents/stamity-security.md": "6817395074d753a68b2c655923c5691d110b7a0147de135abbe2fe533c1d0583 7485 bytes",
@@ -3179,14 +3179,14 @@ exports[`emitted tree for 'cursor' > matches the tree digest golden > cursor tre
   ".cursor/rules/stamity-security-patterns.mdc": "003c872c5805f3896776bc878e25789e52e76491433761cfcfbdc127e8134275 6164 bytes",
   ".cursor/rules/stamity-testing.mdc": "6be05910f96dcd7872779263f35ba66c8928ed3c0b32931a057353d2e7b4bf11 4180 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "254c519142a94c77a78210feaedec26ac3faedc448cf825a4821646b14644e1d 4403 bytes",
-  ".cursor/skills/st-ask/SKILL.md": "cf9e651a5ceda6b35c0fcde56793a084fb1e3133e9c6528b6d53b32d07e3387c 6905 bytes",
+  ".cursor/skills/st-ask/SKILL.md": "c54d01dd7744948cc84d16ea225178b0ec600cd84f20ac02be5fa47689d98ba0 7313 bytes",
   ".cursor/skills/st-board/SKILL.md": "c925b34c57a623b290186fcf4423d5b279dcf7a4f3e919db1871a7353b44fb79 20754 bytes",
   ".cursor/skills/st-debug/SKILL.md": "67360f3a67d92364ac87632269d3ee24a4575f5504e01056ad739ddad75667d6 11703 bytes",
-  ".cursor/skills/st-plan/SKILL.md": "2a3167ab58ad47ae71aea76f7aefe953aada0ae7b97a1b17615d25606cf7e92b 23066 bytes",
+  ".cursor/skills/st-plan/SKILL.md": "4a64c14008779e8b2e7b74cf449e2d55b2e2081080707f72ae330c1791ae1e29 23428 bytes",
   ".cursor/skills/st-pr-resolve/SKILL.md": "66beda7c4e0031c0ac523407f0be602c09003ce4df7c20175b88da3ef2ebcad6 19933 bytes",
   ".cursor/skills/st-quick/SKILL.md": "d9c0e2eb254cd9cd9e83b9d9e620ee3e4ac420a7bfd3eb55de0277bda92ff918 8271 bytes",
-  ".cursor/skills/st-rework/SKILL.md": "4f63aff9a6df7f768f12f30648fcb10d28a665801a1a3ab529833c5f78ef087e 16320 bytes",
-  ".cursor/skills/st-spec/SKILL.md": "6171c8a8b557fdc82d9b0119864753dc982467bbf71883924c4d5e8f12667624 15410 bytes",
+  ".cursor/skills/st-rework/SKILL.md": "b2cb34ec353056e83ac7cc3ed2e1fc58116ca9b08ad1049bb9908fd1d327f893 17401 bytes",
+  ".cursor/skills/st-spec/SKILL.md": "3a207681a02833f16a54faf154216e547a56089bb02f55701a66ecf105bfdb9e 15834 bytes",
   ".cursor/skills/st-work/SKILL.md": "ba4d57a26dd8e7fc014427106a330b3f1ea2975595ee43e97c4a8401489a52e3 21904 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "f8fbe8e8b09bc960be56387909425a4db0d79570de16d3fad0629c041839d681 9 bytes",
@@ -3198,8 +3198,8 @@ exports[`emitted tree for 'cursor' > matches the tree digest golden > cursor tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "f4c62c2c56eecc4b0c8ed494912f4b5ac4cff53f8ca9b05ead70e7ae7f6c4a6a 16089 bytes",
-  "AGENTS.md": "74fd69723f9254536403c2c0e65de0cc604791021fd1c9ed228452ef06eac386 4404 bytes",
+  ".stamity/manifest.json": "4d3531fa649790b9050b1ce24d89d62a1e3e97a2e431d7bc6952d8a796fee6c3 16089 bytes",
+  "AGENTS.md": "491b444b2ffeb2b8b6d73e5077f5a06b29ad981856cad588a83704d12081bfc8 4474 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
