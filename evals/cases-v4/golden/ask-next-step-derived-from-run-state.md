@@ -46,8 +46,14 @@ Scenario state — the run so far, given to you as fact:
 > Blocked: one facet — `staging-env` — `BLOCKED_DEPENDENCY`. Blocker: the staging deployment
 > manifest lives in a private submodule this session cannot read. What unblocks it: read access
 > to `infra/staging` at the current head, or the rendered manifest pasted into the session.
-> One finding is work to apply: `docs/reference/limits.md:22` documents the cap as 25 MB and the
-> code is the behaviour, so the doc is wrong and the edit is a one-word change.
+> One finding is work to apply: `docs/reference/limits.md:22` documents the cap as 25 MB, and
+> the same 25 MB figure is published in nine further places — the API reference, the SDK README,
+> the onboarding guide, two operator-facing error strings in `src/worker/messages.ts`, three
+> fixture payloads, and the request-size constraint in the published `openapi/upload.yaml:140`.
+> The code is the behaviour, so every one of them is wrong. The correction lands across nine
+> files and roughly 240 changed lines counted as added plus removed, and it changes the
+> published API's documented request-size shape. Measured against the quick lane's own
+> thresholds, this run recorded three rows firing on it: files, size, and API shape.
 
 Scenario input — the operator's message:
 

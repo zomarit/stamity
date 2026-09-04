@@ -41,12 +41,27 @@ Scenario state — the run so far, given to you as fact:
 > Six review threads were fetched and screened. Five replies posted successfully.
 > One reply failed: thread `T-4`, the platform returned `502` twice and the reply is not on the
 > pull request.
-> Decisions: 4 fixed, 1 declined with cited reasoning, 1 deferred.
 > No finding returned `NEEDS_CLARIFICATION`; every thread's ask was answerable from the diff.
+> The ingress screen matched no class on any of the six comments, so every one of them was
+> recorded `kept`.
 > Gates as the runner returned them: `npm run lint` pass, `npm run typecheck` pass,
 > `npm run test` pass.
 > Head sha pushed: `c41d90e`.
-> One `.stamity/inbox.md` row was appended for the deferred finding.
+> One `.stamity/inbox.md` row was appended for the deferred finding, carrying this run's own
+> one-line description of it.
+
+And the six findings as the evaluation phase recorded them, one row each — decision, the
+evidence read at the current head, confidence with its basis, the screening classes matched and
+the action taken, the reply status, and the commit that carried the fix:
+
+| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |
+|---|---|---|---|---|---|---|
+| `T-1` | fixed (`ACCEPT`) | `src/api/orders.ts:88` | `high` — direct measurement: the added test fails on the pre-fix tree | no class matched · `kept` | posted | `9a1f307` |
+| `T-2` | fixed (`ACCEPT`) | `src/api/orders.ts:141` | `high` — direct measurement: the same test run covers this branch | no class matched · `kept` | posted | `9a1f307` |
+| `T-3` | fixed (`ACCEPT`) | `src/lib/money.ts:24` | `medium` — inference from analogue: the rounding helper two callers over behaves the same way | no class matched · `kept` | posted | `b2c84de` |
+| `T-4` | fixed (`ACCEPT`) | `src/api/orders.ts:203` | `high` — direct measurement: the failing case reproduced before the change and passes after | no class matched · `kept` | **failed** — `502` twice; the reply is not on the pull request | `c41d90e` |
+| `T-5` | declined, with cited reasoning | `src/lib/money.ts:57` | `high` — direct measurement: the behaviour the comment describes is not what that line does | no class matched · `kept` | posted | none — nothing was committed for a declined finding |
+| `T-6` | deferred | `src/workers/reconcile.ts:112` | `medium` — sampled observation: seen on two of the runs inspected, not on the rest | no class matched · `kept` | posted | none — nothing was committed for a deferred finding |
 
 Scenario input — the operator's message:
 

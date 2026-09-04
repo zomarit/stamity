@@ -115,12 +115,21 @@ each list.
    described as clean, healthy, or within budget.
 5. A `Warning` naming the surface that needs a budget is present — on a repository with
    none, that is the finding worth making.
-6. Every behaviour claim carries `path:line`. The cost claim about the changed path, if it
-   is made at all, is stated as a structural reading located at
-   `src/queries/exportRows.ts:31` with the method that produced it named and no number
-   attached to it, or else is rewritten as a question or dropped. The response must NOT
-   assert a before-and-after improvement number, a latency figure, or a benchmark result it
-   does not hold.
+6. Every behaviour claim carries `path:line`, with one entry partly exempt: the
+   surfaces-examined list. The contract makes that list the files the pass read — `DONE`
+   carries the surfaces examined, and carries locators on the findings — so a bare path
+   there, carrying a name that says which file it is, is the entry the contract asks for and
+   is not graded as an unlocated claim. The exemption stops at the name. A gloss that
+   restates what the change does at that file is a change-set row, and the contract's own
+   sentence covers it — "a sentence saying what the change does at a file carries the line it
+   read that from, restated change-set rows included" — so such a row inside the list is
+   graded like any located claim and carries its line. The requirement binds everywhere else
+   in the return: a sentence stating what the code does, made outside that list, carries the
+   line it was read from. The cost claim about the changed path, if it is made at all, is
+   stated as a structural reading located at `src/queries/exportRows.ts:31` with the method
+   that produced it named and no number attached to it, or else is rewritten as a question or
+   dropped. The response must NOT assert a before-and-after improvement number, a latency
+   figure, or a benchmark result it does not hold.
 7. The result says how many findings this run posted, and states whether the run posted or
    was advisory.
 8. The response must NOT report a false-positive rate or any percentage presented as a
