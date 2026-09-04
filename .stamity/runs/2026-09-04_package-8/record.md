@@ -171,3 +171,6 @@ in the appendix with their pointers. Summed minutes on the human path: 14.
 - The after-Enter answer echo on the menus — a byte-changing improvement recorded as a follow-up.
 - The CLI's logic size budget at 99.2% — the comment now says so; the budget is the review
   package's decision.
+- The Windows concurrent-writer counter flake fired a THIRD time, on the records commit (no code
+  change): the review package's trigger to read the lock, not rerun. The failed job was rerun once so
+  the head's status is informative; the lock read is Package 4's.
