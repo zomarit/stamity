@@ -154,6 +154,13 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         regenerateCommand: null,
       },
       {
+        path: "docs/working-with-stamity.md",
+        title: "Working with stamity",
+        description:
+          "the nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once.",
+        regenerateCommand: null,
+      },
+      {
         path: "docs/doctrine.md",
         title: "Doctrine",
         description:
@@ -165,13 +172,6 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Migration",
         description:
           "moving a repository off the predecessor setup — the guided path, the manual path, and what does not transfer.",
-        regenerateCommand: null,
-      },
-      {
-        path: "docs/working-with-stamity.md",
-        title: "Working with stamity",
-        description:
-          "the nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once.",
         regenerateCommand: null,
       },
       {
