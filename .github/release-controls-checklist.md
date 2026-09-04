@@ -168,10 +168,11 @@ regenerate its kickoff prompt — so the record never trails the registry. (Adde
 day the record was found two releases stale.)
 
 A second line rides the same cut and lands *before* the tag rather than after it: the full eval set
-runs per `evals/SET-v3.md`, and the release carries its run artifact under `evals/runs/`. The corpus
+runs per `evals/SET-v4.md`, and the release carries its run artifact under `evals/runs/`. The corpus
 is model-executed prose, so a version cut with no run behind it ships behaviour nobody measured — no
 artifact, no tag, and a release without one is blocked by this checklist rather than by anyone's
-memory. (Added 2026-09-01, with the set; repointed to `SET-v3.md` on 2026-09-02.)
+memory. (Added 2026-09-01, with the set; repointed to `SET-v3.md` on 2026-09-02, and to
+`SET-v4.md` on 2026-09-04.)
 
 A third line rides the same cut and lands *before* the tag as well: confirm the repository's own
 public metadata is current — the GitHub repository description and topics still describe what this
