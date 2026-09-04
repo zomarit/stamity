@@ -8,10 +8,10 @@ export const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url
 /** Real filesystem paths are composed natively; logical paths are always displayed POSIX. */
 const posix = (value: string): string => value.replaceAll("\\", "/");
 
-export const CASES_DIR = "evals/cases-v3";
-export const EXEMPTIONS_FILE = "evals/coverage-exemptions-v3.md";
-export const SET_FILE = "evals/SET-v3.md";
-export const RUBRIC_FILE = "evals/rubric-v3.md";
+export const CASES_DIR = "evals/cases-v4";
+export const EXEMPTIONS_FILE = "evals/coverage-exemptions-v4.md";
+export const SET_FILE = "evals/SET-v4.md";
+export const RUBRIC_FILE = "evals/rubric-v4.md";
 export const README_FILE = "evals/README.md";
 export const RUNNER_SKILL_FILE = ".stamity/overrides/skills/st-eval-run/SKILL.md";
 
@@ -62,7 +62,7 @@ export interface CaseFile {
   readonly raw: string;
 }
 
-/** Every case file under `evals/cases-v3/**`, sorted by path. */
+/** Every case file under `evals/cases-v4/**`, sorted by path. */
 export const caseFiles = (): CaseFile[] => {
   const root = join(REPO_ROOT, ...CASES_DIR.split("/"));
   const out: CaseFile[] = [];

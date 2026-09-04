@@ -1,6 +1,6 @@
 // The eval-coverage gate: every model-executed artifact is measured or exempted.
 //
-// `SET-v3.md` states the obligation the AI-evals rule imposes — every behaviour the
+// `SET-v4.md` states the obligation the AI-evals rule imposes — every behaviour the
 // corpus claims maps to at least one case — and v2 had nothing enforcing it. This is
 // the enforcement. It derives both sides from the files rather than from a list kept
 // here, because a hand-maintained roster is a literal that drifts silently green.
