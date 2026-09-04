@@ -6,6 +6,7 @@ import {
   detectTerminalFacts,
   makePalette,
   makeSpinner,
+  resolveAccentDepth,
   resolveColorEnabled,
   type Palette,
   type Spinner,
@@ -214,6 +215,12 @@ export async function runCli(
       machineReadable: argv.includes("--json"),
       env,
       noColorFlag: program.opts<{ color?: boolean }>().color === false,
+      // The width gate: the mark is a fixed-width picture, so a window
+      // narrower than it wraps rather than shrinks it. `stdoutColumns` is
+      // absent off a pipe or a test double, which `bannerBlock` reads as "the
+      // caller does not know" and prints, exactly as it did before the fact
+      // existed.
+      ...(terminal.stdoutColumns === undefined ? {} : { columns: terminal.stdoutColumns }),
     });
   });
 
@@ -259,7 +266,13 @@ export async function runCli(
         env,
         stdoutIsTTY: terminal.stdoutIsTTY,
       });
-      const palette = makePalette(colorEnabled);
+      // The accent depth rides beside the colour decision, resolved from the
+      // same injected env: `--no-color` has already been folded into
+      // `colorEnabled`, so a "none" depth is the honest answer whenever colour
+      // is off. Commands read the result off `ctx.palette` and thread it into
+      // the prompt gate, which is the only way the raw menus can learn a
+      // decision the funnel made.
+      const palette = makePalette(colorEnabled, resolveAccentDepth({ colorEnabled, env }));
       const rawOut = io.out.bind(io);
       const commandIo: CommandIo = {
         out: json

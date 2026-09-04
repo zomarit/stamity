@@ -79,6 +79,17 @@ describe("detectTerminalFacts", () => {
     ).toEqual({ stdoutIsTTY: true, stderrIsTTY: false, stdinIsTTY: true });
   });
 
+  // The width fact `bannerBlock` gates on: read here, injected from there, so a
+  // fixed-width picture can stay out of a window narrower than it instead of
+  // wrapping into a scramble.
+  it("reports the stdout stream's own column count, and leaves no key when it reports none", () => {
+    expect(detectTerminalFacts({ stdout: { isTTY: true, columns: 100 }, stderr: {}, stdin: {} })).toEqual(
+      { stdoutIsTTY: true, stderrIsTTY: false, stdinIsTTY: false, stdoutColumns: 100 },
+    );
+    const piped = detectTerminalFacts({ stdout: { isTTY: false }, stderr: {}, stdin: {} });
+    expect("stdoutColumns" in piped).toBe(false);
+  });
+
   it("defaults to the live process streams and always returns booleans", () => {
     const facts = detectTerminalFacts();
     expect(typeof facts.stdoutIsTTY).toBe("boolean");
@@ -170,6 +181,33 @@ describe("makePalette", () => {
     ]) {
       expect(style("plain")).toBe("plain");
     }
+  });
+
+  // The accent is the one method whose depth is a SECOND argument, and its
+  // default is what keeps every existing caller byte-identical: a palette built
+  // the way this kit has always built one writes no accent escape at all.
+  it("leaves the accent as the identity when no depth is named, enabled or not", () => {
+    expect(makePalette(false).accent("plain")).toBe("plain");
+    expect(makePalette(true).accent("plain")).toBe("plain");
+  });
+
+  it("paints the UI accent — #8A52FF, not the mark's #6B24FF — at the depths that can carry it", () => {
+    // The interface's ladder is a lighter tint of the brand hue than the
+    // wordmark's on purpose: #6B24FF is 3.32:1 on black and 2.25:1 on a
+    // Dracula ground, below WCAG 1.4.11's 3:1 floor for a state indicator.
+    expect(makePalette(true, "truecolor").accent("x")).toBe(`${ESC}38;2;138;82;255mx${ESC}39m`);
+    expect(makePalette(true, "ansi256").accent("x")).toBe(`${ESC}38;5;99mx${ESC}39m`);
+  });
+
+  it("writes NO escape for the accent at 16-color depth: a theme-defined color may not carry state", () => {
+    // SGR 35 is whatever the reader's theme maps magenta to, so it is not a
+    // measurable contrast — and the glyph under the accent carries the state on
+    // its own, so vanishing costs decoration and nothing else.
+    expect(makePalette(true, "ansi16").accent("x")).toBe("x");
+  });
+
+  it("still disables every method, accent included, when color is off at any depth", () => {
+    expect(makePalette(false, "truecolor").accent("x")).toBe("x");
   });
 });
 
