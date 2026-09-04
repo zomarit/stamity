@@ -3,10 +3,20 @@
  * layout.
  *
  * Still not a theme fork. Every rule below either sets a variable Infima already reads or styles
- * the landing page's own classes — there is no restyled component and no theme selector named
- * here, so an Infima upgrade has nothing to re-reconcile. One rule, `.landing .landing__install`,
- * does land on a class the landing page hands to a theme component; what it argues with, and why
- * it is scoped rather than shouted, is written above the rule.
+ * the landing page's own classes, so an Infima upgrade has nothing to re-reconcile. Three rules
+ * carve out of that — two on the landing page, one on the docs pages — and each is argued above
+ * itself rather than here. One, `.landing .landing__install`, lands on a class the landing page
+ * hands to a theme component; what it argues with, and why it is scoped rather than shouted, is
+ * written above the rule. The second is the only place a theme selector is named at all: the
+ * copy-button rule spells the two global, non-hashed class names the theme exposes on the install
+ * block — `theme-code-block` and `clean-btn` — and sets exactly one property on them, `opacity`,
+ * so the control the block's whole purpose depends on is visible without hovering. It is
+ * page-scoped for the same reason the first is: `.landing` is what makes the selector specific
+ * enough to beat the theme's own rules rather than to shout over them, and it keeps the change to
+ * this page's one install line instead of every code block on the site. The third names one more
+ * global the theme puts on doc content, `markdown`, and sets exactly one property —
+ * `white-space` — on the inline code inside a docs table, so a hyphenated command name stops
+ * breaking mid-word in a narrow cell.
  *
  * What grew is the token set, because the palette is now the product's rather than the starter's:
  * three colours (violet #6B24FF, ink #09090C, paper #F6F6F8) taken from the marks in
@@ -298,4 +308,121 @@ html[data-theme='dark'] .landing::before {
   flex-wrap: wrap;
   gap: 1rem;
   justify-content: center;
+}
+
+/*
+ * The two links carry an icon, so each is a flex row rather than the `inline-block` Infima gives
+ * `.button` (default.css:1760, alongside a `vertical-align` and a `white-space` that a text-only
+ * button needs and this one does not). The page's own class is what is styled — `.button` is never
+ * named — so the pair resolves on specificity, (0,2,0) over (0,1,0), and does not depend on
+ * emission order.
+ *
+ * Both icons are `currentColor`, so neither invents a colour. The arrow inherits
+ * `--ifm-button-color` (#ffffff on the violet, 6.32:1; #09090c on the dark violet, 6.75:1). The
+ * mark inherits Infima's `.button.button--secondary` colour — gray-900 #1c1e21 on secondary
+ * #ebedf0, 14.24:1 — and the SAME pair in dark mode, because Infima redefines neither of those two
+ * tokens there and neither does this file. Worth knowing before reading the `--ifm-button-color`
+ * lines above as though they governed both buttons: they govern only the primary one.
+ */
+.landing__links .landing__link {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.5em;
+  justify-content: center;
+}
+
+.landing__links .landing__link svg {
+  flex: none;
+}
+
+.landing__links .landing__link--start svg {
+  height: 1.1em;
+  transition: transform var(--ifm-transition-fast) var(--ifm-transition-timing-default);
+  width: 1.1em;
+}
+
+/*
+ * The arrow is 1.1em where the mark is 1em: its glyph occupies roughly columns 3.75–13.5 of the
+ * same 16-box, so it needs the extra to read at the same optical size.
+ *
+ * `--ifm-transition-fast` is 0ms under `prefers-reduced-motion: reduce` (default.css:3022-3025), so
+ * this collapses to an instant 2px offset rather than needing a media query of its own.
+ */
+.landing__links .landing__link--start:hover svg {
+  transform: translateX(0.15em);
+}
+
+/* The mark is not animated, resized on hover, or recoloured: GitHub's logo terms forbid modifying
+ * it, so it gets a size and nothing else. */
+.landing__links .landing__link--repo svg {
+  height: 1em;
+  width: 1em;
+}
+
+/*
+ * THE REPO LINK OPENS A NEW TAB, AND SAYS SO. Its href is absolute, so Docusaurus's `Link` emits
+ * `target="_blank"` for it — a behaviour the navbar's own GitHub item announces with the theme's
+ * external-link icon and this button, being the page's own markup, announced not at all. The cue
+ * is a span of text rather than a second icon: it is the half of the affordance a screen-reader
+ * user gets nothing else for, and it joins the accessible name ("GitHub (opens in a new tab)")
+ * without adding a glyph beside a mark GitHub's logo terms say not to decorate.
+ *
+ * Clipped rather than hidden, because `display: none` and `visibility: hidden` both take the text
+ * out of the accessibility tree, which is the one place it has to stay. The 1px box with
+ * `clip-path` is what keeps it rendered and unreadable at once; `white-space: nowrap` stops the
+ * phrase wrapping inside that box and dragging the button's line box open with it. Page-owned:
+ * the class is this page's, so no theme utility is overridden and none is depended on.
+ */
+.landing__sr-only {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/*
+ * THE COPY BUTTON, VISIBLE AT REST. The theme ships it at `opacity: 0` and raises it to 0.4 only
+ * while the block is hovered — 2.14:1 against the light Prism ground, which fails WCAG 1.4.11 and,
+ * on the one line this site exists to hand a reader, reads as no control at all. At full opacity
+ * the theme's own pair is 10.79:1 light and 13.36:1 dark, so opacity is the whole fix: no colour is
+ * set here, and both modes stay the theme's github/dracula pair the way the rule above leaves them.
+ *
+ * FOUR CLASSES BECAUSE THERE ARE TWO THEME RULES TO BEAT. The theme's module class names are
+ * hashed and cannot be spelled, so the anchors are the two global names it exposes on exactly these
+ * elements: `theme-code-block`, which `ThemeClassNames` puts on the same container `landing__install`
+ * lands on, and `clean-btn`, which Infima defines and every code-block button carries. The resting
+ * rule is `.buttonGroup button`, (0,1,1); the block-hover rule is
+ * `:global(.theme-code-block:hover) .buttonGroup button`, (0,3,1). A three-class selector wins the
+ * first and LOSES the second, so the button would appear at rest and then fade as the reader moved
+ * toward it — worse than today. Source order breaks neither tie, for the reason already set out
+ * above `.landing .landing__install`: the theme's CSS modules are emitted after this file. So this
+ * selector is written to (0,4,1) and wins where that argument says a selector has to win.
+ *
+ * If a future theme renames either global class, or moves its opacity rules, this stops matching
+ * and the block reverts to the theme's behaviour — never to a broken page.
+ */
+.landing .landing__install.theme-code-block button.clean-btn {
+  opacity: 1;
+}
+
+/*
+ * HYPHENATED CODE SPANS DO NOT BREAK AT THEIR HYPHENS IN A TABLE CELL. `/st-pr-resolve` and
+ * `--use-existing` are single names, and a browser treats every hyphen in them as a soft wrap
+ * opportunity, so a narrow cell renders one identifier down three lines and the reader has to
+ * reassemble it. This holds them whole.
+ *
+ * It costs nothing at the page level, and the reason is Infima's own table rule (default.css:1175):
+ * `display: block` with `overflow: auto`, so a docs table is its own scroll container. An
+ * unbreakable span widens the column and the table scrolls sideways under it — the body never
+ * does, which is the trade this rule is only safe to make because of.
+ *
+ * `markdown` is the global, non-hashed class Docusaurus puts on rendered doc content, so the rule
+ * reaches docs pages and nothing else: not the navbar, not the sidebar, not the landing page's
+ * install block. `:not(pre) > code` is what keeps it to INLINE code — a fenced block inside a cell
+ * keeps its own `white-space` and its own line breaks.
+ */
+.markdown table :not(pre) > code {
+  white-space: nowrap;
 }
