@@ -307,3 +307,8 @@ directory is text this run wrote, about text that cleared the ingress screen.
 
 The PR-thread reply is the fourth write-back channel, and it exists only here: progress comment,
 PR link, and status transition are the other three. This command writes no other platform state.
+
+The block closes on one recommended next step, derived from this run's own state and not from a
+fixed menu: a thread whose reply failed makes re-posting it the step; a `NEEDS_CLARIFICATION`
+row makes the reviewer's answer the step; an unspent round under the attempt cap with fresh
+comments makes the next round the step. A run that closed with none of those says so in the line.

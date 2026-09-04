@@ -82,6 +82,17 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-04, the recommended-next-step close-out — Package 8, carried from
+ *     the last package's register sweep by name. NOTHING moved here, and the
+ *     row exists so the two ledgers stay in step. The wave changed six corpus
+ *     command bodies — `st-ask`, `st-debug`, `st-quick`, `st-spec`, `st-rework`
+ *     and `st-pr-resolve` — each gaining one closing paragraph that names a
+ *     recommended next step derived from the run's own state, which makes all
+ *     nine touchpoints carry the line. This suite holds none of the six bodies:
+ *     its substitution golden is `commands/st-work.md` and its MDC companion
+ *     heads are rules, so no golden here has a byte to move. The moved bytes
+ *     are itemised in the sibling ledger.
+ *
  *   - 2026-09-02, the identity casing fix. HOOK SCRIPTS moved, and only on the
  *     three operator-facing lines that speak the product name: the session-start
  *     "no learnings and no resumable handoffs" line and the config-tamper

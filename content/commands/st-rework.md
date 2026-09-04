@@ -242,6 +242,11 @@ findings by severity, REVISE/DEFER counts, validation verdicts with confidence, 
 check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · R1 pass|fail`, the plan path, and the
 inbox rows added.
 
+Close also on one recommended next step, derived from this run's own state and not from a fixed
+menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what
+blocks handoff; a plan persisted on `stop` makes running it through `/st-work` the step; DEFER
+rows alone make board triage of the inbox the step. None of those, and the line says so.
+
 ## Meta-feedback
 
 Feedback about how the agent behaved — not about the branch's code — leaves the code path here.

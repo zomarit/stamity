@@ -124,6 +124,20 @@ function headings(body: string): string[] {
   return [...body.matchAll(/^#{1,2} .+$/gm)].map((match) => match[0].trim());
 }
 
+/**
+ * One `##` section as whitespace-collapsed prose: everything after the heading
+ * line up to the next `#`/`##`. Scoped so a clause the return contract owes
+ * cannot be satisfied by text somewhere else in the body.
+ */
+async function sectionProse(heading: string): Promise<string> {
+  const lines = (await artifact).parsed.body.split("\n");
+  const start = lines.findIndex((line) => line.trimEnd() === heading);
+  if (start === -1) throw new Error(`heading not found in body: ${JSON.stringify(heading)}`);
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^#{1,2} /.test(line));
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n").replace(/\s+/g, " ");
+}
+
 describe("/st-spec — frontmatter contract", () => {
   it("declares the command identity head, on-demand load class, and deletion trigger", async () => {
     const file = await artifact;
@@ -306,6 +320,21 @@ describe("/st-spec — design decisions carried as text", () => {
     for (const severity of ["Critical", "Warning", "Minor"]) {
       expect(text, `severity ${severity} is missing`).toContain(severity);
     }
+  });
+
+  it("closes the return contract on a next step derived from the run's own state", async () => {
+    const contract = await sectionProse("## Return contract");
+
+    // The contract enumerated what the run recorded and named nothing to do
+    // next, so the forward pointer into the next touchpoint dangled. Derivation
+    // is the point — a fixed menu would satisfy the words and not the finding —
+    // so the states this run actually produces are asserted with the phrase.
+    expect(contract).toContain("Next step");
+    expect(contract).toMatch(/derived from this run's own state/);
+    expect(contract).toMatch(/never a fixed menu/);
+    expect(contract).toMatch(/an open `\[NEEDS CLARIFICATION\]` marker/);
+    expect(contract).toMatch(/an unconfirmed T2 or T3 proposal/);
+    expect(contract).toMatch(/a census gap/);
   });
 });
 

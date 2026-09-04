@@ -747,9 +747,13 @@ describe("/st-work — Prove", () => {
   it("closes with a next step derived from the run's own state", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
 
-    // Every closing contract was surveyed and none carried one, so the
-    // forward pointer into the next touchpoint dangled. Derivation is the
-    // point — a fixed suggestion would satisfy the words and not the finding.
+    // The finding that opened this: every closing contract was surveyed and
+    // none carried one, so the forward pointer into the next touchpoint
+    // dangled. That is history now — all nine touchpoints carry the line, this
+    // one plus `st-board` and `st-plan`, then `st-ask`, `st-debug`, `st-quick`,
+    // `st-spec`, `st-rework` and `st-pr-resolve`, each asserted by its own
+    // suite. Derivation is the point — a fixed suggestion would satisfy the
+    // words and not the finding.
     expect(proof).toContain("recommended next step");
     expect(proof).toContain("derived from this run's own state");
     expect(proof).toContain("never a generic suggestion");
