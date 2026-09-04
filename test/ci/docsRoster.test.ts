@@ -18,7 +18,13 @@ import { LLMS_INDEX_SECTIONS } from "../../src/cli/docs/llmsIndex.ts";
  * 1. The sidebar lists it — the human route.
  * 2. `src/cli/docs/llmsIndex.ts` indexes it — the agent route, which carries the whole tree
  *    including pages the navigation deliberately omits.
- * 3. {@link EXEMPTIONS} names it, with the reason written down. An exemption is a decision on the
+ * 3. It sits under a directory the site build excludes — read off `website/docusaurus.config.ts`'s
+ *    own `exclude` list ({@link buildExcludedDirs}), never restated here, so the config and this
+ *    gate cannot disagree about which directories are off the routes. A page under one has no
+ *    route to be reachable from, and the derivation holds before the directory's first page
+ *    lands — which is what a hand-typed exemption cannot do, since the stale check below refuses
+ *    an exemption covering nothing on disk.
+ * 4. {@link EXEMPTIONS} names it, with the reason written down. An exemption is a decision on the
  *    record, not a suppression: each one states why the page is off both routes, and each is
  *    checked against disk so a page that has since been deleted or renamed cannot leave a
  *    permanent hole behind it.
@@ -52,13 +58,22 @@ const EXEMPTIONS: readonly Exemption[] = [
       "published unlisted by decision — its readers arrive from the predecessor's own sunset " +
       "material; indexed in llms.txt.",
   },
-  {
-    path: "docs/specs/",
-    reason:
-      "engineering design documents for partly unbuilt behaviour — excluded from the site " +
-      "build by website/docusaurus.config.ts, so they have no route to be reachable from.",
-  },
 ];
+
+/** The site config, read as text for the same reason the sidebar is. */
+const SITE_CONFIG = readFileSync(join(REPO_ROOT, "website", "docusaurus.config.ts"), "utf8");
+
+/**
+ * The directories the docs preset excludes from the build, as repo-relative prefixes: every
+ * `'<dir>/**'` entry of its `exclude` list. The plugin's default patterns (`**\/_*`, tests)
+ * are not directories and are not exemptions.
+ */
+function buildExcludedDirs(config: string): readonly string[] {
+  const list = /^\s*exclude:\s*\[([^\]]*)\]/m.exec(config)?.[1] ?? "";
+  return [...list.matchAll(/'([A-Za-z0-9_-]+)\/\*\*'/g)].map((match) => `docs/${match[1] ?? ""}/`);
+}
+
+const excludedDirs = buildExcludedDirs(SITE_CONFIG);
 
 /** Least number of pages this gate must have walked to have checked anything. */
 const MIN_PAGES = 10;
@@ -87,6 +102,7 @@ const indexedPages: ReadonlySet<string> = new Set(
 );
 
 const exempts = (page: string): boolean =>
+  excludedDirs.some((dir) => page.startsWith(dir)) ||
   EXEMPTIONS.some((entry) =>
     entry.path.endsWith("/") ? page.startsWith(entry.path) : page === entry.path,
   );
@@ -99,13 +115,26 @@ describe("every page under docs/ is reachable from something", () => {
     expect(pages.length, "the docs walk found almost nothing").toBeGreaterThanOrEqual(MIN_PAGES);
   });
 
+  it("derived the build-excluded directories rather than restating them", () => {
+    // Vacuity guard on the derivation: a config whose `exclude` line moved out of the regex's
+    // reach would exempt nothing and fail the page check with a misleading message, so the
+    // derivation is asserted on its own — the design documents' directory is the one it must find.
+    expect(excludedDirs, "the config's exclude list no longer yields docs/specs/").toContain(
+      "docs/specs/",
+    );
+    for (const dir of excludedDirs) {
+      expect(dir, "a derived exclusion is not a docs/ directory prefix").toMatch(/^docs\/[^/]+\/$/);
+    }
+  });
+
   it("lists, indexes or exempts each one", () => {
     for (const page of pages) {
       const reachable = sidebarPages.includes(page) || indexedPages.has(page) || exempts(page);
       expect(
         reachable,
         `${page} is on disk and reachable from nothing — add it to website/sidebars.ts, to ` +
-          `src/cli/docs/llmsIndex.ts, or to EXEMPTIONS in this file with the reason`,
+          `src/cli/docs/llmsIndex.ts, to the site config's exclude list, or to EXEMPTIONS in ` +
+          `this file with the reason`,
       ).toBe(true);
     }
   });
