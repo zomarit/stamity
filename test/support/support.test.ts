@@ -36,10 +36,16 @@ interface BuildConfigModule {
     budgets: { half: string; bytes: number; budget: number }[];
     violations: { half: string; bytes: number; budget: number }[];
   };
+  default: { outputOptions?: { comments?: { jsdoc?: boolean } } };
 }
 
-const { LOGIC_BUDGET_BYTES, CORPUS_BUDGET_BYTES, checkSizeBudgets, classifyDistEntry } =
-  buildConfigModule as BuildConfigModule;
+const {
+  LOGIC_BUDGET_BYTES,
+  CORPUS_BUDGET_BYTES,
+  checkSizeBudgets,
+  classifyDistEntry,
+  default: buildConfig,
+} = buildConfigModule as BuildConfigModule;
 
 describe("makeTempDir", () => {
   it("hands every caller its own directory, including under parallel construction", async () => {
@@ -553,6 +559,19 @@ describe("build size budgets", () => {
     // A sourcemap counts against NEITHER budget: it is not emitted, and one that
     // reappeared should surface as unbudgeted rather than eat the logic half.
     expect(classifyDistEntry("cli.js.map")).toBe("other");
+    // A shared chunk under a subdirectory is still the logic half. Today's build
+    // emits none — the three entries sit at the root — but chunk placement is
+    // the bundler's choice, and a tsdown/rolldown release that starts naming
+    // them `chunks/<hash>.js` would otherwise move the logic half's bytes into
+    // the unbudgeted total, which is printed and can never be a violation. The
+    // budget is the canary for exactly that class of change, so it may not be
+    // the thing the change walks around.
+    expect(classifyDistEntry("chunks/x.js")).toBe("logic");
+    expect(classifyDistEntry("shared/deep/nested.js")).toBe("logic");
+    // The corpus prefixes still win over the extension: a staged `.js` fixture
+    // is data the runtime reads, not bundled logic.
+    expect(classifyDistEntry("content/fixtures/x.js")).toBe("corpus");
+    expect(classifyDistEntry("packs/ops/x.js")).toBe("corpus");
   });
 
   it("totals both halves and passes a build inside them", () => {
@@ -690,5 +709,17 @@ describe("build size budgets", () => {
     // 2.54 MiB of the measured 4.05 MiB unpacked tree was sourcemaps, under
     // neither budget; `files: ["dist"]` ships whatever lands there.
     expect(config).toContain("sourcemap: false");
+  });
+
+  it("keeps JSDoc out of the emitted bundles, as a red test rather than a printed line", () => {
+    // The strip is 48.8% of what the logic half used to be — 2,081,093 bytes
+    // down to 1,064,549 — and the budget above cannot defend it: the pre-strip
+    // figure was UNDER the 2,097,152-byte ceiling, so losing this option puts a
+    // megabyte back into every npx download on a build that still exits 0 and a
+    // `size-budget` check that still passes. The `[size]` line would report it
+    // and nobody would be stopped. This assertion is what fails instead, on the
+    // two ways it goes: the option deleted, or a tsdown/rolldown upgrade
+    // changing what `comments` defaults to (package.json pins tsdown by caret).
+    expect(buildConfig.outputOptions?.comments?.jsdoc).toBe(false);
   });
 });

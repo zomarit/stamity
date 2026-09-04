@@ -23,23 +23,55 @@ import { defineConfig } from "tsdown";
  * The bundled logic half — every `.js` tsdown emits into dist/, entries and shared
  * chunks together.
  *
- * 2 MiB. Not derived from the current build: it is the ceiling the distribution
- * design fixed for the logic bundle. That ceiling is now very nearly spent — the
- * measured build reports 2,081,093 bytes of the 2,097,152-byte budget (1.98 of
- * 2.00 MiB, 99.23%), leaving 16,059 bytes, under 0.8%, of headroom. The earlier
- * wording here promised "roughly 1.5 MiB measured, so ~0.5 MiB of room to grow";
- * that has not been true for some time, and a comment asserting room that does
- * not exist is worse than no comment, because the next author sizes a change
- * against it. Read the number the build prints, not this paragraph: a change of
- * the size the recent ones have run to (single-digit KB) can now be the one that
- * fails `npm run build`.
+ * 2 MiB, and held there. Not derived from the current build: it is the ceiling
+ * the distribution design fixed for the logic bundle. What follows is the
+ * measurement it is held against, taken on the build that stripped JSDoc from
+ * the output (`outputOptions` below).
  *
- * What does NOT follow from that is raising the number. A build that crosses the
- * ceiling is a review prompt ("what got bundled?"), and where this budget should
- * sit — held here and paid for by finding what grew dist/src.js to 1.54 MB, or
- * moved with the reason it moved recorded beside it — is a decision for the
- * review package, not a value to nudge in the same commit that noticed it. This
- * paragraph reports the measurement; it does not settle the budget.
+ * Measured basis, on two different trees — so which is which is part of the
+ * figure. BEFORE is the clean head b2d51a6, where the build printed 2,081,093
+ * bytes of the 2,097,152-byte budget: 99.2% spent, 16,059 bytes of headroom,
+ * under one percent. AFTER is this tree with the change applied, where the build
+ * prints 1,066,261 bytes: 1,030,891 bytes free, 49.2% of the ceiling. The
+ * 1,014,832-byte difference is 48.8% of what the logic half used to be, and it
+ * is a NET of two effects rather than a comment measurement: the strip is what
+ * recovered the space, and this tree's own shipped code moved the other way
+ * over the same interval — the emitted review-gate script alone is several
+ * kilobytes larger here than at b2d51a6, which `wc -c` on
+ * `.stamity/generated/hooks/claude/stamity-review-gate.mjs` against that tree's
+ * copy checks in one command, and it keeps moving. The strip measured on ONE
+ * tree — b2d51a6 with only `comments: { jsdoc: false }` changed — removes
+ * 1,014,152 bytes, and the figure above is that net of the code this tree added.
+ * Nothing published reads the comments: package.json's `exports` maps `.` to
+ * `./dist/index.js` and `./package.json`, with no `types` condition, so the
+ * shipped surface is the bin plus one re-export module. The prose belongs in
+ * src/, where a reader can see the code it describes; the bundle is a
+ * download.
+ *
+ * Why the ceiling is not redrawn onto the new figure: the recovered space is
+ * headroom on purpose. The budget's job is unchanged — a build that crosses it
+ * is a review prompt ("what got bundled?"), not a number to raise — and a
+ * ceiling pinned to today's measurement becomes a high-water mark that ratchets
+ * on every commit, which is what the number was set to avoid. Moving it in
+ * either direction is a change with its own reason recorded beside it, not a
+ * consequence of this one.
+ *
+ * The `[size]` line every build prints is the figure of record. Read it, not
+ * this paragraph: nothing recomputes these figures, and the earlier wording here
+ * ("roughly 1.5 MiB measured, so ~0.5 MiB of room to grow") drifted far enough
+ * to size other people's changes against room that did not exist.
+ *
+ * What that line is NOT is the guard. Two ways the logic half roughly doubles
+ * again with no code added — the `comments` option removed, or a
+ * tsdown/rolldown upgrade changing what it defaults to, since package.json pins
+ * tsdown by caret — and neither one FAILS anything here, because the pre-strip
+ * measurement (2,081,093 bytes) is under this ceiling: the build would exit 0,
+ * the `size-budget` check would pass, and the megabyte would be back in every
+ * npx download with a printed line as its only trace. The gate against that is
+ * a test, not a budget — `test/support/support.test.ts` asserts this config's
+ * `outputOptions.comments.jsdoc === false`, and that assertion goes red on both
+ * regressions. This ceiling catches something else: bytes ARRIVING, a
+ * dependency or a fixture tree bundled in.
  */
 export const LOGIC_BUDGET_BYTES = 2 * 1024 * 1024;
 
@@ -58,13 +90,22 @@ export const CORPUS_BUDGET_BYTES = 1536 * 1024;
 /**
  * Which budget a dist-relative POSIX path counts against.
  *
- * Sourcemaps are deliberately unclassified: they are not emitted (see `sourcemap`
- * below), and if one ever reappears it should surface as an unbudgeted file rather
- * than quietly consume the logic half.
+ * The corpus prefixes are checked first, so a `.js` staged as DATA under
+ * `content/` or `packs/` counts as corpus rather than as bundled logic. Every
+ * other `.js` is logic at any depth — entries at the root today, and a shared
+ * chunk under a subdirectory if a future tsdown/rolldown release starts placing
+ * one there. Depth used to be part of the test (`!relPath.includes("/")`), which
+ * made a nested chunk `other`: printed, never a violation, so a chunk-naming
+ * change would have moved the logic half's bytes out of both budgets without
+ * failing anything.
+ *
+ * Sourcemaps stay deliberately unclassified: they are not emitted (see
+ * `sourcemap` below), and if one ever reappears it should surface as an
+ * unbudgeted file rather than quietly consume the logic half.
  */
 export function classifyDistEntry(relPath) {
   if (relPath.startsWith("content/") || relPath.startsWith("packs/")) return "corpus";
-  if (relPath.endsWith(".js") && !relPath.includes("/")) return "logic";
+  if (relPath.endsWith(".js")) return "logic";
   return "other";
 }
 
@@ -155,6 +196,21 @@ export default defineConfig({
   // debugging a bundled stack turns this on locally rather than shipping it to
   // everyone.
   sourcemap: false,
+  // No JSDoc in the emitted bundles. The bundle is the shipped artifact, not the
+  // reading copy: this codebase's reasoning lives in src/, which is where a reader
+  // should meet it, and documentation comments were 48.8% of the logic half by
+  // measurement (see LOGIC_BUDGET_BYTES above) — download weight on every npx run
+  // that answers nobody's question. `gzip -9` over the three emitted files totalled
+  // 671,973 bytes before and 291,932 after, which is closer to what an install pays.
+  // Rolldown drops plain line and block comments whatever this option says (its own
+  // note on `comments`: "Regular line and block comments without these markers are
+  // always removed regardless of this option"); `legal` and `annotation` stay on
+  // by default, so `@license`/`@preserve` notices and the `/*#__PURE__*/`
+  // tree-shaking hints survive. Comments carry no semantics, and the emission proves
+  // it: running `init --yes --tools claude` into two fresh fixture repositories, one
+  // with each bundle, produced 61 files whose only difference was the created/updated
+  // timestamp pair in `.stamity/manifest.json`.
+  outputOptions: { comments: { jsdoc: false } },
   treeshake: true,
   failOnWarn: true,
   // Declaration emit stays off on ONE reason: nothing consumes this package as a
