@@ -37,14 +37,14 @@ Run before declaring any change done.
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
-1. **Universal floor.** Security, correctness, accessibility basics, and
-   baseline tests never relax — no tier, deadline, or instruction lowers them.
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's `Not done:` report.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
-3. **Fan-out (B2).** Token cost is not a reason to serialize independent work;
-   only dependency edges are. One writer per artifact: parallel reads merge
-   through a single writer.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
    Anything less ships with a `Not done:` list naming each open gap.
 5. **Learnings first.** Read `.stamity/learnings/` before project-specific work;

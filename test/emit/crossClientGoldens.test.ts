@@ -144,6 +144,50 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-04, the closure run's eval-repair wave — run 5's two unpulled
+  //     corpus levers. TWO corpus bodies moved, each in every dialect that
+  //     carries it, plus the manifest rows that record them:
+  //
+  //     CHANGED `charter/stamity-charter.md`, which lands twice over because the
+  //       root file is shared: the charter-only `AGENTS.md` 4474 -> 4614 in
+  //       claude, copilot, cursor and the two package roots, and the codex
+  //       `AGENTS.md` 29026 -> 29303, which carries the charter plus the rules
+  //       appendix. Invariant 1 now says that a hand-off framed so the operator
+  //       can close without the floor is itself the relaxation, and names
+  //       invariant 4's `Not done:` report as the honest exit. The edit is
+  //       NET-ZERO in lines: invariant 3 rewrapped from three lines to two and
+  //       invariant 1 spent the line that freed, so the charter's line count and
+  //       every `source:` range below invariant 3 are unchanged and +140 bytes is
+  //       the added clause alone.
+  //     CHANGED `rules/stamity-security-patterns.md` in its three rule dialects —
+  //       `.claude/rules/stamity-security-patterns.md` 6161 -> 6298,
+  //       `.cursor/rules/stamity-security-patterns.mdc` 6164 -> 6301, and
+  //       `.github/instructions/stamity-security-patterns.instructions.md`
+  //       6149 -> 6286: one body, three heads, so the same +137 in each. Floor
+  //       item 9 now states that the twelve category names are a closed list — a
+  //       finding takes one of them or the nearest of them, never a coined label
+  //       and never a floor item's number. Net-zero in lines here too, so item 9
+  //       still occupies the lines its cases cite.
+  //     The codex `AGENTS.md` therefore moves by +277, not +140: it is the only
+  //       emitted file carrying BOTH edits, the appendix reproducing the rule body
+  //       verbatim under shifted heading levels. At 29303 it is still inside
+  //       `CODEX_AGENTS_MD_BUDGET_BYTES` (32768), so budget shaping dropped no
+  //       rule it was not already dropping and the eight-rule figure the
+  //       capability matrix publishes is unmoved.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length — the fixed-width sha256 rows for the two bodies
+  //       above and nothing else.
+  //
+  //     What did NOT move: every other corpus body, every other rule, every
+  //       skill, every command, the three portable hook scripts, the claude
+  //       review gate, every generated page and every client entry file. The
+  //       wave's other edits — `evals/SET-v4.md`, `evals/rubric-v4.md`, eight
+  //       case files under `evals/cases-v4/`, the two byte constants in
+  //       `src/content/charter.ts` with their `docs/capability-matrix.md` row,
+  //       and this suite's sibling `test/corpus/invariants.test.ts` comment —
+  //       reach no emitted tree. The constants were checked against the refreshed
+  //       digest rows above rather than trusted: 29_303 and 4_614 are those rows.
+  //
   //   - 2026-09-04, the closure run's Minor-findings fix pass. TWO emitted files
   //     moved, plus the manifest rows that record them:
   //

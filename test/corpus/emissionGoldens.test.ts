@@ -82,6 +82,26 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-04, the closure run's eval-repair wave. SUBSTITUTION moved on
+ *     `charter/stamity-charter.md` alone, 4513 -> 4655 bytes at an unchanged
+ *     91 lines: invariant 1 now says that a hand-off framed so the operator can
+ *     close without the floor is itself the relaxation, and names invariant 4's
+ *     `Not done:` report as the honest exit. The paragraph took the line that
+ *     invariant 3 freed by rewrapping from three lines to two, which is why the
+ *     line count holds. Of the +142, +140 is the content edit byte for byte and
+ *     +2 is this snapshot's own escaping of the two new backticks — the golden
+ *     diff is the content edit and nothing else, so substitution passed the new
+ *     prose through and left no token behind.
+ *
+ *     NOTHING else moved here. `commands/st-work.md` and
+ *     `agents/stamity-test-runner.md` — the other two substitution targets —
+ *     are byte-identical, and so are the catalog, the MDC companion heads, the
+ *     policy document and the three core hook scripts. The wave's second corpus
+ *     edit, `rules/stamity-security-patterns.md`'s floor item 9, reaches this
+ *     suite only through the MDC companion head, which is frontmatter and did
+ *     not move; its body lands in the sibling suite's three rule dialects and
+ *     in the codex appendix, itemised there.
+ *
  *   - 2026-09-04, the closure run's Minor-findings fix pass. NOTHING moved in
  *     this snapshot, and that is the reviewed result rather than a skipped
  *     refresh. The pass changed two emitted surfaces — `commands/st-rework.md`
