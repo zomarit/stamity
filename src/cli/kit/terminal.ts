@@ -6,9 +6,9 @@ import { styleText } from "node:util";
  *
  * Color resolution order is ours, not the platform's: the --no-color
  * flag beats a nonempty NO_COLOR env, which beats a nonempty FORCE_COLOR env,
- * which beats stdout TTY detection. `styleText` is therefore always called with
- * stream validation off — the resolved flag is the single authority, never a
- * second stream auto-detect inside node:util.
+ * which beats a `TERM` of `dumb`, which beats stdout TTY detection. `styleText`
+ * is therefore always called with stream validation off — the resolved flag is
+ * the single authority, never a second stream auto-detect inside node:util.
  */
 
 export interface TerminalFacts {
@@ -73,10 +73,29 @@ export function detectTerminalFacts(streams?: {
 const FORCE_COLOR_OFF = new Set(["0", "false"]);
 
 /**
+ * The one `TERM` value that means "this terminal displays no SGR". Spelled once
+ * here and read case-insensitively; `./prompts.ts::rawMenuIo` imports it and
+ * makes the same comparison against its own injected env for the cursor-motion
+ * half of the same fact, so the opt-out has one spelling and not two.
+ */
+export const DUMB_TERM = "dumb";
+
+/**
  * Precedence: --no-color flag > NO_COLOR nonempty > FORCE_COLOR nonempty
- * (`0`/`false` force off, anything else forces on) > stdout isTTY. An
- * empty-string env var counts as unset on both sides, per the informal NO_COLOR
- * spec (https://no-color.org: any nonempty value disables).
+ * (`0`/`false` force off, anything else forces on) > `TERM=dumb` > stdout
+ * isTTY. An empty-string env var counts as unset on both sides, per the
+ * informal NO_COLOR spec (https://no-color.org: any nonempty value disables).
+ *
+ * `TERM=dumb` names a terminal that displays no SGR, so an escape written to
+ * one stays in the transcript as literal bytes instead of becoming paint —
+ * which is what stdout TTY-ness alone answered yes to. It is a CAPABILITY fact
+ * read off the environment, so it sits below FORCE_COLOR (an operator stating
+ * where the stream really goes outranks what the terminal advertises) and above
+ * stream detection; the flag and NO_COLOR sit above FORCE_COLOR and have
+ * already returned by the time this line runs. Matched
+ * case-insensitively on the WHOLE value, the same read `./prompts.ts::rawMenuIo`
+ * makes when it sends this terminal to the typed list: a `TERM` that merely
+ * contains the word names some other terminal and keeps stream detection.
  *
  * The empty string is the one place this deliberately does not follow Node,
  * which reads `FORCE_COLOR=` as force-on: the symmetric "empty means unset"
@@ -96,6 +115,7 @@ export function resolveColorEnabled(opts: {
   if (forceColor !== undefined && forceColor !== "") {
     return !FORCE_COLOR_OFF.has(forceColor);
   }
+  if ((opts.env["TERM"] ?? "").toLowerCase() === DUMB_TERM) return false;
   return opts.stdoutIsTTY;
 }
 

@@ -154,6 +154,33 @@ describe("resolveColorEnabled", () => {
     expect(resolve(false, {}, false)).toBe(false);
   });
 
+  it("reads TERM=dumb as color off, under FORCE_COLOR and over stream detection", () => {
+    // A dumb terminal displays no SGR, so an escape written to one survives in
+    // the transcript as literal bytes rather than as paint. Stream detection
+    // alone said yes to it: this is the input that used to be missing.
+    expect(resolve(false, { TERM: "dumb" }, true)).toBe(false);
+    // Below FORCE_COLOR, which is where every color library puts it: the env
+    // var is the operator stating where the stream really goes, and it still
+    // outranks a capability read off TERM.
+    expect(resolve(false, { TERM: "dumb", FORCE_COLOR: "1" }, true)).toBe(true);
+    expect(resolve(false, { TERM: "dumb", FORCE_COLOR: "1" }, false)).toBe(true);
+    // The off-spellings, NO_COLOR and the flag keep their meaning: nothing
+    // here is a second way to turn color back on.
+    expect(resolve(false, { TERM: "dumb", FORCE_COLOR: "0" }, true)).toBe(false);
+    expect(resolve(false, { TERM: "dumb", NO_COLOR: "1" }, true)).toBe(false);
+    expect(resolve(true, { TERM: "dumb", FORCE_COLOR: "1" }, true)).toBe(false);
+  });
+
+  it("matches TERM=dumb case-insensitively on the WHOLE value, as the menu probe does", () => {
+    // Same read as `src/cli/kit/prompts.ts::rawMenuIo`, which sends this exact
+    // terminal to the typed path — one spelling of the opt-out, not two.
+    expect(resolve(false, { TERM: "DUMB" }, true)).toBe(false);
+    // A TERM that merely CONTAINS the word names some other terminal, and keeps
+    // whatever stream detection decided for it.
+    expect(resolve(false, { TERM: "xterm-dumbish" }, true)).toBe(true);
+    expect(resolve(false, { TERM: "" }, true)).toBe(true);
+  });
+
   it("treats empty-string env vars as unset (informal NO_COLOR spec: nonempty check)", () => {
     expect(resolve(false, { NO_COLOR: "" }, true)).toBe(true);
     expect(resolve(false, { NO_COLOR: "", FORCE_COLOR: "1" }, false)).toBe(true);

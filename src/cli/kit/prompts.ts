@@ -1,7 +1,7 @@
 import { emitKeypressEvents, type Key } from "node:readline";
 import { createInterface, type Interface } from "node:readline/promises";
 import { CliFailure } from "./output.ts";
-import { makePalette, type Palette } from "./terminal.ts";
+import { DUMB_TERM, makePalette, type Palette } from "./terminal.ts";
 
 /**
  * TTY-gated prompt helpers over injectable streams (readline/promises).
@@ -638,7 +638,7 @@ function rawMenuIo(gate: PromptGate, io: PromptIo, choiceCount: number): RawIo |
   // promises but did not check for. Read off the INJECTED `gate.env` (see the
   // "arrow menu" section header): an omitted `env` reads as an unset `TERM`,
   // which is the raw-capable default.
-  if ((gate.env?.["TERM"] ?? "").toLowerCase() === "dumb") return null;
+  if ((gate.env?.["TERM"] ?? "").toLowerCase() === DUMB_TERM) return null;
   // Height fit: a menu taller than the terminal scrolls its own top rows off
   // screen before the operator ever sees them, where the typed list simply
   // grows the scrollback instead of lying about which row the cursor is on.

@@ -13,7 +13,12 @@ import {
   type PromptIo,
 } from "../../src/cli/kit/prompts.ts";
 import { CliFailure } from "../../src/cli/kit/output.ts";
-import { makePalette, type Palette } from "../../src/cli/kit/terminal.ts";
+import {
+  makePalette,
+  resolveAccentDepth,
+  resolveColorEnabled,
+  type Palette,
+} from "../../src/cli/kit/terminal.ts";
 import type { CommandModule } from "../../src/cli/kit/program.ts";
 import { runInProcess } from "../support/inProcess.ts";
 // The raw-TTY double, the terminal's own key bytes, and the shared
@@ -1614,6 +1619,40 @@ describe("C1-residual: a byte left behind by a menu does not silently answer the
   });
 });
 
+/**
+ * The palette exactly as `../../src/cli/kit/program.ts:264-275` builds one for
+ * a command: the colour decision first, then the accent depth resolved from
+ * the same env. Nothing here decides colour on its own — that is the point of
+ * the leg that uses it, which measures what the funnel hands the prompts.
+ *
+ * Module scope rather than inside the describe below, because a describe-scoped
+ * helper that captures nothing from that scope is an oxlint error here
+ * (`unicorn/consistent-function-scoping`).
+ */
+const funnelPalette = (env: Record<string, string | undefined>): Palette => {
+  const colorEnabled = resolveColorEnabled({ noColorFlag: false, env, stdoutIsTTY: true });
+  return makePalette(colorEnabled, resolveAccentDepth({ colorEnabled, env }));
+};
+
+/**
+ * The typed fallback driven through both bad answers, as the terminal saw it.
+ * `makePromptIo`'s input is a plain PassThrough, so `rawMenuIo` refuses on
+ * `input.isTTY !== true` and this is the typed path on every env.
+ */
+async function typedTranscript(env: Record<string, string | undefined>): Promise<string> {
+  const { io, input, output } = makePromptIo();
+  input.end("9\n9\n");
+  const gate: PromptGate = { interactive: true, env, palette: funnelPalette(env) };
+  const picked = await selectOne(gate, io, {
+    question: "Which tool?",
+    choices: TOOL_CHOICES,
+    defaultValue: "c",
+  });
+  expect(picked).toBe("c");
+  closePrompts(io);
+  return output();
+}
+
 describe("the design language on the menus: escapes are ADDED, never substituted", () => {
   /**
    * The UI accent at 24-bit depth (`#8A52FF`), and the mark's own violet
@@ -1712,6 +1751,32 @@ describe("the design language on the menus: escapes are ADDED, never substituted
     expect(output()).toContain("still not a valid choice — keeping the default (3)");
     expect(output()).not.toContain(ESC);
     closePrompts(io);
+  });
+
+  it("writes zero escape bytes on the typed path under TERM=dumb, re-ask included", async () => {
+    // A dumb terminal renders no SGR, so every escape the funnel's palette
+    // would add lands in the transcript as literal bytes. stdoutIsTTY is true
+    // in all three legs: TERM is the only input that differs.
+    const dumb = await typedTranscript({ TERM: "dumb" });
+    // Both painted lines of this path are in the transcript: the question
+    // (bold, `src/cli/kit/prompts.ts:330`) and the first re-ask (yellow,
+    // `:368`). The second disclosure is unpainted on every env.
+    expect(dumb).toContain("Which tool?");
+    expect(dumb).toContain("not a valid choice");
+    expect(dumb).toContain("still not a valid choice — keeping the default (3)");
+    expect(dumb).not.toContain(ESC);
+
+    // Byte-equal to the frame NO_COLOR produces on a colour-capable terminal:
+    // the same content, reached by the two routes that both mean "colour off".
+    expect(dumb).toBe(await typedTranscript({ TERM: "xterm-256color", NO_COLOR: "1" }));
+
+    // The control, so this measures the TERM read rather than a palette that
+    // never paints: drop `dumb` and the same frame comes back painted, with
+    // identical text underneath.
+    const painted = await typedTranscript({ TERM: "xterm-256color" });
+    expect(painted).toContain(`${ESC}[1mWhich tool?${ESC}[22m`);
+    expect(painted).toContain(`${ESC}[33mnot a valid choice`);
+    expect(stripVTControlCharacters(painted)).toBe(dumb);
   });
 
   it("clamps on plain text and paints afterwards, so a coloured row is no shorter than a plain one", async () => {
