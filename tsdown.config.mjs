@@ -24,10 +24,22 @@ import { defineConfig } from "tsdown";
  * chunks together.
  *
  * 2 MiB. Not derived from the current build: it is the ceiling the distribution
- * design fixed for the logic bundle, and the measured build sits at roughly 1.5 MiB,
- * so the headroom is ~0.5 MiB of deliberate room to grow rather than a high-water
- * mark that ratchets on every commit. A build that crosses it is a review prompt
- * ("what got bundled?"), not a number to raise.
+ * design fixed for the logic bundle. That ceiling is now very nearly spent — the
+ * measured build reports 2,081,093 bytes of the 2,097,152-byte budget (1.98 of
+ * 2.00 MiB, 99.23%), leaving 16,059 bytes, under 0.8%, of headroom. The earlier
+ * wording here promised "roughly 1.5 MiB measured, so ~0.5 MiB of room to grow";
+ * that has not been true for some time, and a comment asserting room that does
+ * not exist is worse than no comment, because the next author sizes a change
+ * against it. Read the number the build prints, not this paragraph: a change of
+ * the size the recent ones have run to (single-digit KB) can now be the one that
+ * fails `npm run build`.
+ *
+ * What does NOT follow from that is raising the number. A build that crosses the
+ * ceiling is a review prompt ("what got bundled?"), and where this budget should
+ * sit — held here and paid for by finding what grew dist/src.js to 1.54 MB, or
+ * moved with the reason it moved recorded beside it — is a decision for the
+ * review package, not a value to nudge in the same commit that noticed it. This
+ * paragraph reports the measurement; it does not settle the budget.
  */
 export const LOGIC_BUDGET_BYTES = 2 * 1024 * 1024;
 

@@ -1,6 +1,7 @@
 import { emitKeypressEvents, type Key } from "node:readline";
 import { createInterface, type Interface } from "node:readline/promises";
 import { CliFailure } from "./output.ts";
+import { makePalette, type Palette } from "./terminal.ts";
 
 /**
  * TTY-gated prompt helpers over injectable streams (readline/promises).
@@ -58,6 +59,16 @@ export interface PromptGate {
    * every call site that builds a gate.
    */
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /**
+   * The already-resolved palette (`./terminal.ts::makePalette`), injected for
+   * exactly the reason `env` is: the colour authority is
+   * `./terminal.ts::resolveColorEnabled`, which needs the `--no-color` flag the
+   * funnel parsed, and `PromptIo` carries neither that nor the env. Optional,
+   * defaulting to an identity palette — a call site that does not thread it
+   * renders today's bytes, escape for escape, rather than a silent new
+   * appearance.
+   */
+  readonly palette?: Palette;
 }
 
 /** Interactive only when stdin is a TTY and neither -y nor --json asked for silence. */
@@ -66,12 +77,24 @@ export function promptGate(opts: {
   yes: boolean;
   json: boolean;
   env?: Readonly<Record<string, string | undefined>>;
+  palette?: Palette;
 }): PromptGate {
   return {
     interactive: opts.stdinIsTTY && !opts.yes && !opts.json,
+    // Both spreads are conditional for the same reason: an omitted field must
+    // leave NO key rather than a `undefined` one, because a bare gate is
+    // asserted as exactly `{ interactive: true }`.
     ...(opts.env === undefined ? {} : { env: opts.env }),
+    ...(opts.palette === undefined ? {} : { palette: opts.palette }),
   };
 }
+
+/**
+ * The fallback for a gate carrying no palette: built once at module load, not
+ * per frame. Every method on it is the identity, so it writes zero bytes of its
+ * own — which is what makes an untouched call site byte-identical.
+ */
+const IDENTITY_PALETTE = makePalette(false);
 
 interface Session {
   readonly rl: Interface;
@@ -269,19 +292,27 @@ export async function selectOne<T extends string>(
   },
 ): Promise<T> {
   if (!gate.interactive) return q.defaultValue;
+  // Resolved ONCE per call, here rather than per frame: an absent palette is
+  // the identity, which is what keeps an untouched call site byte-identical.
+  const palette = gate.palette ?? IDENTITY_PALETTE;
   const defaultIndex = q.choices.findIndex((choice) => choice.value === q.defaultValue);
   const raw = rawMenuIo(gate, io, q.choices.length);
   // An empty choice list has no row to put a cursor on and no key that could
   // ever resolve it, so it goes to the typed path, which answers with the
   // default the way it always has.
   if (raw !== null && q.choices.length > 0) {
-    const menu = await runMenu(io, raw, {
-      question: q.question,
-      hint: MOVE_HINT,
-      labels: q.choices.map((choice) => choice.label),
-      active: defaultIndex === -1 ? 0 : defaultIndex,
-      selected: null,
-    });
+    const menu = await runMenu(
+      io,
+      raw,
+      {
+        question: q.question,
+        hint: MOVE_HINT,
+        labels: q.choices.map((choice) => choice.label),
+        active: defaultIndex === -1 ? 0 : defaultIndex,
+        selected: null,
+      },
+      palette,
+    );
     return q.choices[menu.active]?.value ?? q.defaultValue;
   }
   // B2: the same manifest-derived label the menu's `renderMenu` sanitizes
@@ -289,7 +320,15 @@ export async function selectOne<T extends string>(
   // incapable terminal always takes, so it has no other guard.
   const rows = q.choices.map((choice, i) => `  ${i + 1}) ${sanitizeLabel(choice.label)}`);
   const bracket = defaultIndex === -1 ? q.defaultValue : String(defaultIndex + 1);
-  const prompt = `${q.question}\n${rows.join("\n")}\nChoose 1-${q.choices.length} [${bracket}]: `;
+  // The question takes `bold`; the numbered rows and the `Choose ...` line do
+  // not. That line is the one readline redraws on every keystroke and its bytes
+  // are pinned verbatim by five assertions, so it stays plain — and node
+  // measures a prompt's display width with SGR skipped (probed on the engines
+  // floor's release: the bold and the plain form return the identical
+  // `{cols,rows}`), which is what makes bolding the question above it safe.
+  const prompt =
+    `${palette.bold(q.question)}\n${rows.join("\n")}\n` +
+    `Choose 1-${q.choices.length} [${bracket}]: `;
 
   // Parity with `selectManyTyped`: a blank answer accepts the bracketed default
   // outright (Enter on an empty line is a normal answer, not a correction), but
@@ -322,8 +361,13 @@ export async function selectOne<T extends string>(
       if (picked !== undefined) return picked.value;
     }
     if (attempt === 0) {
+      // `yellow`, not `dim`: a re-ask is a correction the operator has to act
+      // on, the register `../commands/init/panel.ts` already spends yellow on.
+      // The newline stays OUTSIDE the run, so the reset lands before it.
       io.output.write(
-        `not a valid choice: ${JSON.stringify(answer)} — enter a number 1-${q.choices.length}\n`,
+        `${palette.yellow(
+          `not a valid choice: ${JSON.stringify(answer)} — enter a number 1-${q.choices.length}`,
+        )}\n`,
       );
     }
   }
@@ -357,24 +401,30 @@ export async function selectMany<T>(
   },
 ): Promise<T[]> {
   if (!gate.interactive) return [...q.defaultValues];
+  const palette = gate.palette ?? IDENTITY_PALETTE;
   const defaultIndexes = q.choices.flatMap((choice, index) =>
     q.defaultValues.includes(choice.value) ? [index] : [],
   );
   const raw = rawMenuIo(gate, io, q.choices.length);
   if (raw !== null && q.choices.length > 0) {
-    const menu = await runMenu(io, raw, {
-      question: q.question,
-      hint: TOGGLE_HINT,
-      labels: q.choices.map((choice) => choice.label),
-      // The cursor opens on the first preselected row so the box under it is
-      // the one the operator is most likely to be revisiting.
-      active: defaultIndexes[0] ?? 0,
-      selected: new Set(defaultIndexes),
-    });
+    const menu = await runMenu(
+      io,
+      raw,
+      {
+        question: q.question,
+        hint: TOGGLE_HINT,
+        labels: q.choices.map((choice) => choice.label),
+        // The cursor opens on the first preselected row so the box under it is
+        // the one the operator is most likely to be revisiting.
+        active: defaultIndexes[0] ?? 0,
+        selected: new Set(defaultIndexes),
+      },
+      palette,
+    );
     const picked = menu.selected ?? new Set<number>();
     return q.choices.filter((_choice, index) => picked.has(index)).map((choice) => choice.value);
   }
-  return await selectManyTyped(io, q, defaultIndexes);
+  return await selectManyTyped(io, q, defaultIndexes, palette);
 }
 
 /**
@@ -430,6 +480,7 @@ async function selectManyTyped<T>(
     defaultValues: readonly T[];
   },
   defaultIndexes: readonly number[],
+  palette: Palette,
 ): Promise<T[]> {
   const count = q.choices.length;
   // B2: same sink as `selectOne`'s typed rows — a manifest-derived label
@@ -442,7 +493,8 @@ async function selectManyTyped<T>(
   // kit's own suite) matches — `Choose 1-N, comma-separated [bracket]: ` —
   // stays byte-identical; this is additive.
   const prompt =
-    `${q.question}\n${rows.join("\n")}\nChoose 1-${count}, comma-separated [${bracket}]: ` +
+    `${palette.bold(q.question)}\n${rows.join("\n")}\n` +
+    `Choose 1-${count}, comma-separated [${bracket}]: ` +
     `(type "none" to clear every box) `;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -464,9 +516,25 @@ async function selectManyTyped<T>(
       return q.choices.filter((_choice, index) => picked.has(index)).map((choice) => choice.value);
     }
     if (attempt === 0) {
+      // `yellow`, and the newline outside the run: same register and same
+      // shape as `selectOne`'s own re-ask above.
+      //
+      // The tokens are the OPERATOR'S OWN text quoted back at them, and they
+      // reach the terminal inside a colour run, so they go through
+      // `sanitizeLabel` first — an ESC typed into the answer would otherwise
+      // ride out on this line as a live escape sequence, mid-run, exactly the
+      // hazard every other rendering seam in this file already guards.
+      // `sanitizeLabel` rather than `selectOne`'s `JSON.stringify`: the two
+      // re-asks quote differently only because this one's strings are pinned
+      // verbatim (`not a valid choice: x`), and wrapping ordinary tokens in
+      // quotes here would be a visible wording change to a settled line for no
+      // security gain. Sanitising leaves every ordinary token byte-identical
+      // and only removes what should never have been printed.
       io.output.write(
-        `not a valid choice: ${parsed.invalid.join(", ")} — ` +
-          `enter numbers 1-${count} separated by commas\n`,
+        `${palette.yellow(
+          `not a valid choice: ${parsed.invalid.map((token) => sanitizeLabel(token)).join(", ")} — ` +
+            `enter numbers 1-${count} separated by commas`,
+        )}\n`,
       );
     }
   }
@@ -525,14 +593,15 @@ export async function textInput(
  * readable stream, which is precisely why the absence of `setRawMode` has to
  * be tested for rather than inferred from a keypress that never arrives.
  *
- * NO COLOR IS WRITTEN. The kit's colour authority is
- * `./terminal.ts::resolveColorEnabled`, which needs the `--no-color` flag and
- * the env the funnel resolved; `PromptIo` carries neither, and reading
- * `process.env` from here would honour NO_COLOR while silently ignoring the
- * flag that outranks it. The cursor marker and the `[x]` box carry the state
- * instead, so the menu reads identically to a NO_COLOR reader, a `script(1)`
- * transcript and a terminal with a palette — the same property the banner's ink
- * has, for the same reason.
+ * COLOUR IS WRITTEN NOW, and the reason it was not before is the reason it can
+ * be: the kit's colour authority is `./terminal.ts::resolveColorEnabled`, which
+ * needs the `--no-color` flag and the env the funnel resolved. `PromptIo`
+ * carries neither, and reading `process.env` from here would honour NO_COLOR
+ * while silently ignoring the flag that outranks it — so the already-resolved
+ * palette is INJECTED on the gate instead (`PromptGate.palette`), exactly the
+ * way `env` is. A gate that carries none renders in the identity palette, which
+ * is byte-for-byte what this file wrote before. What the paint may never do is
+ * carry state or touch a label: see `renderMenu`.
  *
  * `TERM` is read off `PromptGate.env` — INJECTED, the same discipline
  * `./banner.ts:174-178` uses for its own `TERM` read (`opts.env`, never
@@ -612,7 +681,8 @@ interface Menu {
   /**
    * The key legend, rendered on ITS OWN line (N1) — appending it to `question`
    * used to mean a plain, unremarkable question could push the WHOLE line past
-   * 80 columns on its own (`MOVE_HINT` alone is 54 characters), and the part
+   * 80 columns on its own (`MOVE_HINT` alone is 52 characters, `TOGGLE_HINT`
+   * 69), and the part
    * that got clamped off first was the tail: `ctrl-c to cancel`, the only
    * documented way out of the menu. A dedicated line is never in competition
    * with the question's own length for the budget.
@@ -628,8 +698,9 @@ interface Menu {
 const DEFAULT_COLUMNS = 80;
 
 /**
- * Strips a label to plain text: C0/C1 control bytes gone, `\r`/`\n`/`\t`
- * collapsed to a single space rather than dropped outright.
+ * Strips a label to plain text: C0/C1 control bytes gone, Unicode bidi controls
+ * and zero-width characters gone, `\r`/`\n`/`\t` collapsed to a single space
+ * rather than dropped outright.
  *
  * Exported rather than kept file-local: the menu is not the only sink that
  * prints manifest-derived text straight to a terminal — `../commands/config.ts`'s
@@ -647,22 +718,73 @@ const DEFAULT_COLUMNS = 80;
  * `\r` or embedded `\n` desynchronizes the one-row-per-line framing `runMenu`'s
  * rewind math depends on. `\r`/`\n`/`\t` become a space instead of vanishing so
  * two labels that differed only by whitespace do not collide into the same row.
+ *
+ * A control BYTE is not the only way to lie on a terminal, which is why the
+ * strip class covers three families rather than one:
+ *
+ * - C0/C1 (`\u0000`-`\u001F`, `\u007F`-`\u009F`) — ESC and the rest of the
+ *   escape-introducing bytes, the original hazard.
+ * - Bidi overrides and isolates (`\u202A`-`\u202E`, `\u2066`-`\u2069`) — RLO
+ *   and friends REORDER what follows them, so a label reading `…exe.txt` on
+ *   screen can be `…txt.exe` in the value the operator is actually consenting
+ *   to. They render as nothing themselves, so there is no visual tell.
+ * - Zero-width and invisible formatting (`\u200B`-`\u200F`, `\u2060`,
+ *   `\uFEFF`) — zero-width space/non-joiner/joiner, the LRM/RLM marks, word
+ *   joiner and BOM. They let two different values paint identically, so two
+ *   rows the operator reads as the same string are not the same string.
+ *
+ * All three are DROPPED rather than spaced: unlike `\r`/`\n`/`\t` they carry
+ * no width of their own, so replacing one with a space would invent a
+ * difference where the source had none.
  */
 export function sanitizeLabel(label: string): string {
   return label
     .replace(/[\r\n\t]/gu, " ")
     // oxlint-disable-next-line no-control-regex -- stripping control bytes IS the point
-    .replace(/[\u0000-\u001F\u007F-\u009F]/gu, "");
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu, "");
 }
 
-/** One frame: the question line, then one row per choice, clamped to `columns`. */
-function renderMenu(menu: Menu, columns: number): string {
+/**
+ * One frame: the question line, the hint line, then one row per choice, clamped
+ * to `columns` — and painted AFTER the clamp, never before.
+ *
+ * MEASURE, CLAMP, THEN PAINT. `../commands/check.ts` states the rule where it
+ * pads its status tokens, and it is load-bearing twice over here: escape bytes
+ * counted toward `budget` would clamp a coloured label shorter than a plain
+ * one, and a line that ends up wider than the terminal wraps onto a second
+ * PHYSICAL line that `rewind(height)` — which walks back a fixed count of
+ * LOGICAL lines — knows nothing about.
+ *
+ * What the paint is allowed to touch, and why it is redundant everywhere it
+ * lands. The active-row marker `>` takes the UI accent as its own one-column
+ * run; a checked `[x]` takes it as a SECOND, independent run (coalescing the
+ * two would make active-and-checked a special case in this loop, and would
+ * accent the space between them for no reason). The inactive marker is a space
+ * and is never painted — a painted space is an invisible escape pair. Labels
+ * are never painted at all: they are manifest-derived text this process did not
+ * author (see `sanitizeLabel`), and colour on untrusted content is a second
+ * channel nobody audited. The GLYPH is the state in every one of those cases,
+ * so the accent is decoration on top of a signal that already reads — which is
+ * what lets `./terminal.ts`'s ladder drop the colour entirely at 16-colour
+ * depth and lose nothing but decoration (WCAG 1.4.1 is satisfied structurally,
+ * not by contrast).
+ *
+ * Two current-row markers exist in this CLI on purpose, and they are not drift.
+ * `../commands/worktree.ts`'s list paints a cyan `*` on the row you are
+ * standing in — a FACT about the tree, true before the command ran and still
+ * true after it prints. This `>` is a CURSOR the operator moves: it says where
+ * the next keypress lands, not what is true. Different question, different
+ * glyph, different colour.
+ */
+function renderMenu(menu: Menu, columns: number, palette: Palette): string {
   const rows = menu.labels.map((label, index) => {
     // The marker, not colour, is what says which row is active, so an inactive
     // row spends a space on the marker column rather than dropping it: the
     // labels stay in one column and the cursor is the only thing that moves.
-    const marker = index === menu.active ? ">" : " ";
-    const box = menu.selected === null ? "" : `${menu.selected.has(index) ? "[x]" : "[ ]"} `;
+    const active = index === menu.active;
+    const checked = menu.selected !== null && menu.selected.has(index);
+    const marker = active ? ">" : " ";
+    const box = menu.selected === null ? "" : `${checked ? "[x]" : "[ ]"} `;
     const prefix = `${marker} ${box}`;
     // Clamped to what is left of the row after the prefix, so a label wider
     // than the terminal cannot push the marker or box off screen or wrap the
@@ -670,7 +792,10 @@ function renderMenu(menu: Menu, columns: number): string {
     const budget = Math.max(0, columns - prefix.length);
     const clean = sanitizeLabel(label);
     const fitted = clean.length > budget ? clean.slice(0, budget) : clean;
-    return `${prefix}${fitted}`;
+    // Painted only now that every width above has been measured on plain text.
+    const paintedMarker = active ? palette.accent(marker) : marker;
+    const paintedBox = menu.selected === null ? "" : `${checked ? palette.accent("[x]") : "[ ]"} `;
+    return `${paintedMarker} ${paintedBox}${fitted}`;
   });
   // B3: neither the question line nor the hint line was ever clamped —
   // `MOVE_HINT` alone is over 50 columns, so even split onto its own line
@@ -680,8 +805,8 @@ function renderMenu(menu: Menu, columns: number): string {
   // Same budget logic as a row, with no prefix to subtract (neither line has
   // one).
   const clampToWidth = (line: string): string => (line.length > columns ? line.slice(0, columns) : line);
-  const questionLine = clampToWidth(menu.question);
-  const hintLine = clampToWidth(menu.hint);
+  const questionLine = palette.bold(clampToWidth(menu.question));
+  const hintLine = palette.dim(clampToWidth(menu.hint));
   return [questionLine, hintLine, ...rows].map((line) => `${CLEAR_LINE}${line}\n`).join("");
 }
 
@@ -894,7 +1019,7 @@ function installSignalGuards(raw: RawIo): () => void {
  * abort: a Ctrl-C ends the run at the funnel, and a live interface past that
  * point is the interception window the header describes.
  */
-async function runMenu(io: PromptIo, raw: RawIo, menu: Menu): Promise<Menu> {
+async function runMenu(io: PromptIo, raw: RawIo, menu: Menu, palette: Palette): Promise<Menu> {
   if (abortedInputs.has(io.input)) throw abortFailure();
   const carried = quiesceSession(io);
   // B1, entry half: drain BEFORE the listener attaches and BEFORE the real
@@ -937,7 +1062,7 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu): Promise<Menu> {
     return await new Promise<Menu>((resolve, reject) => {
       let drawn = false;
       const draw = (): void => {
-        raw.output.write(`${drawn ? rewind(height) : ""}${renderMenu(menu, columns)}`);
+        raw.output.write(`${drawn ? rewind(height) : ""}${renderMenu(menu, columns, palette)}`);
         drawn = true;
       };
 
@@ -955,6 +1080,13 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu): Promise<Menu> {
         // N2: NAME the value kept, the way `confirm`/`textInput`'s own EOF
         // disclosures do (and the typed selects already did) — not just that
         // a default was applied.
+        //
+        // UNPAINTED, deliberately, where the question line above it is bold and
+        // the hint dim: a disclosed default is a decision record the question
+        // protocol requires the operator to SEE, and `dim` is this CLI's token
+        // for secondary and parenthetical. Theme ink is the register that says
+        // "read this". The same holds for the typed path's own two disclosure
+        // lines, and for `confirm`'s and `textInput`'s.
         raw.output.write(`\n${menuDefaultDisclosure(menu)}\n`);
         resolve({
           question: menu.question,

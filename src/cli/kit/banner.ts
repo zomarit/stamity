@@ -1,4 +1,10 @@
-import { resolveColorEnabled } from "./terminal.ts";
+import {
+  ACCENT_RESET,
+  MARK_ACCENT_SGR,
+  resolveAccentDepth,
+  resolveColorEnabled,
+  type AccentDepth,
+} from "./terminal.ts";
 
 /**
  * The terminal wordmark — "stamity" drawn in half-block characters so the CLI
@@ -23,39 +29,59 @@ import { resolveColorEnabled } from "./terminal.ts";
  * theme, so no cell ever mixes two inks, and the letterforms are drawn so that
  * situation cannot arise (`test/cli/banner.test.ts` pins it).
  *
- * Proportions are read off `website/static/img/wordmark.svg` — the tree's copy
- * of the drawn mark, and the same file README's banner shows — not eyeballed:
- * the 23.2-unit stem is two columns, so the 489x130 artwork lands at 47 columns
- * with a three-pixel ascender, an eight-pixel x-height and a three-pixel
- * descender. The `i` keeps its square dot (two cells wide, one row tall, one
- * pixel of air under it), both `t`s keep the slab crossbar and the foot that
+ * Proportions are derived from `website/static/img/wordmark.svg` — the tree's
+ * copy of the drawn mark, and the same file README's banner shows — not
+ * eyeballed. The derivation is NOT one raster of the whole artwork, and should
+ * not be "simplified" into one: the mark's inter-letter gaps run 4.6 to 7.3 SVG
+ * units, and at 62 columns a column is 7.9 units, so every gap is sub-column at
+ * every width this 64-column budget allows. Rasterize the 489x130 artwork in
+ * one pass and the letters fuse — the `s` welds to the `t`'s crossbar and the
+ * `a` welds to the `m`. So each letter was rasterized in its OWN column box,
+ * 16x16 supersampled coverage per pixel thresholded at 50%, and one blank
+ * column was then inserted by hand between letters.
+ *
+ * Two allocations are hand-set rather than sampled, because the raster's answer
+ * was worse than the mark: the `a`'s right mass is widened to four columns, and
+ * the `m` is narrowed to thirteen so its three legs come out equal. Two further
+ * cells are cleanups of raster phase noise inside the `a`, where the sampling
+ * grid broke the letter's own top/bottom symmetry by one cell — rows 8 and 10
+ * are mirrored back onto rows 5 and 3. On top of those sit the three
+ * adjustments this mark has always carried: the `i` keeps its square dot with
+ * one pixel of air under it, both `t`s keep the slab crossbar and the foot that
  * kicks right, and the `y` keeps the tail that hooks back left under the
  * baseline.
+ *
+ * The grid is deliberately ANISOTROPIC — a difference to preserve, not a bug to
+ * correct. 489/62 gives 7.9 SVG units per column against 130/14 = 9.3 units per
+ * pixel row, so the 23.2-unit stem is three cells WIDE while a stroke of the
+ * same weight lying flat is two rows TALL. Squaring the two would either
+ * overflow the budget or thin every vertical back to two columns, which is what
+ * the previous 47-column grid did — and it cost the `a`. A bowl and a stem the
+ * same width, with the arcs squared off at the corners, is an axis-symmetric
+ * ring, and an axis-symmetric ring is the shape an `o` IS; in a word carrying
+ * no real `o` the eye still resolved it that way. At three columns the
+ * letterform does the work unaided: the bowl's left edge steps in, the right
+ * edge stays dead straight across the whole x-height, and the counter comes out
+ * a lozenge instead of a rectangle.
  */
-
-/** `#6B24FF` — the one accent in the mark, as the SVG spells it. */
-const ACCENT_RGB = [107, 36, 255] as const;
 
 /**
- * The accent's escape sequence per terminal capability, and nothing else — ink
- * has no entry here because ink is never colored.
- *
- * `ansi256` is cube index 57 (rgb 95/0/255), the closest the 6x6x6 cube gets to
- * #6B24FF; `ansi16` falls back to magenta, the only violet-adjacent name the
- * base palette has. Every run closes with SGR 39 (default foreground) rather
- * than SGR 0, so the accent cannot reset a bold or dim the caller had open.
+ * The mark's accent, its degrade ladder and the SGR 39 that closes a run all
+ * live in `./terminal.ts` now, beside the SECOND ladder the interface spends on
+ * state indicators (the menu cursor, the checked box) — one home for both, and
+ * the comment there is where the reason the two are different colors is
+ * written down. This file keeps the names it has always exported.
  */
-const ACCENT_SGR: Readonly<Record<Exclude<BannerAccent, "none">, string>> = {
-  truecolor: `\u001B[38;2;${ACCENT_RGB[0]};${ACCENT_RGB[1]};${ACCENT_RGB[2]}m`,
-  ansi256: "\u001B[38;5;57m",
-  ansi16: "\u001B[35m",
-};
-
-/** Default foreground. Closes an accent run without touching other attributes. */
-const ACCENT_RESET = "\u001B[39m";
 
 /** How much of the accent color a terminal can be given. */
-export type BannerAccent = "truecolor" | "ansi256" | "ansi16" | "none";
+export type BannerAccent = AccentDepth;
+
+/**
+ * The banner's own spelling of `./terminal.ts::resolveAccentDepth`, re-exported
+ * rather than reimplemented: `test/cli/banner.test.ts` imports it from here,
+ * and the mark is not the only surface that needs the answer any more.
+ */
+export { resolveAccentDepth as resolveBannerAccent } from "./terminal.ts";
 
 /**
  * The one non-space pixel that is not plain ink. Everything else that is not a
@@ -65,7 +91,7 @@ export type BannerAccent = "truecolor" | "ansi256" | "ansi16" | "none";
 const ACCENT = "+";
 
 /**
- * The wordmark at two pixels per text row: 14 rows of at most 47 columns.
+ * The wordmark at two pixels per text row: 14 rows of at most 62 columns.
  *
  * Read it as artwork — the letterforms are visible in the source on purpose, so
  * a change to the mark is reviewable as a picture rather than as a diff of
@@ -73,20 +99,20 @@ const ACCENT = "+";
  * {@link pixelAt}, which treats a short row as trailing background.
  */
 const WORDMARK: readonly string[] = [
-  "        ##                      ##  ##",
-  "        ##                      ##  ##",
-  "        ++                          ##",
-  "###### +++++ ####### ########## ## ##### ##  ##",
-  "###### +++++ ####### ########## ## ##### ##  ##",
-  "##      ++   ##   ## ##  ##  ## ##  ##   ##  ##",
-  "######  ##   ##   ## ##  ##  ## ##  ##   ##  ##",
-  "######  ##   ##   ## ##  ##  ## ##  ##   ##  ##",
-  "    ##  ##   ##   ## ##  ##  ## ##  ##   ##  ##",
-  "######  #### ####### ##  ##  ## ##  #### ######",
-  "######  #### ####### ##  ##  ## ##  #### ######",
-  "                                             ##",
-  "                                             ##",
-  "                                           ####",
+  "           ###                             ###  ###",
+  "           ###                             ###  ###",
+  "           +++                                  ###",
+  "  ####### ++++++   #########   #### ####   ### ###### ###  ###",
+  " ######## ++++++  ##########  ###########  ### ###### ###  ###",
+  "###        +++   ####  ##### ### ##### ### ###  ###   ###  ###",
+  "#########  ###   ###    #### ###  ###  ### ###  ###   ###  ###",
+  "#########  ###   ###    #### ###  ###  ### ###  ###   ###  ###",
+  "      ###  ###   ####  ##### ###  ###  ### ###  ###   ########",
+  "########   #####  ########## ###  ###  ### ###  #####  #######",
+  "#######     ####   ######### ###  ###  ### ###   ####   ######",
+  "                                                         #####",
+  "                                                         ####",
+  "                                                         ###",
 ];
 
 /** Text rows the mark occupies: two pixel rows each. */
@@ -115,7 +141,7 @@ function pixelAt(row: string, column: number): string {
 export function renderWordmark(opts: { accent?: BannerAccent; indent?: string } = {}): string {
   const accent = opts.accent ?? "none";
   const indent = opts.indent ?? "";
-  const sgr = accent === "none" ? null : ACCENT_SGR[accent];
+  const sgr = accent === "none" ? null : MARK_ACCENT_SGR[accent];
   const lines: string[] = [];
 
   for (let row = 0; row < WORDMARK.length; row += 2) {
@@ -155,40 +181,23 @@ export function renderWordmark(opts: { accent?: BannerAccent; indent?: string } 
 }
 
 /**
- * How much of the accent this terminal gets, given a color decision already
- * made by `./terminal.ts::resolveColorEnabled`.
- *
- * Capability is read from the environment, not from `getColorDepth()`, so the
- * answer is a pure function of inputs a caller can inject — the same reason the
- * rest of this kit takes injected terminal facts instead of touching
- * `process.stdout`. The cost is a truecolor terminal that advertises nothing
- * getting the 256-color index instead of the exact one; the failure direction
- * is a slightly different violet, never a broken escape or a wrong-colored
- * letterform.
- */
-export function resolveBannerAccent(opts: {
-  colorEnabled: boolean;
-  env: Readonly<Record<string, string | undefined>>;
-}): BannerAccent {
-  if (!opts.colorEnabled) return "none";
-  const colorterm = (opts.env["COLORTERM"] ?? "").toLowerCase();
-  if (colorterm === "truecolor" || colorterm === "24bit") return "truecolor";
-  const term = (opts.env["TERM"] ?? "").toLowerCase();
-  if (term.includes("256color") || colorterm !== "") return "ansi256";
-  return "ansi16";
-}
-
-/**
  * The mark as a ready-to-write block for a human-facing surface, or the empty
  * string when this surface is not one.
  *
- * Two gates, and they answer different questions. WHETHER to print is decided
+ * Three gates, and they answer different questions. WHETHER to print is decided
  * by the reader: a non-TTY stdout is a pipe, a file or a CI log, and a `--json`
  * run is a document with a schema — neither is a person looking at a first
  * screen, and the mark stays out of both entirely rather than being emitted and
- * stripped. HOW to print is decided by the color rules the whole CLI shares
- * (`--no-color` beats NO_COLOR beats FORCE_COLOR beats TTY), so a reader who
- * turned color off still gets the mark, in plain ink.
+ * stripped. WHETHER IT FITS is decided by `columns`, the terminal's own width,
+ * injected like every other terminal fact here: the mark is a fixed-width
+ * picture, so a window narrower than it does not shrink it, it WRAPS it, and a
+ * wrapped wordmark is a scramble of half blocks that reads worse than no mark
+ * at all. Same stay-out-rather-than-print-broken rule as the first two gates.
+ * `columns` absent means the caller does not know the width, and the mark
+ * prints — the behaviour every call site had before this fact existed. HOW to
+ * print is decided by the color rules the whole CLI shares (`--no-color` beats
+ * NO_COLOR beats FORCE_COLOR beats TTY), so a reader who turned color off still
+ * gets the mark, in plain ink.
  *
  * Returns a newline-terminated block so it composes by concatenation; empty
  * output is exactly `""`, which every writer here treats as nothing to write.
@@ -199,10 +208,32 @@ export function bannerBlock(opts: {
   env: Readonly<Record<string, string | undefined>>;
   noColorFlag?: boolean;
   indent?: string;
+  columns?: number;
 }): string {
   if (!opts.stdoutIsTTY) return "";
   if (opts.machineReadable) return "";
-  const accent = resolveBannerAccent({
+  const indent = opts.indent ?? BANNER_INDENT;
+  // The width the mark actually needs is the art plus whatever margin it is
+  // printed at — 62 + 2 today — PLUS one column of slack, so 64 gets nothing
+  // and 65 gets the mark.
+  //
+  // The slack is not padding for taste; it is the difference between two
+  // terminal wrap behaviours. Four of the seven rendered rows are exactly 64
+  // characters with the indent, and a line that exactly fills the window is
+  // where terminals disagree. An xterm-family terminal implements DECAWM
+  // deferred (pending) wrap: the cursor parks in the last column and the
+  // newline that follows just ends the row, so an exact-width mark draws
+  // correctly there and this extra column costs it nothing. conhost and some
+  // other Windows hosts wrap eagerly instead — writing the 64th character
+  // moves the cursor to the next row on its own, and the newline after it then
+  // consumes a SECOND row, so those four rows come out separated by blank
+  // lines: a gapped mark on exactly the first screen this gate exists to
+  // protect. Requiring one column of slack removes the disagreement rather
+  // than betting on which host is reading.
+  if (typeof opts.columns === "number" && opts.columns <= BANNER_COLUMNS + indent.length) {
+    return "";
+  }
+  const accent = resolveAccentDepth({
     colorEnabled: resolveColorEnabled({
       noColorFlag: opts.noColorFlag ?? false,
       env: opts.env,
@@ -210,5 +241,5 @@ export function bannerBlock(opts: {
     }),
     env: opts.env,
   });
-  return `${renderWordmark({ accent, indent: opts.indent ?? BANNER_INDENT })}\n`;
+  return `${renderWordmark({ accent, indent })}\n`;
 }

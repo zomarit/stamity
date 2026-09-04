@@ -809,6 +809,7 @@ async function runInit(
     yes: ctx.yes,
     json: ctx.json,
     env: ctx.app.runtime.env,
+    palette: ctx.palette,
   });
   const selected = await askMembers(ctx, gate, candidates);
 

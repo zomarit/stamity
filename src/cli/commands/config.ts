@@ -1115,6 +1115,7 @@ export const configCommand: CommandModule = {
         yes: ctx.yes,
         json: ctx.json,
         env: ctx.app.runtime.env,
+        palette: ctx.palette,
       });
       // B8, scoped to THIS branch only: `promptGate` reads stdin alone, so a
       // TTY stdin piped into a non-TTY stdout (`stamity config | less`, a

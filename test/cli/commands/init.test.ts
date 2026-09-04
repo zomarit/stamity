@@ -2,11 +2,13 @@ import { existsSync } from "node:fs";
 import { link, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
+import { stripVTControlCharacters } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../../src/adapters/claude.ts";
 import { initCommand } from "../../../src/cli/commands/init.ts";
 import { buildInitDecisions } from "../../../src/cli/commands/init/plan.ts";
 import { planSync } from "../../../src/cli/commands/sync/engine.ts";
+import { renderWordmark } from "../../../src/cli/kit/banner.ts";
 import { runCli, type CommandIo } from "../../../src/cli/kit/program.ts";
 import type { TerminalFacts } from "../../../src/cli/kit/terminal.ts";
 import {
@@ -174,12 +176,24 @@ async function seedPredecessorRepo(
 function runInit(
   root: string,
   argv: readonly string[] = [],
-  opts: { stdinLines?: readonly string[]; ttyStdin?: boolean } = {},
+  opts: {
+    stdinLines?: readonly string[];
+    ttyStdin?: boolean;
+    /** A TTY stdout, for the welcome mark — off by default like every other fact here. */
+    ttyStdout?: boolean;
+    /** The stdout width the mark's fit gate reads; omitted means "unknown". */
+    columns?: number;
+  } = {},
 ): Promise<InProcessResult> {
+  const tty = {
+    ...(opts.ttyStdin === true ? { stdin: true } : {}),
+    ...(opts.ttyStdout === true ? { stdout: true } : {}),
+  };
   return runInProcess([initCommand], ["init", ...argv], {
     cwd: root,
     ...(opts.stdinLines !== undefined ? { stdinLines: opts.stdinLines } : {}),
-    ...(opts.ttyStdin === true ? { tty: { stdin: true } } : {}),
+    ...(Object.keys(tty).length === 0 ? {} : { tty }),
+    ...(opts.columns === undefined ? {} : { columns: opts.columns }),
   });
 }
 
@@ -308,6 +322,41 @@ describe("init — fresh repo", () => {
     expect(result.stdout).toContain("installed claude");
     expect(result.stdout).toContain("stamity is ready.");
     expect((await readManifest(root))?.tools).toEqual(["claude"]);
+  });
+
+  // The welcome mark's fit gate, wired at THIS call site and not only at the
+  // root help's. The mark is a fixed-width picture (62 columns of art plus the
+  // 2-column indent), so a narrower window wraps it into a scramble of half
+  // blocks; init prints it on the first screen a new user sees, so the width
+  // has to reach the gate from here too.
+  // TEST CHANGE, justified: the boundary moved from 63/64 to 64/65 because the
+  // banner's width guard now demands one column of slack past the art plus the
+  // indent (62 + 2 = 64). Four of the rendered rows are exactly 64 characters
+  // with the indent, and on a terminal that wraps eagerly rather than deferring
+  // the wrap, a line that exactly fills the window plus its newline yields a
+  // blank row — a gapped mark. So 64 columns now prints nothing and 65 prints
+  // the mark; the old 63/64 assertion no longer states the contract.
+  it("prints no welcome mark at 64 columns and the mark at 65", async () => {
+    const mark = renderWordmark({ indent: "  " });
+
+    const narrow = await runInit(await makeRepo("narrow"), ["-y"], {
+      ttyStdout: true,
+      columns: 64,
+    });
+    const wide = await runInit(await makeRepo("wide"), ["-y"], {
+      ttyStdout: true,
+      columns: 65,
+    });
+
+    expect(narrow.code).toBe(0);
+    expect(wide.code).toBe(0);
+    // Stripped, because a TTY stdout resolves color on and the mark's one
+    // accent run arrives wrapped in escapes.
+    expect(stripVTControlCharacters(narrow.stdout)).not.toContain(mark);
+    expect(stripVTControlCharacters(wide.stdout)).toContain(mark);
+    // Both runs still reached the panel: the gate suppresses the mark, not init.
+    expect(narrow.stdout).toContain("stamity is ready.");
+    expect(wide.stdout).toContain("stamity is ready.");
   });
 
   it("-y on a clean fixture writes state, manifest and gitignore, and prints no stack block", async () => {

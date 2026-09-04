@@ -15,18 +15,36 @@ export interface TerminalFacts {
   stdoutIsTTY: boolean;
   stderrIsTTY: boolean;
   stdinIsTTY: boolean;
+  /**
+   * The terminal's own width in columns, absent when the stream reports none
+   * (a pipe, a file, a test double).
+   *
+   * Read here rather than at the surfaces that need it, for the same reason
+   * every other fact on this interface is: a renderer that fits its output to
+   * the window takes the width as an INJECTED fact instead of reaching for
+   * `process.stdout.columns` itself. `./banner.ts::bannerBlock` is the first
+   * consumer — a fixed-width picture wraps rather than shrinks, so it stays out
+   * of a window narrower than it — and absent means "the caller does not know",
+   * which every consumer treats as the behaviour it had before this fact.
+   */
+  stdoutColumns?: number;
 }
 
-/** Reads TTY-ness from the given streams, defaulting to the live process streams. */
+/** Reads TTY-ness, and the reported width, from the given streams — defaulting to the live process streams. */
 export function detectTerminalFacts(streams?: {
-  stdout?: { isTTY?: boolean };
+  stdout?: { isTTY?: boolean; columns?: number };
   stderr?: { isTTY?: boolean };
   stdin?: { isTTY?: boolean };
 }): TerminalFacts {
+  const columns = (streams?.stdout ?? process.stdout).columns;
   return {
     stdoutIsTTY: (streams?.stdout ?? process.stdout).isTTY === true,
     stderrIsTTY: (streams?.stderr ?? process.stderr).isTTY === true,
     stdinIsTTY: (streams?.stdin ?? process.stdin).isTTY === true,
+    // Conditional, not `stdoutColumns: undefined`: a stream that reports no
+    // width leaves NO key, so a facts object built off a pipe keeps the exact
+    // shape it has always had.
+    ...(typeof columns === "number" ? { stdoutColumns: columns } : {}),
   };
 }
 
@@ -81,6 +99,88 @@ export function resolveColorEnabled(opts: {
   return opts.stdoutIsTTY;
 }
 
+/** How much of an accent color a terminal can be given. */
+export type AccentDepth = "truecolor" | "ansi256" | "ansi16" | "none";
+
+/**
+ * TWO accent ladders, because the brand violet is spent on two different jobs
+ * and only one of them is decoration.
+ *
+ * `MARK_ACCENT_SGR` is the MARK's ladder: `#6B24FF`, exactly as
+ * `website/static/img/wordmark.svg` spells it, spent on the one cell run in the
+ * wordmark (`./banner.ts`). Nothing the mark communicates depends on it — the
+ * ink carries the letterforms and the accent is a flourish on top — so the
+ * exact brand value is the right answer at every rung there, including the rung
+ * that is a theme-defined magenta.
+ *
+ * `UI_ACCENT_SGR` is the INTERFACE's ladder, and it is deliberately a different
+ * color. Measured on WCAG 2.x relative luminance, `#6B24FF` is 3.32:1 on black
+ * and 2.25:1 on a Dracula ground (`#282A36`), so as a STATE INDICATOR it fails
+ * WCAG 1.4.11's 3:1 floor for non-text contrast on dark grounds — and its
+ * degrade ladder makes that worse rather than better (`#5F00FF`, the 256-color
+ * cube's nearest index, is 2.93:1 on black). A menu cursor is not decoration,
+ * so the UI accent is a ground-INDEPENDENT tint of the same brand hue instead:
+ * `#8A52FF` — the token set's own `--ifm-color-primary-lightest` — at 4.7:1 on
+ * black, 4.4:1 on white and 3.2:1 on `#282A36`, above the floor on every ground
+ * a terminal plausibly has. Its 256-color rung is index 99 (`#875FFF`), the
+ * cube's nearest neighbour.
+ *
+ * At `ansi16` the UI accent writes NO ESCAPE AT ALL, which is why this table
+ * has no `ansi16` row where the mark's does. SGR 35 is whatever the reader's
+ * theme maps magenta to — an unknowable value that may well be 2.2:1 against
+ * their own background — and a color nobody can measure may not be asked to
+ * carry state. Vanishing is the honest rung: the glyph underneath (the `>`
+ * cursor, the `x` in the box) is what says which row is active, and the color
+ * is redundant reinforcement everywhere it appears.
+ *
+ * Both ladders close with `ACCENT_RESET` — SGR 39, default foreground — rather
+ * than SGR 0, so an accent run can never reset a bold or dim a caller had open
+ * around it.
+ */
+const MARK_ACCENT_RGB = [107, 36, 255] as const;
+
+/** The mark's ladder: `#6B24FF`, decorative, one cell run in the wordmark. */
+export const MARK_ACCENT_SGR: Readonly<Record<Exclude<AccentDepth, "none">, string>> = {
+  truecolor: `\u001B[38;2;${MARK_ACCENT_RGB[0]};${MARK_ACCENT_RGB[1]};${MARK_ACCENT_RGB[2]}m`,
+  ansi256: "\u001B[38;5;57m",
+  ansi16: "\u001B[35m",
+};
+
+/** `#8A52FF` — the UI accent, a ground-independent tint of the brand hue. */
+const UI_ACCENT_RGB = [138, 82, 255] as const;
+
+/** The interface's ladder. It has no `ansi16` row on purpose: see above. */
+const UI_ACCENT_SGR: Readonly<Record<Exclude<AccentDepth, "none" | "ansi16">, string>> = {
+  truecolor: `\u001B[38;2;${UI_ACCENT_RGB[0]};${UI_ACCENT_RGB[1]};${UI_ACCENT_RGB[2]}m`,
+  ansi256: "\u001B[38;5;99m",
+};
+
+/** Default foreground. Closes an accent run without touching other attributes. */
+export const ACCENT_RESET = "\u001B[39m";
+
+/**
+ * How much of an accent this terminal gets, given a color decision already made
+ * by `resolveColorEnabled` above.
+ *
+ * Capability is read from the environment, not from `getColorDepth()`, so the
+ * answer is a pure function of inputs a caller can inject — the same reason the
+ * rest of this kit takes injected terminal facts instead of touching
+ * `process.stdout`. The cost is a truecolor terminal that advertises nothing
+ * getting the 256-color index instead of the exact one; the failure direction
+ * is a slightly different violet, never a broken escape.
+ */
+export function resolveAccentDepth(opts: {
+  colorEnabled: boolean;
+  env: Readonly<Record<string, string | undefined>>;
+}): AccentDepth {
+  if (!opts.colorEnabled) return "none";
+  const colorterm = (opts.env["COLORTERM"] ?? "").toLowerCase();
+  if (colorterm === "truecolor" || colorterm === "24bit") return "truecolor";
+  const term = (opts.env["TERM"] ?? "").toLowerCase();
+  if (term.includes("256color") || colorterm !== "") return "ansi256";
+  return "ansi16";
+}
+
 export interface Palette {
   bold(s: string): string;
   dim(s: string): string;
@@ -88,6 +188,12 @@ export interface Palette {
   green(s: string): string;
   yellow(s: string): string;
   cyan(s: string): string;
+  /**
+   * The UI accent (`#8A52FF`) at the depth this terminal can take; the identity
+   * at `"none"`, at `"ansi16"` and whenever color is off. Reserved for a state
+   * indicator whose glyph already carries the state on its own.
+   */
+  accent(s: string): string;
 }
 
 const identity = (s: string): string => s;
@@ -101,8 +207,16 @@ const paint =
  * styleText-backed when enabled, identity functions otherwise. `validateStream:
  * false` keeps the resolved flag authoritative — without it node:util would
  * re-check the stream and the ambient env vars and could override our order.
+ *
+ * `accent` is the one method styleText cannot express (there is no named style
+ * for a 24-bit color), so it is composed from `UI_ACCENT_SGR` directly. Its
+ * depth DEFAULTS to `"none"`, which keeps `makePalette(true)` exactly what it
+ * always was: a caller that has not resolved an accent depth gets the old
+ * behaviour rather than a silent new one.
  */
-export function makePalette(enabled: boolean): Palette {
+export function makePalette(enabled: boolean, accent: AccentDepth = "none"): Palette {
+  const sgr = enabled && accent !== "none" && accent !== "ansi16" ? UI_ACCENT_SGR[accent] : null;
+  const accentFn = sgr === null ? identity : (s: string): string => `${sgr}${s}${ACCENT_RESET}`;
   if (!enabled) {
     return {
       bold: identity,
@@ -111,6 +225,7 @@ export function makePalette(enabled: boolean): Palette {
       green: identity,
       yellow: identity,
       cyan: identity,
+      accent: accentFn,
     };
   }
   return {
@@ -120,6 +235,7 @@ export function makePalette(enabled: boolean): Palette {
     green: paint("green"),
     yellow: paint("yellow"),
     cyan: paint("cyan"),
+    accent: accentFn,
   };
 }
 

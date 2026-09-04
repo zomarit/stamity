@@ -937,6 +937,7 @@ export const initCommand: CommandModule = {
       yes: ctx.yes,
       json: ctx.json,
       env: ctx.app.runtime.env,
+      palette: ctx.palette,
     });
 
     // PROMPT 1 — tools confirm. Only a zero-evidence default is worth a
@@ -1122,6 +1123,14 @@ export const initCommand: CommandModule = {
         machineReadable: ctx.json,
         env: ctx.app.runtime.env,
         noColorFlag: !ctx.colorEnabled,
+        // The width gate, wired the same way the root help wires it
+        // (`../kit/program.ts`): the mark is a fixed-width picture, so a window
+        // narrower than it wraps rather than shrinks it, and a wrapped mark
+        // reads worse than none. Absent off a pipe or a test double, which
+        // `bannerBlock` reads as "the caller does not know" and prints.
+        ...(ctx.terminal.stdoutColumns === undefined
+          ? {}
+          : { columns: ctx.terminal.stdoutColumns }),
       });
       if (welcome !== "") ctx.io.out(`${welcome}\n`);
       ctx.io.out(
