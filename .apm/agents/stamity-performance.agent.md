@@ -115,7 +115,9 @@ run.
 - **severity** for findings: `Critical` | `Warning` | `Minor`. `Critical` requires a
   breached declared budget; without one the run's ceiling is `Warning`.
 - Every behaviour claim cites `path:line`, and every cost claim carries its measurement and
-  the method that produced it. An unmeasured claim is rewritten as a question or dropped.
+  the method that produced it. A bare path is not a citation: a sentence saying what the change
+  does at a file carries the line it read that from, restated change-set rows included. An
+  unmeasured claim is rewritten as a question or dropped.
 - Only `Critical` and `Warning` findings reach the human checkpoint; `Minor` rows are
   ledgered and travel with the run.
 - `DONE` carries the surfaces examined, the budgets found and the budget classes absent, the

@@ -117,7 +117,9 @@ run.
   number invented here would read as a measurement.
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking input
   — no detected component root, no token source to compare against, a rendered surface
-  reachable only through a build this run cannot produce.
+  reachable only through a build this run cannot produce. It carries none of the `DONE`
+  payload: no surfaces-examined list, no criteria-applied list, no finding count, not even at
+  zero. A zero is a measurement of a pass that never ran.
 - Sub-agents do not put questions to the operator. A surface whose intended behaviour admits
   two readings returns `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the ambiguity
   gate and re-spawns.
