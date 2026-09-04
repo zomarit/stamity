@@ -50,7 +50,7 @@ function present(ids: readonly string[]): string[] {
 const categories = [
   {
     label: 'Start here',
-    items: present(['getting-started', 'doctrine']),
+    items: present(['getting-started', 'working-with-stamity', 'doctrine']),
   },
   {
     label: 'Reference',
@@ -70,7 +70,6 @@ const categories = [
   {
     label: 'Guides',
     items: present([
-      'working-with-stamity',
       'customization',
       'workspaces',
       'packs-and-trust',

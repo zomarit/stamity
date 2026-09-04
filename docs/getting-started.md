@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6865e31. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 4607a76. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, a
      verb joins or leaves the command surface, or a path joins or leaves `.stamity/`.
      `test/docsPages.test.ts` holds this page to the hand-page contract; the generated
@@ -109,16 +109,17 @@ invocation. Asking for it by name reaches a file that is genuinely on disk.
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
 `clean`
 
-`init` sets a repo up. `sync` regenerates every managed file from the manifest — run it
-after any config change, because `config` edits state and never regenerates output.
-`check` diagnoses and gates. `validate` checks content this repository authored. `add`
-installs a pack once its trust gates pass. `config` reads and changes the setup.
-`workspace` puts one policy over many repositories — see [workspaces](workspaces.md).
-`worktree` runs several branches of this one repository side by side: `worktree setup
-<name>` creates the checkout beside the repository and copies in the machine-local files a
-checkout cannot carry, `worktree list` says what exists and what state each one is in, and
-`worktree cleanup <name>` removes exactly what setup recorded — never the branch.
-`clean` removes all of it.
+What each one does, every flag it takes and every status it exits with is
+[the CLI reference](cli-reference.md)'s to state: it renders from the program, so it cannot
+describe a verb the CLI does not have or miss one it does. Three things it cannot tell you,
+because each is about how two of them go together rather than about any one verb:
+
+- **Run `sync` after any `config` change.** `config` edits state and never regenerates
+  output, so nothing on disk moves until a sync does.
+- **`worktree` is three subcommands** — `setup`, `list` and `cleanup`. What each one places,
+  records and inverts is in [working with stamity](working-with-stamity.md).
+- **`workspace` reaches past this repository**, and has a guide of its own:
+  [workspaces](workspaces.md).
 
 There are two more, hidden: `learn`, which agents call to record a learning through the
 engine's write gates, and `handoff`, which prepares, resumes, lists, completes and prunes

@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6865e31. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 4607a76. -->
 <!-- Re-open when: the corpus counts, the nine-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives all three from the content
      catalog and the generated capability matrix and fails here first. -->
@@ -50,16 +50,10 @@ learnings, handoffs.
 ## Commands
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`clean` — nine verbs, plus the hidden `learn` and `handoff` plumbing verbs: `learn` records
-a learning through the engine's write gates, `handoff` carries mid-work state across a
-session boundary through the same ones. `init` sets a repo up, `sync` regenerates every
-managed file from the manifest, `check` diagnoses the environment and fails on drift between
-disk and what the engine would write now, `validate` checks the content this repo authored,
-`add` installs a pack once its trust gates pass, `config` reads and changes the setup,
-`workspace` puts one policy over many repositories, `worktree` runs several branches of one
-repository side by side — creating each checkout with the machine-local state a checkout
-cannot carry, and tearing it back down from the receipt that says what was placed — `clean`
-removes all of it.
+`clean` — nine verbs, and behind them two plumbing verbs an agent calls and nobody types,
+`learn` and `handoff`. What each one does, every flag it takes and every status it exits
+with is [the CLI reference](docs/cli-reference.md)'s to state: that page renders from the
+program itself, so it cannot describe a verb the CLI does not have or miss one it does.
 
 ## Working on this repository
 
@@ -106,8 +100,8 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`GOVERNANCE.md`](GOVERNANCE.md) | Who decides, how a change lands, and what the private layer holds. |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and the two channels a report goes through. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Prerequisites, what `init` asks and writes per client, and the guided first change. |
-| [`docs/doctrine.md`](docs/doctrine.md) | The root question every artifact answers, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
 | [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | The nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once. |
+| [`docs/doctrine.md`](docs/doctrine.md) | The root question every artifact answers, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
 | [`docs/customization.md`](docs/customization.md) | Where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries. |
 | [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — the manifest, the init offer, the status rows, and the cascade. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |

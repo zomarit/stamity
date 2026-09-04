@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { COMMAND_ID_PREFIX } from "../src/content/catalog.ts";
 import { TRUST_TIERS } from "../src/pack/trust.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
@@ -118,9 +119,9 @@ const WORKSPACES = "docs/workspaces.md";
  */
 const GUIDES: readonly string[] = [
   GETTING_STARTED,
+  WORKING_WITH_STAMITY,
   DOCTRINE,
   MIGRATION,
-  WORKING_WITH_STAMITY,
   CUSTOMIZATION,
   WORKSPACES,
   PACKS_AND_TRUST,
@@ -317,6 +318,48 @@ const linkTargets = (text: string): string[] =>
 /** A relative target resolved from the linking page's own directory. */
 const resolveTarget = (page: string, target: string): string =>
   join(REPO_ROOT, dirname(page), target);
+
+/**
+ * The charter template — the one home for a touchpoint's one-line job.
+ *
+ * The corpus source, not the emitted `AGENTS.md`: the emission is a dogfood copy that a
+ * skipped `sync` can leave stale, and reading it would make a stale emission look like a
+ * wrong guide. The emitted copy stays covered by the cross-client emission goldens.
+ */
+const CHARTER_TEMPLATE = join(CORPUS_ROOT, "charter", "stamity-charter.md");
+
+/** `- `/st-x` — one-liner`, and the two-space continuation the charter's own wrap produces. */
+const TOUCHPOINT_BULLET = /^- `(\/st-[a-z-]+)` — (.*)$/;
+const BULLET_CONTINUATION = /^ {2}(\S.*)$/;
+
+/** `| `/st-x` | its job | reach for it when |` — 1 is the id, 2 is the job cell. */
+const TOUCHPOINT_ROW = /^\|\s*`(\/st-[a-z-]+)`\s*\|([^|]*)\|/gm;
+
+/** One-line prose compared without its wrap or its terminal period. */
+const oneLine = (text: string): string => text.trim().replace(/\s+/g, " ").replace(/\.$/, "");
+
+/** `id → one-liner` off the charter's `## Touchpoints` section, continuations joined. */
+function charterTouchpoints(): Map<string, string> {
+  const body = readFileSync(CHARTER_TEMPLATE, "utf-8");
+  const section = body.split(/^(?=## )/m).find((part) => part.startsWith("## Touchpoints")) ?? "";
+  const index = new Map<string, string>();
+  let current = "";
+  for (const line of lines(section)) {
+    const bullet = TOUCHPOINT_BULLET.exec(line);
+    if (bullet) {
+      current = bullet[1] ?? "";
+      index.set(current, bullet[2] ?? "");
+      continue;
+    }
+    const more = BULLET_CONTINUATION.exec(line);
+    if (more && current !== "") {
+      index.set(current, `${index.get(current) ?? ""} ${more[1] ?? ""}`);
+      continue;
+    }
+    current = "";
+  }
+  return index;
+}
 
 /** Fenced blocks on a page — the lines a reader copies and runs. */
 const fencedBlocks = (text: string): string[] =>
@@ -935,22 +978,28 @@ describe("CONTRIBUTING.md", () => {
  * below reads the mechanism rather than a second copy of it, the way the README
  * corpus counts do.
  *
- * Four guides have no bespoke case here yet, for three different reasons. The
- * workflow guide narrates which touchpoint to open and what each writes, which
- * `AGENTS.md` owns rather than any symbol this file can read — a case pinning it
- * to the touchpoint index belongs with whichever change makes that index
- * readable. The customization and workspaces guides are the opposite shape: what
- * they claim IS readable — the override tree's four class paths, the strict/
+ * TEST CHANGE, justified (strictly stronger): the workflow guide's gap closed, so
+ * this paragraph reads three rather than four. Its touchpoint table is now a
+ * mirror of the charter's index under the case below, and the reason it had no
+ * bespoke case — "`AGENTS.md` owns it rather than any symbol this file can read"
+ * — no longer holds: the corpus template `content/charter/stamity-charter.md` is
+ * a file this suite can read, and the two cells that had already drifted against
+ * it (`/st-spec` truncated after the semicolon, `/st-plan` re-punctuated from
+ * parentheses to dashes) are what a hand restatement costs.
+ *
+ * Three guides have no bespoke case here yet, for two different reasons. The
+ * customization and workspaces guides are one shape: what they claim IS
+ * readable — the override tree's four class paths, the strict/
  * advisory split and the per-class line thresholds from
  * `src/content/userContent.ts`; the workspace subcommand set, the status row
  * states and the three-field bridge from `src/cli/commands/workspace.ts` and
  * `src/workspace/` — so their gap is a case nobody has written, not a claim
- * nothing can reach. The doctrine page is the third shape: it states the
+ * nothing can reach. The doctrine page is the other shape: it states the
  * reasoning behind the corpus and cites the surfaces that enforce it, and each
  * of those surfaces is already pinned where it lives — the charter cap and the
  * always-on ratchet in `test/corpus/invariants.test.ts`, the currency headers
  * above, the roster in `test/ci/docsRoster.test.ts` — so a case here would
- * re-assert them from a page rather than from the mechanism. All four are held
+ * re-assert them from a page rather than from the mechanism. All three are held
  * to the bucket-wide contract above and to their own re-open triggers meanwhile.
  */
 describe("the guides", () => {
@@ -1027,6 +1076,45 @@ describe("the guides", () => {
       expect(text, `the getting-started guide omits \`${command}\``).toContain(`\`${command}\``);
     }
     expect(text, "the getting-started guide does not say where state lives").toContain(".stamity/");
+  });
+
+  // Additive: nothing above weakens. The charter's `## Touchpoints` index is the one home for a
+  // touchpoint's one-line job — in a consumer repository it is an always-on file that cannot
+  // link and cannot grow past the ratchet — so the workflow guide's "Its job" column is a mirror
+  // of it rather than a second copy, and this is what holds the two equal. It reads the corpus
+  // template rather than the emitted `AGENTS.md` so a skipped dogfood sync cannot make a correct
+  // guide look wrong. A tenth touchpoint hits the roster assertion first, then the always-on
+  // ratchet in `test/corpus/invariants.test.ts`, and only then the order assertion here.
+  it("the workflow guide mirrors the charter's touchpoint index, one-liner for one-liner", async () => {
+    const charter = charterTouchpoints();
+    const rows = new Map<string, string>();
+    for (const [, id, cell] of read(WORKING_WITH_STAMITY).matchAll(TOUCHPOINT_ROW)) {
+      rows.set(id ?? "", oneLine(cell ?? ""));
+    }
+
+    // The vacuity guard: the ids are the catalog's own command roster, so a touchpoint that
+    // lands in `content/commands/` and reaches only one of the two surfaces fails here rather
+    // than shipping a guide that describes eight of ten.
+    const catalog = (await loadCorpusIndex()).items
+      .filter((item) => item.type === "command")
+      .map((item) => `/${COMMAND_PREFIX}${item.id.slice(COMMAND_ID_PREFIX.length)}`);
+    expect(
+      [...charter.keys()].toSorted(),
+      "the charter's touchpoint index is not the catalog's command roster",
+    ).toEqual(catalog.toSorted());
+
+    // Order too: the page narrates the index, so it reads in the index's SDLC order.
+    expect(
+      [...rows.keys()],
+      `${WORKING_WITH_STAMITY} orders its touchpoint table against the charter's index`,
+    ).toEqual([...charter.keys()]);
+
+    for (const [id, gloss] of charter) {
+      expect(
+        rows.get(id),
+        `${WORKING_WITH_STAMITY} restates ${id} instead of mirroring the charter's index`,
+      ).toBe(oneLine(gloss));
+    }
   });
 
   it("migration names both paths and cites the predecessor's own uninstall verb", () => {

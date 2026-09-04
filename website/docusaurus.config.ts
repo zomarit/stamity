@@ -44,7 +44,10 @@ const config: Config = {
   // structural rather than a choice, and the thing to know is which direction it flows: a mark is
   // re-cut outside and copied here, never edited here. README's banner reads the two wordmarks
   // from this directory too, by repo-relative path. `static/` is served from the site root, so
-  // every reference below is `/img/<file>`.
+  // every reference below is `/img/<file>`. That rule governs the product's MARKS and only those:
+  // a page-owned decorative glyph — the two Primer octicons `src/pages/index.tsx` inlines — is
+  // not one, so it lives as path data in the page that draws it, attributed beside that path, and
+  // is never the product's mark wearing another licence.
   favicon: 'img/favicon.svg',
 
   // The deploy target, claimed and serving. `website/static/CNAME` claims the same host, and
@@ -83,6 +86,10 @@ const config: Config = {
     // angle bracket opens a JSX tag, so those pages would fail to parse — and the fix would be to
     // escape the generators' output, which would corrupt the repo-local pages to suit the site.
     format: 'detect',
+    // A ```mermaid fence becomes a diagram instead of a code block. It is a remark transform,
+    // not MDX syntax, so it works under `detect` in a `.md` page — and it is gated on this flag
+    // alone: unset, the same fence stays an ordinary code block rather than failing the build.
+    mermaid: true,
     hooks: {
       // WARN, not throw, and the reason is specific. Every page in `docs/` is written to be read
       // in the repository first, so its links are repo-relative — `[CONTRIBUTING.md](../CONTRIBUTING.md)`,
@@ -140,6 +147,11 @@ const config: Config = {
     ],
   ],
 
+  // The only theme this site adds to the preset. It supplies the `mermaid` component the flag
+  // above rewrites those fences into; without it the fences compile to a component that does not
+  // exist, so the flag and this line move together.
+  themes: ['@docusaurus/theme-mermaid'],
+
   themeConfig: {
     // The card a link to this site unfurls as, in a chat client or a social post. 1280×640, the
     // 2:1 ratio every unfurler crops to, so nothing important is cut. Docusaurus emits it as both
@@ -171,6 +183,13 @@ const config: Config = {
     footer: {
       style: 'dark',
       copyright: '© zomarit · MIT',
+    },
+    // Required, not cosmetic. Mermaid's unset default is a light-ground theme, and this site
+    // defaults to dark (`colorMode` above) while still honouring a light preference — so both
+    // grounds are reachable on the first paint and a single theme name would be unreadable on
+    // one of them. Docusaurus swaps these two by the active color mode.
+    mermaid: {
+      theme: {light: 'neutral', dark: 'dark'},
     },
     prism: {
       theme: prismThemes.github,
