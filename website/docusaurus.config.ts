@@ -108,12 +108,15 @@ const config: Config = {
           // unbuilt. They are written for whoever implements the remainder, not for a reader of
           // the product documentation, and a published route would read as a description of what
           // ships. They stay in the tree, under review like any other file, and off the routes.
-          // `test/ci/docsRoster.test.ts` exempts them from the roster on the strength of this line.
+          // `docs/plans/` is the plan command's output — a run's decomposition, written for the
+          // work run that consumes it — and is off the routes for the same reason before the first
+          // one lands. `test/ci/docsRoster.test.ts` derives its exemptions from this list, so a
+          // directory excluded here is exempt there and the two cannot disagree.
           // Setting `exclude` REPLACES the plugin's default list rather than extending it, so the
           // defaults — partial files and tests — are restated here; without them a future
           // `docs/_draft.md` would publish. Kept on one line because `test/ci/docsSite.test.ts`
           // reads the value off this line.
-          exclude: ['specs/**', '**/_*.{js,jsx,ts,tsx,md,mdx}', '**/_*/**', '**/*.test.{js,jsx,ts,tsx}', '**/__tests__/**'],
+          exclude: ['specs/**', 'plans/**', '**/_*.{js,jsx,ts,tsx,md,mdx}', '**/_*/**', '**/*.test.{js,jsx,ts,tsx}', '**/__tests__/**'],
           routeBasePath: 'docs',
           sidebarPath: './sidebars.ts',
           // No `editUrl` on purpose. Five of these pages are rendered from code and carry a
@@ -126,7 +129,7 @@ const config: Config = {
           beforeDefaultRemarkPlugins: [
             // `excluded` mirrors the `exclude` below: a link into a directory that is off the
             // routes is rewritten to the repository file rather than reported as broken.
-            [repoLinks, {docsDir: DOCS_DIR, repoRoot: REPO_ROOT, repoUrl: REPO_URL, excluded: ['specs']}],
+            [repoLinks, {docsDir: DOCS_DIR, repoRoot: REPO_ROOT, repoUrl: REPO_URL, excluded: ['specs', 'plans']}],
           ],
         },
         blog: false,
