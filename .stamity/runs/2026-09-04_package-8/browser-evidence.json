@@ -1,0 +1,223 @@
+{
+  "method": "headless Google Chrome 152 on the operator machine, driven over the DevTools protocol (no dependency added to the repository): prefers-color-scheme emulated per shot, device metrics 1280×900 and 375×812, the static build served from website/build; probes are page expressions evaluated after load",
+  "before": {
+    "head": "4607a76",
+    "build": "website/build on the untouched head",
+    "shots": [
+      {
+        "shot": "landing-light-1280",
+        "url": "/",
+        "scheme": "light",
+        "dataTheme": "light"
+      },
+      {
+        "shot": "landing-dark-1280",
+        "url": "/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      },
+      {
+        "shot": "landing-light-375",
+        "url": "/",
+        "scheme": "light",
+        "dataTheme": "light"
+      },
+      {
+        "shot": "landing-dark-375",
+        "url": "/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      },
+      {
+        "shot": "landing-dark-1280-hover-install",
+        "url": "/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      },
+      {
+        "shot": "working-with-dark-1280-full",
+        "url": "/docs/working-with-stamity/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      },
+      {
+        "shot": "getting-started-dark-1280",
+        "url": "/docs/getting-started/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      }
+    ]
+  },
+  "after": {
+    "tree": "the finished working tree before the commits (every gate green, review round 4 approved)",
+    "shots": [
+      {
+        "shot": "landing-light-1280",
+        "url": "/",
+        "scheme": "light",
+        "dataTheme": "light",
+        "probes": {
+          "copyOpacityAtRest": "1",
+          "copyAriaLabel": "Copy code to clipboard",
+          "startIcon": true,
+          "repoIcon": true
+        }
+      },
+      {
+        "shot": "landing-dark-1280",
+        "url": "/",
+        "scheme": "dark",
+        "dataTheme": "dark",
+        "probes": {
+          "copyOpacityAtRest": "1"
+        }
+      },
+      {
+        "shot": "landing-dark-1280-hover-install",
+        "url": "/",
+        "scheme": "dark",
+        "dataTheme": "dark",
+        "probes": {
+          "copyOpacityOnBlockHover": "1"
+        }
+      },
+      {
+        "shot": "landing-dark-1280-focus-copy",
+        "url": "/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      },
+      {
+        "shot": "landing-light-1280-hover-start",
+        "url": "/",
+        "scheme": "light",
+        "dataTheme": "light"
+      },
+      {
+        "shot": "landing-light-375",
+        "url": "/",
+        "scheme": "light",
+        "dataTheme": "light",
+        "probes": {
+          "startIconWidth": 20.78125,
+          "repoIconWidth": 18.890625,
+          "buttonsWrap": {
+            "startRight": 282.46875,
+            "repoLeft": 107.71875,
+            "sameRow": false,
+            "viewport": 375
+          }
+        }
+      },
+      {
+        "shot": "landing-dark-375",
+        "url": "/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      },
+      {
+        "shot": "working-with-dark-1280-full",
+        "url": "/docs/working-with-stamity/",
+        "scheme": "dark",
+        "dataTheme": "dark",
+        "probes": {
+          "mermaidSvgs": 1,
+          "mermaidCodeBlocks": 0
+        }
+      },
+      {
+        "shot": "working-with-light-1280-full",
+        "url": "/docs/working-with-stamity/",
+        "scheme": "light",
+        "dataTheme": "light"
+      },
+      {
+        "shot": "working-with-dark-375-full",
+        "url": "/docs/working-with-stamity/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      },
+      {
+        "shot": "getting-started-dark-1280",
+        "url": "/docs/getting-started/",
+        "scheme": "dark",
+        "dataTheme": "dark",
+        "probes": {
+          "sidebarStartHere": [
+            "Start here: Start here | Getting started | Working with stamity | Doctrine",
+            "Reference: Reference | CLI reference | Configuration reference | Client capability matrix",
+            "Content corpus: Content corpus | Agents | Skills | Rules | Commands | Packs | MCP servers",
+            "Guides: Guides | Customization | Workspaces | Packs and trust | Troubleshooting"
+          ]
+        }
+      },
+      {
+        "shot": "working-with-dark-1280-diagram",
+        "url": "/docs/working-with-stamity/",
+        "scheme": "dark",
+        "dataTheme": "dark",
+        "probes": {
+          "svgBox": {
+            "w": 443,
+            "h": 767,
+            "viewBox": "0 0 443.04296875 767.125",
+            "title": "The spine"
+          },
+          "labelFontPx": {
+            "h": 24,
+            "fs": "16px"
+          }
+        }
+      },
+      {
+        "shot": "working-with-light-1280-diagram",
+        "url": "/docs/working-with-stamity/",
+        "scheme": "light",
+        "dataTheme": "light"
+      },
+      {
+        "shot": "working-with-dark-375-diagram",
+        "url": "/docs/working-with-stamity/",
+        "scheme": "dark",
+        "dataTheme": "dark",
+        "probes": {
+          "svgBox": {
+            "w": 343,
+            "h": 594
+          },
+          "labelFontPx": {
+            "h": 18.6
+          }
+        }
+      },
+      {
+        "shot": "working-with-dark-1280-table",
+        "url": "/docs/working-with-stamity/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      },
+      {
+        "shot": "working-with-dark-375-table",
+        "url": "/docs/working-with-stamity/",
+        "scheme": "dark",
+        "dataTheme": "dark"
+      }
+    ]
+  },
+  "readings": {
+    "copyControl": {
+      "before": "opacity 0 at rest, 0.4 on block hover (theme rules)",
+      "after": "computed opacity 1 at rest in light and dark, 1 under block hover; aria-label present"
+    },
+    "landingIcons": {
+      "after": "both inline svg icons present and aria-hidden; at 375 the two buttons wrap onto two rows (start right edge 282, repo left edge 108), icon widths 20.8 and 18.9 px"
+    },
+    "workflowPage": {
+      "after": "one mermaid svg rendered, zero mermaid code blocks; svg title The spine; viewBox 443.04 × 767.13; 16px labels at 1280; at 375 the svg is 343 wide so labels render at 12.39px (16 × 343 / 443.04)"
+    },
+    "sidebar": {
+      "after": "Start here: Getting started, Working with stamity, Doctrine; Guides: Customization, Workspaces, Packs and trust, Troubleshooting"
+    }
+  },
+  "captures": "the png files for every shot above are saved with the run's raw records outside the tree; the readings here are the probe values the record cites"
+}
