@@ -1,9 +1,19 @@
 {
   // Docusaurus ships the compiler options its own theme types need; extending them is the
   // supported path and keeps this file to the two things that are local.
+  //
+  // The third thing is not local, it is an override: the base config still sets `baseUrl`,
+  // which TypeScript 7 removed outright (TS5102), so `tsc --noEmit` fails on the INHERITED
+  // option and deleting a local copy of it cannot help. `"baseUrl": null` unsets what the
+  // base set, and `paths` is restated relative to this file — the documented replacement,
+  // and the same `@site/*` mapping Docusaurus sources expect. Drop the override once the
+  // upstream config stops setting `baseUrl`.
   "extends": "@docusaurus/tsconfig",
   "compilerOptions": {
-    "baseUrl": "."
+    "baseUrl": null,
+    "paths": {
+      "@site/*": ["./*"]
+    }
   },
   "exclude": [".docusaurus", "build"]
 }
