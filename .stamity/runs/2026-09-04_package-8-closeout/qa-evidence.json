@@ -1,0 +1,100 @@
+{
+ "generated": "2026-09-04T22:53:46+0200",
+ "head": "18bbcbf",
+ "cli_version": "1.1.0",
+ "node": "v22.22.1",
+ "legs": {
+  "1 (65) / 3 (60, 64 boundary)": {
+   "row": "1 (65) / 3 (60, 64 boundary)",
+   "cols": 60,
+   "env": null,
+   "exit": 0,
+   "observed": {
+    "usage_present": true,
+    "block_rows_above_usage": 0,
+    "block_rows_anywhere": 0,
+    "mark_rows": [],
+    "accent_escape_present": false
+   }
+  },
+  "2": {
+   "row": "2",
+   "cols": null,
+   "env": null,
+   "exit": null,
+   "observed": {
+    "stripped_frames_byte_equal": true,
+    "paint_escape_delta": 8,
+    "nocolor_paint_escapes": [],
+    "painted_len": 287,
+    "plain_len": 223
+   }
+  },
+  "7": {
+   "row": "7",
+   "cols": null,
+   "env": null,
+   "exit": null,
+   "observed": {
+    "stripped_transcripts_byte_equal": true,
+    "nocolor_escape_count": 0,
+    "color_escape_count": 0
+   }
+  },
+  "3": {
+   "row": "3",
+   "cols": 100,
+   "env": null,
+   "exit": 0,
+   "observed": {
+    "block_rows_anywhere": 0
+   }
+  },
+  "3 (init call site)": {
+   "row": "3 (init call site)",
+   "cols": 65,
+   "env": null,
+   "exit": 0,
+   "observed": {
+    "block_rows_anywhere": 7
+   }
+  }
+ },
+ "site": {
+  "docsSiteRun": 33918417973,
+  "buildJob": "success",
+  "deployJob": "skipped (expected: unarmed run)",
+  "artifact": "docs-site 1,435,111 bytes",
+  "tabOrder": [
+   {
+    "stop": 7,
+    "tag": "BUTTON",
+    "name": "Copy code to clipboard"
+   },
+   {
+    "stop": 8,
+    "tag": "A",
+    "name": "Start here"
+   },
+   {
+    "stop": 9,
+    "tag": "A",
+    "name": "GitHub (opens in new tab)"
+   }
+  ],
+  "githubAxName": "GitHub (opens in new tab)",
+  "everyStopHasAVisibleRing": true,
+  "copyHasLiveRegion": true,
+  "copyAccessibleNameChanges": true,
+  "spineProbe": {
+   "title": "Working with stamity | stamity",
+   "mermaidContainers": "1",
+   "mermaidSvgs": "1",
+   "firstSvgViewBox": "0 0 443.04296875 767.125",
+   "mermaidCodeBlocks": "0",
+   "githubEnrichmentSections": "0",
+   "githubEnrichmentIframes": "0",
+   "githubRawPre": "0"
+  }
+ }
+}
