@@ -1,0 +1,71 @@
+{
+ "repo": "/Users/denismasatovic/Projects/zomarit/stamity",
+ "cli": "/Users/denismasatovic/Projects/zomarit/stamity/dist/cli.js",
+ "legs": {
+  "echo-color": {
+   "env_extra": {
+    "TERM": "xterm-256color",
+    "COLORTERM": "truecolor"
+   },
+   "exit": {
+    "exited": true,
+    "code": 0,
+    "signal": null
+   },
+   "raw": "echo-color.bin",
+   "question_reached": true,
+   "after_enter_sgr_escapes": [
+    "\u001b[1m",
+    "\u001b[22m",
+    "\u001b[2m",
+    "\u001b[32m",
+    "\u001b[38;2;107;36;255m",
+    "\u001b[38;2;138;82;255m",
+    "\u001b[39m"
+   ],
+   "echo_lines": [
+    "Which tools? > claude \u2014 Claude Code"
+   ],
+   "sgr_on_settle": [
+    "\u001b[22m",
+    "\u001b[38;2;107;36;255m",
+    "\u001b[38;2;138;82;255m",
+    "\u001b[39m"
+   ],
+   "rewind_before": "'\\x1b[6A\\x1b[2K\\x1b[1m'"
+  },
+  "echo-nocolor": {
+   "env_extra": {
+    "TERM": "xterm-256color",
+    "COLORTERM": "truecolor",
+    "NO_COLOR": "1"
+   },
+   "exit": {
+    "exited": true,
+    "code": 0,
+    "signal": null
+   },
+   "raw": "echo-nocolor.bin",
+   "question_reached": true,
+   "after_enter_sgr_escapes": [],
+   "echo_lines": [
+    "Which tools? > claude \u2014 Claude Code"
+   ],
+   "sgr_on_settle": [],
+   "rewind_before": "'LI\\r\\n\\x1b[6A\\x1b[2K'"
+  },
+  "typed-dumb": {
+   "env_extra": {
+    "TERM": "dumb"
+   },
+   "exit": {
+    "exited": true,
+    "code": 0,
+    "signal": null
+   },
+   "raw": "echo-dumb.bin",
+   "escape_count": 0
+  }
+ },
+ "note": "the after-Enter echo on the raw-mode menus, driven on a real pty at 100 columns against the round-4 build; raw captures (.bin) are kept in the private layer"
+}
