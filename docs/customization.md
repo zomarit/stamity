@@ -152,7 +152,7 @@ override of the same id would use:
 
 `<slug>` addresses the base artifact's DECLARED `id`, with the engine's internal `cmd-` prefix off
 for a command — not the bundled file's name. The two agree for every artifact this repo ships
-today (`st-qa.md` declares `id: qa`, `st-plan.md` declares `id: plan`), which is corpus convention
+today (`st-qa/SKILL.md` declares `id: qa`, `st-plan.md` declares `id: plan`), which is corpus convention
 rather than a rule the resolver enforces: an artifact whose filename disagrees with its own
 declared `id` is still addressed by the id, because that is the identity the walk resolves an
 overlay against. A skill's halves compose onto `SKILL` the way its readable file does, in a

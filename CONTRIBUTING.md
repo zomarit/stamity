@@ -121,24 +121,31 @@ at the next regeneration.
 |---|---|
 | `docs/capability-matrix.md` | `node scripts/generate-capability-matrix.mjs` |
 | `docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` | `node scripts/generate-docs.mjs` |
-| `packs/*/pack.json` integrity maps, `src/pack/catalogPins.ts` | `node scripts/generate-pack-manifests.mjs` (`--check` verifies and writes nothing) |
+| `src/pack/catalogPins.ts` | `node scripts/generate-pack-manifests.mjs` — verifies every pack against its own `pack.json` integrity map, then rewrites the pins module and nothing else (`--check` verifies and writes nothing) |
+| `packs/*/pack.json` integrity maps | `node scripts/generate-pack-manifests.mjs --write` — maintenance mode, after a deliberate pack edit; the plain invocation fails on the drift instead |
 | `.claude-plugin/`, `.cursor-plugin/plugin.json`, `plugin.json` | `node scripts/generate-plugin-manifests.mjs` (`--check` verifies and writes nothing) |
 | `apm.yml`, `.apm/` | `node scripts/generate-apm-package.mjs` (`--check` verifies and writes nothing) |
-| `AGENTS.md`, `.agents/`, `.claude/`, `.stamity/generated/` | `npm run build && node dist/cli.js sync` |
+| `AGENTS.md`, `.claude/`, `.stamity/generated/` | `npm run build && node dist/cli.js sync` |
 
 The last row is this repository's own setup — it runs its own output. `node dist/cli.js
-check` at the root reports whether that setup is still drift-clean.
+check` at the root reports whether that setup is still drift-clean. The manifest here selects
+Claude alone, which does not read the `.agents/skills/` projection, so no `.agents/` tree is
+emitted or committed in this repository.
 
 ## The leak gate
 
 `npm run gate` runs `scripts/leak-gate.mjs` over the whole working tree — every path by name
 and every file by content — apart from the build and vendor directories. It fails the build
-on two families: reserved names, meaning the working names this project retired and the
-predecessor project, and credential shapes. Every exemption is by path and is printed on every run; the one reserved-name exception is the
-migration-detection module and its tests need the predecessor's literal marker strings to
-recognise a predecessor install. The gate assembles each reserved token from fragments at
-runtime, so it is scanned by its own rules and has no self-exemption, and it prints every
-path it skipped on a pass as well as on a failure.
+on three families: reserved names, meaning the working names this project retired and the
+predecessor project; credential shapes; and references to the operator's private governance
+layer, meaning one of its ledger row identifiers or the name of the repository holding them.
+Every exemption is by path and is printed on every run. The reserved-name allowlist covers
+the migration-detection module and its tests, which need the predecessor's literal marker
+strings to recognise a predecessor install; the published migration guide, which cannot be
+written without naming the tool it moves off; and the three bundled `dist/` JS files those
+sources compile into. The gate assembles each reserved token from fragments at runtime, so it
+is scanned by its own rules and has no self-exemption, and it prints every path it skipped on
+a pass as well as on a failure.
 
 Write about the engine in plain nouns — "the CLI", "the engine", "the corpus" — rather than
 repeating the product name in prose. Spellings the engine emits come from the manifest and

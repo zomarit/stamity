@@ -109,12 +109,15 @@ the pack — never a symlink, a pipe or a device node — and at most 1 MiB. Rea
 few kilobytes; the limit refuses rather than truncates, because half a bundle is not a
 bundle.
 
-**This is the one thing in the CLI that reaches the network.** Verifying a signed pack
+**This is the only network access any command's work performs.** Verifying a signed pack
 fetches the Sigstore trust root over TUF; the transparency-log proofs travel inside the
-bundle. `init`, `sync`, `check`, and installing any pack that declares no signature contact
-nothing — the client is not even loaded. The trust metadata is cached under your user cache
-directory, never inside the repository. [`SECURITY.md`](../SECURITY.md) states the same
-boundary as a control.
+bundle. `init`, `sync`, `check`, and installing any pack that declares no signature do not
+even load the Sigstore client. The trust metadata is cached under your user cache
+directory, never inside the repository. One further path is network-capable and is no part
+of any command's work: the startup update notice asks the public npm registry whether a
+newer version exists — a GET at most once a day, unless `STAMITY_NO_UPDATE_CHECK=1`, or
+`NO_UPDATE_NOTIFIER` or `CI` on any non-empty value, turns it off.
+[`SECURITY.md`](../SECURITY.md) states the same boundary as a control.
 
 **A verified claim is not waivable, and neither is a failed one.** `--allow-untrusted`
 waives the **absence** of a trust basis, so it has no effect on a declared signing claim:
@@ -257,10 +260,12 @@ Two constraints shape what you can ship. Lifecycle scripts are banned outright �
 never runs code at install time. And every file is measured against a footprint cap, so a
 pack is bounded content rather than an open-ended payload.
 
-Regenerate the first-party manifests after editing a pack:
+Regenerate the first-party manifests after editing a pack. The plain invocation verifies each
+pack against its existing map and fails on the drift an edit just introduced — rewriting a map
+is the maintenance mode, and it is deliberate:
 
 ```sh
-node scripts/generate-pack-manifests.mjs
+node scripts/generate-pack-manifests.mjs --write
 ```
 
 What the gate chain checks, where it stops, and what it explicitly does not defend:

@@ -28,11 +28,13 @@ npx @zomarit/stamity init
 
 `init` reads the repository, asks what it cannot infer, and writes the setup plus a manifest
 that every later command works from. Node `>= 22.12` is the engine's only prerequisite:
-nothing is installed globally, and the engine contacts no service to do its work. Two of
-the nine touchpoints reach further — `/st-board` and `/st-pr-resolve` shell out to the
-GitHub CLI (`gh`), authenticated, when they work a real board or pull request. The package is
-`@zomarit/stamity` and it installs two names for the same binary — `stamity` and the short
-alias `st` — so an installed copy runs as `stamity sync` or `st sync`.
+nothing is installed globally, and the one service a command's work contacts is the Sigstore
+trust root, fetched when `add` installs a pack that declares a signature. A startup notice
+asks npm whether a newer version exists until you switch it off; [`SECURITY.md`](SECURITY.md)
+documents both. Two of the nine touchpoints reach further — `/st-board` and `/st-pr-resolve`
+shell out to the GitHub CLI (`gh`), authenticated, when they work a real board or pull
+request. The package is `@zomarit/stamity` and it installs two names for the same binary —
+`stamity` and the short alias `st` — so an installed copy runs as `stamity sync` or `st sync`.
 
 ## How it works
 
@@ -132,11 +134,13 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Dogfooding
 
-This repository runs its own output. `AGENTS.md`, `.agents/`, `.claude/` and `.stamity/` are
+This repository runs its own output. `AGENTS.md`, `.claude/` and `.stamity/` are
 engine-generated and committed, so `node dist/cli.js check` at the root re-proves them
 drift-clean against the current engine — the living integration test, and the reason a
 regression in emission shows up as a failing check rather than as a surprise downstream.
-Regenerate those paths instead of editing them by hand.
+`.agents/` is not among them: that projection is emitted only for a selected client that
+reads it, and the one selected here does not. Regenerate those paths instead of editing them
+by hand.
 
 ## License
 

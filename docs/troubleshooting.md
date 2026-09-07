@@ -41,11 +41,13 @@ numbering that does not exist. Run with `--json` to read it:
 | `INTEGRITY_ERROR` | output cannot be regenerated to match its source |
 | `FS_ERROR` | a filesystem operation failed |
 | `CLEAN_ERROR` | removal failed part-way |
+| `NETWORK_ERROR` | a git transport failed — `worktree setup` could not reach `origin` to plan its branch |
 | `LOCK_TIMEOUT` | a write lock could not be taken before the retry schedule ran out |
 | `UNKNOWN_ERROR` | an internal fault the engine does not classify |
 
-One code is declared and never thrown: `NETWORK_ERROR`. Nothing in this build fetches, so
-no path produces it and a CI branch on it can never be taken.
+`NETWORK_ERROR` is the narrowest of them, and the newest: `worktree setup` fetches `origin`
+to see whether the branch already exists, and a transport failure there is the one path in
+this build that raises it. A remote that answers with no such branch is not this.
 
 On exit `2` **stdout is empty** — the command line never reached an action — and the
 diagnostic is on stderr. Parse stdout only after checking that the status is not `2`. The
@@ -68,7 +70,7 @@ Only three rows can fail: `node-version`, `manifest`, `pack-integrity`.
 | `manifest` | **Can fail.** Absent means the repo was never set up: run `init`. Defective prints the engine's own field-level message — fix the field it names. |
 | `state-dirs` | Warns when `.stamity/learnings/` or `.stamity/handoffs/` is missing. Nothing is lost: they recreate on first write, and `sync` rewrites them now. |
 | `learnings` | Warns when a recorded learning is invalid or sits past the file cap (those do not load). Run `validate` for the per-file detail. |
-| `tmp-hygiene` | Warns on a live concurrent write, or on `.tmp.<hex>` litter from a write interrupted between the temp file and the rename. The row reports; it never deletes. |
+| `tmp-hygiene` | Warns on a live concurrent write, or on `.tmp.stamity-<8hex>` litter from a write interrupted between the temp file and the rename — the engine token in that name is what keeps another tool's `.tmp.<hex>` files out of the row. The row reports; it never deletes. |
 | `env-mcp` | Warns when MCP servers are selected but `.env.mcp` is absent or a credential is still blank — a server whose credential is empty fails at start-up. `config mcp add <id>` recreates the file with the names it needs. |
 | `tool-traces` | Warns when a client the manifest targets has nothing emitted for it in the ledger. `sync` writes its files and records them. |
 | `preserved-duplicate` | Warns when a managed file repeats its own managed block below the END marker, so this repository loads that content twice. Delete the copy at the line the row names; the block itself is regenerated on every sync. |

@@ -24,8 +24,9 @@ Expect an acknowledgement within seven days. That is an estimate, not a funded S
 person maintains this repository, and an honest number beats a response window nobody is on
 call for. There is no bug bounty either: a report is acknowledged and fixed, not paid. A
 useful report names the command you ran, the repository state you ran it in, what happened,
-and what you expected instead. The CLI only writes into a repository you control, so a
-scratch repo plus one command is usually the whole reproduction.
+and what you expected instead. The CLI writes into the repository you point it at, plus the
+three paths outside it named under "Network and data handling", so a scratch repo plus one
+command is usually the whole reproduction.
 
 ## Supported versions
 
@@ -48,8 +49,12 @@ Three sources install, and no more. Nothing on any of them is fetched over the n
 
 Every route runs the same gate chain, and the org trust policy
 (`src/pack/orgPolicy.ts::evaluatePackSource`) is the lever that narrows them — by pack id,
-by scope wildcard, or by source kind (`local-path` vs `npm-package`). Deny wins, and an
-`allow` list denies everything it does not name. Absent a policy file, all three are open.
+by scope wildcard, or by source kind. There are three kind tokens, not two: `local-path`,
+`npm-package`, and `catalog-pinned` — the last granted only to a catalog install whose pin
+verified against the pack's aggregate content hash, so `allow: ["catalog-pinned"]` is how an
+org permits nothing but the catalog and `deny: ["catalog-pinned"]` how it distrusts the
+curated list outright rather than having that install re-read as a local path. Deny wins, and
+an `allow` list denies everything it does not name. Absent a policy file, every route is open.
 
 ## What the engine defends today
 
@@ -64,30 +69,44 @@ one below is asserted to exist by `test/docsPages.test.ts`.
 | Pack author | Writing outside the pack's own directory | Every pack-relative path is checked before it is joined — no absolute paths, no `..` escape | `src/pack/permissions.ts::assertSafePackRelPath` | — |
 | Pack author | Claiming a small footprint and shipping a large one | The `permissions` block is strictly validated at ingress and a malformed declaration fails the load | `src/pack/permissions.ts::readPermissions` | The block is DISCLOSURE, not a sandbox: nothing cross-checks it against the files and nothing refuses an install for exceeding it |
 | Operator's org | Installing from a source the org has not approved | Source policy evaluated before any install is attempted | `src/pack/orgPolicy.ts::evaluatePackSource` | Policy is written in pack ids, scopes and source kinds — never in trust tiers |
-| Any text author | Prompt injection and instruction override reaching agent context | Deny-scan over three pattern sets — content, injection, MCP poisoning — scanned raw ∪ normalized, so a lookalike letter or a combining mark is not an evasion | `src/denyscan/denyScan.ts::scanNormalized`, `src/denyscan/denyScan.ts::normalizeForDenyScan` | A pattern gate is a gate, not a proof |
-| Any text author | Smuggling keywords past a reader with invisible characters | Invisible-character class stripped before every screen | `src/denyscan/denyScan.ts::INVISIBLE_SMUGGLING_CHARS` | — |
+| Any text author | Prompt injection and instruction override reaching agent context | Deny-scan over four pattern sets — content, injection, learnings-and-handoff injection, MCP poisoning — scanned raw ∪ normalized, so a lookalike letter or a combining mark is not an evasion. The fourth set is the memory vector: a learning or a handoff is written once and read back as agent context in a later session, so a forged instruction header, a frontmatter head impersonating engine config, a forged managed-block marker or a cross-agent override is refused at the learnings and handoff write gates and by the emitted session-start screen | `src/denyscan/denyScan.ts::scanNormalized`, `src/denyscan/denyScan.ts::normalizeForDenyScan`, `src/denyscan/denyScan.ts::LEARNINGS_INJECTION_PATTERNS` | A pattern gate is a gate, not a proof |
+| Any text author | Smuggling keywords past a reader with invisible characters | Invisible-character class stripped ahead of the write-path screens — user content, pack bodies, learnings, handoffs, the prompt guard. The MCP metadata screens do not strip: a word-adjacent invisible run is rejoined for them by the normalized copy `scanNormalized` already scans | `src/denyscan/denyScan.ts::INVISIBLE_SMUGGLING_CHARS` | The class excludes the Unicode tag block deliberately, so `unicode-tag-smuggling` can refuse that block on the raw text |
 | MCP server | Poisoning a tool description a model reads | Tool descriptions and their element surfaces are scanned at emission | `src/mcp/descriptionScan.ts::scanMcpEntry` | A server that redefines its tools after install is NOT detected — see below |
 | A generated agent | Using a tool its role was never granted | Deny-by-default per-agent allowlist over tool categories: the named roster is serialized — pre-sanitized to exactly what an access check would authorize — into the policy document the emitted pre-tool-use guard reads, and the guard refuses with a machine-readable reason code | `src/tools/allowlist.ts::buildAgentToolPoliciesJson`, `src/roster/agentPolicies.ts::AGENT_POLICY_ROSTER` | ONE enforcement point, and it is the emitted client-side guard — the in-process check is built but unwired, see below. On a client whose hook payload names no agent the guard is telemetry |
-| An agent | Piping an unbounded payload through the `learn` write path | Stdin is read under a 250 000-character ceiling and REJECTED past it, not truncated | `src/guard/promptGuard.ts::MAX_USER_CONTENT_LENGTH`, applied in `src/cli/commands/learn.ts` | The 500 KB / 1 MB phase bounds beside it are unwired — see below |
-| Concurrent writer, or anything at the target path | Torn writes, symlink redirection, clobbering content the engine does not own | Temp file created `O_EXCL \| O_NOFOLLOW` plus atomic rename under a cross-process lock; content outside managed blocks is preserved and reclaimed | `src/merge/atomicWrite.ts::atomicWriteFile`, `src/merge/managedBlocks.ts::extractCustomContent`, `src/merge/reclaim.ts` | — |
-| Anyone reading the repo | Credentials committed into generated config | MCP configs emit `${env:VAR}` placeholders, never literal values; values are scanned for known secret shapes and masked wherever a finding is printed | `src/mcp/emit.ts::envPlaceholder`, `src/mcp/secretScan.ts::detectSecrets` | Shape detection catches known shapes on sight, and nothing else |
+| An agent | Piping an unbounded payload through the `learn` or `handoff` write path | Stdin is read under a 250 000-byte ceiling and REJECTED past it, not truncated — the bound counts bytes rather than characters, so a body of multi-byte UTF-8 is refused well short of that many characters | `src/guard/promptGuard.ts::MAX_USER_CONTENT_LENGTH`, applied in `src/cli/commands/learn.ts` and `src/cli/commands/handoff.ts`, and over an overlay body in `src/cli/commands/validate.ts` | The 500 KB / 1 MB phase bounds beside it are unwired — see below |
+| Concurrent writer, or anything at the target path | Torn writes, symlink redirection, clobbering content the engine does not own | Temp file created `O_EXCL \| O_NOFOLLOW` plus atomic rename under a cross-process lock; content outside managed blocks is preserved and reclaimed | `src/merge/atomicWrite.ts::atomicWriteFile`, `src/merge/managedBlocks.ts::extractCustomContent`, `src/merge/reclaim.ts::sweepReclaimCandidates` | — |
+| Anyone reading the repo | Credentials committed into generated config | MCP configs emit the reference form each dialect's own client resolves — `${VAR}` for Claude Code, `${env:VAR}` for Cursor, `${input:<id>}` plus an `inputs` entry for VS Code, `$COPILOT_MCP_<VAR>` for Copilot, the variable name alone for Codex — never literal values; values are scanned for known secret shapes and masked wherever a finding is printed | `src/mcp/emit.ts::envPlaceholder`, `src/mcp/secretScan.ts::detectSecrets` | Shape detection catches known shapes on sight, and nothing else |
 
 ## Network and data handling
 
-The engine performs no network I/O while it works, with the one exception named next. Nothing
-is uploaded, no telemetry or analytics is collected, and every byte the CLI produces lands in
-the repository you ran it in.
+The engine performs no network I/O while it works, with the two exceptions named next. Nothing
+is uploaded and no telemetry or analytics is collected. The repository you ran the CLI in is
+where the engine's outputs land, and exactly three paths write outside it: the startup update
+notice's stamp file under your user cache directory
+(`src/cli/notice/updateNotice.ts::noticeCacheDir`), the Sigstore TUF metadata cache under the
+platform's cache root (`src/pack/sigstoreVerifier.ts::sigstoreCachePath`), and the checkouts
+`stamity worktree setup` makes in the farm directory beside the repository
+(`src/worktree/policy.ts::WORKTREE_FARM_DIR_NAME`) — a farm inside the repository is refused.
+Nothing else the CLI produces leaves the repository.
 
-**Verifying a signed pack is the exception.** Installing a pack that declares
+**Verifying a signed pack is the first exception.** Installing a pack that declares
 `signing.method: "sigstore"` fetches the Sigstore project's trust root over TUF before the
 bundle is checked (`src/pack/sigstoreVerifier.ts::verifySigstoreBundle`; the mirror is the
-client's default, named in that file). It is the only network access any command's work
-performs, and it happens only then: `init`, `sync`, `check`, and every install of a pack that
-declares no signature do not even load the client — and no first-party pack declares one. The
-exchange fetches signed metadata and sends nothing about you or the repository; the metadata is
+client's default, named in that file). It happens only then: `init`, `sync`, `check`, and
+every install of a pack that declares no signature do not even load the client — and no
+first-party pack declares one. The exchange fetches signed metadata and sends nothing about
+you or the repository; the metadata is
 cached under your user cache directory (`src/pack/sigstoreVerifier.ts::sigstoreCachePath`),
 never inside the repository being installed into. A host that cannot reach the mirror gets a
 refusal, not a pass.
+
+**`stamity worktree setup` is the second exception.** When no local branch of the requested
+name exists and the repository has an `origin` remote, resolving the branch plan runs
+`git fetch origin <branch>` against that remote under a timeout
+(`src/worktree/git.ts::fetchBranch`). A preview (`--dry-run`) never contacts it, and a
+transport failure refuses with `NETWORK_ERROR` rather than guessing at the branch. The remote
+is the one your repository already had: the engine configures none, runs no package manager,
+and fetches no pack content over it.
 
 One further code path is network-capable and it is not part of any command's work: the startup update
 notice asks the public npm registry whether a version newer than the running one exists
@@ -110,8 +129,8 @@ check are properties of that file rather than of a maintainer's laptop:
   publishing: the publishing job mints a short-lived credential per run, so there is no long-lived
   publishing credential in this repository to leak or to rotate.
 - **A run that can publish must come from a `v*` tag** whose name equals the version
-  `package.json` declares, and whose commit is reachable from `main`. Both proofs run before the
-  pack step, on a tag push and on a maintainer-dispatched release alike; a dispatch from a branch
+  `package.json` declares, and whose commit is reachable from `main`. All three proofs run
+  before the pack step, on a tag push and on a maintainer-dispatched release alike; a dispatch from a branch
   fails there. A rehearsal dispatch runs every gate, publishes nothing, and prints the proofs it
   skipped.
 - **The GitHub release carries the bytes.** The tarball, its SHA-256 in the release body, and a
@@ -155,8 +174,8 @@ where it depends on it.
   production caller: nothing calls it at a delegation boundary, and it refuses nothing outside
   this repository's own suite. Read a denial as one control, not as a pair.
 - **Bounded phase IO.** `src/guard/promptGuard.ts` defines a 500 KB phase-input bound, a
-  1 MB agent-output bound, and boundary-marker wrapping. Only the 250 000-character user-
-  content ceiling above has a production caller; `guardInput`, `validateAgentOutput`,
+  1 MB agent-output bound, and boundary-marker wrapping. Only the 250 000-byte user-content
+  ceiling above has a production caller; `guardInput`, `validateAgentOutput`,
   `wrapWithBoundary` and `extractBoundedContent` have none outside their own module and
   reject nothing today.
 - **MCP tool-manifest drift.** `hashToolManifest` and `detectToolManifestDrift` exist and
@@ -176,8 +195,11 @@ where it depends on it.
 ## Standards mapping
 
 Not written. The table above is this repository's own actor/vector/control/residual model and
-maps to no external control catalogue: there is no OWASP ASI mapping, no version-pinned
-crosswalk, no NSA/CISA joint-guidance anchor, and no NIST AI RMF table anywhere in this tree.
+maps to no external control catalogue: no OWASP ASI mapping of these controls, no
+version-pinned crosswalk, no NSA/CISA joint-guidance anchor, and no NIST AI RMF table anywhere
+in this tree. OWASP ids do occur here — `A01`–`A10` and `ASI01`–`ASI10` as the finding
+vocabulary the emitted security reviewer writes in, `LLM01` in the deny-scan module header —
+as borrowed vocabulary, never as a crosswalk of the controls above.
 
 It is listed here rather than omitted because an unstated obligation reads as one nobody
 took on. Writing it needs the catalogue versions read and cited at a fixed date — a mapping
