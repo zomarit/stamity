@@ -360,6 +360,22 @@ function globalSection(facts: readonly CommandFacts[]): string[] {
   ];
 }
 
+/**
+ * What a mutating command's `--dry-run` prints in place of the write, for the
+ * commands whose preview says more than "nothing happened". The blanket
+ * sentence below claims only what `mutating` asserts — that the flag is
+ * registered — so a mode that previews one named transition has to say so, and
+ * this map is that exception: one entry per command that actually prints a
+ * preview line, never a hand-kept row for every verb.
+ */
+const DRY_RUN_PREVIEWS: Readonly<Record<string, readonly string[]>> = {
+  handoff: [
+    "In `resume` mode that preview is the status advance: the screens, the drift report and",
+    "the framed body all still print, and the run names the transition it withheld —",
+    "`Dry run: <id> would go active → in-progress. Nothing was written.`",
+  ],
+};
+
 /** One command's section, closed by the blank line that separates it from the next. */
 function commandSection(command: CommandFacts): string[] {
   const lines = [`## ${code(`stamity ${command.name}`)}`, "", command.summary, ""];
@@ -367,7 +383,10 @@ function commandSection(command: CommandFacts): string[] {
   if (command.hidden) {
     lines.push(
       "Plumbing. This verb is not listed in `stamity --help` because its caller is generated",
-      "agent content rather than a person. Hidden is not secret — `stamity learn --help` prints",
+      // The verb is interpolated, not typed: the sentence is emitted under EVERY hidden
+      // verb's heading, so a literal here names one verb on every other verb's section —
+      // which is what `stamity learn --help` did under `## stamity handoff`.
+      `agent content rather than a person. Hidden is not secret — ${code(`stamity ${command.name} --help`)} prints`,
       "in full — and it is documented here because a verb that exists and is undocumented is",
       "worse than one that is merely unadvertised.",
       "",
@@ -399,6 +418,9 @@ function commandSection(command: CommandFacts): string[] {
       : "Reads only. Nothing is written, so there is no preview mode to need.",
     "",
   );
+
+  const preview = DRY_RUN_PREVIEWS[command.name];
+  if (preview !== undefined) lines.push(...preview, "");
 
   if (command.args.length > 0) {
     lines.push(

@@ -395,6 +395,22 @@ async function dryRunPrepare(ctx: CliContext, draft: HandoffDraft): Promise<Comm
 
 // ── resume ───────────────────────────────────────────────────────
 
+/**
+ * The one line `resume --dry-run` prints when the status would advance.
+ *
+ * Exported because a second copy of this sentence lives in the CLI reference:
+ * `DRY_RUN_PREVIEWS` in `src/cli/docs/cliReference.ts` quotes it under the
+ * `handoff` section with `<id>` standing in for the id. That page is a
+ * projection of the program everywhere else, and its drift gate compares the
+ * render against the committed markdown — which catches a stale page and cannot
+ * catch a preview that never matched the command. `cliReference.test.ts` builds
+ * the documented sentence from this function instead, so editing the wording
+ * here fails the doc test rather than leaving the page quietly wrong.
+ */
+export function resumeDryRunAdvanceLine(id: string, status: string): string {
+  return `Dry run: ${id} would go ${status} → in-progress. Nothing was written.`;
+}
+
 async function runResume(ctx: CliContext, id: string | undefined): Promise<CommandResult> {
   if (id === undefined || id === "") throw missingFlag(RESUME, "<id>");
   const rootDir = ctx.app.runtime.cwd;
@@ -458,7 +474,19 @@ async function runResume(ctx: CliContext, id: string | undefined): Promise<Comma
 
   ctx.io.out(`${beginFrame(id)}\n${handoff.body.trim()}\n${endFrame(id)}\n`);
 
-  const advanced = advanceable && !readOnly;
+  // The status advance is the only write this mode makes, so `--dry-run` names
+  // the transition it would record and leaves the file where it is. Everything
+  // above ran for real — the integrity check, the expiry and transition
+  // screens, the drift report and the framed body — because a preview that
+  // skipped the gates would answer a question nobody asked.
+  const advanced = advanceable && !readOnly && !ctx.dryRun;
+  if (ctx.dryRun) {
+    ctx.io.out(
+      advanceable && !readOnly
+        ? `${resumeDryRunAdvanceLine(id, status)}\n`
+        : `Dry run: ${id} stays ${status}; this resume advances nothing. Nothing was written.\n`,
+    );
+  }
   if (advanced) {
     // The digest covers `summary` + newline + the trimmed body and nothing
     // else, which is what makes the advance safe: recomputed over an unchanged
@@ -484,6 +512,7 @@ async function runResume(ctx: CliContext, id: string | undefined): Promise<Comma
       status: advanced ? "in-progress" : status,
       advanced,
       readOnly,
+      ...(ctx.dryRun ? { dryRun: true } : {}),
       ...(drift === null ? {} : { drift }),
       frame: { begin: beginFrame(id), end: endFrame(id) },
       body: handoff.body.trim(),

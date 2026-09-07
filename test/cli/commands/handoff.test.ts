@@ -340,6 +340,33 @@ describe("handoff resume", () => {
     expect(parseSingleDoc(result.stdout)).toMatchObject({ advanced: false, status: "in-progress" });
   });
 
+  it("reads and screens but writes nothing under --dry-run", async () => {
+    const temp = tempDir();
+    const root = await seedRepo(temp);
+    const id = await prepareId(root);
+    const path = join(root, HANDOFFS_DIR, `${id}.md`);
+    const before = await readFile(path, "utf8");
+
+    const human = await runHandoff(root, ["resume", id, "--dry-run"]);
+    const result = await runHandoff(root, ["resume", id, "--dry-run", "--json"]);
+
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain(`--- BEGIN HANDOFF DATA ${id}`);
+    expect(human.stdout).toContain(`Dry run: ${id} would go active → in-progress.`);
+    expect(human.stdout).toContain("Nothing was written");
+    expect(result.code).toBe(0);
+    expect(parseSingleDoc(result.stdout)).toMatchObject({
+      dryRun: true,
+      advanced: false,
+      status: "active",
+    });
+    // Bytes, not fields: the advance recomputes `integrity` to the same value
+    // it had, so a digest check passes either way and only a whole-file
+    // comparison proves the preview wrote nothing at all.
+    expect(await readFile(path, "utf8")).toBe(before);
+    expect((await readHandoff(root, id))?.frontmatter.status).toBe("active");
+  });
+
   it("refuses a tampered body and prints none of it", async () => {
     const temp = tempDir();
     const root = await seedRepo(temp);
