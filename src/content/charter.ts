@@ -158,10 +158,15 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * is the failure an earlier wording of this comment had twice: first claiming a
  * disclosure that did not exist, then claiming its absence after it did.
  */
-// 29_026 -> 29_303 on 2026-09-04: invariant 1 took the closing-hand-off clause
-// (+140 bytes) and the security rule's floor item 9 took the closed-list clause
-// (+137), both net-zero in lines; the appendix carries both edits.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_303;
+// 29_303 -> 29_326 on 2026-09-07: the injection-screening rule's body reworded
+// its run-time-ingress item and the gate bullet that restates it (+23 bytes), so
+// a hit on tool ingress is reported by class, source, position and outcome and
+// names no pattern id where no catalog scan ran. The rule's frontmatter moved
+// too (+89, description and obsolete_when) and reaches this figure not at all:
+// the appendix inlines heading, attachment note and body, and the note takes the
+// `**Attaches to:**` branch, which does not print the description. The charter
+// itself was not touched, which is why the sibling figure below is unmoved.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_326;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.

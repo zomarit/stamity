@@ -510,12 +510,14 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
    * `charterTotalLines` binds ONE FILE. It was read for years as the whole
    * always-on budget, which it never was: a client with no way to attach a
    * rule conditionally loads that rule every session, so the slice a session
-   * really pays is charter PLUS those rules. On the shipped corpus that is 240
-   * lines for two of the four clients and 1082 for the one that folds the whole
-   * rule set into its single always-on document — against a template cap of
-   * 150. The composite cases below measure THAT, computed from the emitted rule
-   * set rather than from a hand-kept list, so a rule added or re-scoped moves
-   * the number without anything here being edited.
+   * really pays is charter PLUS those rules. Per client that slice is
+   * `ALWAYS_ON_BUDGET_LINES` (`src/content/charter.ts`) — an order of magnitude
+   * over the template's cap of 150 for the client that folds the whole rule set
+   * into its single always-on document. The figures live there rather than in
+   * this comment because they move: the composite cases below measure THAT,
+   * computed from the emitted rule set rather than from a hand-kept list, so a
+   * rule added or re-scoped moves the number without anything here being
+   * edited.
    */
   const alwaysOnPlan = async (): Promise<AlwaysOnPlan> => {
     const charter = await readCharterTemplate(CORPUS_ROOT);
