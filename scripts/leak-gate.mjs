@@ -61,7 +61,9 @@
 // that is case-sensitive on purpose — the private layer's row identifiers, whose rows are
 // upper-case — still sees a fullwidth or zero-width-split spelling. The case-sensitive credential
 // shapes read neither fold: their alphabets are the issuer's, and a shape invented by a fold is a
-// false positive in a secret scan.
+// false positive in a secret scan. Both folds come off ONE walk of each view: every decision the
+// pass makes except the last is shared between them, and making them in two calls walked every
+// file in the tree twice and doubled this gate's wall time the day the second fold arrived.
 //
 // What remains are exemptions by PATH — the build/vendor prefixes and the per-rule allowlists —
 // and every one of them is printed with the files it dropped, on a PASS and on a FAIL alike,
@@ -293,9 +295,17 @@ function decodeEscapeAt(text, index) {
   return null
 }
 
+/** The two characters an escape can start with, so the matchers below are consulted nowhere else. */
+const AMPERSAND = 0x26
+const PERCENT = 0x25
+
+/** `'A'`..`'Z'` lower-cased, so the ASCII fast path folds case by index instead of by method call. */
+const ASCII_LOWERCASE = Array.from({ length: 26 }, (_, offset) =>
+  String.fromCharCode(0x61 + offset),
+)
+
 /**
- * `text` reduced to what it RENDERS as, with `map[i]` naming the source index every normalized
- * character came from.
+ * `text` reduced to what it RENDERS as, in BOTH folds, from ONE walk of the string.
  *
  * Order matters: escapes decode first (so `&#116;` becomes a letter that later steps can fold),
  * then invisibles drop, then NFKC folds compatibility forms, then the confusable table folds the
@@ -303,48 +313,111 @@ function decodeEscapeAt(text, index) {
  * exact; that is weaker than whole-string NFKC on decomposed sequences and strictly stronger than
  * the nothing that was here before.
  *
- * `preserveCase` keeps the letters as they were written. Everything else about the pass is
- * unchanged, so a rule that is case-sensitive on purpose can read a folded view without being
- * rewritten to match lower case as well.
+ * Two folds, one traversal. The case-preserving fold decodes, drops and NFKC-folds exactly as the
+ * case-folded one does and skips only the lower-casing, so every decision except the last is
+ * shared. Computing them in separate calls walked every file's text twice and every decision
+ * twice, and doubled this gate's wall time the day the case-preserving fold was added. The
+ * caller asks for the folds it will actually read: `caseFolded` for the case-insensitive rules,
+ * `casePreserving` for the rules that declare it, and a fold nobody reads is never built.
+ *
+ * `map[i]` names the source index every emitted character came from, per fold, which is what lets
+ * a hit found through a fold report a real byte offset.
  *
  * The confusable table holds only the lower-case homoglyphs, so the lookup is made on the
  * lower-cased character and the mapped Latin letter is upper-cased back when the source was
  * upper. Without that, a prefix spelled with a capital Cyrillic А or С folded to a lower-case
  * Cyrillic letter and matched nothing — invisible to the case-sensitive rules that read this
- * pass, and invisible to the case-insensitive ones reading the lower-casing fold as well. The
- * cost is one `toLowerCase` per character, beside the per-character NFKC already here.
+ * pass, and invisible to the case-insensitive ones reading the lower-casing fold as well.
+ *
+ * THREE SHORTCUTS, each one an identity rather than a heuristic:
+ *
+ * 1. An escape is decoded only where one can START. `HTML_ENTITY` and `PERCENT_ESCAPE` are both
+ *    STICKY and both begin with a literal introducer, so at a character that is neither `&` nor
+ *    `%` the two `exec` calls can only return `null`. Asking the character first decides exactly
+ *    what they decided, at one integer comparison instead of two regex executions per character
+ *    of every file in the tree.
+ * 2. ASCII takes a fast path. NFKC is the identity on every ASCII character — none of them has a
+ *    canonical or compatibility decomposition — and every key of `CONFUSABLES` is non-ASCII, so
+ *    the lookup on an ASCII character and on its lower-case twin both miss. What is left is that
+ *    the case-preserving fold emits the character and the case-folded one emits its ASCII
+ *    lower-case, which is a table index.
+ * 3. The invisible-character test is skipped on that path. Every code point in `INVISIBLE` is
+ *    U+00AD or above, so no ASCII character is in the set. The C0/DEL test still runs, and runs
+ *    first, which is a reordering of two tests that share no member.
  */
-export function normalizeWithMap(text, { preserveCase = false } = {}) {
-  const chars = []
-  const map = []
-  for (let index = 0; index < text.length; ) {
-    const escape = decodeEscapeAt(text, index)
-    const source = escape === null ? text[index] : escape.text
-    const consumed = escape === null ? 1 : escape.length
+export function normalizeViews(text, { caseFolded = true, casePreserving = false } = {}) {
+  const foldedChars = caseFolded ? [] : null
+  const foldedMap = caseFolded ? [] : null
+  const preservedChars = casePreserving ? [] : null
+  const preservedMap = casePreserving ? [] : null
 
-    for (const char of source) {
-      const code = char.codePointAt(0)
-      if (INVISIBLE.has(code)) continue
-      if (code <= 0x1f || code === 0x7f) continue
-      const nfkc = char.normalize('NFKC')
-      const lower = char.toLowerCase()
-      const confusable = CONFUSABLES.get(char) ?? CONFUSABLES.get(lower)
-      const folded =
-        confusable === undefined
-          ? preserveCase
-            ? nfkc
-            : nfkc.toLowerCase()
-          : preserveCase && lower !== char
-            ? confusable.toUpperCase()
-            : confusable
-      for (const out of folded) {
-        chars.push(out)
-        map.push(index)
+  /** One decoded character of the source, emitted into whichever folds the caller asked for. */
+  const emit = (char, code, index) => {
+    if (code <= 0x1f || code === 0x7f) return
+    if (code < 0x80) {
+      if (foldedChars !== null) {
+        foldedChars.push(code >= 0x41 && code <= 0x5a ? ASCII_LOWERCASE[code - 0x41] : char)
+        foldedMap.push(index)
+      }
+      if (preservedChars !== null) {
+        preservedChars.push(char)
+        preservedMap.push(index)
+      }
+      return
+    }
+    if (INVISIBLE.has(code)) return
+    const nfkc = char.normalize('NFKC')
+    const lower = char.toLowerCase()
+    const confusable = CONFUSABLES.get(char) ?? CONFUSABLES.get(lower)
+    if (foldedChars !== null) {
+      for (const out of confusable === undefined ? nfkc.toLowerCase() : confusable) {
+        foldedChars.push(out)
+        foldedMap.push(index)
       }
     }
-    index += consumed
+    if (preservedChars !== null) {
+      const preserved =
+        confusable === undefined ? nfkc : lower !== char ? confusable.toUpperCase() : confusable
+      for (const out of preserved) {
+        preservedChars.push(out)
+        preservedMap.push(index)
+      }
+    }
   }
-  return { text: chars.join(''), map }
+
+  for (let index = 0; index < text.length; ) {
+    const unit = text.charCodeAt(index)
+    if (unit === AMPERSAND || unit === PERCENT) {
+      const escape = decodeEscapeAt(text, index)
+      if (escape !== null) {
+        // An escape can decode to an astral character, so its body is walked by CODE POINT.
+        for (const char of escape.text) emit(char, char.codePointAt(0), index)
+        index += escape.length
+        continue
+      }
+    }
+    // Everything else is walked by CODE UNIT, which is what leaves a lone surrogate — and each
+    // half of a well-formed pair — as a character NFKC declines to fold, exactly as before.
+    emit(text[index], unit, index)
+    index += 1
+  }
+
+  return {
+    folded: foldedChars === null ? null : { text: foldedChars.join(''), map: foldedMap },
+    preserving: preservedChars === null ? null : { text: preservedChars.join(''), map: preservedMap },
+  }
+}
+
+/**
+ * One fold of `normalizeViews`, as `{ text, map }`.
+ *
+ * The single-fold shape the direct assertions in `test/ci/leakGate.test.ts` read: it names the
+ * fold by what it does to case rather than by which rules consume it, and it builds only the one
+ * fold it returns.
+ */
+export function normalizeWithMap(text, { preserveCase = false } = {}) {
+  const views = normalizeViews(text, { caseFolded: !preserveCase, casePreserving: preserveCase })
+  return preserveCase ? views.preserving : views.folded
 }
 
 // ── Rules ────────────────────────────────────────────────────────────────────
@@ -619,15 +692,16 @@ function lineColumn(text, offset) {
 }
 
 /**
- * The normalizing passes a view can be read through, and the `normalizedViews` key each answers to.
+ * The normalizing folds a view can be read through, and the `normalizedViews` key each answers to.
  *
  * Two folds of one pass, not two passes: `case-preserving` decodes, drops and NFKC-folds exactly
  * as `folded` does and skips only the lower-casing, so a case-sensitive rule reads a rendering
- * without being widened into a case-insensitive one.
+ * without being widened into a case-insensitive one. `key` names the fold in what
+ * `normalizeViews` returns, which is where both arrive together off ONE walk of the view.
  */
 const NORMALIZED_PASSES = [
-  { kind: 'folded', label: 'normalized', preserveCase: false },
-  { kind: 'case-preserving', label: 'normalized, case-preserving', preserveCase: true },
+  { kind: 'folded', key: 'folded', label: 'normalized' },
+  { kind: 'case-preserving', key: 'preserving', label: 'normalized, case-preserving' },
 ]
 
 /**
@@ -639,19 +713,37 @@ const NORMALIZED_PASSES = [
 function scanContent(file, bytes, rules, hits, seen) {
   const views = decodeCandidates(bytes)
   const scannable = views.map((view) => ({ ...view, normalized: null }))
-  for (const pass of NORMALIZED_PASSES) {
-    // A second fold is a second walk of every view and costs about what the first one does, so
-    // it is built only when a rule that survived this file's allowlists actually reads it.
-    if (!rules.some((rule) => rule.normalizedViews.includes(pass.kind))) continue
+  // Which folds this file's SURVIVING rules read — the allowlists run first, so a file where the
+  // only rule wanting a fold was dropped never builds one. Asked once and answered for both
+  // folds together: they come off a single walk of each view, so the walk is spent when either
+  // is wanted and a fold nobody reads is still never built.
+  //
+  // Gated by RULE, and deliberately not by CONTENT. A pre-check that read the raw text and
+  // decided a fold could not possibly hit would have to be a NECESSARY condition, and there is
+  // almost none to state: an HTML entity or a percent-escape spells any character out of plain
+  // ASCII, so `&` or `%` anywhere in a file admits every rule; NFKC and the confusable table
+  // spell any Latin letter or digit out of any non-ASCII character, so one byte above 0x7f does
+  // the same. What survives that is a condition like "ASCII only, no `&`, no `%`, and no `-`, so
+  // the row-identifier rule has no separator to match" — sound, and it fires on 11 of this
+  // tree's 852 files and 0.04% of its bytes. It would buy a rounding error and cost a second
+  // place where this gate decides not to look, which is the one mistake its header records
+  // twice. The walk is cheap enough now to run it.
+  const caseFolded = rules.some((rule) => rule.normalizedViews.includes('folded'))
+  const casePreserving = rules.some((rule) => rule.normalizedViews.includes('case-preserving'))
+  if (caseFolded || casePreserving) {
     for (const view of views) {
       if (view.rawOnly === true) continue
-      const { text, map } = normalizeWithMap(view.text, { preserveCase: pass.preserveCase })
-      scannable.push({
-        label: `${view.label}, ${pass.label}`,
-        text,
-        normalized: pass.kind,
-        byteAt: (index) => view.byteAt(map[index] ?? index),
-      })
+      const folds = normalizeViews(view.text, { caseFolded, casePreserving })
+      for (const pass of NORMALIZED_PASSES) {
+        const fold = folds[pass.key]
+        if (fold === null) continue
+        scannable.push({
+          label: `${view.label}, ${pass.label}`,
+          text: fold.text,
+          normalized: pass.kind,
+          byteAt: (index) => view.byteAt(fold.map[index] ?? index),
+        })
+      }
     }
   }
 

@@ -41,6 +41,28 @@ function runGate(): GateResult {
   }
 }
 
+/**
+ * Wall-clock budget for one whole-repository gate run, derived rather than inherited.
+ *
+ * Every case below spawns the real gate over the real tree, so what each one is really bounded by
+ * is the gate's cost — and the suite-wide default (20s in `vitest.config.ts`, sized for a CLI
+ * spawn) is not that number. It read as one until the gate's wall time doubled and the failure
+ * that reached CI was a TIMEOUT: a red with no cost in it, on the floor and LTS legs only,
+ * saying nothing about what got slower or by how much.
+ *
+ * The basis, so the next person can re-derive it instead of guessing:
+ *   local wall time   3.3s  — `/usr/bin/time -p node scripts/leak-gate.mjs`, three runs,
+ *                             3.28-3.30s over 852 files, node start included
+ *   CI ratio          2x    — the runner class is about half this machine's speed; the run that
+ *                             failed had measured 11.98s locally and did not finish inside 20s
+ *   margin            4x    — a shared runner with a cold file cache, not a second budget
+ *   = 3.3 x 2 x 4 ≈ 26s, rounded to 30s
+ *
+ * So a CI leg twice as slow as expected still REPORTS the gate's true cost, and only a gate that
+ * has become roughly nine times its local wall time trips this — where a timeout is the finding.
+ */
+const GATE_RUN_TIMEOUT_MS = 30_000;
+
 describe("leak-gate against the repository as it stands", () => {
   it("passes, and says how many files it read", () => {
     const result = runGate();
@@ -50,7 +72,7 @@ describe("leak-gate against the repository as it stands", () => {
     // A census of zero would "pass" too. The scan has to have happened.
     const scanned = Number(/scanned (\d+) file\(s\)/.exec(result.stdout)?.[1] ?? 0);
     expect(scanned).toBeGreaterThan(100);
-  });
+  }, GATE_RUN_TIMEOUT_MS);
 
   it("names the encodings it actually read, rather than implying every encoding", () => {
     // The claim that broke: every file was reported as scanned while UTF-16 was a whole-file
@@ -61,7 +83,7 @@ describe("leak-gate against the repository as it stands", () => {
     expect(summary).toContain("utf8");
     expect(summary).toContain("utf16le/utf16be when detected");
     expect(summary).toContain("raw and normalized");
-  });
+  }, GATE_RUN_TIMEOUT_MS);
 
   it("prints every path exemption with the rule it was dropped from", () => {
     // The one exemption that existed never printed: the census line only filled when ALL rules
@@ -75,7 +97,7 @@ describe("leak-gate against the repository as it stands", () => {
     expect(summary).toContain("not scanned (rule github-token allowlisted)");
     expect(summary).toContain("src/mcp/secretScan.ts");
     expect(summary).not.toMatch(/rule predecessor-project allowlisted\)[^\n]*secretScan/);
-  });
+  }, GATE_RUN_TIMEOUT_MS);
 
   it("carries the private-layer family, and counts it in the summary", () => {
     // The third family: a row identifier out of one of the private layer's ledgers, and the name
@@ -91,7 +113,7 @@ describe("leak-gate against the repository as it stands", () => {
     const summary = runGate().stdout;
 
     expect(summary).toContain("PASS - 0 hits for 18 rule(s)");
-  });
+  }, GATE_RUN_TIMEOUT_MS);
 
   it("scans its own file by its own rules, with no self-exemption", () => {
     // Every reserved token in the gate is assembled from fragments at run time, which is what
@@ -213,6 +235,15 @@ describe("decoding and normalization, directly", () => {
     // The same pass, minus the lower-casing: escapes, invisibles and NFKC all still reduce.
     const split = `A${ZWSP}D`;
     expect((normalizeWithMap(split, { preserveCase: true }) as { text: string }).text).toBe("AD");
+
+    // The two folds on PLAIN ASCII, which is the overwhelming majority of every file scanned and
+    // the path the normalizer short-cuts: NFKC is the identity on ASCII and no confusable key is
+    // ASCII, so the only thing left for the case-folded pass to do there is lower-case a letter.
+    // Left untested, that shortcut reads like dead work and the next reader deletes it — and the
+    // fold silently stops being a fold, one encoding short of where the evasion suite looks.
+    const plain = `Fo${String.fromCharCode(0x01)}oT`;
+    expect((normalizeWithMap(plain) as { text: string }).text).toBe("foot");
+    expect((normalizeWithMap(plain, { preserveCase: true }) as { text: string }).text).toBe("FooT");
   });
 
   it("leaves an ordinary string alone, so the fold is not doing the finding", () => {
