@@ -1,0 +1,3 @@
+# This repository commits its emitted tree and every gate compares bytes, so a checkout that
+# rewrote line endings reads as content drift. CI pins core.autocrlf=false on the Windows leg.
+* text=auto eol=lf

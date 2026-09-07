@@ -366,8 +366,40 @@ function isHashProvable(path: string, hashes: ReadonlySet<string>, trusted: Read
   return isStateDirPath(path) || trusted.has(path);
 }
 
-function sha256(bytes: Buffer): string {
-  return createHash("sha256").update(bytes).digest("hex");
+function sha256(content: Buffer | string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+/**
+ * True when `bytes` are still the bytes the ledger recorded writing at this
+ * path — the raw compare first, then the same compare with every `\r\n` folded
+ * to `\n`.
+ *
+ * The raw compare is the real one: the hash covers exactly what is on disk, so
+ * a match is a match without interpretation. The fold exists because a MISS is
+ * not on its own evidence of an edit. Every producer records the SHA-256 of the
+ * LF string it emitted (`../cli/engine/emissionWrite.ts::sha256`, over content
+ * this engine composes with `\n`), so the ledger only ever holds an LF hash —
+ * while a checkout under `core.autocrlf=true`, the Git for Windows installer
+ * default, hands the reader back the same committed file as CRLF. A line-ending
+ * translation the operator never typed must not read as their edit: without the
+ * retry, `hashVetoed` fires on a stale engine output that nobody touched and
+ * the sweep skips it, so `clean` reports success and leaves the file behind —
+ * permanently, because every later sweep reads the same CRLF bytes.
+ *
+ * The fold narrows nothing else. Bytes that disagree with the record in any
+ * other way miss both comparisons and keep the veto, which is why the retry is
+ * safe in a lane where a wrong "yes" unlinks a file: it admits exactly one
+ * transformation, and one this engine can prove it never authored.
+ *
+ * `../merge/safeWrite.ts::hasLedgerDrift` makes the same retry for the same
+ * reason on the write half — the two hash reads of the ledger agree on what a
+ * CRLF checkout means.
+ */
+function matchesRecordedHash(recorded: ReadonlySet<string>, bytes: Buffer, content: string): boolean {
+  if (recorded.has(sha256(bytes))) return true;
+  const folded = content.replaceAll("\r\n", "\n");
+  return folded !== content && recorded.has(sha256(folded));
 }
 
 /** True when `candidate` is `root` or sits underneath it. */
@@ -665,7 +697,8 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
    */
   const hashMismatchDetail =
     "The bytes no longer hash to what the ledger recorded writing here, so the file has been edited since and is left in place with its changes.";
-  const hashMatched = group.recordedHashes.size > 0 && group.recordedHashes.has(sha256(bytes));
+  const hashMatched =
+    group.recordedHashes.size > 0 && matchesRecordedHash(group.recordedHashes, bytes, content);
   const hashVetoed = group.recordedHashes.size > 0 && !hashMatched;
 
   // Settled before the managed-block split on purpose: bytes identical to what

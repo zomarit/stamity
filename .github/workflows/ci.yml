@@ -128,14 +128,18 @@ jobs:
             label: windows
 
     steps:
-      # BEFORE checkout, and only on windows. Git's default `core.autocrlf=true` on Windows
-      # rewrites every LF to CRLF as it writes the working tree, and this repository has no
-      # .gitattributes to override it. Those rewritten bytes would break the two gates that
-      # compare bytes: `check` diffs regenerated output against the committed files, and the
-      # golden suites compare emitted content to fixtures on disk. The failure would be a
-      # line-ending artifact reported as a content drift — a false red that teaches the reader
-      # to distrust the gate. A step may precede `actions/checkout`; `git config --global`
-      # needs no repository.
+      # BEFORE checkout, and only on windows. Three layers hold LF here, and this step is the
+      # middle one. The root .gitattributes (`* text=auto eol=lf`) pins the checkout to LF on any
+      # Git that honours attributes; this step is the defence for the runner's global config,
+      # where Git's default `core.autocrlf=true` on Windows is what rewrites LF to CRLF as it
+      # writes the working tree, so no leg rests on attribute handling alone; and
+      # src/merge/safeWrite.ts and src/merge/reclaim.ts fold CRLF at read time for clones made
+      # before the attribute existed. Rewritten bytes would break the two gates that compare
+      # bytes: `check` diffs regenerated output against the committed files, and the golden
+      # suites compare emitted content to fixtures on disk. The failure would be a line-ending
+      # artifact reported as a content drift — a false red that teaches the reader to distrust
+      # the gate. A step may precede `actions/checkout`; `git config --global` needs no
+      # repository.
       - name: Pin line endings before checkout
         if: runner.os == 'Windows'
         run: |

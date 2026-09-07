@@ -188,14 +188,25 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     facts: { monorepoPackages: decisions.monorepoPackages },
   });
 
-  // Ownership carried in from any previous run: on a `--force` re-init the
-  // existing manifest's ledger is what marks platform-named artifacts
-  // (AGENTS.md, .claude/settings.json, …) engine-owned rather than user-owned.
-  // The hash index rides with it, off the same rows: ownership says the engine
-  // wrote the path, the recorded hash says whether the bytes there are still the
-  // ones it wrote, and a re-init that replaces an engine-owned file the operator
-  // has since hand-edited must take the verified `.bak` rather than the
-  // no-backup fast path (`merge/safeWrite.ts::hasLedgerDrift`).
+  // Ownership as this run knows it — which on a `--force` re-init is the PACK
+  // rows and nothing else. The manifest above is freshly composed with an empty
+  // ledger ({@link composeManifest} → `manifest/manifest.ts::createManifest`),
+  // and `--force` carries forward only the `pack:<id>` rows of the setup being
+  // replaced ({@link carriedPackRows}), so a pack-owned path is the only kind
+  // these two indexes reach. For those the pair does its whole job: ownership
+  // says the engine wrote the path, the recorded hash says whether the bytes
+  // there are still the ones it wrote, and a pack file the operator has since
+  // hand-edited takes the verified `.bak` rather than the no-backup fast path
+  // (`merge/safeWrite.ts::hasLedgerDrift`).
+  //
+  // A core output — AGENTS.md, `.claude/settings.json`, the hook scripts — is in
+  // neither index here, so drift decides nothing for it on a re-init. That does
+  // not leave it unprotected: `--force` reaches the writer for every output
+  // below, so a marker-less file the engine cannot prove it wrote takes the
+  // writer's force-overwrite `.bak` instead, and one carrying STAMITY markers is
+  // merged rather than replaced. What differs is the account the operator reads:
+  // a re-init reports the force-overwrite warning, never the drift warning's
+  // "it was edited by hand since".
   const ownedPaths = ledgerPathSet(rootDir, manifest.ledger.map((row) => row.path));
   const ownedHashes = ledgerHashIndex(rootDir, manifest.ledger);
 

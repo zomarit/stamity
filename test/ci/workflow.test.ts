@@ -255,14 +255,26 @@ describe("ci.yml — the merge-blocking gate", () => {
   });
 
   it("fixes windows line endings BEFORE checkout, or the byte-diffing gates report a false red", () => {
-    // Git's default core.autocrlf on Windows rewrites LF to CRLF as it writes the working tree,
-    // and this repository has no .gitattributes to override it. `check` diffs regenerated output
-    // against committed bytes; a line-ending rewrite would surface as a content drift.
+    // The root .gitattributes pins the checkout to LF on any Git that honours attributes; this
+    // step is the layer under it, covering the runner's global config, where Git's default
+    // core.autocrlf on Windows rewrites LF to CRLF as it writes the working tree. `check` diffs
+    // regenerated output against committed bytes; a line-ending rewrite would surface as a
+    // content drift. src/merge/safeWrite.ts and src/merge/reclaim.ts fold CRLF at read time for
+    // clones made before the attribute existed.
     const guard = indexOf(check, "Pin line endings before checkout");
     expect(guard).toBe(0);
     expect(guard).toBeLessThan(indexOf(check, "Checkout"));
     expect(conditionOf(check, "Pin line endings before checkout")).toBe("runner.os == 'Windows'");
     expect(runOf(check, "Pin line endings before checkout")).toContain("core.autocrlf false");
+  });
+
+  it("carries the .gitattributes that pins the checkout itself to LF", () => {
+    // The pre-checkout step above only reaches the runner's global config. Anyone cloning this
+    // repository by hand gets LF from the attribute or not at all, and the byte-diffing gates
+    // are the same ones either way.
+    const attributes = join(REPO_ROOT, ".gitattributes");
+    expect(existsSync(attributes), ".gitattributes must exist at the repository root").toBe(true);
+    expect(readFileSync(attributes, "utf8")).toMatch(/^\*\s+text=auto\s+eol=lf$/m);
   });
 
   it("keeps the vendor-unsupported toolchain steps on one leg and the runtime gates on all three", () => {

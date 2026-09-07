@@ -156,6 +156,55 @@ describe("safeWriteFile — creation and whole-file writes", () => {
     ).toBe("updated");
   });
 
+  it("reads a CRLF checkout of an LF-ledgered file as the engine's own bytes", async () => {
+    // A repository that commits its emitted tree, cloned on Windows under Git's
+    // own installer default `core.autocrlf=true`: every marker-less ledgered
+    // output — hook scripts, the plain-JSON outputs, every agent `.md` — lands
+    // on disk as CRLF, while the manifest carries the hash of the LF string the
+    // engine wrote. Hashing the raw read alone called all of them drifted, so a
+    // plain flagless `sync` minted a `.bak` beside each one and warned that the
+    // operator had hand-edited files they never opened. A line-ending
+    // translation is not an edit: the file keeps the no-backup fast path and is
+    // rewritten to the engine's LF bytes.
+    const target = tempDir().path("stamity-config.json");
+    const engineWrote = '{\n  "v": 1\n}\n';
+    await writeFile(target, engineWrote.replaceAll("\n", "\r\n"), "utf-8");
+
+    const result = await safeWriteFile(target, '{\n  "v": 2\n}\n', {
+      ledgerPaths: ledgerPathSet(tempDir().dir, ["stamity-config.json"]),
+      ledgerHashes: ledgerHashIndex(tempDir().dir, [
+        { path: "stamity-config.json", contentHash: sha256(engineWrote) },
+      ]),
+    });
+
+    expect(result).toEqual({ path: target, action: "updated" });
+    await expect(bakFiles()).resolves.toEqual([]);
+    await expect(readFile(target, "utf-8")).resolves.toBe('{\n  "v": 2\n}\n');
+  });
+
+  it("still backs up a hand edit made in a CRLF checkout", async () => {
+    // The retry is scoped to line endings and to nothing else. A file whose
+    // folded content still disagrees with the record is an operator edit like
+    // any other and keeps the verified `.bak` — stated here so the newline
+    // retry cannot be read as a blanket second chance at the hash.
+    const target = tempDir().path("stamity-config.json");
+    const engineWrote = '{\n  "v": 1\n}\n';
+    const operatorEdited = '{\r\n  "v": 1,\r\n  "mine": true\r\n}\r\n';
+    await writeFile(target, operatorEdited, "utf-8");
+
+    const result = await safeWriteFile(target, '{\n  "v": 2\n}\n', {
+      ledgerPaths: ledgerPathSet(tempDir().dir, ["stamity-config.json"]),
+      ledgerHashes: ledgerHashIndex(tempDir().dir, [
+        { path: "stamity-config.json", contentHash: sha256(engineWrote) },
+      ]),
+    });
+
+    expect(result.action).toBe("updated");
+    expect(result.warning).toContain("no longer match what it last wrote");
+    await expect(bakFiles()).resolves.toEqual(["stamity-config.json.bak"]);
+    await expect(readFile(`${target}.bak`, "utf-8")).resolves.toBe(operatorEdited);
+  });
+
   it("accepts any co-owner's recorded hash as proof the bytes are the engine's", async () => {
     // One path, several adapters, one row each — and a tool-set change rebuilds
     // one owner's rows without touching the other's, so two rows for one path
