@@ -1,8 +1,10 @@
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit 6865e31. -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or
-     loses a regeneration command, either Node floor moves, a test lane joins or leaves, or a
-     coverage floor in `vitest.config.ts` moves. `test/docsPages.test.ts` asserts the gate steps
-     and the regeneration commands against this page. -->
+     loses a regeneration command, either Node floor moves, a test lane joins or leaves, a
+     coverage floor in `vitest.config.ts` moves, or the eval set's version bumps — the `evals/`
+     paths named below carry that version in their own names, so a bump silently repoints them
+     and is what last carried this page past its stamp. `test/docsPages.test.ts` asserts the gate
+     steps and the regeneration commands against this page. -->
 
 # Contributing
 

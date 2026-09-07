@@ -67,17 +67,18 @@ The reference implementation gitignored most of its own state, so its
 materialization set was large: a state directory symlinked whole, with per-file
 copy overrides carved back out of it, plus every adapter's output tree, plus
 secrets, plus dependencies. This project made the opposite choice, and it is
-documented as a choice: `docs/getting-started.md:151-159` — "Commit it. The
+documented as a choice: `docs/getting-started.md:170-180` — "Commit it. The
 manifest is the provenance record… Everything init writes outside that directory
 commits for the same reason — `AGENTS.md`, `.agents/`, and the client trees
-`.claude/`, `.cursor/`, `.github/prompts/` and `.codex/` … The one file that is
-**not** committed is `.env.mcp`."
+`.claude/`, `.cursor/`, `.github/prompts/` and `.codex/` … The one file init keeps
+**out** of the repository is `.env.mcp`."
 
 The consequence is the central design fact of this lane: **a `git worktree add`
 already delivers the entire setup**, because the setup is tracked content and a
 checkout carries tracked content. The state table
-(`docs/getting-started.md:143-149`) lists five paths — the manifest, learnings,
-handoffs, generated hooks, installed packs — and every one of them is committed.
+(`docs/getting-started.md:155-168`) lists the manifest, learnings, handoffs,
+generated hooks and installed packs among its paths, and every one of those five
+is committed.
 `.gitignore` carries `node_modules/`, `dist/`, `coverage/`, `*.tsbuildinfo`, the
 docs site's build output, and `.env*` (`.gitignore:1-13`), and
 `REQUIRED_GITIGNORE_ENTRIES` has exactly one member, the credential file
@@ -387,7 +388,7 @@ no entry**:
 
 - `.stamity/manifest.json` — committed. The worktree gets the branch's manifest,
   which is the correct answer: it is the provenance record *of that commit*
-  (`docs/getting-started.md:145,151-152`).
+  (`docs/getting-started.md:157,170-171`).
 - `.stamity/learnings/` and `.stamity/handoffs/` — committed, with `.gitkeep`
   placeholders so the empty directories survive a clone
   (`src/emit/stateScaffold.ts:32-45`). They diverge per branch automatically,
@@ -395,7 +396,7 @@ no entry**:
   are written but **not committed** do not travel; that is stated as a fact of
   the lane, not worked around (REQ-WORKTREE-015).
 - `.stamity/generated/`, `.stamity/packs/`, `AGENTS.md`, `.agents/`, and the
-  client trees — committed (`docs/getting-started.md:149-156`).
+  client trees — committed (`docs/getting-started.md:170-180`).
 - `.stamity/review-gate.json` — untracked and un-ignored, so REQ-WORKTREE-003
   refuses it as an entry. That is the right outcome: it is a per-run counter
   whose absence means "the gate is open" (`src/hooks/scripts.ts:153`, and the
@@ -409,7 +410,7 @@ can see the decision and change it in one edit.
 
 **Rationale.** Every row above is decided by one question — is this path
 committed? — and this project answered that question once, globally, and wrote
-the answer down (`docs/getting-started.md:151-159`). The reference's tiering
+the answer down (`docs/getting-started.md:170-180`). The reference's tiering
 existed to reconstruct, per worktree, state that its own design had excluded
 from version control; reproducing the tiers here would be carrying a solution
 across a boundary where the problem does not exist.
@@ -848,10 +849,10 @@ setup and names `stamity init` run inside the worktree; `unreadable` names
 **Rationale.** The reference re-spawned its own binary inside the new worktree
 because its client trees were gitignored and therefore genuinely absent after a
 checkout. Here they are committed
-(`docs/getting-started.md:151-155`), so the checkout is already
+(`docs/getting-started.md:170-180`), so the checkout is already
 self-consistent — and running `sync` would be a CONTENT CHANGE on that branch:
 it regenerates from whichever engine version ran it
-(`docs/getting-started.md:167-169`), so a worktree created off an older branch
+(`docs/getting-started.md:194-195`), so a worktree created off an older branch
 would come up with a dirty tree the operator never asked for, ahead of the first
 edit of the work it was created for. The probe answers the question the sync was
 really asked ("is this worktree usable by a session right now?") without writing
@@ -906,7 +907,7 @@ later change adds them deliberately:
 
 - it does not create, move, merge, or resume handoff records — `.stamity/handoffs/`
   and the handoff skill are the session-state carrier, and they already have a
-  lifecycle (`docs/getting-started.md:147`);
+  lifecycle (`docs/getting-started.md:159`);
 - it does not spawn, attach to, or terminate an agent session in any client;
 - it does not synchronise learnings between worktrees;
 - it does not coordinate the gates. A green gate in one worktree says nothing
@@ -1059,7 +1060,7 @@ generated file whose contents equal the defaults is a file that drifts from them
   unversioned copy that page exists to retire, so the sentence now claims only
   what `mutating` asserts: that the command writes, and that `--dry-run` previews
   it (`src/cli/docs/cliReference.ts:377-395`).
-- `docs/getting-started.md:139-159` gains one sentence pointing at the verb from
+- `docs/getting-started.md:151-186` gains one sentence pointing at the verb from
   the state table, since that table is where a reader learns `.env.mcp` does not
   travel.
 
@@ -1472,7 +1473,7 @@ and the surrounding symbol is the durable address.
 | `source` | `src/workspace/detect.ts:70,101-104,125-138` | a worktree's `.git` is a file; the dot-directory skip; the sub-repo scan |
 | `source` | `src/workspace/model.ts:20-25` | the precedent for an operator-authored policy file outside the manifest |
 | `source` | `scripts/leak-gate.mjs:382-388,456-468` | the reserved-name rule this page is written under, and the untracked-file walk |
-| `doc` | `docs/getting-started.md:139-159` | the state table and the commit decision REQ-WORKTREE-004 is settled from |
+| `doc` | `docs/getting-started.md:151-186` | the state table and the commit decision REQ-WORKTREE-004 is settled from |
 | `doc` | `docs/working-with-stamity.md:5-9,113-182` | the published promise and its re-open trigger; the line spans are the post-rewrite ones, and the promise text they held is quoted in Context |
 | `doc` | `docs/cli-reference.md:5,71-105` | the generated page, its exit table, and the reserved `NETWORK_ERROR` note |
 | `spec` | `docs/specs/overlay-layers.md:118-145,368-381` | the sibling spec's fail-closed posture, adopted here |

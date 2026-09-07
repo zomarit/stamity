@@ -72,11 +72,11 @@ what its cell above says. Nothing is broken by that — the deepest work simply 
 the client would have picked anyway — and pinning `model.frontier` to an id your client accepts
 is how an operator opts into the rung.
 
-`mcp.servers` is the one row whose accepted values are a closed list, and
-[the MCP server reference](reference/mcp-servers.md) is that list: every id this repo resolves
-on its own, with the version each is pinned to, the credentials it needs and the blast radius
-of handing it to an agent. An id absent from that page resolves only when an installed pack
-supplies it.
+`mcp.servers` is the one row whose closed list is kept on a page of its own rather than spelled
+in its cell, and [the MCP server reference](reference/mcp-servers.md) is that page: every id this
+repo resolves on its own, with the version each is pinned to, the credentials it needs and the
+blast radius of handing it to an agent. An id absent from that page resolves only when an
+installed pack supplies it.
 
 ## Changing one
 

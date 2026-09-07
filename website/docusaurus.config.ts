@@ -115,9 +115,10 @@ const config: Config = {
           // unbuilt. They are written for whoever implements the remainder, not for a reader of
           // the product documentation, and a published route would read as a description of what
           // ships. They stay in the tree, under review like any other file, and off the routes.
-          // `docs/plans/` is the plan command's output — a run's decomposition, written for the
-          // work run that consumes it — and is off the routes for the same reason before the first
-          // one lands. `test/ci/docsRoster.test.ts` derives its exemptions from this list, so a
+          // `docs/plans/` is the plan command's output — a run's decomposition, addressed to the
+          // work run that consumes it and spent once that run closes — and is off the routes for
+          // the same reason: a published plan would read as a roadmap this product is promising.
+          // `test/ci/docsRoster.test.ts` derives its exemptions from this list, so a
           // directory excluded here is exempt there and the two cannot disagree.
           // Setting `exclude` REPLACES the plugin's default list rather than extending it, so the
           // defaults — partial files and tests — are restated here; without them a future
