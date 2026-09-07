@@ -33,9 +33,11 @@ export default function Home(): ReactNode {
    * `.catch` — its own comment says errors are left unhandled on purpose, for observability — so
    * when the write is rejected (a denied permission, an insecure context with the fallback
    * unavailable) nothing about the button changes, and a click-triggered announcement would be a
-   * lie the reader then acts on. So the click only records the resting label, and the
-   * announcement is emitted when a MutationObserver sees that label move. The theme's own revert
-   * clears the region, which is why this page owns no timer and has no teardown race with one.
+   * lie the reader then acts on. So the click only records the control it hit and that control's
+   * resting label, and the announcement is emitted when a MutationObserver sees THAT element's
+   * label move — the group holds a second button, and the arming note below says why. The
+   * theme's own revert clears the region, which is why this page owns no timer and has no
+   * teardown race with one.
    *
    * DELEGATION IS NOT A STYLE CHOICE, AND `main` IS THE ONLY SAFE ROOT FOR IT. Two theme
    * behaviours put every node below it out of reach of a mount-time query. The button group is
@@ -59,39 +61,68 @@ export default function Home(): ReactNode {
       return undefined;
     }
 
+    // The armed element, not just its label. The copy button is not alone in the block:
+    // the theme renders `<WordWrapButton /><CopyButton />` in one group inside the same
+    // container that carries `.landing__install` (`CodeBlock/Buttons/index.js`, wrapped by
+    // `CodeBlock/Layout/index.js`), and the word-wrap button appears whenever the line
+    // overflows its container — which the install line does at the text-zoom widths WCAG
+    // 1.4.4 is about. Its `aria-label` is a constant that `wordWrap.toggle()` never touches
+    // (that handler mutates the `<code>` element's style and the button's class), so arming
+    // on the group alone recorded a resting label no mutation could ever match: every later
+    // copy cycle then announced the theme's revert as a second status, for the life of the
+    // page. The observer below acts on the armed element by identity, so a mutation on any
+    // other control in the group is not this control's status.
+    //
+    // The resting label is remembered per element, first-arming only. A click can land while
+    // the label is mid-cycle: copy, then word-wrap (which hands the arming over), then copy
+    // again inside the same 1000 ms window, and the copy button still reads "Copied" at the
+    // moment it is re-armed. Reading the label at arming time would record that as its resting
+    // name, and the theme's revert would then announce "Copy code to clipboard" as a status.
+    // The map holds each control's label as it was the first time this page saw it armed, and
+    // arming never overwrites an entry, so a control is only ever first-armed from rest.
+    const restingLabels = new WeakMap<Element, string>();
+    let armed: Element | null = null;
     let resting: string | null = null;
 
     const onClick = (event: Event) => {
       const button = (event.target as Element | null)?.closest('button');
-      // Armed from rest only. The theme reverts the label on a 1000 ms timeout that a
-      // repeat click neither clears nor restarts (`CopyButton/index.js:52-61`:
-      // `setIsCopied(true)` is a no-op while already copied, so no attribute mutation
-      // fires and a second `setTimeout` is queued behind the first). Capturing the
-      // CURRENT label on every click would therefore record "Copied" as the resting
-      // name for a click inside that window, and the first timeout's revert would then
-      // read as a new state and announce "Copy code to clipboard" — a status whose text
-      // contradicts the state, to exactly the reader who pressed twice because the first
-      // press gave no feedback. `resting` is nulled by the revert below, so the next
-      // cycle re-arms; until then the original resting label stands and the revert
-      // matches it.
-      if (button?.closest('.landing__install') && resting === null) {
-        resting = button.getAttribute('aria-label');
+      // Re-armed only when the click moves to a DIFFERENT button. The theme reverts the
+      // label on a 1000 ms timeout that a repeat click neither clears nor restarts
+      // (`CopyButton/index.js:52-61`: `setIsCopied(true)` is a no-op while already copied,
+      // so no attribute mutation fires and a second `setTimeout` is queued behind the
+      // first). Capturing the CURRENT label on every click would therefore record "Copied"
+      // as the resting name for a click inside that window, and the first timeout's revert
+      // would then read as a new state and announce "Copy code to clipboard" — a status
+      // whose text contradicts the state, to exactly the reader who pressed twice because
+      // the first press gave no feedback. Holding the arming until the revert instead would
+      // trade that for silence, since a word-wrap press would hold it forever. Keying on
+      // identity keeps both: the same button inside its own window keeps its original
+      // resting label, and a press on another control hands the arming over. The region is
+      // cleared on that hand-over because a status about the control just left is stale.
+      if (button?.closest('.landing__install') && button !== armed) {
+        const firstSeen = restingLabels.get(button) ?? button.getAttribute('aria-label');
+        if (firstSeen !== null) {
+          restingLabels.set(button, firstSeen);
+        }
+        armed = button;
+        resting = firstSeen;
+        status.textContent = '';
       }
     };
     root.addEventListener('click', onClick);
 
     const observer = new MutationObserver((records) => {
       for (const record of records) {
-        if (record.attributeName !== 'aria-label' || resting === null) {
+        if (record.attributeName !== 'aria-label' || armed === null) {
           continue;
         }
-        const target = record.target as Element;
-        if (!target.closest('.landing__install')) {
+        if (record.target !== armed) {
           continue;
         }
-        const label = target.getAttribute('aria-label');
+        const label = armed.getAttribute('aria-label');
         if (label === resting) {
           status.textContent = '';
+          armed = null;
           resting = null;
         } else if (label) {
           status.textContent = label;
