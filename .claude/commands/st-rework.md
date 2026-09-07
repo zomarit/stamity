@@ -178,9 +178,12 @@ A Critical finding the user wants deferred **is deferred** — with a record:
 2. **Written rationale required.** A bare "defer" does not satisfy this step; the user states
    why shipping without the fix is acceptable here. That sentence is the record.
 3. **Elevated-triage tag.** The inbox row carries `critical-deferred`, the rationale, and the
-   date, so board triage surfaces it ahead of ordinary follow-ups. The row's shape is fixed:
-   `critical-deferred · <YYYY-MM-DD> · <file:line> · <the consequence in one line> · rationale:
-   <the user's sentence>`. A row missing the date or the rationale is not this record.
+   date, so board triage surfaces it ahead of ordinary follow-ups. The row's shape is fixed, and
+   it opens with `/st-board`'s declared row grammar so the reader that must surface it can parse
+   it — the tag and the two extra fields follow the grammar's four:
+   `Critical · <file:line> · <the consequence in one line> · source: rework <branch> ·
+   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>`. A row missing the date
+   or the rationale is not this record.
 
 Accountability, not a veto: the user decides, and the decision stays legible to whoever reads
 the branch next. **Default if the rationale question goes unanswered:** the deferral stands and
@@ -221,10 +224,12 @@ criterion that describes it just moves the contradiction.
 
 Plan-lint runs once, deterministically, before anything is persisted. The gate is the one
 `/st-plan` defines — `L1` testable acceptance criteria (a unit with no acceptance criterion
-stated as an observable outcome fails it), `L2` dependencies resolve, `L3` edge cases non-empty
-— run here unchanged rather than restated with different content under the same name. One
-rework-only check runs beside it, labelled so the difference is visible: `R1`, every unit cites
-validated `file:line` evidence or is explicitly marked `unvalidated`.
+stated as an observable outcome fails it), `L2` dependencies resolve, `L3` edge cases non-empty,
+`L4` every unit's `requirements` field cites a requirement id carried by the spec or the literal
+`spec carries no ids`, blank never passing — run here unchanged rather than restated with
+different content under the same name. One rework-only check runs beside it, labelled so the
+difference is visible: `R1`, every unit cites validated `file:line` evidence or is explicitly
+marked `unvalidated`.
 
 A unit that fails a check goes back to the user to sharpen or defer. It never enters the plan
 in a state where the implementer would have to guess what "done" means.
@@ -242,8 +247,8 @@ the last marker clears — which is what makes the low-confidence marking of pha
 
 Close with this run's proof block: baseline source (proof record, or `no proof record`),
 findings by severity, REVISE/DEFER counts, validation verdicts with confidence, plan-lint per
-check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · R1 pass|fail`, the plan path, and the
-inbox rows added.
+check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`, the plan
+path, and the inbox rows added.
 
 Close also on one recommended next step, derived from this run's own state and not from a fixed
 menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what

@@ -98,6 +98,14 @@ const REWORK = "commands/st-rework.md";
 const PR_RESOLVE = "commands/st-pr-resolve.md";
 
 /**
+ * Read here as the pair's declared READER, not as a third artifact under test:
+ * rework files deferral rows into `.stamity/inbox.md` and `/st-board` is the
+ * command that parses them, so the row shape below is asserted against board's
+ * own grammar text rather than against a literal copied out of it.
+ */
+const BOARD = "commands/st-board.md";
+
+/**
  * Declared spawn roster per artifact — the command discriminator made explicit.
  *
  * TEST CHANGE, justified: pr-resolve's roster widened from `[researcher, fixer]`.
@@ -116,7 +124,7 @@ const files = new Map<string, CorpusFile>();
 
 beforeAll(async () => {
   const loaded = await Promise.all(
-    [REWORK, PR_RESOLVE].map(async (relPath) => {
+    [REWORK, PR_RESOLVE, BOARD].map(async (relPath) => {
       const raw = await readFile(join(CORPUS_ROOT, relPath), "utf8");
       return corpusFileOf(relPath, raw);
     }),
@@ -421,6 +429,35 @@ describe("rework — leftover scan and routing", () => {
       orderedListNumbers(section(body, "### Critical Deferral Protocol")).every(countingUp),
     ).toBe(true);
   });
+
+  it("fixes the deferred-Critical row in the grammar `/st-board` declares it parses", () => {
+    // `/st-board` is the inbox's declared reader and states ONE row grammar,
+    // with the tag as an optional extra word, and keeps a row that does not
+    // parse verbatim as an UNTAGGED entry. A tag-first row therefore loses
+    // exactly the elevated triage the tag exists to buy. So the fixed shape
+    // opens with board's four fields, and the tag, the date and the rationale
+    // follow them. Board's own text is read here rather than a literal copied
+    // out of it, so the two shapes cannot drift apart silently.
+    const grammar = clause(artifact(BOARD).parsed.body, "## Deferral inbox");
+    expect(grammar).toContain("`severity · file:line · description · source: <writer>`");
+
+    const protocol = clause(artifact(REWORK).parsed.body, "### Critical Deferral Protocol");
+    const row = /`(Critical · [^`]+)`/.exec(protocol)?.[1];
+    expect(row, "the protocol states no fixed `Critical · …` row").toBeDefined();
+
+    const fields = (row ?? "").split(" · ");
+    expect(fields.slice(0, 4)).toEqual([
+      "Critical",
+      "<file:line>",
+      "<the consequence in one line>",
+      "source: rework <branch>",
+    ]);
+    expect(fields.slice(4)).toEqual([
+      "critical-deferred",
+      "<YYYY-MM-DD>",
+      "rationale: <the user's sentence>",
+    ]);
+  });
 });
 
 describe("rework — validation and handoff", () => {
@@ -442,9 +479,14 @@ describe("rework — validation and handoff", () => {
     expect(handoff).toMatch(/\/st-work/);
     // The gate is plan's, cited rather than redefined: the same name carried four
     // unlabelled checks here, one of them changed, and no labelled result at close.
-    expect(handoff).toMatch(/`L1`[^.]*`L2`[^.]*`L3`/);
+    // L4 is in both pins because rework persists through st-plan's own artifact,
+    // whose `requirements` field is never blank: enumerating three checks and
+    // reporting three verdicts hides L4 at the one seam the operator reads.
+    expect(handoff).toMatch(/`L1`[^.]*`L2`[^.]*`L3`[^.]*`L4`/);
     expect(handoff).toMatch(/run here unchanged rather than restated with different content/i);
-    expect(handoff).toMatch(/L1 pass\|fail · L2 pass\|fail · L3 pass\|fail · R1 pass\|fail/);
+    expect(handoff).toMatch(
+      /L1 pass\|fail · L2 pass\|fail · L3 pass\|fail · L4 pass\|fail · R1 pass\|fail/,
+    );
   });
 
   it("gives the low-confidence marking a consumer instead of a note", () => {
