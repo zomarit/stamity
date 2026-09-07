@@ -55,6 +55,14 @@
 // an index map, so a hit found through it still reports the byte offset in the file, and findings
 // are deduped by (rule, file, byte offset) so a plain ASCII hit is not reported once per view.
 //
+// The pass runs in two folds. The CASE-FOLDED one lower-cases as it reduces, which preserves what
+// a case-insensitive rule means and would change what a case-sensitive one means. The
+// CASE-PRESERVING one decodes, drops and NFKC-folds identically and leaves case alone, so a rule
+// that is case-sensitive on purpose — the private layer's row identifiers, whose rows are
+// upper-case — still sees a fullwidth or zero-width-split spelling. The case-sensitive credential
+// shapes read neither fold: their alphabets are the issuer's, and a shape invented by a fold is a
+// false positive in a secret scan.
+//
 // What remains are exemptions by PATH — the build/vendor prefixes and the per-rule allowlists —
 // and every one of them is printed with the files it dropped, on a PASS and on a FAIL alike,
 // because the run a maintainer reads closely is the failing one.
@@ -231,6 +239,10 @@ const INVISIBLE = new Set([
  * Homoglyph folds NFKC does not perform, because the characters are genuinely distinct letters in
  * their own scripts. Latin is the target: a name spelled with a Cyrillic `е` renders identically
  * and is a leak by every measure that matters.
+ *
+ * Lower-case rows only: `normalizeWithMap` looks the table up by the lower-cased character and
+ * restores the case on the way out, so an upper-case row here would be dead weight rather than
+ * extra coverage.
  */
 const CONFUSABLES = new Map(
   Object.entries({
@@ -290,8 +302,19 @@ function decodeEscapeAt(text, index) {
  * homoglyphs NFKC deliberately leaves alone. NFKC is applied per character so the index map stays
  * exact; that is weaker than whole-string NFKC on decomposed sequences and strictly stronger than
  * the nothing that was here before.
+ *
+ * `preserveCase` keeps the letters as they were written. Everything else about the pass is
+ * unchanged, so a rule that is case-sensitive on purpose can read a folded view without being
+ * rewritten to match lower case as well.
+ *
+ * The confusable table holds only the lower-case homoglyphs, so the lookup is made on the
+ * lower-cased character and the mapped Latin letter is upper-cased back when the source was
+ * upper. Without that, a prefix spelled with a capital Cyrillic А or С folded to a lower-case
+ * Cyrillic letter and matched nothing — invisible to the case-sensitive rules that read this
+ * pass, and invisible to the case-insensitive ones reading the lower-casing fold as well. The
+ * cost is one `toLowerCase` per character, beside the per-character NFKC already here.
  */
-export function normalizeWithMap(text) {
+export function normalizeWithMap(text, { preserveCase = false } = {}) {
   const chars = []
   const map = []
   for (let index = 0; index < text.length; ) {
@@ -303,7 +326,17 @@ export function normalizeWithMap(text) {
       const code = char.codePointAt(0)
       if (INVISIBLE.has(code)) continue
       if (code <= 0x1f || code === 0x7f) continue
-      const folded = CONFUSABLES.get(char) ?? char.normalize('NFKC').toLowerCase()
+      const nfkc = char.normalize('NFKC')
+      const lower = char.toLowerCase()
+      const confusable = CONFUSABLES.get(char) ?? CONFUSABLES.get(lower)
+      const folded =
+        confusable === undefined
+          ? preserveCase
+            ? nfkc
+            : nfkc.toLowerCase()
+          : preserveCase && lower !== char
+            ? confusable.toUpperCase()
+            : confusable
       for (const out of folded) {
         chars.push(out)
         map.push(index)
@@ -394,26 +427,61 @@ const NAME_RULES = [
 /**
  * Row-identifier prefixes the private layer's ledgers use, each assembled from single-character
  * fragments so this file spells none of them: the decision ledger, the question channel, the audit
- * ledger, the evidence ledger, the directive ledger, the question batch and the audit cycle.
+ * ledger, the evidence ledger, the directive ledger, the question batch, the audit cycle and the
+ * house build ledger.
  *
- * Two-letter prefixes come first in the alternation only for readability — the trailing `-0` and
- * the word boundaries decide every match, so order changes nothing.
+ * The build ledger's prefix extends the question batch's by a letter, so the alternation holds a
+ * one-letter branch ahead of the two-letter branch that starts with it. Order still changes
+ * nothing: alternation backtracks, so a build-ledger row matches through the longer branch after
+ * the shorter one fails on the separator. What decides a match is the separator, the digit run and
+ * the boundaries below.
  */
 const LEDGER_PREFIXES = [
-  ['A', 'D'], ['Q'], ['A', 'L'], ['E', 'V'], ['D', 'R'], ['B'], ['C'],
+  ['A', 'D'], ['Q'], ['A', 'L'], ['E', 'V'], ['D', 'R'], ['B'], ['C'], ['B', 'D'],
 ].map((fragments) => fragments.join(''))
+
+/**
+ * The separators a row identifier can be spelled with: the ASCII hyphen-minus, the Unicode hyphens
+ * and dashes that render as one, the minus sign, and the fullwidth hyphen-minus.
+ *
+ * A bare `-` was not enough, and the normalizing pass does not close the gap on its own: NFKC
+ * folds the non-breaking hyphen to U+2010 and never to `-`. An id typed with an en dash, pasted
+ * out of a rendered document, or line-broken by a tool read as ordinary prose to the gate.
+ */
+const LEDGER_SEPARATOR = '[-\\u2010-\\u2015\\u2212\\uff0d]'
 
 /**
  * Private-layer references, with no path where either is legal.
  *
  * A row identifier is matched CASE-SENSITIVELY: the rows are upper-case, and a lower-case
- * near-miss is ordinary prose that a fold would turn into a weekly false alarm. The repository
- * name is the product's own package name with `-governance` after it, matched case-insensitively
- * and — like every rule here — against paths as well as content, so a home-directory path naming
- * that checkout is caught the same way a sentence naming it is.
+ * near-miss is ordinary prose that a fold would turn into a weekly false alarm. It reads the
+ * case-preserving normalizing pass as well as the raw views, so a fullwidth or zero-width-split
+ * spelling is caught without giving up that distinction.
+ *
+ * The digit run is two to four digits and requires no leading zero. Ledger rows are an unbounded
+ * sequence, and a rule anchored on `-0` plus exactly two digits stopped at the 99th row of every
+ * one of them — a gate configured narrower than the class it guards. The widening costs
+ * precision: a bare letter-and-number code — a vitamin, an aircraft, an isotope — is a hit now.
+ * No tracked file carries one, and what a hit asks for is a respelling, which is cheap next to a
+ * row identifier that ships.
+ *
+ * The boundaries are explicit alphanumeric lookarounds rather than `\\b`, which counts `_` as a
+ * word character: `row_<id>` and `<id>_notes.md` — a JSON key and a filename, both plausible in an
+ * agent-written run ledger — sat inside a word rather than at its edge, so no boundary was there
+ * to require and both passed.
+ *
+ * The repository name is the product's own package name with `-governance` after it, matched
+ * case-insensitively and — like every rule here — against paths as well as content, so a
+ * home-directory path naming that checkout is caught the same way a sentence naming it is.
  */
 const PRIVATE_RULES = [
-  { id: 'private-ledger-id', source: `\\b(?:${LEDGER_PREFIXES.join('|')})-0\\d\\d\\b`, flags: 'g', allow: [] },
+  {
+    id: 'private-ledger-id',
+    source: `(?<![A-Za-z0-9])(?:${LEDGER_PREFIXES.join('|')})${LEDGER_SEPARATOR}\\d{2,4}(?![A-Za-z0-9])`,
+    flags: 'g',
+    allow: [],
+    normalized: ['case-preserving'],
+  },
   { id: 'private-repo-name', source: ['stam', 'ity', '-gov', 'ernance'].join(''), flags: 'gi', allow: [] },
 ]
 
@@ -454,12 +522,12 @@ function secretRule(id, source, flags) {
 export const RULES = [...NAME_RULES, ...PRIVATE_RULES, ...SECRET_RULES].map((rule) => ({
   id: rule.id,
   pattern: new RegExp(rule.source, rule.flags),
-  // The normalized view lower-cases as it folds, so a case-sensitive rule keeps its meaning
-  // there only if it is matched case-sensitively against a lower-cased string — which would
-  // change what it means. Credential shapes and the private-layer row ids are case-sensitive by
-  // construction, so they run on the raw views only; the name rules and the private repository
-  // name are case-insensitive already and run on both.
-  normalizable: rule.flags.includes('i'),
+  // Which normalizing passes this rule reads, on top of every raw view. A case-insensitive rule
+  // takes the case-folded pass, whose lower-casing preserves what it means. A case-sensitive rule
+  // takes the case-preserving pass only where it asks for one: the private layer's row ids do, so
+  // a fullwidth or zero-width-split id is caught, while the case-sensitive credential shapes ask
+  // for none — their alphabets are the issuer's, and a shape invented by a fold is noise.
+  normalizedViews: rule.flags.includes('i') ? ['folded'] : (rule.normalized ?? []),
   allow: rule.allow.map(toMatcher),
 }))
 
@@ -551,6 +619,18 @@ function lineColumn(text, offset) {
 }
 
 /**
+ * The normalizing passes a view can be read through, and the `normalizedViews` key each answers to.
+ *
+ * Two folds of one pass, not two passes: `case-preserving` decodes, drops and NFKC-folds exactly
+ * as `folded` does and skips only the lower-casing, so a case-sensitive rule reads a rendering
+ * without being widened into a case-insensitive one.
+ */
+const NORMALIZED_PASSES = [
+  { kind: 'folded', label: 'normalized', preserveCase: false },
+  { kind: 'case-preserving', label: 'normalized, case-preserving', preserveCase: true },
+]
+
+/**
  * Scan one file's bytes through every view and report the census label.
  *
  * Findings are keyed by (rule, file, byte offset) so a plain ASCII hit found by the latin1 view
@@ -558,24 +638,26 @@ function lineColumn(text, offset) {
  */
 function scanContent(file, bytes, rules, hits, seen) {
   const views = decodeCandidates(bytes)
-  const scannable = [
-    ...views.map((view) => ({ ...view, normalized: false })),
-    ...views
-      .filter((view) => view.rawOnly !== true)
-      .map((view) => {
-        const { text, map } = normalizeWithMap(view.text)
-        return {
-          label: `${view.label}, normalized`,
-          text,
-          normalized: true,
-          byteAt: (index) => view.byteAt(map[index] ?? index),
-        }
-      }),
-  ]
+  const scannable = views.map((view) => ({ ...view, normalized: null }))
+  for (const pass of NORMALIZED_PASSES) {
+    // A second fold is a second walk of every view and costs about what the first one does, so
+    // it is built only when a rule that survived this file's allowlists actually reads it.
+    if (!rules.some((rule) => rule.normalizedViews.includes(pass.kind))) continue
+    for (const view of views) {
+      if (view.rawOnly === true) continue
+      const { text, map } = normalizeWithMap(view.text, { preserveCase: pass.preserveCase })
+      scannable.push({
+        label: `${view.label}, ${pass.label}`,
+        text,
+        normalized: pass.kind,
+        byteAt: (index) => view.byteAt(map[index] ?? index),
+      })
+    }
+  }
 
   for (const view of scannable) {
     for (const rule of rules) {
-      if (view.normalized && !rule.normalizable) continue
+      if (view.normalized !== null && !rule.normalizedViews.includes(view.normalized)) continue
       for (const hit of collect(rule, view.text)) {
         const offset = view.byteAt(hit.index)
         const key = `${rule.id} ${file} ${offset}`
