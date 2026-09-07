@@ -542,16 +542,27 @@ describe("hand pages", () => {
     );
   });
 
-  it("passes the leak gate", () => {
-    const gate = join(REPO_ROOT, "scripts/leak-gate.mjs");
-    const result = spawnSync(process.execPath, [gate], {
-      cwd: REPO_ROOT,
-      encoding: "utf-8",
-    });
-    const detail =
-      result.status === 0 ? "" : `exit ${String(result.status)}\n${result.stdout}${result.stderr}`;
-    expect(detail).toBe("");
-  });
+  it(
+    "passes the leak gate",
+    () => {
+      const gate = join(REPO_ROOT, "scripts/leak-gate.mjs");
+      const result = spawnSync(process.execPath, [gate], {
+        cwd: REPO_ROOT,
+        encoding: "utf-8",
+      });
+      const detail =
+        result.status === 0 ? "" : `exit ${String(result.status)}\n${result.stdout}${result.stderr}`;
+      expect(detail).toBe("");
+    },
+    // This case is bounded by the whole-repository gate run it spawns, not by the suite-wide
+    // 20s default in `vitest.config.ts` — which is sized for a CLI spawn, and which turned a
+    // doubling of the gate's wall time into a CI timeout that named no cost. Derived, so it can
+    // be re-derived: 3.3s local (`/usr/bin/time -p node scripts/leak-gate.mjs`, three runs,
+    // 3.28-3.30s over 852 files) x 2 for a runner class about half this machine's speed x 4 for
+    // margin on a shared runner with a cold file cache ≈ 26s, rounded to 30s. Kept in step with
+    // `GATE_RUN_TIMEOUT_MS` in `test/ci/leakGate.test.ts`, which spawns the same gate.
+    30_000,
+  );
 });
 
 describe("README", () => {
@@ -915,9 +926,12 @@ describe("SECURITY.md", () => {
         `${unwired} is claimed above "What it does not defend"`,
       ).toBeGreaterThan(text.indexOf("## What it does not defend"));
     }
-    // The one live bound is stated as the live one.
+    // The one live bound is stated as the live one, in the unit it actually
+    // counts: the ceiling is bytes, and a character literal here would pin the
+    // page back to the unit it over-claimed. Anchored on "ceiling" so this
+    // tracks the control row, not the ledger line further down the page.
     expect(text).toContain("MAX_USER_CONTENT_LENGTH");
-    expect(text).toMatch(/250 000-character/);
+    expect(text).toMatch(/250 000-byte ceiling/);
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {
