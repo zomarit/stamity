@@ -1410,7 +1410,7 @@ export function buildReviewGateScript(opts: ReviewGateScriptOptions): string {
   )}
 
 import { randomBytes } from "node:crypto";
-import { closeSync, constants as FS, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
+import { closeSync, constants as FS, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
 const STATE_SEGMENTS = ${json(segments)};
@@ -1493,15 +1493,31 @@ const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
  * because the compound worst case has overtaken that budget even though the
  * ceiling alone still sits inside it.
  *
- * Raising it costs nothing on the failure it does not govern. A holder that
- * DIED holding the lock produces no hand-off, so the idle detector returns in
- * ~1s and the ceiling is never consulted; the ceiling only ever fires while
- * the lock is genuinely changing hands, and waiting longer for a queue that is
- * visibly draining is the whole point of watching for progress. The fail-open
- * drop is unchanged either way: a wait that does expire still reports
- * STATE_LOCKED and exits 0, because a counter is not worth wedging a run over.
+ * That same list is a constraint on the WAITERS and not only on the client's
+ * budget, which is what it used to be read as. The four in-section budgets
+ * (the stat, the read, the rename and the unlink) are wall clock a LIVE holder
+ * spends without handing the lock to anybody, and the idle detector reads "no
+ * hand-off" as "the holder died". So the invariant the two halves have to keep
+ * is: the idle window is never shorter than the critical section these budgets
+ * sanction. Held, it says nothing about a live holder and everything about a
+ * dead one; broken, a holder inside its own retry budget is read as dead by
+ * every waiter queued behind it and each of them drops its round on a path
+ * that exits 0 — 1 stored round of 30, measured both with a holder five
+ * attempts into the win32 rename schedule and with a holder whose counter read
+ * was merely 1.3s slow. LOCK_IDLE_MS is therefore derived from those budgets
+ * below rather than set here, and the heartbeat in beat() carries the part of
+ * the section a sum of pauses cannot see.
+ *
+ * Raising the ceiling costs nothing on the failure it does not govern. A
+ * holder that DIED holding the lock produces no hand-off and no heartbeat, so
+ * the idle detector returns after its own window — LOCK_IDLE_MS, not the
+ * ceiling — and the ceiling is never consulted; the ceiling only ever fires
+ * while the lock is genuinely changing hands, and waiting longer for a queue
+ * that is visibly draining is the whole point of watching for progress. The
+ * fail-open drop is unchanged either way: a wait that does expire still
+ * reports STATE_LOCKED and exits 0, because a counter is not worth wedging a
+ * run over.
  */
-const LOCK_IDLE_MS = 1_000;
 const LOCK_IDLE_POLLS = 24;
 const LOCK_CEILING_MS = 25_000;
 const LOCK_WAIT_MIN_MS = 4;
@@ -1552,6 +1568,40 @@ const RENAME_JITTER = IS_WINDOWS ? 0.25 : 0;
  * hold is not the millisecond-scale one this waits out. */
 const RETRY_ATTEMPTS = 4;
 const RETRY_BACKOFF_MS = 20;
+
+/*
+ * The idle window, derived from the budgets above rather than chosen beside
+ * them. It is the wall clock a waiter watches an unchanging lock for before it
+ * reads the holder as dead, and the invariant it has to keep is the one the
+ * ceiling comment states: never shorter than the critical section these
+ * budgets sanction.
+ *
+ * The section is four budgets long — the counter's stat and its read
+ * (RETRY_BUDGET_MS each), the publish rename (RENAME_WAITS_MS with its jitter)
+ * and the unlink that releases (RETRY_BUDGET_MS again) — which is 1,650 ms on
+ * POSIX and 5,588 ms on win32 as these constants stand. Derived, so widening a
+ * retry schedule cannot leave the window behind it the way a typed 1,000 did:
+ * that constant was correct against a 750 ms rename budget and wrong the
+ * moment the win32 schedule reached 4,687 ms, and nothing in the tree went red
+ * to say so.
+ *
+ * The sum is of PAUSES, and a holder spends syscall time on top of them, so on
+ * its own this would be a lower bound wearing a ceiling's clothes. beat() is
+ * what closes that gap: it re-stamps the lock before every one of these pauses,
+ * so a holder actually spending its retries re-arms each waiter's window
+ * instead of consuming it, and the derived number only has to cover a holder
+ * that is slow inside a single call — the case with no errno and no retry,
+ * where no heartbeat can fire.
+ *
+ * What it costs is the dead-holder verdict: a lock whose holder died is now
+ * given up on after this window rather than after a flat second. The round is
+ * dropped fail-open either way, and LOCK_STALE_MS is still the only path that
+ * CLEARS a lock, so nothing here forces one.
+ */
+const RETRY_BUDGET_MS = RETRY_BACKOFF_MS * (2 ** RETRY_ATTEMPTS - 1);
+const RENAME_BUDGET_MS =
+  RENAME_WAITS_MS.reduce((total, wait) => total + wait, 0) * (1 + RENAME_JITTER);
+const LOCK_IDLE_MS = Math.ceil(3 * RETRY_BUDGET_MS + RENAME_BUDGET_MS);
 
 /** Whether an errno is one of the momentary holds above, rather than an answer. */
 function sharing(error) {
@@ -1650,6 +1700,7 @@ function load() {
     } catch (error) {
       if (error !== null && error !== undefined && error.code === "ENOENT") break;
       if (!sharing(error) || attempt >= RETRY_ATTEMPTS) return { fault: "STATE_UNREADABLE", runs: null };
+      beat();
       pause(RETRY_BACKOFF_MS * 2 ** attempt);
     }
   }
@@ -1668,6 +1719,7 @@ function load() {
       break;
     } catch (error) {
       if (!sharing(error) || attempt >= RETRY_ATTEMPTS) return { fault: "STATE_UNREADABLE", runs: null };
+      beat();
       pause(RETRY_BACKOFF_MS * 2 ** attempt);
     }
   }
@@ -1713,6 +1765,40 @@ function pause(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+/*
+ * Whether THIS process is inside the critical section. The heartbeat below
+ * must never re-stamp a lock another process holds: an unlocked reader waiting
+ * out its own hold would otherwise vouch for a holder that has already died.
+ */
+let holding = false;
+
+/**
+ * Say the holder is still alive, on the one channel the waiters read.
+ *
+ * A waiter's progress signal is the lock file's (mtime, ino) pair, and nothing
+ * a holder does to the COUNTER moves it — so a holder waiting out a held name
+ * was indistinguishable from a holder that died, and the waiters queued behind
+ * it dropped their rounds while it was still working. Touching the lock before
+ * each retry pause moves the pair, so a holder spending its retry budget
+ * re-arms every waiter's idle window instead of consuming it.
+ *
+ * Best-effort in both directions, and silent when it fails: a filesystem that
+ * stamps in whole seconds (exFAT, the same one the file index covers for) may
+ * not move the pair at all, and the touch can lose to the same family of holds
+ * it is reporting through. Either way the wait falls back to the derived
+ * LOCK_IDLE_MS, which is the whole critical section — never below it.
+ */
+function beat() {
+  if (!holding) return;
+  try {
+    const stamp = new Date();
+    utimesSync(LOCK_FILE, stamp, stamp);
+  } catch {
+    // The lock is gone, or the touch lost to a hold. The derived window still
+    // bounds the wait, so there is nothing to report and nothing to retry.
+  }
+}
+
 /**
  * Take the counter's exclusive lock, or give up.
  *
@@ -1748,17 +1834,24 @@ function lock() {
   for (;;) {
     try {
       closeSync(openSync(LOCK_FILE, FS.O_WRONLY | FS.O_CREAT | FS.O_EXCL | FS.O_NOFOLLOW, 0o600));
+      holding = true;
       return true;
     } catch (error) {
       // EEXIST is the answer "somebody holds it", and a sharing fault is no
       // answer at all — the name was momentarily unopenable, most often because
       // the previous holder's unlink left it delete-pending. Both go round the
       // loop; every other errno is this filesystem's own refusal and gives up.
-      // A name that stays unopenable therefore costs the idle window instead of
-      // returning at once — 1.05s measured on darwin against a lock create
-      // rigged to raise EACCES every time, against 31ms before — and still ends
-      // fail-open at STATE_LOCKED with nothing written.
-      if (!error || (error.code !== "EEXIST" && !sharing(error))) return false;
+      //
+      // Windows-only here, unlike the counter's own sites. This is the one
+      // place the whole idle window sits behind the tolerance, and the set
+      // above says why POSIX cannot need it: open(O_CREAT|O_EXCL) answers
+      // EEXIST for contention there, so EACCES/EBUSY/EPERM on this call is a
+      // durable refusal — an unwritable state directory — and polling it out
+      // cost 1.05s per hook event on darwin against 60ms for an answer that
+      // never changes. The counter's sites keep the cross-platform set: their
+      // POSIX cost is 300ms, and it is spent only on the same durable fault.
+      const momentary = IS_WINDOWS && sharing(error);
+      if (!error || (error.code !== "EEXIST" && !momentary)) return false;
     }
 
     // Who holds it now, and since when. A stat that raises is a lock released
@@ -1823,12 +1916,16 @@ function unlock() {
   for (let attempt = 0; ; attempt += 1) {
     try {
       unlinkSync(LOCK_FILE);
-      return;
+      break;
     } catch (error) {
-      if (!sharing(error) || attempt >= RETRY_ATTEMPTS) return;
+      if (!sharing(error) || attempt >= RETRY_ATTEMPTS) break;
+      beat();
       pause(RETRY_BACKOFF_MS * 2 ** attempt);
     }
   }
+  // Released, or given up on: either way this process is no longer the holder
+  // and must stop vouching for whoever takes the name next.
+  holding = false;
 }
 
 /**
@@ -1870,6 +1967,7 @@ function save(runs) {
       } catch (error) {
         const wait = RENAME_WAITS_MS[attempt];
         if (!sharing(error) || wait === undefined) throw error;
+        beat();
         pause(wait + Math.floor(Math.random() * wait * RENAME_JITTER));
       }
     }

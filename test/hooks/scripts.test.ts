@@ -1224,7 +1224,7 @@ function runAsync(
  * fault is still measuring the script this engine ships.
  */
 const GATE_FS_IMPORT =
-  'import { closeSync, constants as FS, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";';
+  'import { closeSync, constants as FS, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeSync } from "node:fs";';
 
 const FAULT_GATE_PATH = "hooks/review-gate-faulting.mjs";
 
@@ -1238,8 +1238,8 @@ const FAULT_CLAIM_FILE = "fault-claim";
 type FaultSite = "lock-create" | "state-stat" | "state-read" | "publish-rename" | "unlock";
 
 /**
- * A `node:fs` stand-in that raises one injected errno, at one named site, in
- * exactly one of the writers.
+ * A `node:fs` stand-in that injects the named fault, at one or more named
+ * sites, in exactly one of the writers.
  *
  * Why injection rather than a race: the loss this guards against is a Windows
  * sharing violation, and no POSIX filesystem produces one — `open(O_EXCL)`
@@ -1248,19 +1248,39 @@ type FaultSite = "lock-create" | "state-stat" | "state-read" | "publish-rename" 
  * exercises the retry paths not at all, which is why the herd case above has
  * never gone red here while the windows leg dropped a round five times.
  *
- * "Exactly one" is not a probability: the first writer to reach the site wins
- * an `O_EXCL` create of the claim file and raises, and every later arrival
- * finds the name taken and proceeds. So one fault always fires, wherever in the
- * queue it lands — a case cannot pass because the fault missed.
+ * "Exactly one" is not a probability: the first writer to reach one of the
+ * named sites wins an `O_EXCL` create of the claim file and takes the faults,
+ * and every later arrival finds the name taken and proceeds. So the fault
+ * always fires, wherever in the queue it lands — a case cannot pass because the
+ * fault missed. Naming more than one site binds them all to that one writer,
+ * which is how a case spends a whole critical section rather than one pause.
+ *
+ * Three knobs beyond the errno, each for a hold the single-shot shape cannot
+ * express. `times` keeps the SAME writer failing at each named site for that
+ * many attempts, so a case can spend a chosen slice of the script's retry
+ * budget rather than its first pause. `stallMs` makes the claiming call merely
+ * SLOW and then succeed — a hold with no errno at all, which is what a loaded
+ * runner or a scanner actually presents and which no retry path can see.
+ * `win32` flips `process.platform` before the script's body reads it, so the
+ * windows branch of the retry schedules is the one under test; `node:path` is
+ * already bound to its posix form by then (every import evaluates before this
+ * statement runs), so nothing but the script's own `IS_WINDOWS` moves.
  */
 function faultShim(stateFileName: string): string {
   return [
     'import * as REAL_FS from "node:fs";',
-    "const { closeSync, constants: FS, mkdirSync, writeSync } = REAL_FS;",
-    'const FAULT_SITE = process.env.STAMITY_FAULT_SITE ?? "";',
+    "const { closeSync, constants: FS, mkdirSync, utimesSync, writeSync } = REAL_FS;",
+    'const FAULT_SITES = (process.env.STAMITY_FAULT_SITE ?? "").split(",").filter((name) => name !== "");',
     'const FAULT_CODE = process.env.STAMITY_FAULT_CODE ?? "EBUSY";',
     'const FAULT_CLAIM = process.env.STAMITY_FAULT_CLAIM ?? "";',
+    'const FAULT_TIMES = Number(process.env.STAMITY_FAULT_TIMES ?? "1");',
+    'const FAULT_STALL_MS = Number(process.env.STAMITY_FAULT_STALL_MS ?? "0");',
+    'if (process.env.STAMITY_FAULT_WIN32 === "1") {',
+    '  Object.defineProperty(process, "platform", { value: "win32", configurable: true });',
+    "}",
     `const STATE_NAME = ${JSON.stringify(stateFileName)};`,
+    "let owned = false;",
+    "const fired = Object.create(null);",
     "function counterFile(path) {",
     '  return typeof path === "string" && path.endsWith(STATE_NAME);',
     "}",
@@ -1268,40 +1288,60 @@ function faultShim(stateFileName: string): string {
     '  return typeof path === "string" && path.endsWith(STATE_NAME + ".lock");',
     "}",
     "function claim(site) {",
-    "  if (site !== FAULT_SITE) return false;",
-    "  try {",
-    '    closeSync(REAL_FS.openSync(FAULT_CLAIM, "wx"));',
-    "    return true;",
-    "  } catch {",
-    "    return false;",
+    "  if (!FAULT_SITES.includes(site)) return false;",
+    "  if (!owned) {",
+    "    try {",
+    '      closeSync(REAL_FS.openSync(FAULT_CLAIM, "wx"));',
+    "      owned = true;",
+    "    } catch {",
+    "      return false;",
+    "    }",
     "  }",
+    "  const taken = fired[site] ?? 0;",
+    "  if (taken >= FAULT_TIMES) return false;",
+    "  fired[site] = taken + 1;",
+    "  return true;",
     "}",
-    "function raise() {",
-    '  const error = new Error(FAULT_CODE + ": injected at " + FAULT_SITE);',
+    "function trip(site) {",
+    "  if (FAULT_STALL_MS > 0) {",
+    "    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, FAULT_STALL_MS);",
+    "    return;",
+    "  }",
+    '  const error = new Error(FAULT_CODE + ": injected at " + site);',
     "  error.code = FAULT_CODE;",
     "  throw error;",
     "}",
     "function openSync(path, flags, mode) {",
-    '  if (lockFile(path) && claim("lock-create")) raise();',
+    '  if (lockFile(path) && claim("lock-create")) trip("lock-create");',
     "  return REAL_FS.openSync(path, flags, mode);",
     "}",
     "function statSync(path, options) {",
-    '  if (counterFile(path) && claim("state-stat")) raise();',
+    '  if (counterFile(path) && claim("state-stat")) trip("state-stat");',
     "  return REAL_FS.statSync(path, options);",
     "}",
     "function readFileSync(path, encoding) {",
-    '  if (counterFile(path) && claim("state-read")) raise();',
+    '  if (counterFile(path) && claim("state-read")) trip("state-read");',
     "  return REAL_FS.readFileSync(path, encoding);",
     "}",
     "function renameSync(from, to) {",
-    '  if (counterFile(to) && claim("publish-rename")) raise();',
+    '  if (counterFile(to) && claim("publish-rename")) trip("publish-rename");',
     "  return REAL_FS.renameSync(from, to);",
     "}",
     "function unlinkSync(path) {",
-    '  if (lockFile(path) && claim("unlock")) raise();',
+    '  if (lockFile(path) && claim("unlock")) trip("unlock");',
     "  return REAL_FS.unlinkSync(path);",
     "}",
   ].join("\n");
+}
+
+/** How a case shapes the injected fault beyond its errno and its site. */
+interface FaultShape {
+  /** Attempts the claiming writer fails at EACH named site before it succeeds. */
+  times?: number;
+  /** Milliseconds the claiming call stalls before succeeding, instead of raising. */
+  stallMs?: number;
+  /** Whether the script reads itself as running on Windows. */
+  win32?: boolean;
 }
 
 /**
@@ -1310,8 +1350,9 @@ function faultShim(stateFileName: string): string {
  * take the fault.
  */
 async function placeFaultingGate(
-  site: FaultSite,
+  site: FaultSite | readonly FaultSite[],
   code = "EBUSY",
+  shape: FaultShape = {},
 ): Promise<{ path: string; env: Record<string, string> }> {
   const body = buildReviewGateScript(GATE_OPTIONS);
   const parts = body.split(GATE_FS_IMPORT);
@@ -1323,14 +1364,15 @@ async function placeFaultingGate(
     FAULT_GATE_PATH,
     `${parts[0] ?? ""}${faultShim(stateFileName)}${parts[1] ?? ""}`,
   );
-  return {
-    path: placed,
-    env: {
-      STAMITY_FAULT_SITE: site,
-      STAMITY_FAULT_CODE: code,
-      STAMITY_FAULT_CLAIM: getRepo().path(FAULT_CLAIM_FILE),
-    },
+  const env: Record<string, string> = {
+    STAMITY_FAULT_SITE: (typeof site === "string" ? [site] : site).join(","),
+    STAMITY_FAULT_CODE: code,
+    STAMITY_FAULT_CLAIM: getRepo().path(FAULT_CLAIM_FILE),
+    STAMITY_FAULT_TIMES: String(shape.times ?? 1),
+    STAMITY_FAULT_STALL_MS: String(shape.stallMs ?? 0),
   };
+  if (shape.win32 === true) env["STAMITY_FAULT_WIN32"] = "1";
+  return { path: placed, env };
 }
 
 /** One writer's reported reasonCode, or its stderr when it reported nothing parseable. */
@@ -1769,6 +1811,14 @@ describe("buildReviewGateScript", () => {
       // Pre-fix, measured: 29 stored, STATE_LOCKED once. `error.code !==
       // "EEXIST"` read a sharing fault as "this lock will never be free" and
       // returned false, so the round was dropped.
+      //
+      // Run on the windows branch, because that is the only branch that now
+      // tolerates the fault here: a sharing errno on the LOCK's create is a
+      // Windows hold or nothing, and treating it as momentary on POSIX bought
+      // a second of polling on a refusal that is durable there (an unwritable
+      // state directory). The case below measures that POSIX answer; this one
+      // still measures the hold the retry exists for.
+      win32: true,
     },
     {
       site: "state-read" as const,
@@ -1796,8 +1846,8 @@ describe("buildReviewGateScript", () => {
       // LOCK_CEILING_MS (25s) — so every remaining writer waited out its idle
       // window and gave up. One dropped unlink costs the rest of the run.
     },
-  ])("counts every round when $what ($site)", async ({ site, code }) => {
-    const gate = await placeFaultingGate(site, code ?? "EBUSY");
+  ])("counts every round when $what ($site)", async ({ site, code, win32 }) => {
+    const gate = await placeFaultingGate(site, code ?? "EBUSY", { win32: win32 === true });
     const writers = 30;
 
     const results = await Promise.all(
@@ -1813,6 +1863,151 @@ describe("buildReviewGateScript", () => {
     expect(herdReport(results, "run-fault")).toEqual(everyRoundLanded(writers));
     expect(gateResidue()).toEqual([]);
   }, HERD_TIMEOUT_MS);
+
+  // The four cases above inject ONE attempt's worth of hold, which the script
+  // absorbs inside a single retry pause. These two inject a hold that lasts
+  // longer than the waiters' idle window instead — the case the widened retry
+  // budgets created and the idle window was never moved for. Both are the same
+  // defect from two directions: a holder that is ALIVE, inside the budget this
+  // script grants it, is indistinguishable to every queued waiter from a holder
+  // that died, because nothing in load()/save()/unlock() touches the lock and
+  // the waiters' only progress signal is the lock's (mtime, ino).
+  it("counts every round while a live holder spends part of its rename budget", async () => {
+    // Five EBUSYs on the windows schedule: 50+100+200+400+600 ms of pauses plus
+    // up to a quarter of jitter, so the holder publishes at ~1.4-1.7s — inside
+    // the 4,687 ms the script's own schedule allots, and past the 1,000 ms idle
+    // window the waiters used to give up on. Pre-fix, measured here: 1 stored
+    // of 30, STATE_LOCKED 29 times, every writer exiting 0.
+    const gate = await placeFaultingGate("publish-rename", "EBUSY", { times: 5, win32: true });
+    const writers = 30;
+
+    const results = await Promise.all(
+      Array.from({ length: writers }, () =>
+        runAsync(gate.path, getRepo().dir, reviewerStop("run-slow-rename", "request-changes"), gate.env),
+      ),
+    );
+
+    expect(existsSync(getRepo().path(FAULT_CLAIM_FILE))).toBe(true);
+    expect(results.map((result) => result.code)).toEqual(Array.from({ length: writers }, () => 0));
+    expect(herdReport(results, "run-slow-rename")).toEqual(everyRoundLanded(writers));
+    expect(gateResidue()).toEqual([]);
+  }, HERD_TIMEOUT_MS);
+
+  it("counts every round while a live holder's counter read is merely slow", async () => {
+    // No errno anywhere: one holder's read of the counter takes 1.3s and then
+    // succeeds, which is what an oversubscribed runner or an on-access scanner
+    // actually presents. A heartbeat inside the retry loops cannot see this one
+    // — there is no retry to hang it on — so it is the case that decides how
+    // long the idle window has to be. Pre-fix, measured here: 1 stored of 30,
+    // STATE_LOCKED 29 times, every writer exiting 0.
+    //
+    // Seeded with an unrelated run so the counter file EXISTS: the read under
+    // the lock is only reached when the stat found bytes, and the herd starts
+    // empty.
+    await seedGateState({
+      "run-elsewhere": { rounds: 2, verdict: "request-changes", confidence: "high", updated: Date.now() },
+    });
+    const gate = await placeFaultingGate("state-read", "EBUSY", { stallMs: 1_300 });
+    const writers = 30;
+
+    const results = await Promise.all(
+      Array.from({ length: writers }, () =>
+        runAsync(gate.path, getRepo().dir, reviewerStop("run-slow-read", "request-changes"), gate.env),
+      ),
+    );
+
+    expect(existsSync(getRepo().path(FAULT_CLAIM_FILE))).toBe(true);
+    expect(results.map((result) => result.code)).toEqual(Array.from({ length: writers }, () => 0));
+    expect(herdReport(results, "run-slow-read")).toEqual(everyRoundLanded(writers));
+    expect(gateResidue()).toEqual([]);
+  }, HERD_TIMEOUT_MS);
+
+  it("counts every round while a live holder spends every retry budget it has", async () => {
+    // The compound case, and the one the derived window is derived FOR: one
+    // holder takes the full four attempts at each of the four sites it retries
+    // — the counter's stat and read, the publish rename, the unlink that
+    // releases — which is 300+300+750+300 = 1,650 ms of pauses on the POSIX
+    // schedule, all of it inside the budgets this script grants itself and none
+    // of it a hand-off any waiter can see. Pre-fix, against a typed 1,000 ms
+    // window: 1 stored of 30, STATE_LOCKED 29 times, every writer exiting 0.
+    //
+    // Seeded so the stat and the read are reached at all: the herd starts with
+    // no counter, and an absent file is answered before either retry runs.
+    await seedGateState({
+      "run-elsewhere": { rounds: 2, verdict: "request-changes", confidence: "high", updated: Date.now() },
+    });
+    const gate = await placeFaultingGate(
+      ["state-stat", "state-read", "publish-rename", "unlock"],
+      "EBUSY",
+      { times: 4 },
+    );
+    const writers = 30;
+
+    const results = await Promise.all(
+      Array.from({ length: writers }, () =>
+        runAsync(gate.path, getRepo().dir, reviewerStop("run-whole-budget", "request-changes"), gate.env),
+      ),
+    );
+
+    expect(existsSync(getRepo().path(FAULT_CLAIM_FILE))).toBe(true);
+    expect(results.map((result) => result.code)).toEqual(Array.from({ length: writers }, () => 0));
+    expect(herdReport(results, "run-whole-budget")).toEqual(everyRoundLanded(writers));
+    expect(gateResidue()).toEqual([]);
+  }, HERD_TIMEOUT_MS);
+
+  it("beats on the lock before every pause it takes while holding it", async () => {
+    const body = buildReviewGateScript(GATE_OPTIONS);
+
+    // Asserted on the emitted text for the same reason the errno set above is:
+    // what this guards is the margin between the derived window and the wall
+    // clock a holder actually spends, and that margin is syscall time — too
+    // small to race a herd against on either platform without turning the case
+    // into a coin flip. The pairing is the contract: a holder that is about to
+    // sleep says so on the lock first, so the pause is a re-arm for every
+    // waiter rather than a bite out of its window.
+    const pauses = [...body.matchAll(/\n( *)pause\(/g)].length;
+    const beaten = [...body.matchAll(/beat\(\);\n *pause\(/g)].length;
+    // Four retry pauses under the lock — stat, read, rename, unlink — and one
+    // that is NOT under it: the jittered wait a waiter takes between attempts,
+    // which must not touch a lock this process does not hold.
+    expect(pauses).toBe(5);
+    expect(beaten).toBe(4);
+
+    // And the guard that keeps the other four honest: an unlocked reader
+    // retrying its own read would otherwise re-stamp a lock it does not hold,
+    // vouching for a holder that has died.
+    expect(body).toMatch(/function beat\(\) \{\n {2}if \(!holding\) return;/);
+    expect(body).toContain("utimesSync(LOCK_FILE, stamp, stamp);");
+  });
+
+  it("answers a lock POSIX cannot momentarily hold at once, rather than polling the idle window out", async () => {
+    // The other half of the same constant. Widening the idle window to cover a
+    // live holder's critical section also widens what a DURABLE refusal costs,
+    // and on POSIX the lock's create cannot answer EACCES for contention at all
+    // — `open(O_CREAT|O_EXCL)` answers EEXIST there, as the script's own comment
+    // says. So the tolerance at that one site is Windows-only, and an unwritable
+    // state directory is answered on the first errno.
+    //
+    // Measured against the wall clock rather than against the script's text,
+    // because the cost is the defect: with the site tolerating the errno on
+    // every platform this run polled for the whole idle window (1.05s at the
+    // 1,000 ms window it shipped with, and ~1.7s at the derived one) against
+    // ~60ms for the base script. The bound below is well under either window
+    // and well over a node start.
+    const gate = await placeFaultingGate("lock-create", "EACCES", { times: 1_000 });
+
+    const started = Date.now();
+    const result = await runAsync(gate.path, getRepo().dir, reviewerStop("run-eacces", "approve"), gate.env);
+    const elapsed = Date.now() - started;
+
+    expect(existsSync(getRepo().path(FAULT_CLAIM_FILE))).toBe(true);
+    expect(result.code).toBe(0);
+    expect(refusal(result)).toMatchObject({ blocked: false, reasonCode: "STATE_LOCKED" });
+    expect(String(refusal(result)["message"])).toContain("the gate is open");
+    expect(elapsed, "the lock create polled a refusal POSIX contention cannot raise").toBeLessThan(750);
+    // Nothing written, and nothing left behind: the round is dropped fail-open.
+    expect(existsSync(getRepo().path(REVIEW_GATE_STATE_FILE))).toBe(false);
+  });
 
   it("reports a counter it cannot parse from under the lock, and never overwrites it", async () => {
     // The reviewer's round is now counted before the unlocked read that used to
@@ -2053,8 +2248,20 @@ describe("buildReviewGateScript", () => {
     // stealing it, because a stolen lock is the lost round the lock exists for.
     await writeFile(getRepo().path(REVIEW_GATE_STATE_FILE) + ".lock", "");
 
+    const started = Date.now();
     const result = run(gate, { cwd: getRepo().dir, input: reviewerStop("run-h", "approve") });
+    const elapsed = Date.now() - started;
 
+    // Timed, because the other half of this change bought the live holder its
+    // window out of this one. Nothing here hands the lock on and nothing beats
+    // on it, so the verdict is the IDLE window — 1,650 ms on POSIX, 5,588 ms on
+    // win32, derived from the retry budgets — and not LOCK_CEILING_MS (25s) or
+    // LOCK_STALE_MS (30s). Bounded loosely, at roughly twice the window plus a
+    // node start: what would go red here is a fix that stopped separating a
+    // holder that died from a queue that is draining, which is the whole design.
+    expect(elapsed, "a dead holder was waited on past its idle window").toBeLessThan(
+      process.platform === "win32" ? 12_000 : 3_500,
+    );
     expect(result.code).toBe(0);
     expect(refusal(result)).toMatchObject({ blocked: false, reasonCode: "STATE_LOCKED" });
     expect(String(refusal(result)["message"])).toContain("the gate is open");
