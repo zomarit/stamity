@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
-## [Unreleased]
+## [1.2.0] - 2026-09-07
 
 ### Added
 
@@ -73,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   announcement is armed per control, so the word-wrap button the theme renders beside the copy
   button cannot poison it.
 - The published logic bundle drops documentation comments no entry reads: 2,081,093 bytes to
-  1,064,549 against the unchanged 2 MiB ceiling, with the emitted tree byte-identical.
+  1,074,318 against the unchanged 2 MiB ceiling, with the emitted tree byte-identical.
 - The light intensity tier runs the security lens on a trigger-path match instead of skipping
   every specialist, so the charter's universal floor holds at every tier; the whole-branch deep
   review is anchored where it runs, after the review loop converges and before the QA checkpoint.
