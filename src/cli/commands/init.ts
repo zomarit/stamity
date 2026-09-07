@@ -784,9 +784,10 @@ function renderDryRun(
  * own, and every marked file the strip refused (a broken block pair, an
  * unreadable file). What it cannot enumerate is the larger class the finding is
  * about: the agent bodies, slash commands, hook scripts and CI workflows the
- * predecessor emitted. Those are not block-free — the predecessor wraps every
- * file it emits in its own block — they are simply never opened: the strip's
- * input list is `../../migration/detect.ts::PREDECESSOR_MARKED_FILE_CANDIDATES`,
+ * predecessor emitted. Block absence is not what spares them — the predecessor
+ * wraps its instruction surfaces in its own block, and only its JSON surfaces
+ * carry none (see {@link unownedSettings}) — they are simply never opened: the
+ * strip's input list is `../../migration/detect.ts::PREDECESSOR_MARKED_FILE_CANDIDATES`,
  * six instruction surfaces, and an emitted agent or workflow is not one of them.
  * (The one overlap is `.cursor/rules/`, whose per-rule files ARE candidates, so
  * a Cursor migration strips those down to their frontmatter and counts them.)

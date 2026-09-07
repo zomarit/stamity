@@ -200,10 +200,11 @@ own directory, so a machine run that just stripped blocks never does it silently
 ## Your last step
 
 A finished migration leaves hatch3r on disk and still live. Init carries learnings and
-credentials and strips the old managed blocks; it removes nothing else. Every file hatch3r
-emitted does carry a `HATCH3R` block — that is not what spares them. What spares them is the
-strip's input list: it opens the six instruction surfaces named under Path A and nothing else,
-so hatch3r's agents, skills, slash commands, hook scripts and CI workflow are never read. The
+credentials and strips the old managed blocks; it removes nothing else. Nearly every file
+hatch3r emitted carries a `HATCH3R` block — its JSON surfaces are the exception — and a block
+is not what spares any of them. What spares them is the strip's input list: it opens the six
+instruction surfaces named under Path A and nothing else, so hatch3r's agents, skills, slash
+commands, hook scripts and CI workflow are never read. The
 one overlap is `.cursor/rules/`, which IS on that list: a Cursor migration strips each of
 hatch3r's rule files there down to its frontmatter, counts it among the stripped files, and
 leaves the stub for the uninstall below. The panel init prints at the end says the same, names

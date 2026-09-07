@@ -22,7 +22,9 @@ running `init` and `check`, is seconds; the time goes into the walk, plus howeve
 Two things, and nothing else.
 
 - **Node 22.12 or newer.** That is the published floor, and `stamity check` verifies it
-  as its `node-version` row. Nothing is installed globally and no service is contacted.
+  as its `node-version` row. Nothing is installed globally, and setup contacts no service: the
+  engine's one network path in a command's work is the Sigstore trust root, fetched when `add`
+  installs a signed pack.
 - **A git repository.** Not strictly required — but setup writes dozens of files, and
   without git there is no revert path. Run `git init` first if this is a fresh directory;
   if you do not, init stops and asks before writing anything.
