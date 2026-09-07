@@ -82,6 +82,46 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-07, the Package 4 review's fix round 2. NOTHING moved in this
+ *     suite. The row exists so the two ledgers stay in step: a refresh was run
+ *     here (`vitest -u` on this file alone) and wrote no byte, which is a
+ *     measured result rather than a skipped step — the snapshot file's digest
+ *     was taken before and after and is the same.
+ *
+ *     The round's one emitted change is `skills/st-handoff/SKILL.md`, +221
+ *     bytes in its resume section saying what `--dry-run` withholds. A skill
+ *     body is not a substitution target, not the catalog, not the policy
+ *     document and not a core hook script, so it reaches nothing this suite
+ *     holds; it lands in the sibling suite's two skill roots, itemised there.
+ *     `charter/stamity-charter.md` is byte-identical, and so are the other two
+ *     substitution targets, every MDC companion head — round 1's
+ *     `rules/stamity-injection-screening.md` head included, which holds at its
+ *     refreshed value — the catalog, the policy document and the three core
+ *     hook scripts. `src/hooks/scripts.ts` carries an uncommitted diff in the
+ *     tree, and it is round 1's: the claude review-gate residue it produces is
+ *     still 39463 bytes, the core three are untouched, and `stamity check`
+ *     reported `drift: clean` against it.
+ *
+ *   - 2026-09-07, the Package 4 review's fix wave. ONE line moved: the MDC
+ *     companion head for `rules/stamity-injection-screening.md`, whose
+ *     `description` now says a hit is reported by its class and its source with
+ *     a pattern id only where a catalog scan actually ran, where it used to say
+ *     "by its source and pattern id". Frontmatter, +59 bytes, and the whole of
+ *     what this suite holds for that rule.
+ *
+ *     NOTHING else moved here. The same rule's BODY also changed (+23 bytes:
+ *     item 2's run-time-ingress paragraph and the gate bullet that restates it),
+ *     and its `obsolete_when` moved with the description — neither reaches this
+ *     snapshot, because the companion head carries `description`, `globs` and
+ *     `alwaysApply` and nothing else. The body lands in the sibling suite's
+ *     three rule dialects and in the codex appendix, itemised there.
+ *     `charter/stamity-charter.md` is byte-identical, and so are the other two
+ *     substitution targets, the catalog, the policy document and the three core
+ *     hook scripts. The wave's other emitted-surface changes are a command body
+ *     (`commands/st-rework.md`, the critical-deferral row grammar and plan-lint
+ *     `L4`) and claude adapter residue (the review-gate hook script): this suite
+ *     holds neither, and the sibling ledger carries both.
+ *
  *   - 2026-09-04, the closure run's eval-repair wave. SUBSTITUTION moved on
  *     `charter/stamity-charter.md` alone, 4513 -> 4655 bytes at an unchanged
  *     91 lines: invariant 1 now says that a hand-off framed so the operator can

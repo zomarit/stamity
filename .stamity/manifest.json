@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.1.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-04T21:49:45.969Z",
+  "updatedAt": "2026-09-07T15:49:12.444Z",
   "tools": [
     "claude"
   ],
@@ -176,7 +176,7 @@
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "bf0282248c22d5180afa62501dd8d40b0e7ce085ba30392c892597f7ada121c8",
+      "contentHash": "8e60b63c44e4d0085e940f7a537b5095da7c0eaf1508cc82fe92bf1688aacc78",
       "path": ".claude/commands/st-rework.md"
     },
     {
@@ -218,7 +218,7 @@
       "adapter": "claude",
       "artifactId": "injection-screening",
       "artifactType": "rule",
-      "contentHash": "fbe6f8284058c19d1fd3a4c37de767422ff5902167c66e33fe3ceb8a0d0f484b",
+      "contentHash": "f1054cb32a001f5294a80862acfc3ba9e7bd5f4e701cf8e5177970335b7fea46",
       "path": ".claude/rules/stamity-injection-screening.md"
     },
     {
@@ -309,14 +309,14 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "6a607214c8167f7d1d6eca0815d1d5a108d3aeb5a195f25e740c04eec3792788",
+      "contentHash": "f62e1563e8223724b9d0b40fba0a0fd6896309536b19329e7eeff26d94a2fa7c",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "handoff",
       "artifactType": "skill",
-      "contentHash": "eaf6d65eeb40a4f7b4c6c7fc0b4067910929fcad1202460a5455d2ee312111be",
+      "contentHash": "be6f50612f6e7e0ce007b1ce6f8c27f5e98fafba1498a3c0b6dffa1198fd310c",
       "path": ".claude/skills/st-handoff/SKILL.md"
     },
     {
@@ -442,7 +442,7 @@
       "adapter": "claude",
       "artifactId": "claude-review-gate",
       "artifactType": "infra",
-      "contentHash": "442ae961e09c7129a34539a03b682880bd59c239ad103d1a625eb4de89800c75",
+      "contentHash": "feb658d7423155051746c32b2f9dc77c8a9e548d3ee34cc0a09e7d2f16f96c02",
       "path": ".stamity/generated/hooks/claude/stamity-review-gate.mjs"
     },
     {

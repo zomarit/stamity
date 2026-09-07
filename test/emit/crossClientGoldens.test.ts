@@ -144,6 +144,108 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-07, the Package 4 review's fix round 2. ONE emitted surface
+  //     moved, plus the manifest rows that record it:
+  //
+  //     CHANGED `skills/st-handoff/SKILL.md` 11368 -> 11589 under both roots it
+  //       reaches — `.claude/skills/st-handoff/SKILL.md` and
+  //       `.agents/skills/st-handoff/SKILL.md` — one body carried twice, so the
+  //       same +221 in each. The resume section now states what `--dry-run`
+  //       withholds and what it does not: every screen still runs and the framed
+  //       body still prints, only the advance is held back, and the run names
+  //       the transition it would have made. The corpus source moved the same
+  //       +221 (11329 -> 11550), so the emitted delta is the body alone and
+  //       nothing the emitter added around it.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length — the fixed-width sha256 row for that one skill
+  //       and nothing else.
+  //
+  //     The two byte constants did NOT move, and that was measured rather than
+  //       assumed: `test/corpus/invariants.test.ts` was re-run against this
+  //       refreshed golden and stayed green at 29_326 and 4614, so
+  //       `src/content/charter.ts` is untouched and `docs/capability-matrix.md`
+  //       regenerates byte-identical. A skill is not always-on — it reaches no
+  //       charter, no rule set and no codex appendix — so the composite budget
+  //       cannot move on a skill edit, and the tripwire agreeing is the evidence
+  //       for that, not the reasoning.
+  //
+  //     What else did NOT move: round 1's three surfaces hold at their own
+  //       figures. `rules/stamity-injection-screening.md` stays 7407/7422,
+  //       `commands/st-rework.md` stays 17724/17771, the codex `AGENTS.md` stays
+  //       29326, and `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       stays 39463 — round 2 changed no rule, no command and no hook source,
+  //       and `stamity check` reported `drift: clean` before this refresh, so
+  //       the sync moved exactly the one skill file it should have. Every other
+  //       rule, command, agent, skill, generated page, client entry file and the
+  //       three portable hook scripts are byte-identical. The round's other
+  //       edits reach no emitted tree at all: the generated docs pages, the
+  //       CHANGELOG, the leak gate, the CLI kit and merge sources with their
+  //       suites, the run records and the website are all outside the emitter.
+  //
+  //   - 2026-09-07, the Package 4 review's fix wave. THREE emitted surfaces
+  //     moved, plus the codex appendix that carries one of them and the manifest
+  //     rows that record them all:
+  //
+  //     CHANGED `rules/stamity-injection-screening.md` in its three rule
+  //       dialects — `.claude/rules/stamity-injection-screening.md`
+  //       7325 -> 7407, `.cursor/rules/stamity-injection-screening.mdc`
+  //       7340 -> 7422, and
+  //       `.github/instructions/stamity-injection-screening.instructions.md`
+  //       7325 -> 7407: one body, three heads, so the same +82 in each. Of that,
+  //       +23 is the BODY — item 2's run-time-ingress paragraph and the gate
+  //       bullet that restates it now report a hit by class, source, position
+  //       and outcome, and say in terms that no catalog scan reaches this text,
+  //       so the record names no pattern id — and +59 is the `description` each
+  //       of the three heads reproduces. The rule's `obsolete_when` moved with
+  //       the description and reaches no emitted file: no rule dialect prints
+  //       it.
+  //     CHANGED `commands/st-rework.md` 17354 -> 17724 (cursor 17401 -> 17771),
+  //       the claude command and the copilot prompt sharing one digest and the
+  //       cursor skill carrying its own head. The critical-deferral row now
+  //       opens with `/st-board`'s declared four-field row grammar before the
+  //       tag, the date and the rationale, so the reader that must surface the
+  //       row can parse it; and plan-lint gains `L4` — every unit's
+  //       `requirements` field cites a requirement id the spec carries, or the
+  //       literal `spec carries no ids`, blank never passing — in both the check
+  //       enumeration and the proof block's per-check line.
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-review-gate.mjs`
+  //       34294 -> 39463. Adapter residue rather than a corpus body, and this
+  //       golden holds its digest and its length, not its text: the row records
+  //       that it moved and by how much, and the change is reviewable in
+  //       `src/hooks/scripts.ts` against `test/hooks/scripts.test.ts`, which is
+  //       where its own suite covers it. A refresh here can neither confirm nor
+  //       absorb what those 5169 bytes say.
+  //     CHANGED the codex `AGENTS.md` 29303 -> 29326 — the injection-screening
+  //       body's +23 and nothing else, itemised in the residue golden line by
+  //       line. The rule is glob-scoped to `.stamity/**`, which `anchorOfGlob`
+  //       refuses (src/adapters/codex.ts:975-983, the engine's own state
+  //       directory), so the section lands in rootSections and `renderSection`
+  //       (:1165-1171) inlines heading, attachment note and body. The note takes
+  //       the `**Attaches to:**` branch, which does not print the description —
+  //       which is why +59 of the +82 above stops at the three rule dialects and
+  //       never reaches this file.
+  //     CHANGED `.stamity/manifest.json` in all five selections, each at
+  //       UNCHANGED byte length — the fixed-width sha256 rows for the surfaces
+  //       above and nothing else.
+  //
+  //     The two byte constants were re-read off these rows rather than trusted:
+  //       `ALWAYS_ON_SHARED_BYTES_WITH_CODEX` moved 29_303 -> 29_326 to meet the
+  //       codex `AGENTS.md` row, and `docs/capability-matrix.md` was regenerated
+  //       to publish it. The pin in `test/corpus/invariants.test.ts` was red at
+  //       29_303 against this refreshed golden before the constant moved and
+  //       green after, so the tripwire fired rather than being assumed.
+  //
+  //     What did NOT move: the charter, so the charter-only `AGENTS.md` holds at
+  //       4614 in claude, copilot, cursor and the two package roots and
+  //       `ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX` is untouched. Every other rule,
+  //       every other command, every agent, every skill, every generated page,
+  //       every client entry file and the three portable hook scripts are
+  //       byte-identical. The wave's other edits reach no emitted tree at all:
+  //       `st-eval-run` is a repo-local override skill under
+  //       `.stamity/overrides/`, not corpus, so its refreshed dogfood copy is
+  //       invisible here; and the docs pages, the eval set and its cases, the
+  //       run records and the website changes are outside the emitter entirely.
+  //
   //   - 2026-09-04, the closure run's eval-repair wave — run 5's two unpulled
   //     corpus levers. TWO corpus bodies moved, each in every dialect that
   //     carries it, plus the manifest rows that record them:
