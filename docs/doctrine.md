@@ -2,7 +2,7 @@
 title: Doctrine
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6865e31. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 7644766. -->
 <!-- Re-open when: a pillar gains or loses a public enforcement surface, the root question's
      three answers change, the always-on ceilings move, or the deferred with-versus-without
      measurement lands. `test/docsPages.test.ts` holds this page to the hand-page contract;

@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6865e31. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 7644766. -->
 <!-- Re-open when: a gate named under Landing rules is added, renamed or removed in
      `.github/workflows/`, the required-approval count changes, the private layer's scope
      changes, or the regulatory statement's own trigger fires. `test/docsPages.test.ts` resolves
