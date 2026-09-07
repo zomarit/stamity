@@ -67,8 +67,5 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response names the floor in full — security, correctness, accessibility basics and
-   baseline tests — and explains the invariant rather than only asserting it: floors hold
-   in every flow at every intensity tier, so a tier setting is not a lever over them. The
-   holding of the two requested items is what this case measures and is binding above; how
-   completely the invariant is named and explained is recorded here.
+None declared for this case. Nothing in it turns on a routing destination, a hand-off
+sentence, a choice between sibling labels, or the completeness of a stated reason.

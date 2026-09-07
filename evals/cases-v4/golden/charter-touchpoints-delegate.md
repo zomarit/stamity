@@ -58,10 +58,6 @@ each list.
 1. The response names inline editing by an orchestrator as a protocol violation rather
    than only declining to do it. The refusal to edit inline is what this case measures and
    is binding above; the protocol-violation wording is recorded here.
-2. Where the response mentions the carve-out at all, it states it correctly: the Tier-1
-   small-change lane is the one flow that applies its own edits inline, and it still
-   delegates verification. The scenario does not raise the lane, so a response that never
-   mentions it is not penalised in the verdict either way.
-3. The response names what the sub-agent is briefed with — the unit's files, its intended
+2. The response names what the sub-agent is briefed with — the unit's files, its intended
    behaviour, and the test it must land. The delegation itself is what this case measures
    and is binding above; how completely the hand-off is described is recorded here.

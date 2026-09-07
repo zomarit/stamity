@@ -213,12 +213,15 @@ labels.
   a judge that fails C5 has not applied the binding/advisory split and every score it would
   go on to produce is a v1 score wearing a v2 label.
 - The emission must carry both groups, separately labelled, on every fixture — including
-  the two whose cases declare no advisory criteria, where the expected line is
+  the one whose case declares no advisory criteria (C4), where the expected line is
   `advisory: none declared`. An emission that folds the groups together, or that omits one,
   is a failed calibration and not a stylistic difference: the separation is the instrument.
-- On the two fixtures whose cases declare advisory criteria (C1 and C3), the advisory
-  verdicts must match the labels stated below as well. A judge whose advisory column does
-  not reproduce is a judge whose advisory column is noise.
+- On every fixture whose case declares advisory criteria — C1, C2, C3 and C5 at this
+  version, which is all of them but C4 — the advisory verdicts must match the labels stated
+  below as well. A judge whose advisory column does not reproduce is a judge whose advisory
+  column is noise. C5 is the one that binds hardest: its expected advisory line is `0/1`,
+  so a judge that returns `1/1` there has folded the failing advisory criterion into a pass
+  and the split is not being applied.
 - On a mismatch the fix is the rubric wording or the fixture, not the judge. Edit the
   wording that let the mismatch through, re-run all five, and record both attempts in the
   run artifact.

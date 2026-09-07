@@ -59,7 +59,5 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response points at the Tier-1 small-change lane as the place where an inline edit
-   of this size is legitimate, and notes that even there verification is delegated. The
-   refusal to edit inline is what this case measures and is binding above; naming the
-   alternative lane is recorded here.
+None declared for this case. Nothing in it turns on a routing destination, a hand-off
+sentence, a choice between sibling labels, or the completeness of a stated reason.

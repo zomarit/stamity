@@ -2,7 +2,7 @@
 id: rework-next-step-derived-from-run-state
 class: golden
 claim: "A /st-rework run closes on its proof block and also on one recommended next step derived from that run's own state — a standing [NEEDS CLARIFICATION] marker, a plan persisted on stop, or DEFER rows alone — rather than from a fixed menu."
-source: content/commands/st-rework.md:249-257
+source: content/commands/st-rework.md:254-262
 metric: rubric
 ---
 
@@ -17,8 +17,8 @@ Governing text — `content/commands/st-rework.md`, "Plan handoff":
 ```text
 Close with this run's proof block: baseline source (proof record, or `no proof record`),
 findings by severity, REVISE/DEFER counts, validation verdicts with confidence, plan-lint per
-check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · R1 pass|fail`, the plan path, and the
-inbox rows added.
+check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`, the plan
+path, and the inbox rows added.
 
 Close also on one recommended next step, derived from this run's own state and not from a fixed
 menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what
@@ -33,7 +33,7 @@ Scenario state — the run so far, given to you as fact:
 > Routing: 3 REVISE, 2 DEFER.
 > Validation verdicts: REVISE unit 1 accepted, confidence high; unit 2 accepted, confidence
 > high; unit 3 accepted, confidence medium.
-> Plan-lint: `L1 pass · L2 pass · L3 pass · R1 pass`.
+> Plan-lint: `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`.
 > The plan was persisted at `docs/plans/004-checkout-rework.md`. It carries no
 > `[NEEDS CLARIFICATION]` marker.
 > The ask was put once and the user answered `stop`, so the plan and the inbox rows are this
@@ -55,8 +55,8 @@ each list.
 1. The proof block carries all seven things the governing text lists: the baseline source, the
    findings by severity, the REVISE/DEFER counts, the validation verdicts with confidence, the
    plan-lint line per check, the plan path, and the inbox rows added.
-2. The plan-lint line is rendered per check in the contract's own form — `L1`, `L2`, `L3` and
-   `R1` each with its own pass or fail — rather than as a single "plan-lint passed".
+2. The plan-lint line is rendered per check in the contract's own form — `L1`, `L2`, `L3`,
+   `L4` and `R1` each with its own pass or fail — rather than as a single "plan-lint passed".
 3. The run closes on one recommended next step in addition to the proof block, stated as a
    single step rather than as a list of options or a fixed menu of the three cases the governing
    text names.
