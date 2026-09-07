@@ -1261,9 +1261,12 @@ type FaultSite = "lock-create" | "state-stat" | "state-read" | "publish-rename" 
  * budget rather than its first pause. `stallMs` makes the claiming call merely
  * SLOW and then succeed — a hold with no errno at all, which is what a loaded
  * runner or a scanner actually presents and which no retry path can see.
- * `win32` flips `process.platform` before the script's body reads it, so the
- * windows branch of the retry schedules is the one under test; `node:path` is
- * already bound to its posix form by then (every import evaluates before this
+ * `platform` flips `process.platform` before the script's body reads it, so the
+ * branch under test is the one the case names rather than the one this host
+ * happens to be — `"win32"` for the windows retry schedules and the sharing
+ * tolerance, `"posix"` for the answers POSIX gives instead, each of which has
+ * to be pinned from a runner of the other kind too. `node:path` is already
+ * bound to this host's form by then (every import evaluates before this
  * statement runs), so nothing but the script's own `IS_WINDOWS` moves.
  */
 function faultShim(stateFileName: string): string {
@@ -1275,8 +1278,9 @@ function faultShim(stateFileName: string): string {
     'const FAULT_CLAIM = process.env.STAMITY_FAULT_CLAIM ?? "";',
     'const FAULT_TIMES = Number(process.env.STAMITY_FAULT_TIMES ?? "1");',
     'const FAULT_STALL_MS = Number(process.env.STAMITY_FAULT_STALL_MS ?? "0");',
-    'if (process.env.STAMITY_FAULT_WIN32 === "1") {',
-    '  Object.defineProperty(process, "platform", { value: "win32", configurable: true });',
+    'const FAULT_PLATFORM = process.env.STAMITY_FAULT_PLATFORM ?? "";',
+    'if (FAULT_PLATFORM !== "") {',
+    '  Object.defineProperty(process, "platform", { value: FAULT_PLATFORM, configurable: true });',
     "}",
     `const STATE_NAME = ${JSON.stringify(stateFileName)};`,
     "let owned = false;",
@@ -1340,8 +1344,8 @@ interface FaultShape {
   times?: number;
   /** Milliseconds the claiming call stalls before succeeding, instead of raising. */
   stallMs?: number;
-  /** Whether the script reads itself as running on Windows. */
-  win32?: boolean;
+  /** Which platform the script reads itself as running on, whatever this host is. */
+  platform?: "win32" | "posix";
 }
 
 /**
@@ -1371,7 +1375,9 @@ async function placeFaultingGate(
     STAMITY_FAULT_TIMES: String(shape.times ?? 1),
     STAMITY_FAULT_STALL_MS: String(shape.stallMs ?? 0),
   };
-  if (shape.win32 === true) env["STAMITY_FAULT_WIN32"] = "1";
+  if (shape.platform !== undefined) {
+    env["STAMITY_FAULT_PLATFORM"] = shape.platform === "win32" ? "win32" : "linux";
+  }
   return { path: placed, env };
 }
 
@@ -1818,7 +1824,7 @@ describe("buildReviewGateScript", () => {
       // a second of polling on a refusal that is durable there (an unwritable
       // state directory). The case below measures that POSIX answer; this one
       // still measures the hold the retry exists for.
-      win32: true,
+      platform: "win32" as const,
     },
     {
       site: "state-read" as const,
@@ -1846,8 +1852,12 @@ describe("buildReviewGateScript", () => {
       // LOCK_CEILING_MS (25s) — so every remaining writer waited out its idle
       // window and gave up. One dropped unlink costs the rest of the run.
     },
-  ])("counts every round when $what ($site)", async ({ site, code, win32 }) => {
-    const gate = await placeFaultingGate(site, code ?? "EBUSY", { win32: win32 === true });
+  ])("counts every round when $what ($site)", async ({ site, code, platform }) => {
+    // Absent means "whatever this host is": only the lock-create row names a
+    // branch, and forcing the other three onto one would change what they
+    // measure on the windows leg.
+    const shape: FaultShape = platform === undefined ? {} : { platform };
+    const gate = await placeFaultingGate(site, code ?? "EBUSY", shape);
     const writers = 30;
 
     const results = await Promise.all(
@@ -1878,7 +1888,7 @@ describe("buildReviewGateScript", () => {
     // the 4,687 ms the script's own schedule allots, and past the 1,000 ms idle
     // window the waiters used to give up on. Pre-fix, measured here: 1 stored
     // of 30, STATE_LOCKED 29 times, every writer exiting 0.
-    const gate = await placeFaultingGate("publish-rename", "EBUSY", { times: 5, win32: true });
+    const gate = await placeFaultingGate("publish-rename", "EBUSY", { times: 5, platform: "win32" });
     const writers = 30;
 
     const results = await Promise.all(
@@ -1988,13 +1998,23 @@ describe("buildReviewGateScript", () => {
     // says. So the tolerance at that one site is Windows-only, and an unwritable
     // state directory is answered on the first errno.
     //
+    // Run on a FORCED posix branch rather than on whatever this host is, the
+    // way the cases above force win32: the behaviour under test is the branch,
+    // not the runner, and asserting the posix cost from a windows runner read
+    // the win32 branch's tolerated poll as a defect (`expected 5688 to be less
+    // than 750`). The win32 counterpart below pins the other direction, so the
+    // branch is measured from both legs instead of skipped on one.
+    //
     // Measured against the wall clock rather than against the script's text,
     // because the cost is the defect: with the site tolerating the errno on
     // every platform this run polled for the whole idle window (1.05s at the
     // 1,000 ms window it shipped with, and ~1.7s at the derived one) against
     // ~60ms for the base script. The bound below is well under either window
     // and well over a node start.
-    const gate = await placeFaultingGate("lock-create", "EACCES", { times: 1_000 });
+    const gate = await placeFaultingGate("lock-create", "EACCES", {
+      times: 1_000,
+      platform: "posix",
+    });
 
     const started = Date.now();
     const result = await runAsync(gate.path, getRepo().dir, reviewerStop("run-eacces", "approve"), gate.env);
@@ -2006,6 +2026,45 @@ describe("buildReviewGateScript", () => {
     expect(String(refusal(result)["message"])).toContain("the gate is open");
     expect(elapsed, "the lock create polled a refusal POSIX contention cannot raise").toBeLessThan(750);
     // Nothing written, and nothing left behind: the round is dropped fail-open.
+    expect(existsSync(getRepo().path(REVIEW_GATE_STATE_FILE))).toBe(false);
+  });
+
+  it("waits the same refusal out on win32, for the derived window, and still drops the round", async () => {
+    // The pair to the case above, and the reason the tolerance is written as a
+    // branch rather than deleted: the identical errno at the identical site is
+    // a momentary hold on Windows — an on-access scanner holding the name, or a
+    // previous holder's unlink still delete-pending — so answering it on the
+    // first attempt is the dropped round the retry exists to prevent. Here the
+    // hold never lifts (the shim raises for 1,000 attempts), which is the worst
+    // case the tolerance can cost: the waiter polls, sees no hand-off, and gives
+    // up after the idle window — LOCK_IDLE_MS, 5,588 ms on the win32 branch as
+    // these budgets stand, not LOCK_CEILING_MS (25s) or LOCK_STALE_MS (30s).
+    //
+    // Bounded on both sides for that reason. The floor is what separates this
+    // branch from the posix one above: below it, the errno was read as an
+    // answer and a real sharing hold would have cost a round. The ceiling is
+    // what keeps the wait attributable to the idle detector — a run that
+    // reached the 25s ceiling would mean the poll loop never gave up on an
+    // unchanging lock at all.
+    const gate = await placeFaultingGate("lock-create", "EACCES", {
+      times: 1_000,
+      platform: "win32",
+    });
+
+    const started = Date.now();
+    const result = await runAsync(gate.path, getRepo().dir, reviewerStop("run-eacces-win", "approve"), gate.env);
+    const elapsed = Date.now() - started;
+
+    expect(existsSync(getRepo().path(FAULT_CLAIM_FILE))).toBe(true);
+    expect(elapsed, "a win32 sharing fault on the lock create was read as an answer").toBeGreaterThan(
+      3_000,
+    );
+    expect(elapsed, "the win32 wait outran the idle window it is derived from").toBeLessThan(15_000);
+    // Same landing as the posix leg: the round is reported, dropped fail-open,
+    // and nothing is written or stranded. Only the wall clock differs.
+    expect(result.code).toBe(0);
+    expect(refusal(result)).toMatchObject({ blocked: false, reasonCode: "STATE_LOCKED" });
+    expect(String(refusal(result)["message"])).toContain("the gate is open");
     expect(existsSync(getRepo().path(REVIEW_GATE_STATE_FILE))).toBe(false);
   });
 
