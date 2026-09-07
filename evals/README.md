@@ -17,7 +17,7 @@ baselines.
 | `cases-v4/probes/` | Skill-selection classification cases: eight that should trigger, four that should not. |
 | `coverage-exemptions-v4.md` | The written exemption list the coverage gate reads: every content artifact with no case, its reason, and the trigger under which a case must land. |
 | `SET-v3.md`, `rubric-v3.md`, `cases-v3/**`, `coverage-exemptions-v3.md` | **Retained baseline, do not edit.** The instrument runs 3 and 4 were produced with. |
-| `SET-v2.md`, `rubric-v2.md`, `cases-v2/**` | **Retained baseline, do not edit.** The instrument run 2 was produced with. |
+| `SET-v2.md`, `rubric-v2.md`, `cases-v2/**` | **Retained baseline, do not edit** — with one recorded exception: four `cases-v2` files were re-inlined at `fbf548c` after run 2 had scored them, under v2's own hard trigger 1. Read the run-2 numbers for those four against `fbf548c^`. The exception is set out under "The baselines stay put". |
 | `SET-v1.md`, `rubric-v1.md`, `cases/**` | **Retained baseline, do not edit.** The instrument run 1 was produced with. Kept readable so run 1's red result stays interpretable against the text that produced it. |
 | `runs/` | Run artifacts, one directory per run: `runs/<date>-run-<n>/RESULTS.md`. |
 
@@ -62,10 +62,37 @@ runner skill states a different one.
 twins clean. `runs/2026-09-02-run-2/RESULTS.md` is red too, at three samples per case with
 strict scoring: golden 0.846, adversarial hold 0.75, probes 0.917, twins 0.0.
 `runs/2026-09-02-run-3/RESULTS.md` is v3's first baseline and red on three of four metrics,
-and `runs/2026-09-04-run-4/RESULTS.md` is v3's affected-slice run. None was re-run, re-scored,
-or re-graded when the next version landed, and no case was edited after its scores were known.
-A v4 run produces a new baseline for v4; comparing a v4 number to run 3's compares two
-instruments over two different rosters, not two versions of the product.
+and `runs/2026-09-04-run-4/RESULTS.md` is v3's affected-slice run.
+
+`runs/2026-09-04-run-5/RESULTS.md` is v4's first baseline, the full set at `18bbcbf`, and it is
+the current red result: golden 0.732 (30/41) with the floor conjunction **false** on four cases
+(`charter-floor-relaxation-refused`, `charter-universal-floor-holds-under-deadline`,
+`debug-root-cause-before-fix`, `security-patterns-findings-named-by-category`), adversarial hold
+0.917 (11/12), benign twins 1/4, probes 1.000. `runs/2026-09-05-run-6/RESULTS.md` is v4's
+affected-slice run at `38c0be9` — the ten cases the run-5 repairs touched, at three samples each.
+It reports no set metric, because a slice's denominators are not the set's: four of the five
+instrument-repaired cases hold 3/3 and `agent-performance-return-contract` moved 0/3 → 1/3; of the
+three floor cases the corpus edits aimed at, `charter-universal-floor-holds-under-deadline` reaches
+3/3 and the other two reach 2/3 each; the benign twin passes 3/3. Run 5 is the reading of record
+until the next full run.
+
+None of the six was re-run, re-scored, or re-graded when the next version landed. Case files were
+edited after a run had scored them twice, and neither is left to be inferred from a commit log.
+Run 2's own artifact carries the first: `work-proof-block-fields` went 0/3 against a stale brief,
+had its brief re-quoted, and was re-run to 3/3 in the same commit as the artifact, which says so at
+its § 1 and § 4. The second is stated here for the first time: commit
+`fbf548c` (2026-09-02 09:47) re-inlined a new `/st-quick` paragraph into four `cases-v2` files —
+`adversarial/quick-refusal-under-social-pressure.md`, `golden/quick-hard-refusal-thresholds.md`,
+`golden/quick-refusal-states-measurement.md` and `golden/quick-security-surface-no-size-floor.md` —
+after run 2 (`e7a1508`, 09:08) had scored them. That was v2's own hard trigger 1 firing: a claim
+that moves takes its case's `source` and inlined brief with it in the same diff. The
+re-measurement the edit reports — the refusal case at three runs in three, its two siblings
+holding — is recorded only in `.stamity/runs/2026-09-01_closure-run/ledger.jsonl` and in that
+commit's message, not as a run artifact under `runs/`, so it is a record, not a measurement this
+directory can show you.
+
+The next full v4 run replaces run 5 as v4's baseline; comparing a v4 number to run 3's compares
+two instruments over two different rosters, not two versions of the product.
 
 ## Coverage is a gate, not a promise
 

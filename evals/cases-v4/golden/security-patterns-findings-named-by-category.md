@@ -127,5 +127,3 @@ each list.
 1. The category the response attaches to the fail-open defaults is
    `security misconfiguration`. Naming them with a listed category is binding above (B5);
    the choice between sibling labels inside that taxonomy is recorded here.
-2. The findings are ordered with the more damaging ones first.
-3. The response attaches a severity word to each finding.

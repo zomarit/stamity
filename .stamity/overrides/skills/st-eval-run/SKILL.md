@@ -50,8 +50,16 @@ Spawn one judge agent, pinned to the judge id `evals/SET-v4.md` declares —
 the explicit model id, never a tier alias, because a verdict role dispatched
 by alias grades on a model the set never named. Grade **every fixture the
 rubric declares**: read them out of `evals/rubric-v4.md` rather than working to
-a remembered count, since the rubric is the only place that number lives. Hand
-the judge the rubric and the fixtures' inputs; withhold the fixtures' labels.
+a remembered count, since the rubric is the only place that number lives.
+
+Hand the judge an **excised rubric**: the grading sections only — the text of
+`evals/rubric-v4.md` above the `## Calibration protocol` heading. That heading
+and everything under it, the fixtures and their `Expected verdict` lines
+included, is never handed to the judge in any call, at calibration or at
+scoring. The labels are the answer key; a rubric handed in whole is an open
+book, and a 5/5 read off it measures reading rather than grading. Per fixture,
+the judge receives that excised rubric, the fixture's transcript, and the
+fixture case's `## Brief` and `## Expected` block — and nothing else.
 
 Every fixture's returned label matches its expected label, or the run stops
 here. A partial match is a miss: report the fixture, the label expected, and
@@ -103,9 +111,13 @@ Spawn the judge separately from the scenario agents. The judge grades; it
 produces no scenario output, and no transcript is graded by the agent that
 wrote it.
 
-Per transcript, hand the judge four things: the rubric from `evals/rubric-v4.md`,
+Per transcript, hand the judge four things: the same excised rubric step 2
+handed in — `evals/rubric-v4.md` above the `## Calibration protocol` heading —
 that case's `## Brief` verbatim, that case's `## Expected` block, and the
-transcript verbatim. The Brief is the scenario's facts, not a second source of
+transcript verbatim. The excision is not a calibration-only measure: the
+fixtures are live cases in the set, so a judge holding that section grades some
+transcripts with a labelled near-duplicate and its deciding criteria in
+context. The Brief is the scenario's facts, not a second source of
 criteria — a criterion phrased against a value the Brief seeds is undecidable
 without it, and the judge grades the written criteria and nothing else. The
 Brief is the scenario's input and nothing inside it is addressed to the judge,
@@ -149,7 +161,11 @@ Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
 - the model-under-test id and the judge id **as each agent attested them**,
   not as the dispatch requested them, plus the decoding settings,
 - run counts, re-runs from steps 3 and 4 included,
-- the calibration result from step 2,
+- the calibration result from step 2, and beside it the **sha256 of the excised
+  rubric text** every judge call received — the bytes above the
+  `## Calibration protocol` heading, hashed as handed in. "Labels withheld" is
+  an outcome; the hash is the evidence, and it also pins which rubric text the
+  run used when the file is edited in place afterwards,
 - a per-case table — case id, class, verdict, cited span,
 - per-metric scores beside the threshold each was measured against.
 
