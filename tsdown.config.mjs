@@ -28,20 +28,24 @@ import { defineConfig } from "tsdown";
  * measurement it is held against, taken on the build that stripped JSDoc from
  * the output (`outputOptions` below).
  *
- * Measured basis, on two different trees — so which is which is part of the
- * figure. BEFORE is the clean head b2d51a6, where the build printed 2,081,093
- * bytes of the 2,097,152-byte budget: 99.2% spent, 16,059 bytes of headroom,
- * under one percent. AFTER is this tree with the change applied, where the build
- * prints 1,066,261 bytes: 1,030,891 bytes free, 49.2% of the ceiling. The
- * 1,014,832-byte difference is 48.8% of what the logic half used to be, and it
- * is a NET of two effects rather than a comment measurement: the strip is what
- * recovered the space, and this tree's own shipped code moved the other way
- * over the same interval — the emitted review-gate script alone is several
- * kilobytes larger here than at b2d51a6, which `wc -c` on
+ * Measured basis — ONE figure, pinned to the tree it was taken on, because a
+ * figure pinned to nothing drifts and then disagrees with its own copies.
+ * BEFORE is the clean head b2d51a6, where the build printed 2,081,093 bytes of
+ * the 2,097,152-byte budget: 99.2% spent, 16,059 bytes of headroom, under one
+ * percent. What the strip recovers is measured on that same ONE tree — b2d51a6
+ * with only `comments: { jsdoc: false }` changed — and it is 1,014,152 bytes,
+ * 48.7% of what the logic half used to be.
+ *
+ * There is deliberately no AFTER figure written here for the current tree. The
+ * `[size]` line prints it on every build (see below), and it is a NET of two
+ * effects rather than a comment measurement: the strip recovered the space, and
+ * this tree's own shipped code moved the other way over the same interval — the
+ * emitted review-gate script alone is several kilobytes larger here than at
+ * b2d51a6, which `wc -c` on
  * `.stamity/generated/hooks/claude/stamity-review-gate.mjs` against that tree's
- * copy checks in one command, and it keeps moving. The strip measured on ONE
- * tree — b2d51a6 with only `comments: { jsdoc: false }` changed — removes
- * 1,014,152 bytes, and the figure above is that net of the code this tree added.
+ * copy checks in one command, and it keeps moving. A hand-copied after-figure
+ * is what left this file, and the test that pins the strip, quoting three
+ * different numbers for one measurement.
  * Nothing published reads the comments: package.json's `exports` maps `.` to
  * `./dist/index.js` and `./package.json`, with no `types` condition, so the
  * shipped surface is the bin plus one re-export module. The prose belongs in
@@ -79,8 +83,9 @@ export const LOGIC_BUDGET_BYTES = 2 * 1024 * 1024;
  * The staged corpus half — `dist/content` plus `dist/packs`, the DATA the runtime
  * reads.
  *
- * 1.5 MiB, roughly three times the measured staged tree (501,457 bytes = 0.48 MiB
- * across the corpus and the three bundled packs, 2026-08-22). Content earns its way
+ * 1.5 MiB, roughly three times the measured staged tree (519,715 bytes = 0.50 MiB
+ * across the corpus and the three bundled packs — the `[size]` line's corpus
+ * figure on this tree, 2026-09-07). Content earns its way
  * in one artifact at a time, so the ratio is wide on purpose: the ceiling exists to
  * catch a category error — a fixture tree, a build directory, a media file staged by
  * accident — not to ration authoring.
@@ -92,12 +97,19 @@ export const CORPUS_BUDGET_BYTES = 1536 * 1024;
  *
  * The corpus prefixes are checked first, so a `.js` staged as DATA under
  * `content/` or `packs/` counts as corpus rather than as bundled logic. Every
- * other `.js` is logic at any depth — entries at the root today, and a shared
- * chunk under a subdirectory if a future tsdown/rolldown release starts placing
- * one there. Depth used to be part of the test (`!relPath.includes("/")`), which
- * made a nested chunk `other`: printed, never a violation, so a chunk-naming
- * change would have moved the logic half's bytes out of both budgets without
- * failing anything.
+ * other JavaScript chunk is logic at any depth — entries at the root today, and
+ * a shared chunk under a subdirectory if a future tsdown/rolldown release starts
+ * placing one there. Depth used to be part of the test
+ * (`!relPath.includes("/")`), which made a nested chunk `other`: printed, never
+ * a violation, so a chunk-naming change would have moved the logic half's bytes
+ * out of both budgets without failing anything.
+ *
+ * The extension test is `/\.[cm]?js$/` rather than `.js` alone for the same
+ * reason the depth test went: `fixedExtension: false` keeps today's output on
+ * plain `.js`, but that is an option and a bundler default, not a guarantee. An
+ * `.mjs` or `.cjs` chunk under a changed emit would have been `other` —
+ * unbudgeted bytes in a printed line that can never fail — which is the exact
+ * escape the depth fix closed.
  *
  * Sourcemaps stay deliberately unclassified: they are not emitted (see
  * `sourcemap` below), and if one ever reappears it should surface as an
@@ -105,7 +117,7 @@ export const CORPUS_BUDGET_BYTES = 1536 * 1024;
  */
 export function classifyDistEntry(relPath) {
   if (relPath.startsWith("content/") || relPath.startsWith("packs/")) return "corpus";
-  if (relPath.endsWith(".js")) return "logic";
+  if (/\.[cm]?js$/.test(relPath)) return "logic";
   return "other";
 }
 
@@ -198,7 +210,7 @@ export default defineConfig({
   sourcemap: false,
   // No JSDoc in the emitted bundles. The bundle is the shipped artifact, not the
   // reading copy: this codebase's reasoning lives in src/, which is where a reader
-  // should meet it, and documentation comments were 48.8% of the logic half by
+  // should meet it, and documentation comments were 48.7% of the logic half by
   // measurement (see LOGIC_BUDGET_BYTES above) — download weight on every npx run
   // that answers nobody's question. `gzip -9` over the three emitted files totalled
   // 671,973 bytes before and 291,932 after, which is closer to what an install pays.

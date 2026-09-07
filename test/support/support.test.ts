@@ -568,6 +568,12 @@ describe("build size budgets", () => {
     // the thing the change walks around.
     expect(classifyDistEntry("chunks/x.js")).toBe("logic");
     expect(classifyDistEntry("shared/deep/nested.js")).toBe("logic");
+    // Same escape by a different route: the extension. `fixedExtension: false`
+    // is what keeps today's emit on plain `.js`, so an option change or a
+    // bundler default moving under it would put `.mjs`/`.cjs` chunks in dist/ —
+    // unbudgeted bytes in a line that is printed and can never be a violation.
+    expect(classifyDistEntry("cli.mjs")).toBe("logic");
+    expect(classifyDistEntry("chunks/shared.cjs")).toBe("logic");
     // The corpus prefixes still win over the extension: a staged `.js` fixture
     // is data the runtime reads, not bundled logic.
     expect(classifyDistEntry("content/fixtures/x.js")).toBe("corpus");
@@ -712,12 +718,15 @@ describe("build size budgets", () => {
   });
 
   it("keeps JSDoc out of the emitted bundles, as a red test rather than a printed line", () => {
-    // The strip is 48.8% of what the logic half used to be — 2,081,093 bytes
-    // down to 1,064,549 — and the budget above cannot defend it: the pre-strip
-    // figure was UNDER the 2,097,152-byte ceiling, so losing this option puts a
-    // megabyte back into every npx download on a build that still exits 0 and a
-    // `size-budget` check that still passes. The `[size]` line would report it
-    // and nobody would be stopped. This assertion is what fails instead, on the
+    // The strip is 48.7% of what the logic half used to be, measured on one
+    // tree (b2d51a6, only this option changed) and pinned there in the config's
+    // own comment; what the current tree emits is whatever the build's `[size]`
+    // line prints, which is the figure of record and is deliberately not
+    // restated here. The budget above cannot defend the strip either way: the
+    // pre-strip figure, 2,081,093 bytes, was UNDER the 2,097,152-byte ceiling,
+    // so losing this option puts a megabyte back into every npx download on a
+    // build that still exits 0 and a `size-budget` check that still passes. The
+    // `[size]` line would report it and nobody would be stopped. This assertion is what fails instead, on the
     // two ways it goes: the option deleted, or a tsdown/rolldown upgrade
     // changing what `comments` defaults to (package.json pins tsdown by caret).
     expect(buildConfig.outputOptions?.comments?.jsdoc).toBe(false);
