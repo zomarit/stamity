@@ -85,6 +85,19 @@ const GITHUB_TOKEN = `gh${"p"}_${"A".repeat(36)}`;
  * so a literal here would be the leak the family catches — in the suite proving it catches it.
  */
 const LEDGER_ID = `${"A"}${"D"}-0${"7"}${"7"}`;
+/**
+ * A row past the ninety-ninth of a sequence with no upper bound, and a row out of the eighth
+ * ledger family — the house build ledger, whose prefix the rule did not list even after rows of
+ * it had reached this tree.
+ */
+const LEDGER_ID_PAST_99 = `${"A"}${"D"}-${"1"}${"0"}${"4"}`;
+const BUILD_LEDGER_ID = `${"B"}${"D"}-0${"1"}${"2"}`;
+/** En dash, non-breaking hyphen, and the fullwidth Latin letters of a two-letter prefix. */
+const EN_DASH = "\u2013";
+const NB_HYPHEN = "\u2011";
+const FULLWIDTH_PREFIX = [0xff21, 0xff24].map((code) => String.fromCharCode(code)).join("");
+/** Cyrillic capital letter A (U+0410) — the upper-case half of the homoglyph class. */
+const CYRILLIC_CAPITAL_A = "\u0410";
 const PRIVATE_REPO = ["stam", "ity", "-gov", "ernance"].join("");
 
 /** PNG's 8-byte magic — a real signature, so the sniff has something true to find. */
@@ -635,19 +648,71 @@ describe("leak-gate — private-layer references", () => {
     expect(result.stderr).toContain("(path)");
   });
 
+  it("fails a row past the ninety-ninth, and a row of the ledger family the rule did not list", () => {
+    // Two ways the rule was narrower than the class it guards. It compiled to a mandatory `-0`
+    // and exactly two digits, so it stopped at the 99th row of an unbounded sequence; and it
+    // listed seven prefixes while rows of an eighth family sat in two state files here, passing
+    // green because no branch of the alternation could match them.
+    const scratch = new Scratch();
+    const past = scratch.write(".stamity/runs/ledger.md", `carried over from ${LEDGER_ID_PAST_99}\n`);
+    const build = scratch.write(".stamity/runs/pass.md", `this framing is the ${BUILD_LEDGER_ID} lesson\n`);
+
+    const result = scratch.run();
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(hitCount(result, past), "a row past the two-digit bound").toBeGreaterThan(0);
+    expect(hitCount(result, build), "a row of the build ledger's family").toBeGreaterThan(0);
+    expect(result.stderr).toContain("[private-ledger-id]");
+  });
+
+  it("fails the spellings a word boundary and an ASCII-only hyphen let through", () => {
+    // `\b` counts `_` as a word character, so an id glued to an underscore — a JSON key, a
+    // filename — was inside a word and never at a boundary. The separator was one ASCII byte,
+    // so an en dash or the non-breaking hyphen a word processor substitutes spelled the same id
+    // past the rule; NFKC folds U+2011 to U+2010 and never to `-`, so the normalizing pass did
+    // not close that on its own. And the rule is case-sensitive, which kept it off the fold that
+    // lower-cases — the pass that reduces a fullwidth prefix to Latin. The confusable table it
+    // does read holds lower-case homoglyphs only, so a prefix spelled with the capital Cyrillic
+    // А folded to a lower-case Cyrillic letter and matched nothing, on every view.
+    const scratch = new Scratch();
+    const spellings: [string, string][] = [
+      ["glued to a leading underscore", `the row_${LEDGER_ID} key`],
+      ["glued to a trailing underscore", `see ${LEDGER_ID}_notes.md`],
+      ["en dash for the separator", `resolved by ${LEDGER_ID.replace("-", EN_DASH)}`],
+      ["non-breaking hyphen for the separator", `resolved by ${LEDGER_ID.replace("-", NB_HYPHEN)}`],
+      ["fullwidth prefix", `resolved by ${FULLWIDTH_PREFIX}${LEDGER_ID.slice(2)}`],
+      [
+        "capital Cyrillic homoglyph in the prefix",
+        `resolved by ${CYRILLIC_CAPITAL_A}${LEDGER_ID.slice(1)}`,
+      ],
+    ];
+    const probes = spellings.map(
+      ([name, body], index) =>
+        [name, scratch.write(`.stamity/runs/spelling-${index}.md`, `${body}\n`)] as const,
+    );
+
+    const result = scratch.run();
+
+    expect(result.status, result.stderr).toBe(1);
+    for (const [name, file] of probes) {
+      expect(hitCount(result, file), name).toBeGreaterThan(0);
+    }
+  });
+
   it("leaves the near-misses alone, so the rule is not matching every hyphenated code", () => {
-    // The false-positive control, one line per way a real identifier is nearly spelled: a
-    // four-digit number, a lower-case prefix (the rows are upper-case, and the rule is
-    // case-sensitive for exactly this reason), a prefix no ledger uses, and a number that does
-    // not start with the zero every row carries.
+    // The false-positive control, one line per way a real identifier is nearly spelled: a digit
+    // run longer than the four a row id can carry, a lower-case prefix (the rows are upper-case,
+    // which is why the rule is case-sensitive and reads the case-PRESERVING fold rather than the
+    // one that lower-cases), a prefix no ledger uses, and a row-shaped number glued to a letter,
+    // which the trailing boundary still refuses.
     const scratch = new Scratch();
     scratch.write(
       "docs/near-misses.md",
       [
-        `${"A"}${"D"}-0${"7"}${"7"}${"3"}`,
+        `${"A"}${"D"}-0${"7"}${"7"}${"3"}${"4"}`,
         `${"a"}${"d"}-0${"7"}${"7"}`,
         `${"X"}${"Y"}-0${"7"}${"7"}`,
-        `${"A"}${"D"}-1${"7"}${"7"}`,
+        `${"A"}${"D"}-0${"7"}${"7"}x`,
       ].join("\n"),
     );
 

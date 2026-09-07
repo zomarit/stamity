@@ -201,6 +201,20 @@ describe("decoding and normalization, directly", () => {
     }
   });
 
+  it("folds without lower-casing when the caller asks for the case-preserving pass", () => {
+    // The fold that lower-cases preserves what a case-INSENSITIVE rule means and changes what a
+    // case-sensitive one means, which is why the private layer's row identifiers — upper-case
+    // rows, matched case-sensitively so a lower-case near-miss stays ordinary prose — were left
+    // on the raw views and could not see a fullwidth spelling at all. This is the fold they read.
+    const upper = [0xff21, 0xff24].map((code) => String.fromCharCode(code)).join("");
+
+    expect((normalizeWithMap(upper) as { text: string }).text).toBe("ad");
+    expect((normalizeWithMap(upper, { preserveCase: true }) as { text: string }).text).toBe("AD");
+    // The same pass, minus the lower-casing: escapes, invisibles and NFKC all still reduce.
+    const split = `A${ZWSP}D`;
+    expect((normalizeWithMap(split, { preserveCase: true }) as { text: string }).text).toBe("AD");
+  });
+
   it("leaves an ordinary string alone, so the fold is not doing the finding", () => {
     // The control: if normalization mangled everything into a match, every case above would
     // pass against a broken folder.
