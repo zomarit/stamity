@@ -117,6 +117,25 @@ revert migrates nothing.
 (1207 ms measured, still `STATE_LOCKED`, exit 0). An oversized or unparseable file is a content
 fault: not retried, and under F5 reported rather than overwritten.
 
+*(Note added in place 2026-09-07: the sentence above is written as if it held on every platform.
+After the Package 4 review's first fix round it describes the Windows path only. The lock-create
+site now takes the sharing tolerance under `IS_WINDOWS` alone, because `open(O_CREAT|O_EXCL)`
+answers `EEXIST` for contention on POSIX — so `EACCES`/`EBUSY`/`EPERM` there is a durable refusal
+and returns at once rather than polling out the idle window. The measured cost of polling it out
+was 1.05s per hook event on darwin against 60ms for the immediate answer.)*
+
+*(Correction added in place 2026-09-07, replacing the closing sentence of the note above. It read:
+"The `1207 ms` figure and the 'rather than returning at once' reading still hold for a lock held by
+a live holder that never releases, on either platform." Only its second clause survives. The idle
+window is no longer the flat constant that figure was measured against: round 1 derived it from the
+retry budgets it has to cover (`LOCK_IDLE_MS = 3 × RETRY_BUDGET_MS + RENAME_BUDGET_MS` in
+`src/hooks/scripts.ts`), which is about 1.65 s on POSIX and about 5.6 s on win32 as those constants
+stand. So a waiter on a live holder that never releases pays that window, not 1207 ms, and the
+literal describes neither platform — it is kept above only as the figure the pre-round-1
+measurement recorded. What still holds is the shape: the wait is paid rather than answered at once,
+the verdict is still `STATE_LOCKED` at exit 0, and a widened retry schedule now moves the window
+with it instead of leaving it behind.)*
+
 ### U2 · `corpus-hardening` — eleven adherence edits across seven content files
 
 **id** `corpus-hardening` · **requirements** spec carries no ids · **depends_on** none
@@ -367,7 +386,7 @@ that produced no verdict; nothing from an interrupted state is scored.
 ### U9 · `qa-evidence` — the seven human rows, driven on the finished tree
 
 **id** `qa-evidence` · **requirements** spec carries no ids · **depends_on** `sync-and-goldens` (the drivers run against the finished `dist/` and `website/build`)
-**files** `.stamity/runs/2026-09-04_package-8-closeout/qa-evidence.md`
+**files** `.stamity/runs/2026-09-04_package-8-closeout/qa-evidence.json`
 **verify** the drivers' own exit status, plus `npx vitest run test/cli/banner.test.ts test/cli/prompts.test.ts`
 
 **Interfaces.** The seven rows are `.stamity/runs/2026-09-04_package-8/record.md:129-135`, each
@@ -375,9 +394,20 @@ driven by the scratchpad harness and re-run on the finished tree with `./run-all
 which rebuilds the git-ignored `dist/` and `website/build` if missing. Rows 1, 2, 3 and 7 are pty
 legs at a winsize set **before** the fork, so the child cannot answer the banner's width gate from
 the default 80×24; row 4 is a real `Tab` walk with browser-computed accessible names; row 5 is a
-screenshot, the renderer being a cross-origin iframe the top frame cannot read; row 6 is the
+fetch of the blob page, checked for the mermaid enrichment the rendered fence carries; row 6 is the
 docs-site run for the sha, reported per run so an empty result is visible rather than read as green.
-The evidence file records per row: leg, capture path, observed output, verdict.
+The evidence file records per leg: row, capture, observed output, verdict; the legs are keyed by
+the driver's own unique leg name, not by the row label several legs share.
+*(Corrected in place 2026-09-07: this unit's **files** line named `qa-evidence.md`; the artifact it
+wrote is `qa-evidence.json`, and this line now names it. The per-leg keying is stated because the
+file as first written keyed on the shared row label and lost ten of the fifteen legs.)*
+
+*(Corrected in place 2026-09-07: this paragraph described row 5 as "a screenshot, the renderer being
+a cross-origin iframe the top frame cannot read". No screenshot was taken. The driver fetched the
+blob page, which is what this run's record states for row 5 — "fetch of the blob page" — and read
+GitHub's mermaid enrichment section out of the returned markup; the line now says that. The
+cross-origin note was the reason a screenshot would have been needed, not a description of what
+ran.)*
 
 **testCriteria.**
 - GIVEN row 7's `init-dumb` leg on the finished tree THEN the capture carries zero `0x1B` bytes and

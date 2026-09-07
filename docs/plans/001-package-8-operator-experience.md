@@ -379,6 +379,14 @@ guide of its own. The `learn`/`handoff` gating paragraph stays — it exists now
 `file.md#anchor` link anywhere (the link resolver does not strip fragments). Currency headers
 on README and getting-started move to `commit 4607a76`.
 
+*(Corrected in place 2026-09-07: this paragraph said the `GUIDES` comment's "two positional
+claims — customization fourth, workspaces fifth — stay true". They did not survive the move.
+Inserting `DOCTRINE` third pushed both entries down one, so customization is fifth in the array
+and workspaces sixth, and the comment kept asserting the pre-move ordinals until the Package 4
+review corrected it in `test/docsPages.test.ts`. The ordinals are indices into a literal array:
+any insertion moves every entry after it, which is why the corrected comment now carries that
+rule beside the numbers.)*
+
 The mirror test, inside `describe("the guides")`: parse the charter's `## Touchpoints` bullets
 (`- \`/st-x\` — one-liner`, continuation lines joined) into `id → one-liner`; parse the page's
 table rows (`| \`/st-x\` | job | …`); assert the charter's id set equals the catalog's command

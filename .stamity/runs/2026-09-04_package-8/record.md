@@ -139,7 +139,7 @@ in the appendix with their pointers. Summed minutes on the human path: 14.
 - [ ] Every H row walked and passing. (No H row: no data, security or blocked core flow is on this path — the security lens approved, and every gate is green.)
 - [ ] Every failing M row has a filed follow-up, linked.
 - L failures are recorded, not blocking.
-- Rollback: `git revert` of the package's commits on `closure-run-execution` in reverse order (the five product commits and the run-4 artifact), then `npm run build && node dist/cli.js sync` to restore the emitted copies; the site reverts with its lockfile.
+- Rollback: `git revert` of the package's commits on `closure-run-execution` in reverse order (the four product commits `26bda81`, `fc5c5b8`, `74b3ab9`, `fbd2a9a`, and the run-4 artifact `1660fe9`), then `npm run build && node dist/cli.js sync` to restore the emitted copies; the site reverts with its lockfile. *(Corrected in place 2026-09-07: this line said "the five product commits"; `git log bc64867..e3003f7` shows four product commits in this package — `26bda81`, `fc5c5b8`, `74b3ab9`, `fbd2a9a` — with `1660fe9` the run-4 artifact and the rest records-only.)*
 - Shippable: **open** — the checkpoint is unsigned because the run was unattended; the seven rows above are the maintainer's, and the review package (Package 4) runs before any merge.
 
 ### Appendix — auto-proven rows
