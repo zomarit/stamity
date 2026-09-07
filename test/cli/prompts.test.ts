@@ -68,6 +68,29 @@ const CURSOR_SHOW = `${ESC}[?25h`;
  * line now, no longer appended to the question), and three choice rows.
  */
 const REWIND_5 = `${ESC}[5A`;
+/** The line-clear the frame writes ahead of every line it draws. */
+const CLEAR_LINE = `${ESC}[2K`;
+/**
+ * Rewind for the four lines a settled 5-line frame no longer occupies: the
+ * echo keeps the first, and the cursor comes back to rest directly under it.
+ */
+const REWIND_4 = `${ESC}[4A`;
+
+/**
+ * The exact bytes a 5-line menu writes when Enter settles it — rewind over the
+ * whole frame, redraw its first line as the resolved echo, blank the four
+ * lines below, walk back under the echo — so a leg can pin the settle byte for
+ * byte rather than matching a substring of it.
+ *
+ * The ONE-line shape only: the question, the renderer's own `>` separator and
+ * the answer, together inside `columns`. A pair too wide for the terminal puts
+ * the answer under the question instead and REFLOWS it across the rows the
+ * frame already owns (`renderMenuEcho`), which moves both the count of drawn
+ * lines and the count of blanked rows below them, so the legs that exercise
+ * that shape pin their own bytes inline rather than through this helper.
+ */
+const settledEcho = (line: string): string =>
+  `${REWIND_5}${CLEAR_LINE}${line}\n${`${CLEAR_LINE}\n`.repeat(4)}${REWIND_4}`;
 
 function makeTtyPromptIo(opts: {
   rawMode: boolean;
@@ -294,6 +317,33 @@ describe("selectOne (interactive)", () => {
       closePrompts(io);
     });
   }
+
+  it("strips a C1 control out of the answer it quotes back, and leaves the ordinary wording alone", async () => {
+    // The re-ask paints the operator's own text into a colour run, which makes
+    // it a rendering seam like every other one in `prompts.ts` — and
+    // `JSON.stringify` is not the guard for one: it escapes C0
+    // (U+0000-U+001F) and stops there. U+009B is the 8-bit CSI, a single byte
+    // that opens a control sequence on any terminal decoding C1, so quoting it
+    // back verbatim hands the answer's author the cursor mid-run.
+    const { io, input, output } = makePromptIo();
+    // `x`, the CSI byte, then what would be its parameters: on an unguarded
+    // frame this is the sequence that sets the foreground red.
+    const answer = "x\u009B31m";
+    input.end(`${answer}\n${answer}\n`);
+    const picked = await selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "c",
+    });
+    expect(picked).toBe("c");
+    const frame = output();
+    expect(frame).not.toContain("\u009B");
+    // Dropped, not escaped into visible noise and not swallowing the line: the
+    // printable text of the answer comes back in the same quoted wording an
+    // ordinary answer gets, so this guard costs the settled line nothing.
+    expect(frame).toContain(`not a valid choice: ${JSON.stringify("x31m")} — enter a number 1-3`);
+    closePrompts(io);
+  });
 
   it("never silently lands on the non-default when the answer is unusable (destructive-adjacent case)", async () => {
     // The shape `init`'s migrate question actually has: two choices, default on
@@ -823,6 +873,387 @@ describe("the raw menu — accept-time settling (SW2)", () => {
   });
 });
 
+/**
+ * DECISION OF RECORD (the maintainer, 2026-09-07): a raw-mode menu that settles
+ * on Enter is replaced by the question and its answer — the way a conventional
+ * prompt library echoes, so a transcript reads as a form the operator filled in
+ * rather than as a frame frozen mid-interaction. ONE line when the pair fits the
+ * terminal; otherwise the answer takes the rows under the question and reflows
+ * across them, so what the echo records is the whole answer at every width the
+ * frame itself was drawable at.
+ *
+ * It supersedes the raw path's after-Enter byte identity and nothing else.
+ * Every frame drawn BEFORE Enter, the typed fallback, the `TERM=dumb` path and
+ * the piped/non-TTY path stay byte-identical to what they were — pinned here
+ * and in "the design language on the menus" below rather than assumed.
+ */
+describe("the raw menu — the answer echo after Enter", () => {
+  it("replaces the settled frame with the question and the chosen label", async () => {
+    // The ONE-line shape, and it stays one line now that a too-wide pair
+    // reflows across the frame's rows: `Which tool? > Cursor` is 20 columns
+    // against the default 80, so the fit test takes the single-line branch and
+    // the reflow below is never reached. Re-based against the new shape, not
+    // weakened — these are the bytes this leg has always pinned, and the three
+    // legs under it fit the same way.
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    await tick();
+    await press(input, KEYS.down, KEYS.enter);
+    expect(await pending).toBe("b");
+    // The whole settle, byte for byte, and it is the last thing written before
+    // the cursor comes back: the frame's five lines are gone and one line
+    // stands where the question line was.
+    expect(output().endsWith(`${settledEcho("Which tool? > Cursor")}${CURSOR_SHOW}`)).toBe(true);
+    // No drawn row survives underneath it — the four blanks are what prove it,
+    // so a row shape is asserted absent from the settle region itself. `> ` is
+    // no longer the discriminator it was, since the echo spells its own
+    // separator with the frame's marker glyph; what the settle is held to
+    // instead is stronger, and says the same thing: every line BELOW the echo
+    // is a bare `CLEAR_LINE` and the last is the rewind home, so no label, no
+    // marker column and no hint can be hiding among them.
+    const settle = output().slice(output().lastIndexOf(REWIND_5));
+    const [echoLine, ...below] = settle.split("\n");
+    expect(echoLine).toBe(`${REWIND_5}${CLEAR_LINE}Which tool? > Cursor`);
+    expect(below).toEqual([
+      CLEAR_LINE,
+      CLEAR_LINE,
+      CLEAR_LINE,
+      CLEAR_LINE,
+      `${REWIND_4}${CURSOR_SHOW}`,
+    ]);
+    expect(settle).not.toContain("up/down to move");
+  });
+
+  it("echoes every checked label, comma-separated, for a checkbox menu", async () => {
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectMany(interactive, io, {
+      question: "Which tools?",
+      choices: TOOL_CHOICES,
+      defaultValues: ["a"],
+    });
+    await tick();
+    await press(input, KEYS.down, KEYS.space, KEYS.enter);
+    expect(await pending).toEqual(["a", "b"]);
+    expect(
+      output().endsWith(`${settledEcho("Which tools? > Claude Code, Cursor")}${CURSOR_SHOW}`),
+    ).toBe(true);
+  });
+
+  it("echoes the word none when the checkbox menu settles with nothing ticked", async () => {
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectMany(interactive, io, {
+      question: "Which tools?",
+      choices: TOOL_CHOICES,
+      defaultValues: ["a"],
+    });
+    await tick();
+    await press(input, KEYS.space, KEYS.enter);
+    expect(await pending).toEqual([]);
+    // The same spelling the typed path and the EOF disclosure already use for
+    // the empty set, so one word means one thing across all three.
+    expect(output().endsWith(`${settledEcho("Which tools? > none")}${CURSOR_SHOW}`)).toBe(true);
+  });
+
+  it("fills every row the frame owns before it clamps what is still left over", async () => {
+    // A line wider than the terminal wraps onto a second PHYSICAL line, and the
+    // rewind below it walks back a fixed count of LOGICAL ones — the same
+    // desync B3 fixed for the question and hint lines, reachable through the
+    // echo because its length is the question PLUS the answer.
+    //
+    // Clamping the assembled pair fixed the wrap by cutting its TAIL, and the
+    // tail is the ANSWER — the one thing an echo exists to record. So the
+    // answer moves under the question instead, where it reflows across the
+    // rows the frame already owns and the clamp is what happens to whatever is
+    // still left over after the LAST of them.
+    //
+    // A one-choice frame is 3 rows, so this answer gets two of them: 18
+    // columns each (`> ` on the first, the two-space indent on the second) is
+    // 36 of its 40 characters, and the last 4 are the clamp doing its job as
+    // the last resort rather than the first. Re-based from one answer row to
+    // two — the widths did not move, the number of rows the echo is allowed to
+    // spend did.
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true, columns: 20 });
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: [{ value: "x", label: "y".repeat(40) }],
+      defaultValue: "x",
+    });
+    await tick();
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("x");
+    // The settle of a ONE-row frame, byte for byte: rewind over its three
+    // lines, the question on the first, the separator and 18 columns of answer
+    // on the second, the indent and 18 more on the third — and NO blanked row
+    // and NO closing rewind, because the echo now spends every row the frame
+    // drew and already rests directly under the last of them.
+    const settle = output().slice(output().lastIndexOf(`${ESC}[3A`));
+    expect(settle).toBe(
+      `${ESC}[3A${CLEAR_LINE}Which tool?\n${CLEAR_LINE}> ${"y".repeat(18)}\n` +
+        `${CLEAR_LINE}  ${"y".repeat(18)}\n${CURSOR_SHOW}`,
+    );
+    // Still clamped, just not at the answer's expense and not before the rows
+    // are used up: 18 columns to a row, never 19, and 36 characters kept of 40.
+    expect(settle).not.toContain("y".repeat(19));
+    expect(stripVTControlCharacters(settle).split("y").length - 1).toBe(36);
+  });
+
+  it("echoes the answer of a question one column short of the terminal, where a single line had room for none of it", async () => {
+    // The measured worst case, and the reason the branch above exists rather
+    // than a wider clamp: at `question.length === columns - 1` a single line
+    // has exactly one column left, which the separating space spends, so the
+    // echo recorded the question and ZERO characters of the answer — a
+    // transcript that names what was asked and not what was chosen.
+    //
+    // Two lines still, under the reflow: `Alpha` is 5 characters against the
+    // 78 the first owned row holds, so it needs no row after that one and the
+    // settle's byte shape is the one this leg already pinned.
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true, columns: 80 });
+    const question = "x".repeat(79);
+    const pending = selectOne(interactive, io, {
+      question,
+      choices: [{ value: "a", label: "Alpha" }],
+      defaultValue: "a",
+    });
+    await tick();
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("a");
+    const settle = output().slice(output().lastIndexOf(`${ESC}[3A`));
+    // The answer, whole, on its own line — asserted as the line it occupies so
+    // a stray "Alpha" anywhere else in the settle could not satisfy it.
+    expect(settle).toBe(
+      `${ESC}[3A${CLEAR_LINE}${question}\n${CLEAR_LINE}> Alpha\n` +
+        `${CLEAR_LINE}\n${ESC}[1A${CURSOR_SHOW}`,
+    );
+  });
+
+  it("keeps both members of a two-repository workspace answer at 80 columns", async () => {
+    // The shipped `selectMany` shape, question and labels both:
+    // `../../src/cli/commands/workspace.ts:643` asks
+    // `Which repositories join this workspace? (N found)` (49 columns at N=2)
+    // and labels each row `<path> — <markers>`, with every row ticked by
+    // default — so the echoed answer is every member joined by ", ". At 80
+    // columns the single line had 30 columns for a 58-column answer, and the
+    // part that fell off the end was the whole second repository.
+    //
+    // Two lines still, under the reflow: 58 characters against the 78 the
+    // first owned row holds, so the second and third rows go unspent and this
+    // leg's bytes are the ones it already pinned. The 40-column leg below is
+    // the same shape at the width where that stops being true.
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true, columns: 80 });
+    const pending = selectMany(interactive, io, {
+      question: "Which repositories join this workspace? (2 found)",
+      choices: [
+        { value: "packages/api", label: "packages/api — node, git, docker" },
+        { value: "packages/web", label: "packages/web — node, git" },
+      ],
+      defaultValues: ["packages/api", "packages/web"],
+    });
+    await tick();
+    await press(input, KEYS.enter);
+    expect(await pending).toEqual(["packages/api", "packages/web"]);
+    // A 2-row frame is 4 lines, so the settle rewinds 4 and blanks the 2 rows
+    // the echo does not spend.
+    const settle = output().slice(output().lastIndexOf(`${ESC}[4A`));
+    expect(settle).toBe(
+      `${ESC}[4A${CLEAR_LINE}Which repositories join this workspace? (2 found)\n` +
+        `${CLEAR_LINE}> packages/api — node, git, docker, packages/web — node, git\n` +
+        `${CLEAR_LINE}\n${CLEAR_LINE}\n${ESC}[2A${CURSOR_SHOW}`,
+    );
+    // Said again as the property, not the byte string: the second member is
+    // present in full, markers included.
+    expect(settle).toContain("packages/web — node, git");
+  });
+
+  it("keeps every character of the shipped migrate answer at 80 columns", async () => {
+    // The question and the two choices `../../src/cli/commands/init.ts:267-277`
+    // ships, spelled out here rather than imported: what this leg is about is
+    // the WIDTHS that reach the renderer, so a later reword of that prompt
+    // should make these numbers stale loudly instead of quietly re-measuring
+    // itself against whatever the prompt became.
+    //
+    // 60 columns of question, 94 characters of answer. One answer line clamped
+    // to `columns - 2` kept 78 of them and cut the last 16 — `nings + .env.mcp`,
+    // the half of the sentence that says which things are carried over, so the
+    // transcript recorded a migration mode whose stated scope stopped
+    // mid-word. The frame is 4 rows (2 choices + 2) and the echo was spending
+    // 2 of them, so the row that holds the rest was already paid for.
+    const question = "Previous setup detected (predecessor state dir). Migrate it?";
+    const full =
+      "full — import its config as defaults, strip its old managed blocks, " +
+      "carry learnings + .env.mcp";
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true, columns: 80 });
+    const pending = selectOne(interactive, io, {
+      question,
+      choices: [
+        { value: "full", label: full },
+        { value: "skip", label: "skip — leave the previous setup untouched" },
+      ],
+      defaultValue: "full",
+    });
+    await tick();
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("full");
+    // The two rows the answer reflows onto, broken at the last space that fit
+    // the first — 73 characters, not a hard cut at 78 mid-`learnings`.
+    const firstRow = "full — import its config as defaults, strip its old managed blocks, carry";
+    const secondRow = "learnings + .env.mcp";
+    // The settle, byte for byte: rewind over the 4-line frame, the question,
+    // the answer's first row behind the separator, its second indented two
+    // columns so the separator column stays the separator's, one blanked row
+    // for the line the frame no longer occupies, and the rewind back to rest
+    // directly under the last echo line.
+    const settle = output().slice(output().lastIndexOf(`${ESC}[4A`));
+    expect(settle).toBe(
+      `${ESC}[4A${CLEAR_LINE}${question}\n${CLEAR_LINE}> ${firstRow}\n` +
+        `${CLEAR_LINE}  ${secondRow}\n${CLEAR_LINE}\n${ESC}[1A${CURSOR_SHOW}`,
+    );
+    // And as the property those bytes exist for: every character of the answer
+    // is in the echo exactly once. The rows rejoin on the single space each
+    // break consumed, so a dropped tail and a duplicated fragment both fail
+    // here, and neither row is wider than the 78 columns it was given.
+    const rows = settle
+      .split("\n")
+      .filter((line) => line.startsWith(`${CLEAR_LINE}> `) || line.startsWith(`${CLEAR_LINE}  `))
+      .map((line) => line.slice(CLEAR_LINE.length + 2));
+    expect(rows.join(" ")).toBe(full);
+    expect(rows.map((row) => row.length)).toEqual([73, 20]);
+  });
+
+  it("keeps both members of the two-repository workspace answer at 40 columns", async () => {
+    // The same shipped `selectMany` shape as the leg above, in a 40-column
+    // pane — a split terminal, a side panel, a phone SSH session. The question
+    // is 49 columns, so it clamps to 40 and there is nothing an echo can do
+    // about that; the ANSWER is what the echo exists to record, and one line
+    // of `columns - 2` cut it at 38 characters, mid-`packages/web`. That is the
+    // 80-column defect this suite already pins, one width further down.
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true, columns: 40 });
+    const pending = selectMany(interactive, io, {
+      question: "Which repositories join this workspace? (2 found)",
+      choices: [
+        { value: "packages/api", label: "packages/api — node, git, docker" },
+        { value: "packages/web", label: "packages/web — node, git" },
+      ],
+      defaultValues: ["packages/api", "packages/web"],
+    });
+    await tick();
+    await press(input, KEYS.enter);
+    expect(await pending).toEqual(["packages/api", "packages/web"]);
+    // The clamped question keeps its trailing space — `clampToWidth` cuts at
+    // the column, it does not tidy — and the 58-character answer takes two of
+    // the frame's three remaining rows, breaking after the comma that
+    // separates the two members.
+    const settle = output().slice(output().lastIndexOf(`${ESC}[4A`));
+    expect(settle).toBe(
+      `${ESC}[4A${CLEAR_LINE}Which repositories join this workspace? \n` +
+        `${CLEAR_LINE}> packages/api — node, git, docker,\n` +
+        `${CLEAR_LINE}  packages/web — node, git\n${CLEAR_LINE}\n${ESC}[1A${CURSOR_SHOW}`,
+    );
+    // The property, again independent of the byte string: both members are
+    // present with their markers, and neither row overflowed the pane.
+    expect(settle).toContain("packages/api — node, git, docker");
+    expect(settle).toContain("packages/web — node, git");
+    for (const line of stripVTControlCharacters(settle).split("\n")) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it("prints no echo when Ctrl-C cancels the menu", async () => {
+    const { io, input, output, chunks } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    const asserted = expect(pending).rejects.toMatchObject({
+      doc: { code: "FAILURE", message: "aborted" },
+    });
+    await tick();
+    await press(input, KEYS.ctrlC);
+    await asserted;
+    // A cancelled menu answered nothing, so there is nothing to echo: the
+    // opening draw is the only frame written, and the transcript ends on the
+    // cursor coming back.
+    expect(menuFrames(chunks)).toHaveLength(1);
+    expect(output()).not.toContain(REWIND_4);
+    expect(output()).not.toContain("Which tool? Claude Code");
+    expect(output().endsWith(CURSOR_SHOW)).toBe(true);
+    closePrompts(io);
+  });
+
+  it("leaves the typed fallback byte-identical: the echo is a raw-menu frame, not a prompt-kit line", async () => {
+    // The path a pipe, a CI log, a dumb terminal and every recorded transcript
+    // take. Pinned as literal bytes rather than as "unchanged", because
+    // "unchanged" has no referent once the raw path moved.
+    const { io, input, output } = makePromptIo();
+    input.end("2\n");
+    expect(
+      await selectOne(interactive, io, {
+        question: "Which tool?",
+        choices: TOOL_CHOICES,
+        defaultValue: "a",
+      }),
+    ).toBe("b");
+    expect(output()).toBe(
+      "Which tool?\n  1) Claude Code\n  2) Cursor\n  3) Copilot\nChoose 1-3 [1]: ",
+    );
+    closePrompts(io);
+  });
+
+  it("reads a TTY reporting columns: 0 as an unknown width, not a zero one", async () => {
+    // `./terminal.ts::detectTerminalFacts` already spells the rule for this
+    // exact field: a window-size ioctl that answered 0x0 leaves `columns` at 0
+    // on a stream that is still a TTY, and that is the terminal saying it does
+    // not know its width. Read as a width it clamps every line to nothing, so
+    // the frame draws as ["", "", "> ", "  ", "  "] — a blank menu.
+    const drawFirstFrame = async (columns?: number): Promise<string> => {
+      const { io, input, chunks } = makeTtyPromptIo(
+        columns === undefined ? { rawMode: true } : { rawMode: true, columns },
+      );
+      const pending = selectOne(interactive, io, {
+        question: "Which tool?",
+        choices: TOOL_CHOICES,
+        defaultValue: "a",
+      });
+      await tick();
+      await press(input, KEYS.enter);
+      expect(await pending).toBe("a");
+      return chunks()[1] ?? "";
+    };
+    const zero = await drawFirstFrame(0);
+    expect(zero).toBe(await drawFirstFrame());
+    expect(zero).toContain("Which tool?");
+    expect(zero).toContain("> Claude Code");
+  });
+
+  it("reads a TTY reporting rows: 0 as an unknown height, so the raw menu still opens", async () => {
+    // The height check's half of the same rule. A window-size ioctl that could
+    // not answer reports 0 for BOTH fields, so `rows: 0` is the terminal
+    // saying it does not know its height — not a terminal zero rows tall.
+    // Compared as a height it is shorter than every menu, so this refused the
+    // raw path outright and every such terminal got the typed numbered list,
+    // where an ABSENT `rows` has always left the check a no-op.
+    const { io, input, output } = makeTtyPromptIo({ rawMode: true, rows: 0 });
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    await tick();
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("a");
+    // The menu's OWN first write is CURSOR_HIDE and the typed path never
+    // writes one, so its presence is the proof `runMenu` was entered — the
+    // same probe the height-refusal leg below uses in the opposite direction.
+    expect(output().startsWith(CURSOR_HIDE)).toBe(true);
+    expect(output()).toContain("> Claude Code");
+    expect(output()).not.toContain("Choose 1-3");
+  });
+});
+
 describe("the raw menu — label geometry and injection floor (F3/W1/W2/SW1)", () => {
   it("strips control bytes from a label so no foreign escape reaches the frame", async () => {
     const { io, input, output } = makeTtyPromptIo({ rawMode: true });
@@ -848,9 +1279,17 @@ describe("the raw menu — label geometry and injection floor (F3/W1/W2/SW1)", (
     // Every ESC left in the whole transcript is one of the renderer's own:
     // CURSOR_HIDE (1) + one CLEAR_LINE per drawn line — the question line, the
     // hint line (N1 — its own line now), and the one choice row, drawn once
-    // (no navigation happened) — + CURSOR_SHOW (1) on the way out.
+    // (no navigation happened) — + the after-Enter settle the 2026-09-07
+    // decision of record added (rewind over the 3-line frame, the echo's own
+    // CLEAR_LINE, one CLEAR_LINE per line it blanks, the rewind back under it)
+    // + CURSOR_SHOW (1) on the way out.
+    //
+    // Re-based, not weakened: the two assertions above now cover the ECHO as
+    // well as the frame, and they are the ones that matter here — the echo
+    // names the chosen label, so an unsanitized label would smuggle its OSC
+    // through this second sink even with the frame clean.
     const escCount = rendered.split(ESC).length - 1;
-    expect(escCount).toBe(1 + 3 + 1);
+    expect(escCount).toBe(1 + 3 + (1 + 1 + 2 + 1) + 1);
   });
 
   it("clamps a label wider than the terminal to the space left after the marker", async () => {
@@ -1438,9 +1877,18 @@ describe("the raw menu and the readline session", () => {
     // echoes the accepted Enter as CRLF, so a CR anywhere in this region is
     // readline's byte, not ours.
     expect(rendered).not.toContain(KEYS.enter);
-    // Two frames, one row each: the opening draw and the redraw after `down`.
+    // Three, and every one of them is the menu's own: two frames drawn one row
+    // each (the opening draw and the redraw after `down`), plus the after-Enter
+    // echo the 2026-09-07 decision of record added, which names the label it
+    // settled on. Re-based rather than loosened — each of the three is pinned
+    // to its exact shape, so a readline echo of the label could not hide among
+    // them.
     const rows = rendered.split("\n").filter((line) => line.includes("Cursor"));
-    expect(rows).toHaveLength(2);
+    expect(rows).toEqual([
+      `${CLEAR_LINE}  Cursor`,
+      `${CLEAR_LINE}> Cursor`,
+      `${REWIND_5}${CLEAR_LINE}Which tool? > Cursor`,
+    ]);
     closePrompts(io);
   });
 });
@@ -1653,6 +2101,29 @@ async function typedTranscript(env: Record<string, string | undefined>): Promise
   return output();
 }
 
+/**
+ * The raw arrow menu drawn once and accepted on the row under the cursor, as
+ * the terminal saw it — the raw-path counterpart to `typedTranscript`, built
+ * with the palette the funnel would resolve for the given env (so `NO_COLOR`
+ * reaches the frame the way it reaches a real run, not as a hand-made
+ * identity palette).
+ *
+ * Module scope for the reason `funnelPalette`'s own doc gives above.
+ */
+async function rawMenuTranscript(env: Record<string, string | undefined>): Promise<string> {
+  const { io, input, output } = makeTtyPromptIo({ rawMode: true });
+  const gate: PromptGate = { interactive: true, env, palette: funnelPalette(env) };
+  const pending = selectOne(gate, io, {
+    question: "Which tool?",
+    choices: TOOL_CHOICES,
+    defaultValue: "b",
+  });
+  await tick();
+  await press(input, KEYS.enter);
+  expect(await pending).toBe("b");
+  return output();
+}
+
 describe("the design language on the menus: escapes are ADDED, never substituted", () => {
   /**
    * The UI accent at 24-bit depth (`#8A52FF`), and the mark's own violet
@@ -1668,6 +2139,14 @@ describe("the design language on the menus: escapes are ADDED, never substituted
   const paintedGate: PromptGate = { interactive: true, palette: truecolor };
 
   const escapeCount = (transcript: string): number => transcript.split(ESC).length - 1;
+
+  /**
+   * The cursor escapes the after-Enter echo spends on a `TOOL_CHOICES`-sized
+   * frame, and not one of them is an SGR: the rewind over the whole frame, the
+   * echo's own `CLEAR_LINE`, one `CLEAR_LINE` per line the frame no longer
+   * occupies, and the rewind back to rest under the echo.
+   */
+  const SETTLE_ESCAPES = 1 + 1 + (1 + TOOL_CHOICES.length) + 1;
 
   /** One `selectOne` menu drawn once and accepted, as the terminal saw it. */
   async function selectOneTranscript(palette?: Palette): Promise<string> {
@@ -1707,12 +2186,13 @@ describe("the design language on the menus: escapes are ADDED, never substituted
     expect(stripVTControlCharacters(painted)).toBe(stripVTControlCharacters(plain));
 
     // The identity path adds none of its own: CURSOR_HIDE + one CLEAR_LINE per
-    // drawn line (question, hint, three rows) + CURSOR_SHOW.
-    expect(escapeCount(plain)).toBe(1 + (2 + TOOL_CHOICES.length) + 1);
-    // Three painted tokens — question (bold), hint (dim), active marker
-    // (accent) — at one opening and one closing escape each. Labels, inactive
-    // markers and the settled frame add none.
-    expect(escapeCount(painted) - escapeCount(plain)).toBe(2 * 3);
+    // drawn line (question, hint, three rows) + the settle + CURSOR_SHOW.
+    expect(escapeCount(plain)).toBe(1 + (2 + TOOL_CHOICES.length) + SETTLE_ESCAPES + 1);
+    // Five painted tokens — question (bold), hint (dim), active marker
+    // (accent), and the ECHO's own question (bold) and separator (accent, the
+    // same paint the frame's marker takes) — at one opening and one closing
+    // escape each. Labels, inactive markers and the echoed ANSWER add none.
+    expect(escapeCount(painted) - escapeCount(plain)).toBe(2 * 5);
 
     expect(painted).toContain(UI_ACCENT);
     expect(painted).not.toContain(MARK_VIOLET);
@@ -1723,16 +2203,75 @@ describe("the design language on the menus: escapes are ADDED, never substituted
     const painted = await selectManyTranscript(truecolor);
 
     expect(stripVTControlCharacters(painted)).toBe(stripVTControlCharacters(plain));
-    expect(escapeCount(plain)).toBe(1 + (2 + TOOL_CHOICES.length) + 1);
-    // Question, hint, the active marker, and one checked box: the marker and
-    // the box are two independent runs, so the accented `[x]` is a fourth token
-    // rather than an extension of the third.
-    expect(escapeCount(painted) - escapeCount(plain)).toBe(2 * 4);
+    expect(escapeCount(plain)).toBe(1 + (2 + TOOL_CHOICES.length) + SETTLE_ESCAPES + 1);
+    // Question, hint, the active marker, one checked box, and the echo's own
+    // question and separator: the marker and the box are two independent runs,
+    // so the accented `[x]` is a fourth token rather than an extension of the
+    // third, the echo's bold question is the fifth and its separator the sixth.
+    expect(escapeCount(painted) - escapeCount(plain)).toBe(2 * 6);
     expect(painted).toContain(`${UI_ACCENT}>${ESC}[39m ${UI_ACCENT}[x]${ESC}[39m Claude Code`);
     // The two unchecked boxes stay unpainted, so the accent appears twice in
-    // the frame and no more.
-    expect(painted.split(UI_ACCENT).length - 1).toBe(2);
+    // the frame — and once more in the settle, on the echo's separator.
+    expect(painted.split(UI_ACCENT).length - 1).toBe(3);
     expect(painted).not.toContain(MARK_VIOLET);
+  });
+
+  it("echoes the answer in theme ink: the question keeps its bold and NO_COLOR renders the identical text with zero SGR", async () => {
+    // The echo is the one line the after-Enter byte-identity statement was
+    // superseded for (the 2026-09-07 decision of record), so its paint is
+    // pinned as tightly as the frame's: the question keeps the bold it already
+    // had, the answer is theme ink, and nothing on the line carries state.
+    const noColor = await rawMenuTranscript({ TERM: "xterm-256color", NO_COLOR: "1" });
+    const painted = await rawMenuTranscript({ TERM: "xterm-256color", COLORTERM: "truecolor" });
+    const settleOf = (transcript: string): string =>
+      transcript.slice(transcript.lastIndexOf(REWIND_5));
+
+    // Identical text on both routes, escapes removed.
+    expect(stripVTControlCharacters(settleOf(painted))).toBe(
+      stripVTControlCharacters(settleOf(noColor)),
+    );
+    expect(stripVTControlCharacters(settleOf(noColor)).trim()).toBe("Which tool? > Cursor");
+
+    // NO_COLOR: the settle's own cursor escapes and NOT ONE SGR byte — the
+    // rewind over the frame, the clear before the echo, one clear per line it
+    // blanks, and the rewind back under it — plus the CURSOR_SHOW that trails
+    // it, since this slice runs to the end of the transcript. The separator
+    // survives with them: it is a GLYPH the renderer writes, so it is still
+    // there on the route that renders no colour at all.
+    expect(escapeCount(settleOf(noColor))).toBe(SETTLE_ESCAPES + 1);
+    // Painted: exactly two tokens more — the question's bold, and the
+    // separator's accent. The ANSWER still takes none.
+    expect(escapeCount(settleOf(painted)) - escapeCount(settleOf(noColor))).toBe(4);
+    expect(settleOf(painted)).toContain(
+      `${ESC}[1mWhich tool?${ESC}[22m ${UI_ACCENT}>${ESC}[39m Cursor`,
+    );
+    expect(settleOf(painted)).not.toContain(MARK_VIOLET);
+  });
+
+  it("separates the question from the answer with the frame's own marker glyph, and pays no SGR for it", async () => {
+    // Under the identity palette the ONLY boundary between the question and
+    // the answer used to be whatever punctuation the caller happened to end
+    // its question with — `Which tool?` reads as a boundary, a question worded
+    // without a trailing `?` or `:` does not, and the echo would run two
+    // phrases together with a single space between them. The separator is the
+    // renderer's own, so the boundary does not depend on the caller.
+    const noColor = await rawMenuTranscript({ TERM: "xterm-256color", NO_COLOR: "1" });
+    const settle = noColor.slice(noColor.lastIndexOf(REWIND_5));
+    expect(settle).toContain(`${CLEAR_LINE}Which tool? > Cursor\n`);
+    // And it costs nothing to draw: the settle's escapes are all cursor
+    // motion, exactly the count the one-line echo has always written.
+    expect(escapeCount(settle)).toBe(SETTLE_ESCAPES + 1);
+
+    // Under a palette the accent lands on the GLYPH and nowhere else — the
+    // same rule the frame's active-row marker follows, and the reason
+    // `./terminal.ts`'s ladder can drop the paint at 16-colour depth without
+    // losing the boundary: the glyph carries it, the colour decorates it.
+    const painted = await rawMenuTranscript({ TERM: "xterm-256color", COLORTERM: "truecolor" });
+    const paintedSettle = painted.slice(painted.lastIndexOf(REWIND_5));
+    expect(paintedSettle).toContain(`${UI_ACCENT}>${ESC}[39m Cursor`);
+    // Not on the answer, which is manifest-derived text this process did not
+    // author: one accent run in the whole settle, on the separator.
+    expect(paintedSettle.split(UI_ACCENT).length - 1).toBe(1);
   });
 
   it("writes no escape at all on the typed path under the identity palette", async () => {

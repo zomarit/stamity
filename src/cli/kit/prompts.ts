@@ -364,9 +364,22 @@ export async function selectOne<T extends string>(
       // `yellow`, not `dim`: a re-ask is a correction the operator has to act
       // on, the register `../commands/init/panel.ts` already spends yellow on.
       // The newline stays OUTSIDE the run, so the reset lands before it.
+      //
+      // What is quoted back is the OPERATOR'S OWN text, and it lands inside a
+      // colour run, so it goes through `sanitizeLabel` first — the same guard
+      // `selectManyTyped`'s re-ask spends on its tokens below, and the one
+      // every other rendering seam in this file already spends. `JSON.stringify`
+      // is not that guard: it escapes C0 (U+0000-U+001F) and nothing else,
+      // so a C1 introducer such as U+009B (8-bit CSI), a bidi override or a
+      // zero-width joiner typed into the answer rides out of here raw and
+      // mid-run. Sanitise first, quote after: `sanitizeLabel` is the identity
+      // on printable text, so every ordinary answer keeps the pinned
+      // `not a valid choice: "x"` wording byte for byte and only what should
+      // never have reached the terminal is missing.
       io.output.write(
         `${palette.yellow(
-          `not a valid choice: ${JSON.stringify(answer)} — enter a number 1-${q.choices.length}`,
+          `not a valid choice: ${JSON.stringify(sanitizeLabel(answer))} — ` +
+            `enter a number 1-${q.choices.length}`,
         )}\n`,
       );
     }
@@ -524,12 +537,13 @@ async function selectManyTyped<T>(
       // `sanitizeLabel` first — an ESC typed into the answer would otherwise
       // ride out on this line as a live escape sequence, mid-run, exactly the
       // hazard every other rendering seam in this file already guards.
-      // `sanitizeLabel` rather than `selectOne`'s `JSON.stringify`: the two
-      // re-asks quote differently only because this one's strings are pinned
-      // verbatim (`not a valid choice: x`), and wrapping ordinary tokens in
-      // quotes here would be a visible wording change to a settled line for no
-      // security gain. Sanitising leaves every ordinary token byte-identical
-      // and only removes what should never have been printed.
+      // `sanitizeLabel` alone, without the `JSON.stringify` quoting
+      // `selectOne`'s re-ask wraps around it: both re-asks run the same guard,
+      // and they differ only in the quotes, because this one's strings are
+      // pinned verbatim (`not a valid choice: x`) and wrapping ordinary tokens
+      // in quotes here would be a visible wording change to a settled line for
+      // no security gain. Sanitising leaves every ordinary token
+      // byte-identical and only removes what should never have been printed.
       io.output.write(
         `${palette.yellow(
           `not a valid choice: ${parsed.invalid.map((token) => sanitizeLabel(token)).join(", ")} — ` +
@@ -600,8 +614,15 @@ export async function textInput(
  * while silently ignoring the flag that outranks it — so the already-resolved
  * palette is INJECTED on the gate instead (`PromptGate.palette`), exactly the
  * way `env` is. A gate that carries none renders in the identity palette, which
- * is byte-for-byte what this file wrote before. What the paint may never do is
+ * adds no byte of its own — every escape then in the transcript is a cursor
+ * escape one of this file's own renderers wrote. What the paint may never do is
  * carry state or touch a label: see `renderMenu`.
+ *
+ * One thing about the raw path DID move after that, and only one: a menu
+ * settled by Enter now replaces its frame with an answer echo (the maintainer's
+ * decision of record, 2026-09-07 — see `renderMenuEcho`). Every frame drawn
+ * BEFORE Enter is unchanged, and so is the typed fallback above, byte for
+ * byte.
  *
  * `TERM` is read off `PromptGate.env` — INJECTED, the same discipline
  * `./banner.ts:174-178` uses for its own `TERM` read (`opts.env`, never
@@ -648,7 +669,18 @@ function rawMenuIo(gate: PromptGate, io: PromptIo, choiceCount: number): RawIo |
   // `choiceCount + 2` is now the frame's EXACT drawn height (N1: the question
   // line and the hint line, each its own row, plus one row per choice) —
   // `runMenu`'s own `height` local computes the identical sum.
-  if (typeof output.rows === "number" && choiceCount + 2 > output.rows) return null;
+  //
+  // `> 0` on `rows` for the reason `runMenu` states for `columns` and
+  // `./terminal.ts::detectTerminalFacts` states for both: a TTY whose
+  // window-size ioctl could not answer reports 0 — a `-t` container with no
+  // attached terminal, some IDE pseudo-terminals — and that is the terminal
+  // saying it does not KNOW its height, spelled as a number. Compared as a
+  // height, 0 is shorter than every menu, so it refused the raw path on every
+  // such terminal, where an ABSENT `rows` has always left this check a no-op.
+  // An unknown height is an absent height: both open the menu at the default.
+  if (typeof output.rows === "number" && output.rows > 0 && choiceCount + 2 > output.rows) {
+    return null;
+  }
   // The cast carries the fact the line above established: narrowing an optional
   // property does not narrow the object that holds it.
   return { input: input as RawIo["input"], output: io.output };
@@ -696,6 +728,17 @@ interface Menu {
 
 /** The default terminal width assumed when the output stream reports none. */
 const DEFAULT_COLUMNS = 80;
+
+/**
+ * One frame line cut to the terminal's width.
+ *
+ * Module scope rather than a closure inside `renderMenu`, because the settled
+ * echo line (`renderMenuEcho`) is a frame line too and clamps by the same rule:
+ * a line wider than the terminal wraps onto a second PHYSICAL line, and every
+ * `rewind` in this section walks back a fixed count of LOGICAL ones.
+ */
+const clampToWidth = (line: string, columns: number): string =>
+  line.length > columns ? line.slice(0, columns) : line;
 
 /**
  * Strips a label to plain text: C0/C1 control bytes gone, Unicode bidi controls
@@ -804,32 +847,192 @@ function renderMenu(menu: Menu, columns: number, palette: Palette): string {
   // LOGICAL lines, so a wrapped frame desyncs the very first time it redraws.
   // Same budget logic as a row, with no prefix to subtract (neither line has
   // one).
-  const clampToWidth = (line: string): string => (line.length > columns ? line.slice(0, columns) : line);
-  const questionLine = palette.bold(clampToWidth(menu.question));
-  const hintLine = palette.dim(clampToWidth(menu.hint));
+  const questionLine = palette.bold(clampToWidth(menu.question, columns));
+  const hintLine = palette.dim(clampToWidth(menu.hint, columns));
   return [questionLine, hintLine, ...rows].map((line) => `${CLEAR_LINE}${line}\n`).join("");
+}
+
+/**
+ * The value(s) a menu is holding, in one string — the answer, with no wording
+ * around it.
+ *
+ * A single-select menu names the label under the cursor; a checkbox menu names
+ * every currently-ticked label in row order, or `none` when the set is empty —
+ * the same `none` spelling `selectManyTyped`'s own disclosure already uses for
+ * an empty set. Labels are manifest-derived content this process did not
+ * author, so they go through `sanitizeLabel` — the same guard every other
+ * rendering seam in this file already applies.
+ *
+ * ONE function for the two sinks that name an answer, rather than two copies
+ * that would drift: the EOF disclosure below and the after-Enter echo
+ * (`renderMenuEcho`). A menu that discloses `(Cursor)` on EOF and echoes a
+ * different spelling on Enter would be two answers to one question.
+ */
+function menuAnswer(menu: Menu): string {
+  if (menu.selected === null) return sanitizeLabel(menu.labels[menu.active] ?? "");
+  const kept = menu.labels.filter((_label, index) => menu.selected?.has(index) === true);
+  return kept.length === 0 ? "none" : kept.map((label) => sanitizeLabel(label)).join(", ");
 }
 
 /**
  * The value(s) an EOF-settled menu is keeping, rendered for the disclosure
  * line — the menu's own parity with `confirm`/`textInput`'s EOF disclosures,
  * which name the value rather than a bare "a default was applied" (N2).
- *
- * A single-select menu names the label under the cursor; a checkbox menu
- * names every currently-ticked label, or `none` when the set is empty — the
- * same `none` spelling `selectManyTyped`'s own disclosure already uses for an
- * empty set. Labels are manifest-derived content this process did not author,
- * so they go through `sanitizeLabel` — the same guard every other rendering
- * seam in this file already applies.
  */
 function menuDefaultDisclosure(menu: Menu): string {
-  if (menu.selected === null) {
-    const label = sanitizeLabel(menu.labels[menu.active] ?? "");
-    return `no answer — keeping the default (${label})`;
+  const noun = menu.selected === null ? "default" : "defaults";
+  return `no answer — keeping the ${noun} (${menuAnswer(menu)})`;
+}
+
+/**
+ * The separator the echo puts between the question and the answer.
+ *
+ * `renderMenu`'s OWN active-row marker, reused rather than a second glyph
+ * minted for this line: `>` already means "the thing under consideration" in
+ * this menu, so the settled line and the live frame stay in one vocabulary.
+ */
+const ECHO_SEPARATOR = ">";
+
+/**
+ * The answer, broken across at most `rows` lines that each fit `columns - 2`
+ * characters — the two columns the echo's own prefix spends: `> ` on the first
+ * row, and two spaces of indent on every row under it, so the separator column
+ * stays the separator's and the answer reads as one block under the question.
+ *
+ * Breaks land on the last space that fits, so a row ends between words; a run
+ * with no space in it (a path, a hash, a single long token) is cut at the
+ * budget instead, because a row that cannot break has to end somewhere. The
+ * window searched is one character wider than the budget so a space sitting
+ * exactly at the boundary still counts as a fit — the row ends before it and
+ * the break consumes it, which is what lets the rows rejoin on a single space.
+ *
+ * Whatever is left when the last owned row is filled is DROPPED: the caller
+ * has no further rows to give it without writing past the frame the menu drew,
+ * and a line written past the frame is a line no `rewind` in this file can
+ * walk back over. `Math.max(1, …)` keeps the walk finite on a terminal
+ * narrower than the prefix itself — the same case `renderMenu`'s rows leave to
+ * wrap rather than give a special case to.
+ */
+function reflowAnswer(answer: string, columns: number, rows: number): string[] {
+  const budget = Math.max(1, columns - 2);
+  const lines: string[] = [];
+  let rest = answer;
+  while (lines.length < rows) {
+    if (rest.length <= budget) return [...lines, rest];
+    const breakAt = rest.slice(0, budget + 1).lastIndexOf(" ");
+    if (breakAt > 0) {
+      lines.push(rest.slice(0, breakAt));
+      rest = rest.slice(breakAt + 1);
+    } else {
+      lines.push(rest.slice(0, budget));
+      rest = rest.slice(budget);
+    }
   }
-  const kept = menu.labels.filter((_label, index) => menu.selected?.has(index) === true);
-  const rendered = kept.length === 0 ? "none" : kept.map((label) => sanitizeLabel(label)).join(", ");
-  return `no answer — keeping the defaults (${rendered})`;
+  return lines;
+}
+
+/**
+ * The frame a menu leaves behind once Enter settles it: the question, the
+ * separator, and the answer, where the whole live frame was — on one line when
+ * the pair fits the terminal, on two when it does not.
+ *
+ * DECISION OF RECORD (the maintainer, 2026-09-07): the after-Enter output is
+ * an ECHO, the way a conventional prompt library echoes, so a transcript reads
+ * as a form the operator filled in rather than as a frame frozen at the moment
+ * it stopped being live. That decision supersedes the raw path's after-Enter
+ * byte identity and nothing else: every frame drawn BEFORE Enter, the typed
+ * fallback, the `TERM=dumb` path and `../commands/config.ts`'s piped
+ * `runList` are untouched.
+ *
+ * THE ANSWER REFLOWS ONTO THE ROWS THE FRAME ALREADY OWNS when one line would
+ * cut it, which is the whole reason this has a branch. `clampToWidth` cuts a
+ * line's TAIL, and on an assembled question-plus-answer line the tail is the
+ * ANSWER — the one thing an echo exists to record. Measured under a real pty
+ * before the branch existed: this package's own migrate question (60 columns)
+ * at 60 columns echoed the question and NOT ONE of its answer's 94 characters,
+ * at 80 columns 19 of them, and the workspace member question at 80 columns
+ * dropped its second repository entirely.
+ *
+ * Moving the answer to ONE line of its own fixed the widths where the answer
+ * happens to be short, and no more: clamped to that line's `columns - 2` the
+ * same migrate answer still lost its last 16 characters at 80 columns
+ * (`nings + .env.mcp` — the half of the sentence that says learnings and
+ * `.env.mcp` are what gets carried), 36 at 60, and the two-member workspace
+ * answer lost its second repository again in a 40-column pane. So the answer
+ * takes as many rows as it needs instead: `height` is `labels.length + 2` and
+ * the question spends one, so `height - 1` rows of `columns - 2` characters
+ * are the answer's, and every one of them is a row the frame itself drew — the
+ * echo asks the terminal for nothing this menu did not already have. The break
+ * falls on the last space that fits where the row has one, so a row ends
+ * between words rather than mid-word. Only what is still left after the LAST
+ * owned row is clamped away, which is the last resort rather than the first.
+ *
+ * The rewind arithmetic is one expression across every shape, parameterised
+ * by how many lines were actually written. `rewind(height)` to the top of the
+ * drawn frame, the per-line `CLEAR_LINE` every drawn line already carries, one
+ * blanked line for each row the frame no longer occupies — without those a
+ * shorter echo would leave the tail of the frame standing underneath it — and
+ * a final `rewind(height - written)` back to rest directly under the LAST echo
+ * line, so whatever prints next starts on the next line rather than several
+ * lines down a run of blanks. The echo writes the question line plus at most
+ * `height - 1` answer rows, so the count written never exceeds `height`, the
+ * run of blanks is never negative, and the closing rewind never walks above
+ * the last line the echo drew.
+ *
+ * WHY A SEPARATOR AT ALL. Under the identity palette — `NO_COLOR`, a
+ * 16-colour terminal, any redirected transcript — the only thing standing
+ * between the question and the answer was whatever punctuation the CALLER
+ * happened to end its question with. `Which tool?` reads as a boundary; a
+ * question worded without a trailing `?` or `:` does not, and the echo then
+ * runs two phrases together under a single space. `ECHO_SEPARATOR` is the
+ * renderer's own, so the boundary does not depend on the caller's wording.
+ *
+ * MEASURE, CLAMP, THEN PAINT, exactly as `renderMenu` does: every width here
+ * is taken on plain text and only what SURVIVED is painted. The question keeps
+ * the `bold` it already had on its own line. The separator takes the accent the
+ * same way the frame's active-row marker does — the GLYPH carries the boundary
+ * and the colour decorates it, which is what lets `./terminal.ts`'s ladder drop
+ * the paint at 16-colour depth and lose nothing. The answer is theme ink,
+ * unpainted: it is manifest-derived text this process did not author (see
+ * `sanitizeLabel`), and colour on untrusted content is a second channel nobody
+ * audited.
+ *
+ * Nothing is echoed on any other exit. A Ctrl-C answered nothing, an aborted
+ * stream answered nothing, and the EOF path has its own disclosure line that
+ * says the run applied a default — an echo there would spell a decision the
+ * operator did not make as one they did.
+ */
+function renderMenuEcho(menu: Menu, columns: number, palette: Palette): string {
+  // The same sum `runMenu`'s own `height` local and `rawMenuIo`'s height-fit
+  // check compute: the question line, the hint line, and one row per choice.
+  const height = menu.labels.length + 2;
+  const answer = menuAnswer(menu);
+  // An empty question paints nothing rather than an empty bold run, which is an
+  // escape pair with no glyph between them.
+  const boldQuestion = (text: string): string => (text === "" ? "" : palette.bold(text));
+  const lines: string[] = [];
+  // The fit test measures the line that would actually be WRITTEN, separator
+  // included. Testing the pair without it would send a line two columns too
+  // wide down the one-line branch, where the clamp would cut the answer again —
+  // the defect this branch exists to remove.
+  if (`${menu.question} ${ECHO_SEPARATOR} ${answer}`.length <= columns) {
+    lines.push(`${boldQuestion(menu.question)} ${palette.accent(ECHO_SEPARATOR)} ${answer}`);
+  } else {
+    // The question clamps to the full width; the answer reflows across the
+    // rows left under it — `renderMenu`'s row arithmetic, with
+    // `ECHO_SEPARATOR` standing where a row's marker stands on the first row
+    // and a two-space indent holding that column open on the rest.
+    lines.push(boldQuestion(clampToWidth(menu.question, columns)));
+    for (const [index, row] of reflowAnswer(answer, columns, height - 1).entries()) {
+      const prefix = index === 0 ? `${palette.accent(ECHO_SEPARATOR)} ` : "  ";
+      lines.push(`${prefix}${row}`);
+    }
+  }
+  // Never negative: `lines` holds one question line plus at most `height - 1`
+  // answer rows, and `height` is at least 2.
+  const rest = height - lines.length;
+  const drawn = lines.map((line) => `${CLEAR_LINE}${line}\n`).join("");
+  return `${rewind(height)}${drawn}${`${CLEAR_LINE}\n`.repeat(rest)}${rewind(rest)}`;
 }
 
 /**
@@ -844,7 +1047,10 @@ function menuDefaultDisclosure(menu: Menu): string {
  * terminal it is worse than a phantom: a terminal-mode interface also echoes
  * the keystrokes and its own refresh escapes into the output, interleaved with
  * the frames. Suppressing the 'line' event alone would fix the queue and leave
- * the echo, so the interface goes away instead.
+ * that keystroke echo, so the interface goes away instead. (Not to be confused
+ * with the menu's OWN answer echo, `renderMenuEcho` — one line this file writes
+ * deliberately once Enter has settled, where readline's is a stream of
+ * keystroke bytes nobody asked for.)
  *
  * `rl.close()` is the detach: it removes readline's keypress listener from the
  * stream, drops raw mode, and pauses the input — verified against node 22.22.1,
@@ -1012,6 +1218,11 @@ function installSignalGuards(raw: RawIo): () => void {
 /**
  * Runs one menu to Enter or Ctrl-C and returns the state it settled in.
  *
+ * Enter also REPLACES the frame with the answer echo (`renderMenuEcho`), which
+ * is the one thing this function writes that is not a live frame. No other exit
+ * echoes: a Ctrl-C, a stream error and the EOF disclosure each leave the output
+ * exactly as they always did.
+ *
  * Cleanup is the whole point of the `finally`: listener off, raw mode off,
  * cursor back, stream paused. An abort mid-interaction has to leave a terminal
  * the operator can still type into, so none of those four is conditional on how
@@ -1035,10 +1246,26 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu, palette: Palette): 
   // line).
   const height = menu.labels.length + 2;
   const count = menu.labels.length;
+  // `> 0`, not just `typeof === "number"` — the same rule
+  // `./terminal.ts::detectTerminalFacts` states for this exact field, and the
+  // same one `rawMenuIo` applies to `rows`. A TTY that reports `columns: 0` is
+  // still a TTY; the zero is the terminal saying it does not know its width,
+  // spelled as a number. Read as a width it is narrower than anything, so
+  // every row clamps to zero characters and the whole menu draws blank —
+  // `["", "", "> ", "  ", "  "]`, an operator asked to choose between three
+  // unlabelled rows. The comparison also drops NaN and a negative, so every
+  // value that is not a width falls to the default.
+  //
+  // WHICH STREAMS ACTUALLY REACH IT, since the two guards are coupled: an
+  // ioctl that cannot answer reports 0x0 — both fields at once — and while
+  // `rawMenuIo`'s height check read `rows: 0` as a terminal zero rows tall, it
+  // refused that pair upstream and this guard only ever saw a zero width
+  // beside a known height (a wrapper or double that fills one field and not
+  // the other). Reading 0 there as an unknown height is what puts the real 0x0
+  // terminal back on this path, which is where its width is handled.
+  const reportedColumns = (raw.output as { columns?: number }).columns;
   const columns =
-    typeof (raw.output as { columns?: number }).columns === "number"
-      ? (raw.output as { columns?: number }).columns!
-      : DEFAULT_COLUMNS;
+    typeof reportedColumns === "number" && reportedColumns > 0 ? reportedColumns : DEFAULT_COLUMNS;
   emitKeypressEvents(raw.input);
   let listener: ((chunk: string | undefined, key: Key | undefined) => void) | null = null;
   let onStreamEnd: (() => void) | null = null;
@@ -1152,6 +1379,11 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu, palette: Palette): 
           settled = true;
           if (listener !== null) raw.input.removeListener("keypress", listener);
           listener = null;
+          // The echo, and this is the only path that writes one — see
+          // `renderMenuEcho`. Safe to rewind unconditionally: `draw()` runs
+          // below before the stream is ever resumed, so a frame is always on
+          // screen by the time any keypress can reach this listener.
+          raw.output.write(renderMenuEcho(menu, columns, palette));
           resolve({
             question: menu.question,
             hint: menu.hint,

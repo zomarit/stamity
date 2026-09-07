@@ -90,6 +90,26 @@ describe("detectTerminalFacts", () => {
     expect("stdoutColumns" in piped).toBe(false);
   });
 
+  // A TTY whose window-size query answered 0x0 — a `-t` container with no
+  // attached terminal, some IDE pseudo-terminals — publishes `columns: 0` on a
+  // stream that is still a TTY. That is the terminal saying it does not know
+  // its width, spelled as a number, so it takes the SAME shape as a pipe: no
+  // key, which `bannerBlock` reads as "the caller does not know" and prints
+  // for. Recorded as a width it would instead read as narrower than anything.
+  it("treats a non-positive column count as an unknown width, not a narrow one", () => {
+    for (const columns of [0, -1, Number.NaN]) {
+      const facts = detectTerminalFacts({ stdout: { isTTY: true, columns }, stderr: {}, stdin: {} });
+      expect(facts).toEqual({ stdoutIsTTY: true, stderrIsTTY: false, stdinIsTTY: false });
+      expect("stdoutColumns" in facts).toBe(false);
+    }
+    // The control, so this measures the sign test rather than a stream double
+    // that never reports a width: one column IS a width, absurd as it is, and
+    // is recorded.
+    expect(
+      detectTerminalFacts({ stdout: { isTTY: true, columns: 1 }, stderr: {}, stdin: {} }),
+    ).toEqual({ stdoutIsTTY: true, stderrIsTTY: false, stdinIsTTY: false, stdoutColumns: 1 });
+  });
+
   it("defaults to the live process streams and always returns booleans", () => {
     const facts = detectTerminalFacts();
     expect(typeof facts.stdoutIsTTY).toBe("boolean");

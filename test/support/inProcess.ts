@@ -67,7 +67,14 @@ export async function runInProcess(
     stdoutIsTTY: opts?.tty?.stdout === true,
     stderrIsTTY: opts?.tty?.stderr === true,
     stdinIsTTY: opts?.tty?.stdin === true,
-    ...(opts?.columns === undefined ? {} : { stdoutColumns: opts.columns }),
+    // The same `> 0` rule `detectTerminalFacts` applies, for the same reason:
+    // zero is a terminal reporting it does not know its width, so it leaves NO
+    // key. Without it this double could hand a command a fact production can
+    // never produce, and a surface tested through it would be tested against a
+    // terminal that does not exist.
+    ...(typeof opts?.columns === "number" && opts.columns > 0
+      ? { stdoutColumns: opts.columns }
+      : {}),
   };
 
   const code = await runCli(argv, commands, {
