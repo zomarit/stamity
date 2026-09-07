@@ -69,7 +69,7 @@ unconditionally.
 A claim about behaviour is worth what its instrument is worth.
 
 - The verification gates — lint, typecheck, tests — decide whether a change is done. `AGENTS.md`
-  states them; nothing else does.
+  is their home; the other pages quote it.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) does: thresholds declared before the run, red runs published
   rather than re-scored.

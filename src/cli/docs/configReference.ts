@@ -259,11 +259,17 @@ export function renderConfigReferenceFrom(specs: readonly ConfigKeySpec[]): stri
     // in src/mcp/catalog.ts and nowhere a reader would look. The pointer lives in
     // the generator rather than the page bytes for the reason every fact on this
     // page does — the committed file is byte-compared against this render.
-    "`mcp.servers` is the one row whose accepted values are a closed list, and",
-    "[the MCP server reference](reference/mcp-servers.md) is that list: every id this repo resolves",
-    "on its own, with the version each is pinned to, the credentials it needs and the blast radius",
-    "of handing it to an agent. An id absent from that page resolves only when an installed pack",
-    "supplies it.",
+    //
+    // NOT "the one row whose accepted values are a closed list": the table above
+    // has eight more — `tools`, `platform`, `maturityTier`, `communicationStyle`
+    // and the four `effort.*` rows — and each spells its members in its own cell.
+    // What is singular about this row is the HOME of its list, not its closure:
+    // the ids are too many, and carry too much per id, to fit a cell.
+    "`mcp.servers` is the one row whose closed list is kept on a page of its own rather than spelled",
+    "in its cell, and [the MCP server reference](reference/mcp-servers.md) is that page: every id this",
+    "repo resolves on its own, with the version each is pinned to, the credentials it needs and the",
+    "blast radius of handing it to an agent. An id absent from that page resolves only when an",
+    "installed pack supplies it.",
     "",
     "## Changing one",
     "",

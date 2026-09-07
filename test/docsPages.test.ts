@@ -94,8 +94,15 @@ const CODE_OF_CONDUCT = "CODE_OF_CONDUCT.md";
 const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
 
 // Declared in path order, which is not the order GUIDES reads in: this block is a lookup and
-// the array below is the sidebar's sequence, so the customization guide sits first here and
-// fourth there, and the workspaces guide last here and fifth there.
+// the array below is GUIDES' own reading order, so the customization guide sits first here and
+// FIFTH there, and the workspaces guide last here and SIXTH there.
+//
+// Two corrections this comment has already needed, kept as the warning they are. The ordinals
+// are indices into a literal array, so inserting one entry moves every entry after it —
+// DOCTRINE at position 3 is what last moved these two. And the array is NOT the sidebar's
+// sequence, which this comment used to claim: the sidebar follows it except for MIGRATION,
+// which is fourth here and deliberately unlisted there (`website/sidebars.ts`; MAPPED_GUIDES
+// below carries the same decision for the README map).
 const CUSTOMIZATION = "docs/customization.md";
 const DOCTRINE = "docs/doctrine.md";
 const GETTING_STARTED = "docs/getting-started.md";
@@ -144,8 +151,19 @@ const MAPPED_GUIDES: readonly string[] = GUIDES.filter((page) => page !== MIGRAT
 /** Every hand-written page. The properties below are asserted on all of them. */
 const HAND_PAGES: readonly string[] = [...PAGES, ...GUIDES];
 
-/** README's hard budget, per the hand-page posture (≤150 lines). */
-const README_MAX_LINES = 150;
+/**
+ * The ≤150-line budget, shared by the two pages written to it.
+ *
+ * README's is the hand-page posture's own figure. The workflow guide's is declared by
+ * `docs/plans/001-package-8-operator-experience.md` — ":24 written to ≤150 physical lines", and
+ * a `wc -l` acceptance criterion at :335 — and that page sits at exactly 150, so it has zero
+ * headroom and one added line is the drift this catches.
+ *
+ * ONE constant because it is one figure, and it is asserted on exactly these two pages: the
+ * other six guides were never written to a line budget, and asserting one on them would invent
+ * a rule rather than hold a declared one.
+ */
+const MAX_LINES = 150;
 
 /**
  * The product, its installable package, and the owner the pages name.
@@ -587,7 +605,7 @@ describe("README", () => {
   });
 
   it("stays within the hand-page line budget", () => {
-    expect(lines(read(README)).length).toBeLessThanOrEqual(README_MAX_LINES);
+    expect(lines(read(README)).length).toBeLessThanOrEqual(MAX_LINES);
   });
 
   // Renamed on each growth of the advertised surface — "seven verbs" before `workspace`, "eight
@@ -1115,6 +1133,42 @@ describe("the guides", () => {
         `${WORKING_WITH_STAMITY} restates ${id} instead of mirroring the charter's index`,
       ).toBe(oneLine(gloss));
     }
+  });
+
+  it("the workflow guide stays within the line budget its plan declares", () => {
+    expect(lines(read(WORKING_WITH_STAMITY)).length).toBeLessThanOrEqual(MAX_LINES);
+  });
+
+  /**
+   * The spine heading and its fence are ONE surface pin, because a stylesheet rule depends on
+   * both. `website/src/css/custom.css` reserves the diagram's box before the diagram exists —
+   * there is no element to style at first paint, so the box is generated on the heading above
+   * it, `.markdown h2#the-spine:has(+ p)::after`, and cancels itself when the rendered
+   * container lands between the two. That rule reads two facts of this page that live nowhere
+   * else: the heading text, which the site slugs into the selector, and the fence being the
+   * heading's immediately next block.
+   *
+   * Both drift silently, in opposite directions, and the rule's own comment names them: rename
+   * the heading and the selector stops matching, reverting the page to the measured 0.26-0.57
+   * CLS; put a paragraph directly under the heading and `:has(+ p)` matches forever, leaving a
+   * permanent ~767px gap. Neither renders as an error, so nothing else in this tree notices.
+   *
+   * The slug is DERIVED from the matched heading rather than typed, so renaming the heading and
+   * the selector together passes and renaming either alone fails — which is the coupling, not
+   * the spelling, being held.
+   */
+  it("the spine heading and its fence stay pinned to the stylesheet's CLS reservation", () => {
+    const spine = /^## (.+)\n\n```mermaid$/m.exec(read(WORKING_WITH_STAMITY));
+    expect(
+      spine,
+      `${WORKING_WITH_STAMITY} no longer opens its mermaid fence directly under a heading — the CLS reservation in website/src/css/custom.css now leaves a permanent gap`,
+    ).not.toBeNull();
+
+    const slug = (spine?.[1] ?? "").toLowerCase().replaceAll(/[^a-z0-9]+/g, "-");
+    expect(
+      read("website/src/css/custom.css"),
+      `the CLS reservation does not name the slug of "${spine?.[1]}" — the heading was renamed and the reservation stopped matching`,
+    ).toContain(`h2#${slug}:has(+ p)::after`);
   });
 
   it("migration names both paths and cites the predecessor's own uninstall verb", () => {

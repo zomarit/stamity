@@ -246,11 +246,15 @@ May write when it runs, so `--dry-run` previews any change without making it.
 prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing)
 
 Plumbing. This verb is not listed in `stamity --help` because its caller is generated
-agent content rather than a person. Hidden is not secret — `stamity learn --help` prints
+agent content rather than a person. Hidden is not secret — `stamity handoff --help` prints
 in full — and it is documented here because a verb that exists and is undocumented is
 worse than one that is merely unadvertised.
 
 May write when it runs, so `--dry-run` previews any change without making it.
+
+In `resume` mode that preview is the status advance: the screens, the drift report and
+the framed body all still print, and the run names the transition it withheld —
+`Dry run: <id> would go active → in-progress. Nothing was written.`
 
 | Argument | What it is |
 |---|---|

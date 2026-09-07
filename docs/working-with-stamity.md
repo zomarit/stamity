@@ -35,7 +35,7 @@ name in plain words. [The capability matrix](capability-matrix.md) is the one ho
 ```mermaid
 flowchart TB
   accTitle: The spine
-  accDescr: Intent, plan, execution, then the gates fork. /st-ask feeds the plan; /st-debug, /st-board, /st-rework and /st-pr-resolve hand to /st-work; /st-quick joins at the gate.
+  accDescr: Intent, plan, execution, then the gates fork. /st-ask feeds the plan; /st-debug, /st-board, /st-rework and /st-pr-resolve hand to /st-work; /st-quick joins at the gate. Gates green leads to done; not green leads to a Not done list, one line per open gap.
   ASK["/st-ask"] --> P
   I["intent<br/>/st-spec"] --> P["plan<br/>/st-plan"]
   IN["/st-debug<br/>/st-board<br/>/st-rework<br/>/st-pr-resolve"] --> X
