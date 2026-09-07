@@ -775,6 +775,48 @@ describe("sweepReclaimCandidates — recorded-hash ownership", () => {
     expect(await readFile(join(root, PACK_FILE), "utf-8")).toBe("edited by hand\n");
   });
 
+  // A CRLF checkout of the file the engine wrote. Producers hash the LF string
+  // they emit, so the ledger holds an LF hash; `core.autocrlf=true` — the Git
+  // for Windows installer default — hands the reader the same committed bytes
+  // back as CRLF. Without the fold the raw compare misses, the hash veto fires
+  // on a file nobody edited, and the sweep skips it on every run.
+  it("deletes a CRLF checkout of bytes whose recorded hash was taken over LF", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const crlf = PACK_BODY.replaceAll("\n", "\r\n");
+    await temp.seedFiles({ [`repo/${PACK_FILE}`]: crlf });
+
+    const report = await sweepReclaimCandidates([hashedCandidate(PACK_FILE, PACK_BODY)], {
+      rootDir: root,
+      consent: true,
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("deleted");
+    expect(entry.detail).toContain("still hash to what the ledger recorded");
+    expect(await snapshot(root)).toEqual({ ".stamity/": "" });
+  });
+
+  // The other half of the same rule: the fold admits a line-ending translation
+  // and nothing else, so a hand edit that also arrived CRLF still misses both
+  // comparisons and still keeps its bytes.
+  it("keeps a CRLF file whose folded bytes still disagree with the recorded hash", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const edited = `${PACK_BODY}Edited by hand.\n`.replaceAll("\n", "\r\n");
+    await temp.seedFiles({ [`repo/${PACK_FILE}`]: edited });
+
+    const report = await sweepReclaimCandidates([hashedCandidate(PACK_FILE, PACK_BODY)], {
+      rootDir: root,
+      consent: true,
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("skipped-user-content");
+    expect(entry.detail).toContain("edited since");
+    expect(await readFile(join(root, PACK_FILE), "utf-8")).toBe(edited);
+  });
+
   // Renamed from "refuses a matching hash outside the state dir, where a row may
   // describe a merged block". Justification: every assertion is preserved
   // verbatim — this is a re-titling, not a relaxation. The old title stated a

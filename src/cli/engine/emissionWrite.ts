@@ -13,13 +13,47 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * The write-side rules the two regeneration verbs must apply IDENTICALLY.
  *
  * `init` (`../commands/init/apply.ts`) and `sync` (`../commands/sync/engine.ts`)
- * are two different write loops on purpose — they differ in the replace lane,
- * the ledger rebuild scope, the collision gate, the reclaim sweep, the scaffold
- * ordering, the dry-run prediction, and how the manifest is composed — and
- * collapsing them into one flagged function would erase distinctions the
- * ownership model depends on. What may NOT differ is what a write means: which
- * lane an output takes, which bytes its authorship proof is computed over, what
- * a ledger row looks like, and which MCP ids the engine can prove it rendered.
+ * are two different write loops on purpose, and collapsing them into one flagged
+ * function would erase distinctions the ownership model depends on. Every
+ * divergence that remains is listed below with the two lines where the loops
+ * part, so the number of them is READ OFF the list rather than carried as a
+ * count that drifts the next time one is unified:
+ *
+ * 1. The replace lane. `init` forces each path an import decision marked
+ *    `replace` (`init/apply.ts:224` builds the set, `:273` forces per path);
+ *    `sync` has no such decision and passes the flag alone
+ *    (`sync/engine.ts:720`).
+ * 2. The ledger rebuild scope. `init` rebuilds the rows of the tools its own
+ *    manifest selects (`init/apply.ts:321-323`); `sync` rebuilds over the CLOSED
+ *    tool set (`sync/engine.ts:745-748`, `for (const tool of TOOLS)`), so a tool
+ *    the operator removed has its rows dropped rather than left standing.
+ * 3. The collision gate. `sync` refuses the run when a planned path collides,
+ *    unless `--force` (`sync/engine.ts:654-655`, the message at `:537`); `init`
+ *    keeps the writer's `skipped` row, reports it in the panel, and carries on
+ *    (`init/apply.ts:280`).
+ * 4. The reclaim sweep. `sync` computes candidates in the plan
+ *    (`sync/engine.ts:447`) and sweeps them after the writes (`:750-758`);
+ *    `init` runs no sweep — a first setup has no previous emission of its own to
+ *    reclaim from, and a `--force` re-init carries only the pack rows.
+ * 5. The scaffold ordering. `init` writes the state scaffold BEFORE the emission
+ *    (`init/apply.ts:173`); `sync` writes it after every write, as the last step
+ *    before the commit point (`sync/engine.ts:770`).
+ * 6. How the manifest is composed. `init` composes a fresh one from the
+ *    decisions, ledger empty (`init/apply.ts:153`); `sync` reads the persisted
+ *    one (`sync/engine.ts:384`) and rewrites it with this run's stamps (`:774`).
+ * 7. The dry-run prediction — and only this much of it, since the predictions
+ *    themselves moved here: `sync`'s plan lane TYPES a refusal (`action:
+ *    "collision"` carrying a `collisionKind`, `sync/engine.ts:298-299`,
+ *    `:329-330`, `:351-359`) because its callers branch on the class, while
+ *    `init`'s dry run returns the writer's plain `MergeResult`
+ *    (`init/apply.ts:434`). Both sides ask the same two predictors:
+ *    `../../merge/safeWrite.ts::predictMergeAction` over
+ *    {@link outputWriteOptions}, and {@link predictMcpDocumentMerge} for the
+ *    three merged MCP documents (`init/apply.ts:380`, `sync/engine.ts:319`).
+ *
+ * What may NOT differ is what a write MEANS: which lane an output takes, which
+ * bytes its authorship proof is computed over, what a ledger row looks like, and
+ * which MCP ids the engine can prove it rendered.
  *
  * Those four questions used to be answered twice, once per verb, with comments
  * on both sides asking the reader to keep the copies in step by hand. Each is

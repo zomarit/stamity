@@ -817,6 +817,20 @@ export function ledgerHashIndex(
  * utf-8), because a comparison between two spellings of the same bytes would
  * report drift on every file.
  *
+ * Which is also why a raw miss is not the verdict on its own. Both producers
+ * hash the LF string they emit (`../cli/engine/emissionWrite.ts::sha256`, over
+ * content this engine composes with `\n`), so the ledger only ever records an
+ * LF hash — while a checkout under `core.autocrlf=true`, the Git for Windows
+ * installer default, hands the reader back the same file as CRLF wherever the
+ * emitted tree is committed. A line-ending translation is not a hand edit, so
+ * the miss is retried against the same content with every `\r\n` folded to
+ * `\n`. Agreement there means the bytes are still the engine's: the file takes
+ * the no-backup fast path and is rewritten to the engine's LF bytes. Calling it
+ * drift instead would mint a `.bak` beside every marker-less ledgered output on
+ * every sync and tell the operator they hand-edited files they never opened.
+ * The fold narrows nothing else — content that disagrees with the record in any
+ * other way still misses both comparisons and still takes the verified `.bak`.
+ *
  * Drift changes whether a `.bak` is taken, never WHICH disposition is returned
  * — a drifted overwrite is `updated` like any other — so
  * {@link predictMergeAction} needs no drift input to stay byte-accurate.
@@ -828,7 +842,14 @@ function hasLedgerDrift(
 ): boolean {
   const recorded = ledgerHashes?.get(toLedgerKey(filePath));
   if (recorded === undefined) return false;
-  return !recorded.has(createHash("sha256").update(existingContent).digest("hex"));
+  if (recorded.has(ledgerHash(existingContent))) return false;
+  const folded = existingContent.replaceAll("\r\n", "\n");
+  return folded === existingContent || !recorded.has(ledgerHash(folded));
+}
+
+/** The ledger's spelling of a content hash — `../cli/engine/emissionWrite.ts::sha256`. */
+function ledgerHash(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
 }
 
 // ── Frontmatter prefix reader ──────────────────────────────────────────────
