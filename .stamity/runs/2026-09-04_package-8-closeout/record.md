@@ -106,7 +106,7 @@ protocol's unattended branch; each is a row in `ledger.jsonl` under `decisions/`
 | Pre-fix, review rounds 1–3, lenses, fix rounds | `claude-fable-5-1` × 6 (verdicts), `claude-opus-5[1m]` × 3 (fixes) | Workflow | approve 0.85 then 0.90 |
 | Eval run 5 | loaders and scenarios `claude-opus-5[1m]`, judge `claude-fable-5-1` | Workflow | run 5, the full set at `18bbcbf`: golden 30/41 (four floor cases failing), guardrail 11/12, twins 1/4, probes 12/12 — red on three of four; five instrument defects, two corpus levers and six adherence findings read in § 9; run 6, the ten-case slice at `38c0be9` after the repairs: every repaired case 3/3, the two floor cases 2/3 each, four adherence samples remain |
 | QA captures | none (pty driver, DevTools protocol, GitHub fetch, `gh`) | Bash | rows 1, 2, 3, 5, 7 on the pushed head; rows 4 and 6 on the CI artifact |
-| Commits and push | orchestrator | git, explicit paths | eight commits `83196c2` … `18bbcbf`, then `31ec407`, then the run-5 repairs `7dd32c3` and `38c0be9` and run 6 over the affected slice `a98656b` and the records |
+| Commits and push | orchestrator | git, explicit paths | seven commits `83196c2` … `18bbcbf`, then `31ec407`, then the run-5 repairs `7dd32c3` and `38c0be9` and run 6 over the affected slice `a98656b` and the records (corrected in place 2026-09-07: this cell said "eight commits `83196c2` … `18bbcbf`"; `git rev-list --count 83196c2^..18bbcbf` is 7 — `83196c2`, `e7344f1`, `7c7b1d2`, `e117788`, `cfeb706`, `ef1ea58`, `18bbcbf`) |
 
 Evidence classes: the workflow journals are native artifacts (kept in the private layer's run
 directory); the gate outputs are the fixers' quoted command results; the QA captures are files.
@@ -119,16 +119,27 @@ Package 4, the review package, with three product questions this run recorded ra
 
 The seven rows the prior record left on the human path, now driven and captured
 (`qa-evidence.json`; raw captures in the private layer). The signature remains the maintainer's.
+Three legs are recorded in that file as **not driven** rather than as passes: Windows (the pty
+driver is POSIX-only), a real screen reader (row 4 measures DOM and accessibility-tree facts, not
+spoken output), and row 6 on a push run (the Docs site workflow does not trigger on
+feature-branch pushes).
+
+*Corrected in place 2026-09-07.* `qa-evidence.json` was regenerated from the driver's own
+report: it had re-keyed the driver's fifteen legs onto five `row` labels, so the last leg under
+each label won and every leg name this table cites was absent — the key standing for row 1 held
+the 60-column leg (zero block rows, no accent), the opposite of what row 1 asserts. Nothing was
+re-driven; the same captures are re-projected under the driver's unique leg names, and the Proof
+column below now names keys that exist in the file.
 
 | # | Scenario | Driven how | Observed | Risk | Proof |
 |---|---|---|---|---|---|
-| 1 | The mark reads "stamity" on a real terminal | pty at 65 columns, `node dist/cli.js --help` | seven block rows above `Usage:`; the third letter flat on its right edge, bars two cells in, a counter | M | `qa-evidence.json` leg help-65 |
-| 2 | The menus carry the accent without carrying state in colour alone | pty, `init` on truecolor, 256-colour, 16-colour and `NO_COLOR=1` | bold question, dim hint, the cursor and check accented, labels plain; `NO_COLOR` writes zero escapes and the frames are strip-equal (delta 8 escapes) | M | legs init-menu-* |
-| 3 | The mark stays out of a narrow pane | pty, `--help` at 64 and 60; a completed `init -y` in a throwaway repository at 64 and 65 | no block rows at 64 or 60; none at 64 and seven at 65 on the init call site (the row's `--dry-run` step could prove nothing: the banner is not on that branch) | L | legs help-64, help-60, init-yes-64/65 |
-| 4 | Keyboard traversal of the landing page | DevTools protocol over the CI artifact of the pushed head | Tab lands on the copy control, then "Start here", then "GitHub (opens in new tab)" with a visible ring on every stop (the theme's own cue wording); a polite live region is present on the page | L | `qa/tabwalk` |
-| 5 | The diagram on GitHub | fetch of the blob page | the fence carries GitHub's mermaid enrichment section | L | `qa/github` |
-| 6 | The docs-site CI run on the pushed head | `gh` | docs-site run 33918417973 on `18bbcbf`: Build success, deploy skipped as an unarmed run, the `docs-site` artifact 1,435,111 bytes; rows 4 and 6 were re-taken against that artifact after the driver's short-sha lookup returned nothing (the GitHub API needs the full sha) | M | `qa/ci-run.json` |
-| 7 | The typed fallback on a dumb terminal | pty, `TERM=dumb` with and without `NO_COLOR` | the numbered list and the `Choose 1-4` line verbatim, the re-ask on `zz`; zero paint escapes, byte-equal to the `NO_COLOR` transcript | L | legs init-dumb* |
+| 1 | The mark reads "stamity" on a real terminal | pty at 65 columns, `node dist/cli.js --help` | seven block rows above `Usage:`; the third letter flat on its right edge, bars two cells in, a counter | M | `qa-evidence.json` leg `help-65` |
+| 2 | The menus carry the accent without carrying state in colour alone | pty, `init` on truecolor, 256-colour, 16-colour and `NO_COLOR=1` | bold question, dim hint, the cursor and check accented, labels plain; `NO_COLOR` writes zero escapes and the frames are strip-equal (delta 8 escapes) | M | `qa-evidence.json` legs `init-menu-color`, `init-menu-nocolor`, `init-menu-256`, `init-menu-16`, `init-menu-strip-equality` |
+| 3 | The mark stays out of a narrow pane | pty, `--help` at 64 and 60; a completed `init -y` in a throwaway repository at 64 and 65 | no block rows at 64 or 60; none at 64 and seven at 65 on the init call site (the row's `--dry-run` step could prove nothing: the banner is not on that branch) | L | `qa-evidence.json` legs `help-64`, `help-60`, `init-yes-64`, `init-yes-65` (the two `init-dryrun-*` legs are recorded there as inconclusive for this row, not as passes) |
+| 4 | Keyboard traversal of the landing page | DevTools protocol over the CI artifact of the pushed head | Tab lands on the copy control, then "Start here", then "GitHub (opens in new tab)" with a visible ring on every stop (the theme's own cue wording); a polite live region is present on the page | L | `qa-evidence.json` `site` (tab order, focus ring, live region); raw capture in the private layer |
+| 5 | The diagram on GitHub | fetch of the blob page | the fence carries GitHub's mermaid enrichment section | L | private-layer capture only — this row has no in-tree leg |
+| 6 | The docs-site CI run on the pushed head | `gh` | docs-site run 33918417973 on `18bbcbf`: Build success, deploy skipped as an unarmed run, the `docs-site` artifact 1,435,111 bytes; rows 4 and 6 were re-taken against that artifact after the driver's short-sha lookup returned nothing (the GitHub API needs the full sha) | M | `qa-evidence.json` `site` (run id, build job, deploy job, artifact size); raw capture in the private layer |
+| 7 | The typed fallback on a dumb terminal | pty, `TERM=dumb` with and without `NO_COLOR` | the numbered list and the `Choose 1-4` line verbatim, the re-ask on `zz`; zero paint escapes, byte-equal to the `NO_COLOR` transcript | L | `qa-evidence.json` legs `init-dumb`, `init-dumb-nocolor`, `init-dumb-strip-equality` |
 
 **Sign-off** — Package 8 closeout, 2026-09-04
 

@@ -1,65 +1,477 @@
 {
  "generated": "2026-09-04T22:53:46+0200",
+ "corrected": "2026-09-07",
+ "correction": "Regenerated in place from the driver's own report. The file as first written re-keyed the driver's array of fifteen legs onto an OBJECT keyed by the shared `row` label, so every leg sharing a label collapsed and the last one in array order won: five keys survived — \"1 (65) / 3 (60, 64 boundary)\", \"2\", \"3\", \"3 (init call site)\", \"7\" — and the key standing for row 1 held the help-60 leg (cols 60, zero block rows, no accent), which is the opposite of what row 1 asserts. Every leg name the record's Proof column cites (help-65, help-64, help-60, init-menu-*, init-dumb*, init-yes-64/65) was therefore absent, and the 256-colour and 16-colour observations were gone entirely. Nothing was re-driven: these are the same captures from the same 2026-09-04 run, re-projected without loss and keyed by the driver's unique `leg` name. The `site` section is unchanged.",
  "head": "18bbcbf",
  "cli_version": "1.1.0",
  "node": "v22.22.1",
+ "captures": "The `capture` field names the raw pty capture for the leg; the captures themselves are held in the private layer, not in this repository. `argv` is shown relative to the repository root (the driver recorded absolute interpreter and entry paths); `observed` is the driver output verbatim, including the absolute temp paths a leg printed.",
  "legs": {
-  "1 (65) / 3 (60, 64 boundary)": {
+  "help-65": {
    "row": "1 (65) / 3 (60, 64 boundary)",
-   "cols": 60,
-   "env": null,
+   "argv": [
+    "dist/cli.js",
+    "--help"
+   ],
+   "cols": 65,
    "exit": 0,
+   "capture": "help-65.bin",
+   "observed": {
+    "usage_present": true,
+    "block_rows_above_usage": 7,
+    "block_rows_anywhere": 7,
+    "mark_rows": [
+     "             ███                             ███  ███",
+     "    ▄▄▄▄▄▄▄ ▄███▄▄   ▄▄▄▄▄▄▄▄▄   ▄▄▄▄ ▄▄▄▄   ▄▄▄ ▄███▄▄ ▄▄▄  ▄▄▄",
+     "  ▄██▀▀▀▀▀▀ ▀███▀▀ ▄███▀▀█████ ▄██▀█████▀██▄ ███ ▀███▀▀ ███  ███",
+     "  █████████  ███   ███    ████ ███  ███  ███ ███  ███   ███  ███",
+     "  ▄▄▄▄▄▄██▀  ███▄▄ ▀███▄▄█████ ███  ███  ███ ███  ███▄▄ ▀███████",
+     "  ▀▀▀▀▀▀▀     ▀▀▀▀   ▀▀▀▀▀▀▀▀▀ ▀▀▀  ▀▀▀  ▀▀▀ ▀▀▀   ▀▀▀▀   ▀█████",
+     "                                                           ███▀"
+    ],
+    "accent_escape_present": true,
+    "accent_escape": "\u001b[38;5;57m",
+    "letter_groups": [
+     [
+      2,
+      11
+     ],
+     [
+      12,
+      18
+     ],
+     [
+      19,
+      30
+     ],
+     [
+      31,
+      44
+     ],
+     [
+      45,
+      48
+     ],
+     [
+      49,
+      55
+     ],
+     [
+      56,
+      64
+     ]
+    ],
+    "third_letter": {
+     "pixel_rows": 14,
+     "left_column": 0,
+     "right_column": 10,
+     "right_edge_rows_inked": 8,
+     "right_edge_contiguous": true,
+     "right_edge_flat_over_x_height": true,
+     "top_bar_starts_at": 2,
+     "bottom_bar_starts_at": 2,
+     "bars_start_two_cells_in": true,
+     "counter_widths_by_row": [
+      2,
+      4,
+      4,
+      2
+     ],
+     "counter_is_lozenge_not_rectangle": true,
+     "art": [
+      "           ",
+      "  ▄▄▄▄▄▄▄▄▄",
+      "▄███▀▀█████",
+      "███    ████",
+      "▀███▄▄█████",
+      "  ▀▀▀▀▀▀▀▀▀",
+      "           "
+     ]
+    }
+   },
+   "verdict": "pass — seven block rows above `Usage:`, the accent run present, the third letter flat on its right edge with the bars two cells in"
+  },
+  "help-64": {
+   "row": "1 (65) / 3 (60, 64 boundary)",
+   "argv": [
+    "dist/cli.js",
+    "--help"
+   ],
+   "cols": 64,
+   "exit": 0,
+   "capture": "help-64.bin",
    "observed": {
     "usage_present": true,
     "block_rows_above_usage": 0,
     "block_rows_anywhere": 0,
     "mark_rows": [],
-    "accent_escape_present": false
-   }
+    "accent_escape_present": false,
+    "accent_escape": null
+   },
+   "verdict": "pass — no block rows at 64, the width guard's first column below the mark"
   },
-  "2": {
+  "help-60": {
+   "row": "1 (65) / 3 (60, 64 boundary)",
+   "argv": [
+    "dist/cli.js",
+    "--help"
+   ],
+   "cols": 60,
+   "exit": 0,
+   "capture": "help-60.bin",
+   "observed": {
+    "usage_present": true,
+    "block_rows_above_usage": 0,
+    "block_rows_anywhere": 0,
+    "mark_rows": [],
+    "accent_escape_present": false,
+    "accent_escape": null
+   },
+   "verdict": "pass — no block rows at 60"
+  },
+  "init-menu-color": {
    "row": "2",
-   "cols": null,
-   "env": null,
-   "exit": null,
+   "argv": [
+    "dist/cli.js",
+    "init"
+   ],
+   "env": {
+    "TERM": "xterm-256color",
+    "COLORTERM": "truecolor"
+   },
+   "exit": 1,
+   "capture": "init-menu-color.bin",
+   "observed": {
+    "question_reached": true,
+    "question_line_bold": true,
+    "hint_line_dim": true,
+    "cursor_and_box_accented": true,
+    "mark_violet_present": false,
+    "ui_accent_occurrences_initial_frame": 2,
+    "ansi256_accent_occurrences_initial_frame": 0,
+    "paint_escapes_initial_frame": [
+     "\u001b[1m",
+     "\u001b[22m",
+     "\u001b[2m",
+     "\u001b[38;2;138;82;255m",
+     "\u001b[39m"
+    ],
+    "labels_unpainted": true,
+    "initial_frame_stripped": "Which tools?\r\n(up/down to move, space to toggle, enter to accept, ctrl-c to cancel)\r\n> [x] claude — Claude Code\r\n  [ ] cursor — Cursor\r\n  [ ] copilot — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\n",
+    "cursor_row_after_down": [
+     "> [ ] cursor — Cursor"
+    ],
+    "cursor_row_after_up": [
+     "> [x] claude — Claude Code"
+    ],
+    "redraw_starts_with_rewind": true,
+    "abort_tail": " — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\nerror: aborted\r\n",
+    "cursor_restored_before_exit": true
+   },
+   "verdict": "pass — bold question, dim hint, cursor and box on the truecolor accent, labels unpainted"
+  },
+  "init-menu-nocolor": {
+   "row": "2",
+   "argv": [
+    "dist/cli.js",
+    "init"
+   ],
+   "env": {
+    "TERM": "xterm-256color",
+    "COLORTERM": "truecolor",
+    "NO_COLOR": "1"
+   },
+   "exit": 1,
+   "capture": "init-menu-nocolor.bin",
+   "observed": {
+    "question_reached": true,
+    "question_line_bold": false,
+    "hint_line_dim": false,
+    "cursor_and_box_accented": false,
+    "mark_violet_present": false,
+    "ui_accent_occurrences_initial_frame": 0,
+    "ansi256_accent_occurrences_initial_frame": 0,
+    "paint_escapes_initial_frame": [],
+    "labels_unpainted": true,
+    "initial_frame_stripped": "Which tools?\r\n(up/down to move, space to toggle, enter to accept, ctrl-c to cancel)\r\n> [x] claude — Claude Code\r\n  [ ] cursor — Cursor\r\n  [ ] copilot — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\n",
+    "cursor_row_after_down": [
+     "> [ ] cursor — Cursor"
+    ],
+    "cursor_row_after_up": [
+     "> [x] claude — Claude Code"
+    ],
+    "redraw_starts_with_rewind": true,
+    "abort_tail": " — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\nerror: aborted\r\n",
+    "cursor_restored_before_exit": true
+   },
+   "verdict": "pass — NO_COLOR writes zero paint escapes and the frame is unchanged"
+  },
+  "init-menu-256": {
+   "row": "2",
+   "argv": [
+    "dist/cli.js",
+    "init"
+   ],
+   "env": {
+    "TERM": "xterm-256color"
+   },
+   "exit": 1,
+   "capture": "init-menu-256.bin",
+   "observed": {
+    "question_reached": true,
+    "question_line_bold": true,
+    "hint_line_dim": true,
+    "cursor_and_box_accented": false,
+    "mark_violet_present": false,
+    "ui_accent_occurrences_initial_frame": 0,
+    "ansi256_accent_occurrences_initial_frame": 2,
+    "paint_escapes_initial_frame": [
+     "\u001b[1m",
+     "\u001b[22m",
+     "\u001b[2m",
+     "\u001b[38;5;99m",
+     "\u001b[39m"
+    ],
+    "labels_unpainted": true,
+    "initial_frame_stripped": "Which tools?\r\n(up/down to move, space to toggle, enter to accept, ctrl-c to cancel)\r\n> [x] claude — Claude Code\r\n  [ ] cursor — Cursor\r\n  [ ] copilot — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\n",
+    "cursor_row_after_down": [
+     "> [ ] cursor — Cursor"
+    ],
+    "cursor_row_after_up": [
+     "> [x] claude — Claude Code"
+    ],
+    "redraw_starts_with_rewind": true,
+    "abort_tail": " — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\nerror: aborted\r\n",
+    "cursor_restored_before_exit": true
+   },
+   "verdict": "pass — the accent degrades to the 256-colour ladder (index 99) with no truecolor escape"
+  },
+  "init-menu-16": {
+   "row": "2",
+   "argv": [
+    "dist/cli.js",
+    "init"
+   ],
+   "env": {
+    "TERM": "xterm"
+   },
+   "exit": 1,
+   "capture": "init-menu-16.bin",
+   "observed": {
+    "question_reached": true,
+    "question_line_bold": true,
+    "hint_line_dim": true,
+    "cursor_and_box_accented": false,
+    "mark_violet_present": false,
+    "ui_accent_occurrences_initial_frame": 0,
+    "ansi256_accent_occurrences_initial_frame": 0,
+    "paint_escapes_initial_frame": [
+     "\u001b[1m",
+     "\u001b[22m",
+     "\u001b[2m"
+    ],
+    "labels_unpainted": true,
+    "initial_frame_stripped": "Which tools?\r\n(up/down to move, space to toggle, enter to accept, ctrl-c to cancel)\r\n> [x] claude — Claude Code\r\n  [ ] cursor — Cursor\r\n  [ ] copilot — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\n",
+    "cursor_row_after_down": [
+     "> [ ] cursor — Cursor"
+    ],
+    "cursor_row_after_up": [
+     "> [x] claude — Claude Code"
+    ],
+    "redraw_starts_with_rewind": true,
+    "abort_tail": " — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\nerror: aborted\r\n",
+    "cursor_restored_before_exit": true
+   },
+   "verdict": "pass — bold and dim only; no accent escape on a 16-colour terminal"
+  },
+  "init-menu-strip-equality": {
+   "row": "2",
    "observed": {
     "stripped_frames_byte_equal": true,
     "paint_escape_delta": 8,
     "nocolor_paint_escapes": [],
     "painted_len": 287,
-    "plain_len": 223
-   }
+    "plain_len": 223,
+    "stripped_frame": "Which tools?\r\n(up/down to move, space to toggle, enter to accept, ctrl-c to cancel)\r\n> [x] claude — Claude Code\r\n  [ ] cursor — Cursor\r\n  [ ] copilot — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\n"
+   },
+   "verdict": "pass — the painted and NO_COLOR frames are byte-equal once escapes are stripped (delta 8 escapes)"
   },
-  "7": {
+  "init-dumb": {
    "row": "7",
-   "cols": null,
-   "env": null,
-   "exit": null,
+   "argv": [
+    "dist/cli.js",
+    "init"
+   ],
+   "env": {
+    "TERM": "dumb"
+   },
+   "exit": 1,
+   "capture": "init-dumb.bin",
+   "observed": {
+    "numbered_rows": [
+     "  1) claude — Claude Code",
+     "  2) cursor — Cursor",
+     "  3) copilot — GitHub Copilot",
+     "  4) codex — Codex CLI",
+     "  1) claude — Claude Code",
+     "  2) cursor — Cursor",
+     "  3) copilot — GitHub Copilot",
+     "  4) codex — Codex CLI"
+    ],
+    "choose_line": "Choose 1-4, comma-separated [1]: (type \"none\" to clear every box) zz",
+    "reask_line": "not a valid choice: zz — enter numbers 1-4 separated by commas",
+    "no_menu_escapes": true,
+    "paint_escapes": [],
+    "question_bolded": false,
+    "reask_yellow": false
+   },
+   "verdict": "pass — the numbered list, the `Choose 1-4` line and the re-ask verbatim, zero paint escapes"
+  },
+  "init-dumb-nocolor": {
+   "row": "7",
+   "argv": [
+    "dist/cli.js",
+    "init"
+   ],
+   "env": {
+    "TERM": "dumb",
+    "NO_COLOR": "1"
+   },
+   "exit": 1,
+   "capture": "init-dumb-nocolor.bin",
+   "observed": {
+    "numbered_rows": [
+     "  1) claude — Claude Code",
+     "  2) cursor — Cursor",
+     "  3) copilot — GitHub Copilot",
+     "  4) codex — Codex CLI",
+     "  1) claude — Claude Code",
+     "  2) cursor — Cursor",
+     "  3) copilot — GitHub Copilot",
+     "  4) codex — Codex CLI"
+    ],
+    "choose_line": "Choose 1-4, comma-separated [1]: (type \"none\" to clear every box) zz",
+    "reask_line": "not a valid choice: zz — enter numbers 1-4 separated by commas",
+    "no_menu_escapes": true,
+    "paint_escapes": [],
+    "question_bolded": false,
+    "reask_yellow": false
+   },
+   "verdict": "pass — identical transcript under NO_COLOR"
+  },
+  "init-dumb-strip-equality": {
+   "row": "7",
    "observed": {
     "stripped_transcripts_byte_equal": true,
     "nocolor_escape_count": 0,
     "color_escape_count": 0
-   }
+   },
+   "verdict": "pass — the two dumb-terminal transcripts are byte-equal and neither carries an escape"
   },
-  "3": {
+  "init-dryrun-60": {
    "row": "3",
-   "cols": 100,
-   "env": null,
+   "argv": [
+    "dist/cli.js",
+    "init",
+    "--dry-run"
+   ],
+   "cols": 60,
    "exit": 0,
+   "capture": "init-dryrun-60.bin",
    "observed": {
-    "block_rows_anywhere": 0
-   }
+    "block_rows_anywhere": 0,
+    "report_tail": "\r- scanning this repo\r                    \rWhich tools?\r\n(up/down to move, space to toggle, enter to accept, ctrl-c t\r\n> [x] claude — Claude Code\r\n  [ ] cursor — Cursor\r\n  [ ] copilot — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\nDry run — nothing was written. A real run would:\r\n  create: .stamity, .stamity/learnings, .stamity/handoffs\r\n  write: 57 file(s) would be written\r\n  manifest: /private/tmp/claude-501/-Users-denismasatovic-Projects-zomarit-stamity/082ccabc-0d60-47e9-895a-42fb2b751c60/scratchpad/closeout/qa/scratch-repo/.stamity/manifest.json\r\n  security: one line — .env.mcp — would be added to your .gitignore, so the credential file this setup uses can never be committed. Nothing else in your .gitignore is touched, and the .stamity/ state directory is committed on purpose.\r\n\r\nnext:\r\n  1. apply it: stamity init\r\n"
+   },
+   "verdict": "inconclusive for row 3 — zero block rows, but `--dry-run` never reaches the banner, so this leg cannot prove the width guard; row 3 is carried by help-64/help-60 and init-yes-64/init-yes-65 instead"
   },
-  "3 (init call site)": {
-   "row": "3 (init call site)",
-   "cols": 65,
-   "env": null,
+  "init-dryrun-100": {
+   "row": "3",
+   "argv": [
+    "dist/cli.js",
+    "init",
+    "--dry-run"
+   ],
+   "cols": 100,
    "exit": 0,
+   "capture": "init-dryrun-100.bin",
    "observed": {
-    "block_rows_anywhere": 7
-   }
+    "block_rows_anywhere": 0,
+    "report_tail": "\r- scanning this repo\r                    \rWhich tools?\r\n(up/down to move, space to toggle, enter to accept, ctrl-c to cancel)\r\n> [x] claude — Claude Code\r\n  [ ] cursor — Cursor\r\n  [ ] copilot — GitHub Copilot\r\n  [ ] codex — Codex CLI\r\nDry run — nothing was written. A real run would:\r\n  create: .stamity, .stamity/learnings, .stamity/handoffs\r\n  write: 57 file(s) would be written\r\n  manifest: /private/tmp/claude-501/-Users-denismasatovic-Projects-zomarit-stamity/082ccabc-0d60-47e9-895a-42fb2b751c60/scratchpad/closeout/qa/scratch-repo/.stamity/manifest.json\r\n  security: one line — .env.mcp — would be added to your .gitignore, so the credential file this setup uses can never be committed. Nothing else in your .gitignore is touched, and the .stamity/ state directory is committed on purpose.\r\n\r\nnext:\r\n  1. apply it: stamity init\r\n"
+   },
+   "verdict": "inconclusive for row 3 — same reason as init-dryrun-60"
+  },
+  "init-yes-64": {
+   "row": "3 (init call site)",
+   "argv": [
+    "dist/cli.js",
+    "init",
+    "-y"
+   ],
+   "cols": 64,
+   "exit": 0,
+   "capture": "init-yes-64.bin",
+   "observed": {
+    "block_rows_anywhere": 0,
+    "mark_rows": [],
+    "head": "\r- scanning this repo\r                    \rstamity is ready.\r\n\r\n  detected a fresh repo (no traces) -> installed claude (57 file(s)) (tier: solo, change with `stamity config`)\r\n  security: one line — .env.mcp — was added to your .gitignore, so the credential file this setup uses can never be committed. Nothing else in your .gitignore is touched, and the .stamity/ state directory is committed on purpose.\r\n\r\nnext steps:\r\n  1. open a terminal in this repo and type: claude\r\n  2. the nine touchpoint commands are installed in .claude/commands/\r\n  3. start here — inside Claude Code, type: /st-onboard"
+   },
+   "verdict": "pass — a completed `init -y` at 64 columns prints no mark"
+  },
+  "init-yes-65": {
+   "row": "3 (init call site)",
+   "argv": [
+    "dist/cli.js",
+    "init",
+    "-y"
+   ],
+   "cols": 65,
+   "exit": 0,
+   "capture": "init-yes-65.bin",
+   "observed": {
+    "block_rows_anywhere": 7,
+    "mark_rows": [
+     "             ███                             ███  ███",
+     "    ▄▄▄▄▄▄▄ ▄███▄▄   ▄▄▄▄▄▄▄▄▄   ▄▄▄▄ ▄▄▄▄   ▄▄▄ ▄███▄▄ ▄▄▄  ▄▄▄",
+     "  ▄██▀▀▀▀▀▀ ▀███▀▀ ▄███▀▀█████ ▄██▀█████▀██▄ ███ ▀███▀▀ ███  ███",
+     "  █████████  ███   ███    ████ ███  ███  ███ ███  ███   ███  ███",
+     "  ▄▄▄▄▄▄██▀  ███▄▄ ▀███▄▄█████ ███  ███  ███ ███  ███▄▄ ▀███████",
+     "  ▀▀▀▀▀▀▀     ▀▀▀▀   ▀▀▀▀▀▀▀▀▀ ▀▀▀  ▀▀▀  ▀▀▀ ▀▀▀   ▀▀▀▀   ▀█████",
+     "                                                           ███▀"
+    ],
+    "head": "\r- scanning this repo\r                    \r             ███                             ███  ███\r\n    ▄▄▄▄▄▄▄ ▄███▄▄   ▄▄▄▄▄▄▄▄▄   ▄▄▄▄ ▄▄▄▄   ▄▄▄ ▄███▄▄ ▄▄▄  ▄▄▄\r\n  ▄██▀▀▀▀▀▀ ▀███▀▀ ▄███▀▀█████ ▄██▀█████▀██▄ ███ ▀███▀▀ ███  ███\r\n  █████████  ███   ███    ████ ███  ███  ███ ███  ███   ███  ███\r\n  ▄▄▄▄▄▄██▀  ███▄▄ ▀███▄▄█████ ███  ███  ███ ███  ███▄▄ ▀███████\r\n  ▀▀▀▀▀▀▀     ▀▀▀▀   ▀▀▀▀▀▀▀▀▀ ▀▀▀  ▀▀▀  ▀▀▀ ▀▀▀   ▀▀▀▀   ▀█████\r\n                                                           ███▀\r\n\r\nstamity is ready.\r\n\r\n  detected a fresh repo (no traces) -> installed claude (57 file(s)) (tier: solo, ch"
+   },
+   "verdict": "pass — the same call site at 65 columns prints the seven mark rows"
   }
  },
+ "not_driven": [
+  {
+   "leg": "windows",
+   "rows": [
+    "1",
+    "2",
+    "3",
+    "7"
+   ],
+   "reason": "the pty driver is POSIX-only; no leg here ran on Windows",
+   "recorded_as": "not driven — not a pass"
+  },
+  {
+   "leg": "screen-reader",
+   "rows": [
+    "4"
+   ],
+   "reason": "row 4 measures DOM and accessibility-tree facts (names, focus rings, live regions), not what a real screen reader speaks",
+   "recorded_as": "not driven — not a pass"
+  },
+  {
+   "leg": "docs-site-push-run",
+   "rows": [
+    "6"
+   ],
+   "reason": "the Docs site workflow does not trigger on feature-branch pushes; run 33918417973 for this head is a pull_request run",
+   "recorded_as": "not driven — not a pass"
+  }
+ ],
  "site": {
   "docsSiteRun": 33918417973,
   "buildJob": "success",
