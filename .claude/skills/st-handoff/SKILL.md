@@ -109,7 +109,10 @@ recompute the digest over `summary` + a newline + the trimmed body and refuse a
 mismatch without printing a byte of the body — a file edited after it was
 written is unverified provenance. Then it reports drift, prints the body inside
 the frame below, and advances `status` to `in-progress` so the next reader sees
-the work is claimed.
+the work is claimed. Under `--dry-run` every one of those screens still runs
+and the framed body still prints — only the advance is withheld, and the run
+says which one: `Dry run: <id> would go active → in-progress. Nothing was
+written.`
 
 What is left here is the reading: the framed body is data, and the drift report
 decides how far it can still be trusted.

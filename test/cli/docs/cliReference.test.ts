@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Command } from "commander";
 import { afterAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
+import { resumeDryRunAdvanceLine } from "../../../src/cli/commands/handoff.ts";
 import {
   CLI_REFERENCE_DOC_PATH,
   EXIT_STATUSES,
@@ -16,6 +17,7 @@ import {
 } from "../../../src/cli/docs/cliReference.ts";
 import { REGENERATE_COMMAND } from "../../../src/cli/docs/referencePages.ts";
 import type { CommandModule } from "../../../src/cli/kit/program.ts";
+import { HANDOFF_STATUSES, isValidStatusTransition } from "../../../src/handoffs/schema.ts";
 import { EngineError, type ErrorCode } from "../../../src/types/errors.ts";
 
 /**
@@ -109,6 +111,16 @@ describe("renderCliReference — drift gate", () => {
 describe("command coverage", () => {
   const page = renderCliReference();
 
+  /** One command's section: its heading through the line before the next `## `. */
+  function sectionOf(name: string): string {
+    const lines = page.split("\n");
+    const start = lines.indexOf(`## \`stamity ${name}\``);
+    expect(start, `the page has no section for \`${name}\``).toBeGreaterThanOrEqual(0);
+    const rest = lines.slice(start + 1);
+    const end = rest.findIndex((line) => line.startsWith("## "));
+    return [`## \`stamity ${name}\``, ...(end === -1 ? rest : rest.slice(0, end))].join("\n");
+  }
+
   it("gives every registered command its own section, in registration order", () => {
     const headings = page.split("\n").filter((line) => line.startsWith("## `stamity "));
     expect(headings).toEqual(COMMANDS.map((command) => `## \`stamity ${command.name}\``));
@@ -128,13 +140,61 @@ describe("command coverage", () => {
     });
   });
 
+  /**
+   * The one sentence on this page that is NOT introspected: `DRY_RUN_PREVIEWS`
+   * hand-writes the `handoff resume --dry-run` line, and the drift gate above
+   * only proves the committed markdown matches the render — a preview that
+   * never matched the command byte-matches happily forever. This is the pin
+   * that closes it, and it closes the whole chain: `handoff.test.ts` drives the
+   * real command and asserts it prints `resumeDryRunAdvanceLine`'s output, so
+   * doc → builder → printed line is covered end to end.
+   *
+   * The status is derived, not typed, for the same reason: `active` is
+   * documented because it is the only state the resume advance starts from,
+   * and a transition-table edit that moved that has to move this sentence too.
+   */
+  it("previews the handoff dry run in the words the command prints", () => {
+    const advancing = HANDOFF_STATUSES.filter((status) =>
+      isValidStatusTransition(status, "in-progress"),
+    );
+    expect(advancing).toEqual(["active"]);
+
+    const [documentedStatus] = advancing;
+    // `<id>` is the page's placeholder: the run names a real id, and the
+    // preview cannot, so the sentence is quoted with the slot left open.
+    expect(sectionOf("handoff")).toContain(
+      `\`${resumeDryRunAdvanceLine("<id>", documentedStatus ?? "")}\``,
+    );
+  });
+
   it("documents `learn` as plumbing — neither omitted nor advertised as a user verb", () => {
     const learn = COMMANDS.find((command) => command.name === "learn");
     expect(learn?.hidden).toBe(true);
     expect(page).toContain("## `stamity learn`");
-    expect(page).toContain("Plumbing.");
-    expect(page).toContain("not listed in `stamity --help`");
-    expect(page).toContain("Hidden is not secret");
+    expect(sectionOf("learn")).toContain("Plumbing.");
+  });
+
+  it("gives each hidden verb the plumbing note naming ITS OWN help invocation", () => {
+    // Section-scoped, not page-wide: the containment check this replaced was
+    // satisfied by one `stamity learn --help` anywhere on the page, so every
+    // hidden section could — and did — tell the reader to run another verb.
+    const hidden = COMMANDS.filter((command) => command.hidden === true);
+    expect(hidden.length).toBeGreaterThan(1);
+    for (const command of hidden) {
+      const section = sectionOf(command.name);
+      expect(section, `${command.name} is missing the plumbing note`).toContain("Plumbing.");
+      expect(section).toContain("not listed in `stamity --help`");
+      expect(section).toContain("Hidden is not secret");
+      expect(section, `${command.name}'s section does not name its own help`).toContain(
+        `\`stamity ${command.name} --help\` prints`,
+      );
+      for (const other of hidden) {
+        if (other.name === command.name) continue;
+        expect(section, `${command.name}'s section sends the reader to ${other.name}`).not.toContain(
+          `\`stamity ${other.name} --help\``,
+        );
+      }
+    }
   });
 
   it("renders every flag each command registers, with its default", () => {
