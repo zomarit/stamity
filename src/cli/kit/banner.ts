@@ -193,11 +193,12 @@ export function renderWordmark(opts: { accent?: BannerAccent; indent?: string } 
  * picture, so a window narrower than it does not shrink it, it WRAPS it, and a
  * wrapped wordmark is a scramble of half blocks that reads worse than no mark
  * at all. Same stay-out-rather-than-print-broken rule as the first two gates.
- * `columns` absent means the caller does not know the width, and the mark
- * prints — the behaviour every call site had before this fact existed. HOW to
- * print is decided by the color rules the whole CLI shares (`--no-color` beats
- * NO_COLOR beats FORCE_COLOR beats TTY), so a reader who turned color off still
- * gets the mark, in plain ink.
+ * `columns` absent — or non-positive, which is a terminal whose own window-size
+ * query came back with no width — means the caller does not know the width, and
+ * the mark prints: the behaviour every call site had before this fact existed.
+ * HOW to print is decided by the color rules the whole CLI shares (`--no-color`
+ * beats NO_COLOR beats FORCE_COLOR beats TTY), so a reader who turned color off
+ * still gets the mark, in plain ink.
  *
  * Returns a newline-terminated block so it composes by concatenation; empty
  * output is exactly `""`, which every writer here treats as nothing to write.
@@ -218,19 +219,34 @@ export function bannerBlock(opts: {
   // and 65 gets the mark.
   //
   // The slack is not padding for taste; it is the difference between two
-  // terminal wrap behaviours. Four of the seven rendered rows are exactly 64
-  // characters with the indent, and a line that exactly fills the window is
+  // terminal wrap behaviours. A rendered row is 64 characters with the indent
+  // whenever either of its two pixel rows reaches column 62 — five of the
+  // seven do, the x-height band (rows 2-6); the counts are the widths
+  // `renderWordmark({ indent: "  " })` produces, 53,64,64,64,64,64,63, not a
+  // literal to keep in step by hand. A line that exactly fills the window is
   // where terminals disagree. An xterm-family terminal implements DECAWM
   // deferred (pending) wrap: the cursor parks in the last column and the
   // newline that follows just ends the row, so an exact-width mark draws
   // correctly there and this extra column costs it nothing. conhost and some
   // other Windows hosts wrap eagerly instead — writing the 64th character
   // moves the cursor to the next row on its own, and the newline after it then
-  // consumes a SECOND row, so those four rows come out separated by blank
+  // consumes a SECOND row, so those five rows come out separated by blank
   // lines: a gapped mark on exactly the first screen this gate exists to
   // protect. Requiring one column of slack removes the disagreement rather
   // than betting on which host is reading.
-  if (typeof opts.columns === "number" && opts.columns <= BANNER_COLUMNS + indent.length) {
+  //
+  // `> 0` guards the same distinction `./terminal.ts::detectTerminalFacts`
+  // makes at the seam that reads the width: a non-positive count is a terminal
+  // that does not know how wide it is, which is the absent case (the mark
+  // prints), not a window narrower than the mark. The detection seam already
+  // drops it, so this is the contract restated where the contract is written
+  // down — a caller that builds its own facts cannot spell "unknown" as `0`
+  // here and get "too narrow".
+  if (
+    typeof opts.columns === "number" &&
+    opts.columns > 0 &&
+    opts.columns <= BANNER_COLUMNS + indent.length
+  ) {
     return "";
   }
   const accent = resolveAccentDepth({

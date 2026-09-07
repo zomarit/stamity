@@ -212,22 +212,39 @@ describe("bannerBlock — who gets the mark", () => {
     // demands one column MORE than that, so 64 gets nothing and 65 draws.
     //
     // TEST CHANGE, justified: the boundary moved from 63/64 to 64/65 because
-    // the guard now requires a column of slack. Four rendered rows are exactly
-    // 64 characters with the indent, and a line that exactly fills the window
-    // is where terminals disagree: an xterm-family terminal defers the wrap
-    // (DECAWM pending wrap), so the mark drew correctly there and the old
-    // boundary was fine; conhost and some other Windows hosts wrap eagerly, so
-    // the newline after the 64th character consumed a second row and those
-    // four rows came out with blank lines between them. The assertion is not
-    // weakened — the same two legs are pinned, one column over — and the
-    // absent-columns leg below is unchanged.
+    // the guard now requires a column of slack. Five rendered rows are exactly
+    // 64 characters with the indent — the count is the row widths
+    // `renderWordmark({ indent: "  " })` produces, 53,64,64,64,64,64,63, and
+    // the row below re-derives it rather than trusting this sentence — and a
+    // line that exactly fills the window is where terminals disagree: an
+    // xterm-family terminal defers the wrap (DECAWM pending wrap), so the mark
+    // drew correctly there and the old boundary was fine; conhost and some
+    // other Windows hosts wrap eagerly, so the newline after the 64th
+    // character consumed a second row and those five rows came out with blank
+    // lines between them. The assertion is not weakened — the same two legs
+    // are pinned, one column over — and the absent-columns leg below is
+    // unchanged.
     expect(bannerBlock({ ...tty, env: {}, columns: 64 })).toBe("");
     const fits = bannerBlock({ ...tty, env: {}, columns: 65 });
     expect(stripVTControlCharacters(fits).trimEnd()).toBe(renderWordmark({ indent: "  " }));
+    // The count in the paragraph above, derived: how many rendered rows fill
+    // the 64-column window exactly, which is what the eager-wrap host gaps.
+    const exact = renderWordmark({ indent: "  " })
+      .split("\n")
+      .filter((row) => row.length === BANNER_COLUMNS + "  ".length);
+    expect(exact).toHaveLength(5);
     // Absent means the caller does not know the width; the mark prints, which
     // is what every call site did before the fact existed.
     const unknown = bannerBlock({ ...tty, env: {} });
     expect(stripVTControlCharacters(unknown).trimEnd()).toBe(renderWordmark({ indent: "  " }));
+    // Zero is the same "unknown" spelled as a number: a TTY whose window-size
+    // query answered 0x0 reports it while still being a TTY, and a width the
+    // terminal does not know is not a window narrower than the mark. It prints,
+    // exactly as the absent leg above does. `./kit.test.ts` pins the seam that
+    // keeps a zero out of the facts object in the first place; this pins what
+    // the renderer does if one reaches it anyway.
+    const zero = bannerBlock({ ...tty, env: {}, columns: 0 });
+    expect(stripVTControlCharacters(zero).trimEnd()).toBe(renderWordmark({ indent: "  " }));
     // The boundary is derived, not typed: if the mark ever changes width, this
     // is the arithmetic the guard uses — the mark's own width plus the indent,
     // and the guard admits only a window WIDER than that sum.

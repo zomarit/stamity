@@ -17,7 +17,15 @@ export interface TerminalFacts {
   stdinIsTTY: boolean;
   /**
    * The terminal's own width in columns, absent when the stream reports none
-   * (a pipe, a file, a test double).
+   * (a pipe, a file, a test double) — or reports one that is not a width.
+   *
+   * Present means a POSITIVE column count. Node's `tty.WriteStream` publishes
+   * whatever the window-size ioctl answered, and an ioctl that answered 0x0 —
+   * a `-t` container with no attached terminal, some IDE pseudo-terminals —
+   * leaves `columns` at 0 on a stream that is still a TTY. Zero is that
+   * terminal saying it does not know its width, spelled as a number; treating
+   * it as a width makes every consumer read "unknown" as "narrower than
+   * anything", which is the opposite answer.
    *
    * Read here rather than at the surfaces that need it, for the same reason
    * every other fact on this interface is: a renderer that fits its output to
@@ -44,7 +52,14 @@ export function detectTerminalFacts(streams?: {
     // Conditional, not `stdoutColumns: undefined`: a stream that reports no
     // width leaves NO key, so a facts object built off a pipe keeps the exact
     // shape it has always had.
-    ...(typeof columns === "number" ? { stdoutColumns: columns } : {}),
+    //
+    // `> 0`, not just `typeof === "number"`: a TTY whose window-size query
+    // answered 0x0 reports `columns: 0`, which is an unknown width, not a
+    // narrow one — recorded, it would tell every consumer the window is
+    // narrower than anything it could fit. The comparison also drops NaN and a
+    // negative, so the key means the same thing for every value that reaches
+    // it.
+    ...(typeof columns === "number" && columns > 0 ? { stdoutColumns: columns } : {}),
   };
 }
 
