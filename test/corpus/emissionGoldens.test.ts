@@ -82,6 +82,12 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-09, the dev-group bump (vitest 4.1.10 -> 5.0.0 and its siblings).
+ *     Nothing in this suite moved: its snapshot keys carry no interpolated
+ *     describe label, so vitest 5's naming change renamed none of them and
+ *     every golden reads byte-identical. The row exists so the two ledgers
+ *     stay in step — the sibling suite's ten keys were renamed, values
+ *     untouched, and are itemised there.
  *   - 2026-09-09, Package 9's retirement shape. SUBSTITUTION moved on
  *     `commands/st-work.md` alone, +77 bytes (23145 -> 23222 in the corpus
  *     source) at UNCHANGED line counts — still 390 body lines and 399 file
