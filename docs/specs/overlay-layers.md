@@ -934,34 +934,25 @@ and the surrounding symbol is the durable address.
 - The page is not indexed in `llms.txt`. That index lists generated pages and a
   named set of guides; adding a specs section to it is a reasonable follow-up
   and is not required by any current check.
-- **The user-content ceiling is spelled twice, on purpose, and the arrangement
-  has a named exit.** The walk holds the body half to `MAX_OVERLAY_BODY_LENGTH`
-  (`src/content/catalog.ts:347-363`), a RESTATEMENT of
-  `MAX_USER_CONTENT_LENGTH` (`src/guard/promptGuard.ts:49`) rather than an
-  import of it. The reason is architectural, not stylistic: the prompt guard is
-  registry-wired by construction and that wiring is gated — it is listed in
+- **The user-content ceiling is spelled once. It used to be spelled twice.** The
+  walk holds the body half to `MAX_USER_CONTENT_LENGTH`
+  (`src/guard/promptGuard.ts::MAX_USER_CONTENT_LENGTH`), imported directly by
+  `src/content/catalog.ts::readOverlayHalves` rather than restated beside it.
+
+  The restatement was architectural rather than stylistic while it lasted: the
+  prompt guard was registry-wired by construction and listed in
   `REGISTRY_ONLY_MODULES` as "cited by two validator headers, imported by
-  neither" (`test/architecture/boundaries.test.ts:681`), and that list may only
-  shrink (`test/architecture/boundaries.test.ts:893-897`). A direct edge from
-  the walk retires the claim, which is a decision for the change that wants to
-  make it rather than a side effect of adding a size check.
+  neither", a list that may only shrink — so an import edge from the walk would
+  have retired that claim as a side effect of adding a size check. The follow-on
+  named here (`2026-08-31_batch-d12-overlays/build/8`) took the edge
+  deliberately instead, and deleted the row, which is what the ratchet message
+  itself prescribes. `src/guard/outputBounds.ts`'s row went with it: the guard
+  imports `truncateAt`, so giving the guard a caller gave that module one too.
 
-  The two numbers cannot drift apart unnoticed meanwhile, because both sides are
-  driven from the guard's own constant rather than from a literal: the walk's
-  refusal at `test/content/catalog.test.ts:1199-1238` (importing it at
-  `test/content/catalog.test.ts:27`) and `validate`'s at
-  `test/cli/commands/validate.test.ts:1012-1018` (reading it off the engine
-  registry). Moving either number alone turns a suite red.
-
-  This is recorded as a concern and not as a defect because the cross-pin holds
-  it, but it is a two-place constant and the follow-on is named:
-  `2026-08-31_batch-d12-overlays/build/8`, the architecture-ratchet decision,
-  deferred rather than dropped. One unit owning both `src/content/catalog.ts`
-  and `test/architecture/boundaries.test.ts` either accepts the production edge
-  — deleting the row, which is what the ratchet message itself prescribes — or
-  moves the constant to a shared leaf both sides may import. Whichever it
-  settles, this restatement then collapses to one spelling or earns its second
-  one explicitly.
+  The cross-pin stays as the behavioural half — the walk's refusal in
+  `test/content/catalog.test.ts` (one character over the ceiling and exactly at
+  it) and `validate`'s in `test/cli/commands/validate.test.ts`, both driven from
+  the guard's own constant rather than from a literal.
 - Line-number citations drift. `SECURITY.md` retired them for exactly that
   reason and moved to `file::symbol`. This spec keeps them because the evidence
   here is often a comment block or a loop rather than a named export, and a

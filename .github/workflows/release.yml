@@ -315,11 +315,18 @@ jobs:
           set -euo pipefail
 
           # Extract the CHANGELOG section for this exact version. The heading is `## [VERSION] …`;
-          # awk starts printing after the matching heading and stops at the next `## [` heading —
-          # or, for the last section, at the Keep-a-Changelog link-reference footer (`[x]: url`) —
-          # so it yields that section's body and no other. A `## [1.0.1]` target never matches a
+          # awk starts printing after the matching heading and stops at the next `## [` heading, so
+          # it yields that section's body and no other. A `## [1.0.1]` target never matches a
           # `## [1.0.10]` heading, because the bracketed target ends in `]`. `found` gates the
           # fail-closed exit; a whitespace-only body is treated as missing too.
+          #
+          # The Keep-a-Changelog link-reference footer (`[x]: url`) is HELD, not stopped on. It
+          # used to end the section outright, which is right for a footer and wrong for anything
+          # after one: a `[note]: …` reference defined mid-body silently truncated every entry
+          # below it out of the published notes, with nothing failing. So link-def lines (and the
+          # blanks between them) go into a hold buffer; a real line after them flushes the buffer
+          # and printing continues, and a buffer still held at the end of the section — which is
+          # exactly the trailing footer — is discarded.
           if [ ! -f CHANGELOG.md ]; then
             echo "::error title=No changelog::CHANGELOG.md is missing. A release must carry a changelog section for its version before it publishes."
             exit 1
@@ -330,8 +337,14 @@ jobs:
                 if (substr($0, 1, length(target)) == target) { printing = 1; found = 1; next }
                 if (printing) { printing = 0 }
               }
-              printing && /^\[[^][]+\]:[ \t]/ { printing = 0 }
-              printing { print }
+              printing && /^\[[^][]+\]:[ \t]/ { held[++n] = $0; next }
+              printing && n > 0 && /^[ \t]*$/ { held[++n] = $0; next }
+              printing {
+                for (i = 1; i <= n; i++) print held[i]
+                n = 0
+                print
+                next
+              }
               END { if (!found) exit 3 }
             ' CHANGELOG.md
           )" || {

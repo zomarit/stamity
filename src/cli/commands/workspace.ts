@@ -15,7 +15,7 @@ import { TOOLS, VALID_TOOLS, type Tool } from "../../types/core.ts";
 import { EngineError } from "../../types/errors.ts";
 import { MANIFEST_FILE, type McpConfig, type SetupManifest } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
-import type { DetectedRepo } from "../../workspace/detect.ts";
+import { DEFAULT_MAX_DEPTH, type DetectedRepo } from "../../workspace/detect.ts";
 import type {
   WorkspaceManifest,
   WorkspaceRepoEntry,
@@ -55,8 +55,12 @@ import type { RepoSyncCallback, WorkspaceRepoSyncRow } from "../../workspace/syn
  * severity is how a CI step starts getting ignored.
  *
  * Engine access rule: the body reaches the workspace engine through
- * `ctx.engine`, the typed composition root; only the vocabulary leaves
- * (`../../types/`) and the engine's own type modules are imported directly.
+ * `ctx.engine`, the typed composition root. What is imported directly is the
+ * vocabulary — the leaves under `../../types/`, the engine's own type modules,
+ * and a declared constant an engine module OWNS and this file must be able to
+ * NAME, which today is `detect.ts`'s `DEFAULT_MAX_DEPTH` (the zero-candidate
+ * refusal states the depth, so it has to read the same number the scan used).
+ * Behaviour still arrives through `ctx.engine` and only through it.
  *
  * ONE FILE, not a `./workspace/` submodule in the `./config/mcp.ts` shape. The
  * split was built and reverted, and the reason is worth writing down rather
@@ -521,21 +525,6 @@ async function runStatus(ctx: CliContext, cwd: string): Promise<CommandResult> {
  */
 
 /**
- * How deep the candidate scan descends, and the number the zero-candidate
- * refusal names.
- *
- * This is `detectSubRepos`' own default (`../../workspace/detect.ts`,
- * `DEFAULT_MAX_DEPTH`) passed EXPLICITLY, because the refusal has to STATE the
- * depth and that module does not export it — so the choice was between naming a
- * number this file cannot see and passing the one it names. Passing it is
- * behaviourally identical to omitting it, and the pin is behavioural rather
- * than referential: the suite plants a repository four levels down and another
- * five levels down, so a drift in either value fails a test rather than quietly
- * making the message wrong.
- */
-const SCAN_DEPTH = 4;
-
-/**
  * The tool a workspace falls back to when no selected member declares one — the
  * same default `stamity init` falls back to for the same reason: a setup
  * targeting no tool emits nothing at all.
@@ -602,7 +591,8 @@ function noCandidates(ctx: CliContext, rootDir: string): CliFailure {
     code: "VALIDATION_ERROR",
     message: `no repositories found under ${rootDir}`,
     why:
-      `the scan descends ${String(SCAN_DEPTH)} levels and counts a directory as a candidate when ` +
+      `the scan descends ${String(DEFAULT_MAX_DEPTH)} levels and counts a directory as a ` +
+      `candidate when ` +
       `it carries a .git entry or a ${STATE_DIR}/${MANIFEST_FILE} of its own`,
     next: `run this in the directory that holds your repositories, or write ${file} by hand`,
   });
@@ -800,7 +790,10 @@ async function runInit(
   await assertCreatable(ctx, rootDir, force);
 
   const candidates = await ctx.engine.workspace.detect.detectSubRepos(rootDir, {
-    maxDepth: SCAN_DEPTH,
+    // `detectSubRepos`' own default, passed explicitly: the zero-candidate
+    // refusal above has to STATE the depth, so both sides read one constant
+    // instead of this file restating a number it cannot otherwise see.
+    maxDepth: DEFAULT_MAX_DEPTH,
   });
   if (candidates.length === 0) throw noCandidates(ctx, rootDir);
 

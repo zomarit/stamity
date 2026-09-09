@@ -428,6 +428,19 @@ describe("selectOne (interactive)", () => {
   });
 });
 
+describe("selectOne — nothing to choose from", () => {
+  it("asks nothing and answers with the default", async () => {
+    // The mirror of `selectMany`'s guard. An empty list used to reach the typed
+    // rendering and print `Choose 1-0 [x]: `, which no answer can resolve.
+    const { io, output } = makeTtyPromptIo({ rawMode: false });
+    expect(
+      await selectOne(interactive, io, { question: "Which tool?", choices: [], defaultValue: "a" }),
+    ).toBe("a");
+    expect(output()).toBe("");
+    closePrompts(io);
+  });
+});
+
 describe("textInput (interactive)", () => {
   it("returns the typed answer, trimmed", async () => {
     const { io, input, output } = makePromptIo();
@@ -764,6 +777,94 @@ describe("selectOne (raw arrow menu)", () => {
     await expect(
       textInput(interactive, io, { question: "Name?", defaultValue: "core" }),
     ).rejects.toMatchObject({ doc: { message: "aborted" } });
+    closePrompts(io);
+  });
+
+  it("keeps the operator's abort when the terminal throws on the way out (B5)", async () => {
+    // A `finally` that throws REPLACES the outcome of the block it guards. The
+    // restore steps talk to a terminal that, on the paths this menu aborts on,
+    // may already be gone — a closed pty, a killed parent — and `setRawMode` and
+    // the cursor-show write both throw synchronously when it is. Unguarded, the
+    // operator's Ctrl-C reached the caller as an EIO from a stream nobody asked
+    // about, and every teardown step after the throw was skipped.
+    const { io, input } = makeTtyPromptIo({ rawMode: true });
+    const enterRaw = input.setRawMode?.bind(input);
+    expect(enterRaw, "the double must offer setRawMode for the raw path to be taken").toBeDefined();
+    input.setRawMode = (mode: boolean): MenuTtyInput => {
+      if (!mode) throw new Error("ioctl(TIOCSETA) failed: EIO");
+      return enterRaw?.(mode) ?? input;
+    };
+
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    const asserted = Promise.all([
+      expect(pending).rejects.toBeInstanceOf(CliFailure),
+      expect(pending).rejects.toMatchObject({ doc: { code: "FAILURE", message: "aborted" } }),
+    ]);
+    await tick();
+    await press(input, KEYS.ctrlC);
+    await asserted;
+    // And the steps AFTER the throwing one still ran: the abort is remembered,
+    // which is what makes the next question refuse rather than read a byte.
+    await expect(
+      textInput(interactive, io, { question: "Name?", defaultValue: "core" }),
+    ).rejects.toMatchObject({ doc: { message: "aborted" } });
+    closePrompts(io);
+  });
+
+  it("settles the menu when the redraw write throws inside the listener (B5)", async () => {
+    // The other half of the same failure the case above pins, on the way IN
+    // rather than on the way out. Every navigation branch of the listener
+    // WRITES — it redraws the frame — and a write to a terminal that went away
+    // throws synchronously. Thrown out of an EventEmitter callback, that throw
+    // never reaches the awaiting caller: it becomes an uncaught exception while
+    // the promise stays pending forever, with raw mode still on and the cursor
+    // still hidden. Settled and rejected instead, so the caller sees the real
+    // error and the teardown still runs.
+    const { io, input } = makeTtyPromptIo({ rawMode: true });
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    // Attached BEFORE the press, for the reason the Ctrl-C case above states:
+    // the rejection lands a turn of the loop after the write.
+    const asserted = expect(pending).rejects.toThrow("write EIO");
+    // Synchronization point before this menu's first press — see `tick`'s
+    // own doc in test/support/menuTty.ts for why. The first frame is on screen
+    // by now; the terminal goes away after it, so the redraw the arrow key
+    // triggers is the write that throws.
+    await tick();
+    io.output.write = ((): never => {
+      throw new Error("write EIO");
+    }) as NodeJS.WritableStream["write"];
+    await press(input, KEYS.down);
+    // Bounded on purpose: a promise that never settles IS the defect, and a
+    // bare await would spend the whole test timeout proving it instead of
+    // naming it.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bounded = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("selectOne never settled after the redraw write threw")),
+        1000,
+      );
+    });
+    try {
+      await Promise.race([asserted, bounded]);
+    } finally {
+      // Cleared rather than left to fire: the loser of a `race` is still a live
+      // promise, and a timer that rejects one nobody is awaiting any more is an
+      // unhandled rejection in the run.
+      if (timer !== undefined) clearTimeout(timer);
+    }
+    // And the teardown ran rather than being skipped with the throw: raw mode
+    // is off, so the operator is not left typing blind into a terminal that
+    // eats their keystrokes. (The cursor-show write throws too and is swallowed
+    // by its own guard — the case above is what pins that half.)
+    expect(input.rawModes).toEqual([true, false]);
     closePrompts(io);
   });
 
@@ -1361,6 +1462,57 @@ describe("the raw menu — label geometry and injection floor (F3/W1/W2/SW1)", (
     expect(await pending).toBe("a");
   });
 
+  it("keeps the cancel affordance in the hint where the terminal has room for it", () => {
+    // The clamp above cuts the TAIL, and `ctrl-c to cancel` is the tail — the
+    // only place this menu tells an operator how to leave without answering.
+    // Nothing asserted it: the suite pinned that a settled frame drops the hint
+    // and that a 40-column terminal cuts it, and neither reads what the hint
+    // says. So a hint reworded, reordered or shortened to fit lost the cancel
+    // affordance silently, on every terminal.
+    const { io, input, chunks } = makeTtyPromptIo({ rawMode: true, columns: 80 });
+    const pending = selectOne(interactive, io, {
+      question: "Which tool?",
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    return tick().then(async () => {
+      const first = menuFrames(chunks)[0] ?? "";
+      expect(first, "the menu's first frame never offers a way out").toContain("ctrl-c to cancel");
+      expect(first).toContain("enter to accept");
+      expect(first).toContain("up/down to move");
+      await press(input, KEYS.enter);
+      expect(await pending).toBe("a");
+      closePrompts(io);
+    });
+  });
+
+  it("cuts a clamped line on a character, never through a surrogate pair", async () => {
+    // `slice` counts UTF-16 code units. A question of astral characters cut at
+    // an odd unit boundary ends in a LONE SURROGATE: half a character, which no
+    // terminal can render and no consumer can decode — it survives to disk in a
+    // captured transcript as a replacement glyph. Emoji in a question is enough.
+    const { io, input, chunks } = makeTtyPromptIo({ rawMode: true, columns: 9 });
+    const pending = selectOne(interactive, io, {
+      question: "\u{1F642}".repeat(20),
+      choices: TOOL_CHOICES,
+      defaultValue: "a",
+    });
+    await tick();
+    // Not `menuFrames`: at nine columns the labels are clamped short of
+    // "Claude Code", so the marker that helper filters on is not in the frame.
+    const first = chunks().find((chunk) => chunk.includes("\u{1F642}")) ?? "";
+    const questionLine = first.split("\n").find((line) => line.includes("\u{1F642}")) ?? "";
+    // A lone surrogate cannot round-trip through UTF-8: it comes back U+FFFD.
+    expect(
+      Buffer.from(questionLine, "utf8").toString("utf8"),
+      "the clamp cut through a surrogate pair",
+    ).toBe(questionLine);
+    expect([...stripVTControlCharacters(questionLine)]).toHaveLength(9);
+    await press(input, KEYS.enter);
+    expect(await pending).toBe("a");
+    closePrompts(io);
+  });
+
   it("takes the typed path when the menu would not fit the terminal's height", async () => {
     const { io, input, output } = makeTtyPromptIo({ rawMode: true, rows: 5 });
     // 17 rows + the question line + the hint line (N1 — its own line now) is
@@ -1559,6 +1711,45 @@ describe("selectMany (typed fallback)", () => {
     expect(output()).toContain("  1) Claude Code");
     expect(output()).toContain("  3) Copilot");
     expect(output()).toContain("Choose 1-3, comma-separated [1,3]: ");
+    closePrompts(io);
+  });
+
+  it("right-aligns the row number so labels stay in one column past nine choices", async () => {
+    // The 17-key `config` picker is the live case: with a fixed one-space
+    // prefix, rows 10-17 push their label one column right of rows 1-9 and the
+    // list stops reading as a column. Below ten choices nothing moves, which is
+    // what keeps the three-choice strings pinned above byte-identical.
+    const { io, input, output } = makeTtyPromptIo({ rawMode: false });
+    const choices = Array.from({ length: 12 }, (_value, index) => ({
+      value: `k${String(index)}`,
+      label: `key-${String(index)}`,
+    }));
+    input.write("\n");
+    await selectMany(interactive, io, { question: "Which keys?", choices, defaultValues: [] });
+    const rows = output()
+      .split("\n")
+      .filter((line) => /^\s+\d+\) /.test(line));
+    expect(rows).toHaveLength(12);
+    const labelColumns = new Set(rows.map((row) => row.indexOf(") ")));
+    expect(labelColumns.size, `rows do not share a label column: ${rows.join(" | ")}`).toBe(1);
+    expect(rows[0]).toBe("   1) key-0");
+    expect(rows[9]).toBe("  10) key-9");
+    closePrompts(io);
+  });
+
+  it("asks nothing when there is no choice to make, and answers with the defaults", async () => {
+    // `Choose 1-0, comma-separated [none]: ` was the old rendering: a range with
+    // no member in it, no answer that resolves it, and the default returned
+    // anyway. Nothing reaches the operator now — not even a blank prompt.
+    const { io, output } = makeTtyPromptIo({ rawMode: false });
+    expect(
+      await selectMany(interactive, io, {
+        question: "Which tools?",
+        choices: [],
+        defaultValues: ["a"],
+      }),
+    ).toEqual(["a"]);
+    expect(output()).toBe("");
     closePrompts(io);
   });
 

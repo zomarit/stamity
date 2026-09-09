@@ -74,8 +74,8 @@
  */
 
 import {
-  COMMAND_ID_PREFIX,
   buildContentIndex,
+  emittedIdFor,
   typeIdKey,
   type CatalogItem,
 } from "../content/catalog.ts";
@@ -109,7 +109,7 @@ import {
 } from "../tools/translator.ts";
 import type { AdapterOutput } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
-import { CONTENT_PREFIX, contentPrefixFor } from "../types/markers.ts";
+import { CONTENT_PREFIX } from "../types/markers.ts";
 
 // ── Layout ───────────────────────────────────────────────────────
 
@@ -528,7 +528,7 @@ export const cursorResiduePlanner: ResiduePlanner = {
 /**
  * `reviewer` → `stamity-reviewer`: the runtime, wire-visible form of an AGENT or
  * RULE id, the two classes that keep the long prefix. Commands go through
- * {@link commandName}, which asks {@link contentPrefixFor} instead — an id the
+ * {@link commandName}, which asks {@link emittedIdFor} instead — an id the
  * operator types is not the same contract as one the spawn guard matches.
  */
 function prefixedId(id: string): string {
@@ -542,16 +542,15 @@ function prefixedId(id: string): string {
  * `/st-work` touchpoint spelling and the file on disk agree by construction
  * rather than by convention.
  *
- * The prefix comes from {@link contentPrefixFor} rather than {@link prefixedId},
+ * The spelling comes from {@link emittedIdFor} rather than {@link prefixedId},
  * because this is the typed half of the surface, and it answers by class alone:
  * a command takes `st-` whether the corpus or an installed pack supplied it,
- * since the operator types both the same way.
+ * since the operator types both the same way. Delegating also picks up the
+ * already-prefixed guard the sibling adapters carried and this one did not — an
+ * id authored as `st-work` rendered `st-st-work` here alone.
  */
 function commandName(item: CatalogItem): string {
-  const bare = item.id.startsWith(COMMAND_ID_PREFIX)
-    ? item.id.slice(COMMAND_ID_PREFIX.length)
-    : item.id;
-  return `${contentPrefixFor(item)}${bare}`;
+  return emittedIdFor(item);
 }
 
 // ── Rules ────────────────────────────────────────────────────────

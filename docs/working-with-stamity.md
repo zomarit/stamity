@@ -123,7 +123,7 @@ the record goes in that tree's git directory — so no ignore rule, and `git sta
 
 What travels with the checkout:
 
-- `AGENTS.md`, the `.agents/` and `.claude/` trees, `.stamity/` with its manifest, learnings and handoffs — yes, because they are committed on purpose — the new worktree comes up with the same charter, rules, skills and touchpoints as the original. Records written but not committed do not travel; that is a property of a checkout, and `list` is what makes it visible rather than surprising.
+- `AGENTS.md`, the managed block in `CLAUDE.md`, the `.agents/` and `.claude/` trees, `.stamity/` with its manifest, learnings and handoffs — yes, because they are committed on purpose — the new worktree comes up with the same charter, rules, skills and touchpoints as the original. Records written but not committed do not travel; that is a property of a checkout, and `list` is what makes it visible rather than surprising.
 - `.env.mcp` — no, so setup places it: `.gitignore` excludes it as MCP credentials, so setup copies it across and holds it at `0600` rather than leaving you to remember.
 - `node_modules` — no, and setup leaves it alone — a built-in `skip`, because a symlinked dependency directory gets written *through* by the next install. Install inside the new tree.
 - `.stamity/worktree.json` — it is the override for the two entries above: add an entry, mark one `secret`, or skip something. Absent, which it is in most repositories, those two defaults apply.

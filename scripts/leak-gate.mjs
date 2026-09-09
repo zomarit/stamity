@@ -633,7 +633,7 @@ function listFromGit() {
       ['-C', ROOT, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'],
       { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] },
     )
-    return stdout.split(' ').filter(Boolean)
+    return stdout.split('\0').filter(Boolean)
   } catch {
     return null
   }
@@ -752,7 +752,7 @@ function scanContent(file, bytes, rules, hits, seen) {
       if (view.normalized !== null && !rule.normalizedViews.includes(view.normalized)) continue
       for (const hit of collect(rule, view.text)) {
         const offset = view.byteAt(hit.index)
-        const key = `${rule.id} ${file} ${offset}`
+        const key = `${rule.id}\0${file}\0${offset}`
         if (seen.has(key)) continue
         seen.add(key)
         const where =

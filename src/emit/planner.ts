@@ -451,6 +451,7 @@ function mergeSkillProjections(
   corpusSkills: readonly ProjectedFile[],
   packs: ResolvedPackContent,
 ): ProjectedFile[] {
+  refuseOverrideDirectoryClash(corpusSkills);
   const corpusByPath = new Map(corpusSkills.map((row) => [row.path, row]));
   const overridesById = new Map(
     corpusSkills.filter((row) => row.origin === "user").map((row) => [row.artifactId, row]),
@@ -488,6 +489,56 @@ function mergeSkillProjections(
   return [...corpusSkills, ...packs.skillRows].toSorted((a, b) =>
     a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
   );
+}
+
+/** `.agents/skills/<dir>/SKILL.md` → `<dir>`: the directory one skill projects into. */
+function projectionDirOf(path: string): string {
+  return path.slice(`${SKILLS_PROJECTION_DIR}/`.length).split("/")[0] ?? "";
+}
+
+/**
+ * The clash the guards above do not cover, because no pack is involved in it:
+ * an OVERRIDE skill's directory is also a CORPUS skill's directory, under two
+ * different catalog ids.
+ *
+ * A skill projects into `<SKILLS_PROJECTION_DIR>/<dir>/`, and `<dir>` is the
+ * authored directory name (`../emit/skillsProjection.ts`), not the id. So an
+ * override authored at `.stamity/overrides/skills/st-verify/SKILL.md` that
+ * declares `id: st-probe` is a NEW artifact — it shadows nothing, the catalog
+ * indexes both — and both project into `.agents/skills/st-verify/`, file for
+ * file. The catalog records the id/directory mismatch as a collision and
+ * `validate` reports it; emission reads no such field, so `sync` fell through
+ * to the composer's content-equality refusal, which names four adapters, the
+ * shared path and neither the override nor the skill it collided with.
+ *
+ * Refused with the override named as the thing to move, for the same reason
+ * the pack shapes above name the override: it is the file the operator wrote
+ * and the only one they can rename without touching shipped content.
+ */
+function refuseOverrideDirectoryClash(corpusSkills: readonly ProjectedFile[]): void {
+  // Only a shipped row can be the thing an override collides WITH: two shipped
+  // skills sharing a directory under two ids cannot be authored, because there
+  // the directory is the id.
+  const shippedByDir = new Map<string, ProjectedFile>();
+  for (const row of corpusSkills) {
+    if (row.origin !== "user") shippedByDir.set(projectionDirOf(row.path), row);
+  }
+
+  for (const row of corpusSkills) {
+    if (row.origin !== "user") continue;
+    const other = shippedByDir.get(projectionDirOf(row.path));
+    if (other === undefined || other.artifactId === row.artifactId) continue;
+    const overridePath = overrideSkillFilePath(row);
+    throw new EngineError(
+      `The override at "${overridePath}" declares id "${row.artifactId}" but sits in a ` +
+        `directory the skill "${other.artifactId}" already projects into: both emit ` +
+        `"${other.path}". One ${SKILLS_PROJECTION_DIR} directory holds one skill — projecting ` +
+        `both would write each skill's files over the other's. Rename the override's directory ` +
+        `to match its own id ("${row.artifactId}"), or change the id to override ` +
+        `"${other.artifactId}" outright.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
 }
 
 /**

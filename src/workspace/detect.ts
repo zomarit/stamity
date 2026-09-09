@@ -33,7 +33,7 @@ import { WORKSPACE_MANIFEST_FILE } from "./model.ts";
  * level to spare, and the walk stops at the first repository on a branch, so
  * the budget is only ever spent on genuinely repo-free directories.
  */
-const DEFAULT_MAX_DEPTH = 4;
+export const DEFAULT_MAX_DEPTH = 4;
 
 /**
  * How many ancestors above the starting directory {@link detectWorkspaceContext}
@@ -120,25 +120,23 @@ export async function detectSubRepos(
 
   const visit = async (dir: string, prefix: string, depth: number): Promise<void> => {
     const entries = await readDirEntries(dir);
-    await Promise.all(
-      entries.map(async (entry) => {
-        if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === SKIPPED_DIR) {
-          return;
-        }
-        const child = join(dir, entry.name);
-        const path = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-        const [hasGit, hasManifest] = await Promise.all([
-          pathExists(join(child, ".git")),
-          fileExists(join(child, STATE_DIR, MANIFEST_FILE)),
-        ]);
+    await mapBounded(entries, async (entry) => {
+      if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === SKIPPED_DIR) {
+        return;
+      }
+      const child = join(dir, entry.name);
+      const path = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      const [hasGit, hasManifest] = await Promise.all([
+        pathExists(join(child, ".git")),
+        fileExists(join(child, STATE_DIR, MANIFEST_FILE)),
+      ]);
 
-        if (hasGit || hasManifest) {
-          found.push({ path, name: entry.name, hasGit, hasManifest });
-          return;
-        }
-        if (depth < maxDepth) await visit(child, path, depth + 1);
-      }),
-    );
+      if (hasGit || hasManifest) {
+        found.push({ path, name: entry.name, hasGit, hasManifest });
+        return;
+      }
+      if (depth < maxDepth) await visit(child, path, depth + 1);
+    });
   };
 
   await visit(resolve(rootDir), "", 1);
@@ -243,14 +241,60 @@ function normalizeDepth(value: number | undefined): number {
  * presence probe: no signal here. A rejection carrying no errno is a defect in
  * this module rather than a fact about the tree, so it propagates instead of
  * being absorbed into a plausible-looking result.
+ *
+ * Descriptor exhaustion is the exception, and it is not a fact about the tree
+ * at all: EMFILE and ENFILE say the PROCESS ran out of file handles. Absorbed
+ * as "no signal", a `readdir` that hit one returned `[]` and the scan reported
+ * a SHORTER candidate list than the tree holds — a workspace init that silently
+ * left members out, with nothing to tell an operator a directory was never
+ * read. It propagates, so the run fails loudly and can be retried.
  */
+const EXHAUSTED: ReadonlySet<string> = new Set(["EMFILE", "ENFILE"]);
+
 async function probe<T>(read: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await read();
   } catch (error) {
-    if (typeof (error as NodeJS.ErrnoException).code === "string") return fallback;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (typeof code === "string" && !EXHAUSTED.has(code)) return fallback;
     throw error;
   }
+}
+
+/**
+ * Directory entries handled at once, per level.
+ *
+ * The walk used to `Promise.all` every entry of a level, and each entry costs
+ * two `stat` calls plus a recursion that opens the next level the same way — so
+ * a wide directory (a monorepo's `packages/`, a `repos/` root with a few
+ * hundred clones) issued hundreds of concurrent filesystem calls, and a deep
+ * one multiplied that per level. That is how a scan reaches EMFILE in the first
+ * place. Sixteen keeps the walk parallel enough to be worth it while bounding
+ * the descriptors in flight to a number every platform's default limit clears.
+ */
+const SCAN_CONCURRENCY = 16;
+
+/** `Promise.all(items.map(run))` with at most {@link SCAN_CONCURRENCY} in flight. */
+async function mapBounded<T>(
+  items: readonly T[],
+  run: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (let index = next; index < items.length; index = next) {
+      next += 1;
+      const item = items[index];
+      if (item === undefined) continue;
+      // One worker is sequential BY DESIGN: the concurrency is the number of
+      // workers, and that count is exactly what bounds the descriptors in
+      // flight. `Promise.all` over the whole level is the shape this replaced.
+      // eslint-disable-next-line no-await-in-loop -- see above
+      await run(item);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(SCAN_CONCURRENCY, items.length) }, () => worker()),
+  );
 }
 
 async function pathExists(path: string): Promise<boolean> {

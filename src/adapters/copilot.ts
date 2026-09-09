@@ -72,8 +72,8 @@
  */
 
 import {
-  COMMAND_ID_PREFIX,
   buildContentIndex,
+  emittedIdFor,
   typeIdKey,
   type CatalogItem,
 } from "../content/catalog.ts";
@@ -107,7 +107,6 @@ import {
 import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import { contentPrefixFor } from "../types/markers.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -713,17 +712,13 @@ function declaredGlobs(item: CatalogItem): string[] {
  * the tool-policy roster keys on that same prefixed form, so the two agree by
  * construction.
  *
- * {@link contentPrefixFor} owns which prefix that is — `st-` for the invocable
- * commands and skills, `stamity-` for agents and rules, with an installed
- * pack's artifacts answering to the same class rule as the corpus's.
+ * {@link emittedIdFor} owns the whole answer — `st-` for the invocable commands
+ * and skills, `stamity-` for agents and rules, with an installed pack's
+ * artifacts answering to the same class rule as the corpus's. This is a named
+ * alias for it, so the adapters cannot disagree about one artifact's name.
  */
 function emittedId(item: CatalogItem): string {
-  const bare =
-    item.type === "command" && item.id.startsWith(COMMAND_ID_PREFIX)
-      ? item.id.slice(COMMAND_ID_PREFIX.length)
-      : item.id;
-  const prefix = contentPrefixFor(item);
-  return bare.startsWith(prefix) ? bare : `${prefix}${bare}`;
+  return emittedIdFor(item);
 }
 
 /** Ledger attribution — every row this adapter returns is owned by `copilot`. */

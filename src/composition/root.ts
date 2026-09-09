@@ -391,8 +391,12 @@ export interface Clock {
  * than the promise hiding.
  *
  * {@link cwd} and {@link clock} ARE threaded (the CLI passes both down through
- * `App`). {@link env} is the seam nothing below the root consumes yet;
- * `../config/parse.ts` shows the shape the three readers above should take —
+ * `App`), and so is {@link env}: seven CLI call sites now read it and pass it
+ * on — `../cli/commands/init.ts` (twice), `config.ts`, `clean.ts`,
+ * `worktree.ts` (twice) and `workspace.ts`, each populating a prompt gate's
+ * `env` from `ctx.app.runtime.env` rather than reading `process.env` where it
+ * stands. What is still NOT threaded is the three engine modules named above;
+ * `../config/parse.ts` shows the shape they should take —
  * `env: Readonly<Record<string, string | undefined>> = process.env` as a
  * defaulted parameter — and threading them is a change to those modules, not
  * to this one.
@@ -401,8 +405,10 @@ export interface Runtime {
   readonly cwd: string;
   /**
    * Process environment. Populated from `process.env` (or an override) and
-   * exposed on `App`; no engine module reads it through this field today — see
-   * the interface note above.
+   * exposed on `App`. The CLI reads it through this field — every prompt gate
+   * the seven command call sites build takes its `env` from here — while the
+   * three ENGINE modules named in the interface note above still read
+   * `process.env` directly.
    */
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly clock: Clock;

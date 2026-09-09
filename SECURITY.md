@@ -25,8 +25,16 @@ person maintains this repository, and an honest number beats a response window n
 call for. There is no bug bounty either: a report is acknowledged and fixed, not paid. A
 useful report names the command you ran, the repository state you ran it in, what happened,
 and what you expected instead. The CLI writes into the repository you point it at, plus the
-three paths outside it named under "Network and data handling", so a scratch repo plus one
-command is usually the whole reproduction.
+three paths outside it named under "Network and data handling" — and one verb reaches further:
+`stamity workspace sync` (`src/cli/commands/workspace.ts::runSync`) takes the nearest directory
+holding a `workspace.json` regular file, probing the current directory and then at most ten
+ancestors above it, stopping earlier if the filesystem root arrives first
+(`src/workspace/detect.ts::detectWorkspaceContext`). It writes into every member repository that
+file's `repos[]` declares, patching each member's `.stamity/manifest.json` and then running that
+member's own sync inside it, and a cascade that is not a `--dry-run` preview also appends a
+crash journal at `<root>/.stamity/workspace-sync-journal.jsonl`
+(`src/workspace/sync.ts::createJournal`). So a scratch repo plus one command is usually the
+whole reproduction, and for that verb it is a scratch workspace root plus its members.
 
 ## Supported versions
 
@@ -81,13 +89,14 @@ one below is asserted to exist by `test/docsPages.test.ts`.
 
 The engine performs no network I/O while it works, with the two exceptions named next. Nothing
 is uploaded and no telemetry or analytics is collected. The repository you ran the CLI in is
-where the engine's outputs land, and exactly three paths write outside it: the startup update
-notice's stamp file under your user cache directory
+where the engine's outputs land, and in a single repository exactly three paths write outside
+it: the startup update notice's stamp file under your user cache directory
 (`src/cli/notice/updateNotice.ts::noticeCacheDir`), the Sigstore TUF metadata cache under the
 platform's cache root (`src/pack/sigstoreVerifier.ts::sigstoreCachePath`), and the checkouts
 `stamity worktree setup` makes in the farm directory beside the repository
-(`src/worktree/policy.ts::WORKTREE_FARM_DIR_NAME`) — a farm inside the repository is refused.
-Nothing else the CLI produces leaves the repository.
+(`src/worktree/policy.ts::WORKTREE_FARM_DIR_NAME`) — a farm inside the repository is refused —
+and, at a workspace root, the `workspace sync` cascade described under Reporting. Nothing else
+the CLI produces leaves the repository.
 
 **Verifying a signed pack is the first exception.** Installing a pack that declares
 `signing.method: "sigstore"` fetches the Sigstore project's trust root over TUF before the

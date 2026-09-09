@@ -71,7 +71,11 @@ const VALID_AGENT: Record<string, string> = {
 /** A seeded corpus + packs root, torn down by the caller. */
 async function seed(
   agentFields: Record<string, string>,
-  options: { readonly packJson?: string | null } = {},
+  options: {
+    readonly packJson?: string | null;
+    /** Optional second artifact: a skill, written under its own `id` directory. */
+    readonly skillFields?: Record<string, string>;
+  } = {},
 ): Promise<{ contentRoot: string; packsRoot: string; cleanup: () => void }> {
   const dir = mkdtempSync(join(tmpdir(), "stamity-p6u03-corpus-"));
   const contentRoot = join(dir, "content");
@@ -79,6 +83,12 @@ async function seed(
   const agentPath = join(contentRoot, "agents", "stamity-probe.md");
   await mkdir(dirname(agentPath), { recursive: true });
   await writeFile(agentPath, artifact(agentFields), "utf-8");
+
+  if (options.skillFields !== undefined) {
+    const skillDir = join(contentRoot, "skills", options.skillFields["id"] ?? "probe");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), artifact(options.skillFields), "utf-8");
+  }
 
   await mkdir(join(packsRoot, "probe-pack"), { recursive: true });
   if (options.packJson !== null) {
@@ -107,11 +117,12 @@ describe("renderReferencePages — drift gate", () => {
   });
 
   it("opens every page with its frontmatter title, then the generated banner", async () => {
-    // Changed assertion (not a weakening): the banner used to be the first bytes
-    // of every page, and Docusaurus parses frontmatter ONLY at byte 0 — so a
-    // banner ahead of it made the whole block invisible and every sidebar label
-    // was derived from the page slug instead of its title. The contract moved:
-    // frontmatter first, banner immediately after it, both still asserted here.
+    // Changed assertion (not a weakening): these pages used to open with the
+    // banner at byte 0 and carried no frontmatter block at all — Docusaurus
+    // parses frontmatter ONLY when it starts at byte 0, so the banner sitting
+    // there left nowhere to declare one, and every sidebar label fell back to
+    // the page slug instead of a title. The contract moved: frontmatter first,
+    // banner immediately after it, both still asserted here.
     for (const [path, bytes] of await live()) {
       const title = REFERENCE_PAGES.find((page) => page.path === path)?.title ?? "";
       expect(title, `${path} has no page spec to take a title from`).not.toBe("");
@@ -120,6 +131,19 @@ describe("renderReferencePages — drift gate", () => {
       expect(bytes).toContain(`title: ${title}`);
       expect(bytes).toContain(REGENERATE_COMMAND);
     }
+  });
+
+  it("refuses a page title frontmatter cannot carry, naming the title", () => {
+    // frontmatterBlock writes an UNQUOTED scalar, so the title is not escaped
+    // on the way in: a `:` makes the line parse as a nested mapping, a leading
+    // `#` makes it a comment, and a leading space makes the block malformed —
+    // each of which publishes the page under its slug rather than its title,
+    // silently. Refuse at the renderer instead of committing that page.
+    for (const title of ["Agents: the roster", "#Agents", " Agents", ""]) {
+      expect(() => frontmatterBlock(title), `title ${JSON.stringify(title)}`).toThrow(EngineError);
+      expect(() => frontmatterBlock(title)).toThrow(/cannot be written as frontmatter/);
+    }
+    expect(frontmatterBlock("Agents")).toBe("---\ntitle: Agents\n---");
   });
 
   it("ends every page with exactly one trailing newline and no CR", async () => {
@@ -237,6 +261,36 @@ describe("frontmatter projection", () => {
       expect(bytes, `${path} shows the catalog-internal command id prefix`).not.toContain(
         COMMAND_ID_PREFIX,
       );
+    }
+  });
+
+  it("heads an already-prefixed id once rather than doubling its prefix", async () => {
+    // Every id in the corpus and in the first-party packs is bare today, so the
+    // already-prefixed branch of the shared spelling has no live input — and an
+    // id authored `st-probe` is legal for a pack, whose ids the reserved-prefix
+    // gate at src/content/userContent.ts never sees. Doubling it would head the
+    // page `st-st-probe`: a name no install lands and nobody can invoke.
+    const fixture = await seed(VALID_AGENT, {
+      skillFields: {
+        id: "st-probe",
+        type: "skill",
+        description: "Probes with its prefix already on it.",
+        tags: "[implementation]",
+        load: "on-demand",
+        obsolete_when: "ids stop carrying their own prefix",
+      },
+    });
+    try {
+      const pages = await renderReferencePages({
+        contentRoot: fixture.contentRoot,
+        packsRoot: fixture.packsRoot,
+      });
+      const skills = pages.get("docs/reference/skills.md") ?? "";
+      const headings = skills.split("\n").filter((line) => line.startsWith("### "));
+      expect(headings).toEqual(["### `st-probe`"]);
+      expect(skills).not.toContain("st-st-probe");
+    } finally {
+      fixture.cleanup();
     }
   });
 });

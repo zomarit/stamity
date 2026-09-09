@@ -392,6 +392,53 @@ describe("override layer under an installed pack", () => {
     expect(plan.filter((row) => row.path.includes(SHADOWED_RULE_ID))).toHaveLength(1);
   });
 
+  it("refuses an override directory that a shipped skill already projects into", async () => {
+    // No pack in this one: the two guards beside it both need one, and this
+    // state needs none. A skill's emitted directory is its AUTHORED directory
+    // name, not its id, so an override written under `st-learn/` while
+    // declaring `id: st-probe` is a new artifact that shadows nothing and
+    // projects file-for-file onto the shipped skill's tree. The catalog files
+    // that as a collision and `validate` reports it; emission read no such
+    // field, so `sync` reached the composer's content-equality refusal — which
+    // names four adapters and the shared path, and neither of the two skills.
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/overrides/skills/st-learn/SKILL.md": [
+        "---",
+        "id: st-probe",
+        "type: skill",
+        "description: A house skill authored under someone else's directory.",
+        "tags:",
+        "  - review",
+        "load: on-demand",
+        "obsolete_when: never",
+        "---",
+        "",
+        USER_MARKER,
+        "",
+      ].join("\n"),
+    });
+
+    // Cursor, not Claude: the `.agents/skills/` projection this guard reads is
+    // built only for a client that consumes it, and Claude copies skills into
+    // its own tree instead. And the shipped `learn` skill has to be SELECTED —
+    // the shared `manifestFor` states an empty selection on purpose, under
+    // which no corpus skill projects and there is nothing to collide with.
+    const manifest = createManifest({
+      tools: ["cursor"],
+      selection: { items: { agent: [], skill: ["learn"], rule: [], command: [] } },
+      generatorVersion: ENGINE_VERSION,
+      now: FIXED_NOW,
+    });
+    const planning = composeEmissionPlanner(ADAPTER_REGISTRY).plan(
+      ctxOf(manifest, { overrideRoot: overrideRootOf() }),
+    );
+
+    await expect(planning).rejects.toThrow(/\.stamity\/overrides\/skills\/st-learn\/SKILL\.md/);
+    await expect(planning).rejects.toThrow(/st-probe/);
+    await expect(planning).rejects.toThrow(/st-learn/);
+  });
+
   it("hands residue planners all three content-root parts once a pack is installed", async () => {
     // The seam itself, localized: whatever an adapter does with the spec, the
     // composer must not narrow it. Asserted through a fake residue so a failure
