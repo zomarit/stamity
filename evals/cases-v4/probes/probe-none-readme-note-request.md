@@ -47,7 +47,6 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The stated reason names both sides of the boundary — that the capture skill writes one
-   finding into the learnings directory through its own write path, and that this request
-   edits a documentation page instead. The classification is what this case measures and
-   is binding above; how completely the reason is stated is recorded here.
+None declared for this case. The label is what this case measures and it is binding above;
+the completeness of the reason prose beside it is no longer graded, and nothing else in the
+case turns on a routing destination, a hand-off sentence, or a choice between sibling labels.

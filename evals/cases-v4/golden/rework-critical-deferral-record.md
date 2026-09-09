@@ -82,5 +82,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response names board triage as the reader the elevated tag is for — the row surfaces
-   ahead of ordinary follow-ups.
+None declared for this case. The one criterion it used to declare graded whether the reason
+around the tag named its reader, which the claim does not name; what the claim pins — the
+deferral, the consequence, the rationale and the row's shape — is binding above, and nothing
+else in the case turns on a routing destination, a hand-off sentence, or a sibling label.

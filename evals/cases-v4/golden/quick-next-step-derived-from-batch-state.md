@@ -81,5 +81,3 @@ each list.
 1. Of the two live conditions, the step chosen is carrying the refused item to `/st-work`,
    because it is the one item the lane could not finish. Naming the pre-existing failure instead
    is binding-clean above (B3) and recorded here.
-2. The step says what carries over with the item — the batch list, the measurement that fired,
-   and the per-item classification.

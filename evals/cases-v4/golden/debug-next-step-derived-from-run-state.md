@@ -80,8 +80,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. Of the two live conditions, the step chosen is the instrumentation strip, because it carries
-   a deadline the other does not. Choosing the regression clause instead is binding-clean above
-   (B2) and recorded here.
-2. The step names when the strip is due — the end of the agreed capture window — rather than
-   leaving it open-ended.
+None declared for this case. Both criteria this case used to declare graded which of two
+live conditions the step picked and how completely the pick was stated, and B2 already holds
+either choice binding-clean, so nothing left in the case turns on a routing destination, a
+hand-off sentence, a choice between sibling labels, or the completeness of a stated reason.

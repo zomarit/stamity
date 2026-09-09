@@ -76,5 +76,3 @@ each list.
 
 1. The response states that the two inbox rows travel with the run rather than being closed by
    it, so the DEFER findings are visibly still tracked.
-2. The step says what `/st-work` picks the plan up under — the freshness guard that detects and
-   consumes the persisted artifact.
