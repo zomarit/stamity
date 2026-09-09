@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 7644766. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit f1a4749. -->
 <!-- Re-open when: the corpus counts, the nine-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives the corpus counts from the
      content catalog and holds the client-surface prose to the generated capability matrix; the
