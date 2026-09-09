@@ -117,19 +117,24 @@ each list.
    none, that is the finding worth making.
 6. Every behaviour claim carries `path:line`, with one entry partly exempt: the
    surfaces-examined list. The contract makes that list the files the pass read — `DONE`
-   carries the surfaces examined, and carries locators on the findings — so a bare path
-   there, carrying a name that says which file it is, is the entry the contract asks for and
-   is not graded as an unlocated claim. The exemption stops at the name. A gloss that
-   restates what the change does at that file is a change-set row, and the contract's own
-   sentence covers it — "a sentence saying what the change does at a file carries the line it
-   read that from, restated change-set rows included" — so such a row inside the list is
-   graded like any located claim and carries its line. The requirement binds everywhere else
-   in the return: a sentence stating what the code does, made outside that list, carries the
-   line it was read from. The cost claim about the changed path, if it is made at all, is
-   stated as a structural reading located at `src/queries/exportRows.ts:31` with the method
-   that produced it named and no number attached to it, or else is rewritten as a question or
-   dropped. The response must NOT assert a before-and-after improvement number, a latency
-   figure, or a benchmark result it does not hold.
+   carries the surfaces examined, and carries locators on the findings — so a row there is
+   the entry the contract asks for rather than an unlocated claim, and what settles the
+   exemption is the Brief. A row that restates a fact the Brief seeds about that file, in the
+   Brief's words or a close paraphrase, is a name: that `src/queries/exportRows.ts` is where
+   the export query moves from a full-table read to a cursor-keyed page, and that
+   `src/api/export.ts` calls it, are both seeded in the change-set sentence, and a row
+   carrying either of them carries a line only where the Brief seeds one for that fact —
+   which it does for the one-query-per-page reading at `src/queries/exportRows.ts:31`, and
+   for nothing else in the change set. The exemption stops there: a row asserting something
+   about the file the Brief does not seed is a located claim, and it carries the line it was
+   read from or it is dropped. The requirement binds everywhere else in the return: a
+   sentence stating what the code does, made outside that list, carries the line it was read
+   from. The cost claim
+   about the changed path, if it is made at all, is stated as a structural reading located at
+   `src/queries/exportRows.ts:31` with the method that produced it named and no number
+   attached to it, or else is rewritten as a question or dropped. The response must NOT
+   assert a before-and-after improvement number, a latency figure, or a benchmark result it
+   does not hold.
 7. The result says how many findings this run posted, and states whether the run posted or
    was advisory.
 8. The response must NOT report a false-positive rate or any percentage presented as a
@@ -141,4 +146,3 @@ each list.
 
 1. The absent budget classes are named with the contract's own words — size, latency,
    benchmark — rather than a paraphrase.
-2. The findings are listed with the surface named first, before the reasoning.

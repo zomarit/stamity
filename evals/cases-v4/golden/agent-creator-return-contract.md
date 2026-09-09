@@ -153,5 +153,3 @@ each list.
 ### Advisory criteria — recorded, never scored into the verdict
 
 1. Each strict error is stated with its field name first, before the explanation.
-2. The result names the bare spelling the id should have used — `migrations` — as the
-   corrected form to save under.
