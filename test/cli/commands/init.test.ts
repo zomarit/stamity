@@ -50,11 +50,13 @@ import { useTempDir } from "../../support/tempDir.ts";
  * the detection module scans for: the state-directory name and the marker token.
  *
  * Question counting: every TYPED question the prompt kit writes ends its ask
- * with `]: ` (selectOne renders `[n]: `, selectMany `[1,3]: `), and no other
- * init output — panel, notes, dry-run report, JSON envelope, failure rendering
- * — contains that suffix. Counting it in the transcript therefore IS the
+ * with one of two shapes — `Choose 1-N [n]: ` (selectOne) or
+ * `Choose 1-N, comma-separated [1,3]: ` (selectMany) — and no other init output
+ * writes either. Matching those two in the transcript therefore IS the
  * structural prompt count, a spy on the prompt output without reaching into the
- * kit. It counts the typed path only, which is every run in this suite bar one:
+ * kit. The bare `]: ` suffix is NOT the shape to key on: the codex adapter's
+ * panel row `warning: touchpoints [codex]: …` ends the same way and is not a
+ * question. It counts the typed path only, which is every run in this suite bar one:
  * the harness stdin is a PassThrough with no `setRawMode`, so the kit's menu
  * probe refuses it and the numbered list is what renders. The one case that
  * drives the menu builds its own stdin and counts frames instead.
@@ -197,9 +199,19 @@ function runInit(
   });
 }
 
-/** See the module header: `]: ` closes exactly one kit question and nothing else. */
+/**
+ * The kit's two typed ask shapes, and only those:
+ * `Choose 1-N [d]: ` (`selectOne`) and `Choose 1-N, comma-separated [d]: `
+ * (`selectManyTyped`), both at `src/cli/kit/prompts.ts`.
+ *
+ * Narrowed from a bare `]: ` split (a heuristic, not a shape): the codex
+ * adapter's panel row `warning: touchpoints [codex]: this client documents no
+ * project-scoped command directory…` carries the same suffix, so a run that
+ * selected codex counted one question that was never asked. The old counter had
+ * to be abandoned on exactly that case; this one holds there too.
+ */
 function countQuestions(stdout: string): number {
-  return stdout.split("]: ").length - 1;
+  return [...stdout.matchAll(/Choose 1-\d+(?:, comma-separated)? \[[^\]]*\]: /g)].length;
 }
 
 /**
@@ -1435,12 +1447,14 @@ describe("init — the tools question", () => {
     const result = await runInit(root, [], { ttyStdin: true, stdinLines: ["1,4"] });
 
     expect(result.code).toBe(0);
-    // Asked ONCE — a usable answer is never re-asked. Counted off the ask
-    // itself rather than through `countQuestions`, which cannot be used on a
-    // run that selects codex: the panel's `warning: touchpoints [codex]: …` row
-    // carries the same `]: ` suffix the counter keys on. That collision
-    // predates this unit (it is the panel's wording plus the counter's
-    // heuristic) and is left alone here.
+    // Asked ONCE — a usable answer is never re-asked. Back on `countQuestions`:
+    // it used to split on a bare `]: `, which the codex panel's `warning:
+    // touchpoints [codex]: …` row also carries, so this case had to count the
+    // ask by hand. The counter now matches the kit's own two ask shapes, so the
+    // panel row no longer reads as a question and the shared counter holds here
+    // like it does everywhere else. Both counts are asserted: the shape-level
+    // one, and the verbatim ask line below it.
+    expect(countQuestions(result.stdout)).toBe(1);
     expect(result.stdout.split("Choose 1-4, comma-separated").length - 1).toBe(1);
     expect(result.stdout).toContain("Which tools?");
     expect(result.stdout).toContain("  1) claude — Claude Code");

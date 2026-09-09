@@ -45,8 +45,8 @@ import { readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  COMMAND_ID_PREFIX,
   buildContentIndex,
+  emittedIdFor,
   type CatalogItem,
   type ContentIndex,
 } from "../../content/catalog.ts";
@@ -67,11 +67,7 @@ import {
 import { findPackageRoot } from "../../shared/paths.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../../types/content.ts";
 import { EngineError } from "../../types/errors.ts";
-import {
-  CONTENT_PREFIX,
-  INVOCABLE_CONTENT_PREFIX,
-  contentPrefixFor,
-} from "../../types/markers.ts";
+import { CONTENT_PREFIX, INVOCABLE_CONTENT_PREFIX } from "../../types/markers.ts";
 
 /** The one command that rewrites every generated page in this lane. */
 export const REGENERATE_COMMAND = "node scripts/generate-docs.mjs";
@@ -103,8 +99,23 @@ export function generatedBanner(): string {
  * One home for the shape, for the same reason {@link generatedBanner} is one:
  * the sibling renderers emit it too, and a second spelling of a three-line
  * block is how one page ends up published under a label nobody chose.
+ *
+ * Titles are checked rather than escaped, because a page title is authored
+ * here and a `:` or a leading `#` in one is a mistake to name, not a value to
+ * quote around: the unquoted scalar this block writes would parse as a mapping
+ * or a comment, and the label the reader sees is then whatever the parser made
+ * of it. The refusal is an {@link EngineError} so the generator fails loudly
+ * instead of committing a page that publishes under its slug.
  */
 export function frontmatterBlock(title: string): string {
+  if (title.trim() === "" || /^[\s#]/.test(title) || title.includes(":")) {
+    fail(
+      `The reference page title ${JSON.stringify(title)} cannot be written as frontmatter: a ` +
+        "title that is blank, opens with whitespace or `#`, or carries a `:` is either " +
+        "unparseable YAML or parses as something other than a title, and the page would then " +
+        "publish under a label nobody chose. Rename the page.",
+    );
+  }
   return ["---", `title: ${title}`, "---"].join("\n");
 }
 
@@ -310,20 +321,16 @@ function tick(value: string): string {
  * `cmd-work` while its own intro said the typed form drops that prefix; the
  * reader was left to work out which of the two the client would accept.
  *
- * Which prefix a class earns is {@link contentPrefixFor}'s answer, not one
+ * Which prefix a class earns is {@link emittedIdFor}'s answer, not one
  * re-decided here — the same call the adapters make, so the page and the file
  * an install lands cannot disagree about the spelling. The leading slash is the
- * command half of that: a command is typed after one, so the heading shows it.
- * The already-prefixed guard means an id authored with its prefix already on it
+ * command half of that, and the only part this function owns: a command is
+ * typed after one, so the heading shows it. The already-prefixed guard the
+ * shared helper carries means an id authored with its prefix already on it
  * renders once rather than doubled.
  */
 function invokedName(item: CatalogItem): string {
-  const bare =
-    item.type === "command" && item.id.startsWith(COMMAND_ID_PREFIX)
-      ? item.id.slice(COMMAND_ID_PREFIX.length)
-      : item.id;
-  const prefix = contentPrefixFor(item);
-  const spelled = bare.startsWith(prefix) ? bare : `${prefix}${bare}`;
+  const spelled = emittedIdFor(item);
   return item.type === "command" ? `/${spelled}` : spelled;
 }
 

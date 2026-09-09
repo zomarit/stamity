@@ -7,7 +7,12 @@ import { requireEnum, requireString, requireStringArray } from "../config/parse.
 import { CONTENT_CLASSES, type ContentClass, type RulePrecedence } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import { carriesEngineContentPrefix, stripEngineContentPrefix } from "../types/markers.ts";
+import { MAX_USER_CONTENT_LENGTH } from "../guard/promptGuard.ts";
+import {
+  carriesEngineContentPrefix,
+  contentPrefixFor,
+  stripEngineContentPrefix,
+} from "../types/markers.ts";
 import { resolveBundledContentRoot } from "./contentRoot.ts";
 import {
   composeFrontmatter,
@@ -91,15 +96,20 @@ export type CatalogFs = Pick<typeof NodeFsPromises, "readdir" | "readFile">;
  * Which layer supplied an artifact: the bundled corpus, an installed pack, or
  * the repo's own override tree.
  *
- * Read the rule below as the contract a consumer MUST honour, not as behaviour
- * already in place: no emission path reads this field yet. Its only consumer in
- * `src/` is `./selection.ts::classifySelection`, and every adapter renders an
- * item the same way whatever layer produced it. The rule the field exists to
- * carry — a `user` body is user-owned end to end, so it is never wrapped in a
- * managed block and never regenerated over — is therefore a guard still to be
- * built on top of it, in the same change that threads the override root into
- * emission. Until that lands, an override reaching an adapter is emitted
- * exactly like a shipped artifact.
+ * Read by three lanes today. `./selection.ts::classifySelection` decides what
+ * an empty selection still admits. `../emit/skillsProjection.ts` stamps it onto
+ * every projected file it emits, and `../emit/planner.ts` then reads it twice:
+ * a `origin !== "pack"` filter narrows the corpus rows handed to
+ * `mergeSkillProjections`, and inside that function an `origin === "user"` test
+ * is what tells an OVERRIDE apart from a shipped skill when two rows claim one
+ * projection directory — the difference between naming the file the operator
+ * wrote and naming four adapters that had nothing to do with it.
+ *
+ * What is NOT built on top of it is the rule the field was minted for: a `user`
+ * body is user-owned end to end, so it should never be wrapped in a managed
+ * block and never regenerated over. No adapter asks. An override that reaches
+ * one is still rendered exactly like a shipped artifact, and the guard that
+ * would change that is still to be written.
  */
 export type ContentOrigin = "corpus" | "pack" | "user";
 
@@ -345,22 +355,21 @@ const TRAILING_NEWLINES = /(?:\r?\n)+$/;
 const OVERLAY_IDENTITY_KEYS = ["id", "type"] as const;
 
 /**
- * Ceiling on an overlay's body half, in characters.
+ * Ceiling on an overlay's body half, in characters: the guard's own
+ * {@link MAX_USER_CONTENT_LENGTH}, imported rather than restated.
  *
- * The SAME ceiling `stamity validate` holds that file to — `MAX_USER_CONTENT_LENGTH`
- * (`../guard/promptGuard.ts`), read there through the engine registry
- * (`../cli/commands/validate.ts` → `cappedBody`). Restated rather than imported
- * because the prompt guard is registry-wired by construction and the import
- * graph is gated on it (`test/architecture/boundaries.test.ts` →
- * `REGISTRY_ONLY_MODULES`): a direct edge from this walk retires that
- * architectural claim, which is a decision for the change that wants to make it
- * rather than a side effect of adding a size check.
+ * It was restated for a while, and the reason was architectural rather than
+ * technical: `../guard/promptGuard.ts` was registry-wired by construction and
+ * listed in `test/architecture/boundaries.test.ts`'s `REGISTRY_ONLY_MODULES` as
+ * "imported by neither" of the two validators that cite it, so an import edge
+ * from this walk would have retired that claim as a side effect of adding a
+ * size check. Taking the edge deliberately is the change that retires it, and
+ * that row is gone with this one — the ratchet only ever shrinks.
  *
- * The two numbers cannot drift apart unnoticed: `test/content/catalog.test.ts`
- * drives this refusal from the guard's own constant, one character over the
- * limit and exactly at it, so moving either number alone turns that suite red.
+ * One number now, so the two cannot drift apart at all. The cross-pin in
+ * `test/content/catalog.test.ts` (one character over the limit and exactly at
+ * it, both driven from the guard's constant) stays as the behavioural half.
  */
-const MAX_OVERLAY_BODY_LENGTH = 250_000;
 
 /** Concurrent artifact reads per class directory. */
 const READ_CONCURRENCY = 8;
@@ -447,6 +456,32 @@ export function typeIdKey(type: ContentClass, id: string): string {
 export function applyCommandPrefix(id: string, type: ContentClass): string {
   if (type !== "command" || id.startsWith(COMMAND_ID_PREFIX)) return id;
   return `${COMMAND_ID_PREFIX}${id}`;
+}
+
+/**
+ * The spelling one artifact is emitted, invoked and documented under: the
+ * catalog id with the command namespacing removed and the filename prefix its
+ * class earns restored. The inverse of {@link applyCommandPrefix}, and the one
+ * answer every surface that names an artifact to a human shares.
+ *
+ * Which prefix a class earns is {@link contentPrefixFor}'s question, not one
+ * re-decided here — a command or a skill lands on `st-`, an agent or a rule on
+ * `stamity-`, and an installed pack's artifacts take the same two answers its
+ * class earns in the corpus. It lives here because four callers needed it and
+ * each spelled it out: the three adapters that mint the filename and the docs
+ * lane that heads the reference entry. Four spellings of one rule is how a
+ * page ends up advertising a name no install lands.
+ *
+ * An id authored with its prefix already on it renders once rather than
+ * doubled, so the function is idempotent the way its inverse is.
+ */
+export function emittedIdFor(item: Pick<CatalogItem, "id" | "type">): string {
+  const bare =
+    item.type === "command" && item.id.startsWith(COMMAND_ID_PREFIX)
+      ? item.id.slice(COMMAND_ID_PREFIX.length)
+      : item.id;
+  const prefix = contentPrefixFor(item);
+  return bare.startsWith(prefix) ? bare : `${prefix}${bare}`;
 }
 
 /**
@@ -827,10 +862,10 @@ function readOverlayFrontmatter(half: OverlayHalf): Record<string, unknown> {
  * the direction this layer exists to close.
  */
 function readOverlayBody(half: OverlayHalf): string {
-  if (half.text.length > MAX_OVERLAY_BODY_LENGTH) {
+  if (half.text.length > MAX_USER_CONTENT_LENGTH) {
     throw new EngineError(
       `${toPosixDisplayPath(half.path)}: the body patch is ${half.text.length} characters, over the ` +
-        `${MAX_OVERLAY_BODY_LENGTH}-character ceiling on user-authored content. Text past it is ` +
+        `${MAX_USER_CONTENT_LENGTH}-character ceiling on user-authored content. Text past it is ` +
         `truncated where the artifact re-enters agent context, so the patch on disk stops being ` +
         `the patch the client gets — split the patch, or move the material into a skill support ` +
         `file.`,

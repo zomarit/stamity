@@ -724,6 +724,43 @@ describe("touchpoint commands", () => {
     expect(work).toMatch(/Run .+ before the QA checkpoint\./);
   });
 
+  /**
+   * The typed half of the surface heads an id that already carries the runtime
+   * prefix exactly once. A command authored as `st-probe` reaches the catalog
+   * as `cmd-st-probe`; the emitted directory — which is the name the operator
+   * types after the slash — is `st-probe`, never `st-st-probe`.
+   *
+   * This adapter spelled the restore as prefix-plus-bare and so doubled the
+   * prefix on that input alone, while its three siblings carried the guard;
+   * delegating `commandName` to the catalog's `emittedIdFor` closed the
+   * divergence, and this case is what holds it. Driven through the composed
+   * plan rather than the builder, because the doubling was in the PATH the run
+   * writes, which no builder-level assertion can see.
+   */
+  it("heads an already-prefixed command id once", async () => {
+    const corpus = await seedCorpus({
+      "corpus/commands/st-probe.md": artifact(
+        [
+          "id: st-probe",
+          "type: command",
+          "description: Authored with the runtime prefix already on it.",
+          "tags: [orchestration]",
+        ],
+        "# /st-probe\n\nProbe body.",
+      ),
+    });
+
+    const plan = await planFor(corpus, { commands: ["work", "ask", "st-probe"] });
+    const probePath = `${CURSOR_COMMANDS_DIR ?? "<none>"}/st-probe/SKILL.md`;
+
+    expect(plan.map((row) => row.path)).toContain(probePath);
+    expect(plan.filter((row) => row.path.includes("st-st-probe")).map((row) => row.path)).toEqual([]);
+    // The `name` the operator types and the directory on disk agree, which is
+    // the whole reason this class asks `emittedIdFor` rather than the long
+    // spawn-guard prefix.
+    expect(contentAt(plan, probePath)).toContain("name: st-probe");
+  });
+
   it("emits no command rows for an empty command selection", async () => {
     const plan = await planFor(await seedCorpus(), { commands: [] });
 

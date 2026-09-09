@@ -1,8 +1,10 @@
 import { stripVTControlCharacters } from "node:util";
 import { describe, expect, it } from "vitest";
 import {
+  ACCENT,
   BANNER_COLUMNS,
   BANNER_ROWS,
+  WORDMARK,
   bannerBlock,
   renderWordmark,
   resolveBannerAccent,
@@ -16,9 +18,10 @@ import { runInProcess } from "../support/inProcess.ts";
  *
  * 1. The plain rendering is pure block characters — the snapshot below is what
  *    a NO_COLOR reader, a captured transcript and a `script(1)` log all get.
- * 2. Ink carries NO escape at all, so it inherits the reader's theme; exactly
- *    one run is colored, and stripping every escape from a colored rendering
- *    returns the plain bytes unchanged.
+ * 2. Ink carries NO escape at all, so it inherits the reader's theme; the
+ *    accent opens one run per text row it touches — two in all, since the
+ *    crossbar spans pixel rows 2-5 — and stripping every escape from a colored
+ *    rendering returns the plain bytes unchanged.
  * 3. The accent degrades 24-bit -> 256 -> 16 and then vanishes.
  * 4. Nothing is printed on a machine-read path: a piped stdout or a `--json`
  *    run gets no mark, not a stripped one.
@@ -81,6 +84,9 @@ describe("wordmark — the plain rendering", () => {
   });
 });
 
+/** The renderer's own rule: any non-space pixel that is not the accent is ink. */
+const isInk = (pixel: string): boolean => pixel !== " " && pixel !== ACCENT;
+
 describe("wordmark — the single accent", () => {
   it.each(COLORED)("spends the violet exactly once per row it touches (%s)", (accent) => {
     const art = renderWordmark({ accent });
@@ -133,6 +139,13 @@ describe("wordmark — the single accent", () => {
     // Six cells per text row, the crossbar's width: arm, stem, stem, stem, arm,
     // arm.
     //
+    // What this equality can and cannot see: a SECOND coloured run, or a run of
+    // the wrong width or on the wrong row, fails it. A cell that mixed accent
+    // with ink cannot — such a cell draws the same `█` glyph inside the very
+    // same coloured run, so the rendered bytes are identical. That half of the
+    // contract is a property of the grid, and it is pinned on the grid, in
+    // "never pairs an accent pixel with an ink pixel in one cell" below.
+    //
     // TEST CHANGE, justified: the expected run grew from five cells to six
     // because the mark was re-derived at 62 columns, where the `t`'s 23.2-unit
     // stem is THREE columns rather than two. What is coloured did not move: it
@@ -143,6 +156,31 @@ describe("wordmark — the single accent", () => {
     // still an exact equality on the full set of coloured runs, so a second
     // coloured run or a cell mixing accent with ink still fails it.
     expect(colored).toEqual(["▄███▄▄", "▀███▀▀"]);
+  });
+
+  it("never pairs an accent pixel with an ink pixel in one cell", () => {
+    // The renderer accents a cell when EITHER of its two pixels is accent
+    // (src/cli/kit/banner.ts, `wantsAccent`), so a grid that paired `+` above
+    // `#` would silently paint that ink violet — and no assertion on the
+    // rendered bytes could see it, because the cell draws `█` either way. The
+    // claim in the module docblock ("no cell ever mixes two inks ... the
+    // letterforms are drawn so that situation cannot arise") is about the
+    // pixels, so it is read off the pixels.
+    const mixed: string[] = [];
+    for (let row = 0; row < WORDMARK.length; row += 2) {
+      const top = WORDMARK[row] ?? "";
+      const bottom = WORDMARK[row + 1] ?? "";
+      for (let column = 0; column < BANNER_COLUMNS; column += 1) {
+        const upper = top[column] ?? " ";
+        const lower = bottom[column] ?? " ";
+        if ((upper === ACCENT && isInk(lower)) || (lower === ACCENT && isInk(upper))) {
+          mixed.push(`text row ${String(row / 2)}, column ${String(column)}: ${upper}/${lower}`);
+        }
+      }
+    }
+    expect(mixed).toEqual([]);
+    // Non-degenerate: the grid does carry accent pixels for the walk to reject.
+    expect(WORDMARK.some((row) => row.includes(ACCENT))).toBe(true);
   });
 });
 
@@ -302,6 +340,59 @@ describe("root help wiring", () => {
     });
     expect(result.stdout).toContain("Usage: stamity greet");
     expect(result.stdout).not.toContain("█");
+  });
+
+  it("honours --no-color wherever it sits, --help included", async () => {
+    // Two claims, and the second is why this case exists at all.
+    //
+    // The flag is not positional: `--help --no-color` and `--no-color --help`
+    // are the same invocation, and a reader has no reason to think word order
+    // decides whether the mark is painted. Commander 15 happens to parse the
+    // whole option run before acting on `--help`, so the program's parsed
+    // options were already a correct answer — but that is an undocumented
+    // ordering inside a dependency, and the funnel now reads argv instead.
+    //
+    // And until this case, the suite could not observe the decision at all.
+    // Commander picks its own answer for whether help output may carry colour,
+    // from the REAL `process.stdout` — never from the injected terminal facts —
+    // and under vitest that is a pipe, so every escape the mark wrote was
+    // stripped before any assertion saw it. `--no-color` "passing" here proved
+    // nothing. The funnel now hands commander the CLI's own colour decision,
+    // which is what makes the last leg below a control rather than a
+    // formality.
+    const violet = { COLORTERM: "truecolor" };
+    const after = await runInProcess(commands, ["--help", "--no-color"], {
+      env: violet,
+      tty: { stdout: true },
+    });
+    expect(after.code).toBe(0);
+    expect(after.stdout, "the flag after --help was ignored").not.toContain("\u001B");
+    expect(after.stdout).toContain(renderWordmark({ indent: "  " }));
+
+    // The spelling that already worked still does.
+    const before = await runInProcess(commands, ["--no-color", "--help"], {
+      env: violet,
+      tty: { stdout: true },
+    });
+    expect(before.stdout).not.toContain("\u001B");
+    expect(before.stdout).toBe(after.stdout);
+
+    // NO_COLOR keeps beating the terminal, whichever side the flag is on.
+    const viaEnv = await runInProcess(commands, ["--help"], {
+      env: { ...violet, NO_COLOR: "1" },
+      tty: { stdout: true },
+    });
+    expect(viaEnv.stdout).not.toContain("\u001B");
+
+    // Non-degenerate: without the flag, the same TTY DOES get the accent — so
+    // the three assertions above are reading a decision, not a blank terminal.
+    const painted = await runInProcess(commands, ["--help"], {
+      env: violet,
+      tty: { stdout: true },
+    });
+    expect(painted.stdout, "the colour TTY leg paints nothing to begin with").toContain(
+      VIOLET.truecolor,
+    );
   });
 
   it("keeps the mark off stderr when help rides a usage error", async () => {

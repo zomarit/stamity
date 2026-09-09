@@ -242,15 +242,16 @@ export function userContentRoot(rootDir: string): string {
  * Mirrors the bundled corpus layout so one id resolves the same way in the user
  * tree as it does in the corpus it overrides.
  */
-const CLASS_LAYOUT: Record<UserArtifactType, { dir: string; layout: "file" | "directory" }> = {
-  agent: { dir: "agents", layout: "file" },
-  skill: { dir: "skills", layout: "directory" },
-  rule: { dir: "rules", layout: "file" },
-  command: { dir: "commands", layout: "file" },
-};
+export const CLASS_LAYOUT: Record<UserArtifactType, { dir: string; layout: "file" | "directory" }> =
+  {
+    agent: { dir: "agents", layout: "file" },
+    skill: { dir: "skills", layout: "directory" },
+    rule: { dir: "rules", layout: "file" },
+    command: { dir: "commands", layout: "file" },
+  };
 
 /** The readable file inside a skill directory. */
-const SKILL_FILE = "SKILL.md";
+export const SKILL_FILE = "SKILL.md";
 
 /** Artifact file extension. A rule's `.mdc` twin does not match, and is not an artifact. */
 const ARTIFACT_EXTENSION = ".md";

@@ -107,6 +107,13 @@ describe("the docs site keeps the one URL the sunset material promises", () => {
     expect(front ?? "", "the migration guide's published route moved").toContain(
       `slug: ${MIGRATION_SLUG}`,
     );
+    // The page's H1 sits behind comment lines, so without a declared title the site inferred
+    // "migration" for the tab and the unfurl — on the one page external links point at. The
+    // title is declared beside the slug (the maintainer's decision of 2026-09-09) and pinned
+    // here, assembled from fragments for the same reason the slug is.
+    expect(front ?? "", "the migration guide's declared title moved").toContain(
+      `title: Migrating from ${["hat", "ch3r"].join("")}`,
+    );
   });
 
   it("keeps that page out of the navigation, so only the bridge artifacts lead to it", () => {

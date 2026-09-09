@@ -88,7 +88,7 @@ export { resolveAccentDepth as resolveBannerAccent } from "./terminal.ts";
  * space is ink, which is why the renderer tests for "not a space" rather than
  * for `#`: a new ink character in the grid should draw, not silently vanish.
  */
-const ACCENT = "+";
+export const ACCENT = "+";
 
 /**
  * The wordmark at two pixels per text row: 14 rows of at most 62 columns.
@@ -97,8 +97,14 @@ const ACCENT = "+";
  * a change to the mark is reviewable as a picture rather than as a diff of
  * escape sequences. Rows are stored right-trimmed and read through
  * {@link pixelAt}, which treats a short row as trailing background.
+ *
+ * Exported for one reason: the "no cell mixes two inks" invariant is a property
+ * of THIS grid, not of the rendering. A cell that paired ink with accent would
+ * draw the same `█` the accented run already draws, so the rendered bytes
+ * cannot tell the two apart — only a reader of the pixel pairs can, and the
+ * test is that reader.
  */
-const WORDMARK: readonly string[] = [
+export const WORDMARK: readonly string[] = [
   "           ###                             ###  ###",
   "           ###                             ###  ###",
   "           +++                                  ###",

@@ -166,6 +166,30 @@ function failureDocFor(err: unknown): FailureDoc {
   };
 }
 
+/**
+ * `--no-color` anywhere on the command line, read off the argv the program was
+ * handed rather than off commander's parsed options.
+ *
+ * The flag is not positional to a reader, so it is not positional here either —
+ * and the help path is where that could stop being true. Commander 15 parses
+ * the whole option run before it acts on `--help` (verified against 15.0.0:
+ * `--help --no-color` and `--no-color --help` both report `color: false` inside
+ * a `beforeAll` help hook), so `program.opts()` is a correct answer there
+ * today. It is an answer about commander's internal ordering, not about the
+ * command line, and it is not a documented guarantee — a version that acted on
+ * help earlier would silently paint over a reader's `--no-color` with no test
+ * able to say so. Reading argv is the answer that cannot move.
+ *
+ * `argv` is the INJECTED array (the funnel's own parameter), never
+ * `process.argv`: this module is called with argv by every test and by the
+ * entrypoint alike, and reading the process would make one of those a lie.
+ * Tokens after a bare `--` are operands, not flags, and are skipped.
+ */
+function noColorRequested(argv: readonly string[]): boolean {
+  const operands = argv.indexOf("--");
+  return (operands === -1 ? argv : argv.slice(0, operands)).includes("--no-color");
+}
+
 /** Returns 0 | 1 | 2 only. Never calls process.exit; the entrypoint owns exit timing. */
 export async function runCli(
   argv: readonly string[],
@@ -182,6 +206,9 @@ export async function runCli(
     ...(opts.clock !== undefined ? { clock: opts.clock } : {}),
   });
   const engine = createEngine();
+  // Read before commander parses anything, so the answer does not depend on
+  // when commander decides to act on `--help` — see `noColorRequested`.
+  const noColorFlag = noColorRequested(argv);
 
   const program = new Command();
   program
@@ -194,6 +221,20 @@ export async function runCli(
     .configureOutput({
       writeOut: (s) => io.out(s),
       writeErr: (s) => io.err(s),
+      // Commander decides for itself whether help output may carry colour, and
+      // it decides from the REAL `process.stdout` plus its own reading of
+      // NO_COLOR/FORCE_COLOR — never from the terminal facts this funnel was
+      // handed and never from `--no-color`. Left alone it strips the wordmark's
+      // escapes on any process whose stdout is not a terminal (which is every
+      // in-process test, so the flag's effect was unobservable) and keeps them
+      // on one whose stdout is, whatever the flag said. Point it at the
+      // decision the rest of the CLI already makes, so there is exactly one.
+      // Commander's own help styling is identity by default, so this governs
+      // the mark and nothing else.
+      getOutHasColors: () =>
+        resolveColorEnabled({ noColorFlag, env, stdoutIsTTY: terminal.stdoutIsTTY }),
+      getErrHasColors: () =>
+        resolveColorEnabled({ noColorFlag, env, stdoutIsTTY: terminal.stderrIsTTY }),
     });
 
   // The wordmark, above the root help only. `beforeAll` is inherited by every
@@ -214,7 +255,7 @@ export async function runCli(
       stdoutIsTTY: terminal.stdoutIsTTY,
       machineReadable: argv.includes("--json"),
       env,
-      noColorFlag: program.opts<{ color?: boolean }>().color === false,
+      noColorFlag,
       // The width gate: the mark is a fixed-width picture, so a window
       // narrower than it wraps rather than shrinks it. `stdoutColumns` is
       // absent off a pipe or a test double, which `bannerBlock` reads as "the
@@ -261,8 +302,11 @@ export async function runCli(
       // confirmation anywhere in the invocation.
       const yes = local["yes"] === true;
       const dryRun = local["dryRun"] === true;
+      // The pre-scan and commander's parse agree on every invocation that
+      // reaches a command body; the OR is what keeps them agreeing if the
+      // option is ever re-spelled (a short alias, say) in only one of the two.
       const colorEnabled = resolveColorEnabled({
-        noColorFlag: program.opts<{ color?: boolean }>().color === false,
+        noColorFlag: noColorFlag || program.opts<{ color?: boolean }>().color === false,
         env,
         stdoutIsTTY: terminal.stdoutIsTTY,
       });

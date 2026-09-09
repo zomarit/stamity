@@ -86,8 +86,8 @@
  */
 
 import {
-  COMMAND_ID_PREFIX,
   buildContentIndex,
+  emittedIdFor,
   typeIdKey,
   type CatalogItem,
 } from "../content/catalog.ts";
@@ -136,7 +136,6 @@ import {
 } from "../tools/translator.ts";
 import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
-import { contentPrefixFor } from "../types/markers.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -825,19 +824,15 @@ function mcpRow(emission: McpEmission): AdapterOutput {
  * `name:`, so the typed command, the emitted `name:`, and the guard's governed
  * namespace all agree by construction.
  *
- * Which prefix that is belongs to {@link contentPrefixFor}, not to this
- * function: a command or a skill lands on `st-`, an agent or a rule on
- * `stamity-`, and an installed pack's artifacts take the same two answers its
- * class earns in the corpus. Deciding it here is how the four adapters drift
- * out of agreement with each other and with the ownership gate.
+ * Which prefix that is belongs to {@link emittedIdFor}, not to this function:
+ * a command or a skill lands on `st-`, an agent or a rule on `stamity-`, and an
+ * installed pack's artifacts take the same two answers its class earns in the
+ * corpus. Deciding it here is how the four adapters drift out of agreement with
+ * each other and with the ownership gate — so this is a named alias for the
+ * catalog's answer, kept for the docblock above rather than for a second rule.
  */
 function emittedId(item: CatalogItem): string {
-  const bare =
-    item.type === "command" && item.id.startsWith(COMMAND_ID_PREFIX)
-      ? item.id.slice(COMMAND_ID_PREFIX.length)
-      : item.id;
-  const prefix = contentPrefixFor(item);
-  return bare.startsWith(prefix) ? bare : `${prefix}${bare}`;
+  return emittedIdFor(item);
 }
 
 /** Ledger attribution — every row this adapter returns is owned by `claude`. */

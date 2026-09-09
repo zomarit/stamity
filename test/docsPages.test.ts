@@ -4,6 +4,11 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { COMMAND_ID_PREFIX } from "../src/content/catalog.ts";
+import {
+  CLASS_LAYOUT,
+  LEAN_LINE_THRESHOLDS,
+  SKILL_FILE,
+} from "../src/content/userContent.ts";
 import { TRUST_TIERS } from "../src/pack/trust.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
@@ -518,15 +523,23 @@ describe("hand pages", () => {
   it("every sidebar-listed hand page declares its H1 as its title", () => {
     // Docusaurus reads the `title:` frontmatter key for the sidebar label AND the document
     // title; a page whose H1 and frontmatter title drift apart shows one heading in the sidebar
-    // and a different one on the page. `migration.md` is excluded on purpose — it carries only
-    // a `slug:` block (see MAPPED_GUIDES) and is off the sidebar, so it has no title to check.
+    // and a different one on the page. `migration.md` is excluded on purpose — it is off the
+    // sidebar (see MAPPED_GUIDES), so there is no sidebar label to hold to its H1; the title it
+    // declares beside its `slug:` is pinned by `test/ci/docsSite.test.ts` instead.
     let checked = 0;
     for (const page of MAPPED_GUIDES) {
       const text = read(page);
 
-      const frontmatter = /^---\r?\ntitle: (.+?)\r?\n---\r?\n/.exec(text);
-      expect(frontmatter, `${page} carries no title frontmatter for the sidebar`).not.toBeNull();
-      const title = frontmatter?.[1] ?? "";
+      // The block first, the key inside it — not one regex spelling both. A
+      // title-only block is what these seven carry today, and the old pattern
+      // required exactly that: the day one of them gains a `sidebar_position`
+      // or a `description`, the page would report "carries no title
+      // frontmatter" while carrying one. Same shape `test/ci/docsSite.test.ts`
+      // reads the migration guide's `slug:` through.
+      const block = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(text)?.[1];
+      expect(block, `${page} carries no frontmatter block for the sidebar`).toBeDefined();
+      const title = /^title: (.+)$/m.exec(block ?? "")?.[1];
+      expect(title, `${page} carries no title frontmatter for the sidebar`).toBeDefined();
 
       const h1 = /^# (.+)$/m.exec(afterFrontmatter(text))?.[1];
       expect(h1, `${page} has no H1 to check its frontmatter title against`).toBeDefined();
@@ -539,6 +552,21 @@ describe("hand pages", () => {
     expect(checked, "no hand page under docs/ was checked for a title").toBeGreaterThan(0);
     expect(checked, "MAPPED_GUIDES filtered out a page the loop should have checked").toBe(
       MAPPED_GUIDES.length,
+    );
+
+    // And "sidebar-listed" is read off the sidebar rather than assumed. MAPPED_GUIDES is
+    // derived from the README-map decision (GUIDES minus MIGRATION); the sidebar is a separate
+    // file with its own `present([...])` lists, and the two agree today by convention alone. A
+    // guide dropped from the navigation would leave this test asserting a frontmatter title for
+    // the sidebar of a page the sidebar does not carry.
+    const sidebarCode = read("website/sidebars.ts");
+    const listed = [...sidebarCode.matchAll(/'([a-z0-9/-]+)'/g)].map((match) => match[1]);
+    for (const page of MAPPED_GUIDES) {
+      const slug = page.replace(/^docs\//, "").replace(/\.md$/, "");
+      expect(listed, `${page} is not listed in website/sidebars.ts`).toContain(slug);
+    }
+    expect(listed, "the migration guide is listed in the sidebar again").not.toContain(
+      MIGRATION.replace(/^docs\//, "").replace(/\.md$/, ""),
     );
   });
 
@@ -630,7 +658,7 @@ describe("README", () => {
   // shipped. A verb lands in `src/cli.ts` and in both arrays, in that order.
   it("states the command surface — nine verbs plus the plumbing verbs", () => {
     const text = read(README);
-    for (const command of [
+    const ADVERTISED = [
       "init",
       "sync",
       "check",
@@ -640,9 +668,26 @@ describe("README", () => {
       "workspace",
       "worktree",
       "clean",
-    ]) {
-      expect(text, `README omits \`${command}\``).toContain(`\`${command}\``);
-    }
+    ];
+    // TEST CHANGE, justified (strictly stronger): nine `toContain` calls over the
+    // WHOLE page became one equality on the `·` list itself. Containment could
+    // not see the failure it was written for — a verb dropped from the list a
+    // reader scans, while still named in the paragraph under it or in a link,
+    // passed every one of the nine. Order is asserted too: the list is the
+    // order `src/cli.ts` advertises, and a reshuffle is a change to the surface
+    // a reader reads it as.
+    const commands = text.split(/^(?=## )/m).find((part) => part.startsWith("## Commands")) ?? "";
+    expect(commands, "README has no `## Commands` section").not.toBe("");
+    const run = /((?:`[a-z-]+` · )+`[a-z-]+`) — /.exec(commands.replaceAll("\n", " "))?.[1];
+    expect(run, "README's `## Commands` section carries no `·` verb list").toBeDefined();
+    const listed = (run ?? "").split(" · ").map((verb) => verb.replaceAll("`", ""));
+    expect(listed, "README's `·` verb list is not the advertised surface").toEqual(ADVERTISED);
+    // The count WORD beside the list is still hand-typed; the length assertion
+    // next to it is what makes the two disagreeing visible.
+    expect(listed).toHaveLength(9);
+    expect(commands, "README's verb count word does not match its own list").toContain(
+      "nine verbs",
+    );
     expect(text).toContain("`learn`");
     // TEST CHANGE, justified: `handoff` joined `learn` behind the advertised surface, so
     // "the plumbing verb" is no longer one verb. The `learn` pin still holds and stays; this
@@ -1019,14 +1064,13 @@ describe("CONTRIBUTING.md", () => {
  * it (`/st-spec` truncated after the semicolon, `/st-plan` re-punctuated from
  * parentheses to dashes) are what a hand restatement costs.
  *
- * Three guides have no bespoke case here yet, for two different reasons. The
- * customization and workspaces guides are one shape: what they claim IS
- * readable — the override tree's four class paths, the strict/
- * advisory split and the per-class line thresholds from
- * `src/content/userContent.ts`; the workspace subcommand set, the status row
- * states and the three-field bridge from `src/cli/commands/workspace.ts` and
- * `src/workspace/` — so their gap is a case nobody has written, not a claim
- * nothing can reach. The doctrine page is the other shape: it states the
+ * TEST CHANGE, justified (strictly stronger): two more of those gaps closed.
+ * The customization guide's override-tree table and advisory thresholds are now
+ * read off `src/content/userContent.ts`, and the workspaces guide's subcommand
+ * list off `src/cli/commands/workspace.ts`, both in cases below.
+ *
+ * One guide has no bespoke case here, and the reason is not that its claim
+ * cannot be reached. The doctrine page is the other shape: it states the
  * reasoning behind the corpus and cites the surfaces that enforce it, and each
  * of those surfaces is already pinned where it lives — the charter cap and the
  * always-on ratchet in `test/corpus/invariants.test.ts`, the currency headers
@@ -1084,6 +1128,59 @@ describe("the guides", () => {
     ).not.toContain(`](${MIGRATION})`);
   });
 
+  it("the customization guide's override tree and thresholds are the module's, not a copy", () => {
+    // Two tables, both restatements of `src/content/userContent.ts`: where an
+    // override for each class lives, and the advisory line count each class is
+    // held to. Neither is derived, so both drift the moment a class moves or a
+    // threshold is retuned — and both are exactly what an author reads the page
+    // for. Read from the module here so the page cannot quietly disagree.
+    const text = read(CUSTOMIZATION);
+    for (const [klass, { dir, layout }] of Object.entries(CLASS_LAYOUT)) {
+      // `SKILL_FILE` is the module's own name for the readable file inside a
+      // skill directory; the file/directory split is the module's too.
+      const tail = layout === "directory" ? `<id>/${SKILL_FILE}` : "<id>.md";
+      expect(text, `the customization guide misfiles a ${klass} override`).toContain(
+        `\`.stamity/overrides/${dir}/${tail}\``,
+      );
+    }
+    for (const [klass, limit] of Object.entries(LEAN_LINE_THRESHOLDS)) {
+      expect(text, `the customization guide's ${klass} threshold is not the module's`).toContain(
+        `| ${klass} | ${String(limit)} |`,
+      );
+    }
+    // Non-degenerate: the loops above pass vacuously over an empty record.
+    expect(Object.keys(CLASS_LAYOUT)).toHaveLength(4);
+    expect(Object.keys(LEAN_LINE_THRESHOLDS)).toHaveLength(4);
+  });
+
+  it("the workspaces guide names every subcommand the verb actually takes", () => {
+    // The guide is the only place the three subcommands are described, and the
+    // set is a closed literal in the command module — so a fourth subcommand,
+    // or one retired, moves nothing here on its own. Read the literal out of
+    // the source rather than importing it: `SUBCOMMANDS` is module-private, and
+    // a test is not a reason to widen a module's surface.
+    const source = read("src/cli/commands/workspace.ts");
+    const declared = /const SUBCOMMANDS = \[([^\]]+)\] as const;/.exec(source)?.[1];
+    expect(declared, "the workspace command no longer declares a closed SUBCOMMANDS set").toBeDefined();
+    const subcommands = [...(declared ?? "").matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
+    expect(subcommands, "no workspace subcommand was read out of the source").not.toHaveLength(0);
+
+    const guide = read(WORKSPACES);
+    for (const subcommand of subcommands) {
+      expect(guide, `the workspaces guide never mentions \`workspace ${subcommand}\``).toContain(
+        `workspace ${subcommand}`,
+      );
+      expect(guide, `the workspaces guide never shows how to run \`${subcommand}\``).toContain(
+        `stamity workspace ${subcommand}`,
+      );
+    }
+    // The page's own count sentence is the second half of the same claim: it
+    // says how many there are, and nothing else recomputes it.
+    expect(guide, "the workspaces guide's subcommand count is not the source's").toContain(
+      subcommands.length === 3 ? "three subcommands" : `${String(subcommands.length)} subcommands`,
+    );
+  });
+
   it("getting started shows the install line and the whole command surface", () => {
     const text = read(GETTING_STARTED);
     expect(text, "the getting-started guide never shows the install command").toContain(
@@ -1108,6 +1205,27 @@ describe("the guides", () => {
       expect(text, `the getting-started guide omits \`${command}\``).toContain(`\`${command}\``);
     }
     expect(text, "the getting-started guide does not say where state lives").toContain(".stamity/");
+    // The clients question is a checkbox menu on a TTY, and no page in `docs/` said how to
+    // work one — the keys were spelled only in `src/cli/kit/prompts.ts`'s own hint line. A
+    // reader who cannot see how to toggle a row cannot answer the first question init asks.
+    expect(text, "the getting-started guide never says the clients question is a menu").toContain(
+      "checkbox menu",
+    );
+    for (const key of ["arrow keys", "space toggles", "enter confirms"]) {
+      expect(text, `the getting-started guide omits how to work the menu: ${key}`).toContain(key);
+    }
+  });
+
+  it("names the managed CLAUDE.md block wherever a page enumerates what init writes", () => {
+    // The Claude Code entry point is a managed block inside `CLAUDE.md` (this guide's own
+    // client table says so, and `docs/capability-matrix.md` declares the cap), so a page that
+    // lists what init writes and commits and stops at `AGENTS.md` plus the client trees has
+    // left out the one file that carries the import. Three enumerations, one omission each.
+    for (const page of [GETTING_STARTED, WORKING_WITH_STAMITY, README]) {
+      expect(read(page), `${page} enumerates the committed setup without CLAUDE.md`).toContain(
+        "the managed block in `CLAUDE.md`",
+      );
+    }
   });
 
   // Additive: nothing above weakens. The charter's `## Touchpoints` index is the one home for a

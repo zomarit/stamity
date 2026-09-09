@@ -298,9 +298,12 @@ export async function selectOne<T extends string>(
   const defaultIndex = q.choices.findIndex((choice) => choice.value === q.defaultValue);
   const raw = rawMenuIo(gate, io, q.choices.length);
   // An empty choice list has no row to put a cursor on and no key that could
-  // ever resolve it, so it goes to the typed path, which answers with the
-  // default the way it always has.
-  if (raw !== null && q.choices.length > 0) {
+  // ever resolve it. It used to fall through to the typed path and ask
+  // `Choose 1-0 [x]: ` — a range with no member in it, which no answer resolves
+  // and which the default answers anyway. Same guard `selectManyTyped` carries,
+  // for the same reason: no rows, no question.
+  if (q.choices.length === 0) return q.defaultValue;
+  if (raw !== null) {
     const menu = await runMenu(
       io,
       raw,
@@ -318,7 +321,7 @@ export async function selectOne<T extends string>(
   // B2: the same manifest-derived label the menu's `renderMenu` sanitizes
   // reaches this numbered-list rendering too — the fallback path a raw-menu-
   // incapable terminal always takes, so it has no other guard.
-  const rows = q.choices.map((choice, i) => `  ${i + 1}) ${sanitizeLabel(choice.label)}`);
+  const rows = q.choices.map((choice, i) => numberedRow(i, q.choices.length, choice.label));
   const bracket = defaultIndex === -1 ? q.defaultValue : String(defaultIndex + 1);
   // The question takes `bold`; the numbered rows and the `Choose ...` line do
   // not. That line is the one readline redraws on every keystroke and its bytes
@@ -441,6 +444,21 @@ export async function selectMany<T>(
 }
 
 /**
+ * `  1) label` — a numbered row for the typed list, with the number RIGHT-ALIGNED
+ * in the width the largest row number needs.
+ *
+ * A list of 10 or more choices is where this shows: with a fixed one-space
+ * prefix, rows 1-9 start their label one column left of rows 10 and up, and the
+ * labels no longer form a column the eye can run down. The 17-key `config`
+ * picker is the live case. Below 10 choices the padding is one character wide
+ * and the row is byte-identical to what it always was, which is why the
+ * three-choice strings this kit's suite pins verbatim do not move.
+ */
+function numberedRow(index: number, count: number, label: string): string {
+  return `  ${String(index + 1).padStart(String(count).length)}) ${sanitizeLabel(label)}`;
+}
+
+/**
  * `"2, 3"` -> `[1, 2]`, in row order with duplicates collapsed.
  *
  * `"default"` covers both a blank answer and one that is nothing but
@@ -496,9 +514,16 @@ async function selectManyTyped<T>(
   palette: Palette,
 ): Promise<T[]> {
   const count = q.choices.length;
+  // No rows, no question. `selectMany` routes an empty choice list here because
+  // the menu has nothing to put a cursor on, and the typed rendering then asks
+  // `Choose 1-0, comma-separated [none]: ` — a range with no member in it, and
+  // no answer that resolves it but the default this returns anyway. Unreachable
+  // today (the only multiple-select caller passes the four-member `TOOLS`), and
+  // guarded rather than left to the first caller who computes a choice list.
+  if (count === 0) return [...q.defaultValues];
   // B2: same sink as `selectOne`'s typed rows — a manifest-derived label
   // printed raw here has no other guard on this path.
-  const rows = q.choices.map((choice, i) => `  ${i + 1}) ${sanitizeLabel(choice.label)}`);
+  const rows = q.choices.map((choice, i) => numberedRow(i, count, choice.label));
   const bracket =
     defaultIndexes.length === 0 ? "none" : defaultIndexes.map((index) => index + 1).join(",");
   // B7: the `'none'` mention is appended AFTER the pinned bracket line rather
@@ -628,7 +653,8 @@ export async function textInput(
  * `./banner.ts:174-178` uses for its own `TERM` read (`opts.env`, never
  * `process.env`) and the one `../../composition/root.ts::Runtime.env` exists
  * to carry: every gate-building call site (`../commands/init.ts`,
- * `./config.ts`, `../commands/clean.ts`) populates it from `ctx.app.runtime.env`.
+ * `../commands/config.ts`, `../commands/clean.ts`) populates it from
+ * `ctx.app.runtime.env`.
  * `env` is optional and defaults to `{}` rather than `process.env` — a caller
  * that does not thread it through gets an unset `TERM`, which reads as
  * raw-capable (the probe only ever refuses on the literal value `"dumb"`), so
@@ -736,9 +762,24 @@ const DEFAULT_COLUMNS = 80;
  * echo line (`renderMenuEcho`) is a frame line too and clamps by the same rule:
  * a line wider than the terminal wraps onto a second PHYSICAL line, and every
  * `rewind` in this section walks back a fixed count of LOGICAL ones.
+ *
+ * Cut on CODE POINTS, not code units. `String.prototype.slice` counts UTF-16
+ * units, so a cut that lands between the two halves of a surrogate pair emits
+ * a lone surrogate — an unpaired half no terminal can render, which shows as a
+ * replacement glyph and, worse, is one byte-sequence a downstream consumer
+ * cannot decode. An emoji or a non-BMP character in a question or a hint is
+ * enough to reach it.
+ *
+ * What this still does NOT do is measure DISPLAY width: a CJK ideograph and a
+ * combining mark are one code point each and occupy two columns and zero, so a
+ * line of them can still wrap. That needs a width table, which is a dependency
+ * rather than a cheap fix, and is why the count is stated as code points here
+ * rather than described as columns.
  */
-const clampToWidth = (line: string, columns: number): string =>
-  line.length > columns ? line.slice(0, columns) : line;
+const clampToWidth = (line: string, columns: number): string => {
+  const points = [...line];
+  return points.length > columns ? points.slice(0, columns).join("") : line;
+};
 
 /**
  * Strips a label to plain text: C0/C1 control bytes gone, Unicode bidi controls
@@ -1340,6 +1381,26 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu, palette: Palette): 
 
       listener = (_chunk, key) => {
         if (settled) return;
+        try {
+          handleKey(key);
+        } catch (error) {
+          // B5-adjacent: this body WRITES — every navigation branch calls
+          // `draw()`, and the accept branch writes the echo — and a write to a
+          // terminal that went away throws synchronously. Thrown out of an
+          // EventEmitter callback that throw does not reach the awaiting caller:
+          // it becomes an uncaught exception while this promise stays pending
+          // forever, with raw mode still on and the cursor still hidden. Settle
+          // it instead. `reject` after a `resolve` in the same branch (the echo
+          // write, which runs before its `resolve`) is a no-op on an already
+          // settled promise, so this is safe to run unconditionally.
+          settled = true;
+          if (listener !== null) raw.input.removeListener("keypress", listener);
+          listener = null;
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      };
+
+      const handleKey = (key: Key | undefined): void => {
         const name = key?.name;
         if (name === "c" && key?.ctrl === true) {
           settled = true;
@@ -1413,7 +1474,17 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu, palette: Palette): 
     }
     if (onStreamError !== null) raw.input.removeListener("error", onStreamError);
     removeSignalGuards();
-    raw.input.setRawMode(false);
+    // Every restore step below is best-effort, for one reason: a `finally` that
+    // throws REPLACES the outcome of the block it guards — the operator's
+    // Ctrl-C, or the real error a caller needs to see, becomes an EIO from a
+    // terminal that had already gone away — and it skips every step after it,
+    // leaving the drain unrun, the leftover mark unwritten and the session
+    // unrestored. `installSignalGuards`'s own restore already reads this way.
+    try {
+      raw.input.setRawMode(false);
+    } catch {
+      // The stream is down or no longer switchable; the mode goes with it.
+    }
     // C1-residual, corrected: this drain is belt-and-braces for the SAME-TICK
     // case only — a chunk already sitting in the JS buffer at this exact
     // instant (an automated caller's burst write, or a second keypress event
@@ -1432,7 +1503,11 @@ async function runMenu(io: PromptIo, raw: RawIo, menu: Menu, palette: Palette): 
     // exists for, and `ask` reads this mark on the next question this same
     // stream is asked, whichever prompt kind that turns out to be.
     menuLeftovers.add(raw.input);
-    raw.output.write(CURSOR_SHOW);
+    try {
+      raw.output.write(CURSOR_SHOW);
+    } catch {
+      // Nothing left to show the cursor on.
+    }
     // Paused, so nothing is read off the stream between here and whoever reads
     // next: bytes typed into a paused stream wait in its buffer, bytes read with
     // no listener are dropped.

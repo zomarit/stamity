@@ -1,5 +1,6 @@
 ---
 slug: /migration-from-hatch3r
+title: Migrating from hatch3r
 ---
 <!-- HAND-WRITTEN PAGE — verified against the tree at the 1.2.0 release cut (2026-09-07). -->
 <!-- Re-open when: the predecessor's own `clean` semantics change, or what `src/migration/`

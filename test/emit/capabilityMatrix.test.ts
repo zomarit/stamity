@@ -119,6 +119,18 @@ describe("renderCapabilityMatrix — drift gate", () => {
     expect(page.endsWith("\n")).toBe(true);
     expect(page.endsWith("\n\n")).toBe(false);
   });
+
+  it("opens with the frontmatter block, then the generated banner", () => {
+    // Asserted against the LIVE render, not against the committed page: the
+    // byte-compare above proves only that the two agree, so a render that
+    // dropped the frontmatter would stay green the moment the page was
+    // regenerated with it missing. The site generator reads frontmatter only at
+    // byte 0, and the whole cost of losing it is silent — the page keeps
+    // publishing, under its slug instead of its title.
+    expect(renderCapabilityMatrix().startsWith(
+      "---\ntitle: Client capability matrix\n---\n\n<!-- GENERATED FILE",
+    )).toBe(true);
+  });
 });
 
 describe("guarantee-honesty section", () => {

@@ -747,13 +747,17 @@ const REGISTRY_ONLY_MODULES: ReadonlyMap<string, string> = new Map([
     "src/content/mdcCompanions.ts",
     "authoring-time .mdc twin generator; the shipped Cursor emission renders its own (src/adapters/cursor.ts)",
   ],
-  ["src/guard/outputBounds.ts", "deep-bounded copy for results crossing a size cap; nothing bounds a result yet"],
-  ["src/guard/promptGuard.ts", "trust boundary for content crossing agent context; cited by two validator headers, imported by neither"],
   ["src/handoffs/store.ts", "handoff persistence; no command reads or writes one"],
   ["src/resilience/adapterTimeout.ts", "the one timeout wrapper; the plan composer awaits planners unwrapped"],
   ["src/resilience/failureClass.ts", "transient-vs-substantive classification; only a retry loop would read it"],
   ["src/resilience/retry.ts", "retry with backoff; no engine call site retries"],
   ["src/roster/triggers.ts", "specialist trigger table, consumed as prompt content rather than by engine code"],
+  // Retired by the overlay ceiling: `src/content/catalog.ts` now imports
+  // `MAX_USER_CONTENT_LENGTH` from `src/guard/promptGuard.ts` instead of
+  // restating the number, which gives the guard a production call site — and
+  // `src/guard/outputBounds.ts` one with it, since the guard imports
+  // `truncateAt`. Two rows, both deleted in the direction this ratchet allows.
+  //
   // Retired by the workspace cascade (W-U3): `stamity workspace sync` drives
   // `src/workspace/sync.ts` through the registry, which runs `resolveRepoConfig`
   // per member, reaches `normalizeRepoPathKey` in `src/workspace/manifest.ts`
