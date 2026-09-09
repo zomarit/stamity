@@ -569,7 +569,11 @@ describe("st-board — sources, signals, and the inbox", () => {
     }
 
     // The writers the census names have to be the writers the corpus has. Board
-    // itself is excluded: it is the reader/parser, not a writer.
+    // itself is excluded: it is the reader/parser, not a writer. The count moved
+    // four -> five when `/st-work`'s close began appending every `deferred`
+    // ledger row at run exit: the census is derived from the corpus, so the
+    // fifth writer had to be named here the moment the corpus carried it.
+
     const writers = files
       .filter(
         (file) =>
@@ -578,9 +582,9 @@ describe("st-board — sources, signals, and the inbox", () => {
           file.parsed.body.includes(".stamity/inbox.md"),
       )
       .map((file) => file.relPath);
-    expect(writers.length).toBe(4);
-    expect(inbox).toMatch(/Writers, four:/);
-    for (const writer of ["/st-rework", "/st-pr-resolve", "/st-plan", "dep-audit"]) {
+    expect(writers.length).toBe(5);
+    expect(inbox).toMatch(/Writers, five:/);
+    for (const writer of ["/st-rework", "/st-pr-resolve", "/st-plan", "/st-work", "dep-audit"]) {
       expect(inbox, `${writer} writes to the inbox and must be named`).toContain(writer);
     }
 
@@ -602,6 +606,24 @@ describe("st-board — sources, signals, and the inbox", () => {
     expect(inbox).toMatch(/A row that does not parse is kept verbatim/);
     expect(inbox).toMatch(/Triage order:.*`critical-deferred` are triaged first/);
     expect(inbox).toMatch(/a deferred Critical is indistinguishable from a Minor/);
+
+    // The anchor is part of the declared grammar, not a private convention of
+    // one writer. `/st-work`'s close writes `Ref: <ledger path>#<row id>`, and
+    // a grammar admitting only a bare `Ref: <path>` would leave board parsing a
+    // shape it never declared — which is how the row every deferral carries
+    // ended up outside the grammar the records gate reads it under.
+    expect(inbox).toContain("`Ref: <path>`");
+    expect(inbox).toContain("`Ref: <path>#<anchor>`");
+    expect(inbox).toMatch(/a ledger is addressable only by row id/);
+
+    const files = await walkAllMarkdown();
+    const workBody = files.find((file) => file.relPath === "commands/st-work.md")?.parsed.body ?? "";
+    const workRef = /`Ref: ([^`]+)`/.exec(workBody)?.[1] ?? "";
+    expect(workRef, "`/st-work` names the `Ref:` shape its close writes").not.toBe("");
+    // Placeholders collapse to one token, so what is compared is the SHAPE
+    // against the anchored form board declares, never the prose inside the
+    // angle brackets.
+    expect(workRef.replaceAll(/<[^>]+>/g, "x")).toMatch(/^[^\s#]+#\S+$/);
   });
 
   it("returns a typed status with the write ledger and handoff", async () => {

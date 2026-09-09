@@ -744,6 +744,56 @@ describe("/st-work — Prove", () => {
     expect(flat).toContain("the id is what makes the rewrite converge");
   });
 
+  it("appends every deferred row to the inbox at exit, in the declared grammar", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+
+    // A ledger is write-once and a record is read-only to every later run, so a
+    // row closed `deferred` died with the session that closed it: the deferral
+    // home three other touchpoints write to was never written by this one. The
+    // close now appends, and the fields it appends are `/st-board`'s declared
+    // grammar rather than a second shape a reader would have to guess at — the
+    // `Ref:` back to the ledger row is what lets the two records converge.
+    expect(proof).toContain("At exit every row that closed `deferred` is appended to `.stamity/inbox.md`");
+    expect(proof).toContain("in the row grammar `/st-board` declares");
+    expect(proof).toContain("`source: /st-work`");
+    expect(proof).toContain("`Ref: <the run's ledger path>#<row id>`");
+    expect(proof).toContain("one dated block per run");
+    expect(proof).toContain("dying in a write-once ledger");
+
+    // The retirement is the inbox row's exit, not the ledger row's rewrite: the
+    // recorded `deferred` state stands and gains a dated line naming which of the
+    // three dispositions retired it.
+    //
+    // The older assertion pinned "gains a dated `retired` line", and that phrasing
+    // named no carrier: a reader could not tell whether a retirement was an eighth
+    // field, a rewritten `state`, or a second row, and the records gate already
+    // enforces the first. The shipped text now declares the shape, so the
+    // assertion moves with the contract rather than being loosened — it is
+    // strictly more specific than the line it replaces.
+    expect(proof).toContain(
+      "gains an optional eighth field on the row, `retired`, whose value opens with the date and then states the disposition",
+    );
+    expect(proof).toContain("only when its inbox row leaves");
+    expect(proof).toContain("fixed in a commit, cut with a reason, or scheduled with a lane, a trigger and an owner");
+  });
+
+  it("refuses to write the record while any ledger row still reads open", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+
+    // The exit invariant already said no finding ends the run pending, but
+    // nothing read the ledger back before the record was written, so an `open`
+    // row shipped as a note in a committed file that later runs read as truth.
+    // The close now reads its own ledger first and refuses.
+    expect(proof).toContain("A committed ledger is read by later runs");
+    expect(proof).toContain("is a gate failure and not a note");
+    expect(proof).toContain("reads its own ledger before writing the record and refuses while any row reads `open`");
+
+    // And the two closing lines answer to the same rows: what was appended, and
+    // what is still owed with the item it became.
+    expect(proof).toContain("next-step line names the inbox rows the run appended");
+    expect(proof).toContain("`Not done:` list is empty or names the scheduled item each line became");
+  });
+
   it("closes with a next step derived from the run's own state", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
 

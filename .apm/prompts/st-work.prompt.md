@@ -249,6 +249,20 @@ not have. The run then closes on the reply. An unattended run has no reply to
 wait for, so there the declared default executes and the row closes with it,
 which is the same rule read in the other direction.
 
+At exit every row that closed `deferred` is appended to `.stamity/inbox.md` in
+the row grammar `/st-board` declares — the severity, the row's `file:line` or
+`—`, the evidence in one line, `source: /st-work`, and `Ref: <the run's ledger
+path>#<row id>` — one dated block per run, so a deferral outlives the session
+instead of dying in a write-once ledger. The ledger row keeps its `deferred`
+state and gains an optional eighth field on the row, `retired`, whose value
+opens with the date and then states the disposition, only when its inbox row
+leaves: fixed in a commit, cut with a reason, or scheduled with a lane, a
+trigger and an owner. A committed ledger is read by later runs, so a row still
+`open` when the record is written is a gate failure and not a note — the close
+reads its own ledger before writing the record and refuses while any row reads
+`open`. The proof block's next-step line names the inbox rows the run appended,
+and its `Not done:` list is empty or names the scheduled item each line became.
+
 Both persist under the state directory, in `.stamity/runs/` — one record per run
 carrying the fields above, with that run's ledger rows beside it. That is the
 baseline `/st-rework` reads and the directory `/st-pr-resolve` appends

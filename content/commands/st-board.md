@@ -326,15 +326,19 @@ into a transition either.
 `.stamity/inbox.md` — one fixed location, one declared row grammar, and this
 command is what parses it.
 
-- **Writers, four:** `/st-rework` deferrals, `/st-pr-resolve` findings
+- **Writers, five:** `/st-rework` deferrals, `/st-pr-resolve` findings
   routed out of the current change, `/st-plan` follow-ups appended while
-  planning, and the dep-audit skill's deferred upgrades.
+  planning, `/st-work`'s close, which appends every `deferred` ledger row at
+  run exit, and the dep-audit skill's deferred upgrades.
 - **Readers, three, all mandatory:** `fill` triages the inbox on every run,
   `/st-work` surfaces overlapping entries at its framing phase when a run
   touches the files an entry names, and `/st-plan` folds overlapping entries
   into its shared intake. An inbox no one reads is a defect.
 - **Row grammar, declared:** `severity · file:line · description · source: <writer>`,
-  with an optional `Ref: <path>` and an optional tag word. `file:line` is `—`
+  with an optional `Ref: <path>` or `Ref: <path>#<anchor>` and an optional tag
+  word. The anchored form names one line inside the referenced file, and a
+  `Ref:` at a ledger always carries it — a ledger is addressable only by row id,
+  which is the form `/st-work`'s close writes. `file:line` is `—`
   when the row names no location. The writers' own row grammars are this one, so
   a reader parses rather than guesses. A row that does not parse is kept verbatim
   and triaged as an untagged entry: the grammar governs what board can read, not
@@ -344,8 +348,10 @@ command is what parses it.
   signal a deferred Critical carries; with no reader pulling it forward, a
   deferred Critical is indistinguishable from a Minor.
 - **Removal:** an entry leaves when its destination item exists, when its
-  proposal id is recorded per `fill` step 5, or when the user drops it by name.
-  Triage does not rewrite an entry in place.
+  proposal id is recorded per `fill` step 5, when the user drops it by name, or
+  when a completeness pass retires it with one line — fixed in a commit, cut
+  with a reason, or scheduled with a lane, a trigger and an owner — recorded in
+  that pass's run record. Triage does not rewrite an entry in place.
 
 ## Return contract
 

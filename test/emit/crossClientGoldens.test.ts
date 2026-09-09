@@ -144,6 +144,78 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-09, Package 9's retirement shape. ONE command body moved, plus
+  //     the manifest rows that record it:
+  //
+  //     CHANGED `commands/st-work.md` 22806 -> 22883 in the claude and copilot
+  //       dialects (`.claude/commands/st-work.md`,
+  //       `.github/prompts/st-work.prompt.md`) and 22851 -> 22928 as the cursor
+  //       skill (`.cursor/skills/st-work/SKILL.md`) — one body, three heads, so
+  //       the same +77 in each, and the corpus source moved the same +77 (23145
+  //       -> 23222). No line was added or removed: the edit reflows inside the
+  //       Proof block paragraph the row below added, because the eval case
+  //       `evals/cases-v4/golden/work-proof-block-fields.md` cites source range
+  //       211-270 of that file and a line added here would move a sealed
+  //       brief's window without touching the brief. The clause that said the
+  //       ledger row "gains a dated `retired` line" now names the carrier: an
+  //       optional EIGHTH field on the same row, `retired`, whose value opens
+  //       with the date and then states the disposition — the shape
+  //       `test/records/ledgers.test.ts` already enforces and the shipped text
+  //       did not declare. It supersedes the phrasing in the row below.
+  //     CHANGED `.stamity/manifest.json` in the four selections that emit
+  //       commands — all-four, claude, copilot and cursor — each at UNCHANGED
+  //       byte length, the fixed-width sha256 row for that one command and
+  //       nothing else. The codex manifest holds at 10810 bytes.
+  //
+  //     What did NOT move: `commands/st-board.md` was not touched by this round,
+  //       so its three heads are byte-identical; a command is not always-on, so
+  //       the codex `AGENTS.md` appendix holds at 29326 and the composite
+  //       always-on budget cannot move on this edit; every rule dialect, agent,
+  //       skill, generated page, client entry file and the four hook scripts are
+  //       byte-identical, and `stamity check` reported `drift: clean` after the
+  //       sync. The round's test-side edits — the derived legacy-vocabulary and
+  //       converge-by-id assertions in `test/records/ledgers.test.ts` and the
+  //       matching corpus assertion in `test/corpus/commands/work.test.ts` —
+  //       reach no emitted tree.
+  //
+  //   - 2026-09-09, Package 9's close-step inbox append. TWO command bodies
+  //     moved, plus the manifest rows that record them:
+  //
+  //     CHANGED `commands/st-work.md` 21859 -> 22806 in the claude and copilot
+  //       dialects (`.claude/commands/st-work.md`,
+  //       `.github/prompts/st-work.prompt.md`) and 21904 -> 22851 as the cursor
+  //       skill (`.cursor/skills/st-work/SKILL.md`) — one body, three heads, so
+  //       the same +947 in each. The Proof block gains one paragraph: at exit
+  //       every row that closed `deferred` is appended to `.stamity/inbox.md` in
+  //       `/st-board`'s declared grammar with a `Ref:` to the ledger row, the
+  //       ledger row gains its dated `retired` line only when that inbox row
+  //       leaves, a row still `open` when the record is written is a gate
+  //       failure, and the next-step and `Not done:` lines answer to those rows.
+  //       The corpus source moved the same +947 (22198 -> 23145), so the emitted
+  //       delta is the paragraph alone and nothing the emitter added around it.
+  //     CHANGED `commands/st-board.md` 20708 -> 21195 in the same two dialects
+  //       and 20754 -> 21241 as `.cursor/skills/st-board/SKILL.md` — +487 in
+  //       each, the corpus source moving the same +487 (20889 -> 21376). The
+  //       `## Deferral inbox` census counts five writers instead of four, naming
+  //       `/st-work`'s close as the fifth; its Removal bullet carries a fourth
+  //       exit, a completeness pass retiring an entry with one line; and its row
+  //       grammar now declares the anchored `Ref: <path>#<anchor>` beside the
+  //       bare `Ref: <path>`, because the shape `/st-work`'s close writes was
+  //       being parsed under a grammar that never admitted it.
+  //     CHANGED `.stamity/manifest.json` in the four selections that emit
+  //       commands — all-four, claude, copilot and cursor — each at UNCHANGED
+  //       byte length, the fixed-width sha256 rows for those two commands and
+  //       nothing else. The codex manifest holds at 10810 bytes: codex carries
+  //       no command file, so neither body reaches its tree.
+  //
+  //     What did NOT move: a command is not always-on, so the codex `AGENTS.md`
+  //       appendix holds at 29326 and the composite always-on budget cannot move
+  //       on this edit. Every rule dialect, agent, skill, generated page, client
+  //       entry file and the four hook scripts are byte-identical, and
+  //       `stamity check` reported `drift: clean` after the sync. The change's
+  //       other edits — two corpus suites, the eval case roster's locators and
+  //       the new `test/records/ledgers.test.ts` — reach no emitted tree.
+  //
   //   - 2026-09-07, the Package 4 review's fix round 2. ONE emitted surface
   //     moved, plus the manifest rows that record it:
   //

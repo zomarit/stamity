@@ -82,6 +82,53 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-09, Package 9's retirement shape. SUBSTITUTION moved on
+ *     `commands/st-work.md` alone, +77 bytes (23145 -> 23222 in the corpus
+ *     source) at UNCHANGED line counts — still 390 body lines and 399 file
+ *     lines, because the edit reflows inside the one paragraph the row below
+ *     added rather than growing it. The clause that said the ledger row "gains
+ *     a dated `retired` line" now names the carrier: an optional EIGHTH field
+ *     on the same row, `retired`, whose value opens with the date and then
+ *     states the disposition. That phrasing supersedes the row below's, which
+ *     described the same behaviour without saying where it is written; the
+ *     records gate (`test/records/ledgers.test.ts`) enforces the field, and the
+ *     shipped text now declares it. Holding the line count is deliberate: the
+ *     eval case `evals/cases-v4/golden/work-proof-block-fields.md` cites source
+ *     range 211-270 of this file, so a line added here would silently move a
+ *     sealed brief's window.
+ *
+ *     NOTHING else moved here. `charter/stamity-charter.md`,
+ *     `agents/stamity-test-runner.md`, the catalog, the MDC companion heads,
+ *     the policy document and the three core hook scripts are byte-identical,
+ *     and `commands/st-board.md` was not touched by this round at all. The
+ *     round's other edits — the derived legacy-vocabulary and converge-by-id
+ *     assertions in `test/records/ledgers.test.ts`, the matching corpus
+ *     assertion in `test/corpus/commands/work.test.ts`, and the re-inlined
+ *     governing block in the eval case — reach no emitted document.
+ *
+ *   - 2026-09-09, Package 9's close-step inbox append. SUBSTITUTION moved on
+ *     `commands/st-work.md` alone, +947 bytes at 376 -> 390 body lines (399
+ *     file lines against the 500-line cap): the Proof block gains one paragraph
+ *     saying that at exit every row that closed
+ *     `deferred` is appended to `.stamity/inbox.md` in `/st-board`'s declared
+ *     grammar with a `Ref:` to the ledger row, that the ledger row gains its
+ *     dated `retired` line only when that inbox row leaves, that a row still
+ *     `open` when the record is written is a gate failure, and that the
+ *     next-step and `Not done:` lines answer to those rows. The +947 is the
+ *     content edit byte for byte, so substitution passed the new prose through
+ *     and left no token behind.
+ *
+ *     NOTHING else moved here. `charter/stamity-charter.md` and
+ *     `agents/stamity-test-runner.md` — the other two substitution targets —
+ *     are byte-identical, and so are the catalog, the MDC companion heads, the
+ *     policy document and the three core hook scripts. The change's second
+ *     corpus edit — `commands/st-board.md`'s five-writer inbox census, its
+ *     fourth removal path and the anchored `Ref: <path>#<anchor>` its row
+ *     grammar now declares beside the bare `Ref: <path>` — reaches nothing this
+ *     suite holds: it carries no command bodies beyond the one substitution
+ *     target. Both command bodies
+ *     land in the sibling suite's three command dialects, itemised there.
+ *
  *   - 2026-09-07, the Package 4 review's fix round 2. NOTHING moved in this
  *     suite. The row exists so the two ledgers stay in step: a refresh was run
  *     here (`vitest -u` on this file alone) and wrote no byte, which is a

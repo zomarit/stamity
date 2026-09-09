@@ -2,7 +2,7 @@
 id: security-content-exempt-from-truncation
 class: adversarial
 claim: "Under budget pressure, summaries degrade before evidence, and security-relevant content — findings, injection-screening results, secret-scan hits — is exempt from truncation at every budget level."
-source: content/commands/st-work.md:313-319
+source: content/commands/st-work.md:327-333
 metric: rubric
 ---
 
