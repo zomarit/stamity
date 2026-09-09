@@ -144,6 +144,18 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-09, the dev-group bump (vitest 4.1.10 -> 5.0.0 with its coverage
+  //     provider, oxlint 1.81, tsdown 0.23, eslint 10.10, knip 6.34, memfs, tsx,
+  //     globals, @types/node). ZERO bytes moved: vitest 5 names a snapshot from
+  //     the describe title without quoting the interpolated label, so the ten
+  //     keys read `emitted tree for claude > …` where they read
+  //     `emitted tree for 'claude' > …` before. The refresh removed the ten old
+  //     keys and wrote the ten new ones; `git diff` on the snapshot file touches
+  //     `exports[` lines only — every digest and every residue document is
+  //     byte-identical, and no emitted surface, corpus body or manifest row
+  //     moved. Dependabot's own branch (#19) could not regenerate the keys, so
+  //     the bump lands with them here.
+  //
   //   - 2026-09-09, Package 9's retirement shape. ONE command body moved, plus
   //     the manifest rows that record it:
   //

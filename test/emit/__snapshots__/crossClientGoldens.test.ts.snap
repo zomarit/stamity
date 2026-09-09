@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`emitted tree for 'all-four' > matches the residue-document golden byte for byte > all-four residue documents 1`] = `
+exports[`emitted tree for all-four > matches the residue-document golden byte for byte > all-four residue documents 1`] = `
 {
   ".claude/settings.json": "{
   "permissions": {
@@ -1220,7 +1220,7 @@ so this index is all that ships — ask there for the outcome in plain words and
 }
 `;
 
-exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four tree digest 1`] = `
+exports[`emitted tree for all-four > matches the tree digest golden > all-four tree digest 1`] = `
 {
   ".agents/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
   ".agents/skills/st-dep-audit/SKILL.md": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
@@ -1410,7 +1410,7 @@ exports[`emitted tree for 'all-four' > matches the tree digest golden > all-four
 }
 `;
 
-exports[`emitted tree for 'claude' > matches the residue-document golden byte for byte > claude residue documents 1`] = `
+exports[`emitted tree for claude > matches the residue-document golden byte for byte > claude residue documents 1`] = `
 {
   ".claude/settings.json": "{
   "permissions": {
@@ -1611,7 +1611,7 @@ Skills for this setup are markdown procedures under \`.claude/skills/\`. Claude 
 }
 `;
 
-exports[`emitted tree for 'claude' > matches the tree digest golden > claude tree digest 1`] = `
+exports[`emitted tree for claude > matches the tree digest golden > claude tree digest 1`] = `
 {
   ".claude/agents/stamity-creator.md": "3793fe36e3fc9e3911550bad8afd0f076841e66708e080236091b43cf036dcb2 13847 bytes",
   ".claude/agents/stamity-design-quality.md": "248ba102d159693d08473e1f879b6be1051016ff46ed52bfacf31ae7ccbde4a0 7859 bytes",
@@ -1691,7 +1691,7 @@ exports[`emitted tree for 'claude' > matches the tree digest golden > claude tre
 }
 `;
 
-exports[`emitted tree for 'codex' > matches the residue-document golden byte for byte > codex residue documents 1`] = `
+exports[`emitted tree for codex > matches the residue-document golden byte for byte > codex residue documents 1`] = `
 {
   ".codex/config.toml": "# stamity — Codex CLI configuration. Generated file: regenerate rather than editing
 # it; local edits are overwritten.
@@ -2405,7 +2405,7 @@ so this index is all that ships — ask there for the outcome in plain words and
 }
 `;
 
-exports[`emitted tree for 'codex' > matches the tree digest golden > codex tree digest 1`] = `
+exports[`emitted tree for codex > matches the tree digest golden > codex tree digest 1`] = `
 {
   ".agents/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
   ".agents/skills/st-dep-audit/SKILL.md": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
@@ -2464,7 +2464,7 @@ exports[`emitted tree for 'codex' > matches the tree digest golden > codex tree 
 }
 `;
 
-exports[`emitted tree for 'copilot' > matches the residue-document golden byte for byte > copilot residue documents 1`] = `
+exports[`emitted tree for copilot > matches the residue-document golden byte for byte > copilot residue documents 1`] = `
 {
   ".github/workflows/copilot-setup-steps.yml": "name: Copilot Setup Steps
 
@@ -2627,7 +2627,7 @@ so this index is all that ships — ask there for the outcome in plain words and
 }
 `;
 
-exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot tree digest 1`] = `
+exports[`emitted tree for copilot > matches the tree digest golden > copilot tree digest 1`] = `
 {
   ".agents/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
   ".agents/skills/st-dep-audit/SKILL.md": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
@@ -2706,7 +2706,7 @@ exports[`emitted tree for 'copilot' > matches the tree digest golden > copilot t
 }
 `;
 
-exports[`emitted tree for 'cursor' > matches the residue-document golden byte for byte > cursor residue documents 1`] = `
+exports[`emitted tree for cursor > matches the residue-document golden byte for byte > cursor residue documents 1`] = `
 {
   ".cursor/hooks.json": "{
   "version": 1,
@@ -3133,7 +3133,7 @@ so this index is all that ships — ask there for the outcome in plain words and
 }
 `;
 
-exports[`emitted tree for 'cursor' > matches the tree digest golden > cursor tree digest 1`] = `
+exports[`emitted tree for cursor > matches the tree digest golden > cursor tree digest 1`] = `
 {
   ".agents/skills/st-browser-evidence/SKILL.md": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
   ".agents/skills/st-dep-audit/SKILL.md": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
