@@ -84,7 +84,7 @@ this morning; the cut moves version carriers, banners and the changelog. Two row
 | # | Scenario | Driven how | Observed | Risk | Proof |
 |---|---|---|---|---|---|
 | 1 | The published version reads 1.3.0 on every carrier and the emitted markers | the cut script and the three `--check` generators | ten carriers at 1.3.0; `check` drift clean | L | the gate table |
-| 2 | The migration page renders its declared title | the docs site built locally from the cut tree | `og:title` "Migrating from hatch3r \| stamity" | L | `website/build` (untracked) |
+| 2 | The migration page renders its declared title | the docs site built locally from the cut tree | `og:title` reads the declared title ("Migrating from …", the predecessor named as the page names it) followed by the site name, where it read "migration" before | L | `website/build` (untracked) |
 
 **Sign-off** — the 1.3.0 release, 2026-09-09
 
