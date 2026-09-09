@@ -33,8 +33,15 @@ One tree, one directory per class:
 | skill | `.stamity/overrides/skills/<id>/SKILL.md` |
 
 A skill is a directory rather than a file, and **the directory name is the name a client
-invokes**. Filing a replacement under a different directory than the skill it replaces renames
-the invocation instead of replacing it, so keep the name if you want the call site to hold.
+invokes**. Filing a replacement under a different directory than the skill it replaces still
+replaces it — the bundled skill leaves emission — and the client then invokes it under the new
+directory's name: an override at `skills/qa/` declaring `id: qa` ships as `qa`, and `st-qa` is
+gone. Keeping the old name is not something either authoring lane allows for a bundled skill,
+whose shipped directory carries the `st-` prefix: the save gate refuses that prefix as an id,
+and on a hand-placed `skills/st-qa/` declaring `id: qa` `stamity validate` reports the id as
+disagreeing with the filename. So a replacement authored through the creator, or through a
+clean `validate`, moves the call site from `st-<id>` to `<id>`; only a hand-placed prefixed
+directory that `validate` flags holds it.
 
 Bytes under `.stamity/overrides/` are yours end to end. No emission path targets anything
 inside that tree: it is never wrapped in a managed block, never regenerated, and never
@@ -57,11 +64,12 @@ surface and be reported by the other.
 
 One gate sits outside that shared judgement, because it is only meaningful before the file
 exists: the save path alone refuses an id carrying a reserved prefix — `stamity-` or `st-`. Both
-name the generated corpus, so a file wearing one reads as engine-owned and loses the verified
-backup a user-lane overwrite otherwise takes; and it shadows nothing extra, because the corpus
-strips the prefix when it derives ids. `st-` is the easy one to reach for by accident — it is the
-stem of every touchpoint. `stamity validate` does not re-check it: once a file exists, its
-filename already answers the question this gate exists to ask before the write. If you hand-author
+are the engine's own filename namespace: the reclaim sweep (`src/merge/reclaim.ts`) reads a
+`stamity-`/`st-` basename as proof of engine authorship over the paths it is authorised to
+delete. It shadows nothing extra either, because the corpus strips the prefix when it derives
+ids. `st-` is the easy one to reach for by accident — it is the stem of every touchpoint.
+`stamity validate` does not re-check it: once a file exists, its filename already answers the
+question this gate exists to ask before the write. If you hand-author
 a file straight into `.stamity/overrides/`, avoid the prefix yourself — a hand-placed
 `st-work.md` passes `validate` clean.
 
@@ -115,7 +123,10 @@ skills reach them through the core projection.
 
 A skill override's directory is projected entire — `SKILL.md` plus every support file beneath
 it, and the override's files rather than those of the skill whose id it took — into
-`.agents/skills/` and into the client-native skills trees rendered from those same bytes.
+`.agents/skills/` whenever a selected client reads that tree — cursor, copilot and codex declare
+that they do — and, for Claude Code, into the one client-native copy at `.claude/skills/`
+re-targeted from those same rendered bytes. A Claude-only setup carries the native copy alone
+and no `.agents/skills/` tree at all.
 
 Support files are screened, because they reach agent context exactly as the artifact body does
 and no write gate ever sees them: `stamity validate` deny-scans every regular file under an
@@ -159,9 +170,14 @@ overlay against. A skill's halves compose onto `SKILL` the way its readable file
 directory that needs no `SKILL.md` of its own.
 
 That skill directory is a **carrier**, not a skill directory: the artifact it patches lives in the
-corpus or in a pack, so nothing beside the two halves ever ships. Any other file dropped in there
-— a `references/*.md`, an image — is silently passed over at emission and reported by
-`stamity validate` as a warning naming it, never emitted and never an error.
+corpus or in a pack, so nothing beside the two halves ever ships. Any other regular, non-dotfile
+entry dropped in there — a `references/*.md`, an image — is silently passed over at emission and
+reported by `stamity validate` as a warning naming it, never emitted and never an error; a
+subdirectory holding two or more files collapses to one warning naming the directory and its
+file count, while a subdirectory holding a single file is named by that file's own path. Dotfiles
+at any depth are passed over without a warning. A symlink is not counted among the dropped carrier
+files, but it is still reported: the support-file scan runs over every skill directory, carrier or
+not, and prints the same skipped-link warning an override skill directory gets.
 
 **The merge.** The frontmatter half is a shallow key set: a key it declares replaces the base
 value whole, a key written `key:` with no value is removed from the merged head, and a key it
@@ -180,15 +196,19 @@ condition: a `.customize.yaml` that is not valid YAML or whose root is not a map
 `type` key in it, which is the identity the patch is addressed by; a `---` fence at the head of a
 `.customize.md`, whose keys belong in the other half; a slug matching no artifact in any layer,
 which is almost always a typo in the filename; a body patch over the 250 000-character ceiling on
-user-authored content; and a merged artifact failing the safe-path, closed-vocabulary and
-field-shape checks the index build runs (`buildItem`) — the same checks a bundled or
-full-override artifact is held to at index time. `stamity validate` runs a WIDER gate over the
-merged artifact — the same one it holds a full override to, including the deny scan, the lifecycle
-declarations and the lean-line threshold — and reports what it finds against the half that carries
-it; sync itself does not run that wider gate, so an overlay can pass sync and still be flagged by
-`validate`. `stamity validate` also prints one `patched` line per healthy pair — the base still
-supplying the body, the layer it comes from, and every half applied. That line is information and
-never moves the exit code, exactly as a shadowing line does not.
+user-authored content; an overlay filename — or, for a skill, its carrier directory — spelled with
+the engine's `stamity-`/`st-` prefix, refused in favour of the bare slug the save gate already
+reserves (`plan.customize.md`, `skills/qa/`), because the corpus strips the prefix when it derives
+ids and two spellings of one patch would leave the exclusivity check blind to one of them; and a
+merged artifact failing the safe-path, closed-vocabulary and field-shape checks the index build
+runs (`buildItem`) — the same checks a bundled or full-override artifact is held to at index time.
+`stamity validate` runs a WIDER gate over the merged artifact — the same one it holds a full
+override to, including the deny scan, the lifecycle declarations and the lean-line threshold — and
+reports what it finds against the half that carries it; sync itself does not run that wider gate,
+so an overlay can pass sync and still be flagged by `validate`. `stamity validate` also prints one
+`patched` line per healthy pair — the base still supplying the body, the layer it comes from, and
+every half applied. That line is information and never moves the exit code, exactly as a shadowing
+line does not.
 
 ## Where to go next
 

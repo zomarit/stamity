@@ -6,7 +6,7 @@ title: Doctrine
 <!-- Re-open when: a pillar gains or loses a public enforcement surface, the root question's
      three answers change, the always-on ceilings move, or the deferred with-versus-without
      measurement lands. `test/docsPages.test.ts` holds this page to the hand-page contract;
-     `../src/content/charter.ts` owns the budgets and `../evals/README.md` owns what is red. -->
+     `../src/content/charter.ts` owns the budgets and `../evals/runs/` owns what is red. -->
 
 # Doctrine
 
@@ -61,15 +61,21 @@ unconditionally.
 - The composite always-on slice is a per-client ratchet, asserted in
   [`test/corpus/invariants.test.ts`](../test/corpus/invariants.test.ts) and disclosed per
   client on [the capability matrix](capability-matrix.md). A ratchet may only come down.
-- Every artifact declares `obsolete_when`. The corpus invariant suite refuses one that does
-  not, so an artifact cannot ship without stating the condition under which it is deleted.
+- Every corpus artifact — charter, command, agent, skill, rule, in `content/` and `packs/` —
+  declares `obsolete_when`. The corpus invariant suite refuses a `content/` one that does not,
+  and each pack's own suite under `test/packs/` applies the same check to its pack, so a corpus
+  artifact cannot ship without stating the condition under which it is deleted. A hand page
+  carries the equivalent as a re-open trigger; a generated page's equivalent is the renderer it
+  is byte-compared against.
 
 ### Provable
 
 A claim about behaviour is worth what its instrument is worth.
 
 - The verification gates — lint, typecheck, tests — decide whether a change is done. `AGENTS.md`
-  is their home; the other pages quote it.
+  is their home; the working-with-stamity guide quotes them verbatim, and README and CONTRIBUTING
+  name the wider contributor gate, `npm run check`, which chains them with the leak gate, the
+  build and the unused-code scan.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) does: thresholds declared before the run, red runs published
   rather than re-scored.
@@ -83,19 +89,28 @@ An artifact that was true once and says nothing about when is unfalsifiable.
 
 - The capability matrix carries a dated access stamp on every client's sources: a platform
   fact is only as current as the date beside it.
-- Every hand-written page carries a currency stamp and a re-open trigger — the two comments at
-  the top of this page, held there by `test/docsPages.test.ts`.
+- Every page in the hand bucket — README, SECURITY, CONTRIBUTING and the eight guides under
+  `docs/` — carries a currency stamp and a re-open trigger, the two comments at the top of this
+  page, held there by `test/docsPages.test.ts`. `GOVERNANCE.md` carries the same pair on its own
+  trigger.
 - The release controls checklist carries a per-release currency section, so re-verification is
   part of cutting a release rather than a thing somebody remembers.
 
 ### Candid
 
 - [`GOVERNANCE.md`](../GOVERNANCE.md) states who decides and what the private layer holds.
-  [`SECURITY.md`](../SECURITY.md) states what is defended and, at equal length, what is not.
-- Every run ends with a `Not done` list naming each open gap. A run with nothing to report
-  says so; a run that omits the list has not finished.
-- The eval README says which run is red and by how much, and the red baseline is not re-run to
-  make it look better.
+  [`SECURITY.md`](../SECURITY.md) states what is defended and, in a section of its own, what is
+  not.
+- A run that closes without green gates ships a `Not done:` list naming each open gap — the
+  charter's invariant 4 — and the work and spec commands carry that list in their closing block
+  by name, and debug and pr-resolve name a `not done` line for one exit each — instrumentation
+  held under a capture-later agreement, a reply that failed to post. The other commands close on
+  a typed open-gap block of their own — unanswerable and blocked, `open`, open questions carried,
+  per-item dispositions, DEFER rows — plus a next-step line that says so when there is nothing
+  outstanding, or, for a plan, names the handoff a clean artifact takes.
+- The run artifacts under `evals/runs/` say which run is red and by how much — the latest full run
+  states its verdict against each declared threshold — and no red baseline is re-run to make it
+  look better; the eval README carries the baselines and the rule that they stay put.
 
 ## Deletion triggers
 
@@ -109,17 +124,21 @@ than a negotiation.
 The honest state today: most artifacts answer **measure**, not **stays**. Conformance is
 measured — the eval set grades whether an agent follows its own rules — but the measurement
 that would settle "does this artifact beat the bare model on task success and token cost" does
-not exist here yet. It is deferred with its trigger written down rather than claimed as done,
-and this paragraph is where that stays visible until it lands.
+not exist here yet. It is deferred, its trigger recorded in the maintainer's roadmap outside
+this tree, and this paragraph is where the deferral stays visible until it lands.
 
 ## The always-on budget
 
 Stated plainly, because a rounder number is available and it is wrong. The charter template is
 capped at 150 lines, and that cap binds one file. What a client actually loads unconditionally
-is the charter plus every rule that client has no way to attach conditionally, which is a
-different number on each of the four — from the client that defers a description-scoped rule
-until it is relevant to the one with no per-rule attach mechanism at all, which carries the
-whole rule set. `ALWAYS_ON_BUDGET_LINES` in [`src/content/charter.ts`](../src/content/charter.ts)
-holds the per-client ceilings, the invariant suite measures the real load against them, and
+is the charter plus every rule that client has no way to attach conditionally, which is three
+distinct figures across the four clients — from the one that defers a description-scoped rule
+until it is relevant and so pays the charter alone, through the two that pay the same composite,
+to the one with no per-rule attach mechanism at all, which is handed the whole rule set less the
+tail its 32 KiB instruction budget drops: eight rules on the full selection, named in the emitted
+file's own omission notice. The ceiling counts them regardless, because a rule silently dropped
+is a floor that stopped binding. `ALWAYS_ON_BUDGET_LINES` in
+[`src/content/charter.ts`](../src/content/charter.ts) holds the per-client ceilings, the
+invariant suite measures the real load against them, and
 [the capability matrix](capability-matrix.md) carries the figures. Read those rather than a
 sentence here: they move, and only they are checked.

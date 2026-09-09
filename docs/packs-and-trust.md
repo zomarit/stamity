@@ -109,15 +109,20 @@ the pack — never a symlink, a pipe or a device node — and at most 1 MiB. Rea
 few kilobytes; the limit refuses rather than truncates, because half a bundle is not a
 bundle.
 
-**This is the only network access any command's work performs.** Verifying a signed pack
-fetches the Sigstore trust root over TUF; the transparency-log proofs travel inside the
-bundle. `init`, `sync`, `check`, and installing any pack that declares no signature do not
-even load the Sigstore client. The trust metadata is cached under your user cache
-directory, never inside the repository. One further path is network-capable and is no part
-of any command's work: the startup update notice asks the public npm registry whether a
-newer version exists — a GET at most once a day, unless `STAMITY_NO_UPDATE_CHECK=1`, or
-`NO_UPDATE_NOTIFIER` or `CI` on any non-empty value, turns it off.
-[`SECURITY.md`](../SECURITY.md) states the same boundary as a control.
+**This is the only network access a pack install performs**, and one of the two the engine
+performs while it works. Verifying a signed pack fetches the Sigstore trust root over TUF;
+the transparency-log proofs travel inside the bundle. `init`, `sync`, `check`, and
+installing any pack that declares no signature do not even load the Sigstore client. The
+trust metadata is cached under your user cache directory, never inside the repository. The
+other is `stamity worktree setup`: when no local branch of the requested name exists and
+the repository has an `origin` remote, it runs `git fetch origin <branch>` against your
+repository's own remote (`src/worktree/git.ts::fetchBranch`), refusing with `NETWORK_ERROR`
+on a transport failure — and a `--dry-run` never runs it. One further path is
+network-capable and is no part of any command's work: the startup update notice asks the
+public npm registry whether a newer version exists — a GET at most once a day, unless
+`STAMITY_NO_UPDATE_CHECK=1`, or `NO_UPDATE_NOTIFIER` or `CI` on any non-empty value, turns
+it off. [`SECURITY.md`](../SECURITY.md) states the same boundary as a control, and lists
+both exceptions.
 
 **A verified claim is not waivable, and neither is a failed one.** `--allow-untrusted`
 waives the **absence** of a trust basis, so it has no effect on a declared signing claim:
@@ -156,10 +161,13 @@ the failure the ownership ledger exists to prevent. Clear the paths instead.
 ## The org trust policy
 
 An organization that wants to narrow the sources its repositories may install from checks
-in a policy file at `.stamity/policy.json`. It is consulted as the first gate after the
-pack manifest is read, and again at projection — so a pack installed before a policy
-existed stops being projected once the policy denies it, without a re-install and without
-losing its files.
+in a policy file at `.stamity/policy.json`. The file is loaded as soon as the pack manifest
+has been read and validated — before the trust tier resolves, and before a single content
+byte is read — so a malformed policy refuses every install whose manifest parses; the policy
+itself is applied once the tier has resolved — the second gate after the manifest read,
+because the `catalog-pinned` kind it judges exists only once the catalog pin has verified —
+and again at projection, so a pack installed before a policy existed stops being projected
+once the policy denies it, without a re-install and without losing its files.
 
 Entries name a pack id (`ops`, `@acme/ops`), a scope wildcard (`@acme/*`), everything
 (`*`), or a source kind (`local-path`, `npm-package`, `catalog-pinned`). Two rules:
@@ -239,11 +247,19 @@ re-install the pack, or accept the edit knowing the row will keep reporting it.
 stamity clean --pack ops
 ```
 
-That removes exactly one pack — its files and its ledger rows — and leaves everything else
-alone. Ownership is matched on exact equality, so `@acme/ops` can never match
-`@acme/ops-extra`. The state directory stays, because every other owner is still live. A
-file the safety gates kept — bytes you edited, an unlink that was refused — loses its row
-anyway and becomes yours to keep or delete, and the output says so.
+That removes exactly one pack — its files and its ledger rows — and, because this is the
+last moment they can be proved, also takes that pack's selected MCP servers out of the
+merged client config files and out of the `mcp.servers` selection in
+`.stamity/manifest.json`. An entry you had tuned yourself is kept and reported as yours.
+Every other pack's files and rows are left alone; outside the pack's own directory, the
+files that change are `.stamity/manifest.json` — the ledger shrunk by exactly this pack's
+rows and the `mcp.servers` selection trimmed — and, when the pack supplied a selected
+server, the merged client MCP documents that removal edited, whose adapter-owned ledger rows
+are re-hashed to the bytes now on disk so the ledger keeps asserting what is actually there.
+Ownership is matched on exact equality, so `@acme/ops` can never match `@acme/ops-extra`.
+The state directory stays, because every other owner is still live. A file the safety gates
+kept — bytes you edited, an unlink that was refused — loses its row anyway and becomes
+yours to keep or delete, and the output says so.
 
 Follow it with `stamity sync`, which reclaims any projected copies of that pack's content
 now that its rows are gone. Plain `stamity clean` with no flag removes the whole setup,

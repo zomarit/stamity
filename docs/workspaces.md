@@ -12,9 +12,9 @@ title: Workspaces
 
 A workspace is one policy over several repositories sitting under one directory. It is a
 `workspace.json` at that directory — the parent of the repositories, not a file inside any of
-their `.stamity/` state directories — plus one verb that reads it: `stamity workspace status`
-reports, `stamity workspace init` creates, `stamity workspace sync` pushes the policy down into
-every member.
+their `.stamity/` state directories — plus one verb built around it: `stamity workspace status`
+reports, `init` creates, `sync` pushes the policy down into every member. That verb is not the
+only reader: `stamity validate` reads the same file too, for its field defects.
 
 Nothing about it is ambient. A member stays an ordinary setup with its own
 `.stamity/manifest.json` and its own `stamity sync`; what the cascade does is write the
@@ -26,7 +26,7 @@ syncs it alone — the most likely next thing to happen to it.
 | Field | What it is |
 |---|---|
 | `version` | schema generation, a semantic version. `1.0.0` today |
-| `defaults` | the baseline every member inherits. `defaults.tools` is required — a workspace whose defaults target nothing generates nothing anywhere. `selection`, `maturityTier` and `mcp` are optional |
+| `defaults` | the baseline every member inherits. `defaults.tools` is required — a workspace whose defaults target nothing fails the row of every member that no group `toolOverrides` or member `overrides.tools` hands a list of its own, since the member schema demands at least one tool, so nothing propagates to those members and the cascade exits 1. `selection`, `maturityTier` and `mcp` are optional |
 | `groups` | named deltas between the defaults and a member's own overrides: add content ids, remove them, or replace the tool list outright. Declaration order is merge order |
 | `repos` | the members, each a path relative to the workspace root. Absolute paths and traversal are refused when the file is read; zero members is valid, since a workspace is assembled before it is filled |
 | `lockedContent` | content ids no member may drop. Applied last, so a `removeItems` naming a locked id is discarded rather than honoured |
@@ -44,9 +44,11 @@ defects whether or not the workspace root is an initialised repository itself.
 
 Two doors, and neither creates a workspace as a side effect.
 
-**The offer inside `stamity init`.** Every init probes once: it classifies this directory, and if
-it is neither a workspace root nor already inside one, it scans for sibling repositories. Two or
-more arms the offer; anything else arms nothing and the run is exactly what it was before.
+**The offer inside `stamity init`.** Every init that is not about to refuse as already-initialised
+probes once: it classifies this directory, and if it is neither a workspace root nor already inside
+one, it scans for sibling repositories. Two or more arms the offer; anything else arms nothing and
+the run is exactly what it was before. An already-initialised repository run without `--force`
+skips the probe entirely, which is also why the offer is suppressed there.
 
 On a terminal the armed offer is one confirm, asked last, defaulting to **no** — creating a
 `workspace.json` at the root of somebody's projects directory declares an intent about
@@ -57,12 +59,13 @@ an uninitialised root behind it.
 Off a terminal — `-y`, `--json`, or piped stdin — nothing is created and one line prints instead,
 on every such run: the candidate count, the first three candidate paths followed by `… and N
 more` when there are more, and `stamity workspace init` as the way to create one. That line rides
-init's notes list, so it lands in the panel and in the `--dry-run` report alike, and a `--json`
-run also carries the candidate paths and `workspaceCreated: false` under `decisions`.
+init's notes list, so it prints ahead of the panel on a live run and inside the `--dry-run` report
+alike, and a `--json` run also carries the candidate paths and `workspaceCreated: false` under
+`decisions`.
 
 Three edges are worth knowing. On an **already-initialised** repository the offer is suppressed,
-as every other init prompt is — the apply would refuse, so the answer would be discarded — and
-`--force`, which is what makes that apply proceed, re-arms it. **Clearing every box is an
+as every other init prompt is — the apply would refuse, so the probe never runs and there is no
+answer to discard — and `--force`, which is what makes that apply proceed, re-arms it. **Clearing every box is an
 answer**: nothing is written, one line says so, and the run is not a failure. And `stamity init
 --dry-run` on an answered offer composes the manifest and reports it in the future tense without
 writing it, the way the rest of that command previews.
@@ -97,10 +100,12 @@ member.
 ## `workspace status`
 
 Bare `stamity workspace` is `status`, on a terminal and on a pipe alike — there is no key registry
-here for a picker to navigate, so both produce the same bytes. It reports the nearest
+here for a picker to navigate, so both produce the same report: the same lines in the same order,
+with colour escapes on a terminal that paints and none on a pipe. It reports the nearest
 `workspace.json` at or above the current directory, so running it inside `apps/web` reports the
-workspace that actually governs `apps/web`. The report is a root line, one row per declared member
-in declaration order, and one journal line per member still in flight.
+workspace that actually governs `apps/web`. The report is two root lines, one row per declared
+member in declaration order — or one line saying none is registered — one journal line per member
+still in flight, and a closing hint naming `stamity workspace sync`.
 
 | Row state | What it means |
 |---|---|
@@ -113,9 +118,9 @@ in declaration order, and one journal line per member still in flight.
 Every other row also carries what that member resolves to: its tool list, the group names that
 matched, and any locked id whose removal the lock refused.
 
-The **root line** names the workspace root and says whether it carries a setup manifest of its
-own. It is marked informative: the root is never a cascade target, since the scan starts at the
-root's children and a member path spelled `"."` or `""` is refused by shape.
+The **root lines** are two: the workspace path, then whether it carries a setup manifest of its
+own. The second is marked informative, because the root is never a cascade target — the scan
+starts at the root's children and a member path spelled `"."` or `""` is refused by shape.
 
 A **journal line** prints for every member whose LAST line in the crash trail is a `started` with
 no `finished` or `skipped` line after it for that member — from this run or any later one. That is
@@ -124,8 +129,8 @@ mid-flight and a later, unrelated run that finished that same member cleanly lea
 only a genuinely unterminated member still prints. Concurrency runs several members at once (the
 machine's core count, capped at eight — see `workspace sync` below), so more than one line can
 print at once, one per member still live. The trail is read from a bounded 64 KiB tail rather than
-the whole file, and an absent journal, an unreadable one, or a window beginning mid-line each print
-nothing.
+the whole file, and an absent journal and an unreadable one print nothing, and a window beginning
+mid-line drops only its leading partial record and reads the rest.
 
 `status` exits 0 whenever it could read the manifest, whatever the rows say: it is a report, not a
 gate. Two gates exist already — `stamity validate` on the manifest's field defects and `workspace
@@ -138,10 +143,11 @@ directory, surfaces as that read's own failure instead, at exit 1.
 `sync` resolves its root the same way `status` does: the nearest `workspace.json` at or above the
 current directory, through the same ancestor walk. Running it inside a member directory therefore
 syncs the workspace that governs that member, not only a workspace whose root the cwd happens to
-be. Before the cascade writes a single byte, `sync` prints one line naming the resolved root and how
+be. Before the cascade writes a single byte, `sync` prints two lines — the resolved root, then how
 many members it declares — ahead of every per-member result, since this is the one subcommand that
-writes and an operator running it from a nested directory should see which root it resolved before
-it starts rewriting manifests, not only in the summary after every write already landed.
+writes into the members, and an operator running it from a nested directory should see which root
+it resolved before it starts rewriting their manifests, not only in the summary after every write
+already landed.
 
 The cascade itself runs members in parallel — the machine's core count, capped at eight, since a
 member sync is write-heavy. Rows come back in manifest order whatever
@@ -172,7 +178,9 @@ each member's row names any locked id whose removal the lock refused — and the
 an emitted file. The reason sits one layer down: a member's own sync refreshes its manifest
 selection from the full corpus on every run, so a written selection would be overwritten before
 anything read it, and `lockedContent`'s only job is to refuse removals against that same
-selection. A workspace declaring either gets one line under the tally saying exactly that.
+selection. A workspace declaring a lock, a baseline selection, or a group add or remove gets one
+line under the tally saying exactly that; a delta written only into a member's own `overrides`
+earns the line only when a lock refused one of its removals.
 
 Every cascade is a full re-run: no member is skipped for having succeeded before or because the
 journal says so, since the idempotence a resume would buy is already bought a layer down, where a
@@ -203,12 +211,13 @@ as `error.code` rather than in the number. `--json` also makes a run non-interac
 
 | Path | What it is |
 |---|---|
-| `workspace.json` at the root | the policy. Yours to edit by hand; only `workspace init` writes it |
+| `workspace.json` at the root | the policy. Yours to edit by hand; only `workspace init` and an accepted offer inside `stamity init` write it |
 | `<root>/.stamity/workspace-sync-journal.jsonl` | the crash trail, two lines appended per attempted member per run. Nothing reads it back to decide anything — `status` displays every member still unterminated and that is all — so deleting it is always safe. Nothing rotates it either |
-| `<member>/.stamity/manifest.json` | the member's own provenance record, and the propagated policy once a cascade has run. The bridge patches three fields there and leaves the rest of the document as it found it |
+| `<member>/.stamity/manifest.json` | the member's own provenance record, and the propagated policy once a cascade has run. The bridge patches three fields there, plus the `updatedAt` stamp every manifest write sets, and keeps the ledger, import choice and creation stamp; the member's own sync in step 4 then refreshes selection, detection and version stamps exactly as plain `stamity sync` does |
 
-Ordinary commands are not workspace-aware: `stamity init` and `stamity sync` run inside a member
-behave exactly as they do anywhere else. That is deliberate, and mostly unnecessary to fix — the
+Ordinary commands are all but workspace-unaware: `stamity sync` reads nothing workspace-related at
+all, and `stamity init` inside a member differs only in that its workspace offer never arms there.
+What either one emits is exactly what it emits anywhere else. That is deliberate, and mostly unnecessary to fix — the
 member's manifest already **is** the propagated policy, so a plain sync inside it emits what the
 workspace decided.
 

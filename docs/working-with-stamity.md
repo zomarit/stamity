@@ -3,9 +3,8 @@ title: Working with stamity
 ---
 
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit 7644766. -->
-<!-- Re-open when: a touchpoint joins or leaves, or its one-line job changes in content/charter/stamity-charter.md — the touchpoint index's owner;
-     a `stamity worktree` subcommand joins or leaves; `.stamity/worktree.json` or the receipt `version` changes shape;
-     or the site stops rendering the mermaid fence. `test/docsPages.test.ts` holds this page to the hand-page contract. -->
+<!-- Re-open when: a touchpoint joins or leaves, or its one-line job changes in content/charter/stamity-charter.md — the touchpoint index's owner; a `stamity worktree` subcommand joins or leaves;
+     `.stamity/worktree.json` or the receipt `version` changes shape; or the site stops rendering the mermaid fence. `test/docsPages.test.ts` holds this page to the hand-page contract. -->
 
 # Working with stamity
 
@@ -26,9 +25,9 @@ lifecycle. This page is which one to open for a piece of work, what each may do,
 | `/st-rework` | apply structured feedback to agent-implemented work | delivered work came back with comments |
 | `/st-pr-resolve` | resolve pull-request review comments | those comments live on a pull request |
 
-Only a client with a project command surface turns these into `/st-<name>` invocations: Claude Code and Copilot do;
-Cursor reads them as skills and Codex has no repository-level command home, so on those two you ask for the flow by
-name in plain words. [The capability matrix](capability-matrix.md) is the one home for that, per client.
+Only a client with a project command surface turns these into `/st-<name>` invocations: Claude Code, Copilot and Cursor
+do, Cursor as explicitly invoked skills under `.cursor/skills/`. Codex has no repository-level command home, so there
+you ask for the flow by name. [The capability matrix](capability-matrix.md) is the one home for that, per client.
 
 ## The spine
 
@@ -106,10 +105,11 @@ known cause starts at `/st-debug`, reaching the same pipeline one step later wit
 
 ## No green, no done
 
-Every flow ends on the charter's verification gates — here `npm run lint && npm run typecheck && npm run test` — and
-the floor holds at every tier, in every lane, including `/st-quick`. A run that cannot reach green ships a `Not done:`
-list naming each open gap instead of a claim. That is why quick delegates its gates even though it applies its own
-edits inline: "the gates ran" is worth reading only when it comes from somewhere other than the writer.
+Every flow that changes product code ends on the charter's verification gates — `/st-work` and `/st-quick` run them,
+`/st-debug`, `/st-rework` and `/st-pr-resolve` through `/st-work` or a `test-runner` spawn — here `npm run lint && npm
+run typecheck && npm run test`, at every tier and in every lane that edits code. `/st-spec`, `/st-plan` and `/st-board`
+write records, not product files, and end on that artifact or a handoff into `/st-work`. A run that cannot reach green
+ships a `Not done:` list naming each open gap, and quick delegates its gates though it edits inline.
 
 ## Two changes at once
 
@@ -119,14 +119,14 @@ the record goes in that tree's git directory — so no ignore rule, and `git sta
 
 - `stamity worktree setup <name>` — creates the tree under the farm, which defaults to `../.stamity-worktrees/<repo-name>/`, beside the clone rather than inside it; `<name>` is both the directory under the farm and the branch the worktree checks out. A setup that gets half way exits 1 and still reports the worktree's path and branch and each entry's own outcome; the recovery is `cleanup <name>`, or `cleanup <name> --force` when even the receipt failed to write and nothing can scope the tree. A run refused before anything was created reports no worktree, because there is none.
 - `stamity worktree list` — one row per worktree git knows about, managed by this lane or not: path, branch, head, dirty counts, ahead/behind, whether a receipt is present, whether that tree carries a stamity setup, and how many handoff records it holds. Above the table, if the clone has stashed work, one line saying so — a stash is one list for the whole clone and belongs to no row below it.
-- `stamity worktree cleanup <name>` — inverts the receipt and nothing else: it removes what setup recorded placing, a copy whose bytes you have edited since is kept and reported as diverged rather than deleted, and a worktree with no readable receipt is reported and left alone. Then the checkout goes — `--force` for one carrying uncommitted changes, `--files-only` to leave the checkout in place, `--all` to sweep every worktree this lane manages.
+- `stamity worktree cleanup <name>` — inverts the receipt and nothing else: it removes what setup recorded placing, a copy whose bytes you have edited since is not inverted — it is reported as diverged and left where it is — though a full cleanup then removes the directory around it, so `--files-only` is the invocation that actually preserves an edited copy, and a worktree with no readable receipt is a consent gate of its own — interactively you get the question, under `--json` or with no TTY the run refuses naming `--force`, and with consent (`--force`, `-y`, or a yes) it goes as a whole tree because nothing can scope a file-by-file inversion; only `--files-only` leaves it standing and says why. Then the checkout goes — `--force`, `-y` or a yes for one carrying uncommitted changes, `--files-only` to leave the checkout in place, `--all` to sweep every worktree this lane manages.
 
 What travels with the checkout:
 
 - `AGENTS.md`, the managed block in `CLAUDE.md`, the `.agents/` and `.claude/` trees, `.stamity/` with its manifest, learnings and handoffs — yes, because they are committed on purpose — the new worktree comes up with the same charter, rules, skills and touchpoints as the original. Records written but not committed do not travel; that is a property of a checkout, and `list` is what makes it visible rather than surprising.
 - `.env.mcp` — no, so setup places it: `.gitignore` excludes it as MCP credentials, so setup copies it across and holds it at `0600` rather than leaving you to remember.
 - `node_modules` — no, and setup leaves it alone — a built-in `skip`, because a symlinked dependency directory gets written *through* by the next install. Install inside the new tree.
-- `.stamity/worktree.json` — it is the override for the two entries above: add an entry, mark one `secret`, or skip something. Absent, which it is in most repositories, those two defaults apply.
+- `.stamity/worktree.json` — present, it replaces those two defaults wholesale rather than layering on them, so a file naming only a new entry drops both the `.env.mcp` copy and the `node_modules` skip: restate the rows you want kept, add an entry, mark one `secret`, or skip something (`.env.mcp` stays `secret` by identity whatever the file says). Absent, which it is in most repositories, those two defaults apply.
 
 | Consent gate | Interactively | Under `--json` or with no TTY |
 |---|---|---|
@@ -135,12 +135,12 @@ What travels with the checkout:
 | copying anything marked `secret` | you get the question | the copy is skipped, the report naming `--copy-secrets` |
 | all three at once | `-y` answers them | `--dry-run` prints the resolved farm, the branch plan, the entry table and every gate's answer, and asks nothing |
 
-**A branch is never deleted**, not by setup, not by cleanup, not under `--force`; the report prints the
-`git branch -d <name>` line to run yourself, because a directory is reconstructible from a ref and a ref is not from a
-directory. Plain `git worktree add` still works; such a tree appears in `list` as unmanaged and `cleanup` leaves it
-alone. Run touchpoints and gates in each tree independently — a green gate in one says nothing about the other, and
-the branches meet only at merge, where charter invariant 6 applies if they touch the same API shape, schema or event:
-file-disjoint is not contract-disjoint.
+**A branch is never deleted**, not by setup, not by cleanup, not under `--force`; the report prints the `git branch -d
+<name>` line to run yourself, because a directory is reconstructible from a ref and a ref is not from a directory. Plain
+`git worktree add` still works; a tree outside the farm appears in `list` as unmanaged and `cleanup` leaves it alone,
+while one inside the farm is a receipt-less tree, which goes only with consent — `--force`, `-y`, or a yes at the
+prompt — and then as a whole tree. Run touchpoints and gates in each tree independently — a green gate in one says
+nothing about the other, and the branches meet only at merge, where charter invariant 6 applies if they touch the same API shape, schema or event: file-disjoint is not contract-disjoint.
 
 ## Where to go next
 

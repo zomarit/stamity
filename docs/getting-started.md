@@ -11,23 +11,27 @@ title: Getting started
 # Getting started
 
 From nothing to one proven change on your own code. The guided first run is sized for
-fifteen minutes — six phases with a budget each, so it degrades in a planned direction
-rather than quietly overrunning — and how long yours takes depends on your repository and
-the decisions you make in it. The mechanical part underneath, installing the package and
-running `init` and `check`, is seconds; the time goes into the walk, plus however long
-`npx` takes to fetch the package.
+fifteen minutes — six phases, five of them carrying a minute budget that sums to fifteen
+and a sixth, optional one that carries none and is dropped first, so it degrades in a
+planned direction rather than quietly overrunning — and how long yours takes depends on
+your repository and the decisions you make in it. The mechanical part underneath,
+installing the package and running `init` and `check`, is seconds; the time goes into the
+walk, plus however long `npx` takes to fetch the package.
 
 ## Before you start
 
 Two things, and nothing else.
 
 - **Node 22.22.2 or newer.** That is the published floor, and `stamity check` verifies it
-  as its `node-version` row. Nothing is installed globally, and setup contacts no service: the
-  engine's one network path in a command's work is the Sigstore trust root, fetched when `add`
-  installs a signed pack.
+  as its `node-version` row. Nothing is installed globally. Two things reach the network:
+  a once-a-day update probe to the npm registry at startup, silenced by
+  `STAMITY_NO_UPDATE_CHECK=1`, `NO_UPDATE_NOTIFIER` or `CI`; and the Sigstore trust root,
+  fetched when `add` verifies a signed pack. `worktree setup` additionally lets git contact
+  `origin` to plan its branch.
 - **A git repository.** Not strictly required — but setup writes dozens of files, and
   without git there is no revert path. Run `git init` first if this is a fresh directory;
-  if you do not, init stops and asks before writing anything.
+  if you do not, an interactive init stops and asks before writing anything; a `-y` or
+  `--json` run proceeds and prints the no-revert-path disclosure instead.
 
 ## Set it up
 
@@ -107,8 +111,12 @@ How you reach it depends on the client, and init prints the right line for yours
 - **Codex** — ask in plain words: run the st-onboard workflow from `.agents/skills/`.
 
 Cursor, Copilot and Codex get a plain-words line rather than a slash command because
-`st-onboard` is a skill, and only Claude Code turns a project skill into a `/name`
-invocation. Asking for it by name reaches a file that is genuinely on disk.
+`st-onboard` reaches them only as the `.agents/skills/` projection, and no emitted file on
+those clients answers a `/st-onboard`: Cursor's `.cursor/skills/` holds the nine touchpoint
+command bodies alone — those are its `/st-<id>` — Copilot's `/st-<id>` are prompt files,
+and Codex has no repo-level command home. Only Claude Code takes a native copy of the
+skill, in `.claude/skills/`, where it is `/st-onboard`. Asking for it by name reaches a
+file that is genuinely on disk.
 
 ## The nine verbs
 
@@ -121,7 +129,8 @@ describe a verb the CLI does not have or miss one it does. Three things it canno
 because each is about how two of them go together rather than about any one verb:
 
 - **Run `sync` after any `config` change.** `config` edits state and never regenerates
-  output, so nothing on disk moves until a sync does.
+  managed output, so no client file moves until a sync does — though `config mcp add`
+  provisions `.env.mcp` and its `.gitignore` line on the spot.
 - **`worktree` is three subcommands** — `setup`, `list` and `cleanup`. What each one places,
   records and inverts is in [working with stamity](working-with-stamity.md).
 - **`workspace` reaches past this repository**, and has a guide of its own:
@@ -176,15 +185,16 @@ Everything the setup knows about itself is under `.stamity/`:
 Commit it. The manifest is the provenance record, and a teammate who clones the
 repository gets the same setup without re-running init. Everything init writes outside
 that directory commits for the same reason — `AGENTS.md`, `.agents/`,
-the managed block in `CLAUDE.md`, and the client trees `.claude/`, `.cursor/`,
-`.github/prompts/` and `.codex/` — because that is what
-makes the clone arrive with working commands and skills already on disk, and because
-generated content earns no exemption from review: it lands as an ordinary diff, and
-`check` is what catches it drifting from what the engine would emit today. The one file
-init keeps **out** of the repository is `.env.mcp` — MCP credentials — and it is the single
-entry it adds to `.gitignore` for you. Because everything above it is committed, a second
-checkout of this repository arrives with the whole setup already in place and that one file
-missing, which is exactly what `stamity worktree setup` places for you when it creates one.
+the managed block in `CLAUDE.md`, the client trees `.claude/`, `.cursor/`, `.github/`
+(agents, instructions, prompts and the `copilot-setup-steps.yml` workflow) and `.codex/`,
+and the MCP documents `.mcp.json`, `.cursor/mcp.json` and `.vscode/mcp.json` when servers
+are selected — because that is what makes the clone arrive with working commands and
+skills already on disk, and because generated content earns no exemption from review: it
+lands as an ordinary diff, and `check` is what catches it drifting from what the engine
+would emit today. The one file init keeps **out** of the repository is `.env.mcp` — MCP
+credentials — and it is the single entry it adds to `.gitignore` for you. Because
+everything above it is committed, a second checkout of this repository arrives with the
+whole setup already in place and that one file missing, which is exactly what `stamity worktree setup` places for you when it creates one.
 
 `review-gate.json` is the one path that is neither: a run writes it, nothing commits it, and
 nothing ignores it either. Leave it in that state. It is runtime state for the run that wrote

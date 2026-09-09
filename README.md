@@ -1,7 +1,8 @@
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit 7644766. -->
 <!-- Re-open when: the corpus counts, the nine-verb command surface, or a client capability
-     this page describes changes. `test/docsPages.test.ts` derives all three from the content
-     catalog and the generated capability matrix and fails here first. -->
+     this page describes changes. `test/docsPages.test.ts` derives the corpus counts from the
+     content catalog and holds the client-surface prose to the generated capability matrix; the
+     nine-verb list is a second hand-kept copy in that test, updated alongside `src/cli.ts`. -->
 
 <!-- The banner leads the rendered page and replaces nothing under it: GitHub picks the source by
      the reader's theme, and every other surface — a plain markdown viewer, a text terminal, the
@@ -26,15 +27,21 @@ GitHub Copilot and Codex from one canonical source model.
 npx @zomarit/stamity init
 ```
 
-`init` reads the repository, asks what it cannot infer, and writes the setup plus a manifest
-that every later command works from. Node `>= 22.22.2` is the engine's only prerequisite:
-nothing is installed globally, and the one service a command's work contacts is the Sigstore
-trust root, fetched when `add` installs a pack that declares a signature. A startup notice
-asks npm whether a newer version exists until you switch it off; [`SECURITY.md`](SECURITY.md)
-documents both. Two of the nine touchpoints reach further — `/st-board` and `/st-pr-resolve`
-shell out to the GitHub CLI (`gh`), authenticated, when they work a real board or pull
-request. The package is `@zomarit/stamity` and it installs two names for the same binary —
-`stamity` and the short alias `st` — so an installed copy runs as `stamity sync` or `st sync`.
+`init` reads the repository, asks what it cannot infer, and writes the setup plus a manifest that
+`sync`, `check`, `config`, `workspace`, `clean` and `add` work from; `validate` runs with or
+without one, and `learn` and `handoff` ask only that `.stamity/` exists. Node `>= 22.22.2` is the
+only prerequisite for `init` and the other core verbs — none of them needs git: `init`, `sync` and
+`check` read it where it is and carry on where it is not, and the rest never call it; `worktree`
+additionally needs a `git` binary on PATH and refuses without one.
+Nothing is installed globally, and two network paths belong to a command's work: the Sigstore trust
+root, fetched when `add` installs a pack that declares a signature, and the repository's own
+`origin` remote, fetched by `worktree setup` when the requested branch has no local copy. A startup
+notice asks npm whether a newer version exists until you switch it off;
+[`SECURITY.md`](SECURITY.md) documents them all. Two of the nine touchpoints reach further —
+`/st-board` and `/st-pr-resolve` shell out to the GitHub CLI (`gh`), authenticated, when they work
+a real board or pull request. The package is `@zomarit/stamity` and it installs two names for the
+same binary — `stamity` and the short alias `st` — so an installed copy runs as `stamity sync` or
+`st sync`.
 
 ## How it works
 
@@ -91,12 +98,12 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`packs/`](packs/) | Three first-party packs — `ops`, `product-audit`, `scaffold` — installed by `add` behind the trust ladder. |
 | [`docs/capability-matrix.md`](docs/capability-matrix.md) | Generated: what each client supports, rendered from adapter code. |
 | [`docs/cli-reference.md`](docs/cli-reference.md) | Generated: every command, flag and exit code, rendered from the program. |
-| [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the typed manifest. |
-| [`docs/reference/`](docs/reference/) | Generated: one page per content class, projected from artifact frontmatter. |
-| [`llms.txt`](llms.txt) | Generated: the agent-native index of every page in this repository. |
+| [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the `config` command's key registry, each row's unset value measured against a probe manifest. |
+| [`docs/reference/`](docs/reference/) | Generated: one page per content class projected from artifact frontmatter, plus the pack inventory and the MCP server reference. |
+| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the eight guides, the charter and every generated reference page. |
 | [`plugin.json`](plugin.json) | Generated: the plugin surfaces — this Agent Plugins manifest, [`.claude-plugin/`](.claude-plugin/) and [`.cursor-plugin/`](.cursor-plugin/). |
 | [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus. |
-| [`website/`](website/) | The Docusaurus site that renders the `docs/` pages above. It holds no page of its own. |
+| [`website/`](website/) | The Docusaurus site that renders the `docs/` pages above directly from the tree. It holds one page of its own, the landing page at `website/src/pages/index.tsx`, and no docs page. |
 | [`SECURITY.md`](SECURITY.md) | What the engine defends today, what it does not, and how to report a vulnerability. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The dev loop, the three test lanes, and how to regenerate derived files. |
 | [`GOVERNANCE.md`](GOVERNANCE.md) | Who decides, how a change lands, and what the private layer holds. |
@@ -135,12 +142,13 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Dogfooding
 
 This repository runs its own output. `AGENTS.md`, the managed block in `CLAUDE.md`, `.claude/`
-and `.stamity/` are engine-generated and committed, so `node dist/cli.js check` at the root
-re-proves them drift-clean against the current engine — the living integration test, and the
+and `.stamity/generated/` are engine-generated and committed, so `node dist/cli.js check` at the
+root re-proves them drift-clean against the current engine — the living integration test, and the
 reason a regression in emission shows up as a failing check rather than as a surprise downstream.
-`.agents/` is not among them: that projection is emitted only for a selected client that
-reads it, and the one selected here does not. Regenerate those paths instead of editing them
-by hand.
+`.agents/` is not among them: that projection is emitted only for a selected client that reads
+it, and the one selected here does not. Regenerate those paths instead of editing them by hand.
+The rest of `.stamity/` — the manifest, learnings, handoffs, runs, overrides and the inbox — is
+setup state and authored content, not a regeneration target.
 
 ## License
 
