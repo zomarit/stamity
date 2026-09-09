@@ -22,6 +22,11 @@
 #     re-proves the committed dogfood configs with the binary it just built, and runs the leak
 #     gate. The floor leg additionally packs and installs the tarball (`tarball-smoke`), because
 #     the published SHAPE is a different tree from the repository.
+#   - `apm-install`, three legs. The APM route, proven by what a real consumer's tree HOLDS after
+#     an install rather than by the exit code — the routing failure this lane exists for exited 0
+#     and deployed nothing. Two legs install the package with a fixed client (0.29.1, the minimum
+#     tested one, and 0.30.0, the current one); the third runs the same smoke on 0.29.0 with
+#     `--expect-failure`, so the lane goes red if it ever stops being able to see that failure.
 #   - The aggregator itself. It is the ONE required status context THIS file exposes: the legs
 #     name themselves per leg, so a rule written against them binds names that rotate with the
 #     matrix.
@@ -242,6 +247,94 @@ jobs:
         if: matrix.tarball_smoke
         run: node scripts/tarball-smoke.mjs
 
+  # The regression gate on the APM route, and the one lane in this file that reads a DEPLOYED
+  # TREE rather than a command's exit code.
+  #
+  # The failure it guards is a mixed-manifest routing failure, and it reported success for weeks.
+  # This repository's root carries both Claude plugin surfaces AND the generated APM surface
+  # (`apm.yml` + `.apm/`), and through apm 0.29.0 the type-detection cascade ranked the plugin
+  # manifest ahead of the APM package: `apm install` typed the tree as an Agent Plugin, exited 0,
+  # and deployed not one primitive (microsoft/apm#2735, closed by PR #2776 and shipped in 0.29.1).
+  # Nothing else here could see it — the package's bytes were correct throughout, so the
+  # generate-and-diff step above was green the whole time.
+  #
+  # The minimum tested client is 0.29.1. No key in `apm.yml` can declare a client floor, so the
+  # floor is a tested claim or it is nothing; `current` tracks the stable release beside it. The
+  # `regression-witness` leg runs the same smoke against 0.29.0 with `--expect-failure` and passes
+  # only when the check still DETECTS the original failure — without it, a smoke that quietly
+  # stopped being able to fail would read exactly like a smoke that keeps passing.
+  apm-install:
+    name: apm route (${{ matrix.role }}, apm ${{ matrix.apm }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - apm: '0.29.1'
+            role: minimum
+          - apm: '0.30.0'
+            role: current
+          - apm: '0.29.0'
+            role: regression-witness
+            expect_failure: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No `cache: npm`, and no `npm ci` below it: the smoke is plain ESM over Node built-ins, and
+      # the package it installs is the `.apm/` tree already in this checkout. A dependency install
+      # here would buy nothing and hand this leg a supply chain it does not need.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.22.2'
+
+      # Pinned rather than inherited from the runner image, so an image refresh cannot move the
+      # interpreter under a matrix whose whole point is that only the apm version varies. apm-cli
+      # declares `python >= 3.10`.
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      # A venv, not a bare `pip install`: the runner image's system Python is externally managed,
+      # and this leg has to hold exactly ONE apm — the matrix is the experiment. The version
+      # reaches pip through `env:` rather than a `${{ }}` interpolation in the script body, like
+      # every other value in this directory.
+      #
+      # It lives in RUNNER_TEMP rather than in the working tree, and that placement is
+      # load-bearing rather than tidy: the smoke's default source is a CLEAN EXPORT of this
+      # checkout built from `git ls-files --cached --others --exclude-standard`, so a venv sitting
+      # untracked-and-unignored beside the code would be exported into the consumer as part of the
+      # package under test.
+      - name: Install apm-cli ${{ matrix.apm }}
+        env:
+          APM: ${{ matrix.apm }}
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/apm-venv"
+          "$RUNNER_TEMP/apm-venv/bin/pip" install --quiet "apm-cli==${APM}"
+          "$RUNNER_TEMP/apm-venv/bin/apm" --version
+
+      # Four targets, because each one has its own deployment paths and its own translation of the
+      # same primitive — a route proven on `claude` alone would say nothing about the other three.
+      - name: APM route smoke
+        if: ${{ !matrix.expect_failure }}
+        run: node scripts/apm-install-smoke.mjs --apm "$RUNNER_TEMP/apm-venv/bin/apm" --targets claude,copilot,cursor,codex
+
+      # Inverted on purpose: this leg PASSES when the install fails to deploy and the smoke says
+      # so, and FAILS when a client from before the fix somehow deploys everything — which would
+      # mean the gate above is measuring something other than what it claims.
+      - name: APM route smoke (regression witness)
+        if: matrix.expect_failure
+        run: node scripts/apm-install-smoke.mjs --apm "$RUNNER_TEMP/apm-venv/bin/apm" --targets claude,copilot,cursor,codex --expect-failure
+
   # Currency, not integrity. The exact pins in the MCP catalog guarantee the bytes never
   # change, which is precisely why something has to go and ask whether those bytes are still
   # a good idea — a pinned version stays byte-identical on the day an advisory lands against
@@ -331,17 +424,19 @@ jobs:
   #
   # `dependency-review` is deliberately NOT in `needs`: it is advisory, and it does not run at
   # all outside a pull request, so requiring it would make every push wait on a job that will
-  # never report.
+  # never report. `apm-install` IS required, and can be: it runs on every trigger this workflow
+  # declares, so requiring it makes no push wait on a job that never reports.
   all-ci-checks:
     name: all-ci-checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     if: always()
-    needs: [check, supply-chain]
+    needs: [check, supply-chain, apm-install]
     steps:
       - name: Report
         run: |
-          echo "check=${{ needs.check.result }} supply-chain=${{ needs.supply-chain.result }}"
+          echo "check=${{ needs.check.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }}"
           # The advisory lane is non-blocking by design: it is reported, never required.
           test "${{ needs.check.result }}" = "success"
+          test "${{ needs.apm-install.result }}" = "success"

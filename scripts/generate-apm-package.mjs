@@ -122,12 +122,20 @@
 //     behalf has invented the one value that matters. Adding `includes: auto`
 //     below is a one-line, deliberate edit whenever that declaration is made.
 //
-//   type: hybrid                      Emitted, and it controls NOTHING today.
-//     APM's reference states behaviour is driven by package content and the
-//     field "is reserved for future explicit overrides". It is emitted because
-//     it is the value that will be true of this package when the field becomes
-//     live — both instructions compilation and skill installation — and it is
-//     described here as inert so nobody reads it as a switch.
+//   type: hybrid                      Emitted, VALIDATED, and it still controls
+//     NOTHING. Re-read at apm 0.30.0 on 2026-09-09, which changed half of that
+//     sentence: the field is now parsed into a four-value enum — `instructions`,
+//     `skill`, `hybrid`, `prompts` — and any other value is a hard parse error
+//     (`models/apm_package.py:544-554`, `models/validation.py:37-51`), so the
+//     spelling below is checked rather than merely tolerated. What has NOT
+//     changed is that nothing reads the parsed value: the routing its own
+//     docstring describes runs through `get_effective_type`, which derives the
+//     content type from the DETECTED package type and never consults the
+//     manifest's declaration (`integration/skill_package_routing.py:10-21`).
+//     `hybrid` is emitted because it is the value that will be true of this
+//     package when the field becomes live — both instructions compilation and
+//     skill installation — and it is described here as inert so nobody reads it
+//     as a switch.
 //
 // THE CHARTER GAP, STATED IN FULL — the same gap the plugin generator
 // discloses, arriving here for a different reason. `content/charter/` is not a
@@ -157,11 +165,12 @@
 // every registry URL in APM's docs is a placeholder the consumer supplies
 // themselves. A tagged public repository is installable as it stands.
 //
-// KNOWN LIMIT — apm type-detection cascade. THE ONE THING THAT DOES NOT WORK
-// YET, AND IT IS NOT IN THIS FILE. This package validates and installs
-// correctly — but only from a tree that carries NEITHER of this repository's
-// two Claude plugin surfaces. APM classifies a package by a first-match-wins
-// cascade whose first two steps sit ahead of the APM package itself
+// HISTORY — the type-detection cascade, and how it closed. This surface spent
+// three weeks correct and unreachable, and the record is kept here because the
+// shape of that failure is the reason this file is gated the way it is.
+//
+// WHAT WAS OBSERVED. APM classifies a package by a first-match-wins cascade,
+// and through 0.29.0 two plugin steps sat ahead of the APM package itself
 // (`src/apm_cli/models/validation.py::detect_package_type`, apm 0.29.0):
 //
 //   1. AGENT_PLUGIN       root `plugin.json` carrying the Agent Plugins schema
@@ -170,8 +179,8 @@
 //   6. APM_PACKAGE        `apm.yml` with `.apm/` — where this surface lives
 //
 // The repository root carries BOTH gates: `plugin.json` (Agent Plugins 1.0.0)
-// and `.claude-plugin/`. Observed by running apm 0.29.0 against copies of this
-// tree on 2026-08-31:
+// and `.claude-plugin/`. The three-way experiment, run against copies of this
+// tree with apm 0.29.0 on 2026-08-31:
 //
 //   - whole tree as published  -> AGENT_PLUGIN. `apm install <path>` is refused
 //     outright ("cannot be installed through the imperative local-bundle
@@ -186,16 +195,42 @@
 //     ids, with each rule's `applyTo` translated into the target's own glob
 //     vocabulary.
 //
-// So the projection below is correct and is currently unreachable from the
-// published tree. Closing that costs one of three things — moving `plugin.json`
-// off the root (which the Agent Plugins spec puts there), dropping a Claude
-// surface, or a cascade change upstream — and every one of them is a decision
-// about which channels this repository publishes on. Which channel an install
-// routes through is a maintainer's decision, taken and RECORDED rather than
-// resolved here: the limit above is the record, this surface ships inert and
-// forward-compatible, and no page in this repository advertises an APM install
-// command while the cascade still routes past it. A generator does not get to
-// settle a publishing question by editing itself.
+// The failure mode worth remembering is not the refusal — it is the arm that
+// SUCCEEDED. The declarative install exited 0, wrote a lockfile, and deployed
+// nothing, so every check that read a status code was green throughout.
+//
+// THE FIX. Reported as microsoft/apm#2735 from those observations; closed by
+// PR #2776, merged 2026-09-03, which moved an ELIGIBLE `apm.yml` to the HEAD of
+// the cascade — eligible meaning `.apm/` sits beside it, or the manifest
+// declares at least one dependency. A metadata-only manifest still lets the
+// plugin signals win, which is how a repository that wants the plugin layout
+// keeps it. The fix shipped in apm 0.29.1 (2026-09-06).
+//
+// THE CURRENT STATE, verified 2026-09-09 against 0.29.1 and 0.30.0. The git
+// route deploys this package from the published tree AS IT STANDS, both plugin
+// surfaces present and nothing stripped: `apm install zomarit/stamity` and
+// `apm install zomarit/stamity#<tag>` each deploy 10 agents, 9 commands,
+// 12 rules and 8 skills per target, and the lockfile types the dependency
+// `apm_package`. The imperative LOCAL route (`apm install <path>`) is still
+// refused by design — the local-bundle route inspects `plugin.json` first — and
+// a `file://` spec is rejected outright, so the local form that reaches this
+// package is the declarative one: a consumer `apm.yml` naming the directory as
+// a dependency. That is the fixture route CI uses, because it needs no tag.
+//
+// 0.29.1 is therefore the MINIMUM tested client and 0.30.0 the current one. No
+// key in `apm.yml` can declare a client floor — the manifest schema has none,
+// and `apm_version` exists only in the lockfile as the version that wrote it —
+// so the floor is a tested claim or it is nothing.
+//
+// WHICH IS WHY THE ROUTE IS NOW A GATE. `scripts/apm-install-smoke.mjs` builds
+// a real consumer, installs this package into it, and verifies the DEPLOYED
+// TREE — every primitive id at its target's path, each carrying its source
+// heading, no supported class at zero, and the lockfile's `package_type`. CI
+// runs it on 0.29.1 and 0.30.0, and once more on 0.29.0 with `--expect-failure`
+// so the check must keep being able to see the original outage; the release
+// gates run it against the canonical remote at the shipping commit. The
+// projection below is what that gate installs, and a change here that breaks
+// the route now fails a check rather than a consumer.
 //
 // The catalog reader is TypeScript and there is no build step here on purpose —
 // a generator that needs `npm run build` first goes stale the moment someone

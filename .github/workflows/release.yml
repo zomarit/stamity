@@ -85,6 +85,10 @@ jobs:
       #   nodejs.org                    — the Node download setup-node performs
       #   objects.githubusercontent.com — GitHub's object and manifest CDN
       #   registry.npmjs.org            — npm ci, and the tarball smoke's consumer install
+      #   pypi.org, files.pythonhosted.org — the apm-cli index and wheel for the APM route smoke
+      #   raw.githubusercontent.com     — actions/setup-python's fallback versions manifest; its
+      #                                   primary read is the api.github.com contents endpoint
+      #                                   above, and a blocked fallback would fail this job closed
       #   results-receiver.actions.githubusercontent.com,
       #   *.blob.core.windows.net       — actions/upload-artifact's hand-off to the publish job
       #
@@ -99,9 +103,12 @@ jobs:
           allowed-endpoints: >
             *.blob.core.windows.net:443
             api.github.com:443
+            files.pythonhosted.org:443
             github.com:443
             nodejs.org:443
             objects.githubusercontent.com:443
+            pypi.org:443
+            raw.githubusercontent.com:443
             registry.npmjs.org:443
             results-receiver.actions.githubusercontent.com:443
 
@@ -220,6 +227,14 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
+      # For the APM route smoke below, which runs an apm-cli out of a throwaway venv. Pinned for
+      # the same reason the Node version is: a runner-image refresh must not move an interpreter
+      # the release path depends on. apm-cli declares `python >= 3.10`.
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
       # The env var takes precedence over .npmrc in npm's config order, so the lifecycle-script
       # deny holds even if a transitive Git dependency rewrites the project rc mid-install.
       - name: Install
@@ -247,6 +262,29 @@ jobs:
       # directory in a repository scan and is the entire package in a publish.
       - name: Tarball smoke (publish shape)
         run: node scripts/tarball-smoke.mjs
+
+      # The FIFTH published surface, proven against the canonical remote at the exact commit this
+      # release ships — not against the checkout. `apm install zomarit/stamity#<sha>` is the route
+      # a consumer takes, resolved through git rather than through this working tree, so it is the
+      # only form that can catch a package correct on disk and unreachable through the resolver:
+      # that is precisely the failure this smoke was written for (apm's type-detection cascade
+      # ranked this repository's plugin manifest ahead of `apm.yml` + `.apm/` through 0.29.0,
+      # deploying zero primitives while exiting 0 — microsoft/apm#2735, fixed in 0.29.1).
+      #
+      # A sha is what a tag push resolves to anyway, and apm resolves one directly, so the gate
+      # runs on the shipping commit even before its tag exists on the remote. It runs BEFORE the
+      # pack, with every other ladder step, because a route this release cannot serve is a reason
+      # not to build the artifact rather than a note to file after publishing it. The venv lives
+      # in RUNNER_TEMP so nothing this step installs can sit in the tree the next step packs.
+      - name: APM route smoke (canonical ref)
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/apm-venv"
+          "$RUNNER_TEMP/apm-venv/bin/pip" install --quiet "apm-cli==0.30.0"
+          "$RUNNER_TEMP/apm-venv/bin/apm" --version
+          node scripts/apm-install-smoke.mjs --apm "$RUNNER_TEMP/apm-venv/bin/apm" --source "zomarit/stamity#${SHA}" --targets claude,copilot,cursor,codex
 
       # Pack the exact bytes the publish job will ship, and record their digest on the job-output
       # channel. The publish job compares against that output, never against a file riding inside

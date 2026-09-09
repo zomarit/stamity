@@ -56,6 +56,23 @@ import { contentPrefixFor } from "../../src/types/markers.ts";
  *   frontmatter     each primitive carries the keys its class's reference
  *                   documents and NOT the engine's authoring vocabulary, and
  *                   the body is the corpus body byte-for-byte.
+ *
+ * WHAT THIS SUITE DOES NOT ANSWER, now that there is a suite that does. Every
+ * group above is about the package's BYTES, and bytes are only half of a
+ * published surface. Through apm 0.29.0 this projection was byte-perfect and
+ * installed NOTHING: the type-detection cascade ranked the repository's root
+ * `plugin.json` ahead of `apm.yml` + `.apm/`, so `apm install` typed the tree
+ * as an Agent Plugin, exited 0, and deployed zero primitives. Everything below
+ * was green throughout, correctly — the bytes it compares were right.
+ *
+ * That gap closed twice over. Upstream: microsoft/apm#2735, fixed by PR #2776
+ * and shipped in apm 0.29.1, which puts an eligible `apm.yml` at the head of
+ * the cascade, so this repository routes to APM with both plugin surfaces
+ * present and nothing stripped. Here: the ROUTE is now gated by
+ * `test/ci/apmInstall.test.ts` and `scripts/apm-install-smoke.mjs`, which
+ * install into a real consumer and read the deployed tree. The division is
+ * deliberate — this suite proves the package is what the corpus says, that one
+ * proves a consumer receives it — and neither can stand in for the other.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -338,10 +355,14 @@ describe("apm.yml", () => {
   });
 
   it("declares the content type as the inert value it is", () => {
-    // `type` is accepted and currently drives nothing — behaviour is content-
-    // driven and the field is reserved for future explicit overrides. `hybrid`
-    // is what will be true of this package when it becomes live: both
-    // instructions compilation and skill installation.
+    // `type` is accepted and still drives nothing. Re-read at apm 0.30.0 on
+    // 2026-09-09: the value is now parsed into a validated four-member enum, so
+    // a typo here is a hard parse error rather than a silent no-op — but the
+    // routing its own docstring describes derives the content type from the
+    // DETECTED package type and never reads the manifest's declaration
+    // (integration/skill_package_routing.py). `hybrid` is what will be true of
+    // this package when it becomes live: both instructions compilation and
+    // skill installation.
     expect(manifestKeys(REPO_ROOT).get("type")).toBe("hybrid");
   });
 });
