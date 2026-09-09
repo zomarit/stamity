@@ -27,7 +27,7 @@ npx @zomarit/stamity init
 ```
 
 `init` reads the repository, asks what it cannot infer, and writes the setup plus a manifest
-that every later command works from. Node `>= 22.12` is the engine's only prerequisite:
+that every later command works from. Node `>= 22.22.2` is the engine's only prerequisite:
 nothing is installed globally, and the one service a command's work contacts is the Sigstore
 trust root, fetched when `add` installs a pack that declares a signature. A startup notice
 asks npm whether a newer version exists until you switch it off; [`SECURITY.md`](SECURITY.md)
@@ -68,10 +68,10 @@ npm run check
 ESLint), tests (Vitest), build (tsdown), and the unused-code scan (knip). All of them pass
 before a commit.
 
-Two Node floors, and they differ. The published runtime floor is `>= 22.12`, which is what
-`package.json` declares and what the CLI needs. The DEV toolchain floor is higher: at 22.12
-`npm install` reports `EBADENGINE` for 14 packages, tsdown and ESLint among them, so develop
-on Node 22.18 or 24.
+One Node floor, where there used to be two. The published runtime floor is `>= 22.22.2`,
+which is what `package.json` declares and what the CLI needs. The DEV toolchain asks for less
+than that — tsdown's `^22.18.0` is the highest engines range in the dev tree, ESLint's
+`^22.13.0` the next — so the published floor is the one to develop on: Node 22.22.2 or 24.
 
 ```sh
 npm run build          # writes dist/cli.js
@@ -134,10 +134,10 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Dogfooding
 
-This repository runs its own output. `AGENTS.md`, `.claude/` and `.stamity/` are
-engine-generated and committed, so `node dist/cli.js check` at the root re-proves them
-drift-clean against the current engine — the living integration test, and the reason a
-regression in emission shows up as a failing check rather than as a surprise downstream.
+This repository runs its own output. `AGENTS.md`, the managed block in `CLAUDE.md`, `.claude/`
+and `.stamity/` are engine-generated and committed, so `node dist/cli.js check` at the root
+re-proves them drift-clean against the current engine — the living integration test, and the
+reason a regression in emission shows up as a failing check rather than as a surprise downstream.
 `.agents/` is not among them: that projection is emitted only for a selected client that
 reads it, and the one selected here does not. Regenerate those paths instead of editing them
 by hand.

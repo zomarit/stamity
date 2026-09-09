@@ -73,8 +73,9 @@ export function detectTerminalFacts(streams?: {
  * Both references agree on these two spellings. Node's own
  * `tty.WriteStream.getColorDepth` returns depth 1 — monochrome — for `0` and
  * for `false`, and depth 4 for the empty string, `1` and `true` (measured on
- * node v22.22.1, the 22.12 floor's line, 2026-08-22); supports-color, which
- * chalk reads, returns level 0 for `false` and for any value parsing to 0.
+ * node v22.22.1, one patch below the 22.22.2 floor and on its line,
+ * 2026-08-22); supports-color, which chalk reads, returns level 0 for `false`
+ * and for any value parsing to 0.
  *
  * Exact, case-sensitive match on the two: `FALSE` and `00` are neither
  * reference's spelling, so widening the set here would put a third

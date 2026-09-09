@@ -765,11 +765,16 @@ describe("combining-mark coverage (derived from Unicode, not hand-listed)", () =
       // Assigned-only, and the qualifier is load-bearing rather than a
       // loosening: `NONSPACING_MARK_RANGES` is materialized Unicode data and a
       // runtime carries its own, so the two sides are only equal when the two
-      // versions are. The class is built from Unicode 17.0; the declared
-      // engines floor (node 22.12.0) ships ICU 76 / Unicode 16.0, which knows
-      // none of the 39 marks 17.0 added and reports every one of them
-      // unassigned — verified against a local Unicode 16.0 runtime, where all
-      // 39 answer `\p{Cn}` and none is assigned to another category. Since
+      // versions are. The class is built from Unicode 17.0, and the tolerance
+      // is for a runtime whose ICU predates it: node 22.12.0, the floor this
+      // repository declared until the raise to 22.22.2, shipped ICU 76 /
+      // Unicode 16.0, which knows none of the 39 marks 17.0 added and reports
+      // every one of them unassigned — verified against a local Unicode 16.0
+      // runtime, where all 39 answer `\p{Cn}` and none is assigned to another
+      // category. The declared floor now ships ICU 78 / Unicode 17.0 (checked
+      // against node's own `uchar.h` at v22.22.2), where the skew does not
+      // arise at all; the tolerance stays because it is the runtime's Unicode
+      // version, not the declared floor, that decides. Since
       // Unicode never un-assigns a code point, over-match on an UNASSIGNED one
       // is that version skew and nothing else, and it cannot cost what this
       // test guards: a code point the runtime has no character for appears in

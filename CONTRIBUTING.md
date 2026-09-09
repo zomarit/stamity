@@ -55,13 +55,15 @@ budget separately; `npm run build` already evaluates it in its own build hook, s
 fails on a violation before a push does. `node scripts/size-budget.mjs` prints both totals
 against a `dist/` you already built.
 
-Two Node floors, and the one in `package.json` is not the one to develop on. `>= 22.12` is
-the PUBLISHED RUNTIME floor: what the CLI needs, what the engines field declares, and what a
-consumer is held to. The DEV TOOLCHAIN floor is higher — at 22.12 `npm install` reports
-`EBADENGINE` for 14 packages, headed by tsdown and ESLint — so develop on Node 22.18 or 24.
-Do not raise the `engines` field to match the toolchain: that would narrow who can install
-the published package for a reason that only applies to this repository. Nothing else is a
-prerequisite: nothing is installed globally, and no service is contacted.
+One Node floor, and it is the one in `package.json`. `>= 22.22.2` is the PUBLISHED RUNTIME
+floor: what the CLI needs, what the engines field declares, and what a consumer is held to.
+It used to sit below the DEV TOOLCHAIN floor — at 22.12 `npm install` reported `EBADENGINE`
+for 15 packages, headed by tsdown (`^22.18.0`) and ESLint (`^22.13.0`) — and the raise past
+both closed that gap, so develop on 22.22.2 or 24. The engines field still moves for the
+RUNTIME graph only, never to match the toolchain: raising it for a dev-only requirement would
+narrow who can install the published package for a reason that applies to this repository
+alone. `test/ci/engines.test.ts` holds it to the runtime half of the lockfile. Nothing else
+is a prerequisite: nothing is installed globally, and no service is contacted.
 
 ## Test lanes
 
