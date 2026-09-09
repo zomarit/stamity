@@ -126,13 +126,13 @@ in the appendix with their pointers. Summed minutes on the human path: 14.
 
 | # | Scenario | Steps | Expected | Risk | Minutes | Proof |
 |---|---|---|---|---|---|---|
-| 1 | The mark reads "stamity" on a real terminal | in a terminal at least 65 columns wide, run `npm run build && node dist/cli.js --help` | seven rows of block art above `Usage:`; the third letter shows a flat right edge, top and bottom bars starting two cells in, and a lozenge counter — an `a`, not an `o` | M | 2 | [ ] |
-| 2 | The menus carry the accent without carrying state in colour alone | in a scratch repository on a colour terminal, run `node <repo>/dist/cli.js init`; move the cursor with the arrow keys; then repeat with `NO_COLOR=1` | with colour: question bold, hint dim, the `>` cursor and a checked `[x]` violet-tinted, labels plain; with `NO_COLOR=1`: the identical frame in plain text | M | 3 | [ ] |
-| 3 | The mark stays out of a narrow pane | resize the terminal to 60 columns and run `node dist/cli.js --help`, then `node dist/cli.js init --dry-run` in a scratch repository | no block characters above `Usage:` and none before the dry-run report — the mark is absent rather than wrapped | L | 2 | [ ] |
-| 4 | Keyboard traversal of the landing page | open the built site's `/`, press Tab through the page | focus lands on the copy control and on both links in order with a visible ring; the GitHub link's accessible name ends "(opens in a new tab)"; the copy control announces nothing when it copies (a theme behaviour, named as not done) | L | 2 | [ ] |
-| 5 | The diagram on GitHub | open `docs/working-with-stamity.md` on the repository's GitHub page | the fence under "The spine" renders as a diagram, not a code block | L | 1 | [ ] |
-| 6 | The docs-site CI run on the pushed head | open the docs-site workflow run for the push | green; the site artifact builds with the mermaid theme | M | 2 | [ ] |
-| 7 | The typed fallback on a dumb terminal | `TERM=dumb node dist/cli.js init` in a scratch repository | the numbered list and `Choose 1-N […]:` prompt exactly as in 1.1.0; the re-ask on a bad answer reads `not a valid choice: …` | L | 2 | [ ] |
+| 1 | The mark reads "stamity" on a real terminal | in a terminal at least 65 columns wide, run `npm run build && node dist/cli.js --help` | seven rows of block art above `Usage:`; the third letter shows a flat right edge, top and bottom bars starting two cells in, and a lozenge counter — an `a`, not an `o` | M | 2 | [x] |
+| 2 | The menus carry the accent without carrying state in colour alone | in a scratch repository on a colour terminal, run `node <repo>/dist/cli.js init`; move the cursor with the arrow keys; then repeat with `NO_COLOR=1` | with colour: question bold, hint dim, the `>` cursor and a checked `[x]` violet-tinted, labels plain; with `NO_COLOR=1`: the identical frame in plain text | M | 3 | [x] |
+| 3 | The mark stays out of a narrow pane | resize the terminal to 60 columns and run `node dist/cli.js --help`, then `node dist/cli.js init --dry-run` in a scratch repository | no block characters above `Usage:` and none before the dry-run report — the mark is absent rather than wrapped | L | 2 | [x] |
+| 4 | Keyboard traversal of the landing page | open the built site's `/`, press Tab through the page | focus lands on the copy control and on both links in order with a visible ring; the GitHub link's accessible name ends "(opens in a new tab)"; the copy control announces nothing when it copies (a theme behaviour, named as not done) | L | 2 | [x] |
+| 5 | The diagram on GitHub | open `docs/working-with-stamity.md` on the repository's GitHub page | the fence under "The spine" renders as a diagram, not a code block | L | 1 | [x] |
+| 6 | The docs-site CI run on the pushed head | open the docs-site workflow run for the push | green; the site artifact builds with the mermaid theme | M | 2 | [x] |
+| 7 | The typed fallback on a dumb terminal | `TERM=dumb node dist/cli.js init` in a scratch repository | the numbered list and `Choose 1-N […]:` prompt exactly as in 1.1.0; the re-ask on a bad answer reads `not a valid choice: …` | L | 2 | [x] |
 
 **Sign-off** — Package 8 operator experience, 2026-09-04
 
@@ -166,6 +166,7 @@ in the appendix with their pointers. Summed minutes on the human path: 14.
 
 - The six new closing lines' golden cases — `SET-v4`.
 - The QA sign-off — unsigned; the human rows are the maintainer's.
+  *(The seven human rows were driven and captured by the closeout run of 2026-09-04 and signed by the maintainer on 2026-09-09 as the first answer of Package 9's decision batch; the table's boxes above are ticked on that signature.)*
 - The copy control's copied-state announcement, mermaid's dark palette, the diagram's
   first-paint reservation — theme behaviours the site's no-fork rule keeps out of reach.
 - The after-Enter answer echo on the menus — a byte-changing improvement recorded as a follow-up.

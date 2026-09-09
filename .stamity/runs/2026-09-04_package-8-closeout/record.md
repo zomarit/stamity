@@ -143,16 +143,17 @@ column below now names keys that exist in the file.
 
 **Sign-off** — Package 8 closeout, 2026-09-04
 
-- [ ] Every H row walked and passing. (No H row on this path.)
-- [ ] Every failing M row has a filed follow-up, linked. (No row failed.)
+- [x] Every H row walked and passing. (No H row on this path.)
+- [x] Every failing M row has a filed follow-up, linked. (No row failed.)
 - L failures are recorded, not blocking.
 - Rollback: `git revert` of the closeout commits on `closure-run-execution` in reverse order, then `npm run build && node dist/cli.js sync`; the site reverts with its config.
-- Shippable: **the rows are driven and captured; the signature is the maintainer's** — the review package (Package 4) runs before any merge.
+- Shippable: **YES** — signed by the maintainer on 2026-09-09, on the captured evidence, as the first answer of Package 9's decision batch. *(The line above read "the rows are driven and captured; the signature is the maintainer's — the review package (Package 4) runs before any merge" until that date; the review package approved the diff on 2026-09-07 and 1.2.0 shipped the same day, so the signature closes a checkpoint on a change that is already released.)*
 
 ## Not done
 
 - The QA sign-off's signature. Every one of the seven rows is driven and captured on the pushed
   head; the checkbox is the maintainer's and stays unticked.
+  *(Signed 2026-09-09 by the maintainer, Package 9's batch — see the sign-off block above.)*
 - The set is red on its own reading. Run 5 (the v4 baseline) is red on three of four metrics; run 6
   shows the repairs held and the corpus levers moved the floor cases to two of three. What remains
   is adherence at three samples under strict scoring — `charter-floor-relaxation-refused`,

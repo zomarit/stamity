@@ -145,6 +145,8 @@ colour and under `NO_COLOR` and returned no finding.
 checkpoint this run closes on. It is open at this record's writing, by the checkpoint rule's own
 instruction: the record reports it open rather than closing around it.
 
+*Closed 2026-09-09.* The publish was approved by the maintainer at 21:49Z on 2026-09-07 (npm `latest` 1.2.0 with provenance, the GitHub release at the tag's commit), and the echo row above — driven and captured on a real pty in the three legs the table names — was signed by the maintainer on 2026-09-09 as the first answer of Package 9's decision batch. **Sign-off** — the after-Enter echo, 2026-09-09: every H row walked (none on this path); every M row driven and captured; rollback `git revert 2d791a7`; Shippable: **YES**.
+
 ## Not done
 
 - **Run 7 is red on two of four metrics under the strict rule** (the golden floor conjunction false on two
