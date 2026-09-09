@@ -66,7 +66,7 @@ Only three rows can fail: `node-version`, `manifest`, `pack-integrity`.
 | Row | What a bad verdict means, and what to do |
 |---|---|
 | `node-version` | **Can fail.** Your Node is below the published floor. Install one in range, or switch with your version manager, then re-run. |
-| `git-available` | Warns when git did not answer — no binary on PATH, or this is not a repository. Nothing requires git; sync's dirty-tree warning simply stays silent. |
+| `git-available` | Warns when git did not answer — no binary on PATH, or this is not a repository. Nothing on `check`'s own path — nor `init`, `sync`, `validate` or `config` — requires git; the `worktree` verbs do, and refuse with `VALIDATION_ERROR` ("… is not inside a git repository, and every worktree verb acts on one") without it. Sync's dirty-tree warning simply stays silent. |
 | `manifest` | **Can fail.** Absent means the repo was never set up: run `init`. Defective prints the engine's own field-level message — fix the field it names. |
 | `state-dirs` | Warns when `.stamity/learnings/` or `.stamity/handoffs/` is missing. Nothing is lost: they recreate on first write, and `sync` rewrites them now. |
 | `learnings` | Warns when a recorded learning is invalid or sits past the file cap (those do not load). Run `validate` for the per-file detail. |
@@ -135,9 +135,14 @@ exact path, so remove that one and re-run.
 ### Permission and filesystem errors
 
 `FS_ERROR` names the operation and the path. The usual causes are a read-only parent
-directory, an exhausted quota, or a path you do not own. Every write goes through a
-temp file and an atomic rename, so a failure leaves the previous file intact rather than a
-half-written one.
+directory, an exhausted quota, or a path you do not own. Every managed-file write goes
+through a temp file and an atomic rename, so a failure leaves the previous file intact
+rather than a half-written one. The in-repo writes that do not — the state directories'
+`.gitkeep` and the `.bak` the writer leaves before overwriting a file it cannot
+regenerate, either a colliding unmanaged file under `--force` or a managed file whose
+markers a plain `sync` has to repair, both created exclusively and never replaced, and the
+workspace root's `.stamity/workspace-sync-journal.jsonl`, an append-only log — cannot
+damage an existing file either.
 
 ### `stamity init` refuses on a repo that already has a setup
 

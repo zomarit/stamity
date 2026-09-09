@@ -37,24 +37,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lower one was the published promise: at `>= 22.12` an `npm install` in this repository reported
   `EBADENGINE` for fifteen packages of its own toolchain, headed by tsdown (`^22.18.0`) and ESLint
   (`^22.13.0`), so the number a consumer was held to was one nobody here developed on. The raise
-  goes past both and leaves a single floor. It closes no install failure a consumer was hitting —
-  the committed runtime graph asks for less than either number, its highest range being
-  commander's `>=22.12.0` — because the gap it closes is that nothing in the tree read the
-  declaration against the graph the declaration is a promise about, which is how a dependency
-  major that raises its own `engines.node` reaches a user as `EBADENGINE` with every gate here
-  green. A new suite (`test/ci/engines.test.ts`) now holds `engines.node` at or above every
-  runtime dependency's own range, and the CI floor leg, the README, the getting-started page and
-  the bug-report template move with the number.
+  goes past both and leaves a single floor. It now matches the highest range the committed runtime
+  graph declares — the sigstore 5 graph's `^22.22.2 || ^24.15.0 || >=26.0.0` — so a consumer
+  on a Node below it was already meeting `EBADENGINE` from that graph at install. The gap the
+  raise closes is that nothing in the tree read the declaration against the graph the declaration
+  is a promise about, which is how a dependency major that raises its own `engines.node` reaches a
+  user as `EBADENGINE` with every gate here green. A new suite (`test/ci/engines.test.ts`) now
+  holds `engines.node` at or above every runtime dependency's own range, and the CI floor leg, the
+  README, the getting-started page and the bug-report template move with the number.
+- A `/st-work` run's close now appends what it deferred instead of letting it die in the run's own
+  ledger: every row that closed `deferred` is written to `.stamity/inbox.md` in the row grammar
+  `/st-board` declares — severity, `file:line` or `—`, the evidence in one line,
+  `source: /st-work`, and a `Ref:` back to the ledger row it came from — and the close refuses to
+  write the run record while any row still reads `open`. `/st-board`'s inbox census names the
+  fifth writer that appends and adds a completeness pass to the ways an entry leaves. The ledger
+  row gains an optional eighth field, `retired`, written only when its inbox row leaves. All of
+  it is shipped prompt text, so every `init` and `sync` emits the new wording.
+- `SECURITY.md` names the one verb that writes outside the repository you point it at. `stamity
+  workspace sync` takes the nearest workspace root at or above you, patches the manifest of every
+  member repository that root's `workspace.json` declares, runs each member's own sync inside it,
+  and — on a cascade that is not a `--dry-run` preview — appends a crash journal at
+  `<root>/.stamity/workspace-sync-journal.jsonl`. "Network and data handling" said "exactly three
+  paths write outside it" and Reporting sent the reader to those same three, which was true of a
+  single repository and not of a workspace root; both now say which reading they are making.
+- The getting-started guide states what the clients question falls back to: on a terminal it is a
+  checkbox menu, and anywhere else — a pipe, a captured log, `TERM=dumb`, a window too short to
+  draw the menu — a numbered list you answer by typing the numbers, comma-separated. Its list of
+  what init writes and commits, and the worktree section of `docs/working-with-stamity.md`, now
+  name the managed block in `CLAUDE.md` beside `AGENTS.md`, `.agents/` and the client trees.
 
 ### Fixed
 
-- `--no-color` now governs the help output as well. The flag was read off commander's parsed
-  options, and commander decides for itself whether help may carry colour — from the real
-  `process.stdout` and its own reading of `NO_COLOR`/`FORCE_COLOR`, never from the flag — so the
-  wordmark above `--help` kept its escapes on a terminal that had been asked for none. The flag
-  is read from the argv the CLI was handed, before any parsing, and commander's help writer is
-  pointed at the same colour decision the rest of the CLI makes, so there is one answer rather
-  than two.
+- The help output takes the CLI's one colour decision. `--no-color` is read off the argv the CLI
+  was handed, before any parsing, so its answer on the help path no longer rests on the
+  undocumented order in which commander parses an option run and acts on `--help` — on commander
+  15 that order already gave the right answer, which is why the recorded premise did not
+  reproduce. And commander's help writer is pointed at the same colour decision the rest of the
+  CLI makes, where it used to decide from
+  the real `process.stdout` and its own reading of `NO_COLOR`/`FORCE_COLOR` — a reading that
+  ignored the terminal facts the CLI was handed and stripped the wordmark's escapes on every
+  process whose stdout is not a terminal, which is why the flag's effect on help was
+  unobservable. There is one answer now rather than two.
+- The typed numbered menu — the fallback every raw-menu-incapable terminal takes — right-aligns
+  its row numbers so a list of ten or more choices (the 17-key `config` picker) keeps its labels
+  in one column, and returns the default on an empty choice list instead of asking `Choose 1-0`,
+  a range with no member in it.
+- The interactive menu — the arrow-key list a raw-capable terminal gets — completes its restore
+  sequence past a failing step: the two steps that touch the terminal, raw mode off and the cursor
+  shown, each run best-effort, so one that throws on a terminal that went away no longer skips the
+  drain, the leftover mark, the pause and the session restore after it, nor replaces the outcome
+  the block was guarding. A write that throws inside its key handler now rejects the pending
+  prompt, where the throw used to leave the run awaiting a promise nothing would settle.
+- Menu frame lines are cut on code points rather than UTF-16 units, so a line clamped at the
+  terminal's width no longer ends in a lone surrogate where an emoji or another non-BMP character
+  straddled the cut.
+- `sync` refuses an override skill whose directory is a shipped skill's projection directory,
+  naming the override to rename and the skill it collides with; the collision used to surface as
+  the composer's content-equality refusal, which named four adapters, a shared path, and neither
+  skill.
+- A workspace scan that exhausts the process's file descriptors (`EMFILE`, `ENFILE`) now fails
+  loudly instead of reading as "no repository here", where it used to report a shorter member list
+  than the tree holds with nothing to say a directory was never read; and the walk now holds at
+  most sixteen directory entries in flight per level.
+- Cursor emission spells a command id once: an id authored with its prefix already on it rendered
+  `st-st-work` in that client's tree alone.
+- A generated reference page refuses a title that is blank, opens with whitespace or `#`, or
+  carries a `:`, rather than writing frontmatter that publishes the page under a label nobody
+  chose.
+- The migration page declares its title, so its browser tab and its link unfurls read the page's
+  name rather than `migration`.
+
+### Security
+
+- The pack verifier's Sigstore client moves to `sigstore` 5.0.0, with `@sigstore/verify` 4.1.2
+  (from 3.1.1, across its 4.0.0 major, which dropped Node 20), `@sigstore/bundle` 5.0.0,
+  `@sigstore/core` 4.0.1 (from 3.2.1) and `@sigstore/tuf` 5.0.0. The hardenings the move picks up
+  are the `@sigstore/verify` 4.1.0–4.1.2 changes — repeated copies of one transparency-log
+  entry are counted once toward the log threshold, so a bundle can no longer meet it with
+  duplicates; a DSSE bundle whose entry is a Rekor v2 entry verifies; and checkpoint parsing is
+  tightened — `@sigstore/core` 4.0.1's ASN.1 parser hardening, which sits on the certificate
+  parsing the verify path does, and `@sigstore/tuf` 5.0.0's refreshed TUF seed files, which arrive
+  with `tuf-js` 4 → 6; `sigstore` 5.0.0 itself only drops Node 20. What this changes is what
+  `stamity add` accepts when a pack declares `signing.method: "sigstore"` — this repository
+  verifies signatures and signs nothing, so no publishing path here moves with it. `p-limit` moves
+  to 7.3.2 in the same group.
 
 ## [1.2.0] - 2026-09-07
 

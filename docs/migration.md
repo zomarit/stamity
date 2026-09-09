@@ -14,13 +14,15 @@ stamity is the successor to hatch3r. This page is the honest floor: what moves, 
 not, and why. Nothing here is automatic beyond what is described — where a transfer could
 guess wrong, it reports instead.
 
-This page is the only one in this repository that spells the predecessor's name. Every
-other file goes through the detection module's own record, so the name never spreads.
-That is also why the FILE is `docs/migration.md` while the PUBLISHED page is
-`/docs/migration-from-hatch3r` — the `slug` above. A migrant searches for the old name,
-so the URL has to carry it; the filename cannot, because every page that linked this one
-would then carry it too, and `scripts/leak-gate.mjs` holds the name to an allowlist of
-literal paths that it scans itself under the same rules.
+This page is the only published page that spells the predecessor's name. In the source tree
+the literal is confined to `src/migration/` and `test/migration/` — the detection module that
+has to spell it and the tests that build fixtures with it — and every other file consumes that
+module's `PredecessorState` record instead; the allowlist is exactly those two directories,
+this page, and the three bundled `dist/` files. That is also why the FILE is
+`docs/migration.md` while the PUBLISHED page is `/docs/migration-from-hatch3r` — the `slug`
+above. A migrant searches for the old name, so the URL has to carry it; the filename cannot,
+because every page that linked this one would then carry it too, and `scripts/leak-gate.mjs`
+holds the name to an allowlist of literal paths that it scans itself under the same rules.
 
 ## Who this is for
 
@@ -48,7 +50,7 @@ of the three comment syntaxes hatch3r emitted, with or without a version stamp o
 whatever else you keep there is never opened.
 
 Finding either one turns the ordinary existing-config question into the migration
-question, and answering it "migrate" does three things in one pass:
+question, and answering it `full` does three things in one pass:
 
 1. **Reads `hatch.json` as defaults.** Target tools, maturity tier, communication style
    and MCP server ids become the *offered* defaults for this init — never a manifest that
@@ -112,15 +114,15 @@ happens to live in one of those directories and never carried a block goes with 
 `--dry-run` prints the exact list under "Would remove": read it before you agree to it, and
 move anything of yours out of the way first.
 
-**What Path B therefore costs you: the config defaults.** Detection needs the state
-directory, and a plain `clean` leaves it standing: init still finds `.hatch3r/`, so it still
-reports a predecessor and still offers the migration. What is gone is the file inside it that
-the first of the three carry steps opens. With no `hatch.json` left to read, the defaults read
-comes back empty, so init
-offers you no old values for target tools, maturity tier, communication style or MCP server
-ids — the "Config choices" row of the table below — and each of those comes from detection
-and from your answers instead. Nothing flags the difference at the time; init reports "a
-predecessor setup" either way.
+**What Path B therefore costs you: the config defaults.** Detection fires on the state
+directory alone, on a marked instruction file alone, or on a workspace package holding its own
+state directory; a plain `clean` leaves the state directory standing, so init still finds
+`.hatch3r/`, still reports a predecessor and still offers the migration. What is gone is the
+file inside it that the first of the three carry steps opens. With no `hatch.json` left to
+read, the defaults read comes back empty, so init offers you no old values for target tools,
+maturity tier, communication style or MCP server ids — the "Config choices" row of the table
+below — and each of those comes from detection and from your answers instead. Nothing flags
+the difference at the time; init reports "a predecessor setup" either way.
 
 The other two carry surfaces never went through the manifest, so they still work: learnings
 are read out of `.hatch3r/learnings/` and `.env.mcp` off the repository root, and neither
@@ -161,11 +163,17 @@ is fine. If either half of that is not true, take Path A.
 | Pack receipts | a receipt records a trust decision this engine never made — packs are re-verified by re-installing them |
 | Every adapter output | regenerated from the corpus; carrying one would import a stale render |
 
-Not every learning necessarily arrives. Two classes are skipped by name — hatch3r's own
-seeded `README.md` and `INDEX.md` in its learnings directory, which are its scaffolding
-rather than your notes — and anything the store refuses on schema, size, the injection
-screen or a name collision is skipped too. Carried plus skipped accounts for the whole
-directory, and both numbers are printed, so nothing disappears without a count behind it.
+Not every learning arrives. Skipped before the store is ever asked: hatch3r's own
+scaffolding in its learnings directory — the `README.md` its init seeds and the `INDEX.md`
+its learn skill maintains — which are its files rather than your notes; any file whose
+frontmatter does not carry all five of hatch3r's learning head keys — `id`, `topic`,
+`applies-to`, `confidence`, `created`, so a stray note or a head that is not valid YAML is
+not treated as a learning at all; any file that cannot be read; and any name that reduces to
+an empty slug. Skipped by the store: schema, size, the injection screen, a name collision,
+and the learnings directory's own file cap. Carried plus skipped accounts for the whole
+directory, and the carried count is always printed with the skipped count beside it whenever
+it is not zero (a `--json` run carries both in `carry.learningsCarried` and
+`carry.learningsSkipped`), so nothing disappears without a count behind it.
 
 ## Overrides are reported, never mapped
 
@@ -195,8 +203,12 @@ To migrate from a script, say so explicitly:
 npx @zomarit/stamity init --migrate full -y
 ```
 
-Either way the run prints a line saying which mode it took and naming the predecessor's
-own directory, so a machine run that just stripped blocks never does it silently.
+On a piped or `-y` run the line prints for both modes, naming the predecessor's own directory
+— `migrate: full — .hatch3r is being carried over`, or `migrate: skip — .hatch3r was left
+untouched (…)` — so a machine run that just stripped blocks never does it silently. A `--json`
+run prints no prose at all, because stdout there belongs to the single envelope: that envelope
+records the mode in `decisions.migrate` and the detection in `decisions.predecessorDetected`,
+but no field of it names the directory.
 
 ## Your last step
 
@@ -240,16 +252,19 @@ uninstall, run by you. The order is one-way.
 outputs by directory rather than by name, and this engine writes into the same directories at
 the same paths: a Claude-tool migration puts its rules, agents, commands and skills under
 `.claude/` and its bridge block in `CLAUDE.md`, and every one of those files sits inside the
-walk described under Path B. They carry `STAMITY:BEGIN` / `STAMITY:END` markers, which
-hatch3r's block detector does not recognize, so it reads them as unmarked and deletes them.
+walk described under Path B. The files under `.claude/` carry no markers at all — this engine
+records their ownership in the manifest's ledger rather than in their bytes — and the one
+marked file in that walk is `CLAUDE.md`, whose `STAMITY:BEGIN` / `STAMITY:END` block hatch3r's
+detector does not recognize. Either way the sweep sees no `HATCH3R` block and deletes them.
 Run `npx hatch3r clean --dry-run` first and read the "Would remove" list against that. What
 comes back afterwards is every generated file — `check` counts all of them and lists the first
 20 by path, then `… and N more`, and `sync` writes every one back from the corpus. What does
 not come back is your own prose outside a managed block: the text you keep in `CLAUDE.md`
-above this setup's block, and the same text in `.github/copilot-instructions.md` if you
-migrated Copilot — both are on the exact-file sweep list above, and after the strip took the
-`HATCH3R` block out of them there is nothing left that hatch3r recognizes, so each is deleted
-whole. That prose is in no ownership ledger and no corpus, so nothing can regenerate it.
+below this setup's block, which init prepends above whatever the file already held, and the
+same text in `.github/copilot-instructions.md` if you migrated Copilot — both are on the
+exact-file sweep list above, and after the strip took the `HATCH3R` block out of them there is
+nothing left that hatch3r recognizes, so each is deleted whole. That prose is in no ownership
+ledger and no corpus, so nothing can regenerate it.
 Commit the repository before you run the sweep, so that prose is recoverable from git — or
 move it out of the tree, or skip the sweep and remove the leftovers by hand with `git rm`.
 
@@ -260,6 +275,8 @@ panel's own list of what was left in place — which means hatch3r's hooks are s
 wired up. Removing that file and running `sync` is what installs this setup's.
 
 In a monorepo, check each workspace package. Init reports every package that carried its
-own state directory, but the carry reads one state directory — the root's. Packages
-beyond it are named for you rather than migrated behind your back, so handle those
-yourself before you delete anything.
+own state directory, and the strip reaches every one of them: a package's own marked
+instruction files — its `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/` — are stripped in the same
+pass. What the carry does not read is a package's own state directory: learnings, manifest and
+overrides come from the root's `.hatch3r/` only. Those packages are named for you rather than
+carried, so handle each one yourself before you delete anything.
