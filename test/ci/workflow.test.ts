@@ -241,7 +241,7 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(strategy?.matrix?.include).toEqual([
       {
         os: "ubuntu-latest",
-        node: "22.12.0",
+        node: "22.22.2",
         label: "floor",
         coverage: true,
         tarball_smoke: true,
@@ -277,9 +277,11 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(readFileSync(attributes, "utf8")).toMatch(/^\*\s+text=auto\s+eol=lf$/m);
   });
 
-  it("keeps the vendor-unsupported toolchain steps on one leg and the runtime gates on all three", () => {
-    // tsdown declares ^22.18.0 and eslint ^22.13.0, both above the declared engines floor, and
-    // none of these four answers a question that depends on the OS or the Node version.
+  it("keeps the toolchain steps on one leg and the runtime gates on all three", () => {
+    // None of these four answers a question that depends on the OS or the Node version, so a
+    // second copy of them buys no coverage. The older reason — tsdown declares ^22.18.0 and
+    // eslint ^22.13.0, both above the 22.12.0 floor this matrix used to run — retired with the
+    // move to 22.22.2, which satisfies both.
     for (const step of ["Typecheck", "Lint", "Self-consistency (generate-and-diff)", "Unused code and dependencies"]) {
       expect(conditionOf(check, step), step).toBe("matrix.toolchain");
     }
@@ -350,7 +352,7 @@ describe("ci.yml — the merge-blocking gate", () => {
     // proves is a RUNTIME claim.
     expect(runOf(check, "Tarball smoke (publish shape)")).toBe("node scripts/tarball-smoke.mjs");
     const floor = jobs["check"]?.strategy?.matrix?.include?.find((leg) => leg.tarball_smoke);
-    expect(floor?.node).toBe("22.12.0");
+    expect(floor?.node).toBe("22.22.2");
   });
 
   it("proves the install runs under the ignore-scripts floor", () => {
@@ -1358,6 +1360,45 @@ describe.skipIf(WINDOWS)("release.yml — the changelog extraction, executed", (
     // The `[label]: url` footer is where the section stops: none of it bleeds into the notes.
     expect(run.notes, "footer link-def line must be excluded").not.toContain("[1.2.0]:");
     expect(run.notes, "footer link-def URL must be excluded").not.toContain("example.invalid");
+  });
+
+  it("keeps the entries after a link reference defined in the middle of a section", () => {
+    // The regression the footer rule cost. `[x]: url` at column 0 ENDED the
+    // section, which is right at the bottom of the file and wrong anywhere
+    // else: a reference defined mid-body (a footnote-style link an author
+    // reuses across two bullets) silently truncated every entry below it out of
+    // the published notes, with the release still green. Nothing in the tree
+    // told an author not to write one.
+    const midBody = [
+      "# Changelog",
+      "",
+      "## [1.2.0] - 2026-08-01",
+      "",
+      "### Added",
+      "- A shiny new flag, see [the note][note].",
+      "",
+      "[note]: https://example.invalid/notes/flag",
+      "",
+      "### Fixed",
+      "- A real bug.",
+      "",
+      "[1.2.0]: https://example.invalid/compare/v1.1.0...v1.2.0",
+      "",
+    ].join("\n");
+    const run = compose(midBody, "1.2.0");
+
+    expect(run.status, run.out).toBe(0);
+    // Everything after the mid-body reference survives.
+    expect(run.notes, "the entries after a mid-body link reference were cut").toContain(
+      "- A real bug.",
+    );
+    expect(run.notes).toContain("### Fixed");
+    // The reference itself rides along — it is part of the body it belongs to.
+    expect(run.notes).toContain("[note]: https://example.invalid/notes/flag");
+    // And the trailing footer is still excluded: held to the end, then dropped.
+    expect(run.notes, "the trailing footer link-def must still be excluded").not.toContain(
+      "[1.2.0]:",
+    );
   });
 
   it("emits a non-empty Changes body for a real section — the positive control", () => {

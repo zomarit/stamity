@@ -21,7 +21,7 @@ running `init` and `check`, is seconds; the time goes into the walk, plus howeve
 
 Two things, and nothing else.
 
-- **Node 22.12 or newer.** That is the published floor, and `stamity check` verifies it
+- **Node 22.22.2 or newer.** That is the published floor, and `stamity check` verifies it
   as its `node-version` row. Nothing is installed globally, and setup contacts no service: the
   engine's one network path in a command's work is the Sigstore trust root, fetched when `add`
   installs a signed pack.
@@ -43,7 +43,11 @@ answered them:
 
 1. **Which clients.** Asked only when nothing decided the target set — no `--tools` flag,
    and no traces of any client in the repository. If you already have a `.claude/` or a
-   `.cursor/` directory, the question does not appear.
+   `.cursor/` directory, the question does not appear. On a terminal it is a
+   checkbox menu — arrow keys move, space toggles a client on or off, and
+   enter confirms; anywhere else — a pipe, a captured log, `TERM=dumb`, a window
+   too short to draw the menu — it falls back to a numbered list you answer by
+   typing the numbers, comma-separated.
 2. **What to do with what is already here.** One question in one of two shapes: a
    previous setup from the predecessor project was detected (migrate, or leave it), or an
    existing agent config file was found (supplement it, replace it, or skip it). When both
@@ -171,8 +175,9 @@ Everything the setup knows about itself is under `.stamity/`:
 
 Commit it. The manifest is the provenance record, and a teammate who clones the
 repository gets the same setup without re-running init. Everything init writes outside
-that directory commits for the same reason — `AGENTS.md`, `.agents/`, and the client
-trees `.claude/`, `.cursor/`, `.github/prompts/` and `.codex/` — because that is what
+that directory commits for the same reason — `AGENTS.md`, `.agents/`,
+the managed block in `CLAUDE.md`, and the client trees `.claude/`, `.cursor/`,
+`.github/prompts/` and `.codex/` — because that is what
 makes the clone arrive with working commands and skills already on disk, and because
 generated content earns no exemption from review: it lands as an ordinary diff, and
 `check` is what catches it drifting from what the engine would emit today. The one file

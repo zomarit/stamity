@@ -204,30 +204,30 @@ describe("checkNodeVersion", () => {
   // pure function it is, with the version injected.
 
   it("passes a version inside the range", () => {
-    expect(checkNodeVersion("22.12.0", ">=22.12")).toEqual({
+    expect(checkNodeVersion("22.22.2", ">=22.22.2")).toEqual({
       id: "node-version",
       status: "pass",
-      detail: "Node 22.12.0 satisfies >=22.12",
+      detail: "Node 22.22.2 satisfies >=22.22.2",
     });
   });
 
   it("fails a version below the floor, naming the range and the fix", () => {
-    const check = checkNodeVersion("20.19.4", ">=22.12");
+    const check = checkNodeVersion("20.19.4", ">=22.22.2");
 
     expect(check.status).toBe("fail");
     expect(check.detail).toContain("20.19.4");
-    expect(check.detail).toContain(">=22.12");
+    expect(check.detail).toContain(">=22.22.2");
     expect(check.detail).toContain("re-run");
   });
 
   it("accepts a prerelease build of a satisfying major", () => {
     // semver excludes prereleases from a plain range by default; a Node nightly
     // on a satisfying major is a real installation, not a floor violation.
-    expect(checkNodeVersion("24.0.0-nightly20260101abcdef", ">=22.12").status).toBe("pass");
+    expect(checkNodeVersion("24.0.0-nightly20260101abcdef", ">=22.22.2").status).toBe("pass");
   });
 
   it("warns rather than fails on an unparseable version or an unreadable range", () => {
-    const unparseable = checkNodeVersion("not-a-version", ">=22.12");
+    const unparseable = checkNodeVersion("not-a-version", ">=22.22.2");
     expect(unparseable.status).toBe("warn");
     expect(unparseable.detail).toContain("not-a-version");
 

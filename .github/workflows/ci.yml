@@ -17,7 +17,7 @@
 # them apart.
 #
 # MERGE-BLOCKING (required through the `all-ci-checks` aggregator):
-#   - `check`, three legs. ubuntu on the declared engines floor (22.12.0) and on the LTS
+#   - `check`, three legs. ubuntu on the declared engines floor (22.22.2) and on the LTS
 #     canonical (24), plus one windows leg on 24. Every leg installs, builds, runs the suite,
 #     re-proves the committed dogfood configs with the binary it just built, and runs the leak
 #     gate. The floor leg additionally packs and installs the tarball (`tarball-smoke`), because
@@ -104,14 +104,16 @@ jobs:
           # gate proves is a RUNTIME claim: the published artifact installs and runs on the
           # oldest Node this package claims to support.
           - os: ubuntu-latest
-            node: '22.12.0'
+            node: '22.22.2'
             label: floor
             coverage: true
             tarball_smoke: true
-          # The LTS canonical, and the one leg every toolchain step runs on: tsdown declares
-          # ^22.18.0 and eslint ^22.13.0, both above the declared floor, so running those four
-          # steps on the floor leg buys no coverage and buys the risk of a patch release
-          # reddening `main` from a Node its vendor never claimed.
+          # The LTS canonical, and the one leg every toolchain step runs on. The four steps
+          # answer questions that depend on neither the OS nor the Node version, so a second
+          # copy of them buys no coverage. Until the floor moved to 22.22.2 there was a second
+          # reason — tsdown declares ^22.18.0 and eslint ^22.13.0, both of which the old 22.12.0
+          # floor sat below — and the raised floor satisfies both, so what is left is the
+          # duplication argument alone.
           - os: ubuntu-latest
             node: '24'
             label: lts
@@ -321,7 +323,7 @@ jobs:
 
   # One stable context name to require, whatever the matrix does.
   #
-  # The jobs above name themselves per leg (`check (floor, node 22.12.0)`), so a required-status
+  # The jobs above name themselves per leg (`check (floor, node 22.22.2)`), so a required-status
   # rule written against them binds context names that rotate the moment the matrix changes.
   # This job's name does not move. It fails when anything it needs failed OR was cancelled —
   # `needs` alone treats a cancelled dependency as "did not succeed" and would otherwise let a

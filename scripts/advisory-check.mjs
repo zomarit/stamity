@@ -25,14 +25,14 @@
 
 // The catalog is TypeScript and there is no build step here on purpose — a probe that needs
 // `npm run build` first goes stale the moment someone skips the build. Node strips the types
-// itself from v22.18 onward; on the repo's declared floor (22.12) the same capability sits
-// behind --experimental-strip-types, so this script re-execs itself once with the flag rather
-// than dying at the catalog import and reporting the breakage as "the probe could not run".
-// CI hid that by pinning this job to a newer Node, which is exactly the shape of gap the probe
-// exists to find in other people's dependencies.
+// itself from v22.18 onward, which every Node the declared floor (>=22.22.2) admits does; the
+// re-exec below is a tolerance for a HOST Node under that floor — unsupported, but a state a
+// contributor's machine can be in — where the same capability sits behind
+// --experimental-strip-types, so this script re-execs itself once with the flag rather than
+// dying at the catalog import and reporting the breakage as "the probe could not run".
 //
-// Three sibling generators carry this same preamble. Extracting it to a shared scripts/ module
-// is the right shape and is deferred here: those three files belong to another change in flight,
+// Five sibling generators carry this same preamble. Extracting it to a shared scripts/ module
+// is the right shape and is deferred here: those five files belong to another change in flight,
 // and duplicating the block is preferable to a half-migrated pair of spellings.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
@@ -43,9 +43,10 @@ const SELF = fileURLToPath(import.meta.url)
 
 // True only when this file is the process entrypoint (run as a CLI), false when imported. Both
 // the native-strip re-exec below and the main() invocation at the bottom are CLI-only concerns:
-// a test that imports `osvQueryBatch` on a Node without native type-stripping (the 22.12 CI floor)
-// must NOT trigger the re-exec, which would call process.exit inside the vitest worker. vitest
-// transforms TypeScript itself, so the import needs no re-exec regardless of the host Node.
+// a test that imports `osvQueryBatch` on a Node without native type-stripping (one below the
+// declared floor) must NOT trigger the re-exec, which would call process.exit inside the vitest
+// worker. vitest transforms TypeScript itself, so the import needs no re-exec regardless of the
+// host Node.
 const IS_MAIN = process.argv[1] !== undefined && resolve(process.argv[1]) === SELF
 
 if (IS_MAIN && !process.features.typescript) {
@@ -54,7 +55,7 @@ if (IS_MAIN && !process.features.typescript) {
   if (process.execArgv.includes('--experimental-strip-types')) {
     console.error(
       `advisory-check: ERROR - this Node build (${process.version}) cannot strip TypeScript ` +
-        'types, so the MCP catalog cannot be loaded. Run the probe on Node >=22.12.',
+        'types, so the MCP catalog cannot be loaded. Run the probe on Node >=22.22.2.',
     )
     process.exit(2)
   }

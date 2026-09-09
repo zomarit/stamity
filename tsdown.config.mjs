@@ -6,9 +6,10 @@ import { defineConfig } from "tsdown";
 // that is a bare `import` of this file, with no TypeScript stripping and no third-party loader,
 // so it behaves identically across the supported range. The two alternatives both break inside
 // it — `auto` resolves to the uninstalled `unrun` on any runtime without native type stripping,
-// which is the declared 22.12 floor, and `tsx` crashes tsdown's CJS config load on Node 24
-// (`ENOENT ... node:fs?tsx-namespace=<uuid>`, tsx 4.23.12, the current release). Authoring this
-// config in TypeScript is what would reintroduce that choice; keep it JavaScript.
+// which the old 22.12 floor was and a host Node below the declared `>=22.22.2` still is, and
+// `tsx` crashes tsdown's CJS config load on Node 24 (`ENOENT ... node:fs?tsx-namespace=<uuid>`,
+// tsx 4.23.12, the current release). Authoring this config in TypeScript is what would
+// reintroduce that choice; keep it JavaScript.
 
 // ── Dual budget ──────────────────────────────────────────────────────────────
 // Two numbers, because dist/ holds two things with unrelated growth curves: the
@@ -193,6 +194,11 @@ export default defineConfig({
   outDir: "dist",
   format: ["esm"],
   platform: "node",
+  // Deliberately at or below the declared engines floor, and not a second spelling of it:
+  // the target only ever downlevels, so a number under the floor stays correct output for
+  // every Node the floor admits. Raising it to match `>=22.22.2` changes emitted bytes, and
+  // therefore what the dual budget above measures — a build decision of its own rather than
+  // part of a floor move.
   target: "node22.12",
   // The package is type: module, so ESM output keeps the plain .js extension the bin
   // entry in package.json points at.

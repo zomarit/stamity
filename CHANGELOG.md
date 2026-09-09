@@ -29,6 +29,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [Unreleased]
+
+### Changed
+
+- The published Node floor is `>= 22.22.2`, raised from `>= 22.12`. There were two floors and the
+  lower one was the published promise: at `>= 22.12` an `npm install` in this repository reported
+  `EBADENGINE` for fifteen packages of its own toolchain, headed by tsdown (`^22.18.0`) and ESLint
+  (`^22.13.0`), so the number a consumer was held to was one nobody here developed on. The raise
+  goes past both and leaves a single floor. It closes no install failure a consumer was hitting —
+  the committed runtime graph asks for less than either number, its highest range being
+  commander's `>=22.12.0` — because the gap it closes is that nothing in the tree read the
+  declaration against the graph the declaration is a promise about, which is how a dependency
+  major that raises its own `engines.node` reaches a user as `EBADENGINE` with every gate here
+  green. A new suite (`test/ci/engines.test.ts`) now holds `engines.node` at or above every
+  runtime dependency's own range, and the CI floor leg, the README, the getting-started page and
+  the bug-report template move with the number.
+
+### Fixed
+
+- `--no-color` now governs the help output as well. The flag was read off commander's parsed
+  options, and commander decides for itself whether help may carry colour — from the real
+  `process.stdout` and its own reading of `NO_COLOR`/`FORCE_COLOR`, never from the flag — so the
+  wordmark above `--help` kept its escapes on a terminal that had been asked for none. The flag
+  is read from the argv the CLI was handed, before any parsing, and commander's help writer is
+  pointed at the same colour decision the rest of the CLI makes, so there is one answer rather
+  than two.
+
 ## [1.2.0] - 2026-09-07
 
 ### Added
@@ -202,7 +229,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/zomarit/stamity/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/zomarit/stamity/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/zomarit/stamity/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/zomarit/stamity/releases/tag/v1.0.0

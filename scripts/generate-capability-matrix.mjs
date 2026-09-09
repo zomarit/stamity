@@ -12,8 +12,10 @@
 //
 // The renderer is TypeScript and there is no build step here on purpose — a
 // generator that needs `npm run build` first goes stale the moment someone
-// skips the build. Node strips the types itself from v22.18 onward; on the
-// repo's declared floor (22.12) the same capability sits behind
+// skips the build. Node strips the types itself from v22.18 onward, which every
+// Node the declared floor (>=22.22.2) admits does; the re-exec below is a
+// tolerance for a HOST Node under that floor — unsupported, but a state a
+// contributor's machine can be in — where the same capability sits behind
 // --experimental-strip-types, so this script re-execs itself once with the
 // flag rather than asking a maintainer to remember it. The re-exec must
 // happen before the renderer is loaded, which is why the imports below are
@@ -34,7 +36,7 @@ if (!process.features.typescript) {
   if (process.execArgv.includes('--experimental-strip-types')) {
     console.error(
       `This Node build (${process.version}) cannot strip TypeScript types, so the renderer ` +
-        'cannot be loaded. Run the generator on Node >=22.12.',
+        'cannot be loaded. Run the generator on Node >=22.22.2.',
     )
     process.exit(1)
   }
