@@ -70,8 +70,12 @@ const PREDECESSOR_OVERRIDES_DIR = "overrides";
 /** MCP credential file at the repo root. Same name this engine uses. */
 const PREDECESSOR_ENV_MCP_FILE = ".env.mcp";
 
-/** Filename prefix on predecessor content artifacts, including learnings. */
-export const PREDECESSOR_CONTENT_PREFIX = "hatch3r-";
+/**
+ * Filename prefix on predecessor content artifacts, including learnings.
+ * Its consumers need string operations, not a literal type: the explicit
+ * annotation keeps this internal marker out of the published declarations.
+ */
+export const PREDECESSOR_CONTENT_PREFIX: string = "hatch3r-";
 
 /** Leading characters sniffed for a NUL before a candidate is treated as text. */
 const BINARY_SNIFF_CHARS = 8192;

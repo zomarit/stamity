@@ -21,10 +21,11 @@
 // Exit codes: 0 the packed artifact is usable, 1 it is not, 2 the smoke could not run.
 
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { isMain } from './native-typescript.mjs'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const GATE = join(ROOT, 'scripts', 'leak-gate.mjs')
@@ -43,8 +44,29 @@ function fail(message, detail) {
   return 1
 }
 
+/** Run the real copied scanner over an installed artifact, including its build tree. */
+export function scanPackedArtifact(installed, gateSource = GATE) {
+  // Node canonicalizes import.meta.url. Give its direct-entry guard the same
+  // path even when the temporary directory has an alias (macOS /var is one).
+  const root = realpathSync(installed)
+  mkdirSync(join(root, 'scripts'), { recursive: true })
+  copyFileSync(gateSource, join(root, 'scripts', 'leak-gate.mjs'))
+  try {
+    const output = run(process.execPath, [join(root, 'scripts', 'leak-gate.mjs'), '--include-build'], {
+      cwd: root,
+    })
+    // A zero exit from an import-only/no-op path establishes no scan at all.
+    if (!/^leak-gate: PASS - 0 hits for [1-9]\d* rule\(s\) across [1-9]\d* file\(s\)$/m.test(output)) {
+      throw new Error('the leak scanner exited without a nonempty successful scan')
+    }
+    return output
+  } finally {
+    rmSync(join(root, 'scripts'), { recursive: true, force: true })
+  }
+}
+
 function main() {
-  const work = mkdtempSync(join(tmpdir(), 'stamity-tarball-smoke-'))
+  const work = realpathSync(mkdtempSync(join(tmpdir(), 'stamity-tarball-smoke-')))
   try {
     // 1. Pack. `npm pack` honours `files`, `.npmignore`, and the publish-time filters, so the
     //    tarball here is byte-for-byte what a publish would upload.
@@ -86,19 +108,13 @@ function main() {
     //    published tree invisible to it in the first place. The release path runs this same
     //    script before it packs the shipped tarball (.github/workflows/release.yml, the
     //    `gates` job), so the artifact a consumer installs is gated by the check below.
-    mkdirSync(join(installed, 'scripts'), { recursive: true })
-    copyFileSync(GATE, join(installed, 'scripts', 'leak-gate.mjs'))
     try {
-      run('node', [join(installed, 'scripts', 'leak-gate.mjs'), '--include-build'], {
-        cwd: installed,
-      })
+      scanPackedArtifact(installed)
     } catch (error) {
       return fail(
         'the packed artifact carries a reserved name or a credential shape',
-        `${error.stdout ?? ''}\n${error.stderr ?? ''}`,
+        `${error.stdout ?? ''}\n${error.stderr ?? error.message ?? ''}`,
       )
-    } finally {
-      rmSync(join(installed, 'scripts'), { recursive: true, force: true })
     }
 
     // Compile a real consumer outside the checkout with only the packed package
@@ -162,9 +178,11 @@ export type { Reachable };
   }
 }
 
-try {
-  process.exitCode = main()
-} catch (error) {
-  console.error(`tarball-smoke: ERROR - ${error instanceof Error ? error.message : String(error)}`)
-  process.exitCode = 2
+if (isMain(import.meta.url)) {
+  try {
+    process.exitCode = main()
+  } catch (error) {
+    console.error(`tarball-smoke: ERROR - ${error instanceof Error ? error.message : String(error)}`)
+    process.exitCode = 2
+  }
 }

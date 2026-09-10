@@ -137,3 +137,43 @@ call. Calibration is unmeasured, all 78 cases have0/3 admitted samples, and no
 aggregate score exists. This is the required honest blocked artifact, not a
 reused eval or a passing deterministic substitute. Actual CI/rehearsal follows
 on the candidate PR. Human QA remains unsigned; no tag or release was created.
+
+
+## Actual CI findings and correction
+
+Draft PR #34 at `41cf1aa68d4d06448c03f4571d8fe72c95117e8a` ran actual CI,
+PR checks, docs and a release `dry_run=true` rehearsal. PR checks/docs and
+all APM legs passed. CI run34535881719 and rehearsal34535889890 failed
+the real packed scan: a new internal declaration inferred a reserved
+migration prefix literal. Windows additionally found two path-spelling
+assertion failures and a committed-input fixture timeout. All failed jobs
+and their raw logs are retained. No publish or deployment was requested.
+
+The local packed-scan claim above is explicitly corrected: macOS temporary
+path aliasing caused the copied scanner's direct-entry guard to skip its
+body and exit0. The original wrapper accepted that as success. Earlier
+strict TypeScript, JavaScript and CLI stages did execute, but that local
+exit0 did not establish a scan. The repaired smoke canonicalizes its paths
+and requires a nonempty successful scanner summary; real symlinked clean
+and leaking fixtures plus silent/failed/empty-zero-exit regressions prove
+its admission. The internal constant now declares `string`, preserving
+runtime migration behavior without publishing a needless literal type.
+
+A separate writer repaired only Windows tests: dynamic imports use file
+URLs, cwd equality compares physical paths, and an early profile-byte
+mismatch avoids a redundant full traversal. The initial196-input load and
+actual rubric midrun-drift check remain; the20-second limit is unchanged.
+Measured fixture Git processes fell479→246. Independent review approves
+all six changed source/test files. Final full gates and new actual CI/
+rehearsal are required before the corrected candidate is called verified.
+
+
+The combined repair passed independent review and the complete local gate:194test
+files,7,667passing tests,2existing opt-in skips, all held floors unchanged. New
+before/after source inventories agree at
+`5ef6446414d8bc5c2787a40f6712bf9eb55ffef5a35369554536527085bca37d`.
+The real packed scanner inspected219files under18rules with0hits through a symlink,
+then rejected the injected old declaration shape and invalid zero-exit scanners.
+Corrected packed strictTS/JS/CLI checks pass. All54render inputs,134site output
+files and20website TypeScript/config/package inputs are unchanged. Fresh actual
+CI and non-publishing rehearsal now follow on the combined repair commit.

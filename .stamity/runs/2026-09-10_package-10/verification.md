@@ -1,3 +1,41 @@
+# Independent repair verification — Package 10
+
+PASS for the reviewed six-file repair and the fresh local gates. Replacement GitHub CI and the non-publishing Release rehearsal remain pending; this is not release approval.
+
+**Correction recorded 2026-09-11:** the packed-tree leak-scan claim and overall local-gate verdict in the historical record below are superseded. Actual CI `34535881719` and Release `34535889890` found a reserved migration marker in `dist/types/migration/detect.d.ts`. The earlier local copied scanner exited zero without scanning because the macOS temporary-path alias did not match its direct-entry check. Original command exits, timestamps and log hashes remain unchanged. The external TypeScript/JavaScript and CLI stages did execute; they did not establish a successful packed scan.
+
+The combined repair is bound to baseline `41cf1aa68d4d06448c03f4571d8fe72c95117e8a` plus the six reviewed source/test files. All 1075 before/after input records are identical at `5ef6446414d8bc5c2787a40f6712bf9eb55ffef5a35369554536527085bca37d`. The current run directory is excluded from this source inventory; the evidence itself receives the source leak gate. Full inventories, logs and negative controls are preserved in the durable private CI archive; `verification.json` records their hashes.
+
+The declaration annotation preserves runtime behavior while preventing an internal literal type from entering the shipped declaration. The packed scan now canonicalizes its entry path and requires a nonempty successful scan. Independent execution over an actual tarball through a symlink reports **0 hits, 18 rules, 219 scanned files** (218 packed entries plus the temporarily copied scanner). Recreating the old declaration leak inside that actual extracted package fails. Silent, explicit-failure and zero-file scanners that exit zero all fail the new witness requirement. The corrected complete tarball smoke also compiles strict external NodeNext TypeScript with `skipLibCheck: false`, preserves JavaScript imports and completes init/check.
+
+The Windows fixes remain in tests: dynamic import uses a file URL, cwd comparisons resolve both physical paths, and process failures expose stderr. The admission fixture retains its full initial 196-input load and five calibration fixtures, rubric drift detection, committed-byte rejection and unchanged 20-second timeout. It avoids a redundant second complete input traversal. No production eval runner or hook runner changed.
+
+Fresh focused verification passes 4 files / 101 tests. Full coverage passes **194 files, 7667 tests, 2 existing opt-in skips** at every unchanged per-file floor; capability-matrix branches remain 56/60 (93.33%). Build size is 1,261,336 bytes of logic/declarations and 538,084 bytes of corpus, inside the held limits.
+
+| Fresh command | Exit | Duration |
+|---|---:|---:|
+| `npm run lint` | 0 | 1.514s |
+| `npm run typecheck` | 0 | 0.937s |
+| `npm run test -- --coverage` | 0 | 105.948s |
+| `npm run build` | 0 | 0.643s |
+| `npm run gate` | 0 | 6.633s |
+| `npm run knip` | 0 | 2.165s |
+| `node scripts/size-budget.mjs` | 0 | 0.546s |
+| `node scripts/generate-pack-manifests.mjs --check` | 0 | 0.422s |
+| `node scripts/generate-plugin-manifests.mjs --check` | 0 | 0.524s |
+| `node scripts/generate-apm-package.mjs --check` | 0 | 0.554s |
+| `python3 /tmp/stamity-package10-verifier-53zp_wt0/compare_generators.py` | 0 | 1.209s |
+| `node dist/cli.js check` | 0 | 0.887s |
+| `node scripts/tarball-smoke.mjs` | 0 | 18.422s |
+
+The previous site/browser proof remains applicable through byte comparison: all 54 render inputs, all 134 site output files and all 20 website TypeScript/config/package inputs match. The site build digest remains `b55042d36fe1ccde8e13bb4f73752eb4b929e1e7671a89a621351504453eafa6`. No unchanged site or browser gate was repeated. Historical cases, Expected blocks, run artifacts and corpus are unchanged by this repair.
+
+Not done: replacement actual Linux/Windows CI and non-publishing Release; admitted fresh model execution/calibration; human QA and platform approval. The initial failed CI/Release logs remain preserved. This verifier did not change product/generated files, stage, commit, push, approve, deploy, publish or rerun a GitHub workflow.
+
+---
+
+## Historical local record (its original packed scan claim is corrected above)
+
 # Independent verification — Package 10 integrated candidate
 
 PASS for the reviewed source and configured local gates. No open source-review findings remain. This is not release approval: fresh behavioral execution, human QA and the root-owned platform/release evidence remain separate.

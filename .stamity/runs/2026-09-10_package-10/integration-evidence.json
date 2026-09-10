@@ -148,7 +148,7 @@
     "generation": "all generator checks exit 0; repeat byte comparison unchanged",
     "diffCheck": "git diff --check: exit 0",
     "sizeBytes": {
-      "logic": 1261341,
+      "logic": 1261336,
       "logicCeiling": 2097152,
       "corpus": 538084,
       "corpusCeiling": 1572864
@@ -1727,5 +1727,67 @@
     "remainingProofs": "Fresh admitted live eval/calibration and affected behavior, final full/site/browser gates, actual CI and non-publishing rehearsal, candidate binding, human QA and platform approval remain separately recorded controls.",
     "privacy": "Both integration records contain zero confidential repository/ledger identifier matches. Leak gate exits0 with0 hits across1085 files and all18 rules.",
     "scopeBoundary": "No later-package measurement, final audit or cleanup performed."
+  },
+  "ciDeclarationAndPackedScanRepair": {
+    "failedCandidate": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+    "ciRun": "34535881719",
+    "ciJob": "103067252092",
+    "trigger": "Linux floor tarball scan found an internal predecessor-prefix literal in the new migration declaration output.",
+    "census": "Runtime prefix has one production reader, migration/carry.ts, using startsWith/slice. It is absent from src/index.ts and no public literal type depends on it. Only tarball-smoke copies the leak scanner into an installed artifact; its shared isMain consumer preserves standalone direct invocation and enables inert helper imports.",
+    "causes": [
+      "Type inference copied an internal migration marker into a public declaration file.",
+      "macOS temporary directory alias made the copied scanner direct-entry guard compare different path spellings, exit0 and scan nothing; the old smoke trusted exit0 alone."
+    ],
+    "fix": "Explicit string declaration preserves runtime prefix. Smoke canonicalizes temporary and installed paths, launches the real copied scanner with include-build, requires its nonempty successful scan summary, and preserves nonzero failures. Existing shared isMain makes script import inert. No leak policy/allowlist/configuration or public runtime API changed.",
+    "changedPaths": [
+      {
+        "path": "src/migration/detect.ts",
+        "sha256": "c9cc08cf775c315766c67df580eb6f5efb13f27a5bc51adb8494568743c6c7ed"
+      },
+      {
+        "path": "test/migration/detect.test.ts",
+        "sha256": "a07898f242b96eb88502016b0455a223edddbd1ff4f2f39336447f00a4123b3e"
+      },
+      {
+        "path": "scripts/tarball-smoke.mjs",
+        "sha256": "1ec42ca7efc1e161c48dfd3d3cfc94b8650f37ef2d02d056aa16c297dcfaa4df"
+      },
+      {
+        "path": "test/ci/tarballStaging.test.ts",
+        "sha256": "52b64c4ad30f93bf73cd4e38357978d0f1da2181d053ecd387f76a6cddc66a66"
+      }
+    ],
+    "redProofs": [
+      {
+        "log": "/tmp/stamity-package10-ci-declaration-repro.log",
+        "result": "Old full tarball smoke falsely exits0 on macOS with the leaking declaration present."
+      },
+      {
+        "log": "/tmp/stamity-package10-packed-declaration-red.log",
+        "result": "Direct real scanner over the same freshly packed/extracted artifact exits1 on migration declaration."
+      },
+      {
+        "log": "/tmp/stamity-package10-declaration-smoke-regressions-red.log",
+        "result": "3 failed,29 passed: emitted declaration literal, symlinked scanner skipped, silent zero exit accepted."
+      }
+    ],
+    "focusedCommand": "npx vitest run test/migration/detect.test.ts test/migration/carry.test.ts test/ci/tarballStaging.test.ts test/ci/nativeTypescript.test.ts test/composition/root.test.ts && npm run lint && npm run typecheck && npm run build",
+    "focusedResult": "exit0:5 files100 tests; lint/typecheck/build pass.",
+    "regressionCoverage": "Production declaration emitter; unchanged runtime prefix and migration carry fixtures; actual scanner rejects leaked declaration through symlink and accepts clean declaration plus narrow runtime exemption through symlink; silent/failed/empty scanner outputs with exit0 refuse.",
+    "packedCommand": "node scripts/tarball-smoke.mjs",
+    "packedResult": "exit0:actual packed scan witness, external strict TypeScript consumer, JavaScript imports, init/check all pass.",
+    "packedLog": "/tmp/stamity-package10-declaration-packed-green.log",
+    "otherChecks": [
+      "source leak gate:0hits across1095files/all18rules",
+      "npm run knip:exit0",
+      "node dist/cli.js check:exit0,driftclean",
+      "importing tarball-smoke prints only explicit import-completion witness",
+      "git diff --check:exit0"
+    ],
+    "sizeBytes": {
+      "logic": 1261336,
+      "corpus": 538084
+    },
+    "sourceFreeze": "These four files frozen and delivered to root/verifier for independent full verification and new candidate CI. Separate Windows test writer remains independent; no changes to its files."
   }
 }

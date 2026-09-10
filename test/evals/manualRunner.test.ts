@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 // @ts-expect-error — the manual harness is import-safe native ESM, outside the product package.
 import { aggregate, calibrationMatches, EvalBlocked, parseCase, parseGrade, parseRubric, sha256 } from "../../scripts/eval/instrument.mjs";
@@ -299,10 +300,10 @@ describe("full run admission and strict aggregation", () => {
 describe("committed inputs and manual entry point", () => {
   it("is import-safe and the help path never requires an API call", () => {
     const script = join(REPO_ROOT, "scripts/eval-run.mjs");
-    const imported = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(script)}); console.log('imported')`], { encoding: "utf8" });
-    expect(imported.status).toBe(0); expect(imported.stdout).toBe("imported\n");
+    const imported = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(pathToFileURL(script).href)}); console.log('imported')`], { encoding: "utf8" });
+    expect(imported.status, imported.stderr).toBe(0); expect(imported.stdout).toBe("imported\n");
     const help = spawnSync(process.execPath, [script, "--help"], { encoding: "utf8" });
-    expect(help.status).toBe(0); expect(help.stdout).toContain("Default profile stays claude");
+    expect(help.status, help.stderr).toBe(0); expect(help.stdout).toContain("Default profile stays claude");
   });
   it("requires committed bytes for every current and calibration input, then detects midrun edits", () => {
     const root = temp();
@@ -320,6 +321,10 @@ describe("committed inputs and manual entry point", () => {
     expect(() => loadInputs(root, "unknown")).toThrow("unknown-or-identical-profile");
     writeFileSync(join(root, "evals/rubric-v5.md"), `${read("evals/rubric-v5.md")}\n`);
     expect(() => loaded.assertUnchanged()).toThrow("input-changed-during-run");
+    // Exercise the same committed-byte comparison at the first read. A second full
+    // traversal to reach the rubric repeats hundreds of Git process launches on Windows;
+    // the full snapshot above and its rubric drift check already cover those inputs.
+    writeFileSync(join(root, "evals/model-profiles-v1.json"), `${read("evals/model-profiles-v1.json")}\n`);
     expect(() => loadInputs(root, "codex-astra")).toThrow("input-working-tree-mismatch");
   });
 });

@@ -96,8 +96,12 @@ describe("portable native hook boundary", () => {
 
   it("normalizes tool input without fabricating calling-agent identity and executes from the repository root", async () => {
     const f = await fixture("codex", 'import {readFileSync} from "node:fs"; process.stdout.write(JSON.stringify({cwd:process.cwd(),payload:JSON.parse(readFileSync(0,"utf8"))}));');
-    const result = JSON.parse(execute(f).stdout);
-    expect(result.cwd).toBe(await realpath(f.root));
+    const child = execute(f);
+    expect(child.status, child.stderr).toBe(0);
+    const result = JSON.parse(child.stdout);
+    // Windows may report an 8.3 cwd while fs.realpath returns its long spelling.
+    // Compare physical directory identity on both sides, retaining the root boundary.
+    expect(await realpath(result.cwd)).toBe(await realpath(f.root));
     expect(result.payload).toMatchObject({ tool_name: "bash", tool_input: { command: "pwd" }, hook_event_name: "PreToolUse" });
     expect(result.payload).not.toHaveProperty("agent_type");
   });
