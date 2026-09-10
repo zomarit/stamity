@@ -942,12 +942,25 @@ jobs:
               echo "Retained remote branch: \`$UPDATE_BRANCH\` at \`$REMOTE_SHA\`."
               echo "Upstream release commit: \`$RELEASE_SHA\`. Recorded gates: **$VERDICT**."
               echo
-              echo "The branch was already pushed, but no PR existed. [This run]($RUN_URL) verified its merge parents, integration record and non-record tree without rewriting it. The integration record below belongs to the retained remote SHA. The newly prepared report belongs to a separate commit and is kept only in the run artifact. Required PR checks still apply; land by reviewed merge commit to retain upstream ancestry."
+              echo "The branch was already pushed, but no PR existed. [This run]($RUN_URL) verified its merge parents, integration record and non-record tree without rewriting it. The retained integration record belongs to the remote SHA. The newly prepared report belongs to a separate commit and is kept only in the run artifact. Required PR checks still apply; land by reviewed merge commit to retain upstream ancestry."
               echo
-              echo '```json'
-              cat "$ARTIFACT_DIR/remote-record.json"
-              echo '```'
+              echo "The complete retained integration record, \`remote-record.json\`, is in the \`upstream-publication\` artifact on [this run]($RUN_URL)."
+              echo
             } > "$BODY"
+            # Recovery records can exceed GitHub's body limit too. Keep the warning, verdict
+            # and retained SHA intact; only inline JSON is optional. The full record remains
+            # unchanged in the publication artifact, even when it does not fit in the PR.
+            BODY_BYTES="$(wc -c < "$BODY")"
+            RECORD_BYTES="$(wc -c < "$ARTIFACT_DIR/remote-record.json")"
+            if [ "$((BODY_BYTES + RECORD_BYTES + 12))" -le 60000 ]; then
+              {
+                echo '```json'
+                cat "$ARTIFACT_DIR/remote-record.json"
+                echo '```'
+              } >> "$BODY"
+            else
+              echo '_Inline JSON omitted to stay inside the GitHub body limit; the complete record is in the artifact linked above._' >> "$BODY"
+            fi
             ACTION='recovered'
           fi
 
