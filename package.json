@@ -48,6 +48,7 @@
     "test": "vitest run",
     "knip": "knip",
     "gate": "node scripts/leak-gate.mjs",
+    "upstream": "node scripts/upstream.mjs",
     "check": "npm run gate && npm run typecheck && npm run lint && npm run test && npm run build && npm run knip"
   },
   "dependencies": {

@@ -2,7 +2,7 @@
 title: Customization
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit f1a4749. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 45bc35d. -->
 <!-- Re-open when: a save gate is added or removed, a content class joins or leaves the
      override tree, a merge verb joins the overlay layer, a class gains or loses overlay
      support, or patch-or-replace exclusivity changes. `test/docsPages.test.ts` holds this
@@ -19,7 +19,9 @@ Nothing in this lane edits the corpus. `content/` is framework territory — shi
 regenerated, so an edit there is erased by the next update — which is why neither shape of
 customization touches a bundled file. An override is a file of your own, and claiming an id is
 how it takes over; an overlay is a patch filed in the same tree, and the artifact it patches
-stays exactly where it was.
+stays exactly where it was. An organisation that does need to edit `content/` forks the
+repository rather than consuming it, and [enterprise forks](enterprise-forks.md) is the lane that
+carries those edits through an upstream release.
 
 ## Where an override lives
 

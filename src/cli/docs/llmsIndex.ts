@@ -189,6 +189,13 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         regenerateCommand: null,
       },
       {
+        path: "docs/enterprise-forks.md",
+        title: "Enterprise forks",
+        description:
+          "taking upstream releases into a customized fork — the config, the verbs, conflicts, the gates that decide, landing, and the opt-in workflow.",
+        regenerateCommand: null,
+      },
+      {
         path: "docs/packs-and-trust.md",
         title: "Packs and trust",
         description:
