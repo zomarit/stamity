@@ -1972,6 +1972,22 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
   });
 });
 
+describe("the contexts each level of a workflow may name", () => {
+  it("names the runner context only inside a step", () => {
+    // `runner.*` is a step-level context: a job's `env:`, `if:` or `name:` that names it fails
+    // GitHub's parser at dispatch time ("Unrecognized named-value: 'runner'"), which no local
+    // YAML parse or shell check catches — the upstream lane's first real dispatch did. Every
+    // job is held here to naming that context in its steps and nowhere else.
+    for (const [file, id, job] of ALL_JOBS) {
+      const { steps: _steps, ...jobWithoutSteps } = job as WorkflowJob & { steps?: unknown };
+      expect(
+        JSON.stringify(jobWithoutSteps),
+        `${file}:${id} names the runner context outside a step`,
+      ).not.toMatch(/\$\{\{[^}]*\brunner\./);
+    }
+  });
+});
+
 describe("dependabot.yml — the update policy behind the pins", () => {
   const source = readFileSync(join(REPO_ROOT, ".github", "dependabot.yml"), "utf8");
   const config = parse(source) as {
