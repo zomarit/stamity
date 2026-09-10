@@ -39,13 +39,8 @@ your object store, so a merge base exists.
 
 **A private copy.** A private copy of a public repository cannot be a fork at all — a fork's
 visibility is tied to its network — so the private case is a mirror clone pushed into a new,
-empty repository:
-
-```sh
-git clone --mirror https://github.com/zomarit/stamity stamity-mirror.git
-cd stamity-mirror.git
-git push --mirror <your new empty private repository>
-```
+empty repository. Follow the ordered private onboarding below: Actions must be disabled
+before importing historical refs, then reviewed before enabling the downstream workflows.
 
 Clone that normally and work in it. The mirror route gives up every fork feature — no "Sync
 fork", no merge-upstream endpoint, no pull request back to upstream, `gh repo sync` refusing with
@@ -70,6 +65,7 @@ that name repositories and out of git URLs. Disable Actions **before importing a
 historical tags can carry older workflows without the current publication guards.
 
 ```sh
+set -euo pipefail
 STAMITY_DOWNSTREAM='acme/stamity-private'
 gh repo create "$STAMITY_DOWNSTREAM" --private
 test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .private)" = true
@@ -516,11 +512,13 @@ is a prerelease and needs a consumer policy allowing that prerelease. Update pac
 regenerate, run full gates, review and commit on the integration branch before tagging.
 
 ```sh
+set -euo pipefail
 STAMITY_PRIVATE_TAG='v1.5.0-acme.1'
 test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .private)" = true
 test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .fork)" = false
+test "$(node -p "require('./package.json').version")" = "${STAMITY_PRIVATE_TAG#v}"
 node scripts/generate-apm-package.mjs --check
-git diff --exit-code
+test -z "$(git status --porcelain)"
 git tag "$STAMITY_PRIVATE_TAG"
 git push origin "$STAMITY_PRIVATE_TAG"
 ```
@@ -589,13 +587,19 @@ re-enable them. Two jobs follow the probe, split by trust:
   is red. On a conflict there is nothing to push, so it opens or updates one issue per release,
   `Upstream <tag> needs conflict resolution`, carrying the report and the local commands.
 
+The preparation job can fetch the public upstream without credentials. Its publish-only
+`STAMITY_UPSTREAM_TOKEN` does not authenticate a private upstream or mirror during preparation.
+Choose an approved source reachable by that job without the write secret, or have the platform
+owner review a separate authenticated-fetch design before claiming that deployment is supported.
+
 **An update branch that already exists on the remote is preserved.** A later run reports its
 open PR without changing its body, title, labels or branch. If the push succeeded but PR
 creation failed, retry can create the missing PR only after proving the same owned integration:
 matching release/target, merge parents, non-record tree and semantic integration record,
 with no human follow-up. The recovered PR names that retained remote SHA. Target movement,
 human fixups, wrong base or ambiguous ownership require manual review and create nothing.
-A closed or merged PR is never reopened or replaced. The lane finds its own issues by a marker it writes into
+A closed or merged PR is never reopened or replaced. The `upstream-publication` artifact
+retains `publish-result.json` and the prepared/remote record evidence. The lane finds its own issues by a marker it writes into
 the body — `<!-- stamity-upstream-lane: <tag> <kind> -->` — rather than by title alone, so
 renaming one does not produce a second.
 
@@ -604,7 +608,9 @@ renaming one does not produce a second.
 `Upstream <tag> needs a reviewed push`, carrying the report and the commands that push the update
 branch from your own checkout. This is not a token limit to work around: a pushed branch's own
 workflow files run on `push` under the pushing identity, so a person reads the workflow diff and
-pushes it. Upstream releases of this product do touch workflow files — expect that issue.
+pushes it and opens the reviewed PR. Even if the reviewed workflow-change branch is already
+on the remote, automatic missing-PR recovery remains refused for it. Upstream releases of
+this product do touch workflow files — expect that issue.
 
 A `concurrency` group serialises runs and never cancels one in flight, because a killed
 `integrate` leaves state the next run has to reconcile.
