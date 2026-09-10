@@ -127,7 +127,11 @@
 //     the way `continue` would, since "every non-generated conflict is resolved" already holds.
 //   - Commits use the repository's identity; when git cannot determine one (a CI runner with no
 //     `user.*`), a placeholder identity on the reserved `.invalid` domain is used and the report
-//     says so. Hooks are bypassed (`--no-verify`): the fork's gates are its declared ones.
+//     says so. The merge itself takes the same fallback: `git merge` resolves the committer
+//     identity before it touches a file, `--no-commit` notwithstanding, so a runner with no
+//     identity failed at the merge and never reached the commit that carried the fallback — the
+//     first dispatch on GitHub Actions found it. Hooks are bypassed (`--no-verify`): the fork's
+//     gates are its declared ones.
 //   - Lane state for an in-progress merge (the release, the head the branch was cut from, the
 //     conflicts with their kinds) lives in the update worktree's own git directory, so
 //     `continue` can name what the human resolved without re-deriving it.
@@ -1682,7 +1686,7 @@ function runPreview(context, doc) {
     log(`previewing the merge of ${state.selected.tag} in a throwaway worktree`)
     git(['worktree', 'add', '--quiet', '--detach', scratch, target.head], { cwd: root })
     added = true
-    const merge = git(['merge', '--no-ff', '--no-commit', state.selected.commit], { cwd: scratch, check: false })
+    const merge = git([...identityArguments(git, scratch).args, 'merge', '--no-ff', '--no-commit', state.selected.commit], { cwd: scratch, check: false })
     if (merge.status > 1) throw new LaneError(`the preview merge could not run: ${merge.stderr.trim()}`)
     const status = git(['status', '--porcelain=v2', '-z'], { cwd: scratch }).stdout
     doc.conflicts = classifyConflicts(status, `${merge.stdout}\n${merge.stderr}`, config.generatedPaths)
@@ -1793,7 +1797,7 @@ function startMerge(context, config, doc, session) {
   doc.branch = session.branch
   doc.worktree = worktree
   log(`merging ${session.release.tag} (${shortSha(session.release.commit)}) on ${session.branch}`)
-  const merge = git(['merge', '--no-ff', '--no-commit', session.release.commit], { cwd: worktree, check: false })
+  const merge = git([...identityArguments(git, worktree).args, 'merge', '--no-ff', '--no-commit', session.release.commit], { cwd: worktree, check: false })
   if (merge.status > 1) throw new LaneError(`git merge failed in ${worktree}: ${merge.stderr.trim()}`)
   const status = git(['status', '--porcelain=v2', '-z'], { cwd: worktree }).stdout
   const conflicts = classifyConflicts(status, `${merge.stdout}\n${merge.stderr}`, config.generatedPaths)
