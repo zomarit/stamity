@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { buildContentIndex } from "../../src/content/catalog.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../../src/types/content.ts";
+import { downstreamCheckout, write } from "./downstreamFixture.ts";
 
 /**
  * The drift gate on the four published plugin surfaces.
@@ -168,9 +169,14 @@ function marketplaceEntry(): Manifest {
   return entries[0] as Manifest;
 }
 
-/** Class -> the corpus directory the catalog walked it out of, and how many it found. */
+/**
+ * Class -> the corpus directory the catalog walked it out of, and how many it found.
+ * These manifests expose direct content/ paths, while the default catalog also
+ * resolves fork winners for APM/CLI. A downstream replacement must not make this
+ * source-path gate expect a file that only exists under fork/.
+ */
 async function corpusDirectories(): Promise<ReadonlyMap<ContentClass, { dir: string; count: number }>> {
-  const index = await buildContentIndex();
+  const index = await buildContentIndex(join(REPO_ROOT, "content"));
   const found = new Map<ContentClass, { dir: string; count: number }>();
   for (const item of index.items) {
     const dir = item.relativePath.split("/")[0] ?? "";
@@ -180,9 +186,9 @@ async function corpusDirectories(): Promise<ReadonlyMap<ContentClass, { dir: str
   return found;
 }
 
-/** Class -> every corpus-relative artifact path, sorted as the generator emits them. */
+/** Class -> direct corpus paths, using the same source-path contract documented above. */
 async function corpusFiles(contentClass: ContentClass): Promise<string[]> {
-  const index = await buildContentIndex();
+  const index = await buildContentIndex(join(REPO_ROOT, "content"));
   return index.items
     .filter((item) => item.type === contentClass)
     .map((item) => item.relativePath)
@@ -261,6 +267,32 @@ describe("scripts/generate-plugin-manifests.mjs", () => {
     } finally {
       rmSync(empty, { recursive: true, force: true });
     }
+  });
+
+  it("passes the component gate in a downstream with fork agent additions and replacements", () => {
+    const downstream = mkdtempSync(join(workspace, "downstream-"));
+    downstreamCheckout(downstream);
+    for (const path of ["vitest.config.ts", "test/ci/pluginManifests.test.ts", "test/ci/downstreamFixture.ts"]) {
+      write(join(downstream, path), readFileSync(join(REPO_ROOT, path)));
+    }
+    execFileSync(process.execPath, [join(downstream, "scripts/generate-plugin-manifests.mjs")], {
+      cwd: downstream,
+      encoding: "utf-8",
+    });
+    // The source plugin still exposes the original corpus files. The fork's added
+    // and replacement agents are delivered by APM/CLI, not these direct paths.
+    expect(readManifest(downstream, CLAUDE_PLUGIN)["agents"]).toEqual([
+      "./content/agents/stamity-patch-agent.md",
+      "./content/agents/stamity-replace-agent.md",
+      "./content/agents/stamity-source-agent.md",
+    ]);
+    // Run the actual inherited gate in isolation. Selecting only the component
+    // group prevents this checkout regression from invoking itself recursively.
+    const result = spawnSync(process.execPath, [
+      join(REPO_ROOT, "node_modules/vitest/vitest.mjs"),
+      "run", "test/ci/pluginManifests.test.ts", "-t", "^plugin manifest components ",
+    ], { cwd: downstream, encoding: "utf-8" });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
   });
 });
 
