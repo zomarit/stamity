@@ -158,7 +158,10 @@ Floors for this lane. They hold whatever the merge does.
    precedence" is retired: it counted a canonical layer and three customization
    layers that were never simultaneously reachable, and counting them is what
    made the surface unimplementable without first deciding what layer 2 applied
-   to.
+   to. The fork layer (`docs/specs/fork-layer.md`) later added a second
+   customizing layer without reviving the count: the chain that now applies to
+   any `(class, id)` is corpus or pack → fork (a full replacement or a patch) →
+   user (a full replacement or a patch).
 4. **Fail closed, name the file and the field.** Parity with decision 13. Every
    overlay defect throws `VALIDATION_ERROR`, stops the sync, and names the
    absolute path plus the offending field or condition.

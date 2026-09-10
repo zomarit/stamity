@@ -2,12 +2,13 @@
 title: Customization
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e58b6ad. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8b6dbba. -->
 <!-- Re-open when: a save gate is added or removed, a content class joins or leaves the
      override tree, a merge verb joins the overlay layer, a class gains or loses overlay
-     support, or patch-or-replace exclusivity changes. `test/docsPages.test.ts` holds this
-     page to the hand-page contract; `src/content/userContent.ts` owns the save gate and
-     `src/content/catalog.ts` owns the overlay merge this page narrates. -->
+     support, the fork layer's place in the precedence chain moves, or patch-or-replace
+     exclusivity changes. `test/docsPages.test.ts` holds this page to the hand-page contract;
+     `src/content/userContent.ts` owns the save gate and `src/content/catalog.ts` owns the
+     overlay merge this page narrates. -->
 
 # Customization
 
@@ -23,6 +24,23 @@ stays exactly where it was. An organisation that does need to edit `content/` fo
 repository rather than consuming it, and [enterprise forks](enterprise-forks.md) is the lane that
 carries those edits through an upstream release.
 
+A package built by such a fork carries one more layer, and it sits below yours. The chain any
+`(class, id)` resolves through is corpus or pack → the fork layer → your own overrides: `fork/` is
+the fork maintainer's tree — theirs to author, not this repository's and not yours — so nothing in
+this lane writes it, and a replacement or a patch of yours still takes the id over anything the fork
+put there. Where a package ships one, `stamity validate` marks its rows `— fork layer`, so a
+shadowing line you did not author reads as somebody else's rather than as yours. Authoring that
+layer is a fork maintainer's job, and [enterprise forks](enterprise-forks.md) describes it; [the
+fork-layer spec](specs/fork-layer.md) is the design reference.
+
+Two of those rows are about your repository rather than about the fork. A fork patch aimed at an id
+your own override has replaced is reported as inert under that override rather than as applied —
+your file won the id, so nothing patches it. And a fork patch of an artifact only a pack supplies
+waits for that pack: in a repository that does not carry it, the patch is skipped and reported as a
+warning row naming the artifact it waits for, never an error, because the fork layer ships with the
+package while packs are installed per repository. Your own orphan patch is still an error, for the
+reason it always was.
+
 ## Where an override lives
 
 One tree, one directory per class:
@@ -34,16 +52,17 @@ One tree, one directory per class:
 | command | `.stamity/overrides/commands/<id>.md` |
 | skill | `.stamity/overrides/skills/<id>/SKILL.md` |
 
-A skill is a directory rather than a file, and **the directory name is the name a client
-invokes**. Filing a replacement under a different directory than the skill it replaces still
-replaces it — the bundled skill leaves emission — and the client then invokes it under the new
-directory's name: an override at `skills/qa/` declaring `id: qa` ships as `qa`, and `st-qa` is
-gone. Keeping the old name is not something either authoring lane allows for a bundled skill,
-whose shipped directory carries the `st-` prefix: the save gate refuses that prefix as an id,
-and on a hand-placed `skills/st-qa/` declaring `id: qa` `stamity validate` reports the id as
-disagreeing with the filename. So a replacement authored through the creator, or through a
-clean `validate`, moves the call site from `st-<id>` to `<id>`; only a hand-placed prefixed
-directory that `validate` flags holds it.
+A skill is a directory rather than a file, and **the name a client invokes is the EMITTED one,
+not the one you filed it under**. An override that takes a bundled skill's id replaces it — the
+bundled skill leaves emission — and the projection keeps the bundled spelling: an override at
+`skills/qa/` declaring `id: qa` replaces `st-qa` and still ships as `st-qa`, directory and `name`
+alike, so every call site and every cross-reference to that skill keeps working. An override whose
+id nothing bundled holds is an addition, and ships under its own directory name.
+
+Your own tree stays free of the reserved prefix either way, because the engine mints it onto what
+it emits: the save gate refuses `stamity-`/`st-` as an id, and on a hand-placed `skills/st-qa/`
+declaring `id: qa` `stamity validate` reports the id as disagreeing with the filename. Author the
+bare directory and let emission restore the prefix.
 
 Bytes under `.stamity/overrides/` are yours end to end. No emission path targets anything
 inside that tree: it is never wrapped in a managed block, never regenerated, and never
@@ -124,7 +143,8 @@ skills reach them through the core projection.
 ## A skill override travels whole
 
 A skill override's directory is projected entire — `SKILL.md` plus every support file beneath
-it, and the override's files rather than those of the skill whose id it took — into
+it, and the override's files rather than those of the skill whose id it took, under the emitted
+name that skill already had rather than under the bare directory you authored — into
 `.agents/skills/` whenever a selected client reads that tree — cursor, copilot and codex declare
 that they do — and, for Claude Code, into the one client-native copy at `.claude/skills/`
 re-targeted from those same rendered bytes. A Claude-only setup carries the native copy alone
