@@ -64,9 +64,9 @@ the upstream commit your tree was taken at, replay your local changes as one com
 
 ## Configuring `.stamity/upstream.json`
 
-The file at the repository root is what enables the lane. `upstream` is the only required key;
-every other has a default, and an unknown key, a non-object or a `version` other than 1 is a
-configuration error (exit 2).
+The file at the repository root is what enables the lane. `version` (which must be `1`) and
+`upstream` are the two required keys; every other has a default, and an unknown key, a
+non-object, or a missing or non-`1` `version` is a configuration error (exit 2).
 
 | Key | Default | What it does |
 |---|---|---|
@@ -134,11 +134,13 @@ node scripts/upstream.mjs integrate --release v1.4.0
 
 Without `--release`, the target is the newest release matching the pattern by semantic-version
 order; `--prerelease` admits a prerelease suffix. Skipped releases are not skipped work: several
-are integrated as **one merge of the newest one**, whose ancestry then covers every release in
-between, and the report lists them so a reviewer sees each one. `--offline` reads what the last
-fetch brought, `--config <path>` moves the configuration file, `--branch <name>` evaluates
-`status` against another branch, and every verb takes `--json` — one document on stdout and
-nothing else there, which is how the workflow reads results.
+are integrated as **one merge of the newest one**, whose ancestry then covers every release the
+newest one contains (a maintenance release cut on a side branch is not covered and stays a
+candidate), and the report lists them so a reviewer sees each one. `--offline` reads what the
+last fetch brought, `--config <path>` moves the configuration file, `--branch <name>` takes
+another branch as the target for any verb — `status` against the update branch itself, or
+`integrate` from a runner checkout under another name — and every verb takes `--json` — one
+document on stdout and nothing else there, which is how the workflow reads results.
 
 `preview` is the safe one: it merges in a temporary detached worktree, reads the result, then
 aborts and removes it. Your working tree, index, stash list and branches are byte-identical
@@ -167,7 +169,7 @@ tool version and the timestamp. It is evidence, never authority — delete every
 | `integrated` | 0 | The merge is committed on the update branch and the gates passed, or none were configured. |
 | `conflict` | 1 | The merge stopped. Nothing is committed; the update worktree holds it, and the report names every conflicted path and its kind. |
 | `validation-failed` | 1 | The merge is clean and your gates failed. On `status`, also: the release is in the ancestry but its record says the gates failed or were skipped — in history and still not integrated. |
-| `regenerate-failed` | 1 | A `regenerate` command exited non-zero. The sequence stops at the first one, output captured. |
+| `regenerate-failed` | 1 | A `regenerate` command exited non-zero — the sequence stops at the first one, output captured — or regeneration rewrote a tracked path no `generatedPaths` glob covers, named with the fix (list it). Nothing is staged or committed either way. |
 | `conflict-pending` | 1 | An update worktree from an earlier run still holds an in-progress merge. Finish it or `abort`; nothing is redone behind your back. |
 | `update-branch-stale` | 1 | The update branch was cut from a target head that has since moved. `--recreate` starts over when the branch carries nothing but the lane's own merge commit; otherwise merge your branch into the update worktree by hand. |
 | `ancestry-missing` | 1 | No merge base with the release. |
@@ -190,12 +192,15 @@ Two things make this shorter than it looks. **Generated paths are never hand-mer
 conflicted path matching `generatedPaths` is not offered to you at all — `continue` runs the
 `regenerate` commands and stages the result, resolution by derivation rather than by preference,
 and the record marks those paths `resolvedBy: regeneration`. When a merge's *only* conflicts are
-generated paths, `integrate` finishes it on its own. And `git rerere` is enabled in the update
-worktree, so a resolution recorded once is replayed the next time git meets the same conflict.
+generated paths, `integrate` finishes it on its own. And the lane runs the merge and its merge
+commit under `rerere` (`-c rerere.enabled=true` per invocation — nothing is written to your git
+configuration), so a resolution recorded once in the shared `rr-cache` is replayed the next time
+git meets the same conflict.
 
-`continue` refuses while any unmerged index entry or any `<<<<<<<` / `=======` / `>>>>>>>` marker
-line remains in a tracked file. A marker that survives regeneration is a defect in your
-`generatedPaths` list, and is reported as one rather than committed.
+`continue` refuses while any unmerged index entry remains, or any `<<<<<<<`, `=======` or
+`>>>>>>>` marker line remains in a file the merge touched (a bare `=======` counts only beside
+another marker — a setext underline alone does not). A marker that survives regeneration is a
+defect in your `generatedPaths` list, and is reported as one rather than committed.
 
 ## Gates are upgrade gates
 
@@ -262,7 +267,8 @@ git commit-tree <the tree that printed> -p <your branch> -p <release> -m "Merge 
 
 - **Back out an attempt.** `node scripts/upstream.mjs abort` aborts the in-progress merge and
   removes the update worktree, deleting the update branch only when it carries no commit beyond
-  the target head it was cut from — a branch with human commits is kept, and the lane says so.
+  the target head it was cut from — a branch with any commit on it, the lane's own merge commit
+  included, is kept, and the lane says so.
   Your integration branch is untouched either way, and a second `abort` is a no-op.
 - **Back out a landed integration.** `git revert -m 1 <the merge commit>` on the integration
   branch. Git then remembers the merge as reverted, so revert the revert before merging that
@@ -279,14 +285,15 @@ git commit-tree <the tree that printed> -p <your branch> -p <release> -m "Merge 
 | Replacement override | `.stamity/overrides/<class>/<id>.md` | None. The file is yours; upstream never writes it. | An override-drift row when the release changes the artifact behind it: *the default behind `<path>` changed in `<tag>`; the override still applies and hides the change — review it*. Reads *orphaned* when the upstream side was deleted, naming the rename target when git found one. |
 | Patch overlay | `.stamity/overrides/<class>/<id>.customize.yaml` or `.customize.md` | None on the merge. The risk is a patch that quietly stops matching what it patches. | The same drift rows — those pairs are derived from the override path, so nothing has to be declared. |
 | Pack | `packs/<id>/` and its `pack.json` | None while the pack only adds. | Nothing, unless the pack shadows a bundled id — declare that in `shadows` and it is reported like an override. |
-| Direct core edit | `content/**`, `src/**`, the roster, the MCP catalog, the hook bodies | The real cost. Same lines on both sides: a conflict. Same file, different lines: a clean merge that may still be wrong. | `overlaps`, one row per path both sides changed — *merged cleanly on both sides' edits; semantic review needed* — and one `watched` row per `watch` glob the release touches, each with the upstream line delta. |
+| Direct core edit | `content/**`, `src/**`, the roster, the MCP catalog, the hook bodies | The real cost. Same lines on both sides: a conflict. Same file, different lines: a clean merge that may still be wrong. | `overlaps`, one row per path both sides changed — *merged cleanly on both sides' edits; semantic review needed* — and one `watched` row per changed path a `watch` glob matches, each with the upstream line delta. |
 
 Those rows are the lane's honest limit: it can say *look here*, and it cannot say *this is fine*.
 
 Adding content downstream also moves this repository's own hand-maintained pins, and an upgrade
-conflicts on them by design: the corpus counts in README's `content/` map row, and the literals
-in `test/docsPages.test.ts` that hold those counts and the page roster. Expect that conflict, and
-resolve it by re-deriving the counts for your fork rather than taking either side whole.
+conflicts on them by design: the corpus counts in README's `content/` map row — hand-typed, and
+held to the catalog's own count by `test/docsPages.test.ts` — and, if your fork adds a guide,
+that test's page-roster literals. Expect that conflict, and resolve it by re-deriving the counts
+for your fork rather than taking either side whole.
 
 A bundled org-overlay layer — a directory inside the package that adds and shadows corpus
 artifacts without editing `content/` — would reduce the most common fork edit to zero conflicts.
@@ -376,9 +383,10 @@ about text and nothing more; `Stamity-Upstream-Gates: none` is the lane telling 
 should still apply now that the default behind it moved; whether an extension point your fork
 depends on was quietly retired upstream. The lane surfaces all three as rows — none is a verdict.
 
-**AI assistance: none required, none used.** No step calls a model, and nothing leaves the
-machine except a `git fetch` of the upstream you configured — plus, in the GitHub workflow, that
-platform's own API through `gh`.
+**AI assistance: none required, none used.** No step calls a model, and nothing the lane itself
+sends leaves the machine except a `git fetch` of the upstream you configured — your own
+`regenerate` and `gates` commands reach whatever they reach (the recommended list's `npm ci`
+reaches the npm registry) — plus, in the GitHub workflow, that platform's own API through `gh`.
 
 ## For stamity maintainers: keeping upgrades cheap downstream
 
