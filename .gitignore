@@ -12,6 +12,10 @@ website/.docusaurus/
 .env.*
 !.env.example
 
+# The upstream lane's update worktrees (scripts/upstream.mjs): one linked worktree per release
+# under here, on its own branch, so a merge in progress never touches the operator's tree.
+.stamity/upstream-work/
+
 # Root-level session scratch. The leak gate walks tracked AND
 # untracked-but-not-ignored files (scripts/leak-gate.mjs, `listFromGit`), so a local
 # note holding names the gate reserves keeps every run red until the path leaves that
