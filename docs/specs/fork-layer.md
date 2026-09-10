@@ -1,7 +1,7 @@
 ---
 id: fork-layer
 # A design document, authored outside the spec command and excluded from the site build.
-status: shipped — unreleased (on main after pull request #29; the next cut is 1.5.0)
+status: shipped-with-1.5.0
 obsolete_when: the enterprise-forks guide and the customization page stop carrying the fork layer's behaviour, or a decision cuts the surface
 ---
 # The fork layer
