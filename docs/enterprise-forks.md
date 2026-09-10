@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 45bc35d. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e58b6ad. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or
      leaves `.stamity/upstream.json`, the job split or the permissions in
      `.github/workflows/upstream-update.yml` change, or CONTRIBUTING.md's regeneration table

@@ -282,7 +282,7 @@ const CURRENCY_HEADER =
  * so the constant has to move on the next cut or the assertion fails, and no page claims a
  * verification later than the cut it shipped in.
  */
-const RELEASE_CUT_DATE = "2026-09-09";
+const RELEASE_CUT_DATE = "2026-09-10";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

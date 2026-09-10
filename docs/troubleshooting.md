@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit f1a4749. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e58b6ad. -->
 <!-- Re-open when: a doctor probe is added or removed, an error code starts or stops being
      thrown, or the three-status exit model changes. `test/docsPages.test.ts` holds this page
      to the hand-page contract; `src/cli/commands/check.ts` owns the probes and
