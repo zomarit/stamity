@@ -304,10 +304,14 @@ default list for this repository is written into the guide and mirrors
 ### REQ-UPSTREAM-008 — Drift a clean merge hides is reported
 
 For each entry of `shadows` (`<fork path> → <upstream path>`), and for each automatic pair
-the lane derives — `.stamity/overrides/<class>/<id>.md` → `content/<class>/<id>.md`,
-`.stamity/overrides/<class>/<id>.customize.{yaml,md}` → the same,
-`.stamity/overrides/skills/<id>/SKILL.md` → `content/skills/<id>/SKILL.md` — the report
-carries one row when the release changes the upstream side: *the default behind
+the lane derives from the two roots it censuses, `.stamity/overrides/` and the fork layer's
+`fork/` (`docs/specs/fork-layer.md`) — `<root>/<class>/<id>.md` and
+`<root>/<class>/<id>.customize.{yaml,md}` → the corpus file that exists at the target head
+among the spellings the corpus uses for that class (`<id>.md`, `stamity-<id>.md`,
+`st-<id>.md`), and `<root>/skills/<id>/SKILL.md` or its `SKILL.customize.*` siblings →
+`content/skills/<spelling>/SKILL.md` resolved the same way; a file with no counterpart is an
+addition and derives no pair — the report carries one row when the release changes the
+upstream side: *the default behind
 `<fork path>` changed in `<tag>` (+a/−b lines); the override still applies and hides the
 change — review it.* When the upstream side was deleted or renamed in the release, the row
 reads *orphaned* and names the rename target when git detected one.

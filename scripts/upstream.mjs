@@ -95,7 +95,9 @@
 //   candidates    [{ tag, commit, date }] every release newer than the integrated one, in order
 //   skipped       the candidate tags the target's single merge covers besides the target itself
 //   divergence    { behindRelease, aheadOfRelease, upstreamAheadOfRelease }
-//   affected      { overlaps, watched, shadowed, renamed } — the drift rows of REQ-UPSTREAM-008
+//   affected      { overlaps, watched, shadowed, renamed } — the drift rows of REQ-UPSTREAM-008;
+//                 the shadowed rows are derived from the consumer override tree and from the
+//                 bundled fork layer `fork/` (REQ-FORK-008), plus the configured `shadows`
 //   conflicts     [{ path, kind, generated, deletedBy?, renamedFrom?, renamedTo?, resolvedBy?,
 //                 regenerated? }] kind is one of content, modify/delete, rename/delete, add/add,
 //                 other; `regenerated: false` marks a generated path that regeneration left
@@ -699,23 +701,91 @@ export function extractReleaseNotes(changelog, version) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Shadows (REQ-UPSTREAM-008): the automatic override -> corpus pairs
+// Shadows (REQ-UPSTREAM-008, REQ-FORK-008): the automatic override -> corpus and fork -> corpus pairs
+//
+// A fork shadows a bundled artifact from two trees with one layout: the consumer override tree
+// `.stamity/overrides/` (`docs/customization.md`) and the bundled fork layer `fork/`
+// (`docs/specs/fork-layer.md`), which a fork of this repository fills with its own agents, rules,
+// commands and skills. Both spell their ids as bare slugs; the corpus spells the same ids with a
+// reserved filename prefix. Resolving the counterpart is therefore a lookup against the tree,
+// not a string concatenation — see `deriveShadowPairs`.
+
+/** The two trees whose files imply a shadow pair, in the order the census lists them. */
+const SHADOW_ROOTS = Object.freeze(['.stamity/overrides/', 'fork/'])
 
 /**
- * The automatic shadow pairs a fork's `.stamity/overrides/` tree implies:
- * `.stamity/overrides/<class>/<id>.md` and `<id>.customize.{yaml,md}` shadow
- * `content/<class>/<id>.md`; `.stamity/overrides/skills/<id>/SKILL.md` shadows
- * `content/skills/<id>/SKILL.md`. Paths are POSIX and repository-relative.
+ * The prefix the engine mints a class's corpus filenames under, keyed by the DIRECTORY name both
+ * shadow trees use for that class.
+ *
+ * A copy of `contentPrefixFor` (`src/types/markers.ts:216-231`): the invocable classes (`command`,
+ * `skill`) take `st-`, every other class takes `stamity-`. Copied rather than imported because
+ * this script imports nothing from `src/` — it has to run in a tree that is mid-merge, where
+ * `src/` may not compile. The four keys are the closed content-class set
+ * (`CONTENT_CLASSES`, `src/types/content.ts:14`) in its directory spelling; a directory that is
+ * not one of them is not a content class at all, so it has no minted spelling and only the bare
+ * name is a candidate for it.
  */
-export function deriveShadowPairs(paths) {
+const CLASS_CONTENT_PREFIX = new Map([
+  ['agents', 'stamity-'],
+  ['rules', 'stamity-'],
+  ['commands', 'st-'],
+  ['skills', 'st-'],
+])
+
+/** Every prefix the engine mints filenames under (`ENGINE_CONTENT_PREFIXES`, `markers.ts:196-199`). */
+const ENGINE_CONTENT_PREFIXES = Object.freeze(['stamity-', 'st-'])
+
+/**
+ * The three filenames inside a skill directory that shadow the skill itself: its body, and the two
+ * overlay siblings that patch it (`REQ-FORK-001`, `docs/customization.md`). All three answer to the
+ * one bundled `SKILL.md` — a patch of a skill hides changes to the same file a replacement does.
+ * Every OTHER file in the directory (`references/`, scripts) shadows nothing: it is the skill's own
+ * material, not a stand-in for a bundled file.
+ */
+const SKILL_SHADOW_FILENAMES = new Set(['SKILL.md', 'SKILL.customize.yaml', 'SKILL.customize.md'])
+
+/**
+ * The corpus spellings one bare id can carry under `<class>`, canonical first: the bare name, the
+ * class's own minted prefix, then the other prefix the engine mints under. Those are the three
+ * spellings REQ-FORK-008 names, ordered so a tie goes to the spelling the class actually mints.
+ */
+function corpusSpellings(klass, id) {
+  const own = CLASS_CONTENT_PREFIX.get(klass)
+  if (own === undefined) return [id]
+  const others = ENGINE_CONTENT_PREFIXES.filter((prefix) => prefix !== own)
+  return [id, `${own}${id}`, ...others.map((prefix) => `${prefix}${id}`)]
+}
+
+/**
+ * The automatic shadow pairs a fork's own trees imply. One layout, two roots ({@link SHADOW_ROOTS}):
+ *
+ *   <root>/<class>/<id>.md                        the corpus file for <id> under <class>
+ *   <root>/<class>/<id>.customize.yaml            the same file
+ *   <root>/<class>/<id>.customize.md              the same file
+ *   <root>/skills/<id>/SKILL.md                   content/skills/<id's spelling>/SKILL.md
+ *   <root>/skills/<id>/SKILL.customize.yaml       the same file
+ *   <root>/skills/<id>/SKILL.customize.md         the same file
+ *
+ * Ids in both trees are bare slugs while the corpus spells them with a reserved prefix —
+ * `stamity-<id>.md` for agents and rules, `st-<id>` for commands and skills — so the counterpart
+ * is the candidate spelling that EXISTS rather than the bare name alone: `exists(path) => boolean`
+ * is answered against the target head by the caller, which is what makes the pair a real corpus
+ * path instead of a name nothing ever matches. A file whose candidates all miss derives NO pair:
+ * it adds an id upstream does not have, and the lane has nothing to compare (REQ-FORK-008).
+ *
+ * Paths are POSIX and repository-relative. `exists` is required; the function is otherwise pure.
+ */
+export function deriveShadowPairs(paths, exists) {
   const pairs = {}
   for (const path of paths) {
-    if (!path.startsWith('.stamity/overrides/')) continue
-    const segments = path.slice('.stamity/overrides/'.length).split('/')
+    const root = SHADOW_ROOTS.find((prefix) => path.startsWith(prefix))
+    if (root === undefined) continue
+    const segments = path.slice(root.length).split('/')
     const [klass, ...rest] = segments
     if (klass === undefined || klass === '') continue
-    if (klass === 'skills' && rest.length === 2 && rest[1] === 'SKILL.md') {
-      pairs[path] = `content/skills/${rest[0]}/SKILL.md`
+    if (klass === 'skills' && rest.length === 2 && SKILL_SHADOW_FILENAMES.has(rest[1])) {
+      const directory = corpusSpellings(klass, rest[0]).find((name) => exists(`content/skills/${name}/SKILL.md`))
+      if (directory !== undefined) pairs[path] = `content/skills/${directory}/SKILL.md`
       continue
     }
     if (rest.length !== 1) continue
@@ -728,7 +798,8 @@ export function deriveShadowPairs(paths) {
           ? name.slice(0, -'.md'.length)
           : null
     if (id === null || id === '') continue
-    pairs[path] = `content/${klass}/${id}.md`
+    const spelling = corpusSpellings(klass, id).find((candidate) => exists(`content/${klass}/${candidate}.md`))
+    if (spelling !== undefined) pairs[path] = `content/${klass}/${spelling}.md`
   }
   return pairs
 }
@@ -1094,8 +1165,21 @@ function computeAffected(context, config, base, targetHead, releaseCommit, relea
     if (matchesAnyGlob(path, config.watch)) watched.push({ path, upstreamChange: change.status, upstreamLines: linesOf(path) })
   }
 
-  const forkTree = git(['ls-tree', '-r', '--name-only', targetHead, '--', '.stamity/overrides/'], { cwd: root, check: false })
-  const automatic = forkTree.status === 0 ? deriveShadowPairs(forkTree.stdout.split('\n').filter((line) => line !== '')) : {}
+  // The census of both shadow trees, and the corpus tree the pairs resolve against — read at the
+  // target head, `-z` so a path with a space or a non-ASCII byte arrives raw rather than quoted,
+  // and `--` so a root that looks like a revision cannot be taken for one. A pathspec matching
+  // nothing is not an error here: a fork with no `fork/` directory just lists fewer files.
+  const listTree = (pathspecs) => {
+    const result = git(['ls-tree', '-r', '--name-only', '-z', targetHead, '--', ...pathspecs], { cwd: root, check: false })
+    return result.status === 0 ? result.stdout.split('\0').filter((entry) => entry !== '') : null
+  }
+  const forkTree = listTree(SHADOW_ROOTS)
+  let corpusTree = null
+  const inCorpus = (candidate) => {
+    corpusTree ??= new Set(listTree(['content/']) ?? [])
+    return corpusTree.has(candidate)
+  }
+  const automatic = forkTree === null || forkTree.length === 0 ? {} : deriveShadowPairs(forkTree, inCorpus)
   const pairs = { ...automatic, ...config.shadows }
   const shadowed = []
   for (const [forkPath, upstreamPath] of Object.entries(pairs)) {
@@ -1685,7 +1769,11 @@ function renderAffected(doc, lines) {
     rows.push(`- \`${row.from}\` was renamed to \`${row.to}\` upstream${row.forkChanged ? '; the fork changed the old path, and git carries that edit into the new one when it can' : ''}`)
   }
   lines.push('## Affected paths', '')
-  lines.push(...(rows.length > 0 ? rows : ['- none: the release touches no path the fork changed, watches or shadows']))
+  lines.push(
+    ...(rows.length > 0
+      ? rows
+      : ['- none: the release touches no path the fork changed, watches, or shadows through `fork/`, `.stamity/overrides/` or `shadows`']),
+  )
   lines.push('')
 }
 

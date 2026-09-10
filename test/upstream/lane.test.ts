@@ -45,6 +45,10 @@ import {
   README_STRAY,
   RELEASE_NOTES_V1_1,
   RELEASE_TAGS,
+  SECRETS_V1,
+  SECRETS_V1_1,
+  SKILL_V1,
+  SKILL_V1_1,
   SLOW_GATE_SOURCE,
   STRAY_GENERATOR_SOURCE,
   blobIdAt,
@@ -425,23 +429,130 @@ describe("release notes (the release.yml extraction rule)", () => {
 });
 
 describe("the record, the shadows, the report, the exit contract", () => {
-  it("derives the automatic shadow pairs from an overrides tree", () => {
+  /**
+   * A corpus at the target head, in every spelling the engine mints (`contentPrefixFor`,
+   * `src/types/markers.ts:216-231`): agents and rules under `stamity-`, commands and skills under
+   * `st-`, one file left bare, one command still carrying the pre-split `stamity-` spelling, and
+   * `content/charter/` — a directory that is NOT one of the four content classes
+   * (`CONTENT_CLASSES`, `src/types/content.ts:14`), so no prefix is ever tried for it.
+   */
+  const CORPUS = new Set([
+    "content/rules/alpha.md",
+    "content/rules/stamity-secrets.md",
+    "content/agents/stamity-reviewer.md",
+    "content/commands/st-ask.md",
+    "content/commands/stamity-legacy.md",
+    "content/skills/st-eval-run/SKILL.md",
+    "content/skills/st-eval-run/references/rubric.md",
+    "content/charter/stamity-charter.md",
+  ]);
+  const inCorpus = (path: string): boolean => CORPUS.has(path);
+
+  it("derives an overrides pair by restoring the reserved prefix the corpus spells the id with", () => {
     expect(
-      deriveShadowPairs([
-        ".stamity/overrides/rules/stamity-secrets.md",
-        ".stamity/overrides/rules/stamity-secrets.customize.yaml",
-        ".stamity/overrides/agents/stamity-reviewer.customize.md",
-        ".stamity/overrides/skills/st-ask/SKILL.md",
-        ".stamity/overrides/skills/st-ask/references/x.md",
-        ".stamity/overrides/README.txt",
-        "content/rules/other.md",
-      ]),
+      deriveShadowPairs(
+        [
+          ".stamity/overrides/rules/secrets.md",
+          ".stamity/overrides/rules/secrets.customize.yaml",
+          ".stamity/overrides/agents/reviewer.customize.md",
+          ".stamity/overrides/commands/ask.md",
+          ".stamity/overrides/skills/eval-run/SKILL.md",
+          ".stamity/overrides/skills/eval-run/references/rubric.md",
+          ".stamity/overrides/README.txt",
+          "content/rules/alpha.md",
+        ],
+        inCorpus,
+      ),
     ).toEqual({
-      ".stamity/overrides/rules/stamity-secrets.md": "content/rules/stamity-secrets.md",
-      ".stamity/overrides/rules/stamity-secrets.customize.yaml": "content/rules/stamity-secrets.md",
-      ".stamity/overrides/agents/stamity-reviewer.customize.md": "content/agents/stamity-reviewer.md",
-      ".stamity/overrides/skills/st-ask/SKILL.md": "content/skills/st-ask/SKILL.md",
+      ".stamity/overrides/rules/secrets.md": "content/rules/stamity-secrets.md",
+      ".stamity/overrides/rules/secrets.customize.yaml": "content/rules/stamity-secrets.md",
+      ".stamity/overrides/agents/reviewer.customize.md": "content/agents/stamity-reviewer.md",
+      ".stamity/overrides/commands/ask.md": "content/commands/st-ask.md",
+      ".stamity/overrides/skills/eval-run/SKILL.md": "content/skills/st-eval-run/SKILL.md",
     });
+  });
+
+  it("takes the bare corpus name when one exists, and the file's own spelling when it is already prefixed", () => {
+    expect(
+      deriveShadowPairs([".stamity/overrides/rules/alpha.md", ".stamity/overrides/rules/stamity-secrets.md"], inCorpus),
+    ).toEqual({
+      ".stamity/overrides/rules/alpha.md": "content/rules/alpha.md",
+      ".stamity/overrides/rules/stamity-secrets.md": "content/rules/stamity-secrets.md",
+    });
+  });
+
+  it("derives the fork layer's pairs from `fork/`: replacements, patches and skills alike", () => {
+    expect(
+      deriveShadowPairs(
+        [
+          "fork/rules/secrets.md",
+          "fork/agents/reviewer.customize.yaml",
+          "fork/commands/ask.customize.md",
+          "fork/skills/eval-run/SKILL.md",
+          "fork/skills/eval-run/references/rubric.md",
+          "fork/README.md",
+        ],
+        inCorpus,
+      ),
+    ).toEqual({
+      "fork/rules/secrets.md": "content/rules/stamity-secrets.md",
+      "fork/agents/reviewer.customize.yaml": "content/agents/stamity-reviewer.md",
+      "fork/commands/ask.customize.md": "content/commands/st-ask.md",
+      "fork/skills/eval-run/SKILL.md": "content/skills/st-eval-run/SKILL.md",
+    });
+  });
+
+  it("pairs a skill's overlay siblings with the same bundled SKILL.md, from either root", () => {
+    // A patch of a skill hides changes to the file a replacement of it hides; the skill's own
+    // material — `references/`, scripts — stands in for no bundled file even when one exists there.
+    expect(
+      deriveShadowPairs(
+        [
+          "fork/skills/eval-run/SKILL.customize.yaml",
+          "fork/skills/eval-run/SKILL.customize.md",
+          ".stamity/overrides/skills/eval-run/SKILL.customize.yaml",
+          ".stamity/overrides/skills/eval-run/SKILL.customize.md",
+          "fork/skills/eval-run/references/rubric.md",
+          ".stamity/overrides/skills/eval-run/references/rubric.md",
+        ],
+        inCorpus,
+      ),
+    ).toEqual({
+      "fork/skills/eval-run/SKILL.customize.yaml": "content/skills/st-eval-run/SKILL.md",
+      "fork/skills/eval-run/SKILL.customize.md": "content/skills/st-eval-run/SKILL.md",
+      ".stamity/overrides/skills/eval-run/SKILL.customize.yaml": "content/skills/st-eval-run/SKILL.md",
+      ".stamity/overrides/skills/eval-run/SKILL.customize.md": "content/skills/st-eval-run/SKILL.md",
+    });
+  });
+
+  it("falls back to the other minted prefix for a class whose corpus file predates the split", () => {
+    // `ENGINE_CONTENT_PREFIXES` keeps both spellings forever because a repository upgraded across
+    // the split holds emissions under both (`src/types/markers.ts:184-199`); a command still filed
+    // as `stamity-legacy.md` is therefore found, after the `st-` spelling its class now mints.
+    expect(deriveShadowPairs(["fork/commands/legacy.md"], inCorpus)).toEqual({
+      "fork/commands/legacy.md": "content/commands/stamity-legacy.md",
+    });
+  });
+
+  it("derives nothing for a fork file that adds an id the corpus does not carry", () => {
+    expect(
+      deriveShadowPairs(
+        [
+          "fork/rules/acme-house-style.md",
+          "fork/rules/acme-house-style.customize.yaml",
+          "fork/skills/acme-review/SKILL.md",
+          "fork/skills/acme-review/SKILL.customize.yaml",
+          "fork/skills/acme-review/SKILL.customize.md",
+        ],
+        inCorpus,
+      ),
+    ).toEqual({});
+  });
+
+  it("tries no prefixed spelling for a directory that is not a content class", () => {
+    // `content/charter/stamity-charter.md` exists, and `charter` is not one of the four classes
+    // `contentPrefixFor` rules on — so the bare name is the only candidate and it misses.
+    expect(deriveShadowPairs(["fork/charter/charter.md", ".stamity/overrides/charter/charter.md"], inCorpus)).toEqual({});
   });
 
   it("shapes the record with the fields REQ-UPSTREAM-010 lists, and derives the gate verdict", () => {
@@ -614,6 +725,15 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     expect(fileAt(upstream, upstream.tags["v1.0.0"]!, "content/rules/alpha.md")).toBe(ALPHA_V1);
     expect(fileAt(upstream, upstream.tags["v1.1.0"]!, "content/rules/alpha.md")).toBe(ALPHA_V1_1);
     expect(fileAt(upstream, upstream.tags["v1.1.0"]!, "content/rules/delta.md")).toBe(DELTA_V1_1);
+    // The prefixed corpus file: filed under the spelling an agent or a rule is minted with, and
+    // changed in v1.1.0, so a shadow filed under the bare id `secrets` has drift to report.
+    expect(fileAt(upstream, upstream.tags["v1.0.0"]!, "content/rules/stamity-secrets.md")).toBe(SECRETS_V1);
+    expect(fileAt(upstream, upstream.tags["v1.1.0"]!, "content/rules/stamity-secrets.md")).toBe(SECRETS_V1_1);
+    expect(fileAt(upstream, upstream.tags["v1.1.0"]!, "content/rules/secrets.md")).toBeNull();
+    // The bundled skill: the `st-` prefix sits on the directory, and v1.1.0 revises its body.
+    expect(fileAt(upstream, upstream.tags["v1.0.0"]!, "content/skills/st-review/SKILL.md")).toBe(SKILL_V1);
+    expect(fileAt(upstream, upstream.tags["v1.1.0"]!, "content/skills/st-review/SKILL.md")).toBe(SKILL_V1_1);
+    expect(fileAt(upstream, upstream.tags["v1.1.0"]!, "content/skills/review/SKILL.md")).toBeNull();
     expect(fileAt(upstream, upstream.tags["v1.1.0"]!, "generated/alpha.txt")).toBe(renderGenerated("alpha", ALPHA_V1_1));
     expect(fileAt(upstream, upstream.tags["v1.3.0"]!, "content/rules/gamma.md")).toBe(BETA_V1_1);
     expect(fileAt(upstream, upstream.tags["v1.3.0"]!, "content/rules/beta.md")).toBeNull();
@@ -1030,6 +1150,60 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     CASE_TIMEOUT_MS,
   );
 
+  // REQ-FORK-008 — the bundled fork layer's drift rows, and the same repair for the override tree.
+  it(
+    "pairs a bare-slug shadow with the prefixed corpus file it hides, from `fork/` and from the override tree, and never pairs a fork addition",
+    () => {
+      const fork = createFork(upstream, forkDir(), {
+        name: "forklayer",
+        files: {
+          // A fork replacement of the corpus rule `secrets`, whose corpus file is spelled
+          // `content/rules/stamity-secrets.md` — the pair a bare-name derivation never found.
+          "fork/rules/secrets.md": "# Secrets, the fork's wording\n",
+          // A fork patch of a bare-named corpus rule: the other spelling, same derivation.
+          "fork/rules/alpha.customize.yaml": "tags: [fork]\n",
+          // A fork patch of a bundled SKILL: the `st-` prefix sits on the corpus DIRECTORY.
+          "fork/skills/review/SKILL.customize.yaml": "tags: [fork]\n",
+          // Additions: no corpus counterpart under any spelling, so no pair and no row — the
+          // patch of the fork's OWN skill is an addition too, and derives nothing either.
+          "fork/rules/acme-house-style.md": "# Acme house style\n",
+          "fork/skills/acme-review/SKILL.md": "# Acme review\n",
+          "fork/skills/acme-review/SKILL.customize.yaml": "tags: [fork]\n",
+          // The consumer tree files the same id the same way, and is repaired the same way.
+          ".stamity/overrides/rules/secrets.md": "# Secrets, this repository's wording\n",
+        },
+      });
+
+      const result = runLane(fork, ["integrate", "--release", "v1.1.0"]);
+      expectOutcome(result, "integrated");
+      expect(result.doc.conflicts).toEqual([]);
+      expect(result.doc.affected?.shadowed).toEqual([
+        { forkPath: ".stamity/overrides/rules/secrets.md", upstreamPath: "content/rules/stamity-secrets.md", release: "v1.1.0", change: "modified", upstreamLines: { added: 1, removed: 1 } },
+        { forkPath: "fork/rules/alpha.customize.yaml", upstreamPath: "content/rules/alpha.md", release: "v1.1.0", change: "modified", upstreamLines: { added: 1, removed: 1 } },
+        { forkPath: "fork/rules/secrets.md", upstreamPath: "content/rules/stamity-secrets.md", release: "v1.1.0", change: "modified", upstreamLines: { added: 1, removed: 1 } },
+        { forkPath: "fork/skills/review/SKILL.customize.yaml", upstreamPath: "content/skills/st-review/SKILL.md", release: "v1.1.0", change: "modified", upstreamLines: { added: 1, removed: 1 } },
+      ]);
+      expect(result.doc.report).toContain(
+        "the default behind `fork/rules/secrets.md` changed in v1.1.0 (+1/−1 lines); the override still applies and hides the change — review it",
+      );
+      // The additions carry no bundled default, so the lane has nothing to compare and says nothing.
+      const rows = result.doc.affected?.shadowed.map((row) => row.forkPath) ?? [];
+      expect(rows).not.toContain("fork/rules/acme-house-style.md");
+      expect(rows).not.toContain("fork/skills/acme-review/SKILL.md");
+      expect(rows).not.toContain("fork/skills/acme-review/SKILL.customize.yaml");
+      expect(result.doc.report).not.toContain("acme-house-style");
+      expect(result.doc.report).not.toContain("acme-review");
+      expect(result.doc.report).toContain(
+        "the default behind `fork/skills/review/SKILL.customize.yaml` changed in v1.1.0 (+1/−1 lines); the override still applies and hides the change — review it",
+      );
+      expect((recordAt(fork, result.doc.mergeCommit!, "v1.1.0") as { affected: { shadowed: unknown[] } }).affected.shadowed).toHaveLength(4);
+      // The fork's own files are the fork's: the merge carries them through untouched.
+      expect(fileAt(fork, result.doc.mergeCommit!, "fork/rules/secrets.md")).toBe("# Secrets, the fork's wording\n");
+      expect(fileAt(fork, result.doc.mergeCommit!, "content/rules/stamity-secrets.md")).toBe(SECRETS_V1_1);
+    },
+    CASE_TIMEOUT_MS,
+  );
+
   // Criterion 11
   it(
     "fails the behaviour gate on a clean merge that changes a default the fork never edited, and validate turns it around",
@@ -1093,7 +1267,7 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
         config: { gates: [{ name: "slow", run: "node scripts/slow-gate.mjs" }] },
       });
       writeFiles(fork.dir, {
-        "README.md": "# Fixture upstream\n\nRules: 1\n\nAn uncommitted operator note.\n",
+        "README.md": "# Fixture upstream\n\nRules: 2\n\nAn uncommitted operator note.\n",
         "scratch/untracked.txt": "untracked\n",
       });
       const before = snapshotRepo(fork);
@@ -1267,9 +1441,9 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     "preview leaves the working tree, index, stash list and branches byte-identical, clean or conflicted",
     () => {
       const clean = createFork(upstream, forkDir(), { name: "clean" });
-      writeFiles(clean.dir, { "README.md": "# Fixture upstream\n\nRules: 1\n\nStashed.\n" });
+      writeFiles(clean.dir, { "README.md": "# Fixture upstream\n\nRules: 2\n\nStashed.\n" });
       git(clean, ["stash", "push", "--quiet", "-m", "operator stash"]);
-      writeFiles(clean.dir, { "notes.txt": "untracked\n", "README.md": "# Fixture upstream\n\nRules: 1\n\nDirty.\n" });
+      writeFiles(clean.dir, { "notes.txt": "untracked\n", "README.md": "# Fixture upstream\n\nRules: 2\n\nDirty.\n" });
       git(clean, ["add", "notes.txt"]);
       const before = snapshotRepo(clean);
 
