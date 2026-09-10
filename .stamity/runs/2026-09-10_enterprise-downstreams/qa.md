@@ -1,6 +1,6 @@
 # Enterprise downstream release QA
 
-Reviewable candidate: `caec7fac5e45d82ad1b766c30affd3696829c690`, prepared version 1.6.0. This checkpoint is unsigned. Product gates bind to `0f7b0e9a457c6c78c96eb3cb9c24c3802d85718b`; the [final source comparison](final-site-source-binding.json) proves the subsequent changes are only the guide, plan and inbox. Actual public and private fixture lifecycles are complete within the explicit external limits below. The subsequent [ledger retirement correction](retirement-verification.md) is independently verified and changes no product, corpus, workflow or rendered-document input.
+Reviewable candidate: `caec7fac5e45d82ad1b766c30affd3696829c690`, prepared version 1.6.0. The maintainer signed this checkpoint on 2026-09-10 after reviewing the final QA candidate at `458afba2c61760cef6240a92b240e2ce48425867`. Product gates bind to `0f7b0e9a457c6c78c96eb3cb9c24c3802d85718b`; the [final source comparison](final-site-source-binding.json) proves the subsequent changes are only the guide, plan and inbox. Actual public and private fixture lifecycles are complete within the explicit external limits below. The subsequent [ledger retirement correction](retirement-verification.md) is independently verified and changes no product, corpus, workflow or rendered-document input.
 
 The [independent full gate](final-report-verification.md) passed 7,458 tests with two existing skips; coverage and all configured per-file floors passed. Product evidence pointers bind to that candidate; final browser evidence binds to `caec7fa`. The browser bundle is [browser-caec7fa.json](../../evidence/browser-caec7fa.json); all 12 theme/viewport scans and 20 actual table keyboard probes passed. These automate specific assertions, not a complete human accessibility review.
 
@@ -39,7 +39,7 @@ The tables below are evidence review, not instructions to repeat completed insta
 
 **Sign-off — enterprise downstream support 1.6.0, 2026-09-10**
 
-- [ ] Every H-risk row is covered by its named passing proof and reviewed.
-- [ ] Every failing M row has a filed follow-up; unperformed human rows remain explicit.
+- [x] Every H-risk row is covered by its named passing proof and reviewed.
+- [x] No failing M row is known from the recorded automated evidence; the two unperformed human rows remain explicit and were retained in the sign-off request.
 - Rollback: revert the merged implementation through a normal reviewed PR; restore any affected consumer to its prior verified commit or retained release ref. Do not move or delete published tags. A published npm correction requires a new patch release, with the same controls.
-- Shippable: **pending human decision**. No approval, manual walkthrough or release is inferred from this artifact.
+- Shippable: **YES**. The maintainer replied “yes” to the explicit sign-off question for version 1.6.0 and candidate `458afba2c61760cef6240a92b240e2ce48425867`, with the unperformed human accessibility walks and external enterprise proof gaps retained. This records a human release decision; it does not mark those walks performed or the external proofs complete. Required CI and the human npm deployment approval remain binding.
