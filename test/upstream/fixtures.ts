@@ -34,9 +34,21 @@ import { carriedProcessEnv, NO_GIT_CONFIG } from "../support/repoFixtures.ts";
  *                 an overlapping edit of `alpha.md`, an enterprise tier in `config.json` with
  *                 the behaviour gate that pins it, extra files, and `.stamity/upstream.json`.
  *
+ * The corpus of the fixture upstream carries both filename spellings this repository's own does:
+ * `content/rules/alpha.md` is bare, and `content/rules/stamity-secrets.md` carries the reserved
+ * prefix an agent or rule is minted under (`contentPrefixFor`, `src/types/markers.ts:216-231`).
+ * A shadow filed under a bare id — `fork/rules/secrets.md`, `.stamity/overrides/rules/secrets.md` —
+ * therefore has to be resolved to the PREFIXED corpus file for a drift row to appear at all, which
+ * is the derivation REQ-FORK-008 asks for and the reason the prefixed file exists here. A skill
+ * carries the same split in its DIRECTORY name: `content/skills/st-review/` is the bundled skill a
+ * fork shadows, or patches, under the bare directory `skills/review/`.
+ *
  * What each release changes, and which scenario it exists for:
  *   v1.1.0  edits the line of `content/rules/alpha.md` the fork also edits (a content conflict),
- *           regenerates `generated/alpha.txt`, adds `beta.md` and `delta.md`, bumps README's count
+ *           regenerates `generated/alpha.txt`, adds `beta.md` and `delta.md`, bumps README's count,
+ *           and revises `content/rules/stamity-secrets.md` and `content/skills/st-review/SKILL.md` —
+ *           the two prefixed defaults a fork shadows under their bare ids, so the shadow's drift
+ *           row (a replacement's, and a `.customize.*` patch's) has something to report
  *   v1.2.0  changes the tier RESOLUTION RULE in `scripts/resolve-tier.mjs` — a file no fork
  *           edits — so a fork's top-level `"tier"` in `config.json` is no longer read: a clean
  *           textual merge that changes behaviour, which the fork's gate catches
@@ -288,6 +300,21 @@ export const ALPHA_FORK = "# Alpha\n\nAlpha line one.\nAlpha line two, the fork'
 export const BETA_V1_1 = "# Beta\n\nBeta line one.\nBeta line two.\nBeta line three.\nBeta line four.\n";
 export const DELTA_V1_1 = "# Delta\n\nDelta line one.\nDelta line two.\n";
 
+/**
+ * `content/rules/stamity-secrets.md`: the prefixed corpus file, at v1.0.0 and as v1.1.0 revises it.
+ * Its id is `secrets`; a fork or a consumer shadows it under that bare slug.
+ */
+export const SECRETS_V1 = "# Secrets\n\nSecrets line one.\nSecrets line two.\n";
+export const SECRETS_V1_1 = "# Secrets\n\nSecrets line one.\nSecrets line two, revised upstream.\n";
+
+/**
+ * `content/skills/st-review/SKILL.md`: the bundled skill, at v1.0.0 and as v1.1.0 revises it. Its
+ * id is `review`, and the `st-` prefix sits on the DIRECTORY — a fork shadows or patches it under
+ * `skills/review/`, so the counterpart has to be resolved through the directory's spelling.
+ */
+export const SKILL_V1 = "---\nname: review\ndescription: Reviews a change.\n---\n\n# Review\n\nReview step one.\n";
+export const SKILL_V1_1 = "---\nname: review\ndescription: Reviews a change.\n---\n\n# Review\n\nReview step one, revised upstream.\n";
+
 const CHANGELOG_V1 = `# Changelog
 
 All notable changes to this fixture are documented here.
@@ -385,9 +412,12 @@ export function createUpstream(parent: string): UpstreamFixture {
   writeFiles(dir, {
     ".gitignore": "node_modules/\n\n# The upstream lane's update worktrees.\n.stamity/upstream-work/\n",
     "package.json": `${JSON.stringify({ name: "fixture-upstream", version: "1.0.0", private: true, type: "module" }, null, 2)}\n`,
-    "README.md": "# Fixture upstream\n\nRules: 1\n",
+    "README.md": "# Fixture upstream\n\nRules: 2\n",
     "CHANGELOG.md": CHANGELOG_V1,
     "content/rules/alpha.md": ALPHA_V1,
+    "content/rules/stamity-secrets.md": SECRETS_V1,
+    "content/skills/st-review/SKILL.md": SKILL_V1,
+    "content/skills/st-review/references/checklist.md": "# Checklist\n\nOne item.\n",
     "scripts/gen.mjs": GENERATOR_SOURCE,
     "scripts/resolve-tier.mjs": RESOLVER_V1,
     "defaults.json": '{\n  "tier": "team"\n}\n',
@@ -403,8 +433,10 @@ export function createUpstream(parent: string): UpstreamFixture {
     "content/rules/alpha.md": ALPHA_V1_1,
     "content/rules/beta.md": BETA_V1_1,
     "content/rules/delta.md": DELTA_V1_1,
+    "content/rules/stamity-secrets.md": SECRETS_V1_1,
+    "content/skills/st-review/SKILL.md": SKILL_V1_1,
     "assets/logo.bin": LOGO_V1_1,
-    "README.md": "# Fixture upstream\n\nRules: 3\n",
+    "README.md": "# Fixture upstream\n\nRules: 4\n",
     "CHANGELOG.md": changelogWith(SECTION_V1_1),
     "package.json": `${JSON.stringify({ name: "fixture-upstream", version: "1.1.0", private: true, type: "module" }, null, 2)}\n`,
   });
@@ -425,7 +457,7 @@ export function createUpstream(parent: string): UpstreamFixture {
   git(repo, ["mv", "content/rules/beta.md", "content/rules/gamma.md"]);
   writeFiles(dir, {
     "content/rules/delta.md": null,
-    "README.md": "# Fixture upstream\n\nRules: 2\n",
+    "README.md": "# Fixture upstream\n\nRules: 3\n",
     "CHANGELOG.md": changelogWith(SECTION_V1_3 + SECTION_V1_2 + SECTION_V1_1),
     "package.json": `${JSON.stringify({ name: "fixture-upstream", version: "1.3.0", private: true, type: "module" }, null, 2)}\n`,
   });
@@ -434,7 +466,7 @@ export function createUpstream(parent: string): UpstreamFixture {
   tagHead(repo, "v1.3.0", { annotated: true });
 
   // Past the newest stable release: a prerelease and a tag outside the pattern, on one commit.
-  writeFiles(dir, { "README.md": "# Fixture upstream\n\nRules: 2\n\nA release candidate is out.\n" });
+  writeFiles(dir, { "README.md": "# Fixture upstream\n\nRules: 3\n\nA release candidate is out.\n" });
   commitAll(repo, "prepare 1.4.0");
   tagHead(repo, PRERELEASE_TAG, { annotated: true });
   tagHead(repo, OFF_PATTERN_TAG, { annotated: false });
