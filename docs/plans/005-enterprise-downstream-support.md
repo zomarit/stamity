@@ -10,9 +10,9 @@ reads: [AGENTS.md, .github/release-controls-checklist.md, docs/specs/fork-layer.
 ## Context
 
 Complete the public and independent-private downstream lifecycle using the existing git
-upstream lane, APM package and downstream-owned Renovate distribution. Source edits already
-work; the APM reader of the fork layer omits resolved additions/replacements and incorrectly
-requires every skill to use a prefixed source directory. Preserve supported CLI commands,
+upstream lane, APM package and downstream-owned Renovate distribution. At intake, source edits
+already worked; the APM reader of the fork layer omitted resolved additions/replacements and
+incorrectly required every skill to use a prefixed source directory. Preserve supported CLI commands,
 public distribution, upstream history, private destinations and review controls while fixing
 those gaps, proving the resulting lifecycle and shipping the canonical release.
 
@@ -182,12 +182,12 @@ contract is reported before edits expand beyond its owner.
 ## Research record and baseline
 
 Intake `d6096aca357ad51c68a79e4fbb3b64cf929b2362`, latest local tag `v1.5.0`, package 1.5.0,
-revalidated 2026-09-10. The catalog/selection/CLI fork behavior already shipped; APM's
-corpus-only filter and prefixed skill source-directory check are the remaining defects.
-Both generators pin the publisher today, so a repository-owner change breaks regeneration.
-The release already isolates APM in its own job; its earlier spec incorrectly placed it
-before packing. The old inbox's live-PR failure remains historical until new evidence closes
-its exact PR and separate landing-policy proof gaps.
+revalidated 2026-09-10. At that baseline the catalog/selection/CLI fork behavior had already
+shipped; APM's corpus-only filter and prefixed skill source-directory check were the remaining
+defects. Both generators pinned the publisher, so a repository-owner change broke regeneration.
+The release already isolated APM in its own job; its earlier spec incorrectly placed it
+before packing. The old inbox's live-PR failure is retained as historical evidence; the new
+live PR and landing-policy results below close its original proof gap.
 
 Official dependency/platform sources checked 2026-09-10:
 
@@ -218,6 +218,42 @@ recorded limitations. This is a one-release exception to U6's fresh-eval require
 standing release policy remains unchanged. The attempted fresh Codex run is unadmitted and
 does not supply replacement scores. The [execution record](../../.stamity/runs/2026-09-10_enterprise-downstreams/record.md)
 owns the authorization, input comparison and evidence details.
+
+## Execution evidence, 2026-09-10
+
+U1–U4 are implemented and independently reviewed: resolved APM exports and shared publisher
+identity, private onboarding and publication boundaries, and retained-branch recovery with
+accurate contribution and landing-policy handling. The guide is reconciled against reviewed
+product commit `0f7b0e9`. Full gates, coverage, actual CI platforms and the release rehearsal
+are recorded in the [execution record](../../.stamity/runs/2026-09-10_enterprise-downstreams/record.md).
+
+U5 now has these real controlled-public results in addition to the independent test suites:
+
+| Proof | Live evidence and result |
+| --- | --- |
+| Customized APM content | The [public fixture tag](https://github.com/zomarit/stamity-p13-public-downstream-20260910/tree/v1.6.0-public-fixture.1) passed anonymous APM 0.29.1 and 0.30.0 installation against an independent oracle for direct source edits, all fork operations/classes and companion bytes. |
+| Missing-PR recovery | [The creation fault](https://github.com/zomarit/stamity-p13-public-downstream-20260910/actions/runs/34500980273) passed preparation, pushed the branch and hit a real GitHub permission refusal. [A fresh complete retry](https://github.com/zomarit/stamity-p13-public-downstream-20260910/actions/runs/34501404211) recovered [PR 5](https://github.com/zomarit/stamity-p13-public-downstream-20260910/pull/5) without changing its retained SHA, despite the regenerated sync timestamp. |
+| Checks, review and ancestry | PR 5's repository-token CI required and received human approval. Its Linux, Windows, APM and PR checks passed before a reviewed merge. The protected target had rejected an earlier merge while `all-ci-checks` was absent. Real git checks retained the upstream ancestor and downstream customization bytes. |
+| Existing PR and operator work | The successful retry's second publication reported the open PR without metadata or comment edits. [The retained negative witness](https://github.com/zomarit/stamity-p13-public-downstream-20260910/actions/runs/34499165898) refused an operator follow-up, then preserved [closed PR 4](https://github.com/zomarit/stamity-p13-public-downstream-20260910/pull/4) and its branch. |
+| Landing warning and new PR | [Run 34503629304](https://github.com/zomarit/stamity-p13-public-downstream-20260910/actions/runs/34503629304) read an active linear-history rule and still created [PR 8](https://github.com/zomarit/stamity-p13-public-downstream-20260910/pull/8) with the warning and classic-protection limitation. Its isolated rule was then disabled; required checks remained armed. This warning-only PR stays unmerged and supplies no PR-CI claim. |
+| Workflow refusal and reviewed push | [Run 34502962897](https://github.com/zomarit/stamity-p13-public-downstream-20260910/actions/runs/34502962897) refused an inert workflow-comment change before pushing and opened [issue 6](https://github.com/zomarit/stamity-p13-public-downstream-20260910/issues/6). Independent review of the actual bundle preceded the manual push and [PR 7](https://github.com/zomarit/stamity-p13-public-downstream-20260910/pull/7). All required checks passed before merge; default `status` then reported the stable fixture release up to date, retaining ancestry and customization. |
+
+Earlier red fixture runs, the initial branch-filter assertion failure and the original issue
+wording remain historical evidence. They are distinct from the final passing candidate and
+the corrected shipping workflow. The old inbox item is retired with its originating ledger
+reference preserved; the execution record owns the retirement statement and retained raw evidence.
+
+Controlled private onboarding, authenticated APM installation, the actual update PR and
+reviewed integration, and the real APM/Renovate consumer cycle are documented in the execution
+record without exposing private fixture identities here. U5's deployment-specific proofs
+remain incomplete for private required-check enforcement on an unsupported GitHub plan,
+the selected enterprise network or mirrors, the existing production distribution engine and
+its failure/stale-poll monitoring destination. Controlled fixture success does not identify
+or verify an unseen enterprise deployment.
+
+U6 follows the explicit run-10 reuse exception above. The canonical version, tag, publication,
+provenance, deployed docs and release-currency outcome are maintained in the execution record;
+prepared artifacts alone are not a release-completion claim.
 
 ## Risks
 

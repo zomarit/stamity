@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 034c681. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0f7b0e9. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes (`src/content/catalog.ts`),
      the job split or the permissions in `.github/workflows/upstream-update.yml` change, or
@@ -130,6 +130,9 @@ intended integration branch. Run the regeneration table and behavior gates befor
 Align the downstream CI workflows' `push` and `pull_request` branch filters with that branch,
 and match its protection's required check names to the jobs that actually run. Verify those
 checks on a real update PR; inherited filters limited to `main` do not cover another branch.
+Update the corresponding workflow tests with that deliberate customization: this repository's
+`test/ci/workflow.test.ts` asserts the canonical `main` filter exactly. Keep an equally explicit
+assertion for the downstream's chosen filters so its full gate still checks the intended policy.
 Only then enable the approved CI/upstream/private-release workflows and repository Actions,
 after the organization owner verifies the bot permissions and actual required PR checks.
 Do not copy canonical branch rules blindly: this integration branch must allow merge ancestry;
