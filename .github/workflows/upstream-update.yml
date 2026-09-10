@@ -644,10 +644,10 @@ jobs:
 
           {
             echo '> [!WARNING]'
-            echo "> **This branch's landing policy will destroy the upstream ancestry this pull request carries.**"
+            echo "> **This branch's landing policy will destroy the upstream ancestry the prepared update carries.**"
             echo '>'
             if [ "${LINEAR:-0}" -gt 0 ]; then
-              echo "> \`$INTEGRATION_BRANCH\` has a **required linear history** rule, which forbids the merge commit this pull request must land as."
+              echo "> \`$INTEGRATION_BRANCH\` has a **required linear history** rule, which forbids the merge commit this update must land as."
             fi
             if [ "${NO_MERGE:-0}" -gt 0 ]; then
               echo "> \`$INTEGRATION_BRANCH\` allows only these merge methods: **${METHODS:-none}** — \`merge\` is not among them."
@@ -665,7 +665,7 @@ jobs:
             echo
           } >> "$POLICY"
           echo 'warning=true' >> "$GITHUB_OUTPUT"
-          echo "::warning title=Landing policy loses upstream ancestry::$INTEGRATION_BRANCH has a merge-ancestry restriction (required_linear_history=$LINEAR, merge-excluding pull_request rules=$NO_MERGE, merge queue=$QUEUE_NO_MERGE, repository disables merge=$REPOSITORY_NO_MERGE). Landing this pull request by squash OR by rebase drops the upstream release out of the branch's history."
+          echo "::warning title=Landing policy loses upstream ancestry::$INTEGRATION_BRANCH has a merge-ancestry restriction (required_linear_history=$LINEAR, merge-excluding pull_request rules=$NO_MERGE, merge queue=$QUEUE_NO_MERGE, repository disables merge=$REPOSITORY_NO_MERGE). Landing this update by squash OR by rebase drops the upstream release out of the branch's history."
 
       # One body, composed once and used for the pull request, the issues and the run summary, so
       # they cannot disagree about what happened. The warning goes FIRST: a reader who stops after
@@ -686,7 +686,7 @@ jobs:
             echo
             echo '## Landing policy'
             echo
-            echo "This pull request must land as a **merge commit**. The lane's record of which upstream release is integrated is derived from history — the release commit being an ancestor of \`$INTEGRATION_BRANCH\` — so a squash landing and a rebase landing both erase it, and the next run then reports \`ancestry-lost\` and offers the same release again."
+            echo "This update must land as a **merge commit**. The lane's record of which upstream release is integrated is derived from history — the release commit being an ancestor of \`$INTEGRATION_BRANCH\` — so a squash landing and a rebase landing both erase it, and the next run then reports \`ancestry-lost\` and offers the same release again."
             echo
             echo '## Provenance'
             echo
@@ -698,16 +698,16 @@ jobs:
             echo "| integration branch | \`$INTEGRATION_BRANCH\` |"
             echo "| prepared by | \`node scripts/upstream.mjs integrate --json\`, in a job with no write grant and no secret |"
             if [ "${ELEVATED_TOKEN:-false}" = 'true' ]; then
-              echo "| push credential | \`STAMITY_UPSTREAM_TOKEN\` |"
+              echo "| configured push credential | \`STAMITY_UPSTREAM_TOKEN\` |"
             else
-              echo "| push credential | the per-run repository token |"
+              echo "| configured push credential | the per-run repository token |"
             fi
             echo "| run | $RUN_URL |"
             echo
-            echo "The fork's own gates ran in that job, on the merged tree, and their verdict is in the integration record on this branch — so this pull request is not the first place the merge is tested."
+            echo "The fork's own gates ran in that job, on the merged tree, and their verdict is in the integration record on the prepared branch. Read that result before landing the update."
             if [ "${ELEVATED_TOKEN:-false}" != 'true' ]; then
               echo
-              echo "This pull request was opened with the per-run repository token. Its \`pull_request\` workflow runs are created in an **approval-required** state: someone with write access clicks \"Approve and run\" to start them. Configuring a \`STAMITY_UPSTREAM_TOKEN\` secret removes that prompt. It changes nothing about what this lane pushes: a release that touches \`.github/workflows/\` is never pushed by automation here, whatever credential the run holds."
+              echo "If this lane opens a pull request with the per-run repository token, its \`pull_request\` workflow runs are created in an **approval-required** state: someone with write access clicks \"Approve and run\" to start them. Configuring a \`STAMITY_UPSTREAM_TOKEN\` secret removes that prompt. It changes nothing about what this lane pushes: a release that touches \`.github/workflows/\` is never pushed by automation here, whatever credential the run holds."
             fi
           } > "$BODY"
 
@@ -823,7 +823,7 @@ jobs:
             echo
             echo '## Why this was not pushed'
             echo
-            echo "The merge succeeded and \`${UPDATE_BRANCH:-the update branch}\` is complete — it is just not on the remote. This release changes files under \`.github/workflows/\`, and this lane never pushes those: a branch's own workflow files run on \`push\`, under the identity that pushed them, so automation must not be the thing that introduces a workflow change into this repository. A person reads the diff and pushes it under their own identity. The run did not attempt the push, so nothing is half-applied. (The per-run repository token could not have made this push in any case — GitHub refuses it outright: *refusing to allow a GitHub App to create or update workflow ... without \`workflows\` permission*. An elevated token would lift that refusal; this lane refuses anyway.)"
+            echo "The prepared merge is available as \`${UPDATE_BRANCH:-the update branch}\` in the artifact; read the report above for its gate results. This run did not push the branch or open a pull request. This release changes files under \`.github/workflows/\`, and this lane never pushes those: a branch's own workflow files run on \`push\`, under the identity that pushed them, so automation must not be the thing that introduces a workflow change into this repository. A person reads the diff and pushes it under their own identity. The run did not attempt the push, so nothing is half-applied. (The per-run repository token could not have made this push in any case — GitHub refuses it outright: *refusing to allow a GitHub App to create or update workflow ... without \`workflows\` permission*. An elevated token would lift that refusal; this lane refuses anyway.)"
             echo
             echo 'Workflow files this release changes:'
             echo
@@ -831,10 +831,16 @@ jobs:
             echo
             echo '## Landing it by hand'
             echo
-            echo "Read the workflow diff above first — that review is the whole reason this branch is not already pushed. Then download the \`upstream-update\` artifact from [this run]($RUN_URL), unzip it, and from a clone of this repository whose credential carries **workflow** scope:"
+            echo "Download the \`upstream-update\` artifact from [this run]($RUN_URL), unzip it, and fetch its prepared branch into a clone of this repository. Inspect the actual workflow diff against the prepared merge’s first parent:"
             echo
             echo '```sh'
             echo "git fetch /path/to/update.bundle '${UPDATE_BRANCH:-stamity-upstream/<tag>}:refs/heads/${UPDATE_BRANCH:-stamity-upstream/<tag>}'"
+            echo "git diff '${MERGE_COMMIT}^1' '$MERGE_COMMIT' -- .github/workflows"
+            echo '```'
+            echo
+            echo 'Review the workflow diff and the reported gate results before any push. Only after approving those changes, use a credential with **workflow** scope to push the reviewed branch and open its pull request:'
+            echo
+            echo '```sh'
             echo "git push origin 'refs/heads/${UPDATE_BRANCH:-stamity-upstream/<tag>}'"
             echo "gh pr create --head '${UPDATE_BRANCH:-stamity-upstream/<tag>}' --base '$INTEGRATION_BRANCH' --title 'chore(upstream): integrate ${TAG:-unknown}'"
             echo '```'
