@@ -62,7 +62,12 @@
 import { renderAgentsMd, AGENTS_MD_FILE, type AgentsMdPlan } from "./agentsMd.ts";
 import { planHooksInfra, type CoreHooksPlan } from "./hooksInfra.ts";
 import { projectSkills, SKILLS_PROJECTION_DIR, type ProjectedFile } from "./skillsProjection.ts";
-import { contentRootsOf, type CatalogItem, type ContentRoots } from "../content/catalog.ts";
+import {
+  contentRootsOf,
+  type CatalogItem,
+  type ContentOrigin,
+  type ContentRoots,
+} from "../content/catalog.ts";
 import type { PackSuppliedServer } from "../mcp/catalog.ts";
 import { planMcpEmissions, type McpDialect, type McpEmission } from "../mcp/emit.ts";
 import {
@@ -295,8 +300,12 @@ export async function buildCoreEmissionPlan(
   // that merge — which is also why a pack skill overlay is resolved (no more
   // false refusal) without being reflected in what gets projected: the
   // pack-skill lane below never sees the override tree, only this lookup does.
+  // The fork root rides along on the same terms as the override root: named
+  // when the caller named it, and otherwise left to the walk, which pairs the
+  // bundled fork layer with the bundled corpus it also resolves for itself.
   const skillsContentRootBase = {
     ...(corpusRoot === undefined ? {} : { root: corpusRoot }),
+    ...(roots.forkRoot === undefined ? {} : { forkRoot: roots.forkRoot }),
     ...(roots.overrideRoot === undefined ? {} : { overrideRoot: roots.overrideRoot }),
   };
   // Pack resolution gates hooks planning (pack hook files are read through the
@@ -446,6 +455,14 @@ export async function buildCoreEmissionPlan(
  * OVERRIDE file as the thing to remove or rename; removing the pack is the
  * stated alternative, exactly as the corpus-vs-pack throw below offers for its
  * own case.
+ *
+ * A FORK skill (`origin: "fork"`, the package's `fork/skills/<dir>/SKILL.md`)
+ * takes the override's side of every one of these rules: it projects through
+ * this lane like a corpus or override skill, and a fork skill claiming a pack
+ * skill's id or directory is refused by the same two shapes, naming the fork
+ * file. The fork is one layer below the override tree and one above the packs
+ * (`../content/catalog.ts`), and the pack lane never saw either, so the seam
+ * is the same one.
  */
 function mergeSkillProjections(
   corpusSkills: readonly ProjectedFile[],
@@ -454,14 +471,18 @@ function mergeSkillProjections(
   refuseOverrideDirectoryClash(corpusSkills);
   const corpusByPath = new Map(corpusSkills.map((row) => [row.path, row]));
   const overridesById = new Map(
-    corpusSkills.filter((row) => row.origin === "user").map((row) => [row.artifactId, row]),
+    corpusSkills.filter((row) => isCustomizingRow(row)).map((row) => [row.artifactId, row]),
   );
   for (const row of packs.skillRows) {
     const corpusRow = corpusByPath.get(row.path);
     const packId = packSupplierOf(packs.items, row.artifactId);
-    const overrideRow = corpusRow?.origin === "user" ? corpusRow : overridesById.get(row.artifactId);
+    const overrideRow =
+      corpusRow !== undefined && isCustomizingRow(corpusRow)
+        ? corpusRow
+        : overridesById.get(row.artifactId);
     if (overrideRow !== undefined) {
-      const overridePath = overrideSkillFilePath(overrideRow);
+      const overridePath = customizingSkillFilePath(overrideRow);
+      const noun = customizingNounOf(overrideRow);
       const shape =
         overrideRow.path === row.path
           ? `shares its directory with the pack skill "${row.artifactId}"'s`
@@ -469,7 +490,7 @@ function mergeSkillProjections(
               packId === undefined ? "an installed pack" : `installed pack "${packId}"`
             }'s skill, from a different directory`;
       throw new EngineError(
-        `Pack-skill overrides are unsupported today: the override at "${overridePath}" ${shape} ` +
+        `Pack-skill overrides are unsupported today: the ${noun} at "${overridePath}" ${shape} ` +
           `(both would project to the client). Remove or rename ${overridePath}, or remove ` +
           `the pack (\`clean --pack ${packId ?? "<pack-id>"}\`).`,
         { code: "VALIDATION_ERROR" },
@@ -514,31 +535,73 @@ function projectionDirOf(path: string): string {
  * Refused with the override named as the thing to move, for the same reason
  * the pack shapes above name the override: it is the file the operator wrote
  * and the only one they can rename without touching shipped content.
+ *
+ * The fork layer sits between the two: a fork skill's directory clashing with
+ * a corpus skill's is refused naming the fork file, and an override's directory
+ * clashing with a fork skill's is refused naming the override — in each pair
+ * the HIGHER layer is the one that moves, because the lower one is shipped
+ * content from where that author stands.
  */
 function refuseOverrideDirectoryClash(corpusSkills: readonly ProjectedFile[]): void {
-  // Only a shipped row can be the thing an override collides WITH: two shipped
-  // skills sharing a directory under two ids cannot be authored, because there
-  // the directory is the id.
-  const shippedByDir = new Map<string, ProjectedFile>();
+  // Only a lower-layer row can be the thing a customizing row collides WITH:
+  // two shipped skills sharing a directory under two ids cannot be authored,
+  // because there the directory is the id. Keep the lowest layer's row per
+  // directory, so the refusal names the most shipped thing in the way.
+  const lowestByDir = new Map<string, ProjectedFile>();
   for (const row of corpusSkills) {
-    if (row.origin !== "user") shippedByDir.set(projectionDirOf(row.path), row);
+    const dir = projectionDirOf(row.path);
+    const held = lowestByDir.get(dir);
+    if (held === undefined || layerRankOf(row) < layerRankOf(held)) lowestByDir.set(dir, row);
   }
 
   for (const row of corpusSkills) {
-    if (row.origin !== "user") continue;
-    const other = shippedByDir.get(projectionDirOf(row.path));
-    if (other === undefined || other.artifactId === row.artifactId) continue;
-    const overridePath = overrideSkillFilePath(row);
+    if (!isCustomizingRow(row)) continue;
+    const other = lowestByDir.get(projectionDirOf(row.path));
+    if (
+      other === undefined ||
+      layerRankOf(other) >= layerRankOf(row) ||
+      other.artifactId === row.artifactId
+    ) {
+      continue;
+    }
+    const overridePath = customizingSkillFilePath(row);
+    const noun = customizingNounOf(row);
     throw new EngineError(
-      `The override at "${overridePath}" declares id "${row.artifactId}" but sits in a ` +
+      `The ${noun} at "${overridePath}" declares id "${row.artifactId}" but sits in a ` +
         `directory the skill "${other.artifactId}" already projects into: both emit ` +
         `"${other.path}". One ${SKILLS_PROJECTION_DIR} directory holds one skill — projecting ` +
-        `both would write each skill's files over the other's. Rename the override's directory ` +
+        `both would write each skill's files over the other's. Rename the ${noun}'s directory ` +
         `to match its own id ("${row.artifactId}"), or change the id to override ` +
         `"${other.artifactId}" outright.`,
       { code: "VALIDATION_ERROR" },
     );
   }
+}
+
+/**
+ * The two layers that customize shipped content and are named as the thing to
+ * move in every refusal above: the repo's override tree and the package's
+ * fork layer. A corpus row, a pack row and an unstamped row are all "shipped"
+ * from where those authors stand.
+ */
+function isCustomizingRow(row: ProjectedFile): boolean {
+  return row.origin === "user" || row.origin === "fork";
+}
+
+/**
+ * Precedence as a rank, for the directory-clash rule: the row of the higher
+ * layer is the one that moves. Mirrors the catalog's order (user > fork >
+ * pack > corpus) without importing its table — an unstamped row reads as
+ * corpus, the way `originOf` reads an item without an origin.
+ */
+function layerRankOf(row: ProjectedFile): number {
+  const origin: ContentOrigin = row.origin ?? "corpus";
+  return origin === "user" ? 3 : origin === "fork" ? 2 : origin === "pack" ? 1 : 0;
+}
+
+/** How a refusal calls the customizing row it names: the file the author can move. */
+function customizingNounOf(row: ProjectedFile): string {
+  return row.origin === "fork" ? "fork skill" : "override";
 }
 
 /**
@@ -551,15 +614,19 @@ function packSupplierOf(items: readonly CatalogItem[], skillId: string): string 
 }
 
 /**
- * The override source file an `origin: "user"` skill row was rendered from,
- * reconstructed from its emitted path rather than carried alongside it —
- * `ProjectedFile` has no source-path field, and the projection dir name is the
- * override directory name unchanged (`skillsProjection.ts`'s own naming
- * guarantee), so the join back is exact.
+ * The source file an `origin: "user"` or `origin: "fork"` skill row was
+ * rendered from, reconstructed from its emitted path rather than carried
+ * alongside it — `ProjectedFile` has no source-path field, and the projection
+ * dir name is the authored directory name unchanged (`skillsProjection.ts`'s
+ * own naming guarantee), so the join back is exact. A fork row names the
+ * package-relative `fork/skills/<dir>/SKILL.md`, the spelling a fork author
+ * edits; an override row names the repo-relative override tree.
  */
-function overrideSkillFilePath(row: ProjectedFile): string {
+function customizingSkillFilePath(row: ProjectedFile): string {
   const dir = row.path.slice(`${SKILLS_PROJECTION_DIR}/`.length).split("/")[0];
-  return `${STATE_DIR}/overrides/skills/${dir}/SKILL.md`;
+  return row.origin === "fork"
+    ? `fork/skills/${dir}/SKILL.md`
+    : `${STATE_DIR}/overrides/skills/${dir}/SKILL.md`;
 }
 
 // ── Composition ──────────────────────────────────────────────────
@@ -775,7 +842,9 @@ export function composeEmissionPlanner(
  * a pack-having repo, it silently stopped arriving, and where an override held
  * a shipped id the SHIPPED body emitted under it. A part omitted here is a
  * content layer that appears or disappears with unrelated state, which is why
- * the rebuild carries all three rather than the two the pack wiring needed.
+ * the rebuild carries all four — the package's fork root
+ * (`ContentRoots.forkRoot`) included — rather than the two the pack wiring
+ * needed.
  *
  * The derivation is what projects pack content through the per-tool residue
  * surfaces WITHOUT an adapter edit: every adapter already walks
@@ -796,6 +865,7 @@ function residueContext(ctx: EmissionContext, packs: ResolvedPackContent): Emiss
     contentRoot: {
       ...(spec.root === undefined ? {} : { root: spec.root }),
       packRoots: [...spec.packRoots, ...packs.packRoots],
+      ...(spec.forkRoot === undefined ? {} : { forkRoot: spec.forkRoot }),
       ...(spec.overrideRoot === undefined ? {} : { overrideRoot: spec.overrideRoot }),
     },
     manifest: selectionWithInstalledPacks(ctx.manifest, packs.items),

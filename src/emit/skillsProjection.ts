@@ -48,8 +48,9 @@
  * Selection is not the only layer that decides a body. The index this module
  * builds takes the same roots the rest of emission walks
  * ({@link ProjectSkillsOptions.contentRoot}), so a repo's own
- * `.stamity/overrides/skills/<dir>/SKILL.md` wins the id it claims and ITS
- * directory — `SKILL.md` and every support file under it — is what projects.
+ * `.stamity/overrides/skills/<dir>/SKILL.md` — or the package's own
+ * `fork/skills/<dir>/SKILL.md`, one layer below it — wins the id it claims and
+ * ITS directory — `SKILL.md` and every support file under it — is what projects.
  *
  * Pure planning: rows out, no filesystem writes. Reading the bundled corpus and
  * the repo's override tree (through the catalog's injectable filesystem seam) is
@@ -132,10 +133,11 @@ export interface ProjectedFile {
   artifactType: ContentClass | "infra";
   /**
    * Which layer supplied the source artifact — `"user"` for an override-tree
-   * row, `"corpus"` for the bundled tree, `"pack"` for an installed pack.
-   * Unset for a non-content (`"infra"`) row and for a producer that has not
-   * been taught to stamp it; a reader that needs the distinction treats
-   * `undefined` as "not an override" rather than as an error.
+   * row, `"fork"` for the package's fork layer, `"corpus"` for the bundled
+   * tree, `"pack"` for an installed pack. Unset for a non-content (`"infra"`)
+   * row and for a producer that has not been taught to stamp it; a reader that
+   * needs the distinction treats `undefined` as "not an override" rather than
+   * as an error.
    */
   origin?: ContentOrigin;
 }
@@ -157,9 +159,11 @@ export interface ProjectSkillsOptions {
   /**
    * Which roots the projection indexes. A bare string is the corpus root and
    * stays the shorthand every fixture uses; the {@link ContentRoots} spelling is
-   * what lets a caller name the repo's own override tree as well, so a
-   * `.stamity/overrides/skills/<dir>/SKILL.md` reaches emission the way a user
-   * agent, rule or command already does. Defaults to the package-bundled corpus.
+   * what lets a caller name the repo's own override tree as well — and the
+   * package's fork layer — so a `.stamity/overrides/skills/<dir>/SKILL.md` or a
+   * `fork/skills/<dir>/SKILL.md` reaches emission the way a user or fork agent,
+   * rule or command already does. Defaults to the package-bundled corpus, with
+   * the bundled fork root beside it.
    *
    * `packRoots` IS now supplied by this projection's caller (`./planner.ts` →
    * `buildCoreEmissionPlan`) — but only into the LOOKUP, not into what this

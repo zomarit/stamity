@@ -1025,6 +1025,157 @@ describe("override content layer", () => {
 });
 
 /**
+ * The fork layer at the emission seam (docs/specs/fork-layer.md,
+ * REQ-FORK-005). A package built by a downstream fork carries a `fork/`
+ * directory one layer below the override tree, and every planner this seam
+ * hands out has to carry a fork root a caller named through
+ * `overlayContentRoots` — the derivation fills the override root in and must
+ * not drop the fourth part on the way. The fork root is named explicitly here
+ * because this repository ships no `fork/` for the walk's own default to find.
+ */
+describe("fork content layer", () => {
+  const getRepo = useTempDir("emission-fork");
+
+  /** A sentence that appears in the fork's body and nowhere in the corpus. */
+  const FORK_MARKER = "Fork rule: name every branch after the ticket it closes, and tag the fork.";
+
+  /** A sentence that appears in the repo's own body and nowhere else. */
+  const USER_MARKER = "House rule: name every branch after the ticket it closes.";
+
+  /** A bundled rule this repo ships, emitted by every client with no `tools:` limit. */
+  const SHADOWED_ID = "testing";
+
+  function forkSkill(id: string): string {
+    return [
+      "---",
+      `id: ${id}`,
+      "type: skill",
+      "description: The fork's version of this skill.",
+      "tags:",
+      "  - implementation",
+      "load: on-demand",
+      "obsolete_when: the fork's runbook covers it",
+      "---",
+      "",
+      FORK_MARKER,
+      "",
+    ].join("\n");
+  }
+
+  /**
+   * All four clients, empty selection: presence is the only thing that admits
+   * a fork artifact. The fork root is `<repo>/pkg/fork` unless a case names
+   * `undefined`, which is the ordinary package with no fork layer.
+   */
+  function repoContext(
+    rootDir: string,
+    forkRoot: string | undefined = join(rootDir, "pkg", "fork"),
+  ): EmissionContext {
+    return {
+      rootDir,
+      manifest: createManifest({
+        tools: ["claude", "cursor", "copilot", "codex"],
+        selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+        generatorVersion: "0.0.0-test",
+        now: FIXED_NOW,
+      }),
+      engineVersion: "0.0.0-test",
+      facts: { monorepoPackages: [] },
+      ...(forkRoot === undefined ? {} : { contentRoot: { forkRoot } }),
+    };
+  }
+
+  it("emits the FORK body to every selected client, exactly once per client, in place of the bundled one", async () => {
+    const repo = getRepo();
+    await seedForkLayer(repo, { [`rules/${SHADOWED_ID}.md`]: ruleWith(SHADOWED_ID, FORK_MARKER) });
+
+    const rows = await getEmissionPlanner().plan(repoContext(repo.dir));
+
+    const carrying = rows.filter((row) => row.content.includes(FORK_MARKER));
+    expect(carrying.map((row) => row.path).toSorted()).toEqual([
+      ".claude/rules/stamity-testing.md",
+      ".cursor/rules/stamity-testing.mdc",
+      ".github/instructions/stamity-testing.instructions.md",
+      "AGENTS.md",
+    ]);
+    expect(new Set(rows.map((row) => row.path)).size).toBe(rows.length);
+    // And NOT both bodies: the bundled rule it took the id of is gone.
+    const bundled = await corpusMarker(SHADOWED_ID);
+    expect(rows.filter((row) => row.content.includes(bundled))).toEqual([]);
+  });
+
+  it("keeps the override tree above the fork layer at this seam", async () => {
+    const repo = getRepo();
+    await seedForkLayer(repo, { [`rules/${SHADOWED_ID}.md`]: ruleWith(SHADOWED_ID, FORK_MARKER) });
+    await repo.seedFiles({
+      [`.stamity/overrides/rules/${SHADOWED_ID}.md`]: ruleWith(SHADOWED_ID, USER_MARKER),
+    });
+
+    const rows = await getEmissionPlanner().plan(repoContext(repo.dir));
+
+    expect(rows.filter((row) => row.content.includes(USER_MARKER))).toHaveLength(4);
+    expect(rows.filter((row) => row.content.includes(FORK_MARKER))).toEqual([]);
+  });
+
+  it("emits a fork skill into both skill trees, and a new fork agent to its client locations", async () => {
+    const repo = getRepo();
+    await seedForkLayer(repo, {
+      "skills/acme-review/SKILL.md": forkSkill("acme-review"),
+      "agents/acme-onboarding.md": [
+        "---",
+        "id: acme-onboarding",
+        "type: agent",
+        "description: The fork's onboarding agent.",
+        "tags:",
+        "  - review",
+        "load: on-demand",
+        "obsolete_when: the fork's onboarding is automated",
+        "capabilities: [read]",
+        "model_class: advanced",
+        "---",
+        "",
+        FORK_MARKER,
+        "",
+      ].join("\n"),
+    });
+
+    const rows = await getEmissionPlanner().plan(repoContext(repo.dir));
+    const paths = rows.filter((row) => row.content.includes(FORK_MARKER)).map((row) => row.path);
+
+    expect(paths).toContain(".agents/skills/acme-review/SKILL.md");
+    expect(paths).toContain(".claude/skills/acme-review/SKILL.md");
+    expect(paths).toContain(".claude/agents/stamity-acme-onboarding.md");
+  });
+
+  it("never plans a path under the fork layer, so nothing in it is regenerated or reclaimed", async () => {
+    const repo = getRepo();
+    const source = `pkg/fork/rules/${SHADOWED_ID}.md`;
+    await repo.seedFiles({ [source]: ruleWith(SHADOWED_ID, FORK_MARKER) });
+
+    const rows = await getEmissionPlanner().plan(repoContext(repo.dir));
+
+    expect(rows.filter((row) => row.path.includes("fork/"))).toEqual([]);
+    expect(await readFile(repo.path(source), "utf8")).toBe(ruleWith(SHADOWED_ID, FORK_MARKER));
+  });
+
+  it("plans byte-identically when the named fork directory does not exist", async () => {
+    // Invariant 1 at this seam: a fork root that resolves to nothing is the
+    // ordinary package, and the plan is the plan a caller that named no fork
+    // root gets.
+    const repo = getRepo();
+    const base = repoContext(repo.dir);
+
+    const [withAbsentFork, reference] = await Promise.all([
+      getEmissionPlanner().plan(base),
+      getEmissionPlanner().plan(repoContext(repo.dir, undefined)),
+    ]);
+
+    expect(withAbsentFork.length).toBeGreaterThan(0);
+    expect(digestOf(withAbsentFork)).toBe(digestOf(reference));
+  });
+});
+
+/**
  * The overlay layer at the emission seam (docs/specs/overlay-layers.md,
  * REQ-OVERLAY-013 and 014).
  *
@@ -1599,6 +1750,33 @@ async function corpusDescription(id: string): Promise<string> {
 }
 
 /** A plan as one digest: any single changed byte moves it. */
+/** A rule authored above the corpus under a shipped id, carrying `marker` as its body. */
+function ruleWith(id: string, marker: string): string {
+  return [
+    "---",
+    `id: ${id}`,
+    "type: rule",
+    "description: A version of this rule authored above the corpus.",
+    "tags:",
+    "  - review",
+    "load: on-demand",
+    "obsolete_when: the repository's own linter enforces it",
+    "scope: conditional",
+    'globs: ["**/*.md"]',
+    "---",
+    "",
+    marker,
+    "",
+  ].join("\n");
+}
+
+/** Seeds a fork layer under `<repo>/pkg/fork`, where the fork-layer cases name it. */
+async function seedForkLayer(repo: TempDirHandle, files: Record<string, string>): Promise<void> {
+  await repo.seedFiles(
+    Object.fromEntries(Object.entries(files).map(([rel, body]) => [`pkg/fork/${rel}`, body])),
+  );
+}
+
 function digestOf(rows: readonly AdapterOutput[]): string {
   return createHash("sha256").update(JSON.stringify(rows)).digest("hex");
 }

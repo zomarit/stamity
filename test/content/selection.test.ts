@@ -292,6 +292,52 @@ describe("classifySelection", () => {
   });
 });
 
+/**
+ * The fork layer (docs/specs/fork-layer.md, REQ-FORK-005): a fork ships what it
+ * put under `fork/`, so its artifacts are admitted by presence exactly as the
+ * repo's own are — a consumer's manifest, written against the corpus, is not a
+ * deselection of anything the fork added.
+ */
+describe("the fork layer", () => {
+  it("keeps a fork artifact the record never names, and still drops a deselected corpus one", async () => {
+    const volume = makeVolume({
+      ...under("corpus", CORPUS),
+      ...under("fork", {
+        "agents/acme-onboarding.md": artifact(
+          "id: acme-onboarding\ntype: agent\ntags: [implementation]",
+        ),
+      }),
+    });
+    const index = await buildContentIndex(
+      { root: join(volume.root, "corpus"), forkRoot: join(volume.root, "fork") },
+      { fs: volume.fs },
+    );
+    const allowlist = buildSelectionAllowlist(selectionOf({}));
+
+    expect(classifySelection(itemAt(index, "agent", "acme-onboarding"), allowlist)).toBe("keep");
+    expect(classifySelection(itemAt(index, "agent", "implementer"), allowlist)).toBe("drop");
+  });
+
+  it("keeps a fork replacement of a floor id without flagging the floor missing", async () => {
+    const volume = makeVolume({
+      ...under("corpus", CORPUS),
+      ...under("fork", {
+        "rules/security.md": artifact("id: security\ntype: rule\ntags: [implementation]"),
+      }),
+    });
+    const index = await buildContentIndex(
+      { root: join(volume.root, "corpus"), forkRoot: join(volume.root, "fork") },
+      { fs: volume.fs },
+    );
+    const allowlist = buildSelectionAllowlist(selectionOf({}));
+
+    const verdicts = index.items
+      .filter((item) => item.id === "security")
+      .map((item) => classifySelection(item, allowlist));
+    expect(verdicts).toEqual(["keep"]);
+  });
+});
+
 describe("the user layer", () => {
   const HOUSE_STYLE = {
     "agents/house-style.md": artifact("id: house-style\ntype: agent\ntags: [implementation]"),

@@ -23,12 +23,33 @@ import { EngineError } from "../types/errors.ts";
  * completeness (which content classes are present, whether ids collide) is the
  * catalog reader's gate, and an empty corpus is a legitimate state — it is the
  * state of this repo until the corpus lands.
+ *
+ * The FORK LAYER resolves beside it ({@link resolveBundledForkRoot}): `fork/`
+ * is the directory a downstream fork of this repository fills with its own
+ * agents, rules, commands and skills (`docs/specs/fork-layer.md`), and it sits
+ * next to the corpus in both layouts — `<packageRoot>/fork` beside `content`,
+ * `<packageRoot>/dist/fork` beside `dist/content`. It is probed as the sibling
+ * of whichever corpus candidate won rather than as a candidate list of its
+ * own, so a stale `dist/fork` left by an earlier build never joins a source
+ * checkout that has no `fork/`. This repository ships no `fork/`, and an absent
+ * directory resolves to nothing — never to an error.
  */
 
 /** Candidate corpus directories relative to the package root, in probe order. */
 const CONTENT_CANDIDATES: readonly (readonly string[])[] = [["content"], ["dist", "content"]];
 
+/** The fork layer's directory name, beside the corpus root's own directory. */
+const FORK_DIR = "fork";
+
 let cached: string | null = null;
+
+/**
+ * The fork root, once resolved: `root` is `undefined` when the directory is
+ * absent. `null` means not resolved yet — a three-state cell rather than a
+ * bare optional, so a pinned absence ({@link __setForkRootForTests}) and an
+ * unresolved cache do not read the same way.
+ */
+let forkCache: { readonly root: string | undefined } | null = null;
 
 function isDirectory(path: string): boolean {
   try {
@@ -68,14 +89,36 @@ export function resolveBundledContentRoot(): string {
 }
 
 /**
- * Drop the resolved root so the next call probes again. Test-only (the `__`
+ * The bundled fork layer's root, or `undefined` when the package ships none.
+ *
+ * Resolved once per process like the corpus root, as that root's sibling:
+ * `<dir>/fork` beside `<dir>/content`, whichever layout the corpus resolved
+ * to. Absence is the ordinary answer — this repository has no `fork/`, and
+ * only a downstream fork's package carries one — so it is cached like a
+ * presence and never raised. What DOES propagate is the corpus probe's own
+ * `CONFIG_ERROR`: a package with no corpus has no fork layer to pair with it,
+ * and that failure is not cached here either, for the reason the corpus probe
+ * does not cache it.
+ */
+export function resolveBundledForkRoot(): string | undefined {
+  if (forkCache !== null) return forkCache.root;
+
+  const candidate = join(dirname(resolveBundledContentRoot()), FORK_DIR);
+  forkCache = { root: isDirectory(candidate) ? candidate : undefined };
+  return forkCache.root;
+}
+
+/**
+ * Drop the resolved roots so the next call probes again. Test-only (the `__`
  * prefix marks a non-production export): resolution is cached for the process,
  * so a test that changes the layout after a first resolve would otherwise see
- * the stale value.
+ * the stale value. Both caches drop together — the fork root is defined as
+ * the corpus root's sibling, so one cannot be re-probed without the other.
  */
 // oxlint-disable-next-line no-underscore-dangle
 export function __resetContentRootCacheForTests(): void {
   cached = null;
+  forkCache = null;
 }
 
 /**
@@ -84,8 +127,24 @@ export function __resetContentRootCacheForTests(): void {
  * The path is stored verbatim and is never stat-ed, which is the point: the
  * reader tests run against an in-memory volume whose paths do not exist on the
  * real filesystem. Pair with {@link __resetContentRootCacheForTests} in teardown.
+ *
+ * The fork cache drops with the pin: a fork root resolved beside the previous
+ * corpus root is not the sibling of the pinned one, and a fixture that wants a
+ * fork layer names it through {@link __setForkRootForTests}.
  */
 // oxlint-disable-next-line no-underscore-dangle
 export function __setContentRootForTests(dir: string): void {
   cached = dir;
+  forkCache = null;
+}
+
+/**
+ * Pin the fork root — to a fixture directory, or to `undefined` for a package
+ * that ships none — bypassing the sibling probe. Test-only, and stored verbatim
+ * like the corpus pin. Pair with {@link __resetContentRootCacheForTests} in
+ * teardown.
+ */
+// oxlint-disable-next-line no-underscore-dangle
+export function __setForkRootForTests(dir: string | undefined): void {
+  forkCache = { root: dir };
 }

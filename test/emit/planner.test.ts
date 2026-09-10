@@ -727,6 +727,61 @@ describe("pack skill directory clashing with a corpus skill", () => {
   });
 });
 
+describe("fork skill directory clashing with a lower layer's skill", () => {
+  /** A fixture corpus whose skill directory is BARE — the only shape a bare-named fork directory can collide with. */
+  async function seedBareCorpus(): Promise<{ corpus: string; fork: string }> {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "corpus/charter/stamity-charter.md": CHARTER_FIXTURE,
+      "corpus/skills/alpha/SKILL.md": SKILL_FIXTURE,
+    });
+    return { corpus: temp.path("corpus"), fork: temp.path("fork") };
+  }
+
+  const forkSkill = (id: string, body = "Do the thing."): string =>
+    SKILL_FIXTURE.replace("id: alpha", `id: ${id}`).replace("Do the thing.", body);
+
+  it("refuses by name — the fork file as the thing to move, and the skill already in the directory", async () => {
+    const { corpus, fork } = await seedBareCorpus();
+    // Same DIRECTORY as the fixture corpus skill (`alpha`), different id — so the
+    // catalog's id-shadowing never fires and the two projections collide path
+    // for path. The fork is the higher layer, so the fork file is what moves.
+    await getTemp().seedFiles({ "fork/skills/alpha/SKILL.md": forkSkill("acme-alpha") });
+    const ctx = { ...ctxOf(["claude"], corpus), contentRoot: { root: corpus, forkRoot: fork } };
+
+    const err = await rejectionOf(buildCoreEmissionPlan(ctx));
+
+    expect(err?.code).toBe("VALIDATION_ERROR");
+    expect(err?.message).toContain('The fork skill at "fork/skills/alpha/SKILL.md"');
+    expect(err?.message).toContain('declares id "acme-alpha"');
+    expect(err?.message).toContain('the skill "alpha" already projects into');
+    expect(err?.message).toMatch(/Rename the fork skill's directory/);
+  });
+
+  it("merges a fork skill in its own directory, replacing the corpus skill whose id it takes", async () => {
+    const { corpus, fork } = await seedBareCorpus();
+    await getTemp().seedFiles({
+      "fork/skills/acme-alpha/SKILL.md": forkSkill("acme-alpha", "Do the acme thing."),
+      "fork/skills/alpha/SKILL.md": forkSkill("alpha", "Do the fork's thing."),
+    });
+    const ctx = { ...ctxOf(["claude"], corpus), contentRoot: { root: corpus, forkRoot: fork } };
+
+    const core = await buildCoreEmissionPlan(ctx);
+
+    // Both fork skills project, the replacement under the id it took; the
+    // corpus body it replaced is gone. Every row carries the fork's origin.
+    expect(core.skills.map((row) => row.path)).toEqual([
+      ".agents/skills/acme-alpha/SKILL.md",
+      ".agents/skills/alpha/SKILL.md",
+    ]);
+    expect(core.skills.every((row) => row.origin === "fork")).toBe(true);
+    expect(core.skills.find((row) => row.path.endsWith("/alpha/SKILL.md"))?.content).toContain(
+      "Do the fork's thing.",
+    );
+    expect(core.skills.some((row) => row.content.includes("Do the thing."))).toBe(false);
+  });
+});
+
 // ── Persisted import decisions ───────────────────────────────────
 
 describe("import decisions over the finished row set", () => {
