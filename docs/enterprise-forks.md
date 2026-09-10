@@ -649,7 +649,12 @@ owner review a separate authenticated-fetch design before claiming that deployme
 open PR without changing its body, title, labels or branch. If the push succeeded but PR
 creation failed, retry can create the missing PR only after proving the same owned integration:
 matching release/target, merge parents, non-record tree and semantic integration record,
-with no human follow-up. The recovered PR names that retained remote SHA. Target movement,
+with no human follow-up. A fresh sync may change only the generated manifest's top-level
+`updatedAt`: recovery accepts that timestamp difference in canonical schema-1.0.0 manifests,
+with valid UTC millisecond timestamps, while requiring every other manifest byte to match.
+Missing, linked, executable, malformed or noncanonical changed manifests require review;
+other generated files remain part of the exact tree comparison. The recovered PR names that
+retained remote SHA. Target movement,
 human fixups, wrong base or ambiguous ownership require manual review and create nothing.
 A closed or merged PR is never reopened or replaced. The `upstream-publication` artifact
 retains `publish-result.json` and the prepared/remote record evidence. The lane finds its own issues by a marker it writes into
