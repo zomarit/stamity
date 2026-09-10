@@ -35,12 +35,12 @@
 #
 # THE OPTIONAL SECRET, AND THE ONE THING IT CHANGES. `publish` uses
 # `secrets.STAMITY_UPSTREAM_TOKEN` when the fork configures one — a fine-grained personal access
-# token or GitHub App token with Contents: write, Pull requests: write and Issues: write (this
+# token with Contents: write, Pull requests: write and Issues: write (this
 # lane opens issues under the same token) — and falls back to the per-run repository token when it
 # does not. What it buys is the pull request's own CI: since GitHub's 2026-06-11 change a pull
 # request created or updated with the repository token DOES create `pull_request` workflow runs,
 # but in an approval-required state — someone has to click "Approve and run" on each. With a
-# personal access token or an App token the runs start on their own. It does NOT let a
+# personal access token the runs start on their own. It does NOT let a
 # workflow-touching release land, because that path is closed above for every credential. Either
 # way the fork's gates already ran in `prepare` and their verdict is committed into the integration
 # record on the update branch, so the pull request is never the first place the merged tree is
@@ -48,15 +48,16 @@
 # red too.
 #
 # The secret is referenced in `publish` and nowhere else. `prepare` sees no secret at all, and that
-# is the property that makes it safe to run the fork's code there.
+# is the property that makes it safe to run the fork's code there. A GitHub App integration must
+# mint an installation token per run; an expiring App token is not a supported static secret.
 #
 # WHY AN EXISTING REMOTE BRANCH IS NEVER FORCE-UPDATED. `stamity-upstream/<tag>` may already carry a
 # human's conflict resolution, a review fixup, or a follow-up commit. Overwriting it would delete
 # work the lane cannot re-derive, so the push is conditional on the branch being ABSENT from the
 # remote and there is no force flag anywhere in this file. When the branch is already there the run
-# REPORTS the existing pull request and stops: it does not edit that pull request's body, because
-# this run's report describes the tree this run merged and not the tree that branch carries. The
-# same property is what makes a second run of the same release idempotent.
+# reports an existing pull request without edits. If no PR ever existed, it may recover one
+# only after proving the remote branch is the unchanged owned integration. Human fixups,
+# ambiguous ownership and a deliberately closed PR require an operator; nothing rewrites them.
 #
 # WHY NO EGRESS ALLOWLIST. release.yml pins its network with step-security/harden-runner because
 # every host it needs is known at authoring time. This lane's most important destination is the
@@ -88,13 +89,10 @@ on:
         type: boolean
         default: false
   schedule:
-    # Daily, and daily is enough: upstream releases are TAGS, not a stream. A release lands a
-    # handful of times a year, so a day of latency on the pull request that offers it costs a fork
-    # nothing, while an hourly cadence would re-run the same fetch-and-compare to reach the same
-    # `up-to-date` answer twenty-three more times. The minute is deliberately off the hour —
-    # GitHub queues the whole top-of-hour cohort together and sheds load from it, so `0 * * * *`
-    # is the one spelling most likely to run late or not at all.
-    - cron: '17 5 * * *'
+    # Hourly at an off-hour minute. Downstreams may change this cron to match their policy.
+    # Scheduling is best effort: delays/dropped runs and disabled workflows require an external
+    # stale-run monitor. Upstream releases never dispatch this repository's workflow themselves.
+    - cron: '17 * * * *'
 
 # Least privilege at workflow scope. `probe` and `prepare` inherit exactly this and nothing more;
 # the write grants live on `publish` alone, where they are declared again.
@@ -690,8 +688,8 @@ jobs:
       # there is none anywhere in this file: `stamity-upstream/<tag>` is a branch a human may have
       # pushed a conflict resolution or a review fixup onto, and overwriting it would delete work
       # the lane cannot re-derive. An existing remote branch is reported, not replaced — and the
-      # step after this one reports it without editing anything, which is what makes the second run
-      # of the same release a no-op instead of a duplicate.
+      # step after this one preserves an existing PR, or proves ownership before recovering a
+      # PR that was never created. No recovery rewrites the existing branch.
       #
       # TWO: the range touches nothing under `.github/workflows/`. This check is UNCONDITIONAL and
       # takes no notice of which credential the run holds. A pushed branch's own workflow files run
@@ -713,16 +711,25 @@ jobs:
 
           git bundle verify "$BUNDLE"
           git fetch "$BUNDLE" "$UPDATE_BRANCH:refs/heads/$UPDATE_BRANCH"
-          echo "Restored $UPDATE_BRANCH at $(git rev-parse --short "refs/heads/$UPDATE_BRANCH")"
+          RESTORED_SHA="$(git rev-parse "refs/heads/$UPDATE_BRANCH")"
+          if [ "$RESTORED_SHA" != "$MERGE_COMMIT" ]; then
+            echo '::error title=Bundle identity rejected::The restored branch does not match the reported merge SHA. Nothing was pushed. Retain the artifact and investigate the preparation report.'
+            exit 1
+          fi
+          echo "Restored $UPDATE_BRANCH at $RESTORED_SHA"
 
           # The existing-branch answer comes first: when origin already has the branch there is
           # nothing to push and nothing to ask a person to push, whatever the range touches.
-          if [ -n "$(git ls-remote --heads origin "$UPDATE_BRANCH")" ]; then
+          if ! REMOTE_BRANCH="$(git ls-remote --heads origin "$UPDATE_BRANCH")"; then
+            echo '::error title=Update branch lookup failed::Cannot read origin refs. Check repository access, Contents permission and credential approval/expiry, then retry. A failed lookup is not evidence that the update branch is absent; nothing was pushed.'
+            exit 1
+          fi
+          if [ -n "$REMOTE_BRANCH" ]; then
             {
               echo 'ready=true'
               echo 'pushed=false'
             } >> "$GITHUB_OUTPUT"
-            echo "::notice title=Update branch already on the remote::origin already has $UPDATE_BRANCH, so this run did not touch it. That branch may carry a conflict resolution or a review fixup, and this lane never force-updates it. The step below REPORTS its pull request and edits nothing."
+            echo "::notice title=Update branch already on the remote::origin already has $UPDATE_BRANCH, so this run did not touch it. That branch may carry a conflict resolution or a review fixup, and this lane never force-updates it. The step below reports its existing pull request, or validates ownership before recovering a missing one."
             exit 0
           fi
 
@@ -795,7 +802,7 @@ jobs:
             echo
             echo '## Why no secret automates this away'
             echo
-            echo 'A `STAMITY_UPSTREAM_TOKEN` repository secret — a fine-grained personal access token or GitHub App token with **Contents: write**, **Pull requests: write** and **Issues: write** (this lane opens issues under the same token) — lifts the "Approve and run" prompt on the pull requests this lane opens. It does NOT make this push automatic. The check above is unconditional, because what it answers is not a missing permission: it is that a workflow file pushed by automation runs under the identity that pushed it, before anyone has read it. `docs/enterprise-forks.md` has the steps.'
+            echo 'A `STAMITY_UPSTREAM_TOKEN` repository secret — a fine-grained personal access token with **Contents: write**, **Pull requests: write** and **Issues: write** (this lane opens issues under the same token) — lifts the "Approve and run" prompt on the pull requests this lane opens. It does NOT make this push automatic. The check above is unconditional, because what it answers is not a missing permission: it is that a workflow file pushed by automation runs under the identity that pushed it, before anyone has read it. `docs/enterprise-forks.md` has the steps.'
           } > "$ISSUE_BODY"
 
           # Searched by the marker's own text, then matched EXACTLY in the bodies that come back —
@@ -818,27 +825,15 @@ jobs:
           echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
           echo "Reviewed-push issue #$NUMBER: $TITLE"
 
-      # One pull request per upstream release, created once and updated in place afterwards. The
-      # search is by HEAD BRANCH rather than by title: a title is editable by a reviewer and a
-      # head branch is the identity the lane actually owns.
+      # Existing PRs are always read-only, including closed/merged PRs. Enumerate all states
+      # through the paginated REST endpoint, not an eventually indexed title search. The head
+      # repository/ref and base are ownership, and multiple matching PRs require human review.
       #
-      # WHAT THIS RUN PUSHED DECIDES WHETHER IT WRITES. When origin already had the branch, this
-      # run pushed nothing — and the report it composed describes the tree THIS run merged, not the
-      # tree that branch carries: a person may have resolved a conflict or pushed a review fixup
-      # onto it since. Writing this run's report over that pull request's body would replace an
-      # accurate account with an inaccurate one, silently. So the already-there case REPORTS the
-      # open pull request — a run annotation and a summary line naming its URL — and edits nothing:
-      # no body, no title, no comment, no label. Only a run that actually pushed the branch creates
-      # or edits the pull request for it.
-      #
-      # A `gh pr create` failure is diagnosed rather than swallowed. The likeliest cause is a
-      # repository or organization setting rather than a bug — "Allow GitHub Actions to create and
-      # approve pull requests" must be enabled for the repository token to open one at all — so
-      # the message names that setting and the token that sidesteps it, then fails.
-      #
-      # The label on a failed validation is best-effort by design — a fork need not have the label
-      # — and the failure is announced rather than swallowed, because a silently unlabelled pull
-      # request and a silently un-run labelling step look identical afterwards.
+      # A push followed by failed PR creation leaves an owned branch. Recovery reads that actual
+      # remote branch as inert git objects: parent topology, record semantics and non-record tree
+      # must match this run's prepared integration. Dates/durations may differ; human fixups and
+      # target movement may not. A record alone is not proof of an unchanged tree. The recovered
+      # body's result/SHA come from the retained branch, never the newly prepared merge report.
       - name: Open or update the pull request
         id: pr
         if: >-
@@ -852,70 +847,134 @@ jobs:
           set -euo pipefail
           BODY="$ARTIFACT_DIR/body.md"
           TITLE="Upstream release ${TAG:-unknown}"
+          EVIDENCE="$ARTIFACT_DIR/publish-result.json"
+          REMOTE_SHA=''
+          [ "${PUSHED:-false}" != 'true' ] || REMOTE_SHA="$MERGE_COMMIT"
+          record_result() {
+            jq -n --arg action "$1" --arg branch "$UPDATE_BRANCH" --arg sha "${REMOTE_SHA:-}" \
+              --arg url "${URL:-}" --arg run "$RUN_URL" \
+              '{action:$action, branch:$branch, commit:$sha, pullRequest:$url, run:$run}' > "$EVIDENCE"
+            echo "action=$1" >> "$GITHUB_OUTPUT"
+          }
+          refuse() {
+            record_result 'ownership-refused'
+            echo "::error title=Update ownership requires review::$1 No branch or PR was changed. Inspect origin/$UPDATE_BRANCH and its integration record, then open a PR by hand only after review; do not delete human work to make a retry pass."
+            exit 1
+          }
 
-          if [ "${PUSHED:-false}" != 'true' ]; then
-            EXISTING="$(gh pr list --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --state open --json number,url)"
-            NUMBER="$(printf '%s' "$EXISTING" | jq -r '.[0].number // empty')"
-            URL="$(printf '%s' "$EXISTING" | jq -r '.[0].url // empty')"
+          # -X GET prevents form fields from switching this read to POST. No --base filter: a
+          # previous PR for another base must be detected, not mistaken for no previous PR.
+          if ! gh api --paginate --slurp -X GET "repos/$GH_REPO/pulls" \
+            -f state=all -f "head=${GH_REPO%%/*}:$UPDATE_BRANCH" -f per_page=100 > "$ARTIFACT_DIR/pulls-pages.json"; then
+            record_result 'lookup-failed'
+            echo '::error title=Pull request lookup failed::Cannot verify prior PR ownership. Check repository access, fine-grained PAT approval/expiry and Pull requests permission, then retry. No PR was created.'
+            exit 1
+          fi
+          jq 'add // []' "$ARTIFACT_DIR/pulls-pages.json" > "$ARTIFACT_DIR/pulls.json"
+          COUNT="$(jq 'length' "$ARTIFACT_DIR/pulls.json")"
+          [ "$COUNT" -le 1 ] || refuse 'Multiple PRs have this head; ownership is ambiguous.'
+          if [ "$COUNT" -eq 1 ]; then
+            jq -e --arg repo "$GH_REPO" --arg head "$UPDATE_BRANCH" --arg base "$INTEGRATION_BRANCH" \
+              '.[0] | .head.repo.full_name == $repo and .head.ref == $head and .base.ref == $base' \
+              "$ARTIFACT_DIR/pulls.json" > /dev/null || refuse 'The previous PR has a different repository, head or base.'
+            NUMBER="$(jq -r '.[0].number' "$ARTIFACT_DIR/pulls.json")"
+            URL="$(jq -r '.[0].html_url' "$ARTIFACT_DIR/pulls.json")"
+            STATE="$(jq -r '.[0].state' "$ARTIFACT_DIR/pulls.json")"
+            REMOTE_SHA="$(jq -r '.[0].head.sha // empty' "$ARTIFACT_DIR/pulls.json")"
             {
               echo "number=$NUMBER"
               echo "url=$URL"
-              echo 'action=reported'
             } >> "$GITHUB_OUTPUT"
-            {
-              echo "### Upstream ${TAG:-unknown} — reported, not rewritten"
-              echo
-              if [ -n "$URL" ]; then
-                echo "\`$UPDATE_BRANCH\` was already on the remote, so this run pushed nothing and changed nothing on it. Its open pull request is $URL."
-              else
-                echo "\`$UPDATE_BRANCH\` was already on the remote, so this run pushed nothing and changed nothing on it. No OPEN pull request has that head; open one by hand if the branch is still wanted."
-              fi
-              echo
-            } >> "$GITHUB_STEP_SUMMARY"
-            if [ -n "$URL" ]; then
-              echo "::notice title=Existing pull request reported::origin already has $UPDATE_BRANCH, so this run left it and its pull request alone: $URL. This run's report describes a different tree, and overwriting the body would have replaced an accurate account with an inaccurate one."
+            if [ "$STATE" = 'open' ]; then
+              record_result 'reported'
+              echo "::notice title=Existing pull request reported::$URL was left unchanged: no title, body, comment or label edits."
+            elif [ "$STATE" = 'closed' ]; then
+              record_result 'closed'
+              echo "::notice title=Closed pull request retained::$URL is closed or merged. This lane never reopens or replaces it. An operator decides whether to reopen the existing PR or use a separately reviewed recovery branch."
             else
-              echo "::notice title=Existing branch, no open pull request::origin already has $UPDATE_BRANCH and no OPEN pull request has that head. Nothing was pushed or edited. Open one by hand if the branch is still wanted: gh pr create --head $UPDATE_BRANCH --base $INTEGRATION_BRANCH"
+              refuse 'The previous PR has an unknown state.'
             fi
+            echo "Existing $STATE pull request: $URL. Its metadata was preserved." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          NUMBER="$(gh pr list --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --state open --limit 20 --json number,url | jq -r '.[0].number // empty')"
-
-          if [ -n "$NUMBER" ]; then
-            gh pr edit "$NUMBER" --title "$TITLE" --body-file "$BODY"
-            URL="$(gh pr view "$NUMBER" --json url | jq -r '.url')"
-            echo 'action=updated' >> "$GITHUB_OUTPUT"
-          else
-            # The URL comes from `gh pr create`'s own stdout rather than from a second search.
-            # GitHub's pull-request search is eventually consistent, so a create-then-search can
-            # legitimately return nothing for a few seconds — and a run that failed there would
-            # be a red run reporting "no pull request" over a pull request that exists.
-            if ! CREATED="$(gh pr create --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --title "$TITLE" --body-file "$BODY")"; then
-              echo "::error title=Could not open the pull request::gh pr create failed. The update branch IS pushed, so nothing is lost — only the pull request is missing. The usual cause is a repository or organization setting rather than a defect: \"Allow GitHub Actions to create and approve pull requests\" (Settings -> Actions -> General -> Workflow permissions) must be enabled before the per-run repository token may open one. Enable it, or configure a STAMITY_UPSTREAM_TOKEN secret so the pull request is opened as that token's owner, or open it by hand: gh pr create --head $UPDATE_BRANCH --base $INTEGRATION_BRANCH"
+          ACTION='created'
+          if [ "${PUSHED:-false}" != 'true' ]; then
+            # Fetch to a dedicated local ref; never update the remote or the prepared branch.
+            if ! git fetch --no-tags origin "refs/heads/$UPDATE_BRANCH:refs/stamity-recovery/$TAG"; then
+              record_result 'lookup-failed'
+              echo '::error title=Recovery fetch failed::Cannot read the retained update branch. Check Contents permission, repository access and credential approval/expiry, then retry. No branch or PR was changed.'
               exit 1
             fi
-            printf '%s\n' "$CREATED"
-            URL="$(printf '%s\n' "$CREATED" | grep -Eo 'https?://[^[:space:]]+' | tail -1 || true)"
-            NUMBER="$(printf '%s' "$URL" | grep -Eo '[0-9]+$' || true)"
-            echo 'action=created' >> "$GITHUB_OUTPUT"
+            REMOTE_SHA="$(git rev-parse "refs/stamity-recovery/$TAG")"
+            RECORD_PATH=".stamity/upstream/integrations/$TAG.json"
+            git show "$REMOTE_SHA:$RECORD_PATH" > "$ARTIFACT_DIR/remote-record.json" || refuse 'The remote branch lacks its integration record.'
+            git show "$MERGE_COMMIT:$RECORD_PATH" > "$ARTIFACT_DIR/prepared-record.json" || refuse 'The prepared branch lacks its integration record.'
+            TARGET_HEAD="$(git rev-parse "refs/heads/$INTEGRATION_BRANCH")"
+            RELEASE_SHA="$(jq -er '.releaseCommit' "$ARTIFACT_DIR/prepared-record.json")" || refuse 'The prepared integration record is invalid.'
+            printf '%s' "$RELEASE_SHA" | grep -Eq '^[0-9a-f]{40}$' || refuse 'The release object identity is invalid.'
+            for RECORD in "$ARTIFACT_DIR/remote-record.json" "$ARTIFACT_DIR/prepared-record.json"; do
+              jq -e --arg tag "$TAG" --arg release "$RELEASE_SHA" --arg branch "$INTEGRATION_BRANCH" --arg head "$TARGET_HEAD" \
+                '.tool == "stamity-upstream-lane" and .version == 1 and .release == $tag and
+                 .releaseCommit == $release and .targetBranch == $branch and .targetHead == $head and
+                 (.gates | IN("passed", "failed", "skipped", "none")) and
+                 (.gateResults | type == "array") and (.regenerate | type == "array")' \
+                "$RECORD" > /dev/null || refuse 'The integration record does not identify this release and current target.'
+              jq -S 'del(.createdAt) | .gateResults |= map(del(.durationMs)) | .regenerate |= map(del(.durationMs))' \
+                "$RECORD" > "$RECORD.semantic"
+            done
+            cmp -s "$ARTIFACT_DIR/remote-record.json.semantic" "$ARTIFACT_DIR/prepared-record.json.semantic" || refuse 'The recorded validation or integration semantics changed.'
+            EXPECTED_PARENTS="$TARGET_HEAD $RELEASE_SHA"
+            [ "$(git show -s --format=%P "$REMOTE_SHA")" = "$EXPECTED_PARENTS" ] || refuse 'The remote branch has human followups or different merge parents.'
+            [ "$(git show -s --format=%P "$MERGE_COMMIT")" = "$EXPECTED_PARENTS" ] || refuse 'The prepared merge has unexpected parents.'
+            [ "$(git show -s --format=%s "$REMOTE_SHA")" = "Merge upstream release $TAG into $INTEGRATION_BRANCH" ] || refuse 'The remote merge does not identify the lane.'
+            git diff --quiet "$REMOTE_SHA" "$MERGE_COMMIT" -- . ":(exclude)$RECORD_PATH" || refuse 'The remote tree contains human edits or differs from the prepared integration.'
+            # This check also covers a branch pushed manually after workflow review. The lane
+            # does not open its PR automatically: the reviewed-push procedure includes that step.
+            [ -z "$(git diff --name-only "$TARGET_HEAD..$REMOTE_SHA" -- .github/workflows)" ] || refuse 'Workflow changes require the reviewed-push recovery procedure.'
+            [ "$(git ls-remote --heads origin "$UPDATE_BRANCH" | cut -f1)" = "$REMOTE_SHA" ] || refuse 'The remote branch moved during ownership verification.'
+            VERDICT="$(jq -r '.gates' "$ARTIFACT_DIR/remote-record.json")"
+            BODY="$ARTIFACT_DIR/recovered-body.md"
+            {
+              cat "$ARTIFACT_DIR/landing-policy.md"
+              echo "## Recovered upstream $TAG pull request"
+              echo
+              echo "Retained remote branch: \`$UPDATE_BRANCH\` at \`$REMOTE_SHA\`."
+              echo "Upstream release commit: \`$RELEASE_SHA\`. Recorded gates: **$VERDICT**."
+              echo
+              echo "The branch was already pushed, but no PR existed. [This run]($RUN_URL) verified its merge parents, integration record and non-record tree without rewriting it. The integration record below belongs to the retained remote SHA. The newly prepared report belongs to a separate commit and is kept only in the run artifact. Required PR checks still apply; land by reviewed merge commit to retain upstream ancestry."
+              echo
+              echo '```json'
+              cat "$ARTIFACT_DIR/remote-record.json"
+              echo '```'
+            } > "$BODY"
+            ACTION='recovered'
           fi
 
+          if ! CREATED="$(gh pr create --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --title "$TITLE" --body-file "$BODY")"; then
+            record_result 'creation-failed'
+            echo "::error title=Could not open the pull request::gh pr create failed. The update branch is retained. Check the repository/organization setting \"Allow GitHub Actions to create and approve pull requests\", or the STAMITY_UPSTREAM_TOKEN fine-grained PAT's approval, expiry and Pull requests permission. After fixing access, retry this lane: it can recover the missing PR only if branch ownership remains unambiguous."
+            exit 1
+          fi
+          printf '%s\n' "$CREATED"
+          URL="$(printf '%s\n' "$CREATED" | grep -Eo 'https?://[^[:space:]]+' | tail -1 || true)"
+          NUMBER="$(printf '%s' "$URL" | grep -Eo '[0-9]+$' || true)"
+          record_result "$ACTION"
           {
             echo "number=$NUMBER"
             echo "url=$URL"
           } >> "$GITHUB_OUTPUT"
-          echo "Pull request ${NUMBER:+#$NUMBER }${URL:-(url not resolved)}"
+          echo "Pull request $ACTION: $URL at ${REMOTE_SHA:-$MERGE_COMMIT}" >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$OUTCOME" = 'validation-failed' ] && [ -n "$NUMBER" ]; then
             LABEL='upstream-validation-failed'
             LABELS="$(gh label list --limit 200 --json name 2>/dev/null | jq -r '.[].name' 2>/dev/null || true)"
             if printf '%s\n' "$LABELS" | grep -Fxq "$LABEL"; then
               if ! gh pr edit "$NUMBER" --add-label "$LABEL"; then
-                echo "::notice title=Label not applied::The \"$LABEL\" label exists but could not be applied to #$NUMBER. The gates still failed and this run is red; the label is a convenience, not the signal."
+                echo "::notice title=Label not applied::Could not apply $LABEL to the newly created PR. The red run and recorded gate result remain the signal."
               fi
             else
-              echo "::notice title=Label not applied::This repository has no \"$LABEL\" label (or the label list could not be read), so #$NUMBER was not labelled. Create the label if you want failed-gate update branches tagged; the red run and the report in the body are the signal either way."
+              echo "::notice title=Label not applied::This repository has no $LABEL label (or its labels could not be read). The red run and recorded gate result remain the signal."
             fi
           fi
 
@@ -970,6 +1029,17 @@ jobs:
           echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
           echo "Conflict issue #$NUMBER: $TITLE"
 
+      # Keep the publication decisions alongside the prepare artifact, including API failures,
+      # ownership refusals and the exact retained remote SHA used by a recovered PR.
+      - name: Retain publication and recovery evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: upstream-publication
+          path: ${{ runner.temp }}/upstream-update
+          if-no-files-found: warn
+          retention-days: 7
+
       # The verdict, in one place, so the mapping from outcome to run colour is readable as a
       # table rather than inferred from which earlier step happened to fail. Runs last and always,
       # so the summary is written even when a step above went red — a failed step has already set
@@ -997,7 +1067,14 @@ jobs:
               echo "> The update branch was prepared but **not pushed**: this release changes files under \`.github/workflows/\`, and this lane never pushes those — a pushed workflow file runs on the push, under the pushing identity, so a person reviews that diff and pushes it themselves. No secret changes this. Issue #${WORKFLOW_ISSUE_NUMBER:-?} carries the commands."
               echo
             fi
-            cat "$ARTIFACT_DIR/body.md" 2>/dev/null || echo '_No report body was composed._'
+            if [ "${PR_ACTION:-}" = 'recovered' ]; then
+              cat "$ARTIFACT_DIR/recovered-body.md"
+            elif [ "${PR_ACTION:-}" = 'reported' ] || [ "${PR_ACTION:-}" = 'closed' ]; then
+              echo "Existing pull request ($PR_ACTION): ${PR_URL:-unknown}. Its branch and metadata were preserved."
+              echo 'This run prepared a separate candidate; its report is in the upstream-update artifact and does not describe the existing PR.'
+            else
+              cat "$ARTIFACT_DIR/body.md" 2>/dev/null || echo '_No report body was composed._'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "${BLOCKED:-}" = 'workflow-files' ]; then

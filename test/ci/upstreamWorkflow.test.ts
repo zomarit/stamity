@@ -193,7 +193,7 @@ describe("upstream-update.yml — the shape of the lane", () => {
     );
   });
 
-  it("declares the dispatch inputs and a daily schedule, and nothing else", () => {
+  it("declares the dispatch inputs and an hourly schedule, and nothing else", () => {
     const on = triggers();
     expect(Object.keys(on).toSorted()).toEqual(["schedule", "workflow_dispatch"]);
 
@@ -209,11 +209,10 @@ describe("upstream-update.yml — the shape of the lane", () => {
 
     const schedule = on["schedule"] as readonly { cron: string }[];
     expect(schedule).toHaveLength(1);
-    // One fixed daily minute, and NOT the top of the hour: releases are tags rather than a
-    // stream, so a day of latency costs nothing, and GitHub sheds load from the `0 * * * *`
-    // cohort it queues together.
+    // REQ-UPSTREAM-013 now recommends hourly enterprise polling; the old daily-only
+    // assertion no longer represents the contract. Keep an off-hour minute under the new cadence.
     const cron = schedule[0]?.cron ?? "";
-    expect(cron).toMatch(/^\d{1,2} \d{1,2} \* \* \*$/);
+    expect(cron).toMatch(/^\d{1,2} \* \* \* \*$/);
     expect(cron.startsWith("0 ")).toBe(false);
   });
 
@@ -499,55 +498,32 @@ describe("upstream-update.yml — the push can never destroy work", () => {
 });
 
 describe("upstream-update.yml — what each outcome produces", () => {
-  it("opens one pull request per release, and only ever writes to one this run pushed", () => {
+  it("creates an owned missing PR while every existing PR remains read-only", () => {
+    // REQ-UPSTREAM-016 replaces the former deliberate missing-PR retry refusal. The shell
+    // behavior is exercised with real git in test/upstream/workflowRecovery.test.ts; this
+    // structural guard keeps its credential boundary and all-state ownership lookup intact.
     const run = runOf("publish", "Open or update the pull request");
-    // Found by HEAD BRANCH rather than by title: a reviewer can edit a title, and the head
-    // branch is the identity the lane owns. One per release, created once, updated after.
-    expect(run).toContain(
-      'gh pr list --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --state open',
-    );
+    expect(run).toContain('gh api --paginate --slurp -X GET "repos/$GH_REPO/pulls"');
+    expect(run).toContain("-f state=all");
     expect(run).toContain('gh pr create --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH"');
-    expect(run).toContain('gh pr edit "$NUMBER"');
     expect(run).toContain('TITLE="Upstream release ${TAG:-unknown}"');
-    // A `gh pr create` failure names the repository setting that most often causes it instead of
-    // dying with the CLI's own message. Never an empty catch.
     expect(run).toContain("Allow GitHub Actions to create and approve pull requests");
     expect(run).toContain("::error title=Could not open the pull request");
-    // The label is best-effort by design and says so when it does not land.
     expect(run).toContain("::notice title=Label not applied");
-
-    // AN EXISTING REMOTE BRANCH IS REPORTED, NEVER REWRITTEN. When origin already had the branch
-    // this run pushed nothing, and the report it composed describes the tree THIS run merged —
-    // not the tree that branch carries, which may since have taken a conflict resolution or a
-    // review fixup. So the not-pushed arm reports the open pull request and returns before any
-    // write: no body edit, no title edit, no comment, no label.
-    const notPushed = run.slice(
-      run.indexOf('if [ "${PUSHED:-false}" != \'true\' ]; then'),
-      run.indexOf('gh pr list --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --state open --limit'),
-    );
-    expect(notPushed, "the not-pushed arm must come first").not.toBe("");
-    expect(notPushed).toContain("action=reported");
-    expect(notPushed).toContain("$GITHUB_STEP_SUMMARY");
-    expect(notPushed).toContain("::notice title=Existing pull request reported");
-    expect(notPushed).toContain("exit 0");
-    // Over COMMAND positions, not bytes: the arm's own annotation names `gh pr create` as the
-    // command a person would run by hand, which is prose rather than a write.
-    const notPushedCommands = notPushed
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => !line.startsWith("echo") && !line.startsWith("printf"))
-      .join("\n");
+    const existing = run.slice(run.indexOf('if [ "$COUNT" -eq 1 ]; then'), run.indexOf("ACTION='created'"));
+    expect(existing).toContain("record_result 'reported'");
+    expect(existing).toContain("record_result 'closed'");
+    expect(existing).toContain("exit 0");
     for (const write of ["gh pr edit", "gh pr create", "gh pr comment", "--add-label"]) {
-      expect(notPushedCommands, `the not-pushed arm must not ${write}`).not.toContain(write);
+      expect(existing).not.toContain(write);
     }
-    // Every write in this step therefore sits AFTER the arm that returns, which is what makes the
-    // edit path reachable only on a run that pushed the branch.
+    expect(run).toContain('git show "$REMOTE_SHA:$RECORD_PATH"');
+    expect(run).toContain('git diff --quiet "$REMOTE_SHA" "$MERGE_COMMIT"');
+    expect(run).toContain("ACTION='recovered'");
     expect(stepOf("publish", "Open or update the pull request").env).toEqual({
       PUSHED: "${{ steps.push.outputs.pushed }}",
     });
-    expect(run.indexOf('if [ "${PUSHED:-false}" != \'true\' ]; then')).toBeLessThan(
-      run.indexOf('gh pr edit "$NUMBER"'),
-    );
+    expect(stepOf("publish", "Retain publication and recovery evidence").if).toBe("always()");
   });
 
   it("opens the conflict issue under the exact title, and finds it by the lane's own marker", () => {
