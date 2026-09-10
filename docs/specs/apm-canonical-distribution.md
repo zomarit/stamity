@@ -57,8 +57,10 @@ regression has been filed (#2831 is a duplicate whose reporter confirmed the rel
 | 0.30.0 | imperative local path | still refused as an Agent Plugin (the local-bundle route inspects `plugin.json` first, by design) |
 | 0.30.0 | declarative local path in a consumer `apm.yml` | 49 files — the deterministic fixture route CI uses |
 
-So the canonical replacement was live at `zomarit/stamity` (main and every `v*` tag) for any
-client at or above 0.29.1 before this change; the change proves and documents it.
+These probes establish the canonical route at the specific `main` revision and `v1.3.0`
+listed above, with the named client versions. They do not establish that every historical
+`v*` tag was tested or that future APM versions behave identically. Each release records its
+own exact commit and installed-content evidence.
 
 ### The intentional difference from the mirror
 
@@ -97,7 +99,9 @@ symptom into a failure on its own.
    lacks its source's heading, or when the lockfile types the package as anything but
    `apm_package`.
 4. The regression witness runs on every push: the same smoke against 0.29.0 with
-   `--expect-failure` proves the check detects the original failure.
+   `--expect-failure` detects routing failures after a completed install. The historical
+   misclassification proof additionally records `package_type: agent_plugin` and zero
+   deployed primitives; a generic missing-file witness alone does not establish that cause.
 
 ## Requirements
 
@@ -106,8 +110,12 @@ symptom into a failure on its own.
   and verifies deployment per target for claude, copilot, cursor and codex.
 - REQ-APM-002 — `ci.yml` runs the smoke at 0.29.1 (minimum), 0.30.0 (current) and 0.29.0
   (`--expect-failure`), required through `all-ci-checks`.
-- REQ-APM-003 — `release.yml`'s gates run the smoke against the canonical remote at the
-  release sha before the tarball is packed.
+- REQ-APM-003 — `release.yml` runs the smoke against the canonical remote at the release SHA
+  in its separate, credential-free `apm-route` job. That job runs independently of `gates`
+  and cannot access its packed artifact; `publish` requires both jobs to pass. This is a
+  prepublication remote-SHA check, with no promised ordering relative to packing. A separate
+  postpublication check verifies the public version tag resolves to the release commit and
+  installs the expected content.
 - REQ-APM-004 — The README and the getting-started page carry the install command, the pinned
   form, the client floor, the symptom of an older client, and the vendored-tree note; the
   generator's header records the history instead of the limit.
@@ -124,8 +132,89 @@ symptom into a failure on its own.
   detected zero deployed primitives.
 - GIVEN a consumer with a lockfile saying `agent_plugin` and no primitives WHEN the exported
   verifier runs THEN it fails naming the classes at zero.
-- GIVEN the tag route `zomarit/stamity#v1.4.0` after publication WHEN the release gates run
-  THEN the smoke passes against the remote at the release sha.
+- GIVEN a canonical release candidate WHEN `apm-route` runs before publication THEN the
+  report names the canonical repository and exact candidate SHA, resolves that commit and
+  verifies its supported deployed classes without a write credential or the npm artifact.
+- GIVEN a published canonical release WHEN its tag route is checked THEN the tag and
+  lockfile resolve to the recorded release commit and installed-content checks pass.
+
+## Public and private downstream contract (2026-09-10)
+
+The source-edit route predates the fork layer: edits under `content/` already reach `.apm/`.
+The 1.5.0 fork layer resolves replacements and additions correctly in the catalog, but the
+APM generator's corpus-origin filter drops the resolved fork winners. This extension repairs
+that consumer of the existing catalog and keeps package authoring separate from overrides in
+a consuming repository. The original 1.4.0 decision and dated probe results above remain
+historical evidence; these requirements describe the extension and require fresh proof.
+
+### REQ-APM-006 — Resolved package content and skill identity
+
+Generate rules, commands, agents and skills from reachable corpus and fork items in the
+resolved catalog, including fork patches whose base retains corpus origin. A replacement
+emits exactly once with its resolved body. An addition emits once. Consumer
+`.stamity/overrides/` and per-consumer installed packs are not package-authoring inputs.
+Direct `content/` edits remain supported. Skills use the catalog's replaced claimant to
+choose the bundled emitted directory for a replacement; an addition keeps its own bare
+directory. The frontmatter `name` equals that directory. Supported regular companion files
+are copied from the winning skill, preserving relative paths and bytes; patch control files
+are authoring inputs rather than installed companion files. Path and identity collisions are
+refused before writing, including two artifacts that would otherwise write identical bytes
+to one primitive path. No symlink imports content from outside the skill.
+
+### REQ-APM-007 — Explicit downstream publisher identity
+
+`package.json` may declare `stamity: { "publisher": "acme" }`. The optional object accepts
+only the supported key; its publisher is a validated GitHub owner slug matching the owner
+in the normalized existing `repository.url`. The absent configuration retains the existing
+`zomarit` default. APM and plugin generators share this validation so regeneration cannot
+produce contradictory publishers or repository URLs. Existing package name, version,
+description, license, repository and homepage fields remain their respective sources of
+truth. Invalid identity fails with a remedy before generated outputs are written. No
+repository configuration or package metadata grants permission to publish publicly.
+
+### REQ-APM-008 — Private destinations and authenticated consumers
+
+A private downstream on `github.com` publishes its generated package by retaining `.apm/`
+and `apm.yml` in its private git release ref. Its existing APM and Renovate distribution
+chooses and updates the consumer pin. The inherited canonical npm/APM route and docs deploy
+jobs run only for the public canonical repository identity, checked from GitHub's execution
+context. A downstream uses an explicit reviewed private release setup, checks actual
+repository visibility and grants only its intended private destinations. Public canonical
+publication retains its existing QA, environment, tag and trusted-publisher controls.
+
+Private installation uses the APM version's documented GitHub credential mechanism, with
+read access to the package repository, organization authorization where required and values
+kept out of manifests, URLs, logs and lockfiles. The run records actual successful
+authentication, resolved ref/SHA and installed bytes. Public fetch, package index and Actions
+access, or approved operational mirrors, are prerequisites to the selected deployment. A
+generic mirror claim never substitutes for a fetch and install against the chosen route.
+
+### REQ-APM-009 — Compatibility and evidence matrix
+
+| Route | Package-author customization | Consumer behavior | Required observable proof |
+| --- | --- | --- | --- |
+| Canonical public APM | Unchanged `content/`, no fork layer | Existing supported APM client targets | Baseline generated bytes, minimum/current clients and old-client witness; canonical release SHA and published tag install |
+| Public downstream APM | Direct source edits; fork additions, replacements and patches | Public git dependency pin | Independent expected bodies for all four classes, skill identities and companion files after real installation |
+| Independent private downstream APM | The same package-author inputs plus explicit identity | Authenticated private git dependency, existing Renovate update | Privacy/fork metadata, initial private release/install, reviewed upstream PR/checks/merge, second private release, observed Renovate consumer PR and installed bytes |
+| Packaged CLI, canonical or downstream | Source/engine changes and bundled fork layer | Existing CLI commands and supported client emission; consumer overrides retain precedence | Build/pack/install outside the checkout; source and fork witnesses, override precedence, supported emissions and CLI discovery |
+
+APM supplies the four primitive classes, with deployment limited by APM's target profile.
+It does not supply Stamity's charter, generated hooks, MCP configuration, engine/runtime or
+CLI behavior. Editing those sources in a private repository changes the repository or its
+packaged CLI; it does not add them to this APM package. Customization fixtures carry expected
+content independently of `.apm/`; a generator comparing its own output only proves
+determinism, and a resolver smoke reading `.apm/` only proves delivery of that projection.
+
+- GIVEN source edits or fork additions/replacements/patches in every supported class WHEN a
+  downstream generates and installs its APM package THEN independently specified bodies,
+  skill names and companion bytes are discoverable at the consumer's supported target paths.
+- GIVEN no downstream identity or fork directory WHEN generation runs THEN canonical
+  generated output is unchanged apart from deliberate release metadata.
+- GIVEN a private repository with inherited workflows WHEN a private tag is pushed THEN
+  canonical public npm and docs publishing jobs are excluded by repository identity and
+  visibility, and only its explicitly configured private release path may run.
+- GIVEN an inaccessible private package WHEN install runs THEN authentication fails and
+  no successful installed-content or Renovate claim is recorded.
 
 ## Non-goals
 

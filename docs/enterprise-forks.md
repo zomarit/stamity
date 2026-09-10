@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit b801fe5. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit d6096ac. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes (`src/content/catalog.ts`),
      the job split or the permissions in `.github/workflows/upstream-update.yml` change, or
@@ -54,6 +54,79 @@ git-native. Two platform facts hold either way: upstream `release` and `push` ev
 another repository, so a fork learns about a release by polling or by dispatch; and `gh repo
 sync` is fast-forward-only, its `--force` a hard reset, so it is no route for a customized fork.
 
+### Private onboarding and destinations
+
+Start with approved empty private package and consumer repositories, an integration branch
+that permits reviewed merge commits, and owners for updates and monitoring. Confirm access
+to upstream git releases, npm dependencies, the APM client and its Python dependencies,
+Actions and the selected runner. Where network policy requires mirrors, configure approved
+git/npm/Python endpoints and permitted Actions first, then perform the same fetch, build and
+install checks against them. This guide uses APM's private git route; an experimental APM
+registry is a separate deployment choice. Official sources and tested clients are recorded
+in [the implementation plan](plans/005-enterprise-downstream-support.md).
+
+Set the destination to your approved example equivalent. Keep credentials out of variables
+that name repositories and out of git URLs. Disable Actions **before importing any refs**:
+historical tags can carry older workflows without the current publication guards.
+
+```sh
+STAMITY_DOWNSTREAM='acme/stamity-private'
+gh repo create "$STAMITY_DOWNSTREAM" --private
+test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .private)" = true
+test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .fork)" = false
+gh api --method PUT "repos/$STAMITY_DOWNSTREAM/actions/permissions" -F enabled=false
+STAMITY_PRIVATE_URL="$(gh repo view "$STAMITY_DOWNSTREAM" --json url --jq .url)"
+git clone --mirror https://github.com/zomarit/stamity stamity-mirror.git
+git -C stamity-mirror.git push --mirror "$STAMITY_PRIVATE_URL.git"
+git clone "$STAMITY_PRIVATE_URL.git" stamity-private
+cd stamity-private
+git remote add upstream https://github.com/zomarit/stamity
+git fetch upstream
+git merge-base --is-ancestor v1.5.0 HEAD
+```
+
+The ancestry command checks the illustrated imported baseline; substitute the exact approved
+upstream tag/SHA for another import. Confirm `origin` points to the private destination before
+every initial push. Keep the mirror backup until downstream and consumer checks pass.
+Repeating `push --mirror` after customization would replace downstream refs; subsequent
+updates use the upstream lane. Keep Actions disabled until current workflows, identity,
+credentials and destinations have been reviewed, including how historical tags are handled.
+
+Configure publisher and repository identity through package metadata:
+
+```sh
+STAMITY_PUBLISHER="${STAMITY_DOWNSTREAM%%/*}"
+npm pkg set "name=@$STAMITY_PUBLISHER/stamity" "stamity.publisher=$STAMITY_PUBLISHER"
+npm pkg set "repository.url=git+$STAMITY_PRIVATE_URL.git" "homepage=$STAMITY_PRIVATE_URL"
+npm pkg set "bugs.url=$STAMITY_PRIVATE_URL/issues"
+npm pkg set private=true --json
+npm pkg delete publishConfig
+npm install --package-lock-only --ignore-scripts
+npm ci --ignore-scripts
+node scripts/generate-plugin-manifests.mjs
+node scripts/generate-apm-package.mjs
+```
+
+`stamity.publisher` defaults to `zomarit` when absent. When configured, it must be a valid
+owner slug matching `repository.url`; unsupported keys or mismatched/invalid identities fail
+before generation writes anything. Both generators share this validator. Name, version,
+description and license remain their existing package fields. `private: true` blocks npm
+publishing for this APM-only setup; removing public `publishConfig` makes the destination
+review explicit.
+
+The inherited canonical release and docs deployment workflows additionally check the executing
+repository's identity and visibility. Their public publication jobs run only in the public
+canonical repository. Preserve those guards during upstream review. Private APM needs its
+generated tree and a private git ref; enterprise npm or docs deployment needs a separate
+reviewed workflow and explicit private destination before enabling it.
+
+Commit identity, customization and `.stamity/upstream.json`, setting its `branch` to the
+intended integration branch. Run the regeneration table and behavior gates before pushing.
+Only then enable the approved CI/upstream/private-release workflows and repository Actions,
+after the organization owner verifies the bot permissions and actual required PR checks.
+Do not copy canonical branch rules blindly: this integration branch must allow merge ancestry;
+existing protections remain in force elsewhere.
+
 ### The one precondition, and what to do without it
 
 `status`, `preview` and `integrate` all refuse on a tree that shares no merge base with the
@@ -62,6 +135,10 @@ release: outcome `ancestry-missing`, exit 1, no merge attempted, and never
 or a repository started from a tarball — and there are two recoveries: re-create the repository
 from a clone that carries the upstream history and replay your commits on top, or, when you know
 the upstream commit your tree was taken at, replay your local changes as one commit onto it.
+A shallow clone first runs `git fetch --unshallow origin` against its authorized history
+source, then fetches upstream and retries `status`. If no common history exists, preserve
+the original checkout and replay reviewed changes onto a fresh full-history clone. Erasing
+records or forcing unrelated histories together does not reconstruct the missing base.
 
 ## Configuring `.stamity/upstream.json`
 
@@ -124,7 +201,7 @@ MCP catalog. `shadows` is the one thing the lane cannot derive: a file of yours 
 bundled artifact, declared so a release that moves the artifact behind it is reported even when
 the merge is clean.
 
-## The daily loop
+## The update loop
 
 ```sh
 node scripts/upstream.mjs status                  # what is integrated, what is next, what it touches
@@ -392,7 +469,9 @@ bare — `fork/skills/verify/SKILL.md` — and because `verify` is the id the bu
 it projects to every client as `st-verify`, directory and `name` alike, so every call site and every
 cross-reference to that skill keeps working. A fork skill whose id nothing bundled holds is an
 addition, and projects under its own bare directory. Either way the directory travels whole:
-`SKILL.md` plus every support file beneath it. What a fork skill cannot do is land in a projection
+`SKILL.md` plus supported companion files beneath it (UTF-8 text for the CLI, original bytes
+for APM). APM excludes patch control files from installed companions.
+What a fork skill cannot do is land in a projection
 directory another skill already occupies under a different id — that is refused, naming the file to
 move.
 
@@ -405,6 +484,85 @@ so those do not move.
 [The fork-layer spec](specs/fork-layer.md) is the design reference behind all of it: what was
 decided, what was dropped, and why.
 
+## APM authoring, installation and capabilities
+
+Direct `content/` edits already reach the generated APM package. Fork additions, full
+replacements and patches reach it through the same resolved catalog: a replacement appears
+once with your body, and a patch preserves the resolved patched body. Run
+`node scripts/generate-apm-package.mjs` after authoring, then commit `apm.yml` and `.apm/`.
+Check independent expected content in an installed consumer; generation alone cannot prove
+the client discovered it.
+
+| Distribution | Author customization | What consumers receive |
+| --- | --- | --- |
+| Canonical public APM | Canonical source | Generated rules, commands, agents and skills |
+| Public downstream APM | Direct `content/` edits and the fork layer | Those four resolved classes from the downstream ref |
+| Independent private APM | The same inputs and explicit identity | Those classes after authenticated private git installation |
+| Packaged CLI | Source/engine changes and bundled fork layer | Existing CLI behavior and supported client emission, with consumer override precedence |
+
+APM delivery depends on its target profile: the tested Claude, Copilot and Cursor profiles
+deploy all four classes; Codex deploys agents and skills, with instructions compiled by APM
+separately. This package does not deliver Stamity's charter, hooks, MCP wiring, engine/runtime
+or CLI behavior through APM. Editing those sources changes a downstream repository or its
+packaged CLI, not the APM projection. Plugin manifests retain their direct `content/` surface;
+this change does not add fork projection to plugin installation. Consumer
+`.stamity/overrides/` precedence belongs to the CLI and is not read during APM generation.
+
+### A private release and authenticated consumer
+
+Use the existing private APM and Renovate engine's release convention. Choose a tag distinct
+from imported upstream tags that its version policy accepts: `v1.5.0-acme.1`, for example,
+is a prerelease and needs a consumer policy allowing that prerelease. Update package version,
+regenerate, run full gates, review and commit on the integration branch before tagging.
+
+```sh
+STAMITY_PRIVATE_TAG='v1.5.0-acme.1'
+test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .private)" = true
+test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .fork)" = false
+node scripts/generate-apm-package.mjs --check
+git diff --exit-code
+git tag "$STAMITY_PRIVATE_TAG"
+git push origin "$STAMITY_PRIVATE_TAG"
+```
+
+The private git tag is sufficient for APM. If your existing engine consumes GitHub Release
+objects, add one on that same private repository using its reviewed notes and
+`gh release create "$STAMITY_PRIVATE_TAG" --repo "$STAMITY_DOWNSTREAM" --verify-tag`.
+Check actual visibility immediately before release. These releases remain separate from
+canonical Stamity's public npm/APM/docs release.
+
+The consumer names the private ref in `apm.yml` in the same form as a public dependency:
+
+```yaml
+dependencies:
+  apm:
+    - acme/stamity-private#v1.5.0-acme.1
+```
+
+Use apm-cli **0.29.1 or newer**; **0.30.0** is the current tested client. Supply an approved
+read credential through the secret manager as `GITHUB_APM_PAT_ACME` for this example owner,
+or `GITHUB_APM_PAT`. Per-organization credentials take precedence over the general APM token,
+which precedes `GITHUB_TOKEN` and `GH_TOKEN`. A consumer's Actions token normally cannot
+read another private repository; explicitly grant the selected credential access and
+complete organization SSO authorization where needed. Keep values out of manifests, URLs,
+command history, logs and evidence.
+
+```sh
+apm install --target claude
+```
+
+Read `apm.lock.yaml`: the dependency must be `apm_package` and resolve the intended private
+commit. Assert an independently specified customization marker in every expected installed
+class, skill directory/name and companion file. Retain client version, source ref, resolved
+SHA and byte hashes in the approved private evidence location. An authentication failure
+is incomplete installation even if stale files from an earlier install remain.
+
+After the reviewed upstream merge and second private release, let the existing Renovate
+engine open its consumer update PR. Verify its actual run, chosen ref, access, checks and
+resolved lockfile/installed content. Keep that engine's manager and policy configuration;
+a proposed config or simulated update does not prove the deployed integration. The
+distribution owner closes this step with observed evidence.
+
 ## The GitHub workflow
 
 `.github/workflows/upstream-update.yml` ships in every copy of this repository and does nothing
@@ -412,8 +570,10 @@ until you opt in. **Activation is committing `.stamity/upstream.json`**: the fir
 that file, and where there is none it writes a notice and the run ends green with the jobs after
 it skipped — this repository's own case, permanently.
 
-It runs on `workflow_dispatch` (inputs: `release`, an optional tag, and `dry_run`) and on a daily
-schedule — enough, since releases are tags, a handful a year. Two schedule facts are the
+It runs on `workflow_dispatch` (inputs: `release`, an optional tag, and `dry_run`) and an hourly
+schedule at minute 17 (`17 * * * *`). Change the cron through a reviewed downstream workflow
+edit when policy requires another cadence. Scheduling is best effort, not a deadline, and
+upstream releases do not themselves trigger this workflow. Two schedule facts are the
 platform's rather than the lane's: scheduled workflows are **disabled by default in a fork**, and
 are auto-disabled after sixty idle days in a public repository. Enable them, and expect to
 re-enable them. Two jobs follow the probe, split by trust:
@@ -429,10 +589,13 @@ re-enable them. Two jobs follow the probe, split by trust:
   is red. On a conflict there is nothing to push, so it opens or updates one issue per release,
   `Upstream <tag> needs conflict resolution`, carrying the report and the local commands.
 
-**An update branch that already exists on the remote is reported, never rewritten.** There is no
-force flag anywhere in the file, and a later run does not rewrite the open pull request's body
-either — it reports the one that is there and stops, because that branch may carry a human's
-conflict resolution or a review fixup. The lane finds its own issues by a marker it writes into
+**An update branch that already exists on the remote is preserved.** A later run reports its
+open PR without changing its body, title, labels or branch. If the push succeeded but PR
+creation failed, retry can create the missing PR only after proving the same owned integration:
+matching release/target, merge parents, non-record tree and semantic integration record,
+with no human follow-up. The recovered PR names that retained remote SHA. Target movement,
+human fixups, wrong base or ambiguous ownership require manual review and create nothing.
+A closed or merged PR is never reopened or replaced. The lane finds its own issues by a marker it writes into
 the body — `<!-- stamity-upstream-lane: <tag> <kind> -->` — rather than by title alone, so
 renaming one does not produce a second.
 
@@ -449,7 +612,7 @@ A `concurrency` group serialises runs and never cancels one in flight, because a
 ### The optional secret, and the one thing it buys
 
 The workflow needs no token and no App: `publish` falls back to the per-run repository token. The
-optional `STAMITY_UPSTREAM_TOKEN` — a fine-grained or App token with Contents: write, Pull
+optional `STAMITY_UPSTREAM_TOKEN` — a fine-grained PAT with Contents: write, Pull
 requests: write and Issues: write, read only by `publish` — buys exactly one thing, the pull
 request's own CI. Since
 2026-06-11 a pull request created with the repository token does start `pull_request` runs, but
@@ -457,7 +620,15 @@ in an approval-required state: someone clicks "Approve and run" on each, and wit
 start on their own. It also sidesteps the second half of that limit — opening a pull request with
 the repository token needs the repository or organisation setting **"Allow GitHub Actions to
 create and approve pull requests"**, and without it `gh pr create` fails, the branch is still
-pushed, and the run says exactly that.
+pushed, and the run says exactly that. Correct the permission or credential and retry: an
+unchanged owned branch can then receive its missing PR without a branch rewrite.
+
+Store the PAT in the approved Actions secret store, scoped to the downstream repository,
+with a named owner, expiration and rotation procedure. It reaches `publish` alone. If the
+organization selects a GitHub App, its approved integration must mint a short-lived
+installation token per run; an expiring installation token saved as a static secret is not
+a supported setup. Verify the actual required checks on a real bot-created PR under your
+rules. A passing preparation report alone does not prove those platform checks ran.
 
 What the secret does **not** buy is a workflow-touching release: that path is closed by design,
 above, not by permission. Either way your gates already ran in `prepare` and their verdict is
@@ -470,6 +641,33 @@ merge-method setting to the option that produces a merge commit rather than a fa
 squash, and check it by hand. Only the GitHub reading is automated and only it was verified for
 this release; everywhere else the same misconfiguration surfaces as `ancestry-lost` after the
 first landing.
+
+### Failure, monitoring and recovery evidence
+
+| Condition | Recovery and retained evidence |
+| --- | --- |
+| Authentication/permission failure | Retain the run/report; check repository access, token expiry/SSO and effective grants, then retry. A failed remote lookup is never an absent branch. |
+| `conflict` or `conflict-pending` | Resolve named source conflicts in the update worktree, run `continue`, then review and push. |
+| `regenerate-failed` or `validation-failed` | Fix the failed command or behavior, regenerate and use `continue` or `validate` for the existing state; preserve earlier failures. |
+| Missing/lost ancestry | Restore full history or reconstruct from the known base and review the landing method; preserve the original checkout. |
+| Workflow files changed | Read the complete diff and reviewed-push issue, then perform its local push under the approved reviewer identity. No stronger token bypasses the guard. |
+| Missing PR on unchanged owned branch | Correct the creation failure and retry; verify one PR at the original SHA without a rewrite. |
+| Closed PR, changed branch or ambiguous owner | Preserve state and review manually. An operator decides whether to reopen the existing PR or use a separately reviewed recovery branch. |
+
+Assign an operations owner and connect failed Actions runs to the existing notification
+destination. An external monitor must compare the latest attempted/successful poll with an
+agreed threshold; three hours for hourly polling is an initial threshold to review with that
+owner. A disabled or missed workflow cannot emit its own failure notification. Test a
+controlled failed run and a stale/disabled-poll signal in approved fixtures, retaining proof
+that the selected destination received both.
+
+Before fixture cleanup, retain private/non-fork metadata, initial/final tags and SHAs,
+authenticated installed-content assertions, the ordinary-file upstream release, update run
+and PR/checks, reviewed merge ancestry/customization, the actual Renovate consumer PR and
+final installation. Capture missing-PR retry, unchanged repeat, the separate landing-policy
+warning and reviewed workflow-change recovery. Missing authorization, credentials, observed
+Renovate run or monitoring destination leaves that exact proof as `Not done:` while
+independent work continues. Keep private evidence in its approved private location.
 
 ## What is guaranteed, and by whom
 

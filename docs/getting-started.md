@@ -108,6 +108,11 @@ the ref into the consumer's `apm_modules/` — tests, site and all — and deplo
 of it. APM gitignores that directory itself, and the primitives it deploys are the corpus,
 projected for APM by this repository's own generator and byte-checked in CI.
 
+For public downstreams or independent private packages, the [enterprise guide](enterprise-forks.md)
+covers source/fork customization, publisher identity, private authentication and the existing
+APM/Renovate update lifecycle. APM delivers these four primitive classes; Stamity's charter,
+hooks, MCP wiring and engine/runtime remain capabilities of the packaged CLI route.
+
 ## What lands
 
 `AGENTS.md` is written for every client — the charter: repository facts, the floor
