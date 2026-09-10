@@ -1,5 +1,7 @@
+import { statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsdown";
 
 // Plain ESM JavaScript, loaded with `--config-loader native` (see the build script): together
@@ -81,26 +83,54 @@ import { defineConfig } from "tsdown";
 export const LOGIC_BUDGET_BYTES = 2 * 1024 * 1024;
 
 /**
- * The staged corpus half — `dist/content` plus `dist/packs`, the DATA the runtime
- * reads.
+ * The staged corpus half — `dist/content` plus `dist/packs`, plus `dist/fork` in
+ * a fork's build: the DATA the runtime reads.
  *
  * 1.5 MiB, roughly three times the measured staged tree (519,715 bytes = 0.50 MiB
  * across the corpus and the three bundled packs — the `[size]` line's corpus
  * figure on this tree, 2026-09-07). Content earns its way
  * in one artifact at a time, so the ratio is wide on purpose: the ceiling exists to
  * catch a category error — a fixture tree, a build directory, a media file staged by
- * accident — not to ration authoring.
+ * accident — not to ration authoring. A fork's `fork/` directory counts here too
+ * (`classifyDistEntry`), so a fork's additions are budgeted rather than falling
+ * into the unbudgeted line that can never fail.
  */
 export const CORPUS_BUDGET_BYTES = 1536 * 1024;
+
+/**
+ * The directories the build stages beneath `dist/` as DATA, and their budget
+ * half. `content` and `packs` always; `fork` — the fork layer,
+ * `docs/specs/fork-layer.md` — only when the checkout has one, because a copy
+ * entry naming an absent source fails the build, and this repository ships no
+ * `fork/`. Stated as one list so the copy step and the classifier below cannot
+ * disagree about what counts as corpus.
+ */
+const STAGED_DATA_DIRS = ["content", "packs", "fork"];
+
+/**
+ * The `copy` entries for a checkout that does or does not carry a `fork/`
+ * directory. Pure over the flag so the branch is provable without a second
+ * checkout: `test/support/support.test.ts` pins both answers and the one the
+ * default export took for this tree.
+ *
+ * @param {boolean} forkPresent whether `<repoRoot>/fork` is a directory
+ */
+export function copyTargets(forkPresent) {
+  return STAGED_DATA_DIRS.filter((dir) => dir !== "fork" || forkPresent).map((dir) => ({
+    from: dir,
+    to: "dist",
+    flatten: false,
+  }));
+}
 
 /**
  * Which budget a dist-relative POSIX path counts against.
  *
  * The corpus prefixes are checked first, so a `.js` staged as DATA under
- * `content/` or `packs/` counts as corpus rather than as bundled logic. Every
- * other JavaScript chunk is logic at any depth — entries at the root today, and
- * a shared chunk under a subdirectory if a future tsdown/rolldown release starts
- * placing one there. Depth used to be part of the test
+ * `content/`, `packs/` or `fork/` counts as corpus rather than as bundled logic.
+ * Every other JavaScript chunk is logic at any depth — entries at the root
+ * today, and a shared chunk under a subdirectory if a future tsdown/rolldown
+ * release starts placing one there. Depth used to be part of the test
  * (`!relPath.includes("/")`), which made a nested chunk `other`: printed, never
  * a violation, so a chunk-naming change would have moved the logic half's bytes
  * out of both budgets without failing anything.
@@ -117,9 +147,21 @@ export const CORPUS_BUDGET_BYTES = 1536 * 1024;
  * unbudgeted file rather than quietly consume the logic half.
  */
 export function classifyDistEntry(relPath) {
-  if (relPath.startsWith("content/") || relPath.startsWith("packs/")) return "corpus";
+  if (STAGED_DATA_DIRS.some((dir) => relPath.startsWith(`${dir}/`))) return "corpus";
   if (/\.[cm]?js$/.test(relPath)) return "logic";
   return "other";
+}
+
+/** Whether `<repoRoot>/fork` exists as a directory — the fork layer's source, when a fork has one. */
+function forkDirectoryPresent() {
+  const forkDir = fileURLToPath(new URL("./fork", import.meta.url));
+  try {
+    return statSync(forkDir, { throwIfNoEntry: false })?.isDirectory() === true;
+  } catch {
+    // An unreadable path is not a directory this build can stage; the copy
+    // step then omits it, which is the same answer an absent one gets.
+    return false;
+  }
 }
 
 /**
@@ -253,11 +295,11 @@ export default defineConfig({
   // runs from the repo. Staged here rather than in a separate script so the
   // guarantee holds for anyone who runs the build, not only for CI.
   // `to` names the PARENT the source directory lands in, so `dist` yields
-  // `dist/content` and `dist/packs` — the two paths the readers probe.
-  copy: [
-    { from: "content", to: "dist", flatten: false },
-    { from: "packs", to: "dist", flatten: false },
-  ],
+  // `dist/content` and `dist/packs` — the two paths the readers probe — and
+  // `dist/fork` beside them when this checkout is a fork carrying one
+  // (`resolveBundledForkRoot()` probes the fork root as the corpus root's
+  // sibling, so the staged layout has to keep them side by side).
+  copy: copyTargets(forkDirectoryPresent()),
   // Measured here rather than in a package.json script: the budget belongs to the
   // build that produces the tree, so it holds for anyone who runs the build and not
   // only for whoever remembers the extra command.

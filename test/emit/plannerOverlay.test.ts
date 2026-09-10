@@ -478,6 +478,202 @@ describe("override layer under an installed pack", () => {
   });
 });
 
+// ── The fork layer through the composed planner ──────────────────
+
+/**
+ * The fork layer (docs/specs/fork-layer.md, REQ-FORK-005) at the planner's
+ * three origin seams, in the same paired shape the override cases above take:
+ * with and without a pack installed, because `residueContext`'s rebuild is
+ * the one place a fourth content-root part could be dropped, and dropping it
+ * would not error — the fork's body would silently stop arriving.
+ */
+describe("the fork layer through the composed planner", () => {
+  const PACK_ID = "opspack";
+
+  /** A sentence that appears in the fork's body and nowhere in the corpus. */
+  const FORK_MARKER = "Fork rule: every deploy names the change ticket it ships.";
+
+  /** The fork's own body for a shipped rule id. */
+  function forkRule(id: string): string {
+    return override(id).replace(USER_MARKER, FORK_MARKER);
+  }
+
+  /** A fork skill, bare directory name as the layer requires. */
+  function forkSkill(id: string): string {
+    return [
+      "---",
+      `id: ${id}`,
+      "type: skill",
+      "description: The fork's version of this skill.",
+      "tags:",
+      "  - implementation",
+      "load: on-demand",
+      "obsolete_when: the fork's runbook covers it",
+      "---",
+      "",
+      FORK_MARKER,
+      "",
+    ].join("\n");
+  }
+
+  /** The fork layer, seeded under the temp repo as a package would carry it. */
+  const forkRootOf = (): string => join(getRepo().dir, "pkg", "fork");
+
+  async function seedFork(files: Record<string, string>): Promise<void> {
+    await getRepo().seedFiles(
+      Object.fromEntries(Object.entries(files).map(([rel, body]) => [`pkg/fork/${rel}`, body])),
+    );
+  }
+
+  it("emits the fork body to every client with and without a pack installed", async () => {
+    await seedFork({ [`rules/${SHADOWED_RULE_ID}.md`]: forkRule(SHADOWED_RULE_ID) });
+    const packDir = await stagePack(PACK_ID, {
+      "rules/stamity-opsguard.md": packRule("opsguard"),
+    });
+    const planner = composeEmissionPlanner(ADAPTER_REGISTRY);
+    const tools: Tool[] = ["claude", "cursor", "copilot", "codex"];
+    const contentRoot: ContentRoots = { forkRoot: forkRootOf() };
+
+    const before = await planner.plan(ctxOf(manifestFor(tools), contentRoot));
+    expect(pathsCarrying(before, FORK_MARKER)).toEqual([
+      ".claude/rules/stamity-testing.md",
+      ".cursor/rules/stamity-testing.mdc",
+      ".github/instructions/stamity-testing.instructions.md",
+      "AGENTS.md",
+    ]);
+
+    const manifest = await installPack(packDir, manifestFor(tools));
+    const after = await planner.plan(ctxOf(manifest, contentRoot));
+
+    expect(after.some((row) => row.path.includes("opsguard"))).toBe(true);
+    expect(pathsCarrying(after, FORK_MARKER)).toEqual(pathsCarrying(before, FORK_MARKER));
+  });
+
+  it("keeps the override tree above the fork layer: the authored body, one row under the id", async () => {
+    const repo = getRepo();
+    await seedFork({ [`rules/${SHADOWED_RULE_ID}.md`]: forkRule(SHADOWED_RULE_ID) });
+    await repo.seedFiles({
+      [`.stamity/overrides/rules/${SHADOWED_RULE_ID}.md`]: override(SHADOWED_RULE_ID),
+    });
+
+    const plan = await composeEmissionPlanner(ADAPTER_REGISTRY).plan(
+      ctxOf(manifestFor(["claude"]), { forkRoot: forkRootOf(), overrideRoot: overrideRootOf() }),
+    );
+
+    const rule = contentOf(plan, `.claude/rules/stamity-${SHADOWED_RULE_ID}.md`);
+    expect(rule).toContain(USER_MARKER);
+    expect(rule).not.toContain(FORK_MARKER);
+    expect(plan.filter((row) => row.path.includes(SHADOWED_RULE_ID))).toHaveLength(1);
+  });
+
+  it("projects a fork skill into the vendor-neutral tree and Claude Code's native copy", async () => {
+    await seedFork({ "skills/acme-review/SKILL.md": forkSkill("acme-review") });
+
+    // Cursor reads `.agents/skills/`, Claude takes the native copy; the empty
+    // selection is what proves presence in the fork layer admitted the skill.
+    const plan = await composeEmissionPlanner(ADAPTER_REGISTRY).plan(
+      ctxOf(manifestFor(["claude", "cursor"]), { forkRoot: forkRootOf() }),
+    );
+
+    expect(pathsCarrying(plan, FORK_MARKER)).toEqual([
+      ".agents/skills/acme-review/SKILL.md",
+      ".claude/skills/acme-review/SKILL.md",
+    ]);
+  });
+
+  it("refuses a fork skill claiming an installed pack skill's id, naming the fork file", async () => {
+    const packDir = await stagePack(PACK_ID, {
+      "skills/stamity-triage/SKILL.md": forkSkill("triage").replace(FORK_MARKER, "Pack body."),
+    });
+    const manifest = await installPack(packDir, manifestFor(["cursor"]));
+    await seedFork({ "skills/acme-triage/SKILL.md": forkSkill("triage") });
+
+    const planning = composeEmissionPlanner(ADAPTER_REGISTRY).plan(
+      ctxOf(manifest, { forkRoot: forkRootOf() }),
+    );
+
+    // The walk refuses the pair on contact — packs never share an id — and the
+    // refusal names the fork file the pack collided with.
+    await expect(planning).rejects.toThrow(/must not shadow existing content/);
+    await expect(planning).rejects.toThrow(/fork\/skills\/acme-triage\/SKILL\.md/);
+    await expect(planning).rejects.toThrow(new RegExp(`clean --pack ${PACK_ID}`));
+  });
+
+  it("refuses a fork skill sharing an installed pack skill's directory, naming the fork skill", async () => {
+    // Same DIRECTORY the pack skill projects into, a different id — so the
+    // walk's id refusal never fires and the clash surfaces only where the two
+    // projections meet, which has to name the fork's file as the one to move.
+    const packDir = await stagePack(PACK_ID, {
+      "skills/triage/SKILL.md": forkSkill("triage").replace(FORK_MARKER, "Pack body."),
+    });
+    const manifest = await installPack(packDir, manifestFor(["cursor"]));
+    await seedFork({ "skills/triage/SKILL.md": forkSkill("acme-triage") });
+
+    const planning = composeEmissionPlanner(ADAPTER_REGISTRY).plan(
+      ctxOf(manifest, { forkRoot: forkRootOf() }),
+    );
+
+    await expect(planning).rejects.toThrow(/Pack-skill overrides are unsupported today/);
+    await expect(planning).rejects.toThrow(/the fork skill at "fork\/skills\/triage\/SKILL\.md"/);
+    await expect(planning).rejects.toThrow(/shares its directory with the pack skill "triage"/);
+  });
+
+  it("refuses an override directory that a fork skill already projects into, naming the override", async () => {
+    // The higher layer is the one that moves: the fork skill is shipped content
+    // from where this repo stands, so the refusal names the repo's own file.
+    const repo = getRepo();
+    await seedFork({ "skills/acme-review/SKILL.md": forkSkill("acme-review") });
+    await repo.seedFiles({
+      ".stamity/overrides/skills/acme-review/SKILL.md": forkSkill("house-review").replace(
+        FORK_MARKER,
+        USER_MARKER,
+      ),
+    });
+
+    const planning = composeEmissionPlanner(ADAPTER_REGISTRY).plan(
+      ctxOf(manifestFor(["cursor"]), { forkRoot: forkRootOf(), overrideRoot: overrideRootOf() }),
+    );
+
+    await expect(planning).rejects.toThrow(
+      /The override at "\.stamity\/overrides\/skills\/acme-review\/SKILL\.md"/,
+    );
+    await expect(planning).rejects.toThrow(/the skill "acme-review" already projects into/);
+  });
+
+  it("hands residue planners the fork root once a pack is installed, beside the other three parts", async () => {
+    const packDir = await stagePack(PACK_ID, {
+      "rules/stamity-opsguard.md": packRule("opsguard"),
+    });
+    const manifest = await installPack(packDir, manifestFor(["claude"]));
+    const seen: (string | ContentRoots | undefined)[] = [];
+    const capture: ResiduePlanner = {
+      tool: "claude",
+      facts: fakeFacts("claude"),
+      planResidue: async (_core, ctx) => {
+        seen.push(ctx.contentRoot);
+        return { outputs: [] };
+      },
+    };
+    const planner = composeEmissionPlanner({ claude: capture });
+
+    await planner.plan(ctxOf(manifest, { forkRoot: forkRootOf(), overrideRoot: overrideRootOf() }));
+    const rebuilt = contentRootsOf(seen.at(-1));
+    expect(rebuilt.forkRoot).toBe(forkRootOf());
+    expect(rebuilt.overrideRoot).toBe(overrideRootOf());
+    expect(rebuilt.packRoots.map((root) => root.pack)).toEqual([PACK_ID]);
+
+    // A spec that named no fork root still names none after the rebuild: the
+    // walk's own default is what supplies the bundled one, never this seam.
+    await planner.plan(ctxOf(manifest));
+    expect(contentRootsOf(seen.at(-1)).forkRoot).toBeUndefined();
+  });
+});
+
+/** Every planned path whose content carries `marker`, sorted. */
+function pathsCarrying(plan: readonly AdapterOutput[], marker: string): string[] {
+  return plan.filter((row) => row.content.includes(marker)).map((row) => row.path).toSorted();
+}
+
 /** Dialect facts for the capture planner; no adapter behaviour depends on them. */
 function fakeFacts(tool: Tool): AdapterDialectFacts {
   return {

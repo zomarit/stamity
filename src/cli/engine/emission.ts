@@ -39,13 +39,14 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * always do: one consumer downstream used to drop the root back off, because
  * `residueContext` (`../../emit/planner.ts`) rebuilds the spec once
  * `packs.items.length > 0` and rebuilt it from `{root, packRoots}` — two parts
- * of three. Every residue planner, which is every per-client agent, rule and
- * command emission, then planned without the layer in a pack-having repo. The
- * rebuild carries all three parts now, so the layer no longer appears and
- * disappears with unrelated state — the shape {@link overlayContentRoots}
- * exists to refuse. `test/cli/engine/emission.test.ts` holds the pack-having
- * repo to the same four dialects as the pack-free one, so a rebuild that
- * narrows again fails there rather than going quiet.
+ * of what were then three. Every residue planner, which is every per-client
+ * agent, rule and command emission, then planned without the layer in a
+ * pack-having repo. The rebuild carries all four parts now — the fork root
+ * included — so no layer appears and disappears with unrelated state, the
+ * shape {@link overlayContentRoots} exists to refuse.
+ * `test/cli/engine/emission.test.ts` holds the pack-having repo to the same
+ * four dialects as the pack-free one, so a rebuild that narrows again fails
+ * there rather than going quiet.
  *
  * ALL FOUR content classes arrive. `agent`, `rule` and `command` reach their
  * clients through the residue planners named above; `skill` reaches them
@@ -90,11 +91,18 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * should: a second vocabulary for a patched artifact would be state nobody
  * reads, since an overlay source file is never an emitted path (below).
  *
- * The phrase "four-layer precedence" is retired with the gap it labelled. Two
- * customization chains exist and exactly one applies to any `(class, id)`:
- * corpus-or-pack → `.customize.yaml` → `.customize.md`, or corpus-or-pack →
- * full override in this tree (`../../content/userContent.ts`). They are mutually
- * exclusive, and a tree claiming both is refused at the walk.
+ * The phrase "four-layer precedence" stays retired — it once counted the two
+ * shapes of one layer as layers of their own. The chain that applies to any
+ * `(class, id)` is corpus or pack → fork (a full replacement or a patch) → user
+ * (a full replacement or a patch): the package's `fork/` directory
+ * (`docs/specs/fork-layer.md`) replaces or patches what the corpus or a pack
+ * supplies, and this tree (`../../content/userContent.ts`) replaces or patches
+ * whatever the fork stage produced. Within one layer the two shapes are
+ * mutually exclusive, and a layer claiming both for one id is refused at the
+ * walk. Nothing at this seam switches the fork layer on: it rides with the
+ * bundled corpus root inside the walk, and a spec that names `forkRoot`
+ * explicitly is carried through {@link overlayContentRoots} like every other
+ * part.
  *
  * Ownership across that layer is the same install-once split installed packs
  * get (`../../pack/projection.ts`): the emitted per-client copy of a user
@@ -251,9 +259,13 @@ export function getEmissionPlanner(): EmissionPlanner {
  * `ctx` with the repo's override tree named as the highest-precedence content
  * root, or `ctx` itself when a caller already named one.
  *
- * All three parts of the spec are carried through, never rebuilt from a subset:
+ * All four parts of the spec are carried through, never rebuilt from a subset:
  * dropping one turns a layer into something that appears or disappears with
- * unrelated state instead of failing where anyone can see it.
+ * unrelated state instead of failing where anyone can see it. The fork root is
+ * carried when named and left absent otherwise — absent is not "no fork
+ * layer" but "the bundled one beside the bundled corpus", which the walk
+ * resolves for itself exactly as it resolves the corpus root this function
+ * also leaves alone.
  *
  * A repo with no `.stamity/overrides/` directory plans byte-identically to a
  * build that never had this function. The catalog treats an absent override
@@ -269,6 +281,7 @@ function overlayContentRoots(ctx: EmissionContext): EmissionContext {
     contentRoot: {
       ...(spec.root === undefined ? {} : { root: spec.root }),
       packRoots: spec.packRoots,
+      ...(spec.forkRoot === undefined ? {} : { forkRoot: spec.forkRoot }),
       overrideRoot: userContentRoot(ctx.rootDir),
     },
   };

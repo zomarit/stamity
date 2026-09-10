@@ -8,7 +8,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
+  __setForkRootForTests,
   resolveBundledContentRoot,
+  resolveBundledForkRoot,
 } from "../../src/content/contentRoot.ts";
 import type { EngineError } from "../../src/types/errors.ts";
 
@@ -16,10 +18,15 @@ const REPO_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 const PACKAGE_JSON = join(REPO_ROOT, "package.json");
 const SOURCE_CONTENT = join(REPO_ROOT, "content");
 const BUILT_CONTENT = join(REPO_ROOT, "dist", "content");
+/** The fork layer's two layouts, each the sibling of one corpus layout. */
+const SOURCE_FORK = join(REPO_ROOT, "fork");
+const BUILT_FORK = join(REPO_ROOT, "dist", "fork");
 
 interface ProbeHarness {
   resolveRoot: () => string;
   setRoot: (dir: string) => void;
+  resolveFork: () => string | undefined;
+  setFork: (dir: string | undefined) => void;
   reset: () => void;
   /** Candidate paths reported as directories; mutate between calls to model a reinstall. */
   dirs: Set<string>;
@@ -62,6 +69,8 @@ async function loadWithFs(...dirPaths: string[]): Promise<ProbeHarness> {
   return {
     resolveRoot: contentRoot.resolveBundledContentRoot,
     setRoot: contentRoot.__setContentRootForTests,
+    resolveFork: contentRoot.resolveBundledForkRoot,
+    setFork: contentRoot.__setForkRootForTests,
     reset: contentRoot.__resetContentRootCacheForTests,
     dirs,
     files,
@@ -85,6 +94,19 @@ describe("__setContentRootForTests", () => {
 
     expect(resolveBundledContentRoot()).toBe(fixture);
     expect(resolveBundledContentRoot()).toBe(fixture);
+  });
+
+  it("pins a fork root beside it, or pins its absence, without the sibling existing", () => {
+    __setContentRootForTests("/virtual/volume/content");
+    // No `/virtual/volume/fork` exists: the pinned corpus root's sibling probe
+    // answers absence, which is the ordinary package's answer.
+    expect(resolveBundledForkRoot()).toBeUndefined();
+
+    __setForkRootForTests("/virtual/volume/fork");
+    expect(resolveBundledForkRoot()).toBe("/virtual/volume/fork");
+
+    __setForkRootForTests(undefined);
+    expect(resolveBundledForkRoot()).toBeUndefined();
   });
 
   it("serves the fixture without touching the filesystem, and reset restores probing", async () => {
@@ -161,5 +183,102 @@ describe("resolveBundledContentRoot", () => {
     harness.dirs.add(BUILT_CONTENT);
 
     expect(harness.resolveRoot()).toBe(BUILT_CONTENT);
+  });
+});
+
+/**
+ * The fork layer's root (docs/specs/fork-layer.md, REQ-FORK-002): `fork/` in
+ * a source checkout, `dist/fork` in the published package, resolved as the
+ * SIBLING of whichever corpus layout won — and nothing, never an error, when
+ * the package ships none, which is this repository's own state.
+ */
+describe("resolveBundledForkRoot", () => {
+  it("resolves to nothing, not to an error, when the package ships no fork directory", async () => {
+    const harness = await loadWithFs(SOURCE_CONTENT);
+
+    expect(harness.resolveFork()).toBeUndefined();
+  });
+
+  it("pairs the source checkout's fork with the source corpus", async () => {
+    const harness = await loadWithFs(SOURCE_CONTENT, SOURCE_FORK);
+
+    expect(harness.resolveFork()).toBe(SOURCE_FORK);
+  });
+
+  it("pairs the built fork with the built corpus", async () => {
+    const harness = await loadWithFs(BUILT_CONTENT, BUILT_FORK);
+
+    expect(harness.resolveRoot()).toBe(BUILT_CONTENT);
+    expect(harness.resolveFork()).toBe(BUILT_FORK);
+  });
+
+  it("ignores a stale built fork when the corpus resolved to the source checkout", async () => {
+    // A `dist/fork` left by an earlier build is not this checkout's fork layer:
+    // the layer is the corpus root's sibling, so a source corpus with no `fork/`
+    // beside it has none — whatever the last build staged.
+    const stale = await loadWithFs(SOURCE_CONTENT, BUILT_FORK);
+    expect(stale.resolveFork()).toBeUndefined();
+
+    const both = await loadWithFs(SOURCE_CONTENT, BUILT_CONTENT, BUILT_FORK);
+    expect(both.resolveRoot()).toBe(SOURCE_CONTENT);
+    expect(both.resolveFork()).toBeUndefined();
+  });
+
+  it("skips a fork candidate that exists as a file", async () => {
+    const harness = await loadWithFs(SOURCE_CONTENT);
+    harness.files.add(SOURCE_FORK);
+
+    expect(harness.resolveFork()).toBeUndefined();
+  });
+
+  it("caches the answer, absence included, until the caches are reset", async () => {
+    const harness = await loadWithFs(SOURCE_CONTENT);
+
+    expect(harness.resolveFork()).toBeUndefined();
+    const afterFirst = harness.statCalls();
+    // The layout changing underneath must not change the answer within a process.
+    harness.dirs.add(SOURCE_FORK);
+    expect(harness.resolveFork()).toBeUndefined();
+    expect(harness.statCalls()).toBe(afterFirst);
+
+    harness.reset();
+
+    expect(harness.resolveFork()).toBe(SOURCE_FORK);
+  });
+
+  it("propagates the corpus probe's failure rather than reading a missing corpus as no fork", async () => {
+    // Absence of `fork/` is an answer; absence of the corpus is the failure the
+    // corpus probe already names, and it names it here too.
+    const harness = await loadWithFs();
+
+    let thrown: unknown;
+    try {
+      harness.resolveFork();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(harness.EngineError);
+    expect((thrown as EngineError).code).toBe("CONFIG_ERROR");
+    // Not cached: the reinstall that resolves the corpus resolves the fork too.
+    harness.dirs.add(BUILT_CONTENT);
+    harness.dirs.add(BUILT_FORK);
+    expect(harness.resolveFork()).toBe(BUILT_FORK);
+  });
+
+  it("serves a pinned fork root without touching the filesystem, and re-pairs on a corpus pin", async () => {
+    const harness = await loadWithFs(SOURCE_CONTENT, SOURCE_FORK);
+
+    harness.setFork("/virtual/volume/fork");
+    expect(harness.resolveFork()).toBe("/virtual/volume/fork");
+    expect(harness.statCalls()).toBe(0);
+
+    // Pinning the corpus root drops the fork pin: the fork root is that root's
+    // sibling, and the pinned volume has none.
+    harness.setRoot("/virtual/volume/content");
+    expect(harness.resolveFork()).toBeUndefined();
+
+    harness.reset();
+    expect(harness.resolveFork()).toBe(SOURCE_FORK);
   });
 });

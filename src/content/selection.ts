@@ -56,13 +56,18 @@
  * `test/content/floorMembership.test.ts` pins both sets, so widening or
  * narrowing the floor is a deliberate edit with a visible diff.
  *
- * ## The user layer
+ * ## The user layer, and the fork layer beside it
  *
  * An artifact from the repo's override tree (`origin: "user"`) is admitted by
  * PRESENCE: {@link classifySelection} keeps it whatever the tracked selection
  * says, the same "installed = selected" rule installed packs get. The file is
  * in the tree because someone in this repo put it there, and a manifest written
- * before it existed is not a deselection of it.
+ * before it existed is not a deselection of it. The package's fork layer
+ * (`origin: "fork"`, `docs/specs/fork-layer.md`) takes the same rule for the
+ * same reason one level up: a fork ships what it put under `fork/`, and a
+ * consumer's manifest — written against the corpus, never against the fork's
+ * additions — is not a deselection of any of it. Selecting fork artifacts per
+ * tier or per tool through the manifest is a declared non-goal.
  *
  * That rule is also what keeps the floor whole when an override takes a floor
  * artifact's id. The catalog has already dropped the replaced artifact from the
@@ -91,7 +96,8 @@ import { filterByLanguages, isFloorTag } from "./tags.ts";
  * How a tracked selection treats one artifact:
  *
  * - `keep` — the selection admits it, its class is unfiltered, or it came from
- *   the repo's override tree and is admitted by presence.
+ *   the repo's override tree or the package's fork layer and is admitted by
+ *   presence.
  * - `drop` — absent from its class's selected ids.
  * - `keep-protected-missing` — a floor artifact absent from the selection.
  *   Still emitted, and worth surfacing: {@link resolveSelection} records floor
@@ -177,9 +183,11 @@ export function classifySelection(
   allowlist: SelectionAllowlist,
 ): SelectionVerdict {
   // Admitted by presence (see the module note): the repo authored this file
-  // into its own override tree, so no selection record deselects it — and when
-  // it has taken a floor artifact's id, keeping it IS keeping the floor.
-  if (originOf(item) === "user") return "keep";
+  // into its own override tree, or the fork that built this package put it
+  // under `fork/`, so no selection record deselects it — and when it has taken
+  // a floor artifact's id, keeping it IS keeping the floor.
+  const origin = originOf(item);
+  if (origin === "user" || origin === "fork") return "keep";
   if (isIdInSelection(allowlist, item.type, item.id)) return "keep";
   return item.tags.some(isFloorTag) ? "keep-protected-missing" : "drop";
 }

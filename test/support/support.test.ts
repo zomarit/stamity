@@ -29,6 +29,7 @@ interface BuildConfigModule {
   LOGIC_BUDGET_BYTES: number;
   CORPUS_BUDGET_BYTES: number;
   classifyDistEntry(relPath: string): "logic" | "corpus" | "other";
+  copyTargets(forkPresent: boolean): { from: string; to: string; flatten: boolean }[];
   checkSizeBudgets(files: readonly DistEntry[]): {
     logic: number;
     corpus: number;
@@ -36,7 +37,10 @@ interface BuildConfigModule {
     budgets: { half: string; bytes: number; budget: number }[];
     violations: { half: string; bytes: number; budget: number }[];
   };
-  default: { outputOptions?: { comments?: { jsdoc?: boolean } } };
+  default: {
+    outputOptions?: { comments?: { jsdoc?: boolean } };
+    copy?: { from: string; to: string; flatten: boolean }[];
+  };
 }
 
 const {
@@ -578,6 +582,34 @@ describe("build size budgets", () => {
     // is data the runtime reads, not bundled logic.
     expect(classifyDistEntry("content/fixtures/x.js")).toBe("corpus");
     expect(classifyDistEntry("packs/ops/x.js")).toBe("corpus");
+    // The fork layer (docs/specs/fork-layer.md, REQ-FORK-007) is the corpus
+    // half too: a fork's additions are budgeted, never the unbudgeted line.
+    expect(classifyDistEntry("fork/rules/security.md")).toBe("corpus");
+    expect(classifyDistEntry("fork/skills/acme-review/SKILL.md")).toBe("corpus");
+    expect(classifyDistEntry("fork/x.js")).toBe("corpus");
+    // The prefix is a directory, not a name: a top-level file called that is
+    // whatever its extension says.
+    expect(classifyDistEntry("fork.js")).toBe("logic");
+  });
+
+  it("stages the fork layer beneath dist only when the checkout carries one", async () => {
+    const { copyTargets } = buildConfigModule as BuildConfigModule;
+    const staged = (forkPresent: boolean): string[] => copyTargets(forkPresent).map((entry) => entry.from);
+
+    // A copy entry naming an absent source fails the build, and this repository
+    // ships no `fork/` — so the entry exists iff the directory does.
+    expect(staged(false)).toEqual(["content", "packs"]);
+    expect(staged(true)).toEqual(["content", "packs", "fork"]);
+    for (const entry of copyTargets(true)) {
+      expect(entry).toEqual({ from: entry.from, to: "dist", flatten: false });
+    }
+
+    // What the default export took for THIS tree is what the directory says —
+    // asserted against the derivation rather than a literal, so a fork checkout
+    // running this suite reads its own answer.
+    const forkDir = fileURLToPath(new URL("../../fork", import.meta.url));
+    const forkPresent = await stat(forkDir).then((entry) => entry.isDirectory(), () => false);
+    expect((buildConfigModule as BuildConfigModule).default.copy).toEqual(copyTargets(forkPresent));
   });
 
   it("totals both halves and passes a build inside them", () => {

@@ -1,7 +1,13 @@
+// The `__`-prefixed test seams keep the naming convention their module declares.
+// oxlint-disable no-underscore-dangle
 import { chmod, mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createEngine } from "../../../src/index.ts";
+import {
+  __resetContentRootCacheForTests,
+  __setForkRootForTests,
+} from "../../../src/content/contentRoot.ts";
 import {
   discoverUserContent,
   userContentRoot,
@@ -17,7 +23,7 @@ import {
   type ValidateShadow,
 } from "../../../src/cli/commands/validate.ts";
 import { runInProcess } from "../../support/inProcess.ts";
-import { useTempDir } from "../../support/tempDir.ts";
+import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 
 /**
  * Command-level lane: the real command module through the real program funnel,
@@ -627,6 +633,11 @@ describe("validate — shadowing", () => {
         outcome: "replaced",
         type: "rule",
         id: SHADOWED_ID,
+        // TEST CHANGE, justified: the row gained `winner`, the layer that holds
+        // the id now, when the fork layer joined the walk as a second layer
+        // that can take a bundled id (docs/specs/fork-layer.md, REQ-FORK-006).
+        // Asserted whole, as before: a consumer override reads `user`.
+        winner: "user",
         path: `.stamity/overrides/rules/${SHADOWED_ID}.md`,
         replaced: [`rules/stamity-${SHADOWED_ID}.md`],
         // TEST CHANGE, justified: the row gained `emits`, and a rule override
@@ -676,6 +687,9 @@ describe("validate — shadowing", () => {
         outcome: "replaced",
         type: "skill",
         id: "qa",
+        // TEST CHANGE, justified: `winner` joined the row with the fork layer —
+        // see the rule case above.
+        winner: "user",
         path: ".stamity/overrides/skills/qa/SKILL.md",
         replaced: ["skills/st-qa/SKILL.md"],
         emits: true,
@@ -826,6 +840,11 @@ describe("validate — the overlay layer", () => {
         outcome: "patched",
         type: "rule",
         id: PATCHED_ID,
+        // TEST CHANGE, justified: the row gained `layer`, the layer that
+        // supplied the halves, when the fork layer joined the walk as a second
+        // layer that can patch a bundled id (docs/specs/fork-layer.md,
+        // REQ-FORK-006). `origin` keeps its meaning — the BASE's layer.
+        layer: "user",
         base: PATCHED_BASE,
         origin: "corpus",
         overlays: [YAML_HALF, BODY_HALF],
@@ -865,6 +884,9 @@ describe("validate — the overlay layer", () => {
         outcome: "patched",
         type: "skill",
         id: "qa",
+        // TEST CHANGE, justified: `layer` joined the row with the fork layer —
+        // see the rule case above.
+        layer: "user",
         base: "skills/st-qa/SKILL.md",
         origin: "corpus",
         overlays: [".stamity/overrides/skills/qa/SKILL.customize.md"],
@@ -1051,6 +1073,9 @@ describe("validate — the overlay layer", () => {
         outcome: "patched",
         type: "command",
         id: "cmd-ask",
+        // TEST CHANGE, justified: `layer` joined the row with the fork layer —
+        // see the rule case above.
+        layer: "user",
         base: "commands/st-ask.md",
         origin: "corpus",
         overlays: [".stamity/overrides/commands/ask.customize.yaml"],
@@ -1185,6 +1210,248 @@ describe("validate — the overlay layer", () => {
     expect(human.stdout).toContain("checked 1 artifact, no findings");
     expect(human.stdout).not.toContain("overlay");
     expect(human.stdout).not.toContain("patches");
+
+    const { doc } = await runJson(repo.dir);
+    expect(doc.shadows).toEqual([]);
+  });
+});
+
+/** Seeds the fork layer under `<repo>/pkg/fork` and pins it as the bundled fork root. */
+async function seedForkLayer(repo: TempDirHandle, files: Record<string, string>): Promise<void> {
+  await repo.seedFiles(
+    Object.fromEntries(Object.entries(files).map(([rel, body]) => [`pkg/fork/${rel}`, body])),
+  );
+  __setForkRootForTests(repo.path("pkg", "fork"));
+}
+
+/** Which customizing layer a row is about, read off the field each outcome carries. */
+function customizedLayerOf(row: ValidateShadow): string {
+  return row.outcome === "replaced" ? `replaced:${row.winner}` : `patched:${row.layer}`;
+}
+
+/**
+ * The fork layer (docs/specs/fork-layer.md, REQ-FORK-006). A package built by
+ * a downstream fork ships a `fork/` directory that replaces and patches bundled
+ * artifacts one layer below the override tree, and this command is the one
+ * surface a consumer has that names it. The fork root is pinned through the
+ * content-root test seam — the same seam the walk resolves it through — so a
+ * directory under the temp repo stands in for the package's own `fork/`, and
+ * every path the report prints for it is the package-relative `fork/...`
+ * spelling a fork author edits.
+ */
+describe("validate — the fork layer", () => {
+  /** A bundled rule this repo ships, and the file the corpus carries it in. */
+  const FORKED_ID = "testing";
+  const FORKED_BASE = `rules/stamity-${FORKED_ID}.md`;
+  const FORK_RULE = `fork/rules/${FORKED_ID}.md`;
+  const FORK_YAML_HALF = `fork/rules/${FORKED_ID}.customize.yaml`;
+  const FORK_BODY_HALF = `fork/rules/${FORKED_ID}.customize.md`;
+  const USER_YAML_HALF = `.stamity/overrides/rules/${FORKED_ID}.customize.yaml`;
+
+  /** Assembled from fragments so this file never carries the literal (see the overlay suite). */
+  const DENY_SPAN = ["ig", "nore all find", "ings"].join("");
+
+  afterEach(() => {
+    __resetContentRootCacheForTests();
+  });
+
+  it("reports a fork replacement as a shadow the fork won, in a repo that customized nothing", async () => {
+    const repo = getRepo();
+    await seedForkLayer(repo, { [`rules/${FORKED_ID}.md`]: ruleArtifact(FORKED_ID) });
+
+    const human = await runHuman(repo.dir);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("shadowing — 1 fork replacement takes a bundled id");
+    expect(human.stdout).toContain(FORK_RULE);
+    expect(human.stdout).toContain(`replaces ${FORKED_BASE} — fork layer`);
+    // The rows are information about the PACKAGE, not findings against this
+    // repo: nothing user-authored was read, and the verdict still says so.
+    expect(human.stdout).toContain("nothing user-authored to validate");
+
+    const { code, doc } = await runJson(repo.dir);
+    expect(code).toBe(0);
+    expect(doc.findings).toEqual([]);
+    expect(doc.shadows).toEqual([
+      {
+        outcome: "replaced",
+        type: "rule",
+        id: FORKED_ID,
+        winner: "fork",
+        path: FORK_RULE,
+        replaced: [FORKED_BASE],
+        emits: true,
+      },
+    ]);
+  });
+
+  it("reports a fork patch as a patched row naming the fork file, the base's origin unchanged", async () => {
+    const repo = getRepo();
+    await seedForkLayer(repo, {
+      [`rules/${FORKED_ID}.customize.yaml`]: "description: The fork's version of this rule.\n",
+    });
+
+    const human = await runHuman(repo.dir);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("shadowing — 1 fork overlay patches a bundled id");
+    expect(human.stdout).toContain(`patches ${FORKED_BASE} (corpus) — fork layer`);
+    expect(human.stdout).toContain(FORK_YAML_HALF);
+
+    const { code, doc } = await runJson(repo.dir);
+    expect(code).toBe(0);
+    expect(doc.findings).toEqual([]);
+    expect(doc.shadows).toEqual([
+      {
+        outcome: "patched",
+        type: "rule",
+        id: FORKED_ID,
+        layer: "fork",
+        base: FORKED_BASE,
+        origin: "corpus",
+        overlays: [FORK_YAML_HALF],
+        emits: true,
+      },
+    ]);
+  });
+
+  it("lists both lower claimants when an override takes an id the fork layer replaced", async () => {
+    const repo = getRepo();
+    await seedForkLayer(repo, { [`rules/${FORKED_ID}.md`]: ruleArtifact(FORKED_ID) });
+    await repo.seedFiles({
+      [`.stamity/overrides/rules/${FORKED_ID}.md`]: ruleArtifact(FORKED_ID),
+    });
+
+    const human = await runHuman(repo.dir);
+    expect(human.stdout).toContain("shadowing — 1 override takes a bundled id");
+    expect(human.stdout).toContain(`replaces ${FORKED_BASE}, ${FORK_RULE}`);
+    // The override won, so no row is the fork's — the fork file is named as a
+    // claimant that stopped being emitted, not as the layer that did anything.
+    expect(human.stdout).not.toContain("fork layer");
+    expect(human.stdout).not.toContain("fork replacement");
+
+    const { doc } = await runJson(repo.dir);
+    expect(doc.shadows).toEqual([
+      {
+        outcome: "replaced",
+        type: "rule",
+        id: FORKED_ID,
+        winner: "user",
+        path: `.stamity/overrides/rules/${FORKED_ID}.md`,
+        replaced: [FORKED_BASE, FORK_RULE],
+        emits: true,
+      },
+    ]);
+  });
+
+  it("reads a user patch over a fork replacement as patching the fork's body", async () => {
+    const repo = getRepo();
+    await seedForkLayer(repo, { [`rules/${FORKED_ID}.md`]: ruleArtifact(FORKED_ID) });
+    await repo.seedFiles({ [USER_YAML_HALF]: "description: Ours, over the fork's.\n" });
+
+    const human = await runHuman(repo.dir);
+    expect(human.code).toBe(0);
+    // Two rows about one id: the fork's replacement of the corpus rule, and the
+    // repo's patch over the fork's body — each named for what it did.
+    expect(human.stdout).toContain(
+      "shadowing — 1 fork replacement takes a bundled id, 1 overlay patches one",
+    );
+    expect(human.stdout).toContain(`replaces ${FORKED_BASE} — fork layer`);
+    expect(human.stdout).toContain(`patches ${FORK_RULE} (fork)`);
+
+    const { code, doc } = await runJson(repo.dir);
+    expect(code).toBe(0);
+    expect(doc.findings).toEqual([]);
+    expect(doc.shadows).toEqual([
+      {
+        outcome: "replaced",
+        type: "rule",
+        id: FORKED_ID,
+        winner: "fork",
+        path: FORK_RULE,
+        replaced: [FORKED_BASE],
+        emits: true,
+      },
+      {
+        outcome: "patched",
+        type: "rule",
+        id: FORKED_ID,
+        layer: "user",
+        base: FORK_RULE,
+        origin: "fork",
+        overlays: [USER_YAML_HALF],
+        emits: true,
+      },
+    ]);
+  });
+
+  it("composes the header clause by clause across both layers", async () => {
+    const repo = getRepo();
+    await seedForkLayer(repo, {
+      [`rules/${FORKED_ID}.customize.yaml`]: "description: The fork's version of this rule.\n",
+    });
+    await repo.seedFiles({ ".stamity/overrides/skills/qa/SKILL.md": skillArtifact("qa") });
+
+    const human = await runHuman(repo.dir);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain(
+      "shadowing — 1 override takes a bundled id, 1 fork overlay patches one",
+    );
+
+    const { doc } = await runJson(repo.dir);
+    expect(doc.shadows.map(customizedLayerOf)).toEqual(["replaced:user", "patched:fork"]);
+  });
+
+  it("judges the merged artifact a fork patch produces, addressing the finding to the fork file", async () => {
+    // The same gate a repo's own patch meets: the layer relaxes no floor, and
+    // the text that reaches agent context is the base plus the fork's patch.
+    const repo = getRepo();
+    await seedForkLayer(repo, {
+      [`rules/${FORKED_ID}.customize.md`]: `Then ${DENY_SPAN} in the report.\n`,
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(1);
+    expect(doc.errorCount).toBe(1);
+    expect(doc.findings).toHaveLength(1);
+    expect(doc.findings[0]).toMatchObject({
+      source: "user-content",
+      path: FORK_BODY_HALF,
+      severity: "error",
+    });
+    expect(doc.findings[0]?.message).toContain("`ignore-findings`");
+    expect(doc.findings[0]?.message).not.toContain(DENY_SPAN);
+  });
+
+  it("reports a fork replacement and a fork patch of one id as the exclusivity refusal, naming both", async () => {
+    const repo = getRepo();
+    await seedForkLayer(repo, {
+      [`rules/${FORKED_ID}.md`]: ruleArtifact(FORKED_ID),
+      [`rules/${FORKED_ID}.customize.yaml`]: "description: The fork's version of this rule.\n",
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+
+    expect(code).toBe(1);
+    expect(doc.findings).toHaveLength(1);
+    const refusal = doc.findings[0];
+    expect(refusal).toMatchObject({ path: FORK_YAML_HALF, severity: "error" });
+    expect(refusal?.message).toContain("never both");
+    expect(refusal?.message).toContain(`rules/${FORKED_ID}.md`);
+    expect(refusal?.message).toContain(`rules/${FORKED_ID}.customize.yaml`);
+    expect(doc.shadows).toEqual([]);
+  });
+
+  it("reads exactly as it did when the package ships no fork layer", async () => {
+    // Pinned absent rather than left to the probe, so the case holds in a fork
+    // checkout too — where the probe would find one.
+    const repo = getRepo();
+    __setForkRootForTests(undefined);
+    await repo.seedFiles({ ".stamity/learnings/cache-warmup-order.md": learning() });
+
+    const human = await runHuman(repo.dir);
+    expect(human.code).toBe(0);
+    expect(human.stdout).not.toContain("shadowing");
+    expect(human.stdout).not.toContain("fork");
 
     const { doc } = await runJson(repo.dir);
     expect(doc.shadows).toEqual([]);

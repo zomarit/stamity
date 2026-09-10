@@ -13,7 +13,7 @@ import {
   contentPrefixFor,
   stripEngineContentPrefix,
 } from "../types/markers.ts";
-import { resolveBundledContentRoot } from "./contentRoot.ts";
+import { resolveBundledContentRoot, resolveBundledForkRoot } from "./contentRoot.ts";
 import {
   composeFrontmatter,
   extractToolsFrontmatter,
@@ -48,38 +48,49 @@ import type { SkippedUserEntry } from "./userContent.ts";
  *     channel to absorb these — a broken artifact that indexes to a half-formed
  *     entry is worse than a run that stops and names the file to fix.
  *
- * Three roots feed one index, in precedence order USER > PACK > CORPUS: the
- * bundled corpus, then any installed pack roots, then the repo's own override
- * tree ({@link ContentRoots.overrideRoot} — `.stamity/overrides/`, the tree the
+ * Four roots feed one index, in precedence order USER > FORK > PACK > CORPUS:
+ * the bundled corpus, then any installed pack roots, then the package's own
+ * fork layer ({@link ContentRoots.forkRoot} — `fork/`, the directory a
+ * downstream fork of this repository fills with its own artifacts,
+ * `docs/specs/fork-layer.md`), then the repo's own override tree
+ * ({@link ContentRoots.overrideRoot} — `.stamity/overrides/`, the tree the
  * user-content lane writes). WITHIN a layer the first claimant of an id wins
  * and a second is reported as a {@link ContentCollision}, unchanged. ACROSS
  * layers the higher layer replaces the lower: the replaced artifacts leave
  * `items` so no consumer emits both bodies, and the replacement is recorded as
- * a {@link ContentShadow}. A shadow is a legitimate state — it is how a repo
- * customizes a shipped artifact — so it is reported, never thrown. Packs are
- * the one exception and stay strict: a pack claiming an id the corpus or an
- * earlier pack already holds is refused (see {@link buildContentIndex}).
+ * a {@link ContentShadow}. A shadow is a legitimate state — it is how a fork
+ * or a repo customizes a shipped artifact — so it is reported, never thrown.
+ * Packs are the one exception and stay strict: a pack claiming an id the
+ * corpus, an earlier pack or the fork layer holds is refused (see
+ * {@link buildContentIndex}).
  *
  * Customization comes in two shapes, and exactly one of them applies to any
- * `(class, id)`. REPLACEMENT is the override above: a whole artifact under the
- * override tree takes the id. PATCHING is the overlay layer — a
- * `<slug>.customize.yaml` beside where that override would sit patches the
- * resolved artifact's frontmatter, a `<slug>.customize.md` appends to its body,
- * and the base keeps flowing from the corpus or the pack that supplies it.
- * Discovery AND merge semantics both live in this module, in the overlay-layer
- * section below ({@link applyOverlays} and the helpers around it), which states
- * why they are folded in here rather than split into a module of their own. The
- * two shapes are mutually exclusive and their
- * coexistence is refused, so an id is either replaced or patched, never both —
- * which is why the phrase "four-layer precedence" is retired: it counted layers
- * that were never simultaneously reachable.
+ * `(class, id)` WITHIN a layer. REPLACEMENT is the override above: a whole
+ * artifact under the fork layer or the override tree takes the id. PATCHING is
+ * the overlay layer — a `<slug>.customize.yaml` beside where that override
+ * would sit patches the resolved artifact's frontmatter, a `<slug>.customize.md`
+ * appends to its body, and the base keeps flowing from the layer that supplies
+ * it. Discovery AND merge semantics both live in this module, in the
+ * overlay-layer section below ({@link applyOverlays} and the helpers around
+ * it), which states why they are folded in here rather than split into a
+ * module of their own. The two shapes are mutually exclusive per layer and
+ * their coexistence is refused, so within one layer an id is either replaced or
+ * patched, never both. The chain that applies to any `(class, id)` is therefore
+ * corpus or pack → fork (a full replacement or a patch) → user (a full
+ * replacement or a patch): a fork patch lands on the item the corpus or a pack
+ * supplies, and the user stage then replaces or patches whatever the fork stage
+ * produced. The phrase "four-layer precedence" stays retired — it once counted
+ * the two shapes of one layer as layers of their own.
  *
- * The override layer's REACH is not a gap and is not latent: the emission seam
+ * Neither customization layer's REACH is a gap or latent: the emission seam
  * supplies {@link ContentRoots.overrideRoot} (`src/cli/engine/emission.ts`),
  * so a repo's `.stamity/overrides/` tree wins the ids it claims on an ordinary
- * `sync`. A consumer that destructures a spec and rebuilds one must carry all
- * three parts — dropping `overrideRoot` on the way into a narrowed context is
- * a per-repo emission difference, not an inert omission.
+ * `sync`, and the bundled fork root rides with the bundled corpus root
+ * ({@link buildContentIndex}) so a fork's `fork/` directory reaches every walk
+ * that reads the package's corpus. A consumer that destructures a spec and
+ * rebuilds one must carry all four parts — dropping `overrideRoot` or
+ * `forkRoot` on the way into a narrowed context is a per-repo emission
+ * difference, not an inert omission.
  *
  * Reading is injectable ({@link CatalogFs}) so the walk can be exercised against
  * a virtual volume; nothing else in the module touches the filesystem.
@@ -93,17 +104,24 @@ import type { SkippedUserEntry } from "./userContent.ts";
 export type CatalogFs = Pick<typeof NodeFsPromises, "readdir" | "readFile">;
 
 /**
- * Which layer supplied an artifact: the bundled corpus, an installed pack, or
- * the repo's own override tree.
+ * Which layer supplied an artifact: the bundled corpus, an installed pack, the
+ * package's fork layer, or the repo's own override tree.
  *
- * Read by three lanes today. `./selection.ts::classifySelection` decides what
- * an empty selection still admits. `../emit/skillsProjection.ts` stamps it onto
- * every projected file it emits, and `../emit/planner.ts` then reads it twice:
- * a `origin !== "pack"` filter narrows the corpus rows handed to
- * `mergeSkillProjections`, and inside that function an `origin === "user"` test
- * is what tells an OVERRIDE apart from a shipped skill when two rows claim one
- * projection directory — the difference between naming the file the operator
- * wrote and naming four adapters that had nothing to do with it.
+ * Read by four lanes today. `./selection.ts::classifySelection` decides what
+ * an empty selection still admits — a `fork` or `user` item is admitted by
+ * presence. `../emit/skillsProjection.ts` stamps it onto every projected file
+ * it emits, and `../emit/planner.ts` then reads it three times: a
+ * `origin !== "pack"` filter narrows the corpus rows handed to
+ * `mergeSkillProjections`; inside that function an override-layer test (`fork`
+ * or `user`) is what tells a REPLACEMENT apart from a shipped skill when a pack
+ * skill claims one id or one projection directory — the difference between
+ * naming the file the operator or the fork wrote and naming four adapters that
+ * had nothing to do with it; and `refuseOverrideDirectoryClash` ranks the
+ * layers to decide which of two rows in one directory is the one to move.
+ * `../cli/commands/validate.ts` reads it to label a shadow row's winner and a
+ * patched row's base layer, so a reader can tell the fork layer from a consumer
+ * override. This walk itself ranks the layers ({@link buildContentIndex}) and
+ * refuses a reserved-prefix filename under the fork root ({@link scanClass}).
  *
  * What is NOT built on top of it is the rule the field was minted for: a `user`
  * body is user-owned end to end, so it should never be wrapped in a managed
@@ -111,7 +129,27 @@ export type CatalogFs = Pick<typeof NodeFsPromises, "readdir" | "readFile">;
  * one is still rendered exactly like a shipped artifact, and the guard that
  * would change that is still to be written.
  */
-export type ContentOrigin = "corpus" | "pack" | "user";
+export type ContentOrigin = "corpus" | "pack" | "fork" | "user";
+
+/**
+ * The two layers that may REPLACE or PATCH a lower one — the ones an overlay
+ * pair can be discovered under. Packs add ids and never take one; the corpus
+ * is the floor.
+ */
+export type CustomizingOrigin = Extract<ContentOrigin, "fork" | "user">;
+
+/**
+ * Precedence, as a rank: a claimant of a higher rank replaces one of a lower
+ * rank, and equal ranks are a same-layer duplicate. Packs outrank the corpus
+ * only nominally — a pack claiming a taken id is refused before this table is
+ * consulted — so the table is the walk order restated, not a second rule.
+ */
+const LAYER_RANK: Readonly<Record<ContentOrigin, number>> = {
+  corpus: 0,
+  pack: 1,
+  fork: 2,
+  user: 3,
+};
 
 /** One indexed artifact: its identity, where it came from, and its full text. */
 export interface CatalogItem {
@@ -192,6 +230,17 @@ export interface ContentRoots {
   /** Installed-pack roots joined to the walk after the corpus. */
   packRoots?: readonly PackContentRoot[];
   /**
+   * The package's fork layer — `<packageRoot>/fork` in a source checkout,
+   * `<packageRoot>/dist/fork` in the published package — walked after the
+   * packs and winning every id it claims from them or the corpus. Absent means
+   * the layer follows the corpus root: a caller that left `root` to the
+   * bundled default gets the bundled fork root beside it
+   * ({@link buildContentIndex}), and a caller that pinned a corpus root has
+   * pinned its layer set and gets no fork layer it did not name. An absent
+   * directory is the same non-event an absent class directory is.
+   */
+  forkRoot?: string;
+  /**
    * The repo's override tree — `<repoRoot>/.stamity/overrides` — walked last and
    * winning every id it claims. Absent means the repo has no customization
    * lane in play, which is also what an absent directory means, so a caller
@@ -201,14 +250,14 @@ export interface ContentRoots {
 }
 
 /**
- * Normalize either spelling of a content-root argument into its three parts.
- * Pure and total: a string is a corpus root with no pack roots and no override
- * tree; `undefined` leaves the corpus-root default to the consumer
- * ({@link buildContentIndex} resolves the bundled corpus, other readers resolve
- * their own).
+ * Normalize either spelling of a content-root argument into its four parts.
+ * Pure and total: a string is a corpus root with no pack roots, no fork layer
+ * and no override tree; `undefined` leaves the corpus-root default to the
+ * consumer ({@link buildContentIndex} resolves the bundled corpus and the fork
+ * root beside it, other readers resolve their own).
  *
  * A caller that normalizes a spec only to rebuild one — a planner deriving a
- * narrowed context — carries all three parts through. An omitted part is not a
+ * narrowed context — carries all four parts through. An omitted part is not a
  * default; it is a layer that disappears for that caller alone, which surfaces
  * as customization silently present or absent depending on unrelated state
  * rather than as an error anyone can see.
@@ -216,14 +265,16 @@ export interface ContentRoots {
 export function contentRootsOf(contentRoot?: string | ContentRoots): {
   root: string | undefined;
   packRoots: readonly PackContentRoot[];
+  forkRoot: string | undefined;
   overrideRoot: string | undefined;
 } {
   if (contentRoot === undefined || typeof contentRoot === "string") {
-    return { root: contentRoot, packRoots: [], overrideRoot: undefined };
+    return { root: contentRoot, packRoots: [], forkRoot: undefined, overrideRoot: undefined };
   }
   return {
     root: contentRoot.root,
     packRoots: contentRoot.packRoots ?? [],
+    forkRoot: contentRoot.forkRoot,
     overrideRoot: contentRoot.overrideRoot,
   };
 }
@@ -251,8 +302,9 @@ export interface ContentCollision {
 }
 
 /**
- * One identity a higher layer took over from a lower one — a user artifact
- * replacing a corpus or pack artifact of the same class and id.
+ * One identity a higher layer took over from a lower one — a fork or user
+ * artifact replacing a corpus, pack or (for a user winner) fork artifact of
+ * the same class and id.
  *
  * Distinct from {@link ContentCollision} on purpose: a collision is two
  * claimants inside ONE layer, which nobody asked for and only the first of
@@ -266,9 +318,16 @@ export interface ContentShadow {
   type: ContentClass;
   /** The catalog id both layers claim. */
   id: string;
-  /** The claimant the index resolves to: the highest layer's first claimant. */
+  /**
+   * The claimant the index resolves to: the highest layer's first claimant.
+   * Its {@link originOf} says which layer won — `fork` or `user`.
+   */
   winner: CatalogItem;
-  /** Every lower-layer claimant it replaced, in walk order. */
+  /**
+   * Every lower-layer claimant it replaced, in walk order — a user winner over
+   * a fork replacement of a corpus id lists the corpus claimant and the fork
+   * one, in that order.
+   */
   shadowed: readonly CatalogItem[];
 }
 
@@ -281,10 +340,11 @@ export interface ContentIndex {
   /** Contested identities; empty for a clean corpus. */
   collisions: ContentCollision[];
   /**
-   * Identities an override took over; empty unless an override root claimed
-   * one. Optional on the type for the same reason {@link CatalogItem.origin}
-   * is — an index assembled by hand walked nothing, so it replaced nothing —
-   * and always set by {@link buildContentIndex}. Read it as `shadows ?? []`.
+   * Identities the fork layer or an override took over; empty unless one of
+   * those roots claimed one. Optional on the type for the same reason
+   * {@link CatalogItem.origin} is — an index assembled by hand walked nothing,
+   * so it replaced nothing — and always set by {@link buildContentIndex}. Read
+   * it as `shadows ?? []`.
    */
   shadows?: readonly ContentShadow[];
   /**
@@ -485,11 +545,20 @@ export function emittedIdFor(item: Pick<CatalogItem, "id" | "type">): string {
 }
 
 /**
- * Walk the corpus — plus any installed-pack roots, plus the repo's override
- * tree — and index it. `contentRoot` defaults to the package-bundled corpus,
- * resolved lazily so a caller that supplies its own root never triggers the
- * probe; the widened object form ({@link ContentRoots}) additionally names pack
- * roots (as does `options.packRoots`) and the override root.
+ * Walk the corpus — plus any installed-pack roots, plus the package's fork
+ * layer, plus the repo's override tree — and index it. `contentRoot` defaults
+ * to the package-bundled corpus, resolved lazily so a caller that supplies its
+ * own root never triggers the probe; the widened object form
+ * ({@link ContentRoots}) additionally names pack roots (as does
+ * `options.packRoots`), the fork root and the override root.
+ *
+ * The fork root follows the corpus root's DEFAULT and not the argument: left
+ * unnamed, it is the bundled `fork/` beside the bundled corpus when the corpus
+ * root was also left to the default, and nothing at all when the caller pinned
+ * a corpus root — a pinned root is a pinned layer set, and a fixture corpus
+ * would otherwise be joined by whatever fork layer the running package
+ * happens to ship. A package with no `fork/` resolves no fork root, so it walks
+ * the three roots it always walked and indexes byte-identically.
  *
  * An absent class directory contributes nothing, so an empty corpus yields an
  * empty index rather than a failure — that is the state of a checkout whose
@@ -500,22 +569,28 @@ export function emittedIdFor(item: Pick<CatalogItem, "id" | "type">): string {
  * Pack roots are walked AFTER the corpus, sorted by pack id, so the merged
  * item order is a property of what is installed and never of argument order.
  * Identity is stricter across the seam than within the corpus: a pack item
- * whose type-qualified id is already claimed — by the corpus or by an earlier
- * pack — is refused with `VALIDATION_ERROR`, not reported as a collision. The
- * install-time collision gate derives the ids a pack would introduce through
- * {@link slugOf} and {@link applyCommandPrefix}, i.e. by this walk's own rule
+ * whose type-qualified id is already claimed — by the corpus, by an earlier
+ * pack, or by the fork layer walked after it — is refused with
+ * `VALIDATION_ERROR`, not reported as a collision. The install-time collision
+ * gate derives the ids a pack would introduce through {@link slugOf} and
+ * {@link applyCommandPrefix}, i.e. by this walk's own rule
  * (`../pack/install.ts` → `catalogIdOf`), so that state is unreachable through
- * `add`; this refusal is defence in depth for state assembled any other way,
- * because an installed pack silently shadowing (or shadowed by) existing
- * content is exactly the substitution attack the trust model exists to rule
- * out.
+ * `add` for every id the ledger knows; this refusal is defence in depth for
+ * state assembled any other way, because an installed pack silently shadowing
+ * (or shadowed by) existing content is exactly the substitution attack the
+ * trust model exists to rule out.
  *
- * The override tree is walked LAST and is the opposite posture, because the
- * author of that tree is the repo itself: an override that claims an id the
- * corpus or a pack holds WINS it, the replaced artifacts leave `items`, and the
- * substitution is reported through `shadows`. An absent override directory
- * contributes nothing, exactly like an absent class directory — a repo that has
- * customized nothing indexes as it always did.
+ * The fork layer and the override tree are walked NEXT, in that order, and are
+ * the opposite posture, because the author of each is the party the package or
+ * the repo belongs to: an artifact there that claims an id a lower layer holds
+ * WINS it, the replaced artifacts leave `items`, and the substitution is
+ * reported through `shadows`. Precedence is decided by ONE rule
+ * ({@link resolveLayerInto}) applied in two stages — corpus, packs and fork
+ * first, then the override tree — so that a fork patch lands on the item the
+ * corpus or a pack supplies BEFORE the user stage replaces or patches whatever
+ * the fork stage produced. An absent fork or override directory contributes
+ * nothing, exactly like an absent class directory — a repo that has customized
+ * nothing indexes as it always did.
  */
 export async function buildContentIndex(
   contentRoot?: string | ContentRoots,
@@ -523,6 +598,7 @@ export async function buildContentIndex(
 ): Promise<ContentIndex> {
   const spec = contentRootsOf(contentRoot);
   const root = spec.root ?? resolveBundledContentRoot();
+  const forkRoot = spec.forkRoot ?? (spec.root === undefined ? resolveBundledForkRoot() : undefined);
   const fs = options.fs ?? defaultFs;
   const packRoots = mergePackRoots(spec.packRoots, options.packRoots ?? []);
   const overrideRoot = spec.overrideRoot;
@@ -530,35 +606,43 @@ export async function buildContentIndex(
   // The four class directories are disjoint reads, so they run together; the
   // results are consumed in `CONTENT_CLASSES` order, which is what makes the
   // walk order — and therefore which claimant of a duplicated id wins — fixed.
-  // Pack and override scans are equally disjoint and join the same batch;
+  // Pack, fork and override scans are equally disjoint and join the same batch;
   // ordering is imposed when the results are flattened, not by completion order.
-  const [scanned, packScanned, overrideScanned, overlays] = await Promise.all([
-    Promise.all(CONTENT_CLASSES.map((type) => scanClass(fs, root, type, { origin: "corpus" }))),
-    Promise.all(
-      packRoots.map((packRoot) =>
-        Promise.all(
-          CONTENT_CLASSES.map((type) =>
-            scanClass(fs, packRoot.root, type, {
-              origin: "pack",
-              provenance: {
-                pack: packRoot.pack,
-                declaredTools: packRoot.declaredTools ?? [],
-              },
-            }),
+  const [scanned, packScanned, forkScanned, overrideScanned, forkOverlays, userOverlays] =
+    await Promise.all([
+      Promise.all(CONTENT_CLASSES.map((type) => scanClass(fs, root, type, { origin: "corpus" }))),
+      Promise.all(
+        packRoots.map((packRoot) =>
+          Promise.all(
+            CONTENT_CLASSES.map((type) =>
+              scanClass(fs, packRoot.root, type, {
+                origin: "pack",
+                provenance: {
+                  pack: packRoot.pack,
+                  declaredTools: packRoot.declaredTools ?? [],
+                },
+              }),
+            ),
           ),
         ),
       ),
-    ),
-    overrideRoot === undefined
-      ? []
-      : Promise.all(
-          CONTENT_CLASSES.map((type) => scanClass(fs, overrideRoot, type, { origin: "user" })),
-        ),
-    // Overlays live in the override tree and nowhere else, so an absent override
-    // root skips the pass entirely — the same non-event an absent class
-    // directory is, and what makes an overlay-free repo index byte-identically.
-    overrideRoot === undefined ? [] : discoverOverlays(fs, overrideRoot),
-  ]);
+      forkRoot === undefined
+        ? []
+        : Promise.all(
+            CONTENT_CLASSES.map((type) => scanClass(fs, forkRoot, type, { origin: "fork" })),
+          ),
+      overrideRoot === undefined
+        ? []
+        : Promise.all(
+            CONTENT_CLASSES.map((type) => scanClass(fs, overrideRoot, type, { origin: "user" })),
+          ),
+      // Overlays live in the two customizing layers and nowhere else, so an
+      // absent fork or override root skips its pass entirely — the same
+      // non-event an absent class directory is, and what makes an overlay-free
+      // package or repo index byte-identically.
+      forkRoot === undefined ? [] : discoverOverlays(fs, forkRoot),
+      overrideRoot === undefined ? [] : discoverOverlays(fs, overrideRoot),
+    ]);
 
   // Layer order is the precedence order, and it is imposed here rather than by
   // which scan finished first.
@@ -566,79 +650,80 @@ export async function buildContentIndex(
     ...scanned.flatMap((result) => result.items),
     ...packScanned.flat().flatMap((result) => result.items),
   ];
+  const forkItems = forkScanned.flatMap((result) => result.items);
   const userItems = overrideScanned.flatMap((result) => result.items);
   const collisions = [
     ...scanned.flatMap((result) => result.collisions),
     ...packScanned.flat().flatMap((result) => result.collisions),
+    ...forkScanned.flatMap((result) => result.collisions),
     ...overrideScanned.flatMap((result) => result.collisions),
   ];
 
+  // Two maps over one key set. `byKey` is what is IN FORCE — the resolved
+  // claimant, or the merged artifact a patch produced over it — and is what
+  // lookups and the next stage's patches read. `holders` is the claimant that
+  // WON each key, untouched by patching: a user patch over a fork replacement
+  // leaves the fork item as the holder while `byKey` carries the merge, and the
+  // shadow row for that replacement is owed to the holder.
   const byKey = new Map<string, CatalogItem>();
+  const holders = new Map<string, CatalogItem>();
   const duplicates = new Map<string, string[]>();
   const shadowedKeys = new Set<string>();
-  for (const item of [...shippedItems, ...userItems]) {
-    const key = typeIdKey(item.type, item.id);
-    const existing = byKey.get(key);
-    if (existing === undefined) {
-      byKey.set(key, item);
-      continue;
-    }
-    // Pack items are refused on contact (corpus items walk first, packs in
-    // sorted id order, so the earlier claimant is always the refusal's cited
-    // owner); corpus-internal duplicates keep the report-only posture.
-    if (item.provenance !== undefined) {
-      throw new EngineError(
-        `Installed pack "${item.provenance.pack}" supplies ${item.type} "${item.id}" ` +
-          `(${item.relativePath}), but that id is already ${claimantOf(existing)}. Packs must ` +
-          `not shadow existing content — \`add\` refuses this at install time, deriving the ` +
-          `pack's ids by the same rule this walk uses, and this walk refuses it again as ` +
-          `defence in depth for state assembled some other way. Remove the pack ` +
-          `(clean --pack ${item.provenance.pack}) or rename the artifact in the pack.`,
-        { code: "VALIDATION_ERROR" },
-      );
-    }
-    // Layers are walked low to high, so the only cross-layer claim that reaches
-    // here is an override over corpus or pack content: it takes the id, and
-    // what it replaced is reported instead of vanishing. Two claimants inside
-    // the SAME layer — including two overrides — fall through to the duplicate
-    // report below, because neither of them replaced anything.
-    if (originOf(item) === "user" && originOf(existing) !== "user") {
-      byKey.set(key, item);
-      shadowedKeys.add(key);
-      continue;
-    }
-    // First claimant stays reachable; every claimant is named in the report.
-    duplicates.set(key, [...(duplicates.get(key) ?? [existing.relativePath]), item.relativePath]);
-  }
+
+  // Stage one: everything the package ships, corpus and packs first, then the
+  // fork layer over them. Fork patches run on what THIS stage resolved — the
+  // item the corpus or a pack supplies, or the fork's own replacement of it,
+  // which the exclusivity rule inside `applyOverlays` refuses.
+  resolveLayerInto({ byKey, holders, duplicates, shadowedKeys }, [...shippedItems, ...forkItems]);
+  const forkPatched = await applyOverlays(fs, forkOverlays, byKey, "fork");
+
+  // Stage two: the repo's override tree over whatever stage one produced —
+  // a fork replacement, a fork-patched item, or the untouched original — and
+  // then the user patches over THAT. Patching runs on the RESOLVED item,
+  // whichever layer holds the key: "the artifact currently in force" is the
+  // only target that stays correct when a pack is installed or a fork layer
+  // appears; targeting the corpus specifically would patch a body nobody emits
+  // and report that the patch applied. A patched key is never a shadowed one
+  // within its own layer (an overlay over a full override is refused), so the
+  // shadow rows below read `holders`, which a patch never moves.
+  resolveLayerInto({ byKey, holders, duplicates, shadowedKeys }, userItems);
+  const userPatched = await applyOverlays(fs, userOverlays, byKey, "user");
+
   for (const [key, paths] of duplicates) collisions.push({ key, paths, kind: "duplicate-id" });
 
-  // Patching runs on the RESOLVED item — whichever layer holds the key after the
-  // loop above — and before `items` is assembled. "The artifact currently in
-  // force" is the only target that stays correct when a pack is installed or
-  // removed; targeting the corpus specifically would patch a body nobody emits
-  // and report that the patch applied. A patched key is never a shadowed one
-  // (an overlay over a full override is refused), so `shadows` below reads the
-  // same map it would have read unpatched.
-  const patched = await applyOverlays(fs, overlays, byKey);
-
-  const resolved = [
-    // A replaced artifact leaves the index entirely: one identity, one body, so
-    // a consumer iterating `items` cannot emit both the shipped original and
-    // the override that took its id.
-    ...shippedItems.filter((item) => !shadowedKeys.has(typeIdKey(item.type, item.id))),
-    ...userItems,
-  ];
+  // A replaced artifact leaves the index entirely: one identity, one body, so
+  // a consumer iterating `items` cannot emit both the shipped original and
+  // the replacement that took its id. What stays under a shadowed key is the
+  // winning LAYER's claimants — the holder and any same-layer duplicate of it,
+  // which is reported and unreachable but still there — and a fork item that
+  // took a corpus id stays exactly as a user item that took one does.
+  const survives = (item: CatalogItem): boolean => {
+    const key = typeIdKey(item.type, item.id);
+    if (!shadowedKeys.has(key)) return true;
+    const holder = holders.get(key);
+    return holder !== undefined && LAYER_RANK[originOf(item)] === LAYER_RANK[originOf(holder)];
+  };
+  const resolved = [...shippedItems, ...forkItems, ...userItems].filter(survives);
   // A patch does not move an item: the merged artifact takes the base's place in
-  // walk order, keeping its file, its origin and its provenance.
-  const items = patched.size === 0 ? resolved : resolved.map((item) => patched.get(item) ?? item);
+  // walk order, keeping its file, its origin and its provenance. A user patch
+  // over a fork-patched item composes — the fork's merge is the base the user's
+  // merge was applied to, so the second map is read through the first.
+  const items =
+    forkPatched.size === 0 && userPatched.size === 0
+      ? resolved
+      : resolved.map((item) => {
+          const afterFork = forkPatched.get(item) ?? item;
+          return userPatched.get(afterFork) ?? afterFork;
+        });
   return {
     items,
     byKey,
     collisions,
-    shadows: buildShadows(shippedItems, userItems, byKey, shadowedKeys),
+    shadows: buildShadows([...shippedItems, ...forkItems, ...userItems], holders, shadowedKeys),
     skipped: [
       ...scanned.flatMap((result) => result.skipped),
       ...packScanned.flat().flatMap((result) => result.skipped),
+      ...forkScanned.flatMap((result) => result.skipped),
       ...overrideScanned.flatMap((result) => result.skipped),
     ],
   };
@@ -649,47 +734,140 @@ export function originOf(item: CatalogItem): ContentOrigin {
   return item.origin ?? "corpus";
 }
 
+/** The resolution state one stage of {@link resolveLayerInto} reads and writes. */
+interface ResolutionState {
+  /** What is in force per key: the claimant, or a patch's merge over it. */
+  byKey: Map<string, CatalogItem>;
+  /** The claimant that won each key, never replaced by a patch. */
+  holders: Map<string, CatalogItem>;
+  /** Same-layer duplicate claimants, by key, in walk order. */
+  duplicates: Map<string, string[]>;
+  /** Keys a higher layer took from a lower one. */
+  shadowedKeys: Set<string>;
+}
+
 /**
- * One row per identity an override took over, ordered by the override tree's
- * walk order.
+ * The one precedence rule, applied to one batch of claimants in walk order.
+ *
+ * A first claimant takes its key. A later claimant of a HIGHER layer replaces
+ * the holder and the key is recorded as shadowed; one of the SAME layer is a
+ * duplicate, reported and unreachable — including two overrides, or two fork
+ * files, of one id, because neither replaced anything. A pack meeting a taken
+ * id, or a fork item meeting an id a pack took, is refused on contact: packs
+ * add ids and never share one ({@link refusePackShadow}).
+ *
+ * Called once per stage rather than once over everything, so a fork patch can
+ * run between the fork stage and the user stage (see {@link buildContentIndex}).
+ * The rule does not know which stage it is in — the rank table is the whole of
+ * it — which is what makes the two calls one loop rather than two.
+ */
+function resolveLayerInto(state: ResolutionState, claimants: readonly CatalogItem[]): void {
+  const { byKey, holders, duplicates, shadowedKeys } = state;
+  for (const item of claimants) {
+    const key = typeIdKey(item.type, item.id);
+    const existing = byKey.get(key);
+    if (existing === undefined) {
+      byKey.set(key, item);
+      holders.set(key, item);
+      continue;
+    }
+    // A pack is refused from either side of the seam: walked after the corpus
+    // or an earlier pack it collides with, or walked BEFORE the fork item whose
+    // id it claims. Either way the pack is the party at fault — a fork replaces
+    // shipped content by design, and a pack never shares an id with anything.
+    if (item.provenance !== undefined) refusePackShadow(item, existing);
+    if (existing.provenance !== undefined && originOf(item) === "fork") {
+      refusePackShadow(existing, item);
+    }
+    // Layers are walked low to high, so a higher-ranked claimant is a
+    // replacement: it takes the id, and what it replaced is reported instead of
+    // vanishing. Equal ranks fall through to the duplicate report below.
+    if (LAYER_RANK[originOf(item)] > LAYER_RANK[originOf(existing)]) {
+      byKey.set(key, item);
+      holders.set(key, item);
+      shadowedKeys.add(key);
+      continue;
+    }
+    // First claimant stays reachable; every claimant is named in the report.
+    duplicates.set(key, [...(duplicates.get(key) ?? [existing.relativePath]), item.relativePath]);
+  }
+}
+
+/**
+ * The pack-shadowing refusal, naming the pack artifact and the claimant it
+ * collided with. Corpus items walk first and packs in sorted id order, so
+ * against those the earlier claimant is always the cited owner; against the
+ * fork layer the pack was walked first and the fork item is what it turned
+ * out to be claiming.
+ */
+function refusePackShadow(packItem: CatalogItem, other: CatalogItem): never {
+  const pack = packItem.provenance?.pack ?? "<pack-id>";
+  throw new EngineError(
+    `Installed pack "${pack}" supplies ${packItem.type} "${packItem.id}" ` +
+      `(${packItem.relativePath}), but that id is already ${claimantOf(other)}. Packs must ` +
+      `not shadow existing content — \`add\` refuses this at install time, deriving the ` +
+      `pack's ids by the same rule this walk uses, and this walk refuses it again as ` +
+      `defence in depth for state assembled some other way. Remove the pack ` +
+      `(clean --pack ${pack}) or rename the artifact in the pack.`,
+    { code: "VALIDATION_ERROR" },
+  );
+}
+
+/**
+ * One row per identity a customizing layer took over, fork winners in the fork
+ * layer's walk order and then user winners in the override tree's.
  *
  * `shadowed` lists EVERY lower-layer claimant of the id, not only the one that
- * held `byKey`: a corpus that already duplicated an id has two files to account
+ * held the key: a corpus that already duplicated an id has two files to account
  * for, and a report naming one of them would send the author to the wrong file
- * when the other is the one that stopped being emitted.
+ * when the other is the one that stopped being emitted. Lower is by rank, so a
+ * user winner over a fork replacement lists the corpus claimant AND the fork
+ * one, while the fork item — a winner in its own stage before the user took
+ * the id — wins no row of its own.
+ *
+ * Winners are read from `holders`, the claimant that won each key, rather than
+ * from the in-force map: a user patch over a fork replacement leaves a merged
+ * item in force under the fork's key, and the fork's row must not vanish
+ * because a higher layer patched what it replaced.
  */
 function buildShadows(
-  shippedItems: readonly CatalogItem[],
-  userItems: readonly CatalogItem[],
-  byKey: ReadonlyMap<string, CatalogItem>,
+  claimants: readonly CatalogItem[],
+  holders: ReadonlyMap<string, CatalogItem>,
   shadowedKeys: ReadonlySet<string>,
 ): ContentShadow[] {
   if (shadowedKeys.size === 0) return [];
 
-  const replaced = new Map<string, CatalogItem[]>();
-  for (const item of shippedItems) {
+  const contested = new Map<string, CatalogItem[]>();
+  for (const item of claimants) {
     const key = typeIdKey(item.type, item.id);
     if (!shadowedKeys.has(key)) continue;
-    const claimants = replaced.get(key);
-    if (claimants === undefined) replaced.set(key, [item]);
-    else claimants.push(item);
+    const list = contested.get(key);
+    if (list === undefined) contested.set(key, [item]);
+    else list.push(item);
   }
 
-  // Only the override that actually holds the key wins a row: a second override
+  // Only the claimant that actually won the key wins a row: a second override
   // of the same id replaced nothing, and is reported as a duplicate instead.
-  return userItems.flatMap((winner) => {
+  return claimants.flatMap((winner) => {
+    if (LAYER_RANK[originOf(winner)] < LAYER_RANK.fork) return [];
     const key = typeIdKey(winner.type, winner.id);
-    const shadowed = replaced.get(key);
-    if (shadowed === undefined || byKey.get(key) !== winner) return [];
-    return [{ type: winner.type, id: winner.id, winner, shadowed }];
+    if (holders.get(key) !== winner) return [];
+    const rank = LAYER_RANK[originOf(winner)];
+    const shadowed = (contested.get(key) ?? []).filter(
+      (item) => LAYER_RANK[originOf(item)] < rank,
+    );
+    return shadowed.length === 0 ? [] : [{ type: winner.type, id: winner.id, winner, shadowed }];
   });
 }
 
 /** How a refusal names the artifact already holding a contested id. */
 function claimantOf(existing: CatalogItem): string {
-  return existing.provenance === undefined
-    ? `claimed by the corpus artifact at ${existing.relativePath}`
-    : `claimed by installed pack "${existing.provenance.pack}" (${existing.relativePath})`;
+  if (existing.provenance !== undefined) {
+    return `claimed by installed pack "${existing.provenance.pack}" (${existing.relativePath})`;
+  }
+  return originOf(existing) === "fork"
+    ? `claimed by the fork-layer artifact at fork/${existing.relativePath}`
+    : `claimed by the corpus artifact at ${existing.relativePath}`;
 }
 
 /**
@@ -941,9 +1119,9 @@ function appendOverlayBody(base: string, appended: string): string {
 function refuseOrphanOverlay(paths: readonly string[], type: ContentClass, id: string): never {
   throw new EngineError(
     `Overlay ${paths.map(toPosixDisplayPath).join(" and ")} patches ${type} "${id}", but no artifact of that id exists ` +
-      `in any layer — not the corpus, not an installed pack, not the override tree. An overlay ` +
-      `is addressed by its filename, so this is usually a typo in it. Correct the filename, or ` +
-      `remove the file.`,
+      `in any layer the patch can reach — not the corpus, not an installed pack, not the fork ` +
+      `layer, not the override tree. An overlay is addressed by its filename, so this is usually ` +
+      `a typo in it. Correct the filename, or remove the file.`,
     { code: "VALIDATION_ERROR" },
   );
 }
@@ -1024,14 +1202,16 @@ interface DiscoveredOverlay {
 }
 
 /**
- * Every overlay pair in the override tree, in class order then name order.
+ * Every overlay pair under one customizing root — the override tree, or the
+ * fork layer — in class order then name order.
  *
  * A distinct pass rather than a branch inside {@link scanClass}, because the two
  * answer different questions: the scan asks "is this an artifact", and an
  * overlay is emphatically not one — it is a delta addressed at an artifact some
- * other layer supplies. Overlays are looked for in the override tree ONLY. The
- * corpus and pack trees are framework territory, and a patch sitting beside the
- * file it patches would be a customization the author cannot carry forward.
+ * other layer supplies. Overlays are looked for in the two customizing layers
+ * ONLY. The corpus and pack trees are framework territory, and a patch sitting
+ * beside the file it patches would be a customization the author cannot carry
+ * forward — which is exactly what `fork/` exists to hold for a fork.
  */
 async function discoverOverlays(fs: CatalogFs, root: string): Promise<DiscoveredOverlay[]> {
   const perClass = await Promise.all(
@@ -1148,6 +1328,14 @@ async function scanSkillOverlays(
  * answer base-item → merged-item so the caller can put each merged artifact in
  * its base's place.
  *
+ * `layer` is the customizing layer the pairs were discovered under. Exclusivity
+ * is judged against IT: a pair may not patch an id the same layer also replaced
+ * whole — that is one file too many — while a pair from a higher layer patching
+ * a lower layer's replacement is the chain working (a user patch over a fork
+ * replacement lands on the fork's body). The caller sequences the two layers
+ * so that a fork pair only ever sees what the corpus, the packs and the fork
+ * itself resolved.
+ *
  * The merged document goes back through {@link buildItem} as `raw`, so it
  * re-runs the EXACT checks an authored artifact runs — including the closed
  * tool vocabulary, which is read from the raw text rather than from the map.
@@ -1159,6 +1347,7 @@ async function applyOverlays(
   fs: CatalogFs,
   overlays: readonly DiscoveredOverlay[],
   byKey: Map<string, CatalogItem>,
+  layer: CustomizingOrigin,
 ): Promise<Map<CatalogItem, CatalogItem>> {
   const patched = new Map<CatalogItem, CatalogItem>();
   if (overlays.length === 0) return patched;
@@ -1179,10 +1368,11 @@ async function applyOverlays(
     const key = typeIdKey(overlay.type, id);
     const base = byKey.get(key);
     if (base === undefined) refuseOrphanOverlay(overlayPaths, overlay.type, id);
-    // Exclusivity again, read by IDENTITY rather than by filename: an override
-    // whose declared id disagrees with its own filename still REPLACED this id,
-    // and an id is either replaced or patched, never both.
-    if (originOf(base) === "user") refuseOverlayExclusivity(base.filePath, overlayPaths);
+    // Exclusivity again, read by IDENTITY rather than by filename: a
+    // replacement in this same layer whose declared id disagrees with its own
+    // filename still REPLACED this id, and within one layer an id is either
+    // replaced or patched, never both.
+    if (originOf(base) === layer) refuseOverlayExclusivity(base.filePath, overlayPaths);
 
     const halves = halvesOf(overlay, textByPath);
     // Both halves vanished between the listing and the read. Nothing to apply,
@@ -1338,8 +1528,37 @@ async function skillArtifactEntry(
 interface ScanOptions {
   /** Layer the root belongs to; stamped on every item found under it. */
   origin: ContentOrigin;
-  /** Pack identity + its disclosed footprint — absent for the corpus and the override tree. */
+  /** Pack identity + its disclosed footprint — absent for every root that is not a pack's. */
   provenance?: { pack: string; declaredTools: readonly string[] };
+}
+
+/**
+ * Refuse a fork-layer artifact filename spelled WITH an engine content prefix
+ * (`stamity-`/`st-`) — `fork/rules/stamity-security.md`, or a skill directory
+ * `fork/skills/st-acme-review/`.
+ *
+ * The fork layer's ids are bare slugs (`docs/specs/fork-layer.md`,
+ * REQ-FORK-001), for the reason an overlay filename's are
+ * ({@link refusePrefixedOverlaySpelling}): {@link slugOf} strips the prefix
+ * before an id is derived, so `stamity-security.md` and `security.md` would
+ * name one identity under two spellings, and the prefix is what the ENGINE
+ * mints onto its emitted files — a source file wearing it reads as generated.
+ * The override tree is not held to this at index time (its save gate refuses
+ * the prefix instead, `./userContent.ts` → `saveIdDefect`); a fork has no save
+ * gate, so the walk is where its authors meet the rule. The bare spelling
+ * replaces a prefixed corpus file of the same id exactly as a user override
+ * does — prefix and all.
+ */
+function refusePrefixedForkSpelling(path: string, name: string, layout: "file" | "directory"): never {
+  const bare = stripEngineContentPrefix(name);
+  const noun = layout === "directory" ? "skill directory" : "filename";
+  throw new EngineError(
+    `${toPosixDisplayPath(path)}: a fork-layer ${noun} carries the engine content prefix, which ` +
+      `names the generated corpus, not the fork's own artifact. Save it under the bare spelling ` +
+      `${JSON.stringify(bare)} instead — a bare slug that matches a bundled artifact's id ` +
+      `replaces it, prefix and all.`,
+    { code: "VALIDATION_ERROR" },
+  );
 }
 
 /**
@@ -1410,6 +1629,17 @@ async function scanClass(
     const relativePath = posix.join(...segments);
     assertSafePath(relativePath, `${dir} content walk`);
     const filePath = join(root, ...segments);
+
+    // The fork layer's one index-time spelling rule, judged on the name before
+    // the file is opened — like the overlay rule it mirrors, and unlike the
+    // override tree, whose prefixed files index (its save gate holds the rule).
+    if (options.origin === "fork" && carriesEngineContentPrefix(entry.name)) {
+      refusePrefixedForkSpelling(
+        layout === "directory" ? join(root, dir, entry.name) : filePath,
+        entry.name,
+        layout,
+      );
+    }
 
     if (probes[index] === "symlink") {
       result.skipped.push({ type, filePath, reason: SYMLINK_SKIP_REASON });

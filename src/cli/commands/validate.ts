@@ -1,6 +1,13 @@
 import { readFile, stat } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
-import { toPosixDisplayPath, type ContentIndex, type PackContentRoot } from "../../content/catalog.ts";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  toPosixDisplayPath,
+  type CatalogItem,
+  type ContentIndex,
+  type ContentOrigin,
+  type CustomizingOrigin,
+  type PackContentRoot,
+} from "../../content/catalog.ts";
 import type { UserContentOverlay } from "../../content/userContent.ts";
 import type { EngineRegistry } from "../../index.ts";
 import type { ContentClass } from "../../types/content.ts";
@@ -69,6 +76,18 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * overlay can cause becomes a finding here, since an overlay file meets no other
  * gate in this command.
  *
+ * THE FORK LAYER. A package built by a downstream fork carries a `fork/`
+ * directory (`docs/specs/fork-layer.md`) that replaces and patches bundled
+ * artifacts one layer below the override tree. Its rows are reported here too,
+ * whether or not this repo customized anything, because a consumer reading
+ * "why does the security rule say this" has no other surface that would name
+ * the fork: a replaced row carries `winner: "fork"` and the package-relative
+ * `fork/...` path, a patched row carries `layer: "fork"` and the fork's halves,
+ * and the human rendering marks each with "fork layer". The merged artifact a
+ * fork patch produces goes through the same gate a repo's own patch does — the
+ * layer relaxes no floor — with the finding addressed to the fork file. This
+ * repository ships no `fork/`, so here the block reads exactly as it did.
+ *
  * Non-mutating: no `--dry-run`, nothing written, nothing created to find out
  * that it is absent. Exit 1 iff a finding is an error; warnings alone exit 0 —
  * and a shadow is neither, so it never moves the exit code.
@@ -96,19 +115,30 @@ type ValidateSource = ValidateFinding["source"];
  */
 export type ValidateShadow = ValidateReplaced | ValidatePatched;
 
-/** One bundled identity a user artifact took over. */
+/** One bundled identity a user or fork artifact took over. */
 interface ValidateReplaced {
   outcome: "replaced";
   /** Class of the contested identity. */
   type: ContentClass;
   /** The catalog id both layers claim. */
   id: string;
-  /** Repo-relative POSIX path of the user artifact that holds it now. */
+  /**
+   * The layer that holds the id now: `user` for the repo's override tree,
+   * `fork` for the package's fork layer. Machine-readable so a CI consumer can
+   * tell a consumer override from something the package shipped that way.
+   */
+  winner: CustomizingOrigin;
+  /**
+   * POSIX path of the artifact that holds it now: repo-relative for a user
+   * artifact, package-relative (`fork/<class>/...`) for a fork one — the
+   * spelling each author edits.
+   */
   path: string;
   /**
-   * Content-root-relative paths of every shipped artifact the id was taken
-   * from. They stop being emitted when `emits` is true; when it is false they
-   * are still what emits.
+   * Paths of every lower-layer artifact the id was taken from: content-root-
+   * relative for a corpus or pack artifact, `fork/`-prefixed for a fork one a
+   * user override replaced. They stop being emitted when `emits` is true; when
+   * it is false they are still what emits.
    */
   replaced: string[];
   /**
@@ -139,11 +169,24 @@ interface ValidatePatched {
   type: ContentClass;
   /** The catalog id the overlay is addressed by. */
   id: string;
-  /** Content-root-relative path of the BASE — the file that still supplies the body. */
+  /**
+   * The layer that supplied the halves: `user` for the repo's override tree,
+   * `fork` for the package's fork layer. Distinct from `origin`, which is the
+   * BASE's layer — a user patch over a fork replacement reads
+   * `layer: "user", origin: "fork"`.
+   */
+  layer: CustomizingOrigin;
+  /**
+   * Path of the BASE — the file that still supplies the body: content-root-
+   * relative for a corpus or pack artifact, `fork/`-prefixed for a fork one.
+   */
   base: string;
-  /** Layer the base came from: `corpus`, or the id of the pack that supplies it. */
+  /** Layer the base came from: `corpus`, `fork`, or the id of the pack that supplies it. */
   origin: string;
-  /** Repo-relative POSIX paths of the halves applied, frontmatter half first. */
+  /**
+   * POSIX paths of the halves applied, frontmatter half first: repo-relative
+   * for the repo's own, package-relative (`fork/...`) for the fork layer's.
+   */
   overlays: string[];
   /**
    * Whether the merged body reaches emission, from the same
@@ -303,13 +346,16 @@ async function collectUserContent(
   manifest: SetupManifest | null,
 ): Promise<SectionReport> {
   const { userContent } = engine.content;
-  // Five disjoint walks of one small tree, plus the per-artifact judgements.
-  const [artifacts, skipped, support, overlays, carrierExtras] = await Promise.all([
+  const forkRoot = bundledForkRoot(engine);
+  // Five disjoint walks of one small tree, plus the per-artifact judgements —
+  // and, when the package ships a fork layer, the same overlay walk over it.
+  const [artifacts, skipped, support, overlays, carrierExtras, forkOverlays] = await Promise.all([
     userContent.discoverUserContent(rootDir),
     userContent.discoverSkippedUserEntries(rootDir),
     userContent.scanUserSkillSupportFiles(rootDir),
     userContent.discoverUserOverlays(rootDir),
     userContent.discoverSkillOverlayCarrierExtras(rootDir),
+    forkRoot === undefined ? [] : userContent.discoverOverlaysUnder(forkRoot),
   ]);
   const judged = await Promise.all(
     artifacts.map(async (artifact) => ({
@@ -320,12 +366,18 @@ async function collectUserContent(
 
   // One catalog walk answers both halves of the customization report: what each
   // override replaced, and what each overlay patched. It is run only when the
-  // tree holds something customizing, so the ordinary repo never pays for
-  // reading the bundled corpus.
+  // tree holds something customizing — or when the package ships a fork layer,
+  // whose replacements and patches are reported whether or not this repo
+  // customized anything — so the ordinary repo on the ordinary package never
+  // pays for reading the bundled corpus.
   const customization =
-    artifacts.length === 0 && overlays.length === 0
+    artifacts.length === 0 && overlays.length === 0 && forkRoot === undefined
       ? EMPTY_SHADOWS
-      : await collectCustomization(rootDir, engine, manifest, overlays);
+      : await collectCustomization(rootDir, engine, manifest, {
+          overlays,
+          forkOverlays,
+          forkRoot,
+        });
 
   const findings = [
     ...judged.flatMap(({ artifact, check }) =>
@@ -409,6 +461,77 @@ interface CustomizationScan {
   readonly note?: string;
 }
 
+/** What the customization scan reads beside the override tree it always reads. */
+interface CustomizationInputs {
+  /** The repo's own overlay pairs, from the override tree. */
+  readonly overlays: readonly UserContentOverlay[];
+  /** The fork layer's overlay pairs; empty when the package ships no `fork/`. */
+  readonly forkOverlays: readonly UserContentOverlay[];
+  /** The fork layer's root, when the package ships one. */
+  readonly forkRoot: string | undefined;
+}
+
+/** How an absolute path is spelled for a reader of this report. */
+type PathDisplay = (absolute: string) => string;
+
+/**
+ * The bundled fork root, or `undefined` for a package that ships none.
+ *
+ * Total on purpose: the probe pairs the fork root with the corpus root, and a
+ * checkout whose corpus is not staged has neither — which today's command
+ * answers with "nothing user-authored to validate" rather than with a finding
+ * about the package, because no section here ever read the corpus unless the
+ * repo customized something. Swallowing the probe's failure keeps that answer;
+ * the customization scan raises the same failure as its own note when there IS
+ * something to report against.
+ */
+function bundledForkRoot(engine: EngineRegistry): string | undefined {
+  try {
+    return engine.content.contentRoot.resolveBundledForkRoot();
+  } catch {
+    // The corpus probe failed, so there is no fork layer to pair with it — the
+    // pre-corpus checkout state, reported by the scan below when it matters.
+    return undefined;
+  }
+}
+
+/**
+ * Repo-relative for the repo's own files, `fork/`-relative for the package's
+ * fork layer: each spelling is the one its author edits, and a fork file
+ * rendered relative to the repo would climb through `node_modules` or further.
+ */
+function pathDisplayOf(rootDir: string, forkRoot: string | undefined): PathDisplay {
+  return (absolute) => {
+    if (forkRoot !== undefined) {
+      const rel = relative(forkRoot, absolute);
+      if (rel !== "" && !rel.startsWith("..") && !isAbsolute(rel)) {
+        return `fork/${rel.split(sep).join("/")}`;
+      }
+    }
+    return repoPath(rootDir, absolute);
+  };
+}
+
+/**
+ * The layer-qualified path of an indexed artifact: content-root-relative as the
+ * catalog reports it, with the fork layer's `fork/` prefix restored so a fork
+ * file and a corpus file of one class never read alike.
+ */
+function layerPathOf(engine: EngineRegistry, item: CatalogItem): string {
+  return engine.content.catalog.originOf(item) === "fork"
+    ? `fork/${item.relativePath}`
+    : item.relativePath;
+}
+
+/**
+ * The customizing layer an origin names. A shadow's winner is always one of
+ * the two by construction — the catalog records a shadow only for a fork or
+ * user claimant — so anything else reads as the override tree.
+ */
+function customizingLayerOf(origin: ContentOrigin): CustomizingOrigin {
+  return origin === "fork" ? "fork" : "user";
+}
+
 /**
  * What the repo customizes, from one merged catalog walk: the identities the
  * override tree took over, the identities an overlay patched, and the judgement
@@ -437,26 +560,35 @@ async function collectCustomization(
   rootDir: string,
   engine: EngineRegistry,
   manifest: SetupManifest | null,
-  overlays: readonly UserContentOverlay[],
+  inputs: CustomizationInputs,
 ): Promise<CustomizationScan> {
   const { catalog, userContent } = engine.content;
   const packRoots = await installedPackRoots(rootDir, engine, manifest);
+  const display = pathDisplayOf(rootDir, inputs.forkRoot);
+  // Every overlay pair the walk can refuse, fork layer first — the order the
+  // walk applies them in, and the order the rows below come out in.
+  const overlays = [...inputs.forkOverlays, ...inputs.overlays];
   try {
     const index = await catalog.buildContentIndex({
       overrideRoot: userContent.userContentRoot(rootDir),
       packRoots,
+      // Named rather than left to the walk's default, so the rows below spell
+      // fork paths against the same root the walk read them from.
+      ...(inputs.forkRoot === undefined ? {} : { forkRoot: inputs.forkRoot }),
     });
-    const patched = await Promise.all(
-      overlays.map((overlay) => judgePatched(rootDir, engine, index, overlay)),
-    );
+    const patched = await Promise.all([
+      ...inputs.forkOverlays.map((overlay) => judgePatched(engine, index, overlay, "fork", display)),
+      ...inputs.overlays.map((overlay) => judgePatched(engine, index, overlay, "user", display)),
+    ]);
     return {
       shadows: [
         ...(index.shadows ?? []).map((shadow) => ({
           outcome: "replaced" as const,
           type: shadow.type,
           id: shadow.id,
-          path: repoPath(rootDir, shadow.winner.filePath),
-          replaced: shadow.shadowed.map((item) => item.relativePath),
+          winner: customizingLayerOf(catalog.originOf(shadow.winner)),
+          path: display(shadow.winner.filePath),
+          replaced: shadow.shadowed.map((item) => layerPathOf(engine, item)),
           emits: OVERRIDE_EMITTING_CLASSES.includes(shadow.type),
         })),
         ...patched.flatMap((result) => result.rows),
@@ -464,7 +596,7 @@ async function collectCustomization(
       findings: patched.flatMap((result) => result.findings),
     };
   } catch (cause) {
-    const named = overlayFailure(rootDir, overlays, cause);
+    const named = overlayFailure(overlays, display, cause);
     if (named !== undefined) return { shadows: [], findings: [named] };
     return {
       shadows: [],
@@ -487,8 +619,8 @@ async function collectCustomization(
  * verbatim, so the field it names is the field the author reads.
  */
 function overlayFailure(
-  rootDir: string,
   overlays: readonly UserContentOverlay[],
+  display: PathDisplay,
   cause: unknown,
 ): ValidateFinding | undefined {
   const message = messageOf(cause);
@@ -501,9 +633,7 @@ function overlayFailure(
   // drifted copy of the engine's own display normalisation is how that parse
   // silently stops matching (a finding degrading to a note at exit 0).
   const named = overlays.flatMap(halfPaths).find((path) => message.includes(toPosixDisplayPath(path)));
-  return named === undefined
-    ? undefined
-    : finding("user-content", repoPath(rootDir, named), "error", message);
+  return named === undefined ? undefined : finding("user-content", display(named), "error", message);
 }
 
 /** Absolute paths of one pair's halves, frontmatter half first. */
@@ -531,10 +661,11 @@ function halfPaths(overlay: UserContentOverlay): string[] {
  * address is a starting point and the message is what names the field.
  */
 async function judgePatched(
-  rootDir: string,
   engine: EngineRegistry,
   index: ContentIndex,
   overlay: UserContentOverlay,
+  layer: CustomizingOrigin,
+  display: PathDisplay,
 ): Promise<{ rows: ValidatePatched[]; findings: ValidateFinding[] }> {
   const { catalog, userContent } = engine.content;
   const id = catalog.applyCommandPrefix(overlay.slug, overlay.type);
@@ -564,7 +695,7 @@ async function judgePatched(
   const findings = [...check.errors, ...check.warnings].map((violation) =>
     finding(
       "user-content",
-      repoPath(rootDir, addressOf(overlay, violation.kind)),
+      display(addressOf(overlay, violation.kind)),
       violation.severity,
       violation.detail,
     ),
@@ -576,13 +707,14 @@ async function judgePatched(
         outcome: "patched",
         type: overlay.type,
         id: item.id,
-        base: item.relativePath,
+        layer,
+        base: layerPathOf(engine, item),
         origin: item.provenance?.pack ?? catalog.originOf(item),
-        overlays: halfPaths(overlay).map((path) => repoPath(rootDir, path)),
+        overlays: halfPaths(overlay).map(display),
         emits: OVERRIDE_EMITTING_CLASSES.includes(overlay.type),
       },
     ],
-    findings: [...findings, ...cappedBody(rootDir, engine, overlay)],
+    findings: [...findings, ...cappedBody(engine, overlay, display)],
   };
 }
 
@@ -613,16 +745,16 @@ function addressOf(overlay: UserContentOverlay, kind: string): string {
  * number moves in one place.
  */
 function cappedBody(
-  rootDir: string,
   engine: EngineRegistry,
   overlay: UserContentOverlay,
+  display: PathDisplay,
 ): ValidateFinding[] {
   const cap = engine.guard.promptGuard.MAX_USER_CONTENT_LENGTH;
   if (overlay.bodyPath === undefined || (overlay.bodyLength ?? 0) <= cap) return [];
   return [
     finding(
       "user-content",
-      repoPath(rootDir, overlay.bodyPath),
+      display(overlay.bodyPath),
       "error",
       `body patch is ${overlay.bodyLength} characters, over the ${cap}-character ceiling on ` +
         `user-authored content — text past it is truncated where the artifact re-enters agent ` +
@@ -932,19 +1064,30 @@ function renderShadows(ctx: CliContext, shadows: readonly ValidateShadow[]): voi
   if (shadows.length === 0) return;
   const { palette } = ctx;
 
-  const replaced = shadows.filter((row) => row.outcome === "replaced").length;
-  const patched = shadows.length - replaced;
+  // One clause per (outcome, layer) pair that has rows, in the order the rows
+  // are listed: the repo's own overrides and overlays under their usual nouns,
+  // the fork layer's under "fork replacement" and "fork overlay", so the header
+  // tells a reader which layer did what before a single row is read.
+  const count = (outcome: ValidateShadow["outcome"], layer: CustomizingOrigin): number =>
+    shadows.filter((row) => row.outcome === outcome && customizedBy(row) === layer).length;
+  const takes = (n: number, noun: string): string =>
+    `${plural(n, noun)} ${n === 1 ? "takes" : "take"} a bundled id`;
+  // "one" only where a clause before it already said what: a patched clause
+  // standing first has to name the thing it patches.
+  const patches = (n: number, noun: string, saidId: boolean): string =>
+    `${plural(n, noun)} ${n === 1 ? "patches" : "patch"} ${saidId ? "one" : "a bundled id"}`;
+  const replacedUser = count("replaced", "user");
+  const replacedFork = count("replaced", "fork");
+  const patchedUser = count("patched", "user");
+  const patchedFork = count("patched", "fork");
   const clauses = [
-    ...(replaced > 0
-      ? [`${plural(replaced, "override")} ${replaced === 1 ? "takes" : "take"} a bundled id`]
+    ...(replacedUser > 0 ? [takes(replacedUser, "override")] : []),
+    ...(replacedFork > 0 ? [takes(replacedFork, "fork replacement")] : []),
+    ...(patchedUser > 0
+      ? [patches(patchedUser, "overlay", replacedUser + replacedFork > 0)]
       : []),
-    ...(patched > 0
-      ? [
-          `${plural(patched, "overlay")} ${patched === 1 ? "patches" : "patch"} ` +
-            // "one" only where the clause before it already said what: a patched
-            // row standing alone has to name the thing it patches.
-            `${replaced > 0 ? "one" : "a bundled id"}`,
-        ]
+    ...(patchedFork > 0
+      ? [patches(patchedFork, "fork overlay", replacedUser + replacedFork + patchedUser > 0)]
       : []),
   ];
   ctx.io.out(`${palette.bold("shadowing")} — ${clauses.join(", ")}\n\n`);
@@ -966,9 +1109,17 @@ function renderShadows(ctx: CliContext, shadows: readonly ValidateShadow[]): voi
               : `patches ${row.base} (${row.origin}) — not emitted, the bundled ` +
                 `${row.type} body is still what ships`,
           ];
-    ctx.io.out(`  ${row.type} ${palette.bold(row.id)}  ${palette.dim(path)}  ${outcome}\n`);
+    // The fork layer is marked on the row as well as in the header: a row read
+    // on its own — grepped out of a CI log — still says which layer did it.
+    const layer = customizedBy(row) === "fork" ? " — fork layer" : "";
+    ctx.io.out(`  ${row.type} ${palette.bold(row.id)}  ${palette.dim(path)}  ${outcome}${layer}\n`);
   }
   ctx.io.out("\n");
+}
+
+/** Which customizing layer a row is about: the winner of a replacement, the patcher of a patch. */
+function customizedBy(row: ValidateShadow): CustomizingOrigin {
+  return row.outcome === "replaced" ? row.winner : row.layer;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

@@ -90,10 +90,16 @@ import { parseFrontmatter } from "./frontmatter.ts";
  *   overlay already patches: the two are mutually exclusive, and a tree holding
  *   both stops indexing on the next `sync`.
  *
- * The phrase "four-layer precedence" is retired with the gap it described: it
- * counted layers that were never simultaneously reachable. The chain that
- * applies is corpus-or-pack → `.customize.yaml` → `.customize.md`, or
- * corpus-or-pack → full override, and never both.
+ * The phrase "four-layer precedence" stays retired — it once counted the two
+ * shapes of one layer as layers of their own. The chain that applies to any
+ * `(class, id)` is corpus or pack → fork (a full replacement or a patch) → user
+ * (a full replacement or a patch): the package's `fork/` directory
+ * (`docs/specs/fork-layer.md`) sits between the shipped layers and this tree,
+ * and this tree replaces or patches whatever the fork stage produced. Within
+ * one layer an id is replaced or patched, never both. This module never reads
+ * the fork layer any more than it reads the corpus — {@link discoverOverlaysUnder}
+ * is the one scan it lends out, so `stamity validate` can list a fork's patches
+ * by the same rule it lists a repo's.
  *
  * Content defects come back in the result; environment failures (an unreadable
  * class directory, a write that cannot land) throw the typed error their layer
@@ -520,7 +526,19 @@ export interface UserContentOverlay {
  * so a pair built from a link here would describe a patch that never applies.
  */
 export async function discoverUserOverlays(rootDir: string): Promise<UserContentOverlay[]> {
-  const root = userContentRoot(rootDir);
+  return discoverOverlaysUnder(userContentRoot(rootDir));
+}
+
+/**
+ * Every overlay pair under one overlay-carrying root, in class order and then
+ * slug order within a class — the scan behind {@link discoverUserOverlays},
+ * exported so `stamity validate` can run it over the package's fork layer
+ * (`fork/`, `docs/specs/fork-layer.md`) and report a fork patch through the
+ * same row it reports a repo's own. The layout is the one both trees share, so
+ * one scan is the parity guarantee; a second, fork-specific listing would be a
+ * divergence waiting for its first differing rule.
+ */
+export async function discoverOverlaysUnder(root: string): Promise<UserContentOverlay[]> {
   // Four disjoint reads, consumed in CONTENT_CLASSES order so the result does
   // not vary with which listing finished first.
   const perClass = await Promise.all(CONTENT_CLASSES.map((type) => scanOverlays(root, type)));

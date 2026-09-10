@@ -639,6 +639,182 @@ describe("projectSkills over an override tree", () => {
 });
 
 /**
+ * The fork layer reaching THIS projection (docs/specs/fork-layer.md,
+ * REQ-FORK-005): a `fork/skills/<dir>/SKILL.md` projects through the
+ * corpus-and-override lane with the fork root among the widened roots, wins
+ * the id it claims from the corpus, and loses it to the override tree above.
+ * Three roots in ONE volume, read through the same injected seam.
+ */
+describe("projectSkills over the fork layer", () => {
+  const CORPUS_DIR = "corpus";
+  const FORK_DIR = "fork";
+  const OVERRIDE_DIR = "overrides";
+
+  const skillDoc = (id: string, description: string, body: string): string =>
+    artifact(
+      [
+        `id: ${id}`,
+        "type: skill",
+        `description: ${description}`,
+        "tags: [review]",
+        "load: on-demand",
+        "obsolete_when: never",
+      ].join("\n"),
+      body,
+    );
+
+  const SHIPPED_MARKER = "Shipped body: run the bundled drill.";
+  const FORK_MARKER = "Fork body: run the fork's own drill.";
+  const HOUSE_MARKER = "House body: run this repository's own drill.";
+
+  function volumeOf(files: Record<string, string>): {
+    fs: ProjectSkillsOptions["fs"];
+    corpusRoot: string;
+    forkRoot: string;
+    overrideRoot: string;
+  } {
+    const volume = makeVolume(files);
+    return {
+      fs: volume.fs,
+      corpusRoot: `${volume.root}/${CORPUS_DIR}`,
+      forkRoot: `${volume.root}/${FORK_DIR}`,
+      overrideRoot: `${volume.root}/${OVERRIDE_DIR}`,
+    };
+  }
+
+  it("emits the FORK body for a skill whose id a corpus skill holds, and stamps its origin", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${FORK_DIR}/skills/alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The fork's version of this skill.",
+        `${FORK_MARKER}\n`,
+      ),
+      [`${CORPUS_DIR}/skills/st-beta/SKILL.md`]: skillDoc(
+        "beta",
+        "A bundled skill no fork touches.",
+        "Untouched bundled body.\n",
+      ),
+    });
+
+    const rows = await projectSkills(contextOf(["alpha", "beta"]), {
+      contentRoot: { root: volume.corpusRoot, forkRoot: volume.forkRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+    const byPath = new Map(rows.map((row) => [row.path, row]));
+
+    // Under the FORK's directory name — the bare slug the fork layer requires.
+    const forked = byPath.get(`${SKILLS_PROJECTION_DIR}/alpha/SKILL.md`);
+    expect(forked?.content).toContain(FORK_MARKER);
+    expect(forked?.origin).toBe("fork");
+    expect(forked?.artifactId).toBe("alpha");
+    // Not both bodies, and not the shipped one anywhere in the plan.
+    expect(rows.filter((row) => row.content.includes(SHIPPED_MARKER))).toEqual([]);
+    expect(byPath.has(`${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`)).toBe(false);
+    // The untouched skill still projects: a replacement, not a filter.
+    expect(byPath.get(`${SKILLS_PROJECTION_DIR}/st-beta/SKILL.md`)?.origin).toBe("corpus");
+  });
+
+  it("emits a fork skill the corpus never shipped, admitted by presence", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${FORK_DIR}/skills/acme-review/SKILL.md`]: skillDoc(
+        "acme-review",
+        "A skill the fork authored and the corpus never had.",
+        `${FORK_MARKER}\n`,
+      ),
+      [`${FORK_DIR}/skills/acme-review/references/house.md`]: "Fork reference.\n",
+    });
+
+    // `acme-review` is NOT in the selection: presence in the fork layer admits it.
+    const rows = await projectSkills(contextOf(["alpha"]), {
+      contentRoot: { root: volume.corpusRoot, forkRoot: volume.forkRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+
+    expect(pathsOf(rows)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/acme-review/SKILL.md`,
+      `${SKILLS_PROJECTION_DIR}/acme-review/references/house.md`,
+      `${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`,
+    ]);
+    const review = rows.find((row) => row.path.endsWith("acme-review/SKILL.md"));
+    expect(review?.content).toContain(FORK_MARKER);
+    expect(review?.origin).toBe("fork");
+  });
+
+  it("lets the override tree take a fork skill's id: the house body, not the fork's, not both", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${FORK_DIR}/skills/alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The fork's version of this skill.",
+        `${FORK_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/skills/alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The house version of this skill.",
+        `${HOUSE_MARKER}\n`,
+      ),
+    });
+
+    const rows = await projectSkills(contextOf(["alpha"]), {
+      contentRoot: {
+        root: volume.corpusRoot,
+        forkRoot: volume.forkRoot,
+        overrideRoot: volume.overrideRoot,
+      },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+
+    expect(pathsOf(rows)).toEqual([`${SKILLS_PROJECTION_DIR}/alpha/SKILL.md`]);
+    expect(rows[0]?.content).toContain(HOUSE_MARKER);
+    expect(rows[0]?.origin).toBe("user");
+    expect(rows.filter((row) => row.content.includes(FORK_MARKER))).toEqual([]);
+  });
+
+  it("plans byte-identically to a corpus-only projection when the package ships no fork layer", async () => {
+    const files = {
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${CORPUS_DIR}/skills/st-alpha/references/shipped.md`]: "Bundled reference.\n",
+    };
+    const ctx = contextOf(["alpha"]);
+
+    const bare = volumeOf(files);
+    const asString = await projectSkills(ctx, {
+      contentRoot: bare.corpusRoot,
+      ...(bare.fs === undefined ? {} : { fs: bare.fs }),
+    });
+
+    const absent = volumeOf(files);
+    const withMissingFork = await projectSkills(ctx, {
+      // The fork root is named and the directory is simply not there — the
+      // same non-event an absent override tree is.
+      contentRoot: { root: absent.corpusRoot, forkRoot: absent.forkRoot },
+      ...(absent.fs === undefined ? {} : { fs: absent.fs }),
+    });
+
+    expect(asString).toHaveLength(2);
+    expect(withMissingFork).toEqual(asString);
+  });
+});
+
+/**
  * A PATCH, not a replacement: `.customize.yaml`/`.customize.md` beside where an
  * override would sit merge onto the base rather than standing in for it, and
  * the base keeps supplying everything the overlay does not name. `buildItem`

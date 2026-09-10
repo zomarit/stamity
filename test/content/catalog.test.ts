@@ -24,6 +24,7 @@ import {
 import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
+  __setForkRootForTests,
 } from "../../src/content/contentRoot.ts";
 import { MAX_USER_CONTENT_LENGTH } from "../../src/guard/promptGuard.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -96,6 +97,47 @@ async function overlayIndexOf(
   const overrideRoot = join(volume.root, "overrides");
   const index = await buildContentIndex({ root, overrideRoot }, { fs: volume.fs });
   return { index, root, overrideRoot, volume };
+}
+
+/**
+ * The corpus, the package's fork layer and the repo's override tree as three
+ * roots of one walk, with any pack roots between the first two — the shape a
+ * fork's published package has inside a consumer repo
+ * (docs/specs/fork-layer.md). Every root is seeded whether or not it holds
+ * anything, so an empty map is an absent directory, the ordinary case.
+ */
+async function forkIndexOf(
+  corpus: Record<string, string>,
+  fork: Record<string, string>,
+  overrides: Record<string, string> = {},
+  packs: Record<string, Record<string, string>> = {},
+): Promise<{
+  index: ContentIndex;
+  root: string;
+  forkRoot: string;
+  overrideRoot: string;
+  volume: ReturnType<typeof makeVolume>;
+}> {
+  const volume = makeVolume({
+    ...under("corpus", corpus),
+    ...under("fork", fork),
+    ...under("overrides", overrides),
+    ...Object.fromEntries(
+      Object.entries(packs).flatMap(([pack, files]) => Object.entries(under(`packs/${pack}`, files))),
+    ),
+  });
+  const root = join(volume.root, "corpus");
+  const forkRoot = join(volume.root, "fork");
+  const overrideRoot = join(volume.root, "overrides");
+  const packRoots: PackContentRoot[] = Object.keys(packs).map((pack) => ({
+    pack,
+    root: join(volume.root, "packs", pack),
+  }));
+  const index = await buildContentIndex(
+    { root, packRoots, forkRoot, overrideRoot },
+    { fs: volume.fs },
+  );
+  return { index, root, forkRoot, overrideRoot, volume };
 }
 
 /** Every item as `[origin, type, id]`, the triple the layered rules are about. */
@@ -1439,6 +1481,467 @@ describe("the overlay layer", () => {
   });
 });
 
+/**
+ * The fork layer (docs/specs/fork-layer.md, REQ-FORK-001 through -004): a
+ * fourth scan over the package's own `fork/`, ordered between the packs and the
+ * override tree, replacing and patching what the corpus or a pack supplies
+ * before the repo's own layer replaces or patches whatever that produced.
+ */
+describe("the fork layer", () => {
+  /** The fork's own version of the corpus security rule. */
+  const FORK_RULE = artifact(
+    "id: security\ntype: rule\ndescription: The fork's security floor.\ntags: [floor:security]",
+    "Fork body.\n",
+  );
+
+  /** The repo's own version, one layer above the fork's. */
+  const REPO_RULE = artifact(
+    "id: security\ntype: rule\ndescription: The repo's own security floor.\ntags: [floor:security]",
+    "Repo body.\n",
+  );
+
+  /** A pack supplying its own id, and one claiming the corpus rule's. */
+  const OPS_PACK = {
+    "rules/stamity-ops.md": artifact("id: ops\ntype: rule\ndescription: Pack ops floor."),
+  };
+
+  afterEach(() => {
+    __resetContentRootCacheForTests();
+  });
+
+  describe("REQ-FORK-002/003 — a fourth scan, ordered by layer", () => {
+    it("makes a fork artifact the sole claimant of the corpus id it takes, and records the shadow", async () => {
+      const { index, forkRoot } = await forkIndexOf(CORPUS, { "rules/security.md": FORK_RULE });
+
+      expect(index.items.filter((item) => item.type === "rule")).toHaveLength(1);
+      const winner = itemAt(index, "rule", "security");
+      expect(originOf(winner)).toBe("fork");
+      expect(winner.body).toBe("Fork body.\n");
+      expect(winner.filePath).toBe(join(forkRoot, "rules", "security.md"));
+      expect(resolveArtifactFilePath(index, "rule", "security")).toBe(winner.filePath);
+
+      // Reported, not silent: the corpus claimant it replaced is the row.
+      const shadow = oneShadow(index);
+      expect(shadow.type).toBe("rule");
+      expect(shadow.id).toBe("security");
+      expect(shadow.winner).toBe(winner);
+      expect(shadow.shadowed.map((item) => item.relativePath)).toEqual(["rules/stamity-security.md"]);
+      expect(shadow.shadowed.map((item) => originOf(item))).toEqual(["corpus"]);
+      expect(index.collisions).toEqual([]);
+    });
+
+    it("adds a fork artifact under a fresh id by presence, recording no shadow", async () => {
+      const { index } = await forkIndexOf(CORPUS, {
+        "agents/acme-onboarding.md": artifact(
+          "id: acme-onboarding\ntype: agent\ndescription: The fork's onboarding agent.",
+        ),
+      });
+
+      expect(index.shadows).toEqual([]);
+      expect(index.collisions).toEqual([]);
+      expect(originOf(itemAt(index, "agent", "acme-onboarding"))).toBe("fork");
+      // Nothing the corpus supplied moved.
+      expect(index.items.filter((item) => originOf(item) === "corpus")).toHaveLength(4);
+    });
+
+    it("orders the merged index corpus, packs, fork, user", async () => {
+      const { index } = await forkIndexOf(
+        CORPUS,
+        {
+          "agents/acme-onboarding.md": artifact("id: acme-onboarding\ntype: agent\ndescription: Ours."),
+          "rules/security.md": FORK_RULE,
+        },
+        { "agents/house-style.md": artifact("id: house-style\ntype: agent\ndescription: Ours.") },
+        { ops: OPS_PACK },
+      );
+
+      // Layer order first, then the walk order within a layer — the property a
+      // downstream golden depends on.
+      expect(layerRows(index)).toEqual([
+        ["corpus", "agent", "implementer"],
+        ["corpus", "skill", "recipe"],
+        ["corpus", "command", "cmd-plan"],
+        ["pack", "rule", "ops"],
+        ["fork", "agent", "acme-onboarding"],
+        ["fork", "rule", "security"],
+        ["user", "agent", "house-style"],
+      ]);
+    });
+
+    it("lets a user override take a fork-replaced id, listing both lower claimants in walk order", async () => {
+      const { index, overrideRoot } = await forkIndexOf(
+        CORPUS,
+        { "rules/security.md": FORK_RULE },
+        { "rules/security.md": REPO_RULE },
+      );
+
+      // One identity, one body: the fork item leaves the index with the corpus one.
+      expect(index.items.filter((item) => item.type === "rule")).toHaveLength(1);
+      const winner = itemAt(index, "rule", "security");
+      expect(originOf(winner)).toBe("user");
+      expect(winner.body).toBe("Repo body.\n");
+      expect(winner.filePath).toBe(join(overrideRoot, "rules", "security.md"));
+
+      const shadow = oneShadow(index);
+      expect(shadow.winner).toBe(winner);
+      expect(shadow.shadowed.map((item) => item.relativePath)).toEqual([
+        "rules/stamity-security.md",
+        "rules/security.md",
+      ]);
+      expect(shadow.shadowed.map((item) => originOf(item))).toEqual(["corpus", "fork"]);
+      expect(index.collisions).toEqual([]);
+    });
+
+    it("refuses a pack claiming an id the fork layer holds, naming the fork", async () => {
+      // The pack is walked BEFORE the fork item whose id it claims, so the
+      // refusal fires from the fork's side of the seam — and still blames the
+      // pack, which is the party that may never share an id.
+      const refusal = await expectRejection(
+        () =>
+          forkIndexOf(
+            {},
+            { "rules/ops.md": artifact("id: ops\ntype: rule\ndescription: The fork's ops floor.") },
+            {},
+            { ops: OPS_PACK },
+          ),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain('Installed pack "ops"');
+      expect(refusal.message).toContain("must not shadow existing content");
+      expect(refusal.message).toContain("fork-layer artifact at fork/rules/ops.md");
+      expect(refusal.message).toContain("clean --pack ops");
+    });
+
+    it("still names the corpus when a pack claims a corpus id the fork also replaces", async () => {
+      const refusal = await expectRejection(
+        () =>
+          forkIndexOf(
+            CORPUS,
+            { "rules/security.md": FORK_RULE },
+            {},
+            {
+              sec: {
+                "rules/stamity-security.md": artifact(
+                  "id: security\ntype: rule\ndescription: Pack security floor.",
+                ),
+              },
+            },
+          ),
+        "VALIDATION_ERROR",
+      );
+
+      // Corpus first, packs second, fork third: the earlier claimant is the cited owner.
+      expect(refusal.message).toContain("claimed by the corpus artifact at rules/stamity-security.md");
+    });
+
+    it("reports two fork files claiming one id as a same-layer collision, not a shadow", async () => {
+      const { index } = await forkIndexOf(
+        {},
+        { "rules/security.md": FORK_RULE, "rules/security-copy.md": FORK_RULE },
+      );
+
+      expect(index.shadows).toEqual([]);
+      expect(index.items).toHaveLength(2);
+      const expected: ContentCollision[] = [
+        {
+          key: "rule:security",
+          paths: ["rules/security-copy.md", "rules/security.md"],
+          kind: "duplicate-id",
+        },
+      ];
+      expect(index.collisions.filter((entry) => entry.kind === "duplicate-id")).toEqual(expected);
+    });
+
+    it.each([
+      ["rules/stamity-security.md", "security.md"],
+      ["commands/st-plan.md", "plan.md"],
+      ["agents/stamity-acme.md", "acme.md"],
+    ])(
+      "refuses the fork filename %s, naming the bare spelling %s",
+      async (path, bare) => {
+        // REQ-FORK-001: ids are bare slugs at index time. The override tree is
+        // held to the same rule at save time only; a fork has no save gate.
+        const refusal = await expectRejection(
+          () => forkIndexOf({}, { [path]: artifact("id: whatever\ntype: rule") }),
+          "VALIDATION_ERROR",
+        );
+
+        expect(refusal.message).toContain(`fork/${path}`);
+        expect(refusal.message).toContain(JSON.stringify(bare));
+        expect(refusal.message).toContain("engine content prefix");
+      },
+    );
+
+    it("refuses a prefixed fork skill directory the same way, naming the bare directory", async () => {
+      const refusal = await expectRejection(
+        () =>
+          forkIndexOf(
+            {},
+            { "skills/st-acme-review/SKILL.md": artifact("id: acme-review\ntype: skill") },
+          ),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("fork/skills/st-acme-review");
+      expect(refusal.message).toContain('"acme-review"');
+      expect(refusal.message).toContain("skill directory");
+    });
+
+    it("leaves a prefixed override filename indexing as before — the rule is the fork's alone", async () => {
+      const { index } = await forkIndexOf(CORPUS, {}, {
+        "rules/stamity-security.md": artifact("id: stamity-security\ntype: rule\ndescription: Ours."),
+      });
+
+      expect(index.items.map((item) => item.id)).toContain("stamity-security");
+    });
+
+    it("indexes a fork skill as the whole directory it is", async () => {
+      const { index, forkRoot, volume } = await forkIndexOf(CORPUS, {
+        "skills/acme-review/SKILL.md": artifact(
+          "id: acme-review\ntype: skill\ndescription: The fork's review drill.",
+        ),
+        "skills/acme-review/references/checklist.md": "Step one.\n",
+      });
+
+      const skill = itemAt(index, "skill", "acme-review");
+      expect(originOf(skill)).toBe("fork");
+      expect(skill.filePath).toBe(join(forkRoot, "skills", "acme-review", "SKILL.md"));
+      const reference = await volume.fs.readFile(
+        join(dirname(skill.filePath), "references", "checklist.md"),
+        "utf8",
+      );
+      expect(reference).toBe("Step one.\n");
+      expect(index.shadows).toEqual([]);
+    });
+
+    it("reads the bundled fork root beside the bundled corpus when no root is given, and none when a root is pinned", async () => {
+      const volume = makeVolume({
+        ...under("corpus", { "agents/stamity-implementer.md": artifact("id: implementer") }),
+        ...under("fork", { "agents/acme.md": artifact("id: acme") }),
+      });
+      __setContentRootForTests(join(volume.root, "corpus"));
+      __setForkRootForTests(join(volume.root, "fork"));
+
+      const defaulted = await buildContentIndex(undefined, { fs: volume.fs });
+      expect(defaulted.items.map((item) => item.id)).toEqual(["implementer", "acme"]);
+      expect(originOf(itemAt(defaulted, "agent", "acme"))).toBe("fork");
+
+      // A pinned corpus root is a pinned layer set, in either spelling: the
+      // running package's fork layer does not join a fixture corpus uninvited.
+      const pinnedString = await buildContentIndex(join(volume.root, "corpus"), { fs: volume.fs });
+      expect(pinnedString.items.map((item) => item.id)).toEqual(["implementer"]);
+      const pinnedObject = await buildContentIndex(
+        { root: join(volume.root, "corpus") },
+        { fs: volume.fs },
+      );
+      expect(pinnedObject.items.map((item) => item.id)).toEqual(["implementer"]);
+    });
+
+    it("indexes identically with and without a fork root when the directory is absent", async () => {
+      // Invariant 1: a package with no `fork/` walks the three roots it always
+      // walked. Non-degenerate on every surface compared — a pack, an
+      // override that shadows, and a corpus duplicate all take part.
+      const volume = makeVolume({
+        ...under("corpus", {
+          ...CORPUS,
+          "rules/stamity-security-copy.md": artifact("id: security\ntype: rule"),
+        }),
+        ...under("packs/ops", OPS_PACK),
+        ...under("overrides", { "rules/security.md": REPO_RULE }),
+      });
+      const root = join(volume.root, "corpus");
+      const packRoots: PackContentRoot[] = [{ pack: "ops", root: join(volume.root, "packs", "ops") }];
+      const overrideRoot = join(volume.root, "overrides");
+
+      const plain = await buildContentIndex({ root, packRoots, overrideRoot }, { fs: volume.fs });
+      const withFork = await buildContentIndex(
+        { root, packRoots, forkRoot: join(volume.root, "fork"), overrideRoot },
+        { fs: volume.fs },
+      );
+
+      expect(plain.shadows).toHaveLength(1);
+      expect(withFork.items).toEqual(plain.items);
+      expect(withFork.collisions).toEqual(plain.collisions);
+      expect(withFork.shadows).toEqual(plain.shadows);
+      expect(withFork.skipped).toEqual(plain.skipped);
+      expect([...withFork.byKey.entries()]).toEqual([...plain.byKey.entries()]);
+    });
+  });
+
+  describe("REQ-FORK-004 — patches from the fork layer", () => {
+    const BASE_RULE = artifact(
+      "id: security\ntype: rule\ndescription: Security floor.\ntags: [floor:security]",
+      "Base body.\n",
+    );
+    const BASE_CORPUS: Record<string, string> = { "rules/stamity-security.md": BASE_RULE };
+
+    it("patches the corpus artifact in place: origin stays corpus, the file stays the corpus's", async () => {
+      const { index, root } = await forkIndexOf(BASE_CORPUS, {
+        "rules/security.customize.yaml": "description: The fork's floor.\n",
+        "rules/security.customize.md": "Fork addendum.\n",
+      });
+
+      const item = itemAt(index, "rule", "security");
+      expect(originOf(item)).toBe("corpus");
+      expect(item.description).toBe("The fork's floor.");
+      expect(item.body).toBe("Base body.\n\nFork addendum.\n");
+      expect(item.filePath).toBe(join(root, "rules", "stamity-security.md"));
+      // A patch replaces nothing and takes no id.
+      expect(index.shadows).toEqual([]);
+      expect(index.items).toHaveLength(1);
+    });
+
+    it("patches the pack artifact when a pack supplies the id, keeping its provenance", async () => {
+      const { index } = await forkIndexOf(
+        {},
+        { "rules/ops.customize.yaml": "description: The fork's ops floor.\n" },
+        {},
+        { ops: OPS_PACK },
+      );
+
+      const item = itemAt(index, "rule", "ops");
+      expect(originOf(item)).toBe("pack");
+      expect(item.provenance?.pack).toBe("ops");
+      expect(item.description).toBe("The fork's ops floor.");
+    });
+
+    it("applies a user patch after the fork patch, to what the fork stage produced", async () => {
+      const { index } = await forkIndexOf(
+        BASE_CORPUS,
+        {
+          "rules/security.customize.yaml": "description: The fork's floor.\n",
+          "rules/security.customize.md": "Fork addendum.\n",
+        },
+        { "rules/security.customize.md": "Repo addendum.\n" },
+      );
+
+      const item = itemAt(index, "rule", "security");
+      expect(originOf(item)).toBe("corpus");
+      expect(item.description).toBe("The fork's floor.");
+      // Fork first, then the repo — the chain in the order it is stated.
+      expect(item.body).toBe("Base body.\n\nFork addendum.\n\nRepo addendum.\n");
+      expect(index.items).toHaveLength(1);
+      expect(index.shadows).toEqual([]);
+    });
+
+    it("applies a user patch over a fork replacement, on the fork's body, and keeps the fork's shadow row", async () => {
+      const { index, forkRoot } = await forkIndexOf(
+        BASE_CORPUS,
+        { "rules/security.md": FORK_RULE },
+        { "rules/security.customize.md": "Repo addendum.\n" },
+      );
+
+      const item = itemAt(index, "rule", "security");
+      expect(originOf(item)).toBe("fork");
+      expect(item.body).toBe("Fork body.\n\nRepo addendum.\n");
+      expect(item.filePath).toBe(join(forkRoot, "rules", "security.md"));
+      // The replacement is still reported: the fork item won the key, and the
+      // repo's patch over it does not unsay that.
+      const shadow = oneShadow(index);
+      expect(originOf(shadow.winner)).toBe("fork");
+      expect(shadow.winner.filePath).toBe(item.filePath);
+      expect(shadow.shadowed.map((claimant) => claimant.relativePath)).toEqual([
+        "rules/stamity-security.md",
+      ]);
+    });
+
+    it("lets a user full override replace a fork-patched item whole, dropping the fork's patch", async () => {
+      const { index } = await forkIndexOf(
+        BASE_CORPUS,
+        { "rules/security.customize.md": "Fork addendum.\n" },
+        { "rules/security.md": REPO_RULE },
+      );
+
+      const item = itemAt(index, "rule", "security");
+      expect(originOf(item)).toBe("user");
+      expect(item.body).toBe("Repo body.\n");
+      expect(index.items).toHaveLength(1);
+      expect(oneShadow(index).shadowed.map((claimant) => claimant.relativePath)).toEqual([
+        "rules/stamity-security.md",
+      ]);
+    });
+
+    it("patches a corpus skill from a fork carrier directory holding no SKILL.md", async () => {
+      const { index, root } = await forkIndexOf(CORPUS, {
+        "skills/recipe/SKILL.customize.md": "Fork step.\n",
+      });
+
+      const skill = itemAt(index, "skill", "recipe");
+      expect(originOf(skill)).toBe("corpus");
+      expect(skill.body).toBe("Body text.\n\nFork step.\n");
+      expect(skill.filePath).toBe(join(root, "skills", "stamity-recipe", "SKILL.md"));
+    });
+
+    it("refuses a fork replacement and a fork patch of one id together, naming both files", async () => {
+      const refusal = await expectRejection(
+        () =>
+          forkIndexOf(BASE_CORPUS, {
+            "rules/security.md": FORK_RULE,
+            "rules/security.customize.yaml": "description: x\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("fork/rules/security.md");
+      expect(refusal.message).toContain("fork/rules/security.customize.yaml");
+      expect(refusal.message).toContain("never both");
+    });
+
+    it("refuses a fork patch over a fork replacement that took the id under another filename", async () => {
+      const refusal = await expectRejection(
+        () =>
+          forkIndexOf(BASE_CORPUS, {
+            "rules/house-floor.md": artifact("id: security\ntype: rule\ndescription: Ours."),
+            "rules/security.customize.yaml": "description: x\n",
+          }),
+        "VALIDATION_ERROR",
+      );
+
+      // Exclusivity is per layer and by identity, exactly as for the override tree.
+      expect(refusal.message).toContain("fork/rules/house-floor.md");
+      expect(refusal.message).toContain("fork/rules/security.customize.yaml");
+    });
+
+    it("refuses an orphan fork overlay, naming the fork file and the fork layer among the layers searched", async () => {
+      const refusal = await expectRejection(
+        () => forkIndexOf(BASE_CORPUS, { "rules/no-such-rule.customize.yaml": "description: x\n" }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("fork/rules/no-such-rule.customize.yaml");
+      expect(refusal.message).toContain("no-such-rule");
+      expect(refusal.message).toContain("not the fork layer");
+    });
+
+    it.each([
+      [
+        "a prefixed overlay filename",
+        { "rules/stamity-security.customize.yaml": "description: x\n" },
+        "fork/rules/stamity-security.customize.yaml",
+        "engine content prefix",
+      ],
+      [
+        "an identity key",
+        { "rules/security.customize.yaml": "id: elsewhere\n" },
+        "fork/rules/security.customize.yaml",
+        "`id`",
+      ],
+      [
+        "a frontmatter fence in the body half",
+        { "rules/security.customize.md": "---\nid: elsewhere\n---\nPatch.\n" },
+        "fork/rules/security.customize.md",
+        ".customize.yaml",
+      ],
+    ])("applies the overlay refusal for %s unchanged, naming the fork file", async (_label, fork, path, named) => {
+      const refusal = await expectRejection(() => forkIndexOf(BASE_CORPUS, fork), "VALIDATION_ERROR");
+
+      expect(refusal.message).toContain(path);
+      expect(refusal.message).toContain(named);
+    });
+  });
+});
+
 describe("originOf", () => {
   it("reads corpus for an item assembled without an origin", async () => {
     const { index } = await indexOf(CORPUS);
@@ -1453,15 +1956,30 @@ describe("originOf", () => {
 });
 
 describe("contentRootsOf", () => {
-  it("carries the override root through the object form, and none through a string", () => {
+  it("carries the fork and override roots through the object form, and neither through a string", () => {
     expect(contentRootsOf("/corpus")).toEqual({
       root: "/corpus",
       packRoots: [],
+      forkRoot: undefined,
       overrideRoot: undefined,
     });
     expect(contentRootsOf({ root: "/corpus", overrideRoot: "/repo/.stamity/overrides" })).toEqual({
       root: "/corpus",
       packRoots: [],
+      forkRoot: undefined,
+      overrideRoot: "/repo/.stamity/overrides",
+    });
+    // All four parts, so a consumer rebuilding a spec has a fourth to carry.
+    expect(
+      contentRootsOf({
+        root: "/corpus",
+        forkRoot: "/pkg/fork",
+        overrideRoot: "/repo/.stamity/overrides",
+      }),
+    ).toEqual({
+      root: "/corpus",
+      packRoots: [],
+      forkRoot: "/pkg/fork",
       overrideRoot: "/repo/.stamity/overrides",
     });
   });
