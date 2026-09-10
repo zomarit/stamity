@@ -43,7 +43,7 @@ release rule with a decision row in the private layer naming its six cases.
 | `node scripts/apm-install-smoke.mjs` at 0.30.0 · 0.29.1 · 0.29.0 `--expect-failure` | pass (135 primitives, four targets) · pass · pass (the witness saw `agent_plugin` in the lockfile) |
 | the live tag route `zomarit/stamity#v1.3.0` at 0.30.0 | pass, resolved commit `c950e18a` |
 | the docs site, built locally | 0 (the docs unit's build; `onBrokenLinks: throw`) |
-| CI at the pull request head | see the pull request |
+| CI at the pull request head | #26 at `92448e0`: fourteen checks green (the three platform legs, the three APM route legs, DCO, the title, the size budget, both aggregators); merged at `e58b6ad` with the same tree |
 
 ### Review verdicts, per round
 
@@ -111,12 +111,12 @@ release rule with a decision row in the private layer naming its six cases.
 
 ### Recommended next step — derived from this run's own state
 
-<!-- NEXT: patched at the close -->
-Merge the pull request by rebase on green checks, tag `v1.4.0` at main's new head and push the tag; the
-release workflow re-proves version equality and tag ancestry, runs the APM route smoke against the tag's
-sha in its own job, and holds the publish for the maintainer's approval in the `npm-publish` environment;
-after the publish, verify `apm install zomarit/stamity#v1.4.0`, take the mirror's backup into the private
-layer, and hand the maintainer the safe-to-delete checkpoint.
+Pull request #26 is rebase-merged at `e58b6ad` and the cut is pull request #27 from `release-1.4.0`. Merge it by
+rebase on green checks, tag `v1.4.0` at main's new head and push the tag; the release workflow re-proves
+version equality and tag ancestry, runs the APM route smoke against the tag's sha in its own job, and holds
+the publish for the maintainer's approval in the `npm-publish` environment; after the publish, verify
+`apm install zomarit/stamity#v1.4.0` at 0.30.0 and 0.29.1, fill the currency instance in the private layer
+(the mirror's backup is already there, verified by restore), and stop at the safe-to-delete checkpoint.
 
 ## QA walk-through (the human checkpoint)
 
@@ -136,7 +136,6 @@ Rows auto-proven from this run's evidence first; the sign-off is the maintainer'
 
 ## Not done
 
-<!-- NOTDONE: patched at the close -->
 - The pull-request creation path in Actions is proven by the workflow suite's stubbed runs, not live: the
   organisation forbids Actions-created pull requests and no token was created (both the maintainer's).
 - The landing-policy warning's positive branch is proven by the stubbed runs only: the private smoke
