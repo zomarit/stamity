@@ -56,6 +56,7 @@ const ALL_SKILL_IDS = [
 /** The `st-verify` directory: SKILL.md plus its ten axis references. */
 const VERIFY_FILES = [
   "SKILL.md",
+  "agents/openai.yaml",
   "references/enhancability.md",
   "references/maintainability.md",
   "references/performance.md",
@@ -66,6 +67,7 @@ const VERIFY_FILES = [
   "references/testability.md",
   "references/ui.md",
   "references/ux.md",
+  "scripts/spec-plan-coverage.mjs",
 ] as const;
 
 function contextOf(skillIds: readonly string[], detected?: DetectedSummary): EmissionContext {
@@ -125,8 +127,23 @@ describe("projectSkills over the bundled corpus", () => {
     const dirs = new Set(pathsOf(rows).map((path) => path.split("/")[2]));
 
     expect([...dirs].toSorted()).toEqual(["st-handoff", "st-verify"]);
-    // handoff ships its SKILL.md alone; verify ships its full 11-file subtree.
-    expect(rows).toHaveLength(1 + VERIFY_FILES.length);
+    // Handoff includes native UI metadata; verify includes its support subtree.
+    expect(rows).toHaveLength(2 + VERIFY_FILES.length);
+  });
+
+  it("projects usable license, prerequisites and native invocation metadata for every bundled skill", async () => {
+    const rows = await projectSkills(contextOf(ALL_SKILL_IDS));
+    for (const id of ALL_SKILL_IDS) {
+      const prefix = `${SKILLS_PROJECTION_DIR}/st-${id}`;
+      const skill = rows.find((row) => row.path === `${prefix}/SKILL.md`)!;
+      const metadata = parse(skill.content.split("---")[1]!) as Record<string, unknown>;
+      expect(metadata.license, id).toBe("MIT");
+      expect(metadata.compatibility, id).toContain("repository access");
+      const companion = rows.find((row) => row.path === `${prefix}/agents/openai.yaml`)!;
+      const native = parse(companion.content) as { interface: { display_name: string; default_prompt: string } };
+      expect(native.interface.display_name, id).not.toBe("");
+      expect(native.interface.default_prompt, id).toBe(`Use $st-${id} for this repository.`);
+    }
   });
 
   it("returns repo-relative POSIX paths only, attributed to their source skill", async () => {

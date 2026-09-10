@@ -1,0 +1,4 @@
+interface:
+  display_name: "Handoff"
+  short_description: "Use the Stamity handoff workflow"
+  default_prompt: "Use $st-handoff for this repository."

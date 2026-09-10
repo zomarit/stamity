@@ -390,18 +390,17 @@ function nodeCommands(
 
   const test = gate("test", firstBinary(NODE_TEST_BINARIES, detected.testFrameworks));
   const lint = gate("lint", firstBinary(NODE_LINT_BINARIES, detected.linters));
-  // TypeScript is the evidence for a type-check gate, and the only evidence:
-  // `tsc` belongs to the language, not to the package manager. Plain JavaScript
-  // has no separate type check, so it reports its linter — the static-analysis
-  // pass it does have — on the same rule every other such stack follows. A repo
-  // whose language was never identified reports neither: there is no stack to
-  // name a pass for.
+  // An explicit script is direct evidence of the project's check, including
+  // JavaScript projects using checkJs or another analyzer. When it is absent,
+  // preserve the language-based fallback without inventing a JS compiler.
   const typecheck =
-    language === "typescript"
-      ? gate("typecheck", "tsc --noEmit")
-      : language === "javascript"
-        ? lint
-        : undefined;
+    scripts?.includes("typecheck") === true
+      ? `${run} typecheck`
+      : language === "typescript"
+        ? gate("typecheck", "tsc --noEmit")
+        : language === "javascript"
+          ? lint
+          : undefined;
 
   return compose(test, lint, typecheck);
 }

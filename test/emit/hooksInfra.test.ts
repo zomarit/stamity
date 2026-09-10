@@ -177,12 +177,13 @@ describe("core script rows", () => {
     const cursorGuard = scriptContent(p, "cursor", GUARD);
     const copilotGuard = scriptContent(p, "copilot", GUARD);
 
-    // copilot never blocks on a hook, and its guard says so in its bytes.
+    // Copilot's identity-free payload makes this role guard telemetry even
+    // though its native preToolUse command hooks can deny.
     expect(copilotGuard).not.toBe(claudeGuard);
     expect(claudeGuard).toContain("const BLOCKING = true");
     expect(claudeGuard).toContain("Blocking client");
     expect(copilotGuard).toContain("const BLOCKING = false");
-    expect(copilotGuard).toContain("Reporting-only client");
+    expect(copilotGuard).toContain("Telemetry only on this client");
 
     // Assertion INVERTED, and the BD-candidate this comment used to flag is the
     // reason. The two bodies were byte-identical because blocking was derived
@@ -193,7 +194,7 @@ describe("core script rows", () => {
     // it `failClosed` and the capability matrix advertised the claim.
     expect(cursorGuard).not.toBe(claudeGuard);
     expect(cursorGuard).toContain("const BLOCKING = false");
-    expect(cursorGuard).toContain("carries no agent identity");
+    expect(cursorGuard).toContain("carries no calling-agent");
 
     // The tool-independent bodies never fork per tool.
     expect(scriptContent(p, "cursor", SESSION_START)).toBe(scriptContent(p, "claude", SESSION_START));
@@ -560,7 +561,8 @@ describe("interchange rows", () => {
       .map((facts) => facts.tool)
       .toSorted();
 
-    expect(withoutConfig.length, "no client declares a null hook config path").toBeGreaterThan(0);
+    expect(withoutConfig).toEqual([]);
+    expect(withConfig).toEqual(["claude", "codex", "copilot", "cursor"]);
 
     // Every client with a config home plans rows and raises no drop row; every
     // client without one raises exactly one.
@@ -574,7 +576,7 @@ describe("interchange rows", () => {
     }
   });
 
-  it("names the client that takes no hook config, so the drop is not silent", async () => {
+  it("retains accepted Copilot hooks now that the adapter registers them", async () => {
     const repo = getRepo();
     await repo.seedFiles({
       [`${USER_HOOKS_DIR}/notify.json`]: hookDoc({
@@ -586,15 +588,8 @@ describe("interchange rows", () => {
 
     const p = await plan(["claude", "copilot"]);
 
-    // The bytes land and nothing registers them, and an authored hook that
-    // passed every ingress check is dropped. Both facts were unreported.
-    const dropped = p.warnings.filter((warning) => warning.startsWith("hook wiring [copilot]"));
-    expect(dropped).toHaveLength(1);
-    expect(dropped[0]).toMatch(/takes no hook configuration/);
-    expect(dropped[0]).toMatch(/\d{4,} bytes of generated hook scripts/);
-    expect(dropped[0]).toMatch(/1 accepted hook row\(s\)/);
-    // Only the client that cannot wire them: claude gets no such row.
-    expect(p.warnings.filter((warning) => warning.includes("[claude]"))).toEqual([]);
+    expect(p.warnings.filter((warning) => warning.startsWith("hook wiring [copilot]"))).toEqual([]);
+    expect(p.interchangeFor("copilot")).toContainEqual({ event: "stop", command: ["node", NOTIFY_SCRIPT] });
   });
 
   it("names the drop when a selection is empty, where no per-client row can carry it", async () => {
@@ -626,10 +621,10 @@ describe("interchange rows", () => {
     expect(dropped).toHaveLength(1);
     expect(dropped[0]).toMatch(/2 accepted hook row\(s\)/);
     expect(dropped[0]).toMatch(/no selected client/);
-    // The remedy names the clients that can actually carry a hook — copilot,
-    // which takes no hook configuration, must not be offered as one.
-    expect(dropped[0]).toContain("claude, cursor, codex");
-    expect(dropped[0]).not.toContain("copilot");
+    // The remedy names clients that can carry hooks, including the current
+    // Copilot CLI/cloud repository hook configuration.
+    expect(dropped[0]).toContain("copilot");
+    expect(dropped[0]).toContain("codex");
   });
 
   it("stays silent on an empty selection with nothing accepted to drop", async () => {

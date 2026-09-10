@@ -190,25 +190,25 @@ describe("planCoreHookScripts", () => {
     for (const tool of TOOLS) {
       const guarantee = CLIENT_HOOK_GUARANTEES.find((entry) => entry.tool === tool);
       const guard = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, tool));
-      const canBlock = guarantee?.failMode !== "fail-open" && tool !== "cursor";
+      const canBlock = guarantee?.failMode !== "fail-open" && tool === "claude";
 
       expect(guard, tool).toContain(`const BLOCKING = ${canBlock};`);
       expect(guard, tool).toContain("const BLOCK_EXIT = 2;");
     }
   });
 
-  it("emits the identity-free client's guard as telemetry, and says which fact makes it one", () => {
-    const cursor = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, "cursor"));
+  it.each(["cursor", "codex", "copilot"] as const)("emits %s's identity-free guard as telemetry, and says which fact makes it one", (tool) => {
+    const guard = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, tool));
     const claude = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, "claude"));
 
     // The guard's whole scope test is `agentId.startsWith(GOVERNED_PREFIX)`, and
-    // the identity fields it reads are absent from Cursor's tool-call payload.
-    expect(cursor).toContain("const BLOCKING = false;");
-    expect(cursor).toContain("carries no agent identity");
-    expect(cursor).toContain("a record, not a control");
+    // the identity fields it reads are absent from these tool-call payloads.
+    expect(guard).toContain("const BLOCKING = false;");
+    expect(guard).toContain("carries no calling-agent");
+    expect(guard).toContain("does not enforce a role grant on identity-free payloads");
     // The claim is per-client, not a blanket downgrade.
     expect(claude).toContain("const BLOCKING = true;");
-    expect(claude).not.toContain("carries no agent identity");
+    expect(claude).not.toContain("carries no calling-agent");
   });
 
   it("gives every script a posture line naming its own reads outside repo state", () => {

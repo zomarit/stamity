@@ -214,9 +214,12 @@ export const REVISIT_TRIGGERS: readonly RevisitTrigger[] = [
   },
   {
     when: "VS Code deny-gate GA",
-    action: "Copilot enforcement upgrade",
+    action: "recheck editor-specific hook compatibility",
     watch: "copilot",
-    status: "Still Preview — the `copilot` deny-gate cap emits the gate when it reaches GA.",
+    status:
+      "CLI/cloud preToolUse hooks are emitted now, with timeout fail-open. " +
+      "[VS Code hooks](https://code.visualstudio.com/docs/agent-customization/hooks) " +
+      "remain Preview; editor-specific compatibility needs separate verification.",
   },
 ];
 

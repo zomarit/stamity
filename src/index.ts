@@ -6,10 +6,9 @@
  * "Everything" is a closure claim, not a listing claim: a type reachable from an
  * exported type is part of the API whether or not it is named, so the surface is
  * only honest when the named set is closed under reachability. Closing it is a
- * test obligation (`test/composition/root.test.ts`), because nothing in the build
- * fails on an anonymous reachable type today — declaration emit is deferred, so
- * an unnamed member costs a consumer an inline structural type rather than a
- * compile error, and the deferral is what kept the gap cheap enough to survive.
+ * test obligation (`test/composition/root.test.ts`), and bundled declarations
+ * now ship under the package types export. The packed-consumer smoke compiles
+ * against those files outside the source checkout.
  */
 export {
   createApp,
@@ -32,7 +31,7 @@ export type { ErrorCode } from "./types/errors.ts";
 // but cannot narrow a `string` to it has half an enum. Three trios
 // (IMPORT_MODES, MODEL_CLASSES, EFFORT_LEVELS) were reachable from exported
 // manifest types while unexported themselves; they are exported here so the
-// gap is closed now rather than surfacing when declaration emit is switched on.
+// gap stays closed in the shipped declaration surface.
 export {
   DEFAULT_COMMUNICATION_STYLE,
   DEFAULT_IMPORT_MODE,
@@ -121,5 +120,6 @@ export type { HookParseError, HookParseErrorCode, UserHookDefinition } from "./h
 export type { LearningConfidence } from "./learnings/validation.ts";
 export type { McpEnvRequirement } from "./mcp/catalog.ts";
 export type { PackWriteSetEntry } from "./pack/install.ts";
+export type { SignPackOptions } from "./pack/sign.ts";
 export type { WorkspaceRole } from "./workspace/detect.ts";
 export type { WorkspaceRepoOverrides } from "./workspace/model.ts";

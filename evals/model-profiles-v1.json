@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "set": "evals/SET-v4.md",
+  "set": "evals/SET-v5.md",
   "defaultProfile": "claude",
   "profiles": {
     "claude": {

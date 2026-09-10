@@ -967,6 +967,14 @@ describe("release.yml — the only publishing path", () => {
       expect(harden?.with?.["egress-policy"], label).toBe("block");
       expect(harden?.with?.["disable-sudo"], label).toBe(true);
       expect(allowlistOf(steps), label).toContain("api.github.com:443");
+      // Account roster replaces the old arbitrary-Azure wildcard. Every
+      // currently documented result account is admitted, not one run's host.
+      expect(allowlistOf(steps), label).not.toContain("*.blob.core.windows.net");
+      if (label !== "apm-route") {
+        for (let account = 0; account < 20; account += 1) {
+          expect(allowlistOf(steps), label).toContain(`productionresultssa${account}.blob.core.windows.net:443`);
+        }
+      }
     }
 
     // First step, before anything downloads or executes — in both jobs that run third-party code.

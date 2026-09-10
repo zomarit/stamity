@@ -97,22 +97,44 @@ jobs:
       #   objects.githubusercontent.com — GitHub's object and manifest CDN
       #   registry.npmjs.org            — npm ci, and the tarball smoke's consumer install
       #   results-receiver.actions.githubusercontent.com,
-      #   *.blob.core.windows.net       — actions/upload-artifact's hand-off to the publish job
+      #   productionresultssa0..19.blob.core.windows.net — GitHub artifact storage
       #
       # The Python index and CDN are deliberately absent: the APM route smoke runs a third-party
       # interpreter and now lives in the `apm-route` job below, which is where those hosts are
       # listed. Nothing in this job reaches them.
       #
-      # On the first release run, compare this list against the harden-runner run insights
-      # (Recommended Policy) and narrow the blob wildcard to the observed subdomain if it proves
-      # broader than needed.
+      # Reviewed 2026-09-10 against connections on release 34509238734 and rehearsal
+      # 34500672177 plus api.github.com/meta domains.actions. GitHub currently names
+      # twenty result-storage accounts; retain the complete official set, not the
+      # one account a single run contacted. No arbitrary Azure storage is admitted.
+      # Recheck that endpoint contract when GitHub changes the roster. The pinned
+      # hardener also manages runner-service/cache endpoints; see release-egress.md.
       - name: Harden runner
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           disable-sudo: true
           allowed-endpoints: >
-            *.blob.core.windows.net:443
+            productionresultssa0.blob.core.windows.net:443
+            productionresultssa1.blob.core.windows.net:443
+            productionresultssa2.blob.core.windows.net:443
+            productionresultssa3.blob.core.windows.net:443
+            productionresultssa4.blob.core.windows.net:443
+            productionresultssa5.blob.core.windows.net:443
+            productionresultssa6.blob.core.windows.net:443
+            productionresultssa7.blob.core.windows.net:443
+            productionresultssa8.blob.core.windows.net:443
+            productionresultssa9.blob.core.windows.net:443
+            productionresultssa10.blob.core.windows.net:443
+            productionresultssa11.blob.core.windows.net:443
+            productionresultssa12.blob.core.windows.net:443
+            productionresultssa13.blob.core.windows.net:443
+            productionresultssa14.blob.core.windows.net:443
+            productionresultssa15.blob.core.windows.net:443
+            productionresultssa16.blob.core.windows.net:443
+            productionresultssa17.blob.core.windows.net:443
+            productionresultssa18.blob.core.windows.net:443
+            productionresultssa19.blob.core.windows.net:443
             api.github.com:443
             github.com:443
             nodejs.org:443
@@ -448,6 +470,8 @@ jobs:
       contents: read
 
     steps:
+      # Audited in both observed runs named in release-egress.md: this job already
+      # contains no broad artifact-storage allowance and needs its Python/fallback hosts.
       # Same fail-closed posture as every other job here, over the hosts THIS job needs and no
       # others. The three Python hosts moved here with the step that reaches them:
       #   api.github.com, github.com    — the depth-1 checkout and setup-node's version manifest
@@ -593,14 +617,33 @@ jobs:
       #                                 — the provenance attestation npm publishes
       #   uploads.github.com            — release asset upload
       #   results-receiver.actions.githubusercontent.com,
-      #   *.blob.core.windows.net       — actions/download-artifact
+      #   productionresultssa0..19.blob.core.windows.net — GitHub artifact storage
       - name: Harden runner
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block
           disable-sudo: true
           allowed-endpoints: >
-            *.blob.core.windows.net:443
+            productionresultssa0.blob.core.windows.net:443
+            productionresultssa1.blob.core.windows.net:443
+            productionresultssa2.blob.core.windows.net:443
+            productionresultssa3.blob.core.windows.net:443
+            productionresultssa4.blob.core.windows.net:443
+            productionresultssa5.blob.core.windows.net:443
+            productionresultssa6.blob.core.windows.net:443
+            productionresultssa7.blob.core.windows.net:443
+            productionresultssa8.blob.core.windows.net:443
+            productionresultssa9.blob.core.windows.net:443
+            productionresultssa10.blob.core.windows.net:443
+            productionresultssa11.blob.core.windows.net:443
+            productionresultssa12.blob.core.windows.net:443
+            productionresultssa13.blob.core.windows.net:443
+            productionresultssa14.blob.core.windows.net:443
+            productionresultssa15.blob.core.windows.net:443
+            productionresultssa16.blob.core.windows.net:443
+            productionresultssa17.blob.core.windows.net:443
+            productionresultssa18.blob.core.windows.net:443
+            productionresultssa19.blob.core.windows.net:443
             api.github.com:443
             fulcio.sigstore.dev:443
             github.com:443

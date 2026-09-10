@@ -822,10 +822,9 @@ describe("override content layer", () => {
     expect(rows.some((row) => row.content.includes(USER_MARKER))).toBe(true);
     expect(digestOf(full.outputs)).toBe(digestOf(rows));
     // The channel is present and describes the BUILD, not the layer: this repo
-    // authored no hooks, so nothing in it is a user-hook rejection. (A four-tool
-    // selection does earn a `hook wiring [copilot]` row — that client takes no
-    // hook configuration — which is the planner reporting a real fact about the
-    // selection, and is `hooksInfra`'s own suite to pin.)
+    // authored no hooks, so nothing in it is a user-hook rejection. Native
+    // capability fallback diagnostics describe the selected clients' limits;
+    // the hooksInfra suite pins those separately from authored-hook failures.
     expect(Array.isArray(full.warnings)).toBe(true);
     expect(full.warnings.every((warning) => !warning.includes("user hook"))).toBe(true);
   });

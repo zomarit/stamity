@@ -12,9 +12,25 @@ obsolete_when: the eval set runs from a committed automation lane whose scores g
 The manual runner for `evals/`: one operator-started harness session, one
 committed result. No schedule or automatic provider calls.
 
+For a selected Codex profile, the repository includes the manually invoked
+`scripts/eval-run.mjs` transport. After committing and reviewing all inputs, run:
+
+```sh
+node scripts/eval-run.mjs --run-id YYYY-MM-DD-run-N --profile codex-astra --trigger release --capacity 4
+```
+
+It requires an authorized `OPENAI_API_KEY`, reads no CLI authentication tokens,
+and makes stateless requests only to the official Responses API. No profile
+argument still resolves `claude`; this transport blocks that unsupported profile
+instead of changing the default. The exact pair and `high` effort stay in provider
+controls. Each request carries one verbatim Brief or four verbatim judge blocks,
+with no conversation, previous response, additional instructions or exposed tools.
+The harness and isolation controls define a separate baseline from native dispatch.
+This implementation and its mock tests do not establish a successful live run.
+
 ## 1. Preconditions
 
-Read `evals/SET-v4.md` first for the case roster, thresholds and run-artifact
+Read `evals/SET-v5.md` first for the case roster, thresholds and run-artifact
 shape. Resolve the operator's named profile from `evals/model-profiles-v1.json`
 (its `defaultProfile` is `claude` when none was named), following
 `evals/MODEL-PROFILES-v1.md`. Read the selected profile's `rubric` next for the
@@ -50,6 +66,15 @@ by alias grades on a model the set never named. Grade **every fixture the
 rubric declares**: read them out of the selected rubric rather than working to
 a remembered count, since the rubric is the only place that number lives.
 
+For retained rubric-v4/v5 fixtures, resolve their Brief and Expected blocks from
+`evals/cases-v4/`; v5 scoring cases do not replace the historical calibration inputs.
+Before calibration the stateless runner proves both role controls with separate
+non-scoring provider calls. It admits only complete responses exposing the exact
+model and reasoning effort, no additional instructions/context, and an inspectable
+output trace with no tool call. Provider-internal instructions are not exposed by
+the API; the artifact records that limit. A native receipt carrying ambient
+developer messages does not pass admission even with zero tool calls.
+
 Hand the judge an **excised rubric**: the grading sections only — the text of
 the selected rubric above the `## Calibration protocol` heading. That heading
 and everything under it, the fixtures and their `Expected verdict` lines
@@ -69,26 +94,28 @@ id is **redone, up to three attempts, and never recorded as a mismatch** — an
 errored call and a disagreeing call are different failures and are reported
 separately.
 
-Record the calibration outcome — the fixtures run, the matches, and the judge
-id the agent attested rather than the id requested — because the artifact in
+Record the calibration outcome — the fixtures run, the matches, and the judge's
+provider-resolved ID and effort separately from optional attestation — because the artifact in
 step 6 carries it. A calibration result belongs to the selected profile's judge
 model, effort, rubric bytes, harness and isolation controls. Calibrate this
 configuration before scoring; a different profile's calibration never transfers.
 
 ## 3. Scenario fan-out
 
-One sub-agent per case file under `evals/cases-v4/**`, all dispatched together:
-the cases are independent, so only a dependency edge would justify serialising
-them, and there is none.
+Three independent fresh samples per case file under `evals/cases-v5/**`.
+Queue independent calls together up to the recorded capacity; the stateless runner
+allows 1–16 concurrent calls, default 4. A queue slot is a resource limit, never
+shared model context. A release measures the full 78-case roster (234 scenarios).
 
 Each scenario agent gets exactly what the case seals and no more.
 
-Each case/sample starts in a fresh agent with no inherited conversation or
-earlier sample. In Codex dispatch with `fork_turns: "none"`, the profile's exact
-`model`, and its `reasoning_effort`. Do not reuse a scenario through a follow-up
-task. Keep model selection in dispatch controls; the profile document is never
-part of the sealed Brief. Inspect tool traces before admitting a sample; any
-scenario tool use or extra repository read invalidates it and requires a redo.
+Each case/sample starts with no inherited conversation or earlier sample. A native
+Codex agent uses `fork_turns: "none"`, the profile's exact `model` and
+`reasoning_effort`, and must additionally prove no ambient input was injected.
+A stateless API call omits all history and passes exact model/effort controls.
+Do not reuse a scenario through a follow-up task. The profile document never
+enters the sealed Brief. Extra input, tool use or an uninspectable trace blocks
+admission; a claimed fresh agent alone proves none of these conditions.
 
 | Handed in | Withheld |
 |---|---|
@@ -102,13 +129,14 @@ Four rules keep a transcript worth grading:
   context, and the second case then measures the first one's output.
 - The brief goes in unedited. A brief reworded at dispatch time is a different
   case from the one the set versions, and so is a brief with a sentence appended
-  to it: the only addition the harness may make is the trailing
-  model-attestation request, stripped before judging. A case whose expected
-  behaviour is to act cannot be measured under an appended instruction not to.
+  to it. This runner adds no model-attestation request: attestation is unavailable
+  and provider metadata is recorded separately.
 - Collect each transcript verbatim, whitespace included, keyed by case id. A
   summarised transcript cannot be cited by a span in step 4.
-- A scenario call that errors, truncates, or comes back off the declared model
-  is re-run before grading, and the re-run count lands in the artifact.
+- Infrastructure errors, truncation, invalid responses and unavailable/mismatched
+  model or effort evidence have at most three total attempts, each retained with
+  its reason. Input contamination and tool use stop admission. A genuine grade
+  failure or calibration-label mismatch is never retried to obtain a pass.
 
 ## 4. Judging
 
@@ -143,7 +171,13 @@ them. Position preference alone can flip a verdict.
 
 ## 5. Aggregate
 
-Compute exactly the metrics `evals/SET-v4.md` declares, by its own definitions:
+Compute exactly the metrics `evals/SET-v5.md` declares, by its own definitions:
+
+A case passes only when all three admitted samples pass every binding criterion.
+The artifact lists each floor and per-skill recall, binding/advisory citations,
+all attempts and same-configuration advisory repeats. Missing samples prevent a
+full-set score. The manual script runs the full set for every supported trigger;
+there is no slice option that could accidentally stand in for a release run.
 
 | Metric | Aggregation | Bar |
 |---|---|---|
@@ -160,13 +194,14 @@ and a score with no decoding note beside it cannot be reproduced or compared.
 ## 6. Run artifact
 
 Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
-`evals/SET-v4.md` declares for it. At minimum it records:
+`evals/SET-v5.md` declares for it. At minimum it records:
 
 - the set/rubric versions and repo sha,
 - the selected model profile, profile document version/path/hash, and exact
   rubric path/hash; use the same selected rubric for calibration and scoring,
-- the model-under-test id and the judge id **as each agent attested them**,
-  not as the dispatch requested them, plus the decoding settings,
+- the model-under-test and judge IDs from provider metadata, requested controls,
+  and separate optional attestation (unavailable in the stateless transport),
+  plus exposed decoding settings and explicit unavailable controls,
 - requested/resolved model IDs and requested/effective reasoning effort for all
   roles, with provider/harness metadata recorded separately from attestation;
   record unavailable metadata as unavailable, never as independent proof,

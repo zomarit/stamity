@@ -21,7 +21,7 @@
 // Exit codes: 0 the packed artifact is usable, 1 it is not, 2 the smoke could not run.
 
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -101,6 +101,40 @@ function main() {
       rmSync(join(installed, 'scripts'), { recursive: true, force: true })
     }
 
+    // Compile a real consumer outside the checkout with only the packed package
+    // and explicitly installed compiler/platform types. No paths/baseUrl or
+    // repository-source fallback can make missing shipped declarations pass.
+    const compilerVersion = JSON.parse(readFileSync(join(ROOT, 'node_modules/typescript/package.json'), 'utf8')).version
+    const nodeTypesVersion = JSON.parse(readFileSync(join(ROOT, 'node_modules/@types/node/package.json'), 'utf8')).version
+    run('npm', ['install', '--save-dev', '--no-audit', '--no-fund', '--silent', '--ignore-scripts',
+      `typescript@${compilerVersion}`, `@types/node@${nodeTypesVersion}`], { cwd: project })
+    writeFileSync(join(project, 'consumer.mts'), `
+import { createApp, createEngine, TOOLS, EngineError, type App, type AppOptions,
+  type Tool, type SetupManifest, type HooksConfig, type LedgerEntry,
+  type AdapterOutput, type EmissionOwner } from '@zomarit/stamity';
+const options: AppOptions = { cwd: process.cwd(), env: {} };
+const app: App = createApp(options);
+const tool: Tool = TOOLS[0];
+const engine = createEngine();
+const error = new EngineError('consumer', { code: 'VALIDATION_ERROR' });
+type Reachable = [SetupManifest['hooks'], HooksConfig, LedgerEntry['adapter'], AdapterOutput['owner'], EmissionOwner];
+// @ts-expect-error The packed type must reject an unsupported client, not become any.
+const invalid: Tool = 'unsupported-client';
+void [app, tool, engine, error, invalid];
+export type { Reachable };
+`)
+    writeFileSync(join(project, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
+      module: 'NodeNext', moduleResolution: 'NodeNext', target: 'ESNext', strict: true,
+      noEmit: true, skipLibCheck: false, types: ['node'],
+    }, include: ['consumer.mts'] }))
+    try {
+      run(process.execPath, [join(project, 'node_modules/typescript/bin/tsc'), '--project', 'tsconfig.json'], { cwd: project })
+    } catch (error) {
+      return fail('the packed TypeScript API does not compile', `${error.stdout ?? ''}\n${error.stderr ?? ''}`)
+    }
+    run(process.execPath, ['--input-type=module', '--eval',
+      "import { createApp, VERSION } from '@zomarit/stamity'; if (createApp().version !== VERSION) process.exit(1)"], { cwd: project })
+
     // 5. The first command a user runs, in a repo that is not this one.
     const target = join(work, 'target-repo')
     run('mkdir', ['-p', target])
@@ -120,7 +154,7 @@ function main() {
     console.log(
       `tarball-smoke: PASS - ${filename} installs, carries ${REQUIRED_CONTENT_DIRS.length} content ` +
         `class(es) and ${REQUIRED_PACK_DIRS.length} pack(s) under dist/, passes the leak gate ` +
-        `over the packed tree, and completes init + check`,
+        `over the packed tree, compiles its external TypeScript consumer, preserves JavaScript imports, and completes init + check`,
     )
     return 0
   } finally {

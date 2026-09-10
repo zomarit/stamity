@@ -252,8 +252,8 @@ export function computeAggregateContentSha(integrity: Record<string, string>): s
  *
  * This function IS the signing contract. A signature verifies only against
  * these bytes, so an author producing a bundle must sign this serialization and
- * not the bare hex; a helper that emits it is a separate piece of work, and
- * until one ships this docblock is the specification an author works from.
+ * not the bare hex. The author helper in `./sign.ts` calls this same function;
+ * changing this serialization would invalidate existing signatures.
  *
  * Length-framed for the same reason the map entries above are, and reusing the
  * same {@link frameField} so there is one framing rule in this module rather

@@ -235,7 +235,9 @@ stated as an observable outcome fails it), `L2` dependencies resolve, `L3` edge 
 `spec carries no ids`, blank never passing — run here unchanged rather than restated with
 different content under the same name. One rework-only check runs beside it, labelled so the
 difference is visible: `R1`, every unit cites validated `file:line` evidence or is explicitly
-marked `unvalidated`.
+marked `unvalidated`. Apply `/st-plan`'s structural coverage pass and semantic
+coverage review at the same handoff; a structural pass alone does not resolve
+incompatible requirement and unit meanings.
 
 A unit that fails a check goes back to the user to sharpen or defer. It never enters the plan
 in a state where the implementer would have to guess what "done" means.

@@ -29,6 +29,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [1.7.0] - 2026-09-10
+
+### Added
+
+- **Pack authors can create detached Sigstore bundles.** The source-checkout signing helper
+  uses the existing verification payload and signer declaration, checks the returned bundle,
+  and refuses output paths that could overwrite pack inputs. The engine exports `pack.sign`
+  and its options type; the public CLI keeps its existing commands.
+- **TypeScript consumers receive public declarations.** The package exposes declarations
+  alongside its existing JavaScript entry, including the dependencies needed to resolve
+  reachable Sigstore types in an external project.
+- **Spec and plan workflows can check structural coverage.** A projected `st-verify` companion
+  detects missing, duplicate and dangling requirement or unit references in existing Markdown
+  formats. Semantic review remains a separate required step.
+- **A manual isolated eval transport records admission evidence.** The source-checkout runner
+  records exact inputs, provider model controls, traces and bounded retries, and requires every
+  selected calibration fixture to pass before accepting scores. It uses the configured model
+  profile and an authorized API credential; deterministic runner tests do not establish live
+  model behavior.
+
+### Changed
+
+- **Shipped skills declare compatibility and license metadata and include invocation hints.**
+  Client documentation names the supported native invocation syntax and manual fallbacks.
+- **Authoring and review instructions make proof obligations explicit.** Structural checks
+  retain semantic review, every finding names its evidence basis, and onboarding time limits
+  keep unmet mandatory gates in the `Not done` report. Security reporting separates categories
+  from mechanisms and excludes credential fragments and injected payload wording.
+
+### Fixed
+
+- **Native hook output follows each client's decision contract.** Portable runners translate
+  allow, deny and global-stop responses with their reasons, normalize supported event payloads,
+  and apply bounded execution. Documentation identifies native timeout and unsupported-event
+  limitations instead of claiming uniform enforcement.
+- **JavaScript projects honor an explicit typecheck script.** Generated verification gates
+  retain a configured typecheck command even when no TypeScript source is detected.
+- **Imported authoring scripts do not start a second process or write output.** Direct script
+  invocation still forwards Node flags and arguments and preserves useful failure statuses.
+
 ## [1.6.0] - 2026-09-10
 
 ### Added

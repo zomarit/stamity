@@ -5,10 +5,8 @@ applyTo: "**/.env*,**/secrets*,**/*.pem,**/*.key,**/config/**"
 
 # Secrets
 
-Attaches on files that hold credentials or point at them: environment files,
-key and certificate material, and the configuration that references them. A
-value that grants access is handled the same way whether it belongs to a
-payment provider or to a staging database.
+Credential files and references — environment, key, certificate and configuration
+material — share this floor, regardless of provider or deployment environment.
 
 ## Floor
 
@@ -41,11 +39,11 @@ payment provider or to a staging database.
 4. **Values are write-only inside the process.** They arrive from the
    environment and never come back out: not in a response body, an error
    message, a stack frame, a serialized object, a query string, an analytics
-   event, or a log field. Wrapper types override their string and JSON forms so
-   an accidental interpolation prints a mask. Every surface that prints
-   configuration prints the placeholder or the masked form
-   (`PAYMENT_CREDENTIAL=****`), and the printer applies the mask — not the
-   caller remembering to pass a flag.
+   event, or a log field. Wrapper types override their string and JSON forms
+   to print a mask on interpolation. Every configuration output uses a
+   placeholder or mask (`PAYMENT_CREDENTIAL=****`); the printer applies the mask.
+   Masks contain no leading, trailing, truncated, or split value fragments,
+   even in refusal examples. Name the variable and its role instead.
 5. **Two write paths refuse credential-shaped text, and they are the only two.**
    State the engine writes — a captured learning, a saved artifact, a handoff —
    is scanned against the content catalog, where a credential-shaped assignment

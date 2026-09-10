@@ -64,6 +64,10 @@ silently dropped.
   it, and names the spec requirement ids it implements — or records that the
   spec carries none — the join key the plan unit, the implementer's delta and
   the test name share.
+- **Coverage before Build.** For persisted plans, apply `/st-plan`'s structural
+  coverage pass and semantic review; fix missing references and resolve conflicting
+  readings before handoff. In-flow units use the same bidirectional review against
+  their requirement IDs. A structural pass alone does not establish clarity.
 - **Plan gate.** light: auto-continue. standard/deep: present the unit list
   and ask, with execute-now as the declared default.
 
@@ -199,6 +203,11 @@ The mandatory closing checkpoint, human-facing, at every intensity:
    with this command.
 3. When the change has a user-facing surface, offer a browser-evidence skill
    run; captured screenshots and console output attach to the proof block.
+
+On a change with no user-facing surface, mark browser evidence not applicable
+and continue the other checkpoint steps. An ordinary skip of that inapplicable
+offer needs no refusal, invariant language, or hypothetical warning about a
+different change. Human QA sign-off still comes from the guided pass.
 
 The checkpoint covers what automation cannot.
 
@@ -348,12 +357,12 @@ is verified against this plan.
 Where the assignment comes from: a role's class is declared once, in that
 role's own agent definition, and the engine projects that one declaration into
 the `model` and `effort` keys wherever the client has a field the class
-resolves into — one client carries effort inside the model value rather than a
-key of its own, and one carries it nowhere at all. Where nothing resolves — a
-class the client publishes no name for, with no operator pin behind it — the
-key is left out rather than filled with a guess, and the client's own default
-applies. A missing key is the ladder declining to invent a sizing decision,
-not a role running unsized; `stamity config` is where an operator states one.
+resolves into. The emitted client capability disclosure names its model and
+effort carriers and any missing control. A class without a supported model
+name or operator pin leaves selection to the client's own default. That class
+expresses intent, not a verified resolved model: check effective dispatch
+identity before asserting the role ran at the required class, and report an
+unresolved assignment. `stamity config` is where an operator pins a model.
 
 The table below restates those declarations for the check above; it does not
 decide them. So when a row and an agent file disagree, the agent file is the

@@ -278,7 +278,11 @@ item stay outside as well, and surface the same way — proposals in the run
 report for a human to apply. Closes are the one case that splits, and channel 3
 above states which side a given platform falls on. A write that would need a
 fifth channel stops and returns `BLOCKED_DEPENDENCY` rather than improvising
-one.
+one. This is decided on the requested action before any write is attempted.
+A requested close implemented as a separate platform operation therefore
+returns `BLOCKED_DEPENDENCY` for that item and records the close as a proposal;
+the proposal does not remove the blocked status. Report enabled independent
+writes separately, and carry the blocked action in the run status.
 
 ## Progress contract
 

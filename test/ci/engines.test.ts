@@ -195,7 +195,7 @@ describe("the declared Node floor and the graph under it", () => {
 describe("the floor as the scripts spell it", () => {
   const SCRIPTS_DIR = join(REPO_ROOT, "scripts");
   /** `Run the generator on Node >=x.y.z.` / `Run the probe on Node >=x.y.z.` */
-  const ADVICE = /Run the (?:generator|probe) on Node (>=[\d.]+)\./g;
+  const ADVICE = /Run the (?:generator|probe|\$\{label\}) on Node (>=[\d.]+)\./g;
 
   it("names the declared floor in every re-exec failure message", () => {
     const found = readdirSync(SCRIPTS_DIR)
@@ -206,10 +206,10 @@ describe("the floor as the scripts spell it", () => {
         ),
       );
 
-    // Non-degenerate: a green result must not be able to mean the regex matched
-    // nothing. Six scripts carried the sentence when this was written, and the
-    // bound is loose because generators come and go.
-    expect(found.length, "no script tells the reader which Node to run on").toBeGreaterThan(3);
+    // The shared bootstrap now owns the advice once; requiring duplicated
+    // literals would restore the drift this consolidation removes. Nonempty
+    // matching plus the bootstrap behavior tests keep the assertion load-bearing.
+    expect(found).toContainEqual(["native-typescript.mjs", DECLARED_FLOOR]);
 
     expect(
       found.filter(([, range]) => range !== DECLARED_FLOOR),

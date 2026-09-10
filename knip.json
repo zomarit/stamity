@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "project": ["src/**/*.ts", "test/**/*.ts"],
-  "ignoreBinaries": ["jq", "mkfifo"]
+  "ignoreBinaries": ["jq", "mkfifo"],
+  "ignoreDependencies": ["@sigstore/rekor-types", "@types/make-fetch-happen"]
 }

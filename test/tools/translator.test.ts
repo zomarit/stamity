@@ -89,10 +89,10 @@ describe("client coverage", () => {
     expect(toCursorReadonlyFrontmatter(FULL_GRANT)).toBe(false);
   });
 
-  it("emits the codex column in the claude dialect, flagged provisional", () => {
-    // Locks the placeholder decision: when the adapter phase maps codex onto
-    // its own primitive, this expectation and the `provisional` flag move
-    // together — neither is allowed to drift alone.
+  it("retains Codex role-grant prose in the compatible comma-list dialect, flagged provisional", () => {
+    // The public helper keeps its existing output for developer-instruction
+    // prose. The provisional flag prevents treating that prose as an enforced
+    // native grant; no undocumented tools key is emitted by the adapter.
     expect(toCodexToolsFrontmatter(FULL_GRANT)).toBe(toClaudeToolsFrontmatter(FULL_GRANT));
     const codex = ADAPTER_ALLOWLIST_COVERAGE.find((row) => row.tool === "codex");
     expect(codex?.provisional).toBe(true);
