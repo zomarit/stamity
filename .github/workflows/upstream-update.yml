@@ -239,6 +239,11 @@ jobs:
           if ! git switch "$INTEGRATION_BRANCH" 2>/dev/null; then
             git switch -c "$INTEGRATION_BRANCH" "origin/$INTEGRATION_BRANCH"
           fi
+          # The merge commit's author. A runner has no git identity, and git resolves one at
+          # `merge` time; the script carries a placeholder for that case, but the commit a
+          # reviewer sees on the pull request should name the automation that made it.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           echo "On $(git rev-parse --abbrev-ref HEAD) at $(git rev-parse --short HEAD)"
 
       # The one call this whole file exists to make. The report goes to a directory OUTSIDE the

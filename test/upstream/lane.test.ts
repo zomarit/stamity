@@ -625,6 +625,33 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     CASE_TIMEOUT_MS,
   );
 
+  // A headless runner has no git identity, and git resolves the committer identity at `merge`
+  // time, `--no-commit` notwithstanding. The lane's fallback identity therefore has to cover
+  // the merge, not only the commit; the first dispatch on GitHub Actions failed at exactly this
+  // point. The strict case is forced here rather than assumed: `user.useConfigOnly` stops git
+  // from guessing an identity out of the OS account, which is what hides the failure on a laptop.
+  it(
+    "integrates on a runner with no git identity: the merge and the commit take the fallback identity, and the report says so",
+    () => {
+      const fork = createFork(upstream, forkDir());
+      const env: Record<string, string> = { ...fork.env };
+      for (const key of ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"]) {
+        delete env[key];
+      }
+      const headless = { ...fork, env };
+      const result = runLane(headless, ["integrate", "--release", "v1.1.0"], {
+        env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "user.useConfigOnly", GIT_CONFIG_VALUE_0: "true" },
+      });
+      expectOutcome(result, "integrated");
+      expect(result.doc.messages.some((line) => line.startsWith("no git identity was configured"))).toBe(true);
+      const merge = result.doc.mergeCommit;
+      expect(merge).not.toBeNull();
+      expect(parentsOf(fork, merge!)).toEqual([fork.head, upstream.tags["v1.1.0"]]);
+      expect(git(fork, ["log", "-1", "--format=%ce", merge!]).stdout.trim()).toMatch(/\.invalid$/);
+    },
+    CASE_TIMEOUT_MS,
+  );
+
   // Criterion 2
   it(
     "keeps independent customizations: a new file and an edit upstream never touches survive the merge",
