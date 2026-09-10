@@ -16,6 +16,13 @@ function shell(name: string): string {
   return run;
 }
 
+function expectNoPrWrites(calls: readonly string[][]): void {
+  // Read-only CLI forms may change without changing the promise. Assert the forbidden platform
+  // effects, not that a particular reader command was chosen to enumerate the existing PRs.
+  const writes = calls.filter((args) => args[0] === "pr" && !["list", "view"].includes(args[1] ?? ""));
+  expect(writes).toEqual([]);
+}
+
 // These are the actual Ubuntu workflow shell steps. Git and jq remain real; GitHub is the only
 // substitute because unit tests cannot create authorized platform PRs or inject API failures.
 // Windows does not execute this workflow (runs-on: ubuntu-latest), and lacks its POSIX shell.
@@ -102,7 +109,7 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     const repeat = f.invoke();
     expect(repeat.status, repeat.stderr).toBe(0);
     expect(repeat.output).toContain("action=reported");
-    expect(repeat.calls.every((args) => args[0] === "api")).toBe(true);
+    expectNoPrWrites(repeat.calls);
   });
 
   it("reports an open PR with human metadata and never edits it even on the fresh-push path", () => {
@@ -112,7 +119,7 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
       const result = f.invoke(undefined, { PUSHED: pushed });
       expect(result.status, result.stderr).toBe(0);
       expect(result.output).toContain("action=reported");
-      expect(result.calls.every((args) => args[0] === "api")).toBe(true);
+      expectNoPrWrites(result.calls);
     }
   });
 
@@ -143,7 +150,7 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     const result = f.invoke();
     expect(result.status, result.stderr).toBe(0);
     expect(result.output).toContain("action=closed");
-    expect(result.calls.every((args) => args[0] === "api")).toBe(true);
+    expectNoPrWrites(result.calls);
   });
 
   it("refuses ambiguous PR ownership and a PR aimed at another base", () => {
@@ -153,7 +160,7 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
       const result = f.invoke();
       expect(result.status, result.stderr).toBe(1);
       expect(result.stdout).toContain("ownership");
-      expect(result.calls.every((args) => args[0] === "api")).toBe(true);
+      expectNoPrWrites(result.calls);
     }
   });
 
@@ -166,7 +173,7 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     const result = f.invoke();
     expect(result.status, result.stderr).toBe(1);
     expect(result.stdout).toContain("ownership");
-    expect(result.calls.every((args) => args[0] === "api")).toBe(true);
+    expectNoPrWrites(result.calls);
     expect(git(f.fork, ["ls-remote", "--heads", "origin", f.env.UPDATE_BRANCH]).stdout).toContain(human);
     expect(branchHead(f.fork, "main")).toBe(f.fork.head);
   });
@@ -186,7 +193,7 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     const result = f.invoke();
     expect(result.status, result.stderr).toBe(1);
     expect(result.stdout).toContain("current target");
-    expect(result.calls.every((args) => args[0] === "api")).toBe(true);
+    expectNoPrWrites(result.calls);
   });
 
   it.each(["human-tree", "invalid-record", "workflow-files"])("refuses %s even when the remote head retains the expected merge parents", (kind) => {
@@ -209,7 +216,7 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     const result = f.invoke(undefined, kind === "workflow-files" ? { MERGE_COMMIT: changed } : {});
     expect(result.status, result.stderr).toBe(1);
     expect(result.stdout).toContain("ownership");
-    expect(result.calls.every((args) => args[0] === "api")).toBe(true);
+    expectNoPrWrites(result.calls);
     expect(git(f.fork, ["ls-remote", "--heads", "origin", f.env.UPDATE_BRANCH]).stdout).toContain(changed);
     expect(branchHead(f.fork, "main")).toBe(f.fork.head);
   });
