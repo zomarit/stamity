@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit f1a4749. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e58b6ad. -->
 <!-- Re-open when: any `file::symbol` address below stops resolving, a named control loses its
      last production caller, a new install source or execution surface ships, a control named
      under "Publishing this package" changes in `.github/workflows/release.yml`, or the external

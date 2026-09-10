@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 45bc35d. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e58b6ad. -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or
      loses a regeneration command, either Node floor moves, a test lane joins or leaves, a
      coverage floor in `vitest.config.ts` moves, or the eval set's version bumps — the `evals/`

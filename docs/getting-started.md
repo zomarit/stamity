@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 45bc35d. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e58b6ad. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, a
      verb joins or leaves the command surface, a path joins or leaves `.stamity/`, or the APM
      route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page to
