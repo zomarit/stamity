@@ -146,6 +146,8 @@ APM generator's corpus-origin filter drops the resolved fork winners. This exten
 that consumer of the existing catalog and keeps package authoring separate from overrides in
 a consuming repository. The original 1.4.0 decision and dated probe results above remain
 historical evidence; these requirements describe the extension and require fresh proof.
+The extension targets 1.6.0; its release and live lifecycle evidence remain pending until
+publication and the required verification are recorded.
 
 ### REQ-APM-006 — Resolved package content and skill identity
 

@@ -452,6 +452,9 @@ nothing else: no config, no record, no worktree. Nothing under `.stamity/upstrea
 
 ### REQ-UPSTREAM-016 — Recover an owned branch whose pull request was never created
 
+Requirements -016 through -018 target the 1.6.0 extension. The original 1.4.0 release status
+above remains historical; publication and the required live lifecycle evidence are pending.
+
 If the push succeeded and pull-request creation failed, a retry may create the missing PR
 without rewriting the remote branch. Ownership is checked from the remote branch's actual
 merge topology, integration record and tree, against the selected upstream release and

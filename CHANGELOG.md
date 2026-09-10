@@ -29,6 +29,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [1.6.0] - 2026-09-10
+
+### Added
+
+- **Explicit downstream publisher identity.** Package authors can set
+  `stamity.publisher` in `package.json` for the APM and plugin generators. Both validate it
+  against the GitHub owner in `repository.url` before writing, while an absent setting keeps
+  the canonical publisher. Package metadata does not grant publication permission.
+
+### Changed
+
+- **Public and independent private APM packages carry the resolved fork layer.** Rules,
+  commands, agents and skills added, replaced or patched under `fork/` now reach the generated
+  package alongside existing direct `content/` customization. Replaced skills keep their
+  bundled directory and name; additions keep their authored names. Winning skill companion
+  files retain their bytes, patch control files stay out of installed companions, and unsafe
+  paths or identity collisions fail before generation writes. CLI commands and consumer
+  override precedence retain their existing behavior.
+- **The enterprise guide covers private onboarding through updates and recovery.** It documents
+  independent private repositories retaining upstream history, disabling Actions before importing
+  historical refs, explicit private destinations, authenticated APM installation, the existing
+  downstream APM and Renovate distribution, required PR checks, monitoring and recovery. Its
+  capability table distinguishes APM's four primitive classes from the packaged CLI's charter,
+  hooks, MCP wiring and runtime, and names the live evidence each deployment must establish.
+- **Eval runners can select explicit Codex model profiles.** `codex-astra` runs Astra scenarios
+  with a Sol judge; `codex-astra-judge` reverses those roles. The Claude profile remains the
+  default, and calibration, isolation controls and results remain separate for each profile.
+
+### Fixed
+
+- **An upstream update branch whose PR creation failed can recover its missing PR.** A retry
+  verifies the retained branch's merge parents, integration record, release and target identity,
+  and tree before opening the PR without rewriting the branch. Existing open, closed and merged
+  PRs keep their metadata and disposition. Human changes, moved targets, ambiguous ownership and
+  workflow-file changes require review. Recovery reports identify the retained remote SHA and
+  keep oversized integration records in the run artifact within GitHub's PR body limit.
+- **Inherited public publishing workflows are restricted to the public canonical repository.**
+  npm release, canonical APM verification and public docs deployment check GitHub's execution
+  identity and visibility. A downstream configures its own reviewed private release destinations;
+  canonical release approval and provenance controls continue to apply.
+- **Upstream access and missing-history failures include recovery steps.** Diagnostics identify
+  approved network, authentication and history restoration checks, including the separation
+  between credential-free preparation and the publish-only update token.
+
 ## [1.5.0] - 2026-09-10
 
 ### Added
@@ -400,7 +444,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/zomarit/stamity/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/zomarit/stamity/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/zomarit/stamity/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/zomarit/stamity/compare/v1.2.0...v1.3.0
