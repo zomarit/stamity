@@ -1,0 +1,14 @@
+{
+  "baseline_commit": "64f6c533467acfb479b294579778e2797d603b0e",
+  "path": ".stamity/runs/2026-09-10_release-1.4.0/ledger.jsonl",
+  "row_id": "2026-09-10_release-1.4.0/build/3",
+  "line": 6,
+  "old_git_blob": "4d5d86012628579f14369467fe7695a5658e6d25",
+  "old_sha256": "8ee68209fa2bc50491196a5f1c124df43826fcd24cab3445f3efa37aa381805b",
+  "new_git_blob": "f4caeb463cb21c8c0778fecae175f55939228c05",
+  "new_sha256": "4d8a1d4aa46de4796417e66d6b55b15b234089a3157210b18e39f1b1fe6e5903",
+  "all_other_lines_byte_identical": true,
+  "all_original_row_fields_and_values_unchanged": true,
+  "only_added_field": "retired",
+  "dated_disposition": "2026-09-10 fixed in da7d8a76bad16eec38cf734a5bfeb01d0c419d38 and proved by real public repository-token creation/recovery (runs 34500980273 and 34501404211, PR 5), human-approved required CI and reviewed merge, plus landing-warning/new-PR run 34503629304 (PR 8); disposition and retained evidence: .stamity/runs/2026-09-10_enterprise-downstreams/record.md. This retires only the stub-only live-PR proof gap; separate private-plan enforcement and enterprise deployment/monitoring limits remain."
+}
