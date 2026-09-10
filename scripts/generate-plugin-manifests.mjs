@@ -134,6 +134,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { resolveDistributionIdentity } from './distribution-identity.mjs'
+
 const SELF = fileURLToPath(import.meta.url)
 const ROOT = resolve(SELF, '..', '..')
 const USAGE = 'Usage: node scripts/generate-plugin-manifests.mjs [--check] [--out-dir <dir>]'
@@ -188,17 +190,7 @@ for (let i = 0; i < args.length; i += 1) {
   }
 }
 
-// ── Pinned publisher facts ───────────────────────────────────────
-//
-// The display name, pinned rather than read. package.json's `author` now holds
-// the same name, and that is precisely why this constant is not derived from
-// it: `author` is a free-text npm field, so reading it would let one edit there
-// silently rename the publisher on all four plugin surfaces at once. Pinned
-// here, the name is cross-checked against the repository owner slug below, so a
-// repository move — or a drifted pin — fails the run instead of shipping a
-// publisher nobody chose.
-
-const PUBLISHER = 'zomarit'
+// Publisher identity is resolved from package.json by the shared validator below.
 
 /** Reverse-domain namespace for the Agent Plugins `extensions` key. */
 const EXTENSION_HOST = 'com.github'
@@ -245,30 +237,15 @@ const keywords = requirePkg(
   pkg.keywords,
   (value) => Array.isArray(value) && value.length > 0 && value.every(nonEmptyString),
 )
-const repositoryUrl = requirePkg('repository.url', pkg.repository?.url, nonEmptyString)
 const homepageUrl = requirePkg('homepage', pkg.homepage, nonEmptyString)
 
-/** `git+https://github.com/owner/repo.git` -> `https://github.com/owner/repo`. */
-const repository = repositoryUrl.replace(/^git\+/, '').replace(/\.git$/, '')
-
-const ownerMatch = /^https:\/\/github\.com\/([^/]+)\/([^/]+)$/.exec(repository)
-if (ownerMatch === null) {
-  fail(
-    `package.json \`repository.url\` normalises to ${repository}, which is not a ` +
-      'https://github.com/<owner>/<repo> URL. The plugin surfaces derive the homepage, the ' +
-      'marketplace owner and the extension namespace from it — teach this generator the new ' +
-      'host before moving the repository.',
-  )
+let identity
+try {
+  identity = resolveDistributionIdentity(pkg)
+} catch (err) {
+  fail(err.message)
 }
-const [, ownerSlug] = ownerMatch
-
-if (ownerSlug.toLowerCase() !== PUBLISHER.toLowerCase()) {
-  fail(
-    `The pinned publisher ${JSON.stringify(PUBLISHER)} does not match the repository owner ` +
-      `${JSON.stringify(ownerSlug)} in ${repository}. One of the two moved; reconcile them here ` +
-      'rather than letting the manifests name a publisher that owns nothing.',
-  )
-}
+const { publisher: PUBLISHER, repository, ownerSlug } = identity
 
 /** The plugin id, on every surface. All three schemas want kebab-case with no scope. */
 const pluginName = packageName.replace(/^@[^/]+\//, '')
@@ -320,7 +297,8 @@ if (contentDir === '' || contentDir.startsWith('..')) {
   )
 }
 
-const index = await buildContentIndex()
+// Plugin manifests point at content/; fork projection belongs to APM and the CLI.
+const index = await buildContentIndex(contentRoot)
 
 /**
  * Class -> its directory under the corpus root, read off the paths the walk
