@@ -1,8 +1,51 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig, type TestUserConfig } from "vitest/config";
+
+/**
+ * 2026-09-11: Windows CI showed a shared stall while these three real-disk
+ * suites overlapped (normal cases before/after; unchanged inputs passed earlier).
+ * Isolate that measured resource overlap, keeping all assertions and timeouts.
+ * The host-level cause remains unproved; an actual Windows run must verify this.
+ * Vitest groups execute in order; one worker serializes only the second group:
+ * https://vitest.dev/config/sequence.html#sequence-grouporder
+ */
+export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfig, "include" | "projects"> {
+  if (platform !== "win32") return {};
+  const heavy = [
+    "test/upstream/lane.test.ts",
+    "test/pack/installSmoke.e2e.test.ts",
+    "test/cli/commands/syncMcpOwnership.test.ts",
+  ];
+  return {
+    // Inline projects inherit arrays by concatenation. An empty root include
+    // lets each project select its own files; the root still owns coverage.
+    include: [],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "parallel",
+          include: ["test/**/*.test.ts"],
+          exclude: [...configDefaults.exclude, ...heavy],
+          sequence: { groupOrder: 0 },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "windows-fixtures",
+          include: heavy,
+          maxWorkers: 1,
+          sequence: { groupOrder: 1 },
+        },
+      },
+    ],
+  };
+}
 
 export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
+    ...fixtureScheduling(process.platform),
     environment: "node",
     // Child-process cases shell out to the CLI entry; 20s is generous for a cold start
     // and still fails fast if a spawn hangs.

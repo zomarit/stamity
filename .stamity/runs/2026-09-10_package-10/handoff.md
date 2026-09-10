@@ -1,16 +1,18 @@
 # Package 10 reviewed candidate handoff
 
-Reviewed implementation: `713c057e113c0447ef0c2a2980d9cfc7ccea1379` in
-[draft PR #34](https://github.com/zomarit/stamity/pull/34). Implementation and independent
-reviews are complete; all actionable findings were repaired and rechecked. Version 1.7.0
-is prepared and unpublished. The released baseline remains `v1.6.0` at
+Reviewed candidate: [draft PR #34](https://github.com/zomarit/stamity/pull/34).
+Runtime/package implementation `713c057e113c0447ef0c2a2980d9cfc7ccea1379` is followed
+by the three-file Windows test-scheduling mitigation described below. Version 1.7.0
+is prepared and unpublished; released `v1.6.0` remains at
 `99c1094953346ef19a8aaab3ee0bd7d292c36ba6`.
 
-`candidate-binding.json` confirms that all 1,075 verified inputs match the reviewed
-commit, with source digest `5ef6446414d8bc5c2787a40f6712bf9eb55ffef5a35369554536527085bca37d`.
-Following handoff-record commits change evidence only. The PR exposes the required
-checks for its current head; the receipts below identify exactly which implementation
-and checkout each completed proof exercised.
+`candidate-binding.json` preserves earlier committed bindings and identifies the
+scheduling candidate's 1,076 inputs by digest
+`2dd850b73c4a2e03a4511d95394749633e4b9749faf4c8dcdfdfd01e1a01ec2c`.
+This source record precedes its final platform run. The PR description records the
+final tested commit and completed CI/rehearsal links; the PR's required checks show
+that head's status. Earlier green runs and the subsequent red run remain distinct;
+this document does not predict an unrun check.
 
 | Item | Implemented outcome | Evidence and remaining boundary |
 |---|---|---|
@@ -25,11 +27,20 @@ and checkout each completed proof exercised.
 | 10D six behavior repairs | Retained transcripts independently classified; repaired injection wording, closure routing, credential fragments, security categories, reviewer evidence basis and benign-skip wording | `u2-evidence.json`, `review-u1-u2.md`; source and Briefs synchronized. Affected three-sample behavior remains unmeasured. |
 | 10D bootstrap/declarations | Shared import-inert TypeScript helper; supported declaration compiler; public types and size accounting; internal migration literal omitted | `verification.md`: external strict TS (`skipLibCheck:false`), JavaScript and packed CLI pass. Actual packed scanner runs and rejects the old leak and invalid scanner output. |
 | 10D dependencies | Dated primary-source recheck retains exact unmet Docusaurus-v4/image-size triggers | `SECURITY.md`; no supported fix/migration found; applicable site gates pass. |
-| 10E integration/accessibility | APM, customization, upstream and CLI contracts retained; generated surfaces reconciled; shared reference-heading defect repaired | `integration.md`, `verification.md`, `browser-review.md`: local gates, actual Linux/Windows CI and browser checks pass. Full human walks remain open. |
+| 10E integration/accessibility | APM, customization, upstream and CLI contracts retained; generated surfaces reconciled; shared reference-heading defect repaired | `integration.md`, `verification.md`, `browser-review.md` preserve completed runtime/site proof. `windows-scheduling-review.md` covers the subsequent CI mitigation; current PR checks identify final-head proof. Full human walks remain open. |
 
 ## Completed proof
 
-- Local gates: 194 test files, **7,667 passing tests**, two existing opt-in skips,
+Latest local verification exercised both scheduling projects on actual Darwin:
+**195 files, 7,671 passing tests**, two retained skips and unchanged coverage floors.
+Lint, typecheck and Knip also pass. `windows-scheduling-review.md` records the exact
+commands and input binding; this is local scheduling proof, not Windows OS proof.
+
+The following platform receipts exercised `713c057`. Runtime/build/generator/packed
+and site inputs remain unchanged by the scheduling repair, preserving their corrected
+proof. Final-head platform outcomes are linked from PR #34.
+
+- Runtime implementation local gates: 194 test files, **7,667 passing tests**, two existing opt-in skips,
   unchanged coverage floors; lint, typecheck, build, leak, Knip, size, generators,
   dogfood and the external packed consumer all pass.
 - [Required CI 34537631703](https://github.com/zomarit/stamity/actions/runs/34537631703):
@@ -53,6 +64,22 @@ actually scans 219 files/18 rules and rejects the old declaration shape and sile
 failed or empty zero-exit scanners. The Windows fixture repair preserves all 196
 inputs, physical root equality and the 20-second limit; fixture Git process launches fell
 from 479 to 246. No gate policy or coverage threshold was weakened.
+
+The evidence-only `f7d3f95` head then failed [CI 34538915096](https://github.com/zomarit/stamity/actions/runs/34538915096):
+eight Windows fixture timeouts, despite unchanged executable inputs. Two upstream
+cases hit 30 seconds and six MCP ownership cases hit 20 seconds. A concurrent pack
+case took 109 seconds versus 4.5 seconds in the earlier pass. Identical runner/tool
+versions and faster cases before/after support a localized shared-resource stall;
+logs do not establish whether CPU, filesystem or scanning caused it. The eval-runner
+fixture executed after this interval and is excluded as a concurrent cause.
+
+The mitigation isolates exactly those three heavy suites in a later single-worker
+Windows group. Other tests retain default parallelism; non-Windows scheduling,
+existing assertions, limits, skips and coverage floors are unchanged. The new
+regression resolves actual Vitest projects and verifies all 195 files exactly once.
+`windows-scheduling-review.md` records independent proof; an actual final-head
+Windows pass, linked from the PR, is required before handback. No unchanged retry
+or timeout extension is used to convert the failed run into green evidence.
 
 `history-preservation.json` confirms 91 original v4/rubric/run-10/run-11 files are
 unchanged. SET-v5 has 78 cases × three samples; all 69 inherited Expected blocks

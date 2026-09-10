@@ -1,8 +1,10 @@
 # Package 10 candidate QA (draft)
 
-Prepared version: 1.7.0, unpublished. Local source/gate binding: `verification.md`;
-implementation commit `713c057e113c0447ef0c2a2980d9cfc7ccea1379` is bound by
-`candidate-binding.json`; actual CI/rehearsal receipts are in `ci-verification.md` and `handoff.md`.
+Prepared version: 1.7.0, unpublished. `candidate-binding.json` identifies the runtime
+implementation at `713c057` and the subsequent scheduling candidate's 1,076-input
+digest. `verification.md` and `ci-verification.md` preserve earlier proof;
+`windows-scheduling-review.md` records the Windows mitigation. The final tested
+commit and latest platform results are identified in [PR #34](https://github.com/zomarit/stamity/pull/34).
 This table is not a human sign-off. The user's conditional release authorization does not
 perform the final QA or the protected npm deployment approval.
 
@@ -26,6 +28,7 @@ perform the final QA or the protected npm deployment approval.
 | A6 | Structural coverage remains separate from semantic clarity | Run complete and defective existing-format spec/plan fixtures, including missing coverage, duplicate/dangling references and ambiguous semantics. | Structural defects fail with usable locators; complete structure passes with semantic review still required. | M | 4 | Independent 430-test U2 recheck includes structural/eval/source tests; seeded live semantic behavior remains unmeasured. |
 | A7 | Packed JavaScript and TypeScript consumers work | Install the candidate tarball outside the checkout; import the public API and reachable types; run both supported CLI entries. | Existing JavaScript import resolves; strict TypeScript consumer compiles and rejects invalid types; expected CLI files/behavior appear. | M | 4 | `verification.md` repaired-candidate addendum: external packed strict TS/JS consumer, negative type assertion and CLI init/check pass. The real packed scanner checks 219 files/18 rules; injected old declarations and silent/invalid scanners fail. |
 | A8 | Release rehearsal retains identity boundaries | Inspect actual non-publishing candidate workflow jobs and artifact handoff. | Gates and APM route pass with restricted egress; publish is skipped; no publishing identity reaches those jobs. | H | 3 | `ci-verification.md`: rehearsal34537639076 passes gates/pack, canonical APM and dry-run summary on713c057; publication is skipped. This is not authenticated publication proof. |
+| A9 | Windows scheduling retains every test and gate | Resolve actual Vitest project membership; inspect the final Windows job identified in PR #34. | Every test file runs once; only the three observed heavy suites serialize. Assertions, timeouts, skips and coverage floors stay unchanged. | M | 3 | `windows-scheduling-review.md` records local group/coverage proof; actual final-head Windows acceptance must be recorded in the PR before handback. |
 
 ## Sign-off
 
@@ -34,6 +37,7 @@ perform the final QA or the protected npm deployment approval.
 - Rollback: revert through a reviewed PR; retain historical tags and artifacts. Restore a consumer
   to its last verified version if needed. A published correction requires a new governed release.
 - Shippable: **NO — fresh behavioral evidence and current human approval remain pending.**
+  Required platform checks must also pass on the final candidate.
 
 The current QA skill requires human sign-off on every run, including one whose rows all
 auto-prove. This record preserves that checkpoint and the separate platform approval.
