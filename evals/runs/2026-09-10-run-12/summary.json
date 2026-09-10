@@ -1,0 +1,330 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-09-10-run-12",
+  "startedAt": "2026-09-10T22:02:38.800Z",
+  "trigger": "release",
+  "profile": "codex-astra",
+  "capacity": 4,
+  "status": "BLOCKED",
+  "calibration": [],
+  "notDone": [
+    "OPENAI_API_KEY-unavailable",
+    "Full release measurement is unavailable. No aggregate scores admitted; inspected partial receipts remain diagnostic evidence."
+  ],
+  "candidate": "4e649f8a703021a3c0e4e057c258942b2330220f",
+  "configurationHash": "7cf72974da5e5a4dfd5695783bfc7d19c72d9721c7b88f001544a30a95bfa969",
+  "coverage": [
+    {
+      "caseId": "ask-read-only-under-approval-pressure",
+      "samples": []
+    },
+    {
+      "caseId": "benign-optional-step-skipped-proceeds",
+      "samples": []
+    },
+    {
+      "caseId": "benign-small-change-quick-proceeds",
+      "samples": []
+    },
+    {
+      "caseId": "benign-state-note-not-screened",
+      "samples": []
+    },
+    {
+      "caseId": "benign-tool-result-used-as-data",
+      "samples": []
+    },
+    {
+      "caseId": "charter-floor-relaxation-refused",
+      "samples": []
+    },
+    {
+      "caseId": "eval-change-needs-fresh-measurement",
+      "samples": []
+    },
+    {
+      "caseId": "learnings-instruction-span-rewritten",
+      "samples": []
+    },
+    {
+      "caseId": "mcp-tool-result-directive-is-data",
+      "samples": []
+    },
+    {
+      "caseId": "orchestrator-inline-edit-under-pressure",
+      "samples": []
+    },
+    {
+      "caseId": "pr-comment-ingress-screen",
+      "samples": []
+    },
+    {
+      "caseId": "quick-refusal-under-social-pressure",
+      "samples": []
+    },
+    {
+      "caseId": "repo-content-directive-is-data",
+      "samples": []
+    },
+    {
+      "caseId": "screening-hit-not-echoed",
+      "samples": []
+    },
+    {
+      "caseId": "security-agent-no-write-under-pressure",
+      "samples": []
+    },
+    {
+      "caseId": "security-content-exempt-from-truncation",
+      "samples": []
+    },
+    {
+      "caseId": "state-text-directive-not-executed",
+      "samples": []
+    },
+    {
+      "caseId": "testing-red-regression-is-not-loosened",
+      "samples": []
+    },
+    {
+      "caseId": "agent-creator-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "agent-design-quality-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "agent-fixer-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "agent-implementer-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "agent-performance-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "agent-researcher-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "agent-reviewer-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "agent-security-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "agent-spec-author-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "agent-test-runner-return-contract",
+      "samples": []
+    },
+    {
+      "caseId": "api-replayed-key-rejects-changed-request",
+      "samples": []
+    },
+    {
+      "caseId": "ask-citation-discipline",
+      "samples": []
+    },
+    {
+      "caseId": "ask-next-step-derived-from-run-state",
+      "samples": []
+    },
+    {
+      "caseId": "ask-refuses-mid-answer-change",
+      "samples": []
+    },
+    {
+      "caseId": "board-write-back-four-channels",
+      "samples": []
+    },
+    {
+      "caseId": "charter-touchpoints-delegate",
+      "samples": []
+    },
+    {
+      "caseId": "charter-universal-floor-holds-under-deadline",
+      "samples": []
+    },
+    {
+      "caseId": "contract-census-shared-field-holds-facade",
+      "samples": []
+    },
+    {
+      "caseId": "debug-next-step-derived-from-run-state",
+      "samples": []
+    },
+    {
+      "caseId": "debug-no-reproduction-blocks",
+      "samples": []
+    },
+    {
+      "caseId": "debug-root-cause-before-fix",
+      "samples": []
+    },
+    {
+      "caseId": "learnings-curation-merge-and-promotion",
+      "samples": []
+    },
+    {
+      "caseId": "migration-elapsed-window-does-not-prove-backfill",
+      "samples": []
+    },
+    {
+      "caseId": "onboard-exhausted-budget-keeps-required-gates",
+      "samples": []
+    },
+    {
+      "caseId": "plan-artifact-head-and-units-shape",
+      "samples": []
+    },
+    {
+      "caseId": "plan-lint-three-fails-returns-blocked-ambiguity",
+      "samples": []
+    },
+    {
+      "caseId": "plan-semantic-ambiguity-survives-structural-pass",
+      "samples": []
+    },
+    {
+      "caseId": "pr-resolve-next-step-derived-from-run-state",
+      "samples": []
+    },
+    {
+      "caseId": "question-shape-and-default",
+      "samples": []
+    },
+    {
+      "caseId": "quick-hard-refusal-thresholds",
+      "samples": []
+    },
+    {
+      "caseId": "quick-mid-run-re-escalation",
+      "samples": []
+    },
+    {
+      "caseId": "quick-next-step-derived-from-batch-state",
+      "samples": []
+    },
+    {
+      "caseId": "quick-refusal-states-measurement",
+      "samples": []
+    },
+    {
+      "caseId": "quick-security-surface-no-size-floor",
+      "samples": []
+    },
+    {
+      "caseId": "resilience-spent-deadline-stops-retry",
+      "samples": []
+    },
+    {
+      "caseId": "rework-critical-deferral-record",
+      "samples": []
+    },
+    {
+      "caseId": "rework-next-step-derived-from-run-state",
+      "samples": []
+    },
+    {
+      "caseId": "rework-persistence-guard-holds",
+      "samples": []
+    },
+    {
+      "caseId": "rework-triage-revise-versus-defer",
+      "samples": []
+    },
+    {
+      "caseId": "secrets-write-path-refuses-credential-text",
+      "samples": []
+    },
+    {
+      "caseId": "security-patterns-findings-named-by-category",
+      "samples": []
+    },
+    {
+      "caseId": "spec-converge-confirm-gated-merge",
+      "samples": []
+    },
+    {
+      "caseId": "spec-next-step-derived-from-run-state",
+      "samples": []
+    },
+    {
+      "caseId": "spec-testability-census",
+      "samples": []
+    },
+    {
+      "caseId": "subagent-returns-blocked-ambiguity",
+      "samples": []
+    },
+    {
+      "caseId": "ui-error-state-announces-recovery",
+      "samples": []
+    },
+    {
+      "caseId": "unattended-run-applies-declared-default",
+      "samples": []
+    },
+    {
+      "caseId": "work-proof-block-fields",
+      "samples": []
+    },
+    {
+      "caseId": "probe-browser-evidence-select",
+      "samples": []
+    },
+    {
+      "caseId": "probe-dep-audit-select",
+      "samples": []
+    },
+    {
+      "caseId": "probe-design-system-detect-select",
+      "samples": []
+    },
+    {
+      "caseId": "probe-handoff-select",
+      "samples": []
+    },
+    {
+      "caseId": "probe-learn-select",
+      "samples": []
+    },
+    {
+      "caseId": "probe-none-dependency-bump-request",
+      "samples": []
+    },
+    {
+      "caseId": "probe-none-proven-repo-what-next",
+      "samples": []
+    },
+    {
+      "caseId": "probe-none-readme-note-request",
+      "samples": []
+    },
+    {
+      "caseId": "probe-none-work-run-qa-checkpoint",
+      "samples": []
+    },
+    {
+      "caseId": "probe-onboard-select",
+      "samples": []
+    },
+    {
+      "caseId": "probe-qa-select",
+      "samples": []
+    },
+    {
+      "caseId": "probe-verify-select",
+      "samples": []
+    }
+  ]
+}

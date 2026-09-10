@@ -1,0 +1,1898 @@
+{
+  "sha": "99c1094-dirty",
+  "timestamp": "2026-09-10T21:58:04.488Z",
+  "target": {
+    "build": "Package 10 candidate website/build",
+    "address": "http://127.0.0.1:4187",
+    "widths": [
+      375,
+      1440
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ]
+  },
+  "harness": {
+    "name": "playwright",
+    "version": "1.63.0",
+    "browser": "146.0.7680.153",
+    "scanner": "axe-core",
+    "scannerVersion": "4.13.0"
+  },
+  "probes": [
+    {
+      "id": "harness",
+      "status": "pass",
+      "evidence": "Previously authorized disposable browser-tools/package.json; no root dependency changes"
+    },
+    {
+      "id": "scanner",
+      "status": "pass",
+      "evidence": "Installed axe-core; all specified rules applied without exclusions"
+    },
+    {
+      "id": "serving-path",
+      "status": "pass",
+      "evidence": "Fresh isolated final documentation candidate build served on a dedicated local port"
+    },
+    {
+      "id": "browser",
+      "status": "pass",
+      "evidence": "Existing Chrome for Testing 146.0.7680.153 executable; exact local path retained in the raw receipt."
+    },
+    {
+      "id": "surface",
+      "status": "pass",
+      "evidence": "Affected generated and hand-written documentation, plus retained enterprise table controls"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "enterprise-forks-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-enterprise-forks-375-light.json"
+    },
+    {
+      "id": "enterprise-forks-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-enterprise-forks-375-dark.json"
+    },
+    {
+      "id": "enterprise-forks-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-enterprise-forks-1440-light.json"
+    },
+    {
+      "id": "enterprise-forks-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-enterprise-forks-1440-dark.json"
+    },
+    {
+      "id": "getting-started-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-getting-started-375-light.json"
+    },
+    {
+      "id": "getting-started-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-getting-started-375-dark.json"
+    },
+    {
+      "id": "getting-started-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-getting-started-1440-light.json"
+    },
+    {
+      "id": "getting-started-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-getting-started-1440-dark.json"
+    },
+    {
+      "id": "customization-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-customization-375-light.json"
+    },
+    {
+      "id": "customization-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-customization-375-dark.json"
+    },
+    {
+      "id": "customization-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-customization-1440-light.json"
+    },
+    {
+      "id": "customization-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-customization-1440-dark.json"
+    },
+    {
+      "id": "packs-and-trust-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-packs-and-trust-375-light.json"
+    },
+    {
+      "id": "packs-and-trust-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-packs-and-trust-375-dark.json"
+    },
+    {
+      "id": "packs-and-trust-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-packs-and-trust-1440-light.json"
+    },
+    {
+      "id": "packs-and-trust-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-packs-and-trust-1440-dark.json"
+    },
+    {
+      "id": "capability-matrix-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-capability-matrix-375-light.json"
+    },
+    {
+      "id": "capability-matrix-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-capability-matrix-375-dark.json"
+    },
+    {
+      "id": "capability-matrix-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-capability-matrix-1440-light.json"
+    },
+    {
+      "id": "capability-matrix-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-capability-matrix-1440-dark.json"
+    },
+    {
+      "id": "reference-skills-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-skills-375-light.json"
+    },
+    {
+      "id": "reference-skills-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-skills-375-dark.json"
+    },
+    {
+      "id": "reference-skills-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-skills-1440-light.json"
+    },
+    {
+      "id": "reference-skills-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-skills-1440-dark.json"
+    },
+    {
+      "id": "reference-rules-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-rules-375-light.json"
+    },
+    {
+      "id": "reference-rules-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-rules-375-dark.json"
+    },
+    {
+      "id": "reference-rules-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-rules-1440-light.json"
+    },
+    {
+      "id": "reference-rules-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-rules-1440-dark.json"
+    },
+    {
+      "id": "reference-commands-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-commands-375-light.json"
+    },
+    {
+      "id": "reference-commands-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-commands-375-dark.json"
+    },
+    {
+      "id": "reference-commands-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-commands-1440-light.json"
+    },
+    {
+      "id": "reference-commands-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-commands-1440-dark.json"
+    },
+    {
+      "id": "reference-agents-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-agents-375-light.json"
+    },
+    {
+      "id": "reference-agents-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-agents-375-dark.json"
+    },
+    {
+      "id": "reference-agents-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-agents-1440-light.json"
+    },
+    {
+      "id": "reference-agents-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-agents-1440-dark.json"
+    },
+    {
+      "id": "reference-packs-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-packs-375-light.json"
+    },
+    {
+      "id": "reference-packs-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-packs-375-dark.json"
+    },
+    {
+      "id": "reference-packs-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-packs-1440-light.json"
+    },
+    {
+      "id": "reference-packs-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-packs-1440-dark.json"
+    },
+    {
+      "id": "reference-mcp-servers-375-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-mcp-servers-375-light.json"
+    },
+    {
+      "id": "reference-mcp-servers-375-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-mcp-servers-375-dark.json"
+    },
+    {
+      "id": "reference-mcp-servers-1440-light",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-mcp-servers-1440-light.json"
+    },
+    {
+      "id": "reference-mcp-servers-1440-dark",
+      "origin": "spec",
+      "requirement": "REQ-FINISH-010 \u2014 Changed documentation: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/scenario-reference-mcp-servers-1440-dark.json"
+    },
+    {
+      "id": "resize-and-font-size",
+      "origin": "change-description",
+      "requirement": "ResizeObserver tracks viewport and row-group width",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/resize-and-font-size.json"
+    },
+    {
+      "id": "ssr-no-javascript",
+      "origin": "change-description",
+      "requirement": "Pre-hydration tables retain headers and keyboard stops",
+      "status": "pass",
+      "evidence": "/tmp/stamity-package10-browser-evidence/ssr-no-javascript.json"
+    }
+  ],
+  "accessibility": [
+    {
+      "surface": "enterprise-forks-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-enterprise-forks-375-light.json"
+    },
+    {
+      "surface": "enterprise-forks-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-enterprise-forks-375-dark.json"
+    },
+    {
+      "surface": "enterprise-forks-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-enterprise-forks-1440-light.json"
+    },
+    {
+      "surface": "enterprise-forks-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-enterprise-forks-1440-dark.json"
+    },
+    {
+      "surface": "getting-started-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-getting-started-375-light.json"
+    },
+    {
+      "surface": "getting-started-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-getting-started-375-dark.json"
+    },
+    {
+      "surface": "getting-started-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-getting-started-1440-light.json"
+    },
+    {
+      "surface": "getting-started-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-getting-started-1440-dark.json"
+    },
+    {
+      "surface": "customization-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-customization-375-light.json"
+    },
+    {
+      "surface": "customization-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-customization-375-dark.json"
+    },
+    {
+      "surface": "customization-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-customization-1440-light.json"
+    },
+    {
+      "surface": "customization-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-customization-1440-dark.json"
+    },
+    {
+      "surface": "packs-and-trust-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-packs-and-trust-375-light.json"
+    },
+    {
+      "surface": "packs-and-trust-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-packs-and-trust-375-dark.json"
+    },
+    {
+      "surface": "packs-and-trust-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-packs-and-trust-1440-light.json"
+    },
+    {
+      "surface": "packs-and-trust-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-packs-and-trust-1440-dark.json"
+    },
+    {
+      "surface": "capability-matrix-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-capability-matrix-375-light.json"
+    },
+    {
+      "surface": "capability-matrix-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-capability-matrix-375-dark.json"
+    },
+    {
+      "surface": "capability-matrix-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-capability-matrix-1440-light.json"
+    },
+    {
+      "surface": "capability-matrix-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-capability-matrix-1440-dark.json"
+    },
+    {
+      "surface": "reference-skills-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-skills-375-light.json"
+    },
+    {
+      "surface": "reference-skills-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-skills-375-dark.json"
+    },
+    {
+      "surface": "reference-skills-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-skills-1440-light.json"
+    },
+    {
+      "surface": "reference-skills-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-skills-1440-dark.json"
+    },
+    {
+      "surface": "reference-rules-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-rules-375-light.json"
+    },
+    {
+      "surface": "reference-rules-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-rules-375-dark.json"
+    },
+    {
+      "surface": "reference-rules-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-rules-1440-light.json"
+    },
+    {
+      "surface": "reference-rules-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-rules-1440-dark.json"
+    },
+    {
+      "surface": "reference-commands-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-commands-375-light.json"
+    },
+    {
+      "surface": "reference-commands-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-commands-375-dark.json"
+    },
+    {
+      "surface": "reference-commands-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-commands-1440-light.json"
+    },
+    {
+      "surface": "reference-commands-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-commands-1440-dark.json"
+    },
+    {
+      "surface": "reference-agents-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-agents-375-light.json"
+    },
+    {
+      "surface": "reference-agents-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-agents-375-dark.json"
+    },
+    {
+      "surface": "reference-agents-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-agents-1440-light.json"
+    },
+    {
+      "surface": "reference-agents-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-agents-1440-dark.json"
+    },
+    {
+      "surface": "reference-packs-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-packs-375-light.json"
+    },
+    {
+      "surface": "reference-packs-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-packs-375-dark.json"
+    },
+    {
+      "surface": "reference-packs-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-packs-1440-light.json"
+    },
+    {
+      "surface": "reference-packs-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-packs-1440-dark.json"
+    },
+    {
+      "surface": "reference-mcp-servers-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-mcp-servers-375-light.json"
+    },
+    {
+      "surface": "reference-mcp-servers-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-mcp-servers-375-dark.json"
+    },
+    {
+      "surface": "reference-mcp-servers-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-mcp-servers-1440-light.json"
+    },
+    {
+      "surface": "reference-mcp-servers-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-package10-browser-evidence/axe-reference-mcp-servers-1440-dark.json"
+    }
+  ],
+  "screenshots": [
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-enterprise-forks-375-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-enterprise-forks-375-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": true,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-enterprise-forks-1440-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": true,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-enterprise-forks-1440-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-getting-started-375-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-getting-started-375-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-customization-375-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-customization-375-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-capability-matrix-375-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-capability-matrix-375-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-capability-matrix-1440-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-package10-browser-evidence/keyboard-capability-matrix-1440-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    }
+  ],
+  "summary": "Automated browser verification: 46 scenarios passed; 44 theme/viewport scans have zero violations. Retained per-page records identify actual Tab/ArrowRight probes. Human screen-reader and complete keyboard journey remain unperformed; no visual regression baseline exists.",
+  "inputBinding": {
+    "at": "2026-09-10T21:58:03.709404+00:00",
+    "sha": "99c1094-dirty",
+    "sourceDigest": "4abffd583d67908f2222777e16010ab8cbce3193efa120d5dea2a2eec71b21d9",
+    "verifierSourceDigest": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+    "siteBuildDigest": "b55042d36fe1ccde8e13bb4f73752eb4b929e1e7671a89a621351504453eafa6"
+  },
+  "rawEvidence": {
+    "location": "/tmp/stamity-package10-browser-evidence",
+    "archive": "Durable raw receipts retained separately; public summary omits confidential archive paths.",
+    "files": [
+      {
+        "name": "ax-capability-matrix-1440-dark.json",
+        "bytes": 1309109,
+        "sha256": "8d86fd6f95fc9c827698d1df0f1554c9bde02bdf79cf7439bc5c51d5e9bdeeb0"
+      },
+      {
+        "name": "ax-capability-matrix-1440-light.json",
+        "bytes": 1309114,
+        "sha256": "3a9240cda3221d3fbd512b80b742c534b586b409c5e70eee944de77ecc42ec44"
+      },
+      {
+        "name": "ax-capability-matrix-375-dark.json",
+        "bytes": 1318627,
+        "sha256": "0ad4b4ca9e5d58547294198f95e4bd22f113138b644c42cea4e3d6f1eef14379"
+      },
+      {
+        "name": "ax-capability-matrix-375-light.json",
+        "bytes": 1318580,
+        "sha256": "c56aa54c1f1fed69da7d83ddb633427e5e4f9ee36aef9de8b03838d48619baf5"
+      },
+      {
+        "name": "ax-customization-1440-dark.json",
+        "bytes": 845987,
+        "sha256": "decc27cb8039031c8c60097c275bf6a90a424081ef2cc41df2a2d99ee1f43251"
+      },
+      {
+        "name": "ax-customization-1440-light.json",
+        "bytes": 845984,
+        "sha256": "a368ad1849ffccbcb85e843819f1eb7f9477d026ad37259f879e6dddbd7039fe"
+      },
+      {
+        "name": "ax-customization-375-dark.json",
+        "bytes": 805855,
+        "sha256": "82f9592de728535e0ce8b9b6a1d1c31459f76d5843f306607bb3f779e3f1c4f1"
+      },
+      {
+        "name": "ax-customization-375-light.json",
+        "bytes": 805840,
+        "sha256": "b8c84286641e45dac7a447ae2658517804ec71f55926c478a56fd1e85c7193a9"
+      },
+      {
+        "name": "ax-enterprise-forks-1440-dark.json",
+        "bytes": 3131880,
+        "sha256": "5bff7af79a364663070224e35117830486072fb4608c4a6f572cdfcbf5a9247b"
+      },
+      {
+        "name": "ax-enterprise-forks-1440-light.json",
+        "bytes": 3131948,
+        "sha256": "25c717f2218c81d29b29375a6501ca7295ed211e27bfa87a4150d9cfc71a8b0c"
+      },
+      {
+        "name": "ax-enterprise-forks-375-dark.json",
+        "bytes": 3229405,
+        "sha256": "efc971d3c23ea1edf0ce0f8a5b4793272e39f0e89e0f736164f87f9cfc6945fa"
+      },
+      {
+        "name": "ax-enterprise-forks-375-light.json",
+        "bytes": 3229400,
+        "sha256": "fa1149b118c2cbc6177f1db4754c1719589b66446d177301be1c5c30dddacced"
+      },
+      {
+        "name": "ax-getting-started-1440-dark.json",
+        "bytes": 954002,
+        "sha256": "1e8417153d45796b9423ca618aa350e5d08c20028e1e8944d62c59bcbdc8c2fe"
+      },
+      {
+        "name": "ax-getting-started-1440-light.json",
+        "bytes": 954003,
+        "sha256": "383a876bb5e4dbeb82c4c35528ee8c03906d0f87b7e154a66b9f7b2ffb30f156"
+      },
+      {
+        "name": "ax-getting-started-375-dark.json",
+        "bytes": 913447,
+        "sha256": "81fbf59d5e4f2c01ddfdd7b4aed5c9b8b3b383e77acc56e1dc0bac411ebf45e4"
+      },
+      {
+        "name": "ax-getting-started-375-light.json",
+        "bytes": 913442,
+        "sha256": "1717430c0af20de4999c929225120da0c7e7ce61ed7a460480a969bc4f11905f"
+      },
+      {
+        "name": "ax-packs-and-trust-1440-dark.json",
+        "bytes": 998119,
+        "sha256": "4e344cb6011904aeea90c5009155773fadbedfaa6c2effcf13b8ec32796bc444"
+      },
+      {
+        "name": "ax-packs-and-trust-1440-light.json",
+        "bytes": 998045,
+        "sha256": "056f58c03af9be07c9c2cfebf752b5a890078c5ee45be237bc75ab3f13b22497"
+      },
+      {
+        "name": "ax-packs-and-trust-375-dark.json",
+        "bytes": 973358,
+        "sha256": "76adbe1110c93b0d02f8d39b887f604d217f21b1fbae7178599eaeab077add1d"
+      },
+      {
+        "name": "ax-packs-and-trust-375-light.json",
+        "bytes": 973354,
+        "sha256": "b3fe80153c26b2420babf6e5d09f5cded4117ca39b0286fdc09da3735df44342"
+      },
+      {
+        "name": "ax-reference-agents-1440-dark.json",
+        "bytes": 528448,
+        "sha256": "26d503584f0960203d32c0f3961cb51c9e44255e003f4a1165a99fdda5a7b63e"
+      },
+      {
+        "name": "ax-reference-agents-1440-light.json",
+        "bytes": 528445,
+        "sha256": "b0ca0729d3def08d502183fa54ad252b95fe6d0749512bb8e93780e6c0a6d16c"
+      },
+      {
+        "name": "ax-reference-agents-375-dark.json",
+        "bytes": 419806,
+        "sha256": "19373b4f0fcf4cec488bd2d7844e27afe5c2d9d80bdf5c19c0cc5550ccf748f8"
+      },
+      {
+        "name": "ax-reference-agents-375-light.json",
+        "bytes": 419802,
+        "sha256": "8de12fc921c62bee32ab3b6a5e47415c19b8a476121c0451aee0588dfaa13d79"
+      },
+      {
+        "name": "ax-reference-commands-1440-dark.json",
+        "bytes": 467257,
+        "sha256": "f2e1a04945fcbe25c540bda70d63c3aaa0a1fc446d4c12061210f2c2fc163a64"
+      },
+      {
+        "name": "ax-reference-commands-1440-light.json",
+        "bytes": 467258,
+        "sha256": "eeb21169b138ce1b8d87f8f2e45aa7a868af71b5f807749aff73b97b4b640770"
+      },
+      {
+        "name": "ax-reference-commands-375-dark.json",
+        "bytes": 356873,
+        "sha256": "057ed3bc5ca2fab0c6d612ad4031e2ba599e38ef834b514bb6b8612112958191"
+      },
+      {
+        "name": "ax-reference-commands-375-light.json",
+        "bytes": 356868,
+        "sha256": "2ab476b227776be750551464401404fbcce9ac5158a057df2da532461bd2f8b6"
+      },
+      {
+        "name": "ax-reference-mcp-servers-1440-dark.json",
+        "bytes": 696154,
+        "sha256": "842a2729dc97b7f06931e60c2c7eda02eee9c177be15a8f192b384bbf5b74903"
+      },
+      {
+        "name": "ax-reference-mcp-servers-1440-light.json",
+        "bytes": 696151,
+        "sha256": "e79827806e3a613b5a7d594612abd98f1ab4100567b789545bc591c9eb1c8a46"
+      },
+      {
+        "name": "ax-reference-mcp-servers-375-dark.json",
+        "bytes": 616357,
+        "sha256": "544e9c9498cd1141584a33ee096d48b98a3c79182bca94c2bbb4b3cc94415ebe"
+      },
+      {
+        "name": "ax-reference-mcp-servers-375-light.json",
+        "bytes": 616352,
+        "sha256": "722cc373e25cdba8dcd87f2016f49a5278d4edd455ad0f0aced69df8fbe2a20d"
+      },
+      {
+        "name": "ax-reference-packs-1440-dark.json",
+        "bytes": 282825,
+        "sha256": "745e484d013ab5e691f4530953de42b0f8bd351c75bd67d1299b19afe9272026"
+      },
+      {
+        "name": "ax-reference-packs-1440-light.json",
+        "bytes": 282874,
+        "sha256": "b1ae4047d3bf9f2520b694d5d85acae8913fa07dbbd7ad578d752e425255fd5f"
+      },
+      {
+        "name": "ax-reference-packs-375-dark.json",
+        "bytes": 186778,
+        "sha256": "3c8bf50d8db38e93ff64861d39e66a4f052c514d64386b408ce605bcd40f6a91"
+      },
+      {
+        "name": "ax-reference-packs-375-light.json",
+        "bytes": 186772,
+        "sha256": "8578f0bb9f67399d779e186dc912ca64c7802eaa71ccf1764a688ab4114e322e"
+      },
+      {
+        "name": "ax-reference-rules-1440-dark.json",
+        "bytes": 610450,
+        "sha256": "6f12bbf17a93dff1b1e5e9eecbeaa42d41c309f4cb09a63661d24611bf8a6432"
+      },
+      {
+        "name": "ax-reference-rules-1440-light.json",
+        "bytes": 610455,
+        "sha256": "0eae72c5d93cf86f5cc9b12de464a506827b326b177f0db9f34071bdc699f280"
+      },
+      {
+        "name": "ax-reference-rules-375-dark.json",
+        "bytes": 505306,
+        "sha256": "53187f11145d0463c4cfd2bff12a53142cce762bb5682338c7e07042197cd087"
+      },
+      {
+        "name": "ax-reference-rules-375-light.json",
+        "bytes": 505400,
+        "sha256": "6d6dfc2df913e612e6a89a4ab5ec57b4a5170ecf41c1e38df34fcf7ccd697302"
+      },
+      {
+        "name": "ax-reference-skills-1440-dark.json",
+        "bytes": 467612,
+        "sha256": "4c51028ee7749ea2bb8e48eed863debd812cbd30cb602e0c579ab1a1ec7f7213"
+      },
+      {
+        "name": "ax-reference-skills-1440-light.json",
+        "bytes": 467613,
+        "sha256": "40c05b948b2d651df9c167b81cee71d2510edc646763f005aee893f94e8fbbd8"
+      },
+      {
+        "name": "ax-reference-skills-375-dark.json",
+        "bytes": 370538,
+        "sha256": "3f9657273fb7738a32cfc4f9101278802909ecf549b425e424d66e0c82ac8aa1"
+      },
+      {
+        "name": "ax-reference-skills-375-light.json",
+        "bytes": 370551,
+        "sha256": "86e255d7674180e9956482e269259e22fc7917f8aa70e457d40c8911ae1ac09d"
+      },
+      {
+        "name": "axe-capability-matrix-1440-dark.json",
+        "bytes": 1169861,
+        "sha256": "ab2e095f93cd0edb7a66948c5021b88f55c7d8c3e2a74296e5f66f620b794862"
+      },
+      {
+        "name": "axe-capability-matrix-1440-light.json",
+        "bytes": 1170577,
+        "sha256": "899267ad618112baef6a78baaf8b3cd93f688a79e8d8d64c4b2b92b6f628c43b"
+      },
+      {
+        "name": "axe-capability-matrix-375-dark.json",
+        "bytes": 1081977,
+        "sha256": "66537d9be6b9864fca510a443cc5dd615e4692aa2cdb3f2fecc64df2b3e5a215"
+      },
+      {
+        "name": "axe-capability-matrix-375-light.json",
+        "bytes": 1082093,
+        "sha256": "6ed6b0eb49e597c14c4051dab3bcb818b74d9f1fd7b54e050081976b8bcf054b"
+      },
+      {
+        "name": "axe-customization-1440-dark.json",
+        "bytes": 764285,
+        "sha256": "4f2e716e132e052db798185bd912b5c0fdf2a1a08c4a15cd2de85e94e62cd91f"
+      },
+      {
+        "name": "axe-customization-1440-light.json",
+        "bytes": 770113,
+        "sha256": "54c5b735fead996827a3ec4df8862a6a4d485e62fb2db1e028f6abd870fc41de"
+      },
+      {
+        "name": "axe-customization-375-dark.json",
+        "bytes": 565879,
+        "sha256": "f022ab9efe7e4f9e9abe7fdf2fbb9e2c6290f08e534570a1abf6982c1ca7f812"
+      },
+      {
+        "name": "axe-customization-375-light.json",
+        "bytes": 570851,
+        "sha256": "efd156faed77ff5b72aa2b4fcf59166d87aac919febb0cc655d30cafca39219b"
+      },
+      {
+        "name": "axe-enterprise-forks-1440-dark.json",
+        "bytes": 3344264,
+        "sha256": "712018151ce3fdf131e73982b892441240b381a17fcc56e17f94783471f68690"
+      },
+      {
+        "name": "axe-enterprise-forks-1440-light.json",
+        "bytes": 3412324,
+        "sha256": "657c653cc7b996a7d16b166d188f5bbbb7bba6030e57630943a92470684c07d0"
+      },
+      {
+        "name": "axe-enterprise-forks-375-dark.json",
+        "bytes": 3185790,
+        "sha256": "a2b25063501ea10563607ac9a52aa1a686a35cf6241dcaf06f37ae56eed84510"
+      },
+      {
+        "name": "axe-enterprise-forks-375-light.json",
+        "bytes": 3253986,
+        "sha256": "e8835a3b87bd6a5acd6a93679da645afa0959bd60a574ce4ea7b6f4ab01a463d"
+      },
+      {
+        "name": "axe-getting-started-1440-dark.json",
+        "bytes": 963702,
+        "sha256": "5dbf180a4e951ec5ebcccc7293c8f010429389b70caf1fa1f082e2abc61b7a32"
+      },
+      {
+        "name": "axe-getting-started-1440-light.json",
+        "bytes": 971240,
+        "sha256": "52493628d3d5aa3db51b1874465a809750804f91f960ff0dda9eee240909126a"
+      },
+      {
+        "name": "axe-getting-started-375-dark.json",
+        "bytes": 805823,
+        "sha256": "d0d5deaf545426c5c4a8d6c7c3e14efaca0d28eb742a3fb243b9d7a424174317"
+      },
+      {
+        "name": "axe-getting-started-375-light.json",
+        "bytes": 813437,
+        "sha256": "43a7e30f49c35762a4af952110e233409a5ae25e140769f5616c1a4ed8395e16"
+      },
+      {
+        "name": "axe-packs-and-trust-1440-dark.json",
+        "bytes": 1127312,
+        "sha256": "8a9c646c677c04771e977bd5d991fa3d1339deac51d3c889fbaa4792919c1dbe"
+      },
+      {
+        "name": "axe-packs-and-trust-1440-light.json",
+        "bytes": 1150297,
+        "sha256": "2e83606b005b43ee6f7cde0e99312f0c256bf7231b62e3fae0a28571bd7ba99a"
+      },
+      {
+        "name": "axe-packs-and-trust-375-dark.json",
+        "bytes": 957230,
+        "sha256": "80edb7b867348ec1e6845cf5c30a184b79f4ab9ade6e88339063dee23603f127"
+      },
+      {
+        "name": "axe-packs-and-trust-375-light.json",
+        "bytes": 980243,
+        "sha256": "700eec0f8ffddc715c00f6c7bf0fb4223c6775f16650564a63880ec01530be26"
+      },
+      {
+        "name": "axe-reference-agents-1440-dark.json",
+        "bytes": 630768,
+        "sha256": "e49670f818b6d15d9296fe3590070369df153044217e71e57c390501bfd3cd29"
+      },
+      {
+        "name": "axe-reference-agents-1440-light.json",
+        "bytes": 630710,
+        "sha256": "19990934e9a43b4c086ff13d26cd9e09e9d9cad079b57c9db715dff16b403b90"
+      },
+      {
+        "name": "axe-reference-agents-375-dark.json",
+        "bytes": 409106,
+        "sha256": "3aea6d5518ac417bda364fda167adec4f02ea23b29c3a3f54d11d4493981a366"
+      },
+      {
+        "name": "axe-reference-agents-375-light.json",
+        "bytes": 409076,
+        "sha256": "3b07f84adf9ed84ce70dc0734163f5dcd03c0146885953421a73fb84c4e25d4b"
+      },
+      {
+        "name": "axe-reference-commands-1440-dark.json",
+        "bytes": 587027,
+        "sha256": "b64c7e8e1f33bd86c8928c13c840dc8e74f903c7b963ec322eb1d1de27450854"
+      },
+      {
+        "name": "axe-reference-commands-1440-light.json",
+        "bytes": 586971,
+        "sha256": "14f2673592063c8b7a7610f01f7b5bac73fe0690cc5e1fae7e0cacbd8c0c11c5"
+      },
+      {
+        "name": "axe-reference-commands-375-dark.json",
+        "bytes": 371919,
+        "sha256": "34fb1bf9888e7bd91636697dd17aebaf45e6cc69483196b77bfa18c5fdbb138d"
+      },
+      {
+        "name": "axe-reference-commands-375-light.json",
+        "bytes": 371891,
+        "sha256": "f5dd2ec8b6b8fcbb58f1354fb74cb0b795efdfe05dbfe73b7a8f712894bf4c45"
+      },
+      {
+        "name": "axe-reference-mcp-servers-1440-dark.json",
+        "bytes": 727243,
+        "sha256": "186512cd4fcfdaf48bb056e9e9d3225b036c6ba431863940d379044a6a987cf8"
+      },
+      {
+        "name": "axe-reference-mcp-servers-1440-light.json",
+        "bytes": 727185,
+        "sha256": "94b4b4e835eb6a7b303ba2d1619c9046c37aa53a8f204f61e63f1aa2d6fd7c05"
+      },
+      {
+        "name": "axe-reference-mcp-servers-375-dark.json",
+        "bytes": 508044,
+        "sha256": "850d38f1fafa0f75b891b0bfb4366b823323ad372d393cc3e4c06406eeb7bf91"
+      },
+      {
+        "name": "axe-reference-mcp-servers-375-light.json",
+        "bytes": 508014,
+        "sha256": "316cc4ee4b65ff90163d94914637dac914daa84170dfb0ed91d8f02d41e1d315"
+      },
+      {
+        "name": "axe-reference-packs-1440-dark.json",
+        "bytes": 425465,
+        "sha256": "c7a3711ae9eb3c59c3d0bb4bee0c878b788d1cd61e4ece49a92c1f925063f12f"
+      },
+      {
+        "name": "axe-reference-packs-1440-light.json",
+        "bytes": 425421,
+        "sha256": "a7539b8e0529b665ee38c8fe7eb11e57723c4c25dfa4f40e3174c4eadf1f2579"
+      },
+      {
+        "name": "axe-reference-packs-375-dark.json",
+        "bytes": 234318,
+        "sha256": "27bae941cebad36b64775ee41d6d95877e85bdf0e9323110c7b3a33a5353c568"
+      },
+      {
+        "name": "axe-reference-packs-375-light.json",
+        "bytes": 234302,
+        "sha256": "b56bcef121805a698cca4e07b5febe12c49b36e68965c688c8070999ac816b58"
+      },
+      {
+        "name": "axe-reference-rules-1440-dark.json",
+        "bytes": 692922,
+        "sha256": "580d6acf935da4a1437029b20995fda71e217ef3064839856c0419ba9b20c064"
+      },
+      {
+        "name": "axe-reference-rules-1440-light.json",
+        "bytes": 692860,
+        "sha256": "286a574f570b3ae64f3c534503ff90b12b353bb09a28156f831bd124edd17ab6"
+      },
+      {
+        "name": "axe-reference-rules-375-dark.json",
+        "bytes": 462265,
+        "sha256": "a750b44f948b7fe82685af9b2da4089b27bc81caddb354482d2aac26cb5af8fb"
+      },
+      {
+        "name": "axe-reference-rules-375-light.json",
+        "bytes": 462231,
+        "sha256": "090ac0daa02f55e9fb632728218d26eb451e2cefbfd32001712e27cc914c5c65"
+      },
+      {
+        "name": "axe-reference-skills-1440-dark.json",
+        "bytes": 565752,
+        "sha256": "b3a0b6515be93cba481d223e73962776d7bfbf975770f46be494006ea2f15ab3"
+      },
+      {
+        "name": "axe-reference-skills-1440-light.json",
+        "bytes": 565698,
+        "sha256": "2718f14d679f1fed39aba8958dda0f090eb28ff6cbe88e4209535866225af5dd"
+      },
+      {
+        "name": "axe-reference-skills-375-dark.json",
+        "bytes": 353508,
+        "sha256": "05a5b1709f897bbf4afc904c7380d061e7d833c6eab2e29ca529fa9a5275510c"
+      },
+      {
+        "name": "axe-reference-skills-375-light.json",
+        "bytes": 353482,
+        "sha256": "ef14e3d784938cd1d7e7b7fcf5586a94c3f0c90c8cb03d346ac5be660cba2d20"
+      },
+      {
+        "name": "keyboard-capability-matrix-1440-dark.png",
+        "bytes": 225522,
+        "sha256": "134d67318b99ca1833d4f6afc2f938bb3e844ce54b3aaf753fd264a64f964e87"
+      },
+      {
+        "name": "keyboard-capability-matrix-1440-light.png",
+        "bytes": 225292,
+        "sha256": "14b8a32cde7c377967ba8b369d0d8afe2fc3107bf12d7ca217c8ad8fa8bbdb61"
+      },
+      {
+        "name": "keyboard-capability-matrix-375-dark.png",
+        "bytes": 66132,
+        "sha256": "06ced7716d3ce417f8fe920b27e14c5270f24530713c0c2b3d51c274b7b82ea5"
+      },
+      {
+        "name": "keyboard-capability-matrix-375-light.png",
+        "bytes": 66364,
+        "sha256": "8a0550ad0266ed28a262192724607bad8826af76c7749a73d28d90705c5ebd76"
+      },
+      {
+        "name": "keyboard-customization-375-dark.png",
+        "bytes": 87196,
+        "sha256": "f3c7fd593d7bc571d8e5483258c45808ad43ae2a9537f6974df5de45de43399a"
+      },
+      {
+        "name": "keyboard-customization-375-light.png",
+        "bytes": 87363,
+        "sha256": "4404a08850d4710934945982aa58ec64eb15f07b7c5169da541099abd028aa1e"
+      },
+      {
+        "name": "keyboard-enterprise-forks-1440-dark.png",
+        "bytes": 227731,
+        "sha256": "7fa500ca7b1eda8c0f23d5e3aae5549d135d37c33715304c16ef45bf9276fee4"
+      },
+      {
+        "name": "keyboard-enterprise-forks-1440-light.png",
+        "bytes": 228093,
+        "sha256": "81355782f039743e7d145f687146d11607688b2a62a357fa2e5eb5e9928aad2b"
+      },
+      {
+        "name": "keyboard-enterprise-forks-375-dark.png",
+        "bytes": 44597,
+        "sha256": "37249e6ab9487bded2cda9041151cf164455594e95e6342a6677b4b0f7241c05"
+      },
+      {
+        "name": "keyboard-enterprise-forks-375-light.png",
+        "bytes": 45895,
+        "sha256": "e6b19635ec08dccfb5c5f90b6cca75d8598e8b3617988c8aba1dab02cceb7d35"
+      },
+      {
+        "name": "keyboard-getting-started-375-dark.png",
+        "bytes": 69893,
+        "sha256": "187483b09bfeac4f0ac213a7416696084a91013ece0c7df2266906a0662f10e7"
+      },
+      {
+        "name": "keyboard-getting-started-375-light.png",
+        "bytes": 70113,
+        "sha256": "fd83990c705aac6b101ebddeb5c5dd8664c9f6629a82169229da256712062ded"
+      },
+      {
+        "name": "resize-and-font-size.json",
+        "bytes": 446,
+        "sha256": "c55a10aca86a90a6d549821cdb19f21d2db5e61d0361018c1e4c6707bd040634"
+      },
+      {
+        "name": "scenario-capability-matrix-1440-dark.json",
+        "bytes": 3591,
+        "sha256": "a206e92a70384feb5c5955b620c2007fd29087ee96d79a35fb2d69bc537298c0"
+      },
+      {
+        "name": "scenario-capability-matrix-1440-light.json",
+        "bytes": 3592,
+        "sha256": "6a7cb0b59f8e86e0f488eb5c2828624f4f9b754ee438059e2cf492bc8dc5c97b"
+      },
+      {
+        "name": "scenario-capability-matrix-375-dark.json",
+        "bytes": 6012,
+        "sha256": "db61983e8a5d17fceefa092b6498e97d6a204f45503f490474ade4fca38e2f02"
+      },
+      {
+        "name": "scenario-capability-matrix-375-light.json",
+        "bytes": 6002,
+        "sha256": "d044723483ce6c418ebd00ee344ee5a6bcf266a9cf33976950dd0a09738a91e9"
+      },
+      {
+        "name": "scenario-customization-1440-dark.json",
+        "bytes": 949,
+        "sha256": "3c851b3728eccdf9618a4a01c257dcccb8c66f446848aba48294af37823df769"
+      },
+      {
+        "name": "scenario-customization-1440-light.json",
+        "bytes": 951,
+        "sha256": "29d3f07eaa7470fb52729ae5d45ef8ae5a378f01e5fd0fd27661d2d82c6faf23"
+      },
+      {
+        "name": "scenario-customization-375-dark.json",
+        "bytes": 1378,
+        "sha256": "1fc3bdf77440ad43a38ee535278f4caf6f945dd0164ebcc6a45126730fd61cf5"
+      },
+      {
+        "name": "scenario-customization-375-light.json",
+        "bytes": 1378,
+        "sha256": "d7be2433bd03297b2bc9c3cf755c059d85f4df650116ee308cf843615ee6d7c7"
+      },
+      {
+        "name": "scenario-enterprise-forks-1440-dark.json",
+        "bytes": 2000,
+        "sha256": "642ae10be1ea7ac033c4a34b866603e35b641744a3f03456833f0e00aeb0f06c"
+      },
+      {
+        "name": "scenario-enterprise-forks-1440-light.json",
+        "bytes": 2001,
+        "sha256": "03b030b17c10d3f2727999cb4711d0fcbc9e195c49adc4ac6f2adfab38fdf307"
+      },
+      {
+        "name": "scenario-enterprise-forks-375-dark.json",
+        "bytes": 2909,
+        "sha256": "79e797fb189c4c90c9dcd5eb2257c7bc10ba65ad38906fb3bad1d220c422650c"
+      },
+      {
+        "name": "scenario-enterprise-forks-375-light.json",
+        "bytes": 2906,
+        "sha256": "2009d88517086e129f9706ad37931e5e457429c1fbb5f06bd48f6da7e00dcf52"
+      },
+      {
+        "name": "scenario-getting-started-1440-dark.json",
+        "bytes": 781,
+        "sha256": "07f7ae5218b7ff6ce053f8693c7a345544900b105d8573bb07dcc6d9bf3a98b3"
+      },
+      {
+        "name": "scenario-getting-started-1440-light.json",
+        "bytes": 783,
+        "sha256": "3fb805dd88ac0857794988c612841da6c9640323b5ca4515b1d5806a1c2917fb"
+      },
+      {
+        "name": "scenario-getting-started-375-dark.json",
+        "bytes": 1237,
+        "sha256": "c98bdc9fb7a808432755f7fa92a9b4df7eac7e1e5e08c61aba0e5d2283ade0fd"
+      },
+      {
+        "name": "scenario-getting-started-375-light.json",
+        "bytes": 1237,
+        "sha256": "3d93e8af1c77a3be43b6c09a0bab84d360162c3020a9eb2986963085d44acd4c"
+      },
+      {
+        "name": "scenario-packs-and-trust-1440-dark.json",
+        "bytes": 510,
+        "sha256": "67aa685ac075385b2d9dda3e8649ad48fdf16081c5454f90a5be906fa4f41f8a"
+      },
+      {
+        "name": "scenario-packs-and-trust-1440-light.json",
+        "bytes": 512,
+        "sha256": "fbfb7c604edfcb925306e34cd019626fcaff4b1bf64556c54d2598dfed0a7752"
+      },
+      {
+        "name": "scenario-packs-and-trust-375-dark.json",
+        "bytes": 506,
+        "sha256": "d450acfff2772856b0afb89bd55717948353391f7474c847f8945946d5f0f317"
+      },
+      {
+        "name": "scenario-packs-and-trust-375-light.json",
+        "bytes": 508,
+        "sha256": "c2daa84b4200e1984887b997724515adf071285f1725acab2ac5f63e8e0f0d43"
+      },
+      {
+        "name": "scenario-reference-agents-1440-dark.json",
+        "bytes": 299,
+        "sha256": "a2cc6ac732c2c73ce02266e2899cf0934c3356e5d2526cbb02eb5b9b3ed52a69"
+      },
+      {
+        "name": "scenario-reference-agents-1440-light.json",
+        "bytes": 301,
+        "sha256": "9ac52d9a9dc152ee2583d16a8a6d1e9b1d5eda93d4d54cbb43d73b4dc1e7f80a"
+      },
+      {
+        "name": "scenario-reference-agents-375-dark.json",
+        "bytes": 295,
+        "sha256": "75c6ed4a608598cb6f00d290b0f6b598df8fd235863d4865c6864befaa404286"
+      },
+      {
+        "name": "scenario-reference-agents-375-light.json",
+        "bytes": 297,
+        "sha256": "019b80d3879d5d7edba455d20cc0c361293a013f73ae2569c094ba5b5d0be2a2"
+      },
+      {
+        "name": "scenario-reference-commands-1440-dark.json",
+        "bytes": 303,
+        "sha256": "14c79d69eaab296031765f5039607a85a96d8ddf953a88e18347039c5f0e481a"
+      },
+      {
+        "name": "scenario-reference-commands-1440-light.json",
+        "bytes": 305,
+        "sha256": "1b431b39ba701aa5f9245bbe7b0e6240f124e1ef0869a13327561656aafbe132"
+      },
+      {
+        "name": "scenario-reference-commands-375-dark.json",
+        "bytes": 299,
+        "sha256": "63fc3f6f922826fff626fb6f0033b0691e9d75db3521dd890eecdb7bd3d53903"
+      },
+      {
+        "name": "scenario-reference-commands-375-light.json",
+        "bytes": 301,
+        "sha256": "31454fcd8c9b1430cd88e989be49204cb19730cb3c3d2b58b1275874b76136df"
+      },
+      {
+        "name": "scenario-reference-mcp-servers-1440-dark.json",
+        "bytes": 309,
+        "sha256": "f217ed6f94690b0de9285d4360057873e30b9703081b56282129b4a4a56ad57c"
+      },
+      {
+        "name": "scenario-reference-mcp-servers-1440-light.json",
+        "bytes": 311,
+        "sha256": "7813e547386439696184cb52120efe02016f92dd3129e19ae856dd004f840a8d"
+      },
+      {
+        "name": "scenario-reference-mcp-servers-375-dark.json",
+        "bytes": 305,
+        "sha256": "795fa766fddb0e9c34a5460925d10fac6134fbcad49027faabfd123cdb50510a"
+      },
+      {
+        "name": "scenario-reference-mcp-servers-375-light.json",
+        "bytes": 307,
+        "sha256": "3577f8a50fece827d7681be1028584a630a9a3a84cda86f8c43817040ee103e8"
+      },
+      {
+        "name": "scenario-reference-packs-1440-dark.json",
+        "bytes": 297,
+        "sha256": "d3d32a373475a78f51177fa3b23e1b1a8e0fd31a83d0d6a87a352b669951c2e1"
+      },
+      {
+        "name": "scenario-reference-packs-1440-light.json",
+        "bytes": 299,
+        "sha256": "a652de39322e7e4b5e36ff9a9a13b8f7d20a36d1ebd2442182a3df2b2bcd51d0"
+      },
+      {
+        "name": "scenario-reference-packs-375-dark.json",
+        "bytes": 293,
+        "sha256": "5e241040ff95181e1f4241644980e2beb656c5402ecccdb210709e536f1a05f5"
+      },
+      {
+        "name": "scenario-reference-packs-375-light.json",
+        "bytes": 295,
+        "sha256": "d9df0288e7a5bc2a76045e8e24cf44a56c7a1f06f305cb3c61711dac12c34b27"
+      },
+      {
+        "name": "scenario-reference-rules-1440-dark.json",
+        "bytes": 297,
+        "sha256": "6920962c16bb8e38d77f56c0cea29249a3dfd0b50ad11083137c03ac920a49e1"
+      },
+      {
+        "name": "scenario-reference-rules-1440-light.json",
+        "bytes": 299,
+        "sha256": "a60bbe241249cc04d602ead68db22002daf02160c674f3ff51954eab955f0486"
+      },
+      {
+        "name": "scenario-reference-rules-375-dark.json",
+        "bytes": 293,
+        "sha256": "058ce3d4ff577273fa9e97eab4ae11d479cbf66cc1fa8632a8cc207a8f17753a"
+      },
+      {
+        "name": "scenario-reference-rules-375-light.json",
+        "bytes": 295,
+        "sha256": "a942518d5aadd871af642c7b138c42a2440b0416b50574f3d02880736f956366"
+      },
+      {
+        "name": "scenario-reference-skills-1440-dark.json",
+        "bytes": 299,
+        "sha256": "1e132a5fb675232765cba999625516d0c831c6d0739a22ebf13d9a8134dda965"
+      },
+      {
+        "name": "scenario-reference-skills-1440-light.json",
+        "bytes": 301,
+        "sha256": "4ef21266098b3a9912201c8c39623d990de835e62703daccc2317f14090209f5"
+      },
+      {
+        "name": "scenario-reference-skills-375-dark.json",
+        "bytes": 295,
+        "sha256": "06fb7bed027ce5a2728ee6354c43ba97044d7efdec823ff3f4b9c26c20bfb383"
+      },
+      {
+        "name": "scenario-reference-skills-375-light.json",
+        "bytes": 297,
+        "sha256": "e386ba00bb87fca185ced2b0b086076bd23682450fc02b67fbac7da133fdb38d"
+      },
+      {
+        "name": "ssr-no-javascript.json",
+        "bytes": 273,
+        "sha256": "6bcf1fd0c56ea547ea002173678853c9601c422919361d86505bb3795a104423"
+      }
+    ]
+  },
+  "candidateBinding": {
+    "commit": "4e649f8a703021a3c0e4e057c258942b2330220f",
+    "verifiedInputCount": 1071,
+    "sourceDigest": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+    "renderInputCount": 54,
+    "renderSourceDigest": "4abffd583d67908f2222777e16010ab8cbce3193efa120d5dea2a2eec71b21d9",
+    "method": "Every recorded input was byte-compared with git show <candidate>:<path>; all match. Browser ran before commit under the explicitly dirty identity."
+  }
+}
