@@ -29,7 +29,7 @@
 // src/apm_cli/models/validation.py, apm 0.29.0, read 2026-08-31) and because
 // APM addresses primitives by their location in that tree, not by a component
 // path a manifest declares. The copy is generated, never hand-edited: the
-// corpus under `content/` stays the one authored source.
+// authored sources remain `content/` and the downstream's optional `fork/`.
 //
 // FOUR CLASSES, FOUR HOMES. Each mapping is documented by APM's own producer
 // reference (docs/src/content/docs/producer/author-primitives/, apm 0.29.0):
@@ -39,9 +39,10 @@
 //   command -> .apm/prompts/<id>.prompt.md              basename becomes /<id>
 //   agent   -> .apm/agents/<id>.agent.md                a callable persona
 //
-// `<id>` is the EMITTED id — `st-` for the invocable classes, `stamity-` for
-// the rest, exactly as `../src/types/markers.ts` rules for every other client
-// surface. An APM consumer therefore types the same `/st-work` and names the
+// `<id>` is the EMITTED id — bundled skills keep their directory, new fork
+// skills keep their bare directory, commands take `st-` and other classes take
+// `stamity-`, following the catalog/CLI identity contract. An APM consumer
+// therefore types the same `/st-work` and names the
 // same `stamity-reviewer` as a consumer who installed through any other
 // channel; a projection that re-derived its own spelling would be a fifth
 // vocabulary for the same corpus.
@@ -250,6 +251,8 @@ import { readFileSync } from 'node:fs'
 import { join, posix, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { resolveDistributionIdentity } from './distribution-identity.mjs'
+
 const SELF = fileURLToPath(import.meta.url)
 const ROOT = resolve(SELF, '..', '..')
 const USAGE = 'Usage: node scripts/generate-apm-package.mjs [--check] [--out-dir <dir>]'
@@ -304,15 +307,7 @@ for (let i = 0; i < args.length; i += 1) {
   }
 }
 
-// ── Pinned publisher facts ───────────────────────────────────────
-//
-// The publisher name, pinned rather than read, for the same reason the plugin
-// generator pins it: package.json's `author` is free text, so reading it would
-// let one edit there silently rename the publisher on a published surface.
-// Pinned here it is cross-checked against the repository owner slug below, so a
-// repository move — or a drifted pin — fails the run.
-
-const PUBLISHER = 'zomarit'
+// Publisher identity is resolved from package.json by the shared validator below.
 
 /** Repo-root manifest, and the root of the generated primitive tree. */
 const APM_MANIFEST = 'apm.yml'
@@ -378,36 +373,21 @@ const packageName = requirePkg('name', pkg.name, nonEmptyString)
 const version = requirePkg('version', pkg.version, nonEmptyString)
 const description = requirePkg('description', pkg.description, nonEmptyString)
 const license = requirePkg('license', pkg.license, nonEmptyString)
-const repositoryUrl = requirePkg('repository.url', pkg.repository?.url, nonEmptyString)
 
-/** `git+https://github.com/owner/repo.git` -> `https://github.com/owner/repo`. */
-const repository = repositoryUrl.replace(/^git\+/, '').replace(/\.git$/, '')
-
-const ownerMatch = /^https:\/\/github\.com\/([^/]+)\/([^/]+)$/.exec(repository)
-if (ownerMatch === null) {
-  fail(
-    `package.json \`repository.url\` normalises to ${repository}, which is not a ` +
-      'https://github.com/<owner>/<repo> URL. An APM package is resolved from its git remote, ' +
-      'so the install shape this repository documents is derived from it — teach this generator ' +
-      'the new host before moving the repository.',
-  )
+let identity
+try {
+  identity = resolveDistributionIdentity(pkg)
+} catch (err) {
+  fail(err.message)
 }
-const [, ownerSlug] = ownerMatch
-
-if (ownerSlug.toLowerCase() !== PUBLISHER.toLowerCase()) {
-  fail(
-    `The pinned publisher ${JSON.stringify(PUBLISHER)} does not match the repository owner ` +
-      `${JSON.stringify(ownerSlug)} in ${repository}. One of the two moved; reconcile them here ` +
-      'rather than letting the manifest name a publisher that owns nothing.',
-  )
-}
+const { publisher: PUBLISHER } = identity
 
 /** The package id, unscoped — the same id every other published surface carries. */
 const packageId = packageName.replace(/^@[^/]+\//, '')
 
 // ── Corpus projection ────────────────────────────────────────────
 
-const { buildContentIndex, COMMAND_ID_PREFIX } = await import('../src/content/catalog.ts')
+const { assertSafePath, buildContentIndex, COMMAND_ID_PREFIX, replacedClaimantOf, typeIdKey } = await import('../src/content/catalog.ts')
 const { composeFrontmatter } = await import('../src/content/frontmatter.ts')
 const { contentPrefixFor } = await import('../src/types/markers.ts')
 const { CONTENT_CLASSES } = await import('../src/types/content.ts')
@@ -416,12 +396,18 @@ const { stringify: stringifyYaml } = await import('yaml')
 
 const index = await buildContentIndex()
 
-/**
- * Corpus artifacts only, one per id. A pack root or an override tree can join
- * the same walk in other callers; neither ships inside this package, and a
- * contested id emits once from the claimant the index resolved.
- */
-const items = index.items.filter((item) => (item.origin ?? 'corpus') === 'corpus')
+// A reported collision is not an exportable package, even when duplicate bodies
+// happen to agree. Refuse before rendering or writing any generated output.
+if (index.collisions.length > 0) {
+  fail('APM content identity collisions:\n' + index.collisions.map((row) =>
+    `  - ${row.kind}: ${row.key} (${row.paths.join(', ')})`).join('\n'))
+}
+
+/** Package-authored winners only; consumer packs and overrides are not inputs. */
+const items = index.items.filter((item) =>
+  ['corpus', 'fork'].includes(item.origin ?? 'corpus') &&
+  index.byKey.get(typeIdKey(item.type, item.id)) === item,
+)
 
 const missingClasses = CONTENT_CLASSES.filter((type) => !items.some((item) => item.type === type))
 if (missingClasses.length > 0) {
@@ -433,12 +419,19 @@ if (missingClasses.length > 0) {
 }
 
 /**
- * The emitted filename stem: the artifact's id with the catalog's command
+ * Skills inherit the replaced bundled directory or keep their own directory.
+ * Other emitted filename stems use the artifact's id with the catalog's command
  * namespacing removed and the filename prefix its class earns restored.
  * `../src/types/markers.ts` owns which prefix that is, so an APM consumer types
  * the same command name and addresses the same agent as every other client.
  */
 function emittedId(item) {
+  if (item.type === 'skill') {
+    const source = replacedClaimantOf(index, item) ?? item
+    const id = posix.basename(posix.dirname(source.relativePath))
+    assertSafePath(id, `skill ${JSON.stringify(item.id)} identity`)
+    return id
+  }
   const bare =
     item.type === 'command' && item.id.startsWith(COMMAND_ID_PREFIX)
       ? item.id.slice(COMMAND_ID_PREFIX.length)
@@ -541,16 +534,20 @@ async function walkRegularFiles(dir, prefix) {
 /** Every file this package ships, as repo-relative POSIX path -> bytes. */
 async function renderPackage() {
   const rendered = new Map()
+  const portablePaths = new Set()
 
   const add = (relPath, bytes) => {
-    const existing = rendered.get(relPath)
-    if (existing !== undefined && existing !== bytes) {
+    assertSafePath(relPath, 'APM projection')
+    // The package must also install on case-insensitive Windows/macOS volumes.
+    const portablePath = relPath.toLowerCase()
+    if (portablePaths.has(portablePath)) {
       fail(
-        `Two corpus artifacts project onto ${relPath}. A primitive path is an identity in an ` +
+        `Two content artifacts project onto ${relPath}. A primitive path is an identity in an ` +
           'APM package, so the second would silently replace the first.',
       )
     }
-    rendered.set(relPath, bytes)
+    portablePaths.add(portablePath)
+    rendered.set(relPath, Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes, 'utf8'))
   }
 
   await Promise.all(
@@ -563,33 +560,28 @@ async function renderPackage() {
         return
       }
 
-      // `skills/<dir>/SKILL.md` -> `<dir>`. The source directory is the
-      // artifact's identity in this corpus and in APM alike, so the two must
-      // already agree; a divergence is a rename nobody chose, not a value to
-      // reconcile silently.
-      const sourceDir = posix.dirname(item.relativePath)
-      const sourceName = posix.basename(sourceDir)
-      if (sourceName !== id) {
-        fail(
-          `Skill ${JSON.stringify(item.id)} lives in ${sourceName}/ but projects as ${id}/. APM ` +
-            'takes a skill\'s identity from its directory name, so the two spellings would ship ' +
-            'as different skills.',
-        )
-      }
-
+      // Identity follows the replaced bundled skill; companion files always
+      // come from the winning skill's own source directory.
       const sourceRoot = resolve(item.filePath, '..')
-      const files = await walkRegularFiles(sourceRoot, '')
+      const files = (await walkRegularFiles(sourceRoot, '')).filter((path) =>
+        !['SKILL.customize.md', 'SKILL.customize.yaml'].includes(path),
+      )
       if (!files.includes(SKILL_FILE)) {
         fail(`Skill ${JSON.stringify(item.id)} has no ${SKILL_FILE} at ${repoRelative(sourceRoot)}.`)
       }
       // Independent reads over one skill's own tree, so they run together.
       const projected = await Promise.all(
-        files.map(async (relPath) => [
-          posix.join(dir, id, relPath),
-          relPath === SKILL_FILE
-            ? primitive(headFor(item, id), item)
-            : await readFile(join(sourceRoot, ...relPath.split('/')), 'utf8'),
-        ]),
+        files.map(async (relPath) => {
+          // Validate before join can normalize anything and before reading a
+          // companion. A POSIX filename containing a backslash is unsafe on Windows.
+          assertSafePath(relPath, `skill ${JSON.stringify(item.id)} companion`)
+          return [
+            posix.join(dir, id, relPath),
+            relPath === SKILL_FILE
+              ? primitive(headFor(item, id), item)
+              : await readFile(join(sourceRoot, ...relPath.split('/'))),
+          ]
+        }),
       )
       for (const [target, bytes] of projected) add(target, bytes)
     }),
@@ -665,8 +657,8 @@ async function pruneEmptyDirectories(dir, relPath) {
 
 /** First line that differs, as a one-line summary a reader can act on. */
 function firstDifference(expected, actual) {
-  const want = expected.split('\n')
-  const have = actual.split('\n')
+  const want = expected.toString('utf8').split('\n')
+  const have = actual.toString('utf8').split('\n')
   for (let i = 0; i < Math.max(want.length, have.length); i += 1) {
     if (want[i] !== have[i]) {
       const line = String(i + 1)
@@ -676,7 +668,7 @@ function firstDifference(expected, actual) {
       )
     }
   }
-  return 'files differ in trailing bytes only'
+  return 'files differ in bytes (including binary content)'
 }
 
 if (check) {
@@ -685,8 +677,8 @@ if (check) {
   const compared = await Promise.all(
     [...rendered].map(async ([relPath, bytes]) => {
       try {
-        const committed = await readFile(resolve(base, relPath), 'utf8')
-        return committed === bytes ? null : `${relPath}: ${firstDifference(bytes, committed)}`
+        const committed = await readFile(resolve(base, relPath))
+        return committed.equals(bytes) ? null : `${relPath}: ${firstDifference(bytes, committed)}`
       } catch (err) {
         return `${relPath}: not readable (${err.code ?? err.message})`
       }

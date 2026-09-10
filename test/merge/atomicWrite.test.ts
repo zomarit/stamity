@@ -197,6 +197,14 @@ describe("locking toggles", () => {
 describe("atomicWriteFile", () => {
   const getDir = useTempDir("atomic-write");
 
+  it("preserves arbitrary companion bytes through creation and atomic replacement", async () => {
+    const target = getDir().path("nested", "companion.bin");
+    await atomicWriteFile(target, new Uint8Array([0, 255, 128, 65]));
+    expect(await readFile(target)).toEqual(Buffer.from([0, 255, 128, 65]));
+    await atomicWriteFile(target, new Uint8Array([254, 0, 129]));
+    expect(await readFile(target)).toEqual(Buffer.from([254, 0, 129]));
+  });
+
   /**
    * How long the concurrent reader below stands aside between samples, as a
    * multiple of the read it just made.

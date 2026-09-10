@@ -1063,7 +1063,7 @@ async function existingFileMode(filePath: string): Promise<number | undefined> {
  */
 export async function atomicWriteFile(
   filePath: string,
-  content: string,
+  content: string | Uint8Array,
   opts?: AtomicWriteOptions,
 ): Promise<void> {
   filePath = resolve(filePath);
@@ -1091,7 +1091,7 @@ export async function atomicWriteFile(
  */
 export async function atomicWriteFileUnlocked(
   filePath: string,
-  content: string,
+  content: string | Uint8Array,
   opts?: AtomicWriteOptions,
 ): Promise<void> {
   // See measure 1 in the module header: `resolve` collapses `..` lexically while
