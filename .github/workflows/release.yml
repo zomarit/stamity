@@ -1,5 +1,5 @@
-# Release — the only path that publishes, split into a job that runs code and a job that holds
-# the credential.
+# Release — the only path that publishes, split into jobs that run code and a job that holds the
+# credential.
 #
 # THE SPLIT. `gates` runs every third-party binary in the release path (the build, the suite, the
 # leak gate, the packed-artifact smoke) on the exact shipping commit, and holds NO OIDC token.
@@ -8,6 +8,13 @@
 # artifact it verifies, because a digest carried inside the artifact it attests is circular.
 # A compromised devDependency therefore cannot mint a publish credential: the job it runs in
 # does not have one.
+#
+# THE THIRD JOB, AND WHY THE SPLIT HAS ONE MORE LINE IN IT. `apm-route` proves the published APM
+# route against the canonical remote at the release sha. It runs a third-party INTERPRETER — pip's
+# unpinned closure and apm itself — so it holds no credential and has no path to the packed
+# artifact: it never checks out the build, never sees `dist/` or the tarball, and uploads nothing.
+# It needs nothing from `gates` and runs beside it; `publish` needs both, so its result gates the
+# release without ever sharing a filesystem with the bytes that ship.
 #
 # THE REHEARSAL. `workflow_dispatch` takes a `dry_run` input that DEFAULTS TO TRUE. A dispatch
 # that leaves it alone runs every gate, packs the tarball, generates the SBOM and prints what it
@@ -85,12 +92,12 @@ jobs:
       #   nodejs.org                    — the Node download setup-node performs
       #   objects.githubusercontent.com — GitHub's object and manifest CDN
       #   registry.npmjs.org            — npm ci, and the tarball smoke's consumer install
-      #   pypi.org, files.pythonhosted.org — the apm-cli index and wheel for the APM route smoke
-      #   raw.githubusercontent.com     — actions/setup-python's fallback versions manifest; its
-      #                                   primary read is the api.github.com contents endpoint
-      #                                   above, and a blocked fallback would fail this job closed
       #   results-receiver.actions.githubusercontent.com,
       #   *.blob.core.windows.net       — actions/upload-artifact's hand-off to the publish job
+      #
+      # The Python index and CDN are deliberately absent: the APM route smoke runs a third-party
+      # interpreter and now lives in the `apm-route` job below, which is where those hosts are
+      # listed. Nothing in this job reaches them.
       #
       # On the first release run, compare this list against the harden-runner run insights
       # (Recommended Policy) and narrow the blob wildcard to the observed subdomain if it proves
@@ -103,12 +110,9 @@ jobs:
           allowed-endpoints: >
             *.blob.core.windows.net:443
             api.github.com:443
-            files.pythonhosted.org:443
             github.com:443
             nodejs.org:443
             objects.githubusercontent.com:443
-            pypi.org:443
-            raw.githubusercontent.com:443
             registry.npmjs.org:443
             results-receiver.actions.githubusercontent.com:443
 
@@ -227,14 +231,6 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      # For the APM route smoke below, which runs an apm-cli out of a throwaway venv. Pinned for
-      # the same reason the Node version is: a runner-image refresh must not move an interpreter
-      # the release path depends on. apm-cli declares `python >= 3.10`.
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.13'
-
       # The env var takes precedence over .npmrc in npm's config order, so the lifecycle-script
       # deny holds even if a transitive Git dependency rewrites the project rc mid-install.
       - name: Install
@@ -262,29 +258,6 @@ jobs:
       # directory in a repository scan and is the entire package in a publish.
       - name: Tarball smoke (publish shape)
         run: node scripts/tarball-smoke.mjs
-
-      # The FIFTH published surface, proven against the canonical remote at the exact commit this
-      # release ships — not against the checkout. `apm install zomarit/stamity#<sha>` is the route
-      # a consumer takes, resolved through git rather than through this working tree, so it is the
-      # only form that can catch a package correct on disk and unreachable through the resolver:
-      # that is precisely the failure this smoke was written for (apm's type-detection cascade
-      # ranked this repository's plugin manifest ahead of `apm.yml` + `.apm/` through 0.29.0,
-      # deploying zero primitives while exiting 0 — microsoft/apm#2735, fixed in 0.29.1).
-      #
-      # A sha is what a tag push resolves to anyway, and apm resolves one directly, so the gate
-      # runs on the shipping commit even before its tag exists on the remote. It runs BEFORE the
-      # pack, with every other ladder step, because a route this release cannot serve is a reason
-      # not to build the artifact rather than a note to file after publishing it. The venv lives
-      # in RUNNER_TEMP so nothing this step installs can sit in the tree the next step packs.
-      - name: APM route smoke (canonical ref)
-        env:
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          python -m venv "$RUNNER_TEMP/apm-venv"
-          "$RUNNER_TEMP/apm-venv/bin/pip" install --quiet "apm-cli==0.30.0"
-          "$RUNNER_TEMP/apm-venv/bin/apm" --version
-          node scripts/apm-install-smoke.mjs --apm "$RUNNER_TEMP/apm-venv/bin/apm" --source "zomarit/stamity#${SHA}" --targets claude,copilot,cursor,codex
 
       # Pack the exact bytes the publish job will ship, and record their digest on the job-output
       # channel. The publish job compares against that output, never against a file riding inside
@@ -438,7 +411,95 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # ── Job 2: publish. The only job with a credential, and the only job that ships. ──
+  # ── Job 2: the APM route. A third-party interpreter, in a job with nothing to steal. ──
+  #
+  # The FIFTH published surface, proven against the canonical remote at the exact commit this
+  # release ships — not against the checkout. `apm install zomarit/stamity#<sha>` is the route a
+  # consumer takes, resolved through git rather than through this working tree, so it is the only
+  # form that can catch a package correct on disk and unreachable through the resolver: that is
+  # precisely the failure this smoke was written for (apm's type-detection cascade ranked this
+  # repository's plugin manifest ahead of `apm.yml` + `.apm/` through 0.29.0, deploying zero
+  # primitives while exiting 0 — microsoft/apm#2735, fixed in 0.29.1).
+  #
+  # WHY IT IS ITS OWN JOB, AND NOT A STEP IN `gates`. This step runs a third-party interpreter and
+  # an unpinned pip closure — apm-cli's own dependency tree, resolved at run time — and then runs
+  # apm itself over a network fetch. `gates` is the job that builds and PACKS the shipping tarball,
+  # so anything executing there shares a filesystem with the artifact the publish job ships. This
+  # job holds no credential and has NO path to the packed artifact: it installs from the remote at
+  # the release sha, never checks out the build, never sees `dist/` or the tarball, and uploads
+  # nothing. Its result still gates the release — `publish` needs it — so a route this release
+  # cannot serve is a reason not to ship rather than a note to file after publishing.
+  #
+  # A sha is what a tag push resolves to anyway, and apm resolves one directly, so the gate runs on
+  # the shipping commit even before its tag exists on the remote. It needs nothing from `gates` and
+  # runs beside it, on the same triggers.
+  apm-route:
+    name: apm route smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      # Same fail-closed posture as every other job here, over the hosts THIS job needs and no
+      # others. The three Python hosts moved here with the step that reaches them:
+      #   api.github.com, github.com    — the depth-1 checkout and setup-node's version manifest
+      #   objects.githubusercontent.com — GitHub's object and manifest CDN, where the setup actions
+      #                                   fetch the interpreter and the Node build from
+      #   pypi.org, files.pythonhosted.org — the apm-cli index and wheel for the venv below
+      #   raw.githubusercontent.com     — actions/setup-python's fallback versions manifest; its
+      #                                   primary read is the api.github.com contents endpoint
+      #                                   above, and a blocked fallback would fail this job closed
+      # `registry.npmjs.org` is absent because this job installs nothing from npm, and the OIDC and
+      # Sigstore hosts are absent for the reason they are absent from `gates`: no token lives here.
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-sudo: true
+          allowed-endpoints: >
+            api.github.com:443
+            files.pythonhosted.org:443
+            github.com:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            pypi.org:443
+            raw.githubusercontent.com:443
+
+      # Depth 1, and only for `scripts/apm-install-smoke.mjs`. This job does not build, does not
+      # install this package's dependencies and never reads the tree under test — the package it
+      # verifies comes from the remote at the release sha, which is the whole point of the route.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      # Pinned for the same reason the Node version is: a runner-image refresh must not move an
+      # interpreter the release path depends on. apm-cli declares `python >= 3.10`.
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      # The venv lives in RUNNER_TEMP rather than in the checkout, so nothing pip resolves can sit
+      # in the tree — a habit worth keeping even in a job that packs nothing.
+      - name: APM route smoke (canonical ref)
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/apm-venv"
+          "$RUNNER_TEMP/apm-venv/bin/pip" install --quiet "apm-cli==0.30.0"
+          "$RUNNER_TEMP/apm-venv/bin/apm" --version
+          node scripts/apm-install-smoke.mjs --apm "$RUNNER_TEMP/apm-venv/bin/apm" --source "zomarit/stamity#${SHA}" --targets claude,copilot,cursor,codex
+
+  # ── Job 3: publish. The only job with a credential, and the only job that ships. ──
   #
   # The condition, spelled out because it is the safety property of this file:
   #   - a `v*` TAG push publishes (`inputs` is empty on a push, so no input is consulted);
@@ -460,9 +521,12 @@ jobs:
   # The dispatch arm keys on dry_run alone, and does NOT re-test the ref here. The ref proofs
   # belong to the `gates` job, which this job needs: a dispatch from a branch reaches this
   # condition and never reaches this job, because gates failed before the pack step.
+  #
+  # It needs `apm-route` too, and needing it is what makes that job a gate rather than a report: a
+  # release whose published route does not resolve never reaches the credential.
   publish:
     name: publish
-    needs: gates
+    needs: [gates, apm-route]
     if: >-
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) == 'false')
@@ -628,7 +692,7 @@ jobs:
             --target "$GITHUB_SHA" \
             --verify-tag
 
-  # ── Job 3: the rehearsal report. Runs instead of `publish`, never beside it. ──
+  # ── Job 4: the rehearsal report. Runs instead of `publish`, never beside it. ──
   # A dispatch is only useful if it tells you what a real run would have done, so this prints the
   # exact artifact identity the publish job would have shipped.
   #

@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it } from "vitest";
 // way on purpose: it has to run beside an extracted package, on a machine with no TypeScript
 // toolchain anywhere near it, exactly as `scripts/leak-gate.mjs` does. One line, because the
 // directive covers the line that follows it and a wrapped import puts the specifier out of reach.
-import { PRIMITIVE_CLASSES, readExpectedPrimitives, verifyDeployment } from "../../scripts/apm-install-smoke.mjs";
+import { describeInstallFailure, isRoutingProblem, PRIMITIVE_CLASSES, readExpectedPrimitives, satisfiesExpectedFailure, verifyDeployment } from "../../scripts/apm-install-smoke.mjs";
 import {
   buildContentIndex,
   COMMAND_ID_PREFIX,
@@ -68,6 +68,13 @@ const verify = verifyDeployment as (
 ) => Verdict;
 const readExpected = readExpectedPrimitives as (sourceDir: string) => Expectations;
 const CLASSES = PRIMITIVE_CLASSES as readonly string[];
+const isRouting = isRoutingProblem as (problem: string) => boolean;
+const satisfies = satisfiesExpectedFailure as (problems: readonly string[]) => boolean;
+const describeFailure = describeInstallFailure as (install: {
+  readonly status?: number | null;
+  readonly signal?: string | null;
+  readonly error?: Error;
+}) => string | null;
 
 /** One line summarising every problem, for a `toContain` that does not care about ordering. */
 const joined = (verdict: Verdict): string => verdict.problems.join("\n");
@@ -382,6 +389,108 @@ describe("readExpectedPrimitives — over this repository's own .apm/ tree", () 
 
   it("refuses a directory that is not an APM package rather than expecting nothing of it", () => {
     expect(() => readExpected(join(REPO_ROOT, "scripts"))).toThrow(/No \.apm\/ tree/);
+  });
+});
+
+// ── the --expect-failure witness ─────────────────────────────────────────────
+
+/**
+ * The classifier behind `--expect-failure`, which is a gate on the gate.
+ *
+ * The witness leg exists to prove ONE thing: that this check can still see an install which
+ * reports success and deploys nothing. Before this split it passed on ANY failure, so a client too
+ * broken to install, a wheel that would not build, or an offline runner all turned the leg green
+ * while proving nothing about routing — and the day the routing check itself broke, the witness
+ * would have gone on passing for whatever reason happened to be handy.
+ *
+ * The positive cases are fed REAL `verifyDeployment` output rather than hand-written sentences, so
+ * a reworded problem fails here instead of silently narrowing the witness to nothing.
+ */
+describe("the --expect-failure witness — a ROUTING failure, and nothing else", () => {
+  it("is satisfied by the 0.29.0 outcome, read out of the verdict itself", () => {
+    const consumer = scratch();
+    writeFileSync(join(consumer, "apm.lock.yaml"), AGENT_PLUGIN_LOCK);
+
+    const verdict = verify(consumer, FIXTURE, ALL_TARGETS);
+    expect(verdict.ok).toBe(false);
+    expect(satisfies(verdict.problems)).toBe(true);
+  });
+
+  it("counts each routing class on its own, so one surviving signal still witnesses", () => {
+    // The lockfile typing, from the verdict that produces it.
+    const typed = verify(
+      (() => {
+        const dir = scratch();
+        writeFileSync(join(dir, "apm.lock.yaml"), AGENT_PLUGIN_LOCK);
+        return dir;
+      })(),
+      FIXTURE,
+      ALL_TARGETS,
+    ).problems.filter((problem) => problem.includes("not `apm_package`"));
+    expect(typed.length).toBeGreaterThan(0);
+    expect(typed.every((problem) => isRouting(problem))).toBe(true);
+
+    // One id short of a complete consumer: the per-id problem, with no zero-class problem beside
+    // it. A witness that only recognised the class-level zero would miss this shape entirely.
+    const partial = completeConsumer();
+    rmSync(join(partial, ".claude", "commands", "st-ask.md"));
+    const missing = verify(partial, FIXTURE, ALL_TARGETS).problems;
+    expect(missing.some((problem) => problem.includes("0 of"))).toBe(false);
+    expect(satisfies(missing)).toBe(true);
+  });
+
+  it("is NOT satisfied by an apm install that could not run", () => {
+    // The sentences the script used to fold into the problem list and pass the witness on.
+    for (const problem of [
+      "`apm install` exited 1:\nERROR: Could not find a version that satisfies the requirement",
+      "`apm install` could not run: spawnSync apm ENOENT",
+      "`apm install` was killed by SIGTERM before it finished",
+      "`apm install` exited 2:\nfatal: unable to access 'https://github.com/': Could not resolve host",
+    ]) {
+      expect(isRouting(problem), problem).toBe(false);
+      expect(satisfies([problem]), problem).toBe(false);
+    }
+  });
+
+  it("is NOT satisfied by a problem about this suite's own inputs", () => {
+    // A target with no deployment paths and an empty expectation set are both defects in how the
+    // smoke was CALLED. Neither says anything about how apm routed, so neither may witness.
+    const empty = verify(completeConsumer(), { ...FIXTURE, agent: [] }, ["claude"]);
+    expect(empty.ok).toBe(false);
+    const emptyExpectation = empty.problems.filter((problem) =>
+      problem.includes("expectation set is empty"),
+    );
+    // Regex-rot guard: an empty filter would make the assertion below pass vacuously.
+    expect(emptyExpectation.length).toBeGreaterThan(0);
+    expect(satisfies(emptyExpectation)).toBe(false);
+
+    const unknown = verify(completeConsumer(), FIXTURE, ["windsurf"]);
+    expect(unknown.problems.length).toBeGreaterThan(0);
+    expect(satisfies(unknown.problems)).toBe(false);
+  });
+
+  it("names every process failure the script now refuses in BOTH modes", () => {
+    expect(describeFailure({ status: 0, signal: null })).toBeNull();
+    expect(describeFailure({ status: 1, signal: null })).toContain("exited 1");
+    // A timeout arrives as an error with the child signalled; the error arm has to win, because
+    // its message is the one that says what went wrong.
+    expect(
+      describeFailure({
+        status: null,
+        signal: "SIGTERM",
+        error: new Error("spawnSync apm ETIMEDOUT"),
+      }),
+    ).toContain("ETIMEDOUT");
+    expect(describeFailure({ status: null, signal: "SIGKILL" })).toContain("SIGKILL");
+  });
+
+  it("says in its own header that only a routing failure satisfies the witness", () => {
+    // The header is what a maintainer reads before trusting the leg's colour.
+    const source = readFileSync(SCRIPT_PATH, "utf8");
+    expect(source).toContain("IT IS SATISFIED ONLY BY A ROUTING");
+    expect(source).toContain("in BOTH modes");
+    // And the CLI still documents the three statuses it can exit with.
+    expect(source).toContain("2 the smoke could not run");
   });
 });
 

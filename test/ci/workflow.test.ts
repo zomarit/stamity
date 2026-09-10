@@ -196,6 +196,15 @@ function conditionOf(steps: readonly WorkflowStep[], name: string): string {
   return stepOf(steps, name).if ?? "";
 }
 
+/** The egress allowlist a job's harden-runner step declares, or `""` when it declares none. */
+function allowlistOf(steps: readonly WorkflowStep[]): string {
+  return String(
+    steps.find((step) => (step.uses ?? "").startsWith("step-security/harden-runner@"))?.with?.[
+      "allowed-endpoints"
+    ] ?? "",
+  );
+}
+
 /** Every job in every workflow, as `[file, jobId, job]` rows. */
 const ALL_JOBS: readonly (readonly [string, string, WorkflowJob])[] = ALL_WORKFLOWS.flatMap(
   (loaded) =>
@@ -813,13 +822,25 @@ const DISPATCH_SHAPES = TRIGGER_SHAPES.filter(
 
 describe("release.yml — the only publishing path", () => {
   const gates = jobOf(release, "gates");
+  const apmRoute = jobOf(release, "apm-route");
   const publish = jobOf(release, "publish");
   const gatesSteps = stepsOf(release, "gates");
+  const apmRouteSteps = stepsOf(release, "apm-route");
   const publishSteps = stepsOf(release, "publish");
 
   it("splits gates from publish, and adds a rehearsal job that cannot ship", () => {
-    expect(Object.keys(release.workflow.jobs)).toEqual(["gates", "publish", "dry-run-summary"]);
-    expect(publish.needs).toBe("gates");
+    expect(Object.keys(release.workflow.jobs)).toEqual([
+      "gates",
+      "apm-route",
+      "publish",
+      "dry-run-summary",
+    ]);
+    // `apm-route` runs a third-party interpreter — pip's unpinned closure, then apm itself — so it
+    // is a job of its own rather than a step in the job that packs the shipping tarball: it holds
+    // no credential and has no path to the artifact. `publish` needs BOTH, which is what makes it
+    // a gate rather than a report.
+    expect(publish.needs).toEqual(["gates", "apm-route"]);
+    expect(apmRoute.needs, "the route smoke needs nothing from the build").toBeUndefined();
     expect(jobOf(release, "dry-run-summary").needs).toBe("gates");
   });
 
@@ -845,50 +866,76 @@ describe("release.yml — the only publishing path", () => {
     expect(gates.permissions).toEqual({ contents: "read" });
     expect(Object.keys(gates.permissions ?? {})).not.toContain("id-token");
 
+    // Same for the route smoke, which runs an interpreter and a pip closure neither this
+    // repository nor its lockfile pins, and carries a timeout of its own.
+    expect(apmRoute.permissions).toEqual({ contents: "read" });
+    expect(apmRoute["timeout-minutes"]).toBeTypeOf("number");
+    expect(apmRoute["runs-on"]).toBe("ubuntu-latest");
+
     expect(publish.permissions).toEqual({ contents: "write", "id-token": "write" });
     // The single approval point: environment protection rules are the platform-side control the
     // in-file ancestry probe cannot be.
     expect(publish.environment).toBe("npm-publish");
   });
 
-  it("blocks egress on both jobs, from the first step, with an explicit allowlist", () => {
+  it("blocks egress on every job, from the first step, with an explicit allowlist", () => {
     for (const [label, steps] of [
       ["gates", gatesSteps],
+      ["apm-route", apmRouteSteps],
       ["publish", publishSteps],
     ] as const) {
       const harden = steps.find((step) => (step.uses ?? "").startsWith("step-security/harden-runner@"));
       expect(harden, `${label} must harden the runner`).toBeDefined();
       expect(harden?.with?.["egress-policy"], label).toBe("block");
       expect(harden?.with?.["disable-sudo"], label).toBe(true);
-      const allowed = String(harden?.with?.["allowed-endpoints"] ?? "");
-      expect(allowed, label).toContain("registry.npmjs.org:443");
-      expect(allowed, label).toContain("api.github.com:443");
+      expect(allowlistOf(steps), label).toContain("api.github.com:443");
     }
+
+    // First step, before anything downloads or executes — in both jobs that run third-party code.
+    // `publish` is the documented exception: its dispatch backstop opens no socket and reads no
+    // file, and stopping a run that should not have started comes before installing a monitor.
+    expect(gatesSteps[0]?.name).toBe("Harden runner");
+    expect(apmRouteSteps[0]?.name).toBe("Harden runner");
+
     // The gates job holds no token, so the OIDC and Sigstore hosts must not be reachable from it.
-    const gatesAllow = String(
-      gatesSteps.find((step) => (step.uses ?? "").startsWith("step-security/harden-runner@"))?.with?.[
-        "allowed-endpoints"
-      ] ?? "",
-    );
+    const gatesAllow = allowlistOf(gatesSteps);
+    expect(gatesAllow).toContain("registry.npmjs.org:443");
     expect(gatesAllow).not.toContain("token.actions.githubusercontent.com");
     expect(gatesAllow).not.toContain("sigstore.dev");
-    // And the three the APM route smoke needs: pip's index and CDN, plus setup-python's fallback
-    // versions manifest. harden-runner fails CLOSED, so a host dropped from this list is a
-    // release that stops at the step rather than a release that leaks.
-    expect(gatesAllow).toContain("pypi.org:443");
-    expect(gatesAllow).toContain("files.pythonhosted.org:443");
-    expect(gatesAllow).toContain("raw.githubusercontent.com:443");
+    // And the three the APM route smoke needs are NOT reachable from the job that packs the
+    // tarball: that smoke runs a third-party interpreter, so it lives in `apm-route` and its
+    // hosts live with it. A host that drifted back here would be an interpreter's index opened
+    // up in the job that builds the shipping artifact.
+    expect(gatesAllow).not.toContain("pypi.org");
+    expect(gatesAllow).not.toContain("files.pythonhosted.org");
+    expect(gatesAllow).not.toContain("raw.githubusercontent.com");
 
-    const publishAllow = String(
-      publishSteps.find((step) => (step.uses ?? "").startsWith("step-security/harden-runner@"))
-        ?.with?.["allowed-endpoints"] ?? "",
-    );
+    // harden-runner fails CLOSED, so a host dropped from this list is a release that stops at the
+    // step rather than a release that leaks.
+    const apmAllow = allowlistOf(apmRouteSteps);
+    expect(apmAllow).toContain("pypi.org:443");
+    expect(apmAllow).toContain("files.pythonhosted.org:443");
+    expect(apmAllow).toContain("raw.githubusercontent.com:443");
+    // It installs nothing from npm and mints nothing, so neither the registry nor the token hosts
+    // belong here either.
+    expect(apmAllow).not.toContain("registry.npmjs.org");
+    expect(apmAllow).not.toContain("token.actions.githubusercontent.com");
+    expect(apmAllow).not.toContain("sigstore.dev");
+
+    const publishAllow = allowlistOf(publishSteps);
+    expect(publishAllow).toContain("registry.npmjs.org:443");
     expect(publishAllow).toContain("token.actions.githubusercontent.com:443");
     expect(publishAllow).toContain("fulcio.sigstore.dev:443");
     expect(publishAllow).toContain("uploads.github.com:443");
 
-    // First step, before anything downloads or executes.
-    expect(gatesSteps[0]?.name).toBe("Harden runner");
+    // M5: the setup-python fallback host is listed by exactly one job in the whole directory, and
+    // it is the one that runs setup-python.
+    const rawHosts = ALL_JOBS.filter(([, , job]) =>
+      (job.steps ?? []).some((step) =>
+        String(step.with?.["allowed-endpoints"] ?? "").includes("raw.githubusercontent.com"),
+      ),
+    ).map(([file, id]) => `${file}:${id}`);
+    expect(rawHosts).toEqual(["release.yml:apm-route"]);
   });
 
   it("runs the release proofs on every run that can publish, not only on a tag push", () => {
@@ -943,11 +990,6 @@ describe("release.yml — the only publishing path", () => {
       "Leak gate",
       "Dogfood check",
       "Tarball smoke (publish shape)",
-      // The published SHAPE is proven by the step above; this one proves the published ROUTE, at
-      // the canonical remote and the exact shipping commit. A package whose bytes are right and
-      // whose resolver cannot reach it is the failure that put this step here, and it is a reason
-      // not to pack rather than a note to file after publishing.
-      "APM route smoke (canonical ref)",
     ];
     let previous = -1;
     for (const step of ladder) {
@@ -960,16 +1002,53 @@ describe("release.yml — the only publishing path", () => {
     expect(runOf(gatesSteps, "Leak gate")).toBe("npm run gate");
     expect(runOf(gatesSteps, "Tarball smoke (publish shape)")).toBe("node scripts/tarball-smoke.mjs");
 
+    // The interpreter stays out of this job. `python`, `pip` and a venv in the job that builds and
+    // packs the shipping tarball is exactly the adjacency `apm-route` exists to remove.
+    const gatesShell = gatesSteps.map((step) => step.run ?? "").join("\n");
+    expect(gatesShell).not.toContain("apm-install-smoke");
+    expect(gatesShell).not.toMatch(/\bpython\b|\bpip\b/);
+    expect(indexOf(gatesSteps, "Set up Python"), "setup-python belongs to apm-route").toBe(-1);
+  });
+
+  it("proves the published ROUTE in a job with no credential and no path to the artifact", () => {
+    // The published SHAPE is proven by the gates job's tarball smoke; this proves the published
+    // ROUTE, at the canonical remote and the exact shipping commit. A package whose bytes are
+    // right and whose resolver cannot reach it is the failure that put this job here.
+    //
     // The remote, at this commit — not the working tree. An install from the checkout would prove
     // the local files deploy and say nothing about whether the resolver can reach them.
-    const smoke = runOf(gatesSteps, "APM route smoke (canonical ref)");
+    const smoke = runOf(apmRouteSteps, "APM route smoke (canonical ref)");
     expect(smoke).toContain("node scripts/apm-install-smoke.mjs");
     expect(smoke).toContain('--source "zomarit/stamity#${SHA}"');
     expect(smoke).toContain("--targets claude,copilot,cursor,codex");
     // The sha reaches the shell through `env:`, like every other value in this file.
-    expect(stepOf(gatesSteps, "APM route smoke (canonical ref)").env?.["SHA"]).toBe(
+    expect(stepOf(apmRouteSteps, "APM route smoke (canonical ref)").env?.["SHA"]).toBe(
       "${{ github.sha }}",
     );
+
+    // The interpreter is pinned the way the Node line is — a runner-image refresh must not move
+    // it — and to the same pin ci.yml's apm matrix already carries.
+    expect(stepOf(apmRouteSteps, "Set up Python").uses).toBe(
+      stepOf(stepsOf(ci, "apm-install"), "Set up Python").uses,
+    );
+    expect(stepOf(apmRouteSteps, "Set up Python").with?.["python-version"]).toBe("3.13");
+    expect(stepOf(apmRouteSteps, "Set up Node").uses).toBe(stepOf(gatesSteps, "Set up Node").uses);
+    expect(stepOf(apmRouteSteps, "Set up Node").with?.["node-version"]).toBe(
+      stepOf(gatesSteps, "Set up Node").with?.["node-version"],
+    );
+
+    // No path to the packed artifact: a shallow, credential-free checkout of the scripts, no
+    // build, no npm install, and nothing uploaded or downloaded between this job and any other.
+    const checkout = stepOf(apmRouteSteps, "Checkout");
+    expect(checkout.with?.["persist-credentials"]).toBe(false);
+    expect(checkout.with?.["fetch-depth"]).toBe(1);
+    for (const step of apmRouteSteps) {
+      expect((step.uses ?? "").includes("upload-artifact"), step.name).toBe(false);
+      expect((step.uses ?? "").includes("download-artifact"), step.name).toBe(false);
+    }
+    const routeShell = apmRouteSteps.map((step) => step.run ?? "").join("\n");
+    expect(routeShell).not.toMatch(/npm (ci|install|run build|pack)/);
+    expect(routeShell).not.toContain("dist/");
   });
 
   it("hands the publish job a digest on a channel the artifact does not carry", () => {
