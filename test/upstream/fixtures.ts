@@ -278,8 +278,8 @@ export const OFF_PATTERN_TAG = "nightly-2026-09-10";
 export const MAINTENANCE_TAG = "v1.1.1";
 
 /** `assets/logo.bin` at v1.0.0, at v1.1.0, and as a fork changes it: three binaries, one path. */
-export const LOGO_V1 = Uint8Array.from([0x89, 0x4c, 0x4f, 0x47, 0x4f, 0x00, 0x01]);
-export const LOGO_V1_1 = Uint8Array.from([0x89, 0x4c, 0x4f, 0x47, 0x4f, 0x00, 0x02]);
+const LOGO_V1 = Uint8Array.from([0x89, 0x4c, 0x4f, 0x47, 0x4f, 0x00, 0x01]);
+const LOGO_V1_1 = Uint8Array.from([0x89, 0x4c, 0x4f, 0x47, 0x4f, 0x00, 0x02]);
 export const LOGO_FORK = Uint8Array.from([0x89, 0x4c, 0x4f, 0x47, 0x4f, 0x00, 0xff]);
 
 export const ALPHA_V1 = "# Alpha\n\nAlpha line one.\nAlpha line two.\nAlpha line three.\n";
