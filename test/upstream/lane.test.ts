@@ -1,13 +1,15 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   BRANCH_PREFIX,
   CONFIG_DEFAULTS,
+  GIT_FLOOR,
   OUTCOMES,
   RECORD_DIRECTORY,
   buildRecord,
+  checkTagShape,
   classifyConflicts,
   compareReleases,
   deriveShadowPairs,
@@ -23,6 +25,7 @@ import {
   parseMergeOutput,
   parsePorcelainStatus,
   parseReleaseTag,
+  redactUrl,
   renderReport,
   selectReleases,
   // @ts-expect-error — the lane is a plain .mjs script with no type declarations, and it stays
@@ -35,11 +38,16 @@ import {
   ALPHA_V1_1,
   BETA_V1_1,
   DELTA_V1_1,
+  LOGO_FORK,
+  MAINTENANCE_TAG,
   OFF_PATTERN_TAG,
   PRERELEASE_TAG,
+  README_STRAY,
   RELEASE_NOTES_V1_1,
   RELEASE_TAGS,
   SLOW_GATE_SOURCE,
+  STRAY_GENERATOR_SOURCE,
+  blobIdAt,
   branchHead,
   commitAll,
   createFork,
@@ -218,6 +226,31 @@ describe("release selection", () => {
     expect(compareReleases(parseReleaseTag("v1.0.0-alpha"), parseReleaseTag("v1.0.0-alpha.1"))).toBeLessThan(0);
     expect(compareReleases(parseReleaseTag("v1.0.0-alpha.beta"), parseReleaseTag("v1.0.0-beta"))).toBeLessThan(0);
     expect(compareReleases(parseReleaseTag("v1.0.0"), parseReleaseTag("v1.0.0"))).toBe(0);
+  });
+});
+
+describe("the seams a hostile input reaches: tag shapes and URL userinfo", () => {
+  it("refuses a tag that could become an option, carry a control character, or walk a path", () => {
+    expect(checkTagShape("v1.2.3")).toBeNull();
+    expect(checkTagShape("release/1.2.3")).toBeNull();
+    expect(checkTagShape("-x")).toMatch(/starts with "-"/);
+    expect(checkTagShape("v1\u00012")).toMatch(/control character/);
+    expect(checkTagShape("v1\u007f")).toMatch(/control character/);
+    expect(checkTagShape("v1 2")).toMatch(/whitespace/);
+    expect(checkTagShape("../x")).toMatch(/path segment/);
+    expect(checkTagShape("a//b")).toMatch(/path segment/);
+    expect(checkTagShape("a/./b")).toMatch(/path segment/);
+    expect(checkTagShape("")).toMatch(/empty/);
+  });
+
+  it("strips userinfo from a URL and leaves every other form alone", () => {
+    expect(redactUrl("https://x-access-token:SECRET@github.invalid/org/repo.git")).toBe("https://github.invalid/org/repo.git");
+    expect(redactUrl("https://SECRET@github.invalid/org/repo.git")).toBe("https://github.invalid/org/repo.git");
+    expect(redactUrl("https://github.invalid/org/repo.git")).toBe("https://github.invalid/org/repo.git");
+    expect(redactUrl("https://github.invalid/org/repo.git#a@b")).toBe("https://github.invalid/org/repo.git#a@b");
+    expect(redactUrl("ssh://git@github.invalid/org/repo.git")).toBe("ssh://github.invalid/org/repo.git");
+    expect(redactUrl("git@github.invalid:org/repo.git")).toBe("git@github.invalid:org/repo.git");
+    expect(redactUrl("/srv/git/upstream")).toBe("/srv/git/upstream");
   });
 });
 
@@ -473,6 +506,9 @@ describe("the record, the shadows, the report, the exit contract", () => {
     expect(exitCodeFor("conflict")).toBe(1);
     expect(() => exitCodeFor("nope")).toThrow(/unknown outcome/);
     expect(BRANCH_PREFIX).toBe("stamity-upstream/");
+    // The floor is the version that introduced `--end-of-options`, which every revision reader
+    // passes so a record-supplied object id can never be read as an option.
+    expect(GIT_FLOOR).toEqual([2, 24]);
   });
 
   it("parses the verb and every flag, and refuses what it does not know", () => {
@@ -511,10 +547,12 @@ describe("the record, the shadows, the report, the exit contract", () => {
       conflicts: [
         { path: "content/rules/alpha.md", kind: "content", generated: false },
         { path: "generated/alpha.txt", kind: "content", generated: true },
+        { path: "assets/logo.bin", kind: "content", generated: true, regenerated: false },
         { path: "content/rules/delta.md", kind: "modify/delete", generated: false, deletedBy: "upstream" },
       ],
       gates: [{ name: "check", run: "npm test", status: "failed", exitCode: 1, durationMs: 40, outputTail: "1 failed" }],
       regenerate: [],
+      unlistedGenerated: [{ path: "README.md", change: "modified" }],
       branch: "stamity-upstream/v1.1.0",
       worktree: "/w",
       mergeCommit: null,
@@ -528,6 +566,9 @@ describe("the record, the shadows, the report, the exit contract", () => {
     expect(report).toContain("`packs/a/y.md` is orphaned: its upstream default `content/rules/y.md` was renamed in v1.1.0 (renamed to `content/rules/z.md`)");
     expect(report).toContain("`content/charter/x.md` — watched path modified in v1.1.0 (+3/−0 lines)");
     expect(report).toContain("`generated/alpha.txt` — content; generated: regenerated on `continue`, no hand edit needed");
+    expect(report).toContain("`assets/logo.bin` — content; generated, but regeneration did not produce it: resolve it by hand and `git add` it, or fix the regenerate list");
+    expect(report).toContain("## Regeneration");
+    expect(report).toContain("`README.md` — modified by regeneration, and no generatedPaths glob covers it: add it to generatedPaths");
     expect(report).toContain("`content/rules/delta.md` — modify/delete; deleted by upstream");
     expect(report).toContain("| check | `npm test` | failed | 1 | 40 ms |");
     expect(report).toContain("1 failed");
@@ -561,8 +602,15 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     scratch.cleanup();
   });
 
-  it("builds the upstream the criteria describe: four releases, a prerelease, a generator that derives", () => {
-    expect(Object.keys(upstream.tags)).toEqual([...RELEASE_TAGS, PRERELEASE_TAG, OFF_PATTERN_TAG]);
+  it("builds the upstream the criteria describe: four releases, a prerelease, a side-branch maintenance release, a generator that derives", () => {
+    expect(Object.keys(upstream.tags)).toEqual([...RELEASE_TAGS, PRERELEASE_TAG, OFF_PATTERN_TAG, MAINTENANCE_TAG]);
+    // The maintenance release descends from v1.1.0 and from nothing newer; nothing newer contains it.
+    expect(isAncestor(upstream, upstream.tags["v1.1.0"]!, upstream.tags[MAINTENANCE_TAG]!)).toBe(true);
+    expect(isAncestor(upstream, upstream.tags["v1.2.0"]!, upstream.tags[MAINTENANCE_TAG]!)).toBe(false);
+    expect(isAncestor(upstream, upstream.tags[MAINTENANCE_TAG]!, upstream.tags["v1.3.0"]!)).toBe(false);
+    expect(isAncestor(upstream, upstream.tags[MAINTENANCE_TAG]!, upstream.tags[PRERELEASE_TAG]!)).toBe(false);
+    // The binary changes in v1.1.0, so a fork that changes it too gets a conflict git cannot merge.
+    expect(blobIdAt(upstream, upstream.tags["v1.0.0"]!, "assets/logo.bin")).not.toBe(blobIdAt(upstream, upstream.tags["v1.1.0"]!, "assets/logo.bin"));
     expect(fileAt(upstream, upstream.tags["v1.0.0"]!, "content/rules/alpha.md")).toBe(ALPHA_V1);
     expect(fileAt(upstream, upstream.tags["v1.1.0"]!, "content/rules/alpha.md")).toBe(ALPHA_V1_1);
     expect(fileAt(upstream, upstream.tags["v1.1.0"]!, "content/rules/delta.md")).toBe(DELTA_V1_1);
@@ -588,6 +636,9 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       expect(result.doc.branch).toBe("stamity-upstream/v1.1.0");
       expect(result.doc.worktree).toBe(join(fork.dir, ".stamity", "upstream-work", "v1.1.0"));
       expect(result.doc.target).toMatchObject({ tag: "v1.1.0", commit: upstream.tags["v1.1.0"], isPrerelease: false });
+      // The regenerate command ran from the merged tree with this process's environment, and the
+      // report said so once.
+      expect(result.doc.messages.filter((line) => line.includes("run the merged tree's regenerate commands and gates with the caller's environment"))).toHaveLength(1);
 
       const merge = result.doc.mergeCommit;
       expect(merge).not.toBeNull();
@@ -710,7 +761,12 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
         expect(git(fork, ["show", ":2:content/rules/alpha.md"], { cwd: worktree }).stdout).toBe(ALPHA_FORK);
         expect(git(fork, ["show", ":3:content/rules/alpha.md"], { cwd: worktree }).stdout).toBe(ALPHA_V1_1);
         expect(hasConflictMarkers(readTreeFile(worktree, "content/rules/alpha.md"))).toBe(true);
-        expect(git(fork, ["config", "rerere.enabled"], { cwd: worktree }).stdout.trim()).toBe("true");
+        // rerere is enabled per command and never persisted: the repository configuration the two
+        // worktrees share stays unset, while the merge recorded its preimage into the shared rr-cache.
+        expect(git(fork, ["config", "--get", "rerere.enabled"], { allowFailure: true }).status).toBe(1);
+        expect(git(fork, ["config", "--get", "rerere.enabled"], { cwd: worktree, allowFailure: true }).status).toBe(1);
+        const rrCache = join(fork.dir, ".git", "rr-cache");
+        expect(readdirSync(rrCache).some((id) => existsSync(join(rrCache, id, "preimage")))).toBe(true);
       },
       CASE_TIMEOUT_MS,
     );
@@ -741,6 +797,10 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
         });
         expect(git(fork, ["rev-parse", "-q", "--verify", "MERGE_HEAD"], { cwd: worktree, allowFailure: true }).status).not.toBe(0);
         expect(branchHead(fork, "main")).toBe(fork.head);
+        // The merge commit ran under rerere too: the resolution is recorded beside the preimage.
+        const rrCache = join(fork.dir, ".git", "rr-cache");
+        expect(readdirSync(rrCache).some((id) => existsSync(join(rrCache, id, "postimage")))).toBe(true);
+        expect(git(fork, ["config", "--get", "rerere.enabled"], { allowFailure: true }).status).toBe(1);
       },
       CASE_TIMEOUT_MS,
     );
@@ -778,16 +838,17 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     );
   });
 
-  // Criterion 6
+  // Criterion 6 — and the skipped list is by ancestry, not by version order: the maintenance
+  // release v1.1.1 sorts below v1.3.0 and is a candidate, yet a merge of v1.3.0 does not contain it.
   it(
-    "targets the newest stable release without --release, lists the skipped ones, and merges them in one commit",
+    "targets the newest stable release without --release, lists the skipped ones the merge contains, and merges them in one commit",
     () => {
       const fork = createFork(upstream, forkDir());
       const status = runLane(fork, ["status"]);
       expectOutcome(status, "update-available");
       expect(status.doc.integrated?.tag).toBe("v1.0.0");
       expect(status.doc.target).toMatchObject({ tag: "v1.3.0", commit: upstream.tags["v1.3.0"], isPrerelease: false });
-      expect(status.doc.candidates.map((release) => release.tag)).toEqual(["v1.1.0", "v1.2.0", "v1.3.0"]);
+      expect(status.doc.candidates.map((release) => release.tag)).toEqual(["v1.1.0", MAINTENANCE_TAG, "v1.2.0", "v1.3.0"]);
       expect(status.doc.skipped).toEqual(["v1.1.0", "v1.2.0"]);
       // One commit ahead: the fork's customization commit (its configuration file).
       expect(status.doc.divergence).toEqual({ aheadOfRelease: 1, behindRelease: 3, upstreamAheadOfRelease: 1 });
@@ -795,7 +856,12 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
 
       const pre = runLane(fork, ["status", "--prerelease"]);
       expect(pre.doc.target).toMatchObject({ tag: PRERELEASE_TAG, isPrerelease: true });
-      expect(pre.doc.candidates.map((release) => release.tag)).toEqual(["v1.1.0", "v1.2.0", "v1.3.0", PRERELEASE_TAG]);
+      expect(pre.doc.candidates.map((release) => release.tag)).toEqual(["v1.1.0", MAINTENANCE_TAG, "v1.2.0", "v1.3.0", PRERELEASE_TAG]);
+
+      // Selecting the maintenance release itself covers v1.1.0, its one ancestor among the candidates.
+      const maintenance = runLane(fork, ["status", "--release", MAINTENANCE_TAG]);
+      expectOutcome(maintenance, "update-available");
+      expect(maintenance.doc.skipped).toEqual(["v1.1.0"]);
 
       const result = runLane(fork, ["integrate"]);
       expectOutcome(result, "integrated");
@@ -806,6 +872,7 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       expect(parentsOf(fork, merge)).toEqual([fork.head, upstream.tags["v1.3.0"]]);
       expect(git(fork, ["rev-list", "--count", "--first-parent", `${fork.head}..${merge}`]).stdout.trim()).toBe("1");
       for (const tag of ["v1.1.0", "v1.2.0", "v1.3.0"]) expect(isAncestor(fork, upstream.tags[tag]!, merge)).toBe(true);
+      expect(isAncestor(fork, upstream.tags[MAINTENANCE_TAG]!, merge)).toBe(false);
       expect(recordAt(fork, merge, "v1.3.0")).toMatchObject({ covers: ["v1.1.0", "v1.2.0", "v1.3.0"] });
 
       const after = runLane(fork, ["status", "--branch", "stamity-upstream/v1.3.0"]);
@@ -1002,6 +1069,7 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       const validated = runLane(fork, ["validate", "--release", "v1.2.0"]);
       expectOutcome(validated, "integrated");
       expect(validated.doc.gates).toEqual([expect.objectContaining({ name: "tier", status: "passed", exitCode: 0 })]);
+      expect(validated.doc.messages.filter((line) => line.includes("with the caller's environment"))).toHaveLength(1);
       const head = branchHead(fork, "stamity-upstream/v1.2.0")!;
       expect(git(fork, ["log", "-1", "--format=%s", head]).stdout.trim()).toBe("upstream lane: gates re-run for v1.2.0");
       expect(isAncestor(fork, merge, head)).toBe(true);
@@ -1081,22 +1149,115 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     CASE_TIMEOUT_MS,
   );
 
-  // Criterion 14
+  // Criterion 14, and the recovery REQ-UPSTREAM-004 names: `status` diagnoses, `preview` and
+  // `integrate` carry the diagnosis and proceed, and the re-merge's record supersedes the stale one.
   it(
-    "names the record whose release the history lacks after a squash landing",
+    "names the record whose release the history lacks after a squash landing, and the re-merge supersedes it once landed by merge commit",
     () => {
       const fork = createFork(upstream, forkDir());
       expectOutcome(runLane(fork, ["integrate", "--release", "v1.1.0"]), "integrated");
       git(fork, ["merge", "--squash", "--quiet", "stamity-upstream/v1.1.0"]);
-      commitAll(fork, "squash-landed the update branch");
+      const squashed = commitAll(fork, "squash-landed the update branch");
+      const lost = [{ path: ".stamity/upstream/integrations/v1.1.0.json", tag: "v1.1.0", commit: upstream.tags["v1.1.0"]! }];
 
       const status = runLane(fork, ["status", "--release", "v1.1.0"]);
       expectOutcome(status, "ancestry-lost");
-      expect(status.doc.lostRecords).toEqual([{ path: ".stamity/upstream/integrations/v1.1.0.json", tag: "v1.1.0", commit: upstream.tags["v1.1.0"] }]);
+      expect(status.doc.lostRecords).toEqual(lost);
       expect(status.doc.report).toContain("`.stamity/upstream/integrations/v1.1.0.json` claims v1.1.0");
-      expect(status.doc.messages.join("\n")).toContain("land update branches by merge commit");
-      expect(status.doc.messages.join("\n")).toContain("rerere");
-      expectOutcome(runLane(fork, ["preview", "--release", "v1.1.0"]), "ancestry-lost");
+      const guidance = status.doc.messages.join("\n");
+      expect(guidance).toContain("land update branches by merge commit");
+      expect(guidance).toContain("rerere");
+      expect(guidance).toContain("run `integrate --release v1.1.0` again");
+      expect(guidance).toContain("delete or correct .stamity/upstream/integrations/v1.1.0.json on the target branch");
+
+      // preview merges (cleanly: the squash brought the same bytes) and carries the rows.
+      const preview = runLane(fork, ["preview", "--release", "v1.1.0"]);
+      expectOutcome(preview, "update-available");
+      expect(preview.doc.conflicts).toEqual([]);
+      expect(preview.doc.lostRecords).toEqual(lost);
+      expect(preview.doc.report).toContain("## Records whose release the history lacks");
+      expect(preview.doc.messages.join("\n")).toContain("supersedes the stale one");
+
+      // integrate gets past the diagnosis too; what stops it here is the earlier update branch,
+      // still around and stale because main moved past its cut point. It carries nothing but the
+      // lane's own merge commit, so --recreate discards it the way deleting the branch after the
+      // pull request landed would have.
+      const stale = runLane(fork, ["integrate", "--release", "v1.1.0"]);
+      expectOutcome(stale, "update-branch-stale");
+      expect(stale.doc.lostRecords).toEqual(lost);
+      const again = runLane(fork, ["integrate", "--release", "v1.1.0", "--recreate"]);
+      expectOutcome(again, "integrated");
+      expect(again.doc.lostRecords).toEqual(lost);
+      expect(again.doc.report).toContain("`.stamity/upstream/integrations/v1.1.0.json` claims v1.1.0");
+      expect(again.doc.messages.join("\n")).toContain("supersedes the stale one");
+      const merge = again.doc.mergeCommit!;
+      expect(parentsOf(fork, merge)).toEqual([squashed, upstream.tags["v1.1.0"]]);
+      expect(recordAt(fork, merge, "v1.1.0")).toMatchObject({ releaseCommit: upstream.tags["v1.1.0"], targetHead: squashed, gates: "none" });
+      expect(branchHead(fork, "main")).toBe(squashed);
+
+      // Landed by merge commit, the history contains the release and the record agrees with it.
+      git(fork, ["merge", "--no-ff", "--quiet", "-m", "land v1.1.0 by merge commit", "stamity-upstream/v1.1.0"]);
+      const after = runLane(fork, ["status", "--release", "v1.1.0"]);
+      expectOutcome(after, "up-to-date");
+      expect(after.doc.lostRecords).toEqual([]);
+      expect(after.doc.integrated).toMatchObject({
+        tag: "v1.1.0",
+        commit: upstream.tags["v1.1.0"],
+        record: { releaseCommit: upstream.tags["v1.1.0"], targetHead: squashed },
+      });
+    },
+    CHAINED_TIMEOUT_MS,
+  );
+
+  // M3: a record that cannot be read is named, not skipped, and a record path is read raw.
+  it(
+    "names every record it cannot read under the record directory, and reads a non-ASCII record path as it is",
+    () => {
+      const fork = createFork(upstream, forkDir(), {
+        files: {
+          ".stamity/upstream/integrations/notes.txt": "not a record\n",
+          ".stamity/upstream/integrations/bad.json": `${JSON.stringify({ release: "v1.1.0", releaseCommit: "--output=owned" })}\n`,
+          ".stamity/upstream/integrations/v1.1.0-€.json": `${JSON.stringify({ release: "v1.1.0-€", releaseCommit: upstream.tags["v1.1.0"] })}\n`,
+        },
+      });
+      const status = runLane(fork, ["status", "--release", "v1.1.0"]);
+      expectOutcome(status, "ancestry-lost");
+      expect(status.doc.lostRecords).toEqual([{ path: ".stamity/upstream/integrations/v1.1.0-€.json", tag: "v1.1.0-€", commit: upstream.tags["v1.1.0"] }]);
+      expect(status.doc.messages).toContain(".stamity/upstream/integrations/notes.txt under .stamity/upstream/integrations/ is not a .json record and was ignored");
+      expect(status.doc.messages).toContain(
+        'record .stamity/upstream/integrations/bad.json does not name its release commit as a full object id in "releaseCommit" and was ignored',
+      );
+    },
+    CASE_TIMEOUT_MS,
+  );
+
+  // M8: a release landed with a failed record is not integrated, and integrate says what turns it.
+  it(
+    "names validate on the update branch when a landed release's record says the gates failed",
+    () => {
+      const fork = createFork(upstream, forkDir(), { enterprise: true, config: { gates: [{ name: "tier", run: "node scripts/gate.mjs" }] } });
+      const failed = runLane(fork, ["integrate", "--release", "v1.2.0"]);
+      expectOutcome(failed, "validation-failed");
+      // Landed anyway, by fast-forward, so the release IS in main's history — with the failed record.
+      git(fork, ["merge", "--ff-only", "--quiet", "stamity-upstream/v1.2.0"]);
+      const again = runLane(fork, ["integrate", "--release", "v1.2.0"]);
+      expectOutcome(again, "validation-failed");
+      expect(again.doc.mergeCommit).toBeNull();
+      const guidance = again.doc.messages.join("\n");
+      expect(guidance).toContain("v1.2.0 is in main's history and its record says the gates failed");
+      expect(guidance).toContain("run `validate --release v1.2.0` on the update branch stamity-upstream/v1.2.0");
+      expect(guidance).toContain("git branch stamity-upstream/v1.2.0 main");
+      expect(guidance).toContain("no update branch was created");
+      const status = runLane(fork, ["status", "--release", "v1.2.0"]);
+      expectOutcome(status, "validation-failed");
+      expect(status.doc.messages.join("\n")).toContain("run `validate --release v1.2.0` on the update branch");
+
+      // Following the guidance: the fix on the branch, validate, land the record commit.
+      writeFiles(failed.doc.worktree!, { "config.json": '{\n  "overrides": {\n    "tier": "enterprise"\n  }\n}\n' });
+      commitAll(fork, "fork: follow the 1.2.0 resolution rule", { cwd: failed.doc.worktree! });
+      expectOutcome(runLane(fork, ["validate", "--release", "v1.2.0"]), "integrated");
+      git(fork, ["merge", "--ff-only", "--quiet", "stamity-upstream/v1.2.0"]);
+      expectOutcome(runLane(fork, ["status", "--release", "v1.2.0"]), "up-to-date");
     },
     CASE_TIMEOUT_MS,
   );
@@ -1167,6 +1328,13 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       const fork = createFork(upstream, forkDir(), { editAlpha: true });
       const conflict = runLane(fork, ["integrate", "--release", "v1.1.0"]);
       expectOutcome(conflict, "conflict");
+      // From inside the worktree abort would remove, abort refuses and removes nothing.
+      const inside = runLane(fork, ["abort"], { cwd: conflict.doc.worktree! });
+      expect(inside.code).toBe(2);
+      expect(inside.doc.messages[0]).toContain("leave the directory first");
+      expect(existsSync(conflict.doc.worktree!)).toBe(true);
+      expect(linkedWorktrees(fork)).toHaveLength(1);
+      expect(git(fork, ["rev-parse", "-q", "--verify", "MERGE_HEAD"], { cwd: conflict.doc.worktree!, allowFailure: true }).status).toBe(0);
       const aborted = runLane(fork, ["abort", "--release", "v1.1.0"]);
       expectOutcome(aborted, "aborted");
       expect(existsSync(conflict.doc.worktree!)).toBe(false);
@@ -1314,10 +1482,145 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       expectOutcome(cached, "update-available");
       expect(cached.doc.target?.tag).toBe("v1.3.0");
 
+      // A --release value is refused before it can become an option, a ref or a directory; a
+      // fetched tag of that shape is listed as ignored and never used.
+      const dash = runLane(fork, ["status", "--release", "-x"]);
+      expect(dash.code).toBe(2);
+      expect(dash.doc.messages[0]).toContain('release "-x" is refused: it starts with "-"');
+      const dots = runLane(fork, ["continue", "--release", "../x"]);
+      expect(dots.code).toBe(2);
+      expect(dots.doc.messages[0]).toContain('release "../x" is refused: it contains an empty, "." or ".." path segment');
+      git(upstream, ["update-ref", "refs/tags/-evil", upstream.tags["v1.1.0"]!]);
+      const hostile = runLane(fork, ["status"]);
+      git(upstream, ["update-ref", "-d", "refs/tags/-evil"]);
+      expectOutcome(hostile, "update-available");
+      expect(hostile.doc.messages).toContain('tag "-evil" was ignored: it starts with "-", which a command would read as an option');
+      expect(hostile.doc.candidates.map((release) => release.tag)).not.toContain("-evil");
+
       const help = runLane(fork, ["help"]);
       expect(help.code).toBe(0);
       expect(help.doc.outcome).toBe("help");
       expect(help.doc.report).toContain("usage: node scripts/upstream.mjs");
+      expect(help.doc.report).toContain("--branch <name> takes <name> as the target branch instead of the configured one, for every verb");
+      expect(help.doc.report).toContain("run the merged tree's regenerate commands and gates with the\ncaller's environment");
+    },
+    CASE_TIMEOUT_MS,
+  );
+
+  // W2: regeneration output outside generatedPaths is a refusal, not a silent omission.
+  it(
+    "refuses to commit when regeneration rewrote a tracked path no generatedPaths glob covers, and names the path and the fix",
+    () => {
+      const fork = createFork(upstream, forkDir(), {
+        files: { "scripts/stray.mjs": STRAY_GENERATOR_SOURCE },
+        config: { regenerate: ["node scripts/gen.mjs", "node scripts/stray.mjs"] },
+      });
+      const result = runLane(fork, ["integrate", "--release", "v1.1.0"]);
+      expectOutcome(result, "regenerate-failed");
+      expect(result.doc.regenerate.map((step) => step.status)).toEqual(["passed", "passed"]);
+      expect(result.doc.unlistedGenerated).toEqual([{ path: "README.md", change: "modified" }]);
+      expect(result.doc.report).toContain("`README.md` — modified by regeneration, and no generatedPaths glob covers it: add it to generatedPaths");
+      expect(result.doc.messages.join("\n")).toContain("regeneration modified `README.md`, a tracked path no generatedPaths glob covers");
+      expect(result.doc.messages.join("\n")).toContain("add it to generatedPaths, then run `continue`");
+      expect(result.doc.mergeCommit).toBeNull();
+      expect(branchHead(fork, "stamity-upstream/v1.1.0")).toBe(fork.head);
+      const worktree = result.doc.worktree!;
+      expect(git(fork, ["rev-parse", "-q", "--verify", "MERGE_HEAD"], { cwd: worktree, allowFailure: true }).status).toBe(0);
+      // The stray rewrite sits in the worktree, unstaged: the index still holds the merge's README.
+      expect(git(fork, ["diff", "--name-only"], { cwd: worktree }).stdout.trim()).toBe("README.md");
+      expect(readTreeFile(worktree, "README.md")).toBe(README_STRAY);
+
+      // The fix the message names; continue then commits what the gates test.
+      const config = JSON.parse(readTreeFile(fork.dir, ".stamity/upstream.json")) as { generatedPaths: string[] };
+      config.generatedPaths = ["generated/**", "README.md"];
+      writeFileSync(join(fork.dir, ".stamity", "upstream.json"), `${JSON.stringify(config, null, 2)}\n`);
+      const finished = runLane(fork, ["continue", "--release", "v1.1.0"]);
+      expectOutcome(finished, "integrated");
+      expect(finished.doc.unlistedGenerated).toEqual([]);
+      expect(fileAt(fork, finished.doc.mergeCommit!, "README.md")).toBe(README_STRAY);
+      expect(git(fork, ["status", "--porcelain"], { cwd: worktree }).stdout.trim()).toBe("");
+    },
+    CASE_TIMEOUT_MS,
+  );
+
+  // W3: a conflicted generated path regeneration did not produce is nobody's resolution.
+  it(
+    "leaves a conflicted generated path that regeneration did not produce unmerged for the human, with no side preferred",
+    () => {
+      const fork = createFork(upstream, forkDir(), {
+        files: { "assets/logo.bin": LOGO_FORK },
+        config: { generatedPaths: ["generated/**", "assets/**"] },
+      });
+      const result = runLane(fork, ["integrate", "--release", "v1.1.0"]);
+      expectOutcome(result, "conflict");
+      expect(result.doc.conflicts).toEqual([expect.objectContaining({ path: "assets/logo.bin", kind: "content", generated: true, regenerated: false })]);
+      expect(result.doc.report).toContain("`assets/logo.bin` — content; generated, but regeneration did not produce it: resolve it by hand and `git add` it, or fix the regenerate list");
+      expect(result.doc.messages.join("\n")).toContain("assets/logo.bin is still unmerged after regeneration: the regenerate commands did not produce it");
+      expect(result.doc.mergeCommit).toBeNull();
+      const worktree = result.doc.worktree!;
+      expect(branchHead(fork, "stamity-upstream/v1.1.0")).toBe(fork.head);
+      // Still unmerged, both sides in the index stages: nothing chose for the human.
+      expect(git(fork, ["ls-files", "-u", "--", "assets/logo.bin"], { cwd: worktree }).stdout.trim()).not.toBe("");
+      expect(git(fork, ["rev-parse", ":2:assets/logo.bin"], { cwd: worktree }).stdout.trim()).toBe(blobIdAt(fork, fork.head, "assets/logo.bin"));
+      expect(git(fork, ["rev-parse", ":3:assets/logo.bin"], { cwd: worktree }).stdout.trim()).toBe(blobIdAt(fork, upstream.tags["v1.1.0"]!, "assets/logo.bin"));
+
+      // continue with nothing changed says the same thing again and commits nothing.
+      const again = runLane(fork, ["continue", "--release", "v1.1.0"]);
+      expectOutcome(again, "conflict");
+      expect(again.doc.conflicts).toEqual([expect.objectContaining({ path: "assets/logo.bin", generated: true, regenerated: false })]);
+      expect(again.doc.mergeCommit).toBeNull();
+
+      // The human resolves it by hand — upstream's bytes — and the record says who did.
+      git(fork, ["checkout", "--theirs", "--", "assets/logo.bin"], { cwd: worktree });
+      git(fork, ["add", "assets/logo.bin"], { cwd: worktree });
+      const finished = runLane(fork, ["continue", "--release", "v1.1.0"]);
+      expectOutcome(finished, "integrated");
+      const merge = finished.doc.mergeCommit!;
+      expect(blobIdAt(fork, merge, "assets/logo.bin")).toBe(blobIdAt(fork, upstream.tags["v1.1.0"]!, "assets/logo.bin"));
+      expect(recordAt(fork, merge, "v1.1.0")).toMatchObject({
+        conflicts: [expect.objectContaining({ path: "assets/logo.bin", kind: "content", generated: true, resolvedBy: "human" })],
+      });
+    },
+    CASE_TIMEOUT_MS,
+  );
+
+  // W5: the upstream URL's userinfo never reaches a document, a message or a log line.
+  it(
+    "strips the upstream URL's userinfo from the document, the report and every message, while git receives it as configured",
+    () => {
+      const fork = createFork(upstream, forkDir());
+      expectOutcome(runLane(fork, ["status"]), "update-available");
+      const secret = "https://x-access-token:SECRETTOKEN@example.invalid/org/upstream.git";
+      const shown = "https://example.invalid/org/upstream.git";
+      // The configuration names the URL with a token, the remote is repointed to match, and the
+      // runs are offline: what was fetched is read, and nothing goes to that host.
+      const config = JSON.parse(readTreeFile(fork.dir, ".stamity/upstream.json")) as { upstream: string };
+      config.upstream = secret;
+      writeFileSync(join(fork.dir, ".stamity", "upstream.json"), `${JSON.stringify(config, null, 2)}\n`);
+      git(fork, ["remote", "set-url", "upstream", secret]);
+      const offline = runLane(fork, ["status", "--offline"]);
+      expectOutcome(offline, "update-available");
+      expect(offline.doc.config?.["upstream"]).toBe(shown);
+      expect(offline.doc.upstream?.url).toBe(shown);
+      expect(offline.doc.report).toContain(`Upstream ${shown} (remote \`upstream\`)`);
+      expect(`${offline.stdout}${offline.stderr}`).not.toContain("SECRETTOKEN");
+
+      // The mismatch refusal names both URLs, both stripped.
+      git(fork, ["remote", "set-url", "upstream", "https://other:ALSOSECRET@example.invalid/elsewhere.git"]);
+      const mismatch = runLane(fork, ["status", "--offline"]);
+      expect(mismatch.code).toBe(2);
+      expect(mismatch.doc.messages[0]).toContain("https://example.invalid/elsewhere.git");
+      expect(mismatch.doc.messages[0]).toContain(shown);
+      expect(`${mismatch.stdout}${mismatch.stderr}`).not.toContain("SECRET");
+
+      // A remote the lane creates gets the URL as configured — git needs the credential — and the
+      // message that says so does not.
+      git(fork, ["remote", "remove", "upstream"]);
+      const created = runLane(fork, ["status", "--offline"]);
+      expectOutcome(created, "update-available");
+      expect(git(fork, ["remote", "get-url", "upstream"]).stdout.trim()).toBe(secret);
+      expect(created.doc.messages).toContain(`remote "upstream" was created with ${shown}`);
+      expect(`${created.stdout}${created.stderr}`).not.toContain("SECRETTOKEN");
     },
     CASE_TIMEOUT_MS,
   );
