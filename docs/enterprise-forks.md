@@ -2,13 +2,13 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8b6dbba. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 10a4225. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes (`src/content/catalog.ts`),
      the job split or the permissions in `.github/workflows/upstream-update.yml` change, or
      CONTRIBUTING.md's regeneration table moves. `test/docsPages.test.ts` holds this page to the
-     hand-page contract, and `test/upstream/lane.test.ts` is the acceptance suite that owns every
-     behaviour below. -->
+     hand-page contract, and `test/upstream/lane.test.ts` owns the lane's behaviour below, and the
+     fork layer's is owned by the content, emission and validate suites. -->
 
 # Enterprise forks
 
@@ -284,7 +284,7 @@ git commit-tree <the tree that printed> -p <your branch> -p <release> -m "Merge 
 | Boundary | Where it lives | Conflict cost | What the lane reports |
 |---|---|---|---|
 | Replacement override | `.stamity/overrides/<class>/<id>.md` | None. The file is yours; upstream never writes it. | An override-drift row when the release changes the artifact behind it: *the default behind `<path>` changed in `<tag>`; the override still applies and hides the change — review it*. Reads *orphaned* when the upstream side was deleted, naming the rename target when git found one. |
-| Patch overlay | `.stamity/overrides/<class>/<id>.customize.yaml` or `.customize.md` | None on the merge. The risk is a patch that quietly stops matching what it patches. | The same drift rows, derived rather than declared. Both shadow roots — `.stamity/overrides/` and `fork/` — spell their ids as bare slugs, so the counterpart is whichever corpus spelling EXISTS at the release rather than the bare name: `rules/secrets.md` pairs with `content/rules/stamity-secrets.md`, and `skills/qa/SKILL.customize.yaml` with `content/skills/st-qa/SKILL.md`. |
+| Patch overlay | `.stamity/overrides/<class>/<id>.customize.yaml` or `.customize.md` | None on the merge. The risk is a patch that quietly stops matching what it patches. | The same drift rows, derived rather than declared. Both shadow roots — `.stamity/overrides/` and `fork/` — spell their ids as bare slugs, so the counterpart is whichever corpus spelling EXISTS at your branch's head — the target head the pairs are derived from — rather than the bare name: `rules/secrets.md` pairs with `content/rules/stamity-secrets.md`, and `skills/qa/SKILL.customize.yaml` with `content/skills/st-qa/SKILL.md`. |
 | Pack | `packs/<id>/` and its `pack.json` | None while the pack only adds. | Nothing, unless the pack shadows a bundled id — declare that in `shadows` and it is reported like an override. |
 | Fork layer | `fork/<class>/<id>.md` and `fork/skills/<id>/SKILL.md` inside the package, with `.customize.yaml` / `.customize.md` siblings for a patch instead of a replacement. | None. Upstream never writes under `fork/`, so no release can conflict with it; a replaced or patched default that moves upstream is drift, not a conflict. | A `shadowed` row per fork file whose bundled counterpart changed, resolved to the prefixed corpus file — `fork/rules/secrets.md` pairs with `content/rules/stamity-secrets.md`. Reads *orphaned* when that counterpart was deleted or renamed. A fork ADDITION has no counterpart, so it derives no pair and the lane says nothing about it. |
 | Direct core edit | `src/**`, the roster, the MCP catalog, the hook bodies — and `content/**` for what the fork layer cannot express: the charter template under `content/charter/`, which is not a content class, and an edit to the middle of a bundled body that has to keep tracking upstream, which a whole replacement stops doing and an appended patch cannot state | The real cost. Same lines on both sides: a conflict. Same file, different lines: a clean merge that may still be wrong. | `overlaps`, one row per path both sides changed — *merged cleanly on both sides' edits; semantic review needed* — and one `watched` row per changed path a `watch` glob matches, each with the upstream line delta. |
@@ -319,7 +319,7 @@ what used to be a conflict every release is a file every release merges past.
 | command | `fork/commands/<id>.md` | `fork/commands/<id>.customize.yaml`, `fork/commands/<id>.customize.md` |
 | skill | `fork/skills/<id>/SKILL.md`, plus the skill's own files | `fork/skills/<id>/SKILL.customize.yaml`, `fork/skills/<id>/SKILL.customize.md` |
 
-In a checkout that is `fork/` beside `content/`; in the package your build publishes it is
+In a checkout it is `fork/` beside `content/`; in the package your build publishes it is
 `dist/fork` beside `dist/content`, staged by `tsdown.config.mjs` only when the checkout has one and
 counted in the corpus half of the size budget. A package with no `fork/` directory indexes, plans
 and emits byte-identically to one built before the layer existed — this repository ships none.
@@ -337,7 +337,7 @@ consumer's override tree.
 `stamity-` for agents and rules, `st-` for commands and skills — and a fork file wearing that prefix
 is refused at index time: *a fork-layer filename carries the engine content prefix, which names the
 generated corpus, not the fork's own artifact. Save it under the bare spelling
-"security-patterns" instead — a bare slug that matches a bundled artifact's id replaces it, prefix
+"security-patterns.md" instead — a bare slug that matches a bundled artifact's id replaces it, prefix
 and all.* The same refusal covers a skill directory (`fork/skills/st-qa/`); the engine mints the
 prefix onto what it emits, so you never spell it yourself. So `fork/rules/security-patterns.md` is
 how you replace `content/rules/stamity-security-patterns.md`, and the bare spelling is what the
