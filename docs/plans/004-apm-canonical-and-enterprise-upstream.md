@@ -91,6 +91,13 @@ Every platform fact the guide states traces to one of these, read on the date gi
   takes agents and skills; APM's codex profile carries no commands and compiles instructions on
   `apm compile`). The imperative local-path route is still refused for a tree with a root
   `plugin.json`; the declarative local form (a consumer `apm.yml` naming the path) deploys all 49.
+- The client's own README (read 2026-09-09) documents two install routes — Homebrew (`brew install apm`, updated
+  with `brew upgrade apm` rather than `apm self-update`) and PyPI (`pip install apm-cli`) — which is the source for
+  the remedies the getting-started page names.
+- The exact symptom an older client prints, quoted from the 0.29.0 probe: `Agent Plugins v1.0.0 packages install
+  natively only for the 'copilot' target; selected target(s): claude. Re-run with --target copilot.` — exit 0,
+  zero primitives, the lockfile typed `agent_plugin`. Observed with every client probed: `apm install` appends
+  `apm_modules/` to the consumer's `.gitignore` ("Added apm_modules/ to .gitignore").
 - Follow-up worth watching: microsoft/apm#2806 (merged 2026-09-09, unreleased) makes an Agent
   Plugin that deploys to no target exit non-zero — the class of silent no-op the original failure
   belonged to; it does not touch the precedence rule.

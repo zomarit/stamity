@@ -48,7 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `apm compile`. CI proves it on every push: `scripts/apm-install-smoke.mjs` installs into a
   throwaway consumer and reads the deployed tree at 0.29.1 and 0.30.0, plus a leg on 0.29.0 under
   `--expect-failure` so the check keeps proving it can still see the original silent failure — and
-  the release workflow runs the same smoke against the canonical ref before the tarball is packed.
+  the release workflow runs the same smoke against the canonical ref in its own credential-free
+  job, which the publish job needs before anything ships.
   The README and `docs/getting-started.md` carry the route, its floor and its symptom.
 - **An enterprise upstream lane, for forks of this repository.** A fork that customises anything
   here can now take an upstream release without losing that work. `node scripts/upstream.mjs` (also
@@ -73,7 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The separate APM mirror repository, as a distribution channel.** It existed only because APM's
   type-detection cascade routed past this repository's root, so it served a timed copy of the same
   generated package under a name nobody contributes to. With the cascade fixed and the route proven
-  from `zomarit/stamity` at `main` and at every `v*` tag, consumers install from this repository;
+  from `zomarit/stamity` at `main` and at `v1.3.0` and gated on every release from here on,
+  consumers install from this repository;
   the mirror's install command is replaced rather than redirected, and the mirror is retired after
   this release.
 
