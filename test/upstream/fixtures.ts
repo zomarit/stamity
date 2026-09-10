@@ -756,6 +756,10 @@ export function treeFileExists(dir: string, path: string): boolean {
 
 /** A fresh, symlink-resolved scratch directory for one fixture family. */
 export function makeScratch(label: string): { dir: string; cleanup: () => void } {
-  const dir = mkdtempSync(join(realpathSync(tmpdir()), `stamity-upstream-${label}-${process.pid}-`));
+  // `realpathSync.native`, not `realpathSync`: on Windows the temp directory arrives in its 8.3
+  // short form (`RUNNER~1`), which the JavaScript realpath keeps and the native one expands to the
+  // long form git reports from `rev-parse --show-toplevel` — the form every path the lane returns
+  // is composed from. The first CI run's Windows leg compared the two spellings and failed.
+  const dir = mkdtempSync(join(realpathSync.native(tmpdir()), `stamity-upstream-${label}-${process.pid}-`));
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) };
 }
