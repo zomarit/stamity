@@ -425,7 +425,6 @@ jobs:
       # and the pull request's `pull_request` runs start without an "Approve and run" prompt.
       GH_TOKEN: ${{ secrets.STAMITY_UPSTREAM_TOKEN || github.token }}
       GH_REPO: ${{ github.repository }}
-      ARTIFACT_DIR: ${{ runner.temp }}/upstream-update
       INTEGRATION_BRANCH: ${{ needs.probe.outputs.branch }}
       UPDATE_BRANCH: ${{ needs.prepare.outputs.branch }}
       OUTCOME: ${{ needs.prepare.outputs.outcome }}
@@ -433,6 +432,12 @@ jobs:
       HAS_BUNDLE: ${{ needs.prepare.outputs.has_bundle }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      # The artifact lands under the runner's temp directory, outside the checkout. The `runner`
+      # context is a STEP-level context — GitHub refuses to parse a workflow that names it in a
+      # job's `env:` — so the directory is exported from a step into the job's environment here.
+      - name: Name the artifact directory
+        run: echo "ARTIFACT_DIR=$RUNNER_TEMP/upstream-update" >> "$GITHUB_ENV"
+
       # This job's whole purpose is to push, so it KEEPS the credential the previous job refused —
       # and it is the only job here that runs no code out of the repository it is pushing to. The
       # `token:` is what the push below authenticates with, so it takes the same fork token the
