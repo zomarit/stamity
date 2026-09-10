@@ -568,11 +568,13 @@ describe("upstream-update.yml — what each outcome produces", () => {
     );
     expect(run).toContain('contains($marker)');
     expect(run).not.toContain("--limit 50");
-    // It has to name the artifact a person downloads and the two commands that land the branch
-    // from a checkout whose credential does carry workflow scope.
+    // It has to name the artifact, expose the actual prepared workflow diff, and keep
+    // inspection ahead of the commands that land the branch with workflow scope.
     expect(run).toContain("upstream-update");
     expect(run).toContain("git fetch /path/to/update.bundle");
-    expect(run).toContain("git push origin");
+    expect(run).toContain("git diff '${MERGE_COMMIT}^1' '$MERGE_COMMIT' -- .github/workflows");
+    expect(run.indexOf("git diff '")).toBeGreaterThan(run.indexOf("git fetch /path/to/update.bundle"));
+    expect(run.indexOf("git push origin")).toBeGreaterThan(run.indexOf("git diff '"));
     // The issue's copyable manual recovery command must pass the same inherited
     // conventional-title check as a PR created automatically by the lane.
     expect(run).toContain("--title 'chore(upstream): integrate ${TAG:-unknown}'");

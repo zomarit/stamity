@@ -68,6 +68,10 @@ if (args[0] === 'api' || (args[0] === 'pr' && args[1] === 'list')) {
   if (fs.readFileSync(body, 'utf8').length > 65536) { process.stderr.write('PR body exceeds GitHub limit'); process.exit(1); }
   fs.copyFileSync(body, process.env.CREATED_BODY);
   process.stdout.write('https://github.com/example/downstream/pull/7\\n');
+} else if (args[0] === 'issue' && args[1] === 'list') { process.stdout.write('[]'); }
+else if (args[0] === 'issue' && args[1] === 'create') {
+  fs.copyFileSync(args[args.indexOf('--body-file') + 1], process.env.CREATED_BODY);
+  process.stdout.write('https://github.com/example/downstream/issues/8\\n');
 } else if (args[0] === 'label') { process.stdout.write('[]'); }
 else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); process.exit(9); }
 `);
@@ -91,6 +95,65 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     const pr = (state = "open", base = "main") => ({ number: 7, url: "https://github.com/example/downstream/pull/7", html_url: "https://github.com/example/downstream/pull/7", state, base: { ref: base }, head: { ref: env.UPDATE_BRANCH, sha, repo: { full_name: env.GH_REPO } }, title: "Human title", body: "Human evidence", labels: [{ name: "human-label" }] });
     return { fork, sha, dir, artifact, env, invoke, pr, worktree: integrated.doc.worktree! };
   }
+
+  it("reports a prepared workflow update without inventing a PR and puts diff review before push", () => {
+    const f = fixture();
+    mkdirSync(join(f.worktree, ".github/workflows"), { recursive: true });
+    writeFileSync(join(f.worktree, ".github/workflows/review.yml"), "name: Review this workflow change\n");
+    git(f.fork, ["add", ".github/workflows/review.yml"], { cwd: f.worktree });
+    git(f.fork, ["commit", "--amend", "--no-edit", "--quiet"], { cwd: f.worktree });
+    const prepared = branchHead(f.fork, f.env.UPDATE_BRANCH)!;
+    // Only a local bare fixture is modified: this report describes the no-push/no-PR outcome.
+    git(f.fork, ["--git-dir", join(f.dir, "origin.git"), "update-ref", "-d", `refs/heads/${f.env.UPDATE_BRANCH}`]);
+    writeFileSync(join(f.artifact, "upstream-report.md"), "Prepared integration report\n");
+    const composed = f.invoke("Compose the report body", { MERGE_COMMIT: prepared });
+    expect(composed.status, composed.stderr).toBe(0);
+    const result = f.invoke("Open or update the reviewed-push issue", {
+      MERGE_COMMIT: prepared, WORKFLOW_FILES: ".github/workflows/review.yml",
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expectNoPrWrites(result.calls);
+    const body = readFileSync(f.env.CREATED_BODY, "utf8");
+    expect(body).toContain("Prepared integration report");
+    expect(body).toContain("This run did not push the branch or open a pull request");
+    expect(body).not.toMatch(/This pull request (?:was opened|must land|is not the first)/i);
+    expect(body).not.toContain("Its `pull_request` workflow runs are created");
+    expect(body).not.toContain("workflow diff above");
+    const blocks = [...body.matchAll(/```sh\n([\s\S]*?)```/g)].map((match) => match[1]!);
+    const fetchBlock = blocks.find((block) => block.includes("git fetch /path/to/update.bundle"))!;
+    expect(fetchBlock).toBeDefined();
+    expect(fetchBlock).toContain(`git diff '${prepared}^1' '${prepared}' -- .github/workflows`);
+    expect(fetchBlock.indexOf("git diff ")).toBeGreaterThan(fetchBlock.indexOf("git fetch "));
+    expect(fetchBlock).not.toContain("git push");
+    const pushBlock = blocks.find((block) => block.includes("git push origin"))!;
+    expect(pushBlock).toBeDefined();
+    expect(body.indexOf(pushBlock)).toBeGreaterThan(body.indexOf(fetchBlock));
+    expect(body.slice(body.indexOf(fetchBlock) + fetchBlock.length, body.indexOf(pushBlock))).toMatch(/review.*diff.*before.*push/is);
+    expect(pushBlock).toContain("--title 'chore(upstream): integrate v1.1.0'");
+    // Execute the emitted read-only instructions against the actual bundle: the diff must
+    // expose the workflow content while the remote stays untouched and has no update branch.
+    git(f.fork, ["worktree", "remove", f.worktree]);
+    git(f.fork, ["bundle", "create", join(f.artifact, "update.bundle"), `main..${f.env.UPDATE_BRANCH}`]);
+    git(f.fork, ["branch", "-D", f.env.UPDATE_BRANCH]);
+    const inspection = spawnSync("bash", ["-c", fetchBlock.replace("/path/to/update.bundle", `'${join(f.artifact, "update.bundle")}'`)], {
+      cwd: f.fork.dir, env: f.fork.env, encoding: "utf8",
+    });
+    expect(inspection.status, inspection.stderr).toBe(0);
+    expect(inspection.stdout).toContain("+name: Review this workflow change");
+    expect(git(f.fork, ["ls-remote", "--heads", "origin", f.env.UPDATE_BRANCH]).stdout).toBe("");
+  });
+
+  it.each(["false", "true"])("keeps actual PR merge and token-approval guidance (elevated=%s)", (elevated) => {
+    const f = fixture();
+    writeFileSync(join(f.artifact, "upstream-report.md"), "Prepared integration report\n");
+    expect(f.invoke("Compose the report body", { ELEVATED_TOKEN: elevated }).status).toBe(0);
+    const result = f.invoke(undefined, { PUSHED: "true" });
+    expect(result.status, result.stderr).toBe(0);
+    const body = readFileSync(f.env.CREATED_BODY, "utf8");
+    expect(body).toContain("**merge commit**");
+    expect(body.includes("approval-required")).toBe(elevated === "false");
+    expect(body.includes('"Approve and run"')).toBe(elevated === "false");
+  });
 
   it("recovers a missing PR after a creation failure without changing either remote branch", () => {
     const f = fixture();
