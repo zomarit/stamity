@@ -1,8 +1,8 @@
 ---
 id: overlay-layers
 # A design document, authored outside the spec command and excluded from the site build.
-status: design
-obsolete_when: the customization layers ship and the published customization page carries their behaviour, or a decision cuts the surface
+status: shipped
+obsolete_when: the published customization page stops carrying the overlay behaviour this spec designed, or a decision cuts the surface
 ---
 # Overlay customization layers
 

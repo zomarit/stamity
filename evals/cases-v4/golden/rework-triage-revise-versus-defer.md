@@ -104,4 +104,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response names `/st-work` as where execution runs once the plan exists.
+None declared for this case since the 1.4.0 repairs. Its one advisory criterion — that the
+response names `/st-work` as where execution runs once the plan exists, a routing destination
+the claim does not name — missed one sample at run 9 and one at run 10 in the same shape and was
+deleted under the two-run rule; the routing table's outcomes are what the binding criteria pin.
