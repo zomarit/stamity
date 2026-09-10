@@ -20,5 +20,22 @@
     "allEvalRun12InputsMatch": true,
     "evalBoundary": "Run12 remains the original BLOCKED request on4e649f8. No live measurement was performed on either candidate; unchanged input hashes do not convert an unavailable run into a score.",
     "verifiedAt": "2026-09-10T22:29:47.328154+00:00"
+  },
+  "windowsSchedulingCandidate": {
+    "parentCommit": "f7d3f95a7dac26c702c17b3e19ffd9c691e5d2cb",
+    "sourceDigest": "2dd850b73c4a2e03a4511d95394749633e4b9749faf4c8dcdfdfd01e1a01ec2c",
+    "verifiedInputCount": 1076,
+    "manifestSha256": "f1b6e5328b3d524e9ffb40a460ecedf15af1cc6547061e8883c1cadf32ca0d95",
+    "allWorkingInputsMatch": true,
+    "changedSourceInputs": [
+      "vitest.config.ts",
+      "test/ci/testScheduling.test.ts",
+      "test/support/cliHarness.ts"
+    ],
+    "runtimePackageInputsUnchanged": true,
+    "bindingRule": "This source-input snapshot identifies the reviewed scheduling candidate without a self-referential commit ID. Verify each input against the final committed PR head; the PR description and completed platform receipts identify that commit. This field does not assert unrun platform checks.",
+    "sourceReview": "windows-scheduling-review.md",
+    "evalBoundary": "All original run12 inputs and results remain unchanged; no new live admission, calibration or score is supplied.",
+    "verifiedAt": "2026-09-10T23:08:20.192905+00:00"
   }
 }

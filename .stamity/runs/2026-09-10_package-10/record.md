@@ -1,6 +1,6 @@
 # Package 10 execution
 
-Status: source implementation and independent reviews are complete; final verification is in progress.
+Status: implementation and the bounded Windows scheduling mitigation are independently reviewed and locally verified. This chronological record preserves earlier passes and failures; current PR checks identify final-head platform status.
 This record does not perform human QA or platform publication approval.
 
 Baseline: clean HEAD and remote main `99c1094953346ef19a8aaab3ee0bd7d292c36ba6`;
@@ -194,3 +194,35 @@ No actionable source finding remains. Final evidence-only records bind this
 implementation and preserve all open live-eval/human/owner proofs. The final PR
 head must also clear its required checks before handback; no merge/tag/release
 is authorized by the failed-to-dispatch run12 or by unsigned current QA.
+
+
+## Final-head Windows timeouts and bounded scheduling repair
+
+The evidence-only `f7d3f95` candidate failed required CI34538915096: Windows
+103076834099 and aggregate103079077901 are red. Eight timeouts remain failed in
+the retained run: upstream/lane two cases at30s and syncMcpOwnership six at20s.
+Totals:190 files pass/two fail/two skipped;7,513 tests pass/eight fail/148 existing
+skips. Linux floor/LTS, APM, PR checks and docs passed. The earlier713c057 Windows
+pass remains a dated observation, not a waiver for the later failed required check.
+
+Independent timeline comparisons find the same runner/tool versions and peak three
+workers. The failures overlap a pack case growing from4.514s to109.318s; many tests
+before/after are faster. Eval-runner work starts after the affected interval.
+The logs do not distinguish CPU, filesystem or scanning; no proved host root cause
+or infrastructure exception is claimed.
+
+After shared scheduling/fixture census, integration changed only vitest.config.ts,
+a new scheduling regression and a stale comment in test/support/cliHarness.ts.
+Windows uses a normal parallel group followed by exactly the three heavy suites
+in a single-worker group. Actual Vitest5 resolution verifies all195 files once;
+root include[] avoids concatenating inherited selection arrays. All194 original
+files, assertions, limits, skips, floors and non-Windows scheduling remain unchanged.
+Independent review and exact local proof belong to windows-scheduling-review.md;
+source binding is the1,076-input digest in candidate-binding.json.
+
+The final source and reviewed evidence are committed together. Actual CI and the
+non-publishing rehearsal must then run on that final head, with exact results in
+PR #34 and retained platform receipts. This pre-run source record does not assert
+those future outcomes. No extra public evidence commit is required solely to write
+its own CI result. Run12 remains BLOCKED, current human QA unsigned, and release1.7.0
+unpublished while fresh evaluation/human prerequisites remain open. No11/12 or cleanup.
