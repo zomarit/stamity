@@ -479,7 +479,16 @@ merge topology, integration record and tree, against the selected upstream relea
 integration target. The existing record schema remains the contract: `tool`, `version`,
 `release`, `releaseCommit`, `targetBranch`, `targetHead` and gates. Its expected non-record
 tree and semantic record must agree with the prepared integration; timestamps alone cannot
-make independently prepared commits equal. The retained remote merge commit must have no
+make independently prepared commits equal. There is one generated-file exception:
+`src/manifest/manifest.ts::writeManifest` restamps `.stamity/manifest.json.updatedAt` on
+every sync. When this file differs, both git entries must be regular non-executable files
+(`100644`) with the known schema-1.0.0 manifest envelope, canonical two-space JSON without
+duplicate keys, and valid `createdAt`/`updatedAt` values in `YYYY-MM-DDTHH:mm:ss.SSSZ` form.
+The inline publisher masks precisely the single top-level `updatedAt` value and compares
+every remaining byte, including creation time, selection, ledger, field order and formatting.
+No `generatedPaths` pattern is excluded, no code from the prepared branch runs during this
+comparison, and missing/linked/malformed/noncanonical manifests or any other changed field
+still refuse recovery. The retained remote merge commit must have no
 human follow-up or unexplained changed tree. Target movement requires manual review.
 Reports and PR provenance identify the remote SHA and its validation result, never a freshly
 prepared commit that was not pushed. The restored bundle head must equal its reported SHA;

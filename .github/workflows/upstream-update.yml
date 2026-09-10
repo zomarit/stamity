@@ -570,7 +570,7 @@ jobs:
       #
       # Three separate GitHub surfaces govern merge ancestry: active rulesets (paginated),
       # repository merge methods and classic branch protection. The rules endpoint does NOT
-      # include classic protection. Its endpoint requires Administration: read, which the
+      # include classic protection. The classic-protection endpoint requires Administration: read, which the
       # repository token does not have. An unreadable/404/malformed response is unknown, never
       # evidence of no restriction. Keep known warnings even if another surface is unreadable.
       # Official contracts: docs.github.com/en/rest/repos/rules#get-rules-for-a-branch,
@@ -872,8 +872,9 @@ jobs:
       #
       # A push followed by failed PR creation leaves an owned branch. Recovery reads that actual
       # remote branch as inert git objects: parent topology, record semantics and non-record tree
-      # must match this run's prepared integration. Dates/durations may differ; human fixups and
-      # target movement may not. A record alone is not proof of an unchanged tree. The recovered
+      # must match this run's prepared integration. Record dates/durations and the validated
+      # sync-manifest updatedAt may differ; human fixups and target movement may not. A record
+      # alone is not proof of an unchanged tree. The recovered
       # body's result/SHA come from the retained branch, never the newly prepared merge report.
       - name: Open or update the pull request
         id: pr
@@ -969,7 +970,42 @@ jobs:
             [ "$(git show -s --format=%P "$REMOTE_SHA")" = "$EXPECTED_PARENTS" ] || refuse 'The remote branch has human followups or different merge parents.'
             [ "$(git show -s --format=%P "$MERGE_COMMIT")" = "$EXPECTED_PARENTS" ] || refuse 'The prepared merge has unexpected parents.'
             [ "$(git show -s --format=%s "$REMOTE_SHA")" = "Merge upstream release $TAG into $INTEGRATION_BRANCH" ] || refuse 'The remote merge does not identify the lane.'
-            git diff --quiet "$REMOTE_SHA" "$MERGE_COMMIT" -- . ":(exclude)$RECORD_PATH" || refuse 'The remote tree contains human edits or differs from the prepared integration.'
+            # writeManifest (src/manifest/manifest.ts) stamps updatedAt on every successful
+            # sync, including one with no content changes. Validate only the known generated
+            # manifest envelope here, using trusted inline tools, then mask precisely that
+            # top-level timestamp. Every other byte (including createdAt, selection and ledger)
+            # stays exact; no configured generatedPaths are exempted from the tree comparison.
+            MANIFEST_PATH='.stamity/manifest.json'
+            if ! git diff --quiet "$REMOTE_SHA" "$MERGE_COMMIT" -- "$MANIFEST_PATH"; then
+              for SIDE in remote prepared; do
+                SHA="$REMOTE_SHA"
+                [ "$SIDE" != 'prepared' ] || SHA="$MERGE_COMMIT"
+                [ "$(git ls-tree "$SHA" -- "$MANIFEST_PATH" | awk '{print $1}')" = '100644' ] || refuse 'A changed sync manifest is absent or is not a regular non-executable file.'
+                MANIFEST="$ARTIFACT_DIR/$SIDE-manifest.json"
+                git show "$SHA:$MANIFEST_PATH" > "$MANIFEST" || refuse 'Cannot read the changed sync manifest.'
+                jq -e '
+                  def timestamp:
+                    type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$") and
+                    (sub("\\.[0-9]{3}Z$"; "Z") as $seconds | try (($seconds | fromdateiso8601 | todateiso8601) == $seconds) catch false);
+                  type == "object" and .version == "1.0.0" and
+                  (.generatedBy | type == "string" and length > 0) and
+                  (.createdAt | timestamp) and (.updatedAt | timestamp) and
+                  (.tools | type == "array" and length > 0 and all(.[]; IN("claude", "cursor", "copilot", "codex"))) and
+                  (.selection | type == "object") and
+                  (.selection.items | type == "object" and keys == ["agent", "command", "rule", "skill"] and all(.[]; type == "array" and all(.[]; type == "string"))) and
+                  (.ledger | type == "array" and all(.[]; type == "object")) and
+                  ((keys - ["version", "generatedBy", "createdAt", "updatedAt", "tools", "platform", "maturityTier", "communicationStyle", "selection", "ledger", "mcp", "learnings", "hooks", "models", "importChoice", "toolOptions", "detected"]) | length == 0)
+                ' "$MANIFEST" > /dev/null || refuse 'The changed sync manifest has an unsupported schema, envelope or timestamp.'
+                # A reserialization check rejects duplicate keys and noncanonical indentation,
+                # so the single two-space updatedAt line is necessarily the top-level property.
+                jq . "$MANIFEST" > "$MANIFEST.canonical" || refuse 'Cannot parse the changed sync manifest.'
+                cmp -s "$MANIFEST" "$MANIFEST.canonical" || refuse 'The changed sync manifest is not canonical generated JSON.'
+                [ "$(grep -c '^  "updatedAt": "' "$MANIFEST")" = '1' ] || refuse 'The changed sync manifest has no unique top-level timestamp.'
+                sed 's/^  "updatedAt": "[^"]*"/  "updatedAt": "<regenerated>"/' "$MANIFEST" > "$MANIFEST.comparable"
+              done
+              cmp -s "$ARTIFACT_DIR/remote-manifest.json.comparable" "$ARTIFACT_DIR/prepared-manifest.json.comparable" || refuse 'The sync manifest differs beyond its generated updatedAt timestamp.'
+            fi
+            git diff --quiet "$REMOTE_SHA" "$MERGE_COMMIT" -- . ":(exclude)$RECORD_PATH" ":(exclude)$MANIFEST_PATH" || refuse 'The remote tree contains human edits or differs from the prepared integration.'
             # This check also covers a branch pushed manually after workflow review. The lane
             # does not open its PR automatically: the reviewed-push procedure includes that step.
             [ -z "$(git diff --name-only "$TARGET_HEAD..$REMOTE_SHA" -- .github/workflows)" ] || refuse 'Workflow changes require the reviewed-push recovery procedure.'

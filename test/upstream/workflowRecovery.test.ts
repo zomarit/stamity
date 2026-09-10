@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { branchHead, commitAll, createFork, createUpstream, git, gitAvailable, makeScratch, runLane, type ForkOptions, type UpstreamFixture } from "./fixtures.ts";
@@ -173,6 +173,79 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     expect(body).toContain(f.sha);
     expect(body).not.toContain(prepared);
     expect(JSON.parse(readFileSync(join(f.artifact, "publish-result.json"), "utf8"))).toMatchObject({ action: "recovered", commit: f.sha });
+  });
+
+  function syncedFixture() {
+    const manifest = {
+      version: "1.0.0", generatedBy: "1.6.0", createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z", tools: ["claude"],
+      selection: { items: { agent: [], command: [], rule: [], skill: [] } }, ledger: [],
+    };
+    // Call the real sync write seam: its wall-clock updatedAt is the only generated
+    // content difference between two fresh integrations of this unchanged target.
+    const source = pathToFileURL(join(ROOT, "src/manifest/manifest.ts")).href;
+    const f = fixture({
+      files: {
+        ".stamity/manifest.json": `${JSON.stringify(manifest, null, 2)}\n`,
+        "scripts/sync-manifest.mjs": `import { readManifest, writeManifest } from ${JSON.stringify(source)};\nawait writeManifest(process.cwd(), await readManifest(process.cwd()));\n`,
+      },
+      config: {
+        regenerate: ["node scripts/gen.mjs", "node scripts/sync-manifest.mjs"],
+        generatedPaths: ["generated/**", ".stamity/manifest.json"],
+      },
+    });
+    // Retain the pushed remote branch and recreate only this fixture's local preparation,
+    // matching the next workflow run's fresh checkout after the create-PR failure.
+    git(f.fork, ["worktree", "remove", f.worktree]);
+    git(f.fork, ["branch", "-D", f.env.UPDATE_BRANCH]);
+    const second = runLane(f.fork, ["integrate", "--release", "v1.1.0"]);
+    expect(second.doc.outcome).toBe("integrated");
+    const prepared = second.doc.mergeCommit!;
+    const original = JSON.parse(git(f.fork, ["show", `${f.sha}:.stamity/manifest.json`]).stdout) as { updatedAt: string };
+    const fresh = JSON.parse(git(f.fork, ["show", `${prepared}:.stamity/manifest.json`]).stdout) as { updatedAt: string };
+    expect(fresh.updatedAt).not.toBe(original.updatedAt);
+    return { ...f, prepared, worktree: second.doc.worktree! };
+  }
+
+  it("recovers a failed PR creation after a fresh real sync changes only manifest updatedAt", () => {
+    const f = syncedFixture();
+    expect(f.invoke(undefined, { PUSHED: "true", CREATE_FAILURE: "true" }).status).toBe(1);
+    const result = f.invoke(undefined, { MERGE_COMMIT: f.prepared });
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.output).toContain("action=recovered");
+    expect(git(f.fork, ["ls-remote", "--heads", "origin", f.env.UPDATE_BRANCH]).stdout).toContain(f.sha);
+    expect(readFileSync(f.env.CREATED_BODY, "utf8")).toContain(f.sha);
+    expect(readFileSync(f.env.CREATED_BODY, "utf8")).not.toContain(f.prepared);
+  });
+
+  it.each(["other-field", "invalid-date", "malformed", "noncanonical", "symlink", "missing"])("refuses retained manifest %s changes while preserving the remote branch", (kind) => {
+    const f = syncedFixture();
+    const path = join(f.worktree, ".stamity/manifest.json");
+    const raw = readFileSync(path, "utf8");
+    const manifest = JSON.parse(raw) as { updatedAt: string; selection: { items: { rule: string[] } } };
+    if (kind === "other-field") {
+      manifest.selection.items.rule.push("human-customization");
+      writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+    } else if (kind === "invalid-date") {
+      manifest.updatedAt = "2026-02-30T00:00:00.000Z";
+      writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+    } else if (kind === "malformed") {
+      writeFileSync(path, "{invalid JSON\n");
+    } else if (kind === "noncanonical") {
+      writeFileSync(path, JSON.stringify(manifest));
+    } else {
+      rmSync(path);
+      if (kind === "symlink") symlinkSync("upstream.json", path);
+    }
+    git(f.fork, ["add", ".stamity/manifest.json"], { cwd: f.worktree });
+    git(f.fork, ["commit", "--amend", "--no-edit", "--quiet"], { cwd: f.worktree });
+    const changed = branchHead(f.fork, f.env.UPDATE_BRANCH)!;
+    git(f.fork, ["push", "--quiet", "origin", `${changed}:refs/heads/fixture-transfer`]);
+    git(f.fork, ["--git-dir", join(f.dir, "origin.git"), "update-ref", `refs/heads/${f.env.UPDATE_BRANCH}`, changed]);
+    const result = f.invoke(undefined, { MERGE_COMMIT: f.prepared });
+    expect(result.status, result.stdout + result.stderr).toBe(1);
+    expectNoPrWrites(result.calls);
+    expect(git(f.fork, ["ls-remote", "--heads", "origin", f.env.UPDATE_BRANCH]).stdout).toContain(changed);
   });
 
   it("does not reopen or replace a deliberately closed PR", () => {
