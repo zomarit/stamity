@@ -1,0 +1,247 @@
+{
+  "documentationSha": "caec7fac5e45d82ad1b766c30affd3696829c690",
+  "productGatesSha": "0f7b0e9a457c6c78c96eb3cb9c24c3802d85718b",
+  "generatedAt": "2026-09-10T17:00:51Z",
+  "sourceFiles": {
+    "docs/enterprise-forks.md": "0630169206da8a91dd69af545a3d43e9099e5b2b3b5587e8c5a410966776bbcd",
+    "docs/getting-started.md": "7fcb40bac9058f36d7f23aad045edaba4fc6057f3301afed95ea48f08fc5680e",
+    "docs/customization.md": "b2eb61fcaddd5735bec704836ddf92eca134e43cf94e0c6dd5062dbef1f6f3e7",
+    "website/docusaurus.config.ts": "357259e39e3b3e95991843ab8ceed948c6eb49b54ad78b4075b062c6f3a1b4a7",
+    "website/src/css/custom.css": "f9b47f20b2b3f9a75ad727cf1ba01d04df1509500cd6ae3e96ca2f430239164d",
+    "website/src/theme/MDXComponents/index.tsx": "3597177f70bdc4dc85cc56418c9b0f9aa32e0b80968aafb8fb3b37a4959e896b"
+  },
+  "evidenceFiles": {
+    "REPORT.md": {
+      "sha256": "575192f26bf51e7696a92e68e577ef80306d7cc1fe202cc38b9c54b2b9d8c707",
+      "bytes": 2923
+    },
+    "a11y/ax-customization-1440-dark.json": {
+      "sha256": "97ae259af29364c40b9735206807b4f36209e101dc44c43f582d0e653606e86c",
+      "bytes": 773341
+    },
+    "a11y/ax-customization-1440-light.json": {
+      "sha256": "eab4d9b94ee3a418d0c91ce309fa05bda9cc347faca95013daf6d268641ba62d",
+      "bytes": 773342
+    },
+    "a11y/ax-customization-375-dark.json": {
+      "sha256": "260b15d1ebdb5bad7436b3faf116180e0ca56808459e86d358ccfc0e072eed02",
+      "bytes": 725282
+    },
+    "a11y/ax-customization-375-light.json": {
+      "sha256": "df7f351d22e9691524b306e37620e6037373693d397b8dd1ef008219def8254c",
+      "bytes": 725278
+    },
+    "a11y/ax-enterprise-forks-1440-dark.json": {
+      "sha256": "9b782aac9616758f942f3e5476701b55e4772509430ce53caaa4201c83513858",
+      "bytes": 3131940
+    },
+    "a11y/ax-enterprise-forks-1440-light.json": {
+      "sha256": "2e9f9b071f53202893ed5cba62efeab89d0e9c42d4b410405304c1f5da26f1e4",
+      "bytes": 3131891
+    },
+    "a11y/ax-enterprise-forks-375-dark.json": {
+      "sha256": "589b07efb1b48174491381db365220dff01a8f3ebf854d57d8791152764b88c3",
+      "bytes": 3229405
+    },
+    "a11y/ax-enterprise-forks-375-light.json": {
+      "sha256": "b671bf6baf4cefd9bd9be3cb826e99c8f8067394273e6c9ced5f20300a2d72b9",
+      "bytes": 3229400
+    },
+    "a11y/ax-getting-started-1440-dark.json": {
+      "sha256": "15467115296be332b67e998978a09c8ae0b867c05a57d34dad931d6899aab864",
+      "bytes": 945916
+    },
+    "a11y/ax-getting-started-1440-light.json": {
+      "sha256": "55a96ccd1845336dd04c34a1b5204aa4c385f12a0f0bbe04e5c90608bcd17e9a",
+      "bytes": 945916
+    },
+    "a11y/ax-getting-started-375-dark.json": {
+      "sha256": "829d0999b9017225194897d1817eb19b9e1abb7488522dbf71c874729ab7505e",
+      "bytes": 904536
+    },
+    "a11y/ax-getting-started-375-light.json": {
+      "sha256": "f1b16e576aeef4726b5753e8219978125f5a76530096e2d6fda4751ee3137e05",
+      "bytes": 904531
+    },
+    "a11y/axe-customization-1440-dark.json": {
+      "sha256": "e696b346ed15e6e8a9249359fa7811889f0ad7d617debb1940e0ede74d4fad4c",
+      "bytes": 720819
+    },
+    "a11y/axe-customization-1440-light.json": {
+      "sha256": "b83f5efbdba7987d1dea1f26118cfd477a226bb6908036de5f6c527b78ba77f7",
+      "bytes": 725929
+    },
+    "a11y/axe-customization-375-dark.json": {
+      "sha256": "6d1267c3acbec2dc1c936d8af5e1f9acd921b8a12117c5748dad42c0dc2b0cb5",
+      "bytes": 526053
+    },
+    "a11y/axe-customization-375-light.json": {
+      "sha256": "11f5046bc261fa07f83df5e62eba2558a8b4ada289f4b1942a3a47d70d5b312f",
+      "bytes": 530307
+    },
+    "a11y/axe-enterprise-forks-1440-dark.json": {
+      "sha256": "9b02db0ce4f392e3c6b6a743395ac9aa6752b0157f2de8c1a8cac15779ec02f3",
+      "bytes": 3344264
+    },
+    "a11y/axe-enterprise-forks-1440-light.json": {
+      "sha256": "b3c9d5843fc69ecf5aff84932e1fb2a56d12b692eae15c60f367f9d35c98cabc",
+      "bytes": 3412324
+    },
+    "a11y/axe-enterprise-forks-375-dark.json": {
+      "sha256": "d3ccf34197b4b98f2c704ecb74cdd5b6a1f932a47fb8fb62e51ca0d94035463f",
+      "bytes": 3187393
+    },
+    "a11y/axe-enterprise-forks-375-light.json": {
+      "sha256": "a1f5ad9ca9a1280205a174853b7eebb9fd9ed3f6be361c03b94d05abb5699d1c",
+      "bytes": 3255593
+    },
+    "a11y/axe-getting-started-1440-dark.json": {
+      "sha256": "23b0025bc625f8a8921c30318db759ad12aa3f62bf0cebb85f2c6f95b8a1baee",
+      "bytes": 959039
+    },
+    "a11y/axe-getting-started-1440-light.json": {
+      "sha256": "8ee0eaa9eff00e68463c15344e5a5509c1dabfa54fd8b34699f0f070e092c121",
+      "bytes": 966129
+    },
+    "a11y/axe-getting-started-375-dark.json": {
+      "sha256": "07378e2dd92794505608e621b364dd84a35b13d8a43659a8a83e76dd3f566a3f",
+      "bytes": 801829
+    },
+    "a11y/axe-getting-started-375-light.json": {
+      "sha256": "fe7c7a3d83e3f3e40b718295c6de47e81dd2bc26528f778e5044edaa13ce11ab",
+      "bytes": 808997
+    },
+    "a11y/bundle.json": {
+      "sha256": "e850c00f4ea0a85e17a79de7c1d6f9118a3a657e03c2c8d991f3370757c26f2b",
+      "bytes": 14134
+    },
+    "a11y/keyboard-customization-375-dark.png": {
+      "sha256": "f3c7fd593d7bc571d8e5483258c45808ad43ae2a9537f6974df5de45de43399a",
+      "bytes": 87196
+    },
+    "a11y/keyboard-customization-375-light.png": {
+      "sha256": "ca14482ce78cf9898400cf4fb99456d73681e2facbcb5d52fbc7e72280753715",
+      "bytes": 87261
+    },
+    "a11y/keyboard-enterprise-forks-1440-dark.png": {
+      "sha256": "d94e5b71c10d8d613b13de796f001c3be2ad6d6ff6720cb15e2d791f00c6b0e1",
+      "bytes": 227464
+    },
+    "a11y/keyboard-enterprise-forks-1440-light.png": {
+      "sha256": "bbc10b7ce978b39a55782063e6e5395a79a1a1c106f31869a08b20b577462c99",
+      "bytes": 227825
+    },
+    "a11y/keyboard-enterprise-forks-375-dark.png": {
+      "sha256": "e3ab83770edb3db1e7419327057a4fda58c2fb5cb0ae944a07bbd6f5cfd60592",
+      "bytes": 43797
+    },
+    "a11y/keyboard-enterprise-forks-375-light.png": {
+      "sha256": "8aec546d59dfef4879bf5d355830f3da1ed7fc784679885fd2547c6e6251cd32",
+      "bytes": 45418
+    },
+    "a11y/keyboard-getting-started-375-dark.png": {
+      "sha256": "187483b09bfeac4f0ac213a7416696084a91013ece0c7df2266906a0662f10e7",
+      "bytes": 69893
+    },
+    "a11y/keyboard-getting-started-375-light.png": {
+      "sha256": "fd83990c705aac6b101ebddeb5c5dd8664c9f6629a82169229da256712062ded",
+      "bytes": 70113
+    },
+    "a11y/resize-and-font-size.json": {
+      "sha256": "c55a10aca86a90a6d549821cdb19f21d2db5e61d0361018c1e4c6707bd040634",
+      "bytes": 446
+    },
+    "a11y/scenario-customization-1440-dark.json": {
+      "sha256": "a2c6366602fbb006eabdaadd55f824a88d0c6c8dc849c82df4a91230ef9968bb",
+      "bytes": 961
+    },
+    "a11y/scenario-customization-1440-light.json": {
+      "sha256": "8e01d87ac9c54ce125e78051486e03b8a1a7c96229961f4d946e5e866d948cca",
+      "bytes": 963
+    },
+    "a11y/scenario-customization-375-dark.json": {
+      "sha256": "f5d33f1fdf5f869e6496ef03a7db4b6f9e101f55002d61cd4c8e198c9365b020",
+      "bytes": 1390
+    },
+    "a11y/scenario-customization-375-light.json": {
+      "sha256": "772975012a2014d940e74c7e78c896fa9061446ab4a2f5f0f1aeb2261a126067",
+      "bytes": 1390
+    },
+    "a11y/scenario-enterprise-forks-1440-dark.json": {
+      "sha256": "5bfabdd0a027be94475336aaa2eda26e34ca6a4d3afda2bae45425dbc31c15a1",
+      "bytes": 2012
+    },
+    "a11y/scenario-enterprise-forks-1440-light.json": {
+      "sha256": "82e09a1b65f472a05279cb9097014b5214bb5f186d128501f2e161962c10a427",
+      "bytes": 2013
+    },
+    "a11y/scenario-enterprise-forks-375-dark.json": {
+      "sha256": "328384eaa8ea140e8e3d640b6eccdc9fdafbadd6b06f3c0397d7d01da43fafeb",
+      "bytes": 2921
+    },
+    "a11y/scenario-enterprise-forks-375-light.json": {
+      "sha256": "4d0cc26c16ef473e2d46f92881f7a1c8d17f5a2ccda61a6e501dc14243ac8519",
+      "bytes": 2918
+    },
+    "a11y/scenario-getting-started-1440-dark.json": {
+      "sha256": "7d163faf8de550f5ac897b1fb9302849b8fc5af2273958814d0a3ca60ebb41e4",
+      "bytes": 793
+    },
+    "a11y/scenario-getting-started-1440-light.json": {
+      "sha256": "76dccfa6ab1a2da58a22fcbd42fb5170c87c0e214c163d84e5e209161438534f",
+      "bytes": 795
+    },
+    "a11y/scenario-getting-started-375-dark.json": {
+      "sha256": "239a3bc2321ed6e911b519321b583c30c1935c3db924b0c77c89d3d64e9f1362",
+      "bytes": 1249
+    },
+    "a11y/scenario-getting-started-375-light.json": {
+      "sha256": "efc3a97df0e6b867739e9a8a8e29a271569cb9086ffe6fdaa52ff7c6ea343693",
+      "bytes": 1249
+    },
+    "a11y/ssr-no-javascript.json": {
+      "sha256": "6bcf1fd0c56ea547ea002173678853c9601c422919361d86505bb3795a104423",
+      "bytes": 273
+    },
+    "a11y-check.mjs": {
+      "sha256": "bac24f16de5bb35917f3b0cc347ae39e9719400b955ff2eefe333b7c138664a3",
+      "bytes": 10615
+    },
+    "a11y.log": {
+      "sha256": "b87f725d4adeed0e0d44f8e2a6633ee1aaf4ac78326f9f0ede5ff26bb440161f",
+      "bytes": 1256
+    },
+    "browser-caec7fa.json": {
+      "sha256": "90cb2c5d2ae45912f6afd1db8f1f2ac8cb5a7c96e7196e6e99d9d606bdc8c108",
+      "bytes": 14563
+    },
+    "browser.result.json": {
+      "sha256": "a36ef1e9006bab29cb5c5fc6459aeb7c09dd6634211846f43ec0ef2ae1e9a5b4",
+      "bytes": 398
+    },
+    "checkout-final-status.txt": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "checkout.log": {
+      "sha256": "dd905e9d065da44f68b390749e10fee3c78d783680fad092edc54ab94dfcb515",
+      "bytes": 155
+    },
+    "gates.json": {
+      "sha256": "e36bc19c4a02c16769c638f4b0cf7b718e61625e411045c634cd7c7aedc69858",
+      "bytes": 471
+    },
+    "source-binding.json": {
+      "sha256": "ef2de83543ae5b8678984f08b337e4dc31900becf6dd1d8b263862637921d484",
+      "bytes": 588
+    },
+    "website-gates.log": {
+      "sha256": "f1a7c8e5d766d95b0ac648d48233de4ebc394c8897d50ab8752d666a9564251e",
+      "bytes": 439
+    },
+    "website-install.log": {
+      "sha256": "9394f86f7df374776cd7cc84faabf97463b64cb3bbd88104885152a4f593ad0c",
+      "bytes": 331
+    }
+  }
+}

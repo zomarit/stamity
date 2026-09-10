@@ -1,0 +1,25 @@
+{
+  "sha": "caec7fac5e45d82ad1b766c30affd3696829c690",
+  "productGatesSha": "0f7b0e9a457c6c78c96eb3cb9c24c3802d85718b",
+  "allChangedPaths": [
+    ".stamity/inbox.md",
+    "docs/enterprise-forks.md",
+    "docs/plans/005-enterprise-downstream-support.md"
+  ],
+  "protectedComparedPaths": [
+    "src",
+    "content",
+    "scripts",
+    ".github/workflows",
+    "website",
+    "package.json",
+    "package-lock.json",
+    "tsdown.config.mjs",
+    "vitest.config.ts",
+    ".apm",
+    ".claude-plugin",
+    "apm.yml"
+  ],
+  "changedProtectedPaths": [],
+  "startedAt": "2026-09-10T16:58:05Z"
+}
