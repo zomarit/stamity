@@ -38,8 +38,8 @@ your object store, so a merge base exists.
 **A public fork.** Fork the repository and clone it. The upstream commits are already there.
 
 **A private copy.** A private copy of a public repository cannot be a fork at all — a fork's
-visibility is tied to its network — so the private case is a mirror clone pushed into a new,
-empty repository. Follow the ordered private onboarding below: Actions must be disabled
+visibility is tied to its network — so the private case is a bare clone mirror-pushed into a
+new, empty repository. Follow the ordered private onboarding below: Actions must be disabled
 before importing historical refs, then reviewed before enabling the downstream workflows.
 
 Clone that normally and work in it. The mirror route gives up every fork feature — no "Sync
@@ -60,6 +60,12 @@ install checks against them. This guide uses APM's private git route; an experim
 registry is a separate deployment choice. Official sources and tested clients are recorded
 in [the implementation plan](plans/005-enterprise-downstream-support.md).
 
+Confirm the destination owner's GitHub plan supports the required private branch controls.
+Private rulesets and protected branches on GitHub require GitHub Pro, Team or Enterprise
+Cloud. A plan-related `403` leaves required-check enforcement and landing-policy proof
+blocked until the owner provides supported private
+controls. Keep the repository private; changing visibility is not a recovery step.
+
 Set the destination to your approved example equivalent. Keep credentials out of variables
 that name repositories and out of git URLs. Disable Actions **before importing any refs**:
 historical tags can carry older workflows without the current publication guards.
@@ -72,8 +78,8 @@ test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .private)" = true
 test "$(gh api "repos/$STAMITY_DOWNSTREAM" --jq .fork)" = false
 gh api --method PUT "repos/$STAMITY_DOWNSTREAM/actions/permissions" -F enabled=false
 STAMITY_PRIVATE_URL="$(gh repo view "$STAMITY_DOWNSTREAM" --json url --jq .url)"
-git clone --mirror https://github.com/zomarit/stamity stamity-mirror.git
-git -C stamity-mirror.git push --mirror "$STAMITY_PRIVATE_URL.git"
+git clone --bare https://github.com/zomarit/stamity stamity-import.git
+git -C stamity-import.git push --mirror "$STAMITY_PRIVATE_URL.git"
 git clone "$STAMITY_PRIVATE_URL.git" stamity-private
 cd stamity-private
 git remote add upstream https://github.com/zomarit/stamity
@@ -83,7 +89,10 @@ git merge-base --is-ancestor v1.5.0 HEAD
 
 The ancestry command checks the illustrated imported baseline; substitute the exact approved
 upstream tag/SHA for another import. Confirm `origin` points to the private destination before
-every initial push. Keep the mirror backup until downstream and consumer checks pass.
+every initial push. The initial duplication follows GitHub's bare-clone procedure, linked
+from [the implementation plan](plans/005-enterprise-downstream-support.md). It imports
+branches and tags without pull-request refs that GitHub rejects on push.
+Keep the bare import backup until downstream and consumer checks pass.
 Repeating `push --mirror` after customization would replace downstream refs; subsequent
 updates use the upstream lane. Keep Actions disabled until current workflows, identity,
 credentials and destinations have been reviewed, including how historical tags are handled.

@@ -4,7 +4,7 @@ import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { branchHead, commitAll, createFork, createUpstream, git, gitAvailable, makeScratch, runLane, type UpstreamFixture } from "./fixtures.ts";
+import { branchHead, commitAll, createFork, createUpstream, git, gitAvailable, makeScratch, runLane, type ForkOptions, type UpstreamFixture } from "./fixtures.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const workflow = parse(readFileSync(join(ROOT, ".github/workflows/upstream-update.yml"), "utf8")) as {
@@ -35,10 +35,10 @@ describe.skipIf(!SHELL_AVAILABLE)("upstream publish recovery — executable GitH
   beforeAll(() => { upstream = createUpstream(scratch.dir); });
   afterAll(() => { scratch.cleanup(); });
 
-  function fixture() {
+  function fixture(options: ForkOptions = {}) {
     const dir = join(scratch.dir, `case-${ordinal++}`);
     mkdirSync(dir);
-    const fork = createFork(upstream, dir);
+    const fork = createFork(upstream, dir, options);
     const integrated = runLane(fork, ["integrate", "--release", "v1.1.0"]);
     expect(integrated.doc.outcome).toBe("integrated");
     const sha = integrated.doc.mergeCommit!;
@@ -65,6 +65,7 @@ if (args[0] === 'api' || (args[0] === 'pr' && args[1] === 'list')) {
 } else if (args[0] === 'pr' && args[1] === 'create') {
   if (process.env.CREATE_FAILURE === 'true') { process.stderr.write('PR creation denied'); process.exit(1); }
   const body = args[args.indexOf('--body-file') + 1];
+  if (fs.readFileSync(body, 'utf8').length > 65536) { process.stderr.write('PR body exceeds GitHub limit'); process.exit(1); }
   fs.copyFileSync(body, process.env.CREATED_BODY);
   process.stdout.write('https://github.com/example/downstream/pull/7\\n');
 } else if (args[0] === 'label') { process.stdout.write('[]'); }
@@ -121,6 +122,32 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
       expect(result.output).toContain("action=reported");
       expectNoPrWrites(result.calls);
     }
+  });
+
+  it("recovers an oversized integration record with bounded PR evidence and the complete retained artifact", () => {
+    // Run a valid large configured gate through the real lane: the record size comes from its
+    // persisted command, not a fabricated workflow report or a substitute for git/jq.
+    const run = `node -e '/*${"gate-evidence-".repeat(6000)}*/ process.exit(0)'`;
+    const f = fixture({ config: { gates: [{ name: "Large configured gate", run }] } });
+    const recordPath = ".stamity/upstream/integrations/v1.1.0.json";
+    const retainedRecord = git(f.fork, ["show", `${f.sha}:${recordPath}`]).stdout;
+    expect(Buffer.byteLength(retainedRecord)).toBeGreaterThan(65536);
+    const result = f.invoke();
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.output).toContain("action=recovered");
+    const body = readFileSync(f.env.CREATED_BODY, "utf8");
+    expect(Buffer.byteLength(body)).toBeLessThanOrEqual(60000);
+    expect(body).toContain(f.sha);
+    expect(body).toContain(upstream.tags["v1.1.0"]);
+    expect(body).toContain("Recorded gates: **passed**");
+    expect(body).toContain("Fixture landing policy warning");
+    expect(body).toContain("reviewed merge commit");
+    expect(body).toContain("remote-record.json");
+    expect(body).toContain("upstream-publication");
+    expect(body).toContain(f.env.RUN_URL);
+    expect(readFileSync(join(f.artifact, "remote-record.json"), "utf8")).toBe(retainedRecord);
+    expect(JSON.parse(readFileSync(join(f.artifact, "publish-result.json"), "utf8"))).toMatchObject({ action: "recovered", commit: f.sha });
+    expect(git(f.fork, ["ls-remote", "--heads", "origin", f.env.UPDATE_BRANCH]).stdout).toContain(f.sha);
   });
 
   it("identifies the retained remote SHA when an equivalent new preparation has different timestamps", () => {
