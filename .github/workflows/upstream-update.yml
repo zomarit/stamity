@@ -1,0 +1,890 @@
+# Upstream update — the opt-in lane that carries an upstream release into a fork.
+#
+# THIS REPOSITORY DOES NOT RUN IT. The lane is enabled by the presence of `.stamity/upstream.json`,
+# and the canonical repository carries no such file: the `probe` job below finds nothing, writes a
+# notice, and the run ends GREEN with the two jobs after it skipped. A fork enables the lane by
+# committing that config; nothing else in this file changes between here and there. Everything the
+# lane actually does lives in `scripts/upstream.mjs`, which is portable Node and runs the same way
+# on a laptop as it does here — this file is the thin GitHub layer over it, and deliberately holds
+# no logic the script does not already own.
+#
+# THE SPLIT, WHICH IS THE SAFETY PROPERTY. `prepare` fetches the upstream, merges it on an isolated
+# update branch, regenerates the fork's generated tree and runs the fork's own gates — every one of
+# which executes third-party code out of the fork's dependency tree. It runs with `contents: read`,
+# `persist-credentials: false` and NO secret in its environment, so nothing it executes can push,
+# comment, or read a token. It hands its result forward as an ARTIFACT: a JSON report, a markdown
+# report, and the update branch packaged as a git bundle. `publish` holds the write grants, runs
+# only git and `gh` over that artifact, and executes none of the fork's code. release.yml splits on
+# the same line for the same reason; this is that discipline applied to a lane whose untrusted half
+# is an arbitrary downstream repository's build.
+#
+# THE OPTIONAL SECRET, AND THE TWO PLATFORM FACTS BEHIND IT. `publish` uses
+# `secrets.STAMITY_UPSTREAM_TOKEN` when the fork configures one — a fine-grained personal access
+# token or GitHub App token with Contents: write, Pull requests: write and Workflows: write — and
+# falls back to the per-run repository token when it does not. Two things change with it:
+#
+#   1. WORKFLOW FILES CAN LAND. The repository token cannot push a commit that creates or modifies
+#      anything under `.github/workflows/` — the push is refused outright ("refusing to allow a
+#      GitHub App to create or update workflow ... without `workflows` permission"). Upstream
+#      releases of this product routinely touch workflow files, so without the secret those
+#      releases cannot be pushed at all. The publish job checks the update branch for workflow
+#      changes BEFORE pushing and, when it finds them with no elevated token, opens an issue with
+#      the commands a person runs locally instead of failing halfway through a push.
+#   2. THE PULL REQUEST'S OWN CI STARTS WITHOUT A PROMPT. Since GitHub's 2026-06-11 change a pull
+#      request created or updated with the repository token DOES create `pull_request` workflow
+#      runs, but in an approval-required state — someone has to click "Approve and run" on each.
+#      With a personal access token or an App token the runs start on their own. Either way the
+#      fork's gates already ran in `prepare` and their verdict is committed into the integration
+#      record on the update branch, so the pull request is never the first place the merged tree
+#      is tested; a `validation-failed` verdict makes THIS run red so the check on the pull
+#      request is red too.
+#
+# The secret is referenced in `publish` and nowhere else. `prepare` sees no secret at all, and that
+# is the property that makes it safe to run the fork's code there.
+#
+# WHY AN EXISTING REMOTE BRANCH IS NEVER FORCE-UPDATED. `stamity-upstream/<tag>` may already carry a
+# human's conflict resolution, a review fixup, or a follow-up commit. Overwriting it would delete
+# work the lane cannot re-derive, so the push is conditional on the branch being ABSENT from the
+# remote and there is no force flag anywhere in this file. When the branch is already there the run
+# reports the existing pull request instead — which is also what makes a second run idempotent.
+#
+# WHY NO EGRESS ALLOWLIST. release.yml pins its network with step-security/harden-runner because
+# every host it needs is known at authoring time. This lane's most important destination is the
+# FORK'S configured upstream, which is a value in a file this repository never sees; a static
+# allowlist would either omit it (blocking the lane closed on every fork) or be widened to
+# meaninglessness. The compensating control is the job split above: the job that reaches the
+# network holds nothing worth stealing.
+#
+# Actions are pinned to full commit SHAs with a trailing comment naming the EXACT version the SHA
+# resolves to. Every pin here is a pin that already existed in this directory, reused rather than
+# re-resolved:
+#   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+#
+# Drift-guarded by test/ci/upstreamWorkflow.test.ts (this file's own properties) and by
+# test/ci/workflow.test.ts (the gates every workflow in this directory meets).
+
+name: Upstream update
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Upstream tag to integrate (empty = the newest stable release)'
+        type: string
+        required: false
+        default: ''
+      dry_run:
+        description: 'Prepare the update and publish nothing — no branch, no pull request, no issue'
+        type: boolean
+        default: false
+  schedule:
+    # Daily, and daily is enough: upstream releases are TAGS, not a stream. A release lands a
+    # handful of times a year, so a day of latency on the pull request that offers it costs a fork
+    # nothing, while an hourly cadence would re-run the same fetch-and-compare to reach the same
+    # `up-to-date` answer twenty-three more times. The minute is deliberately off the hour —
+    # GitHub queues the whole top-of-hour cohort together and sheds load from it, so `0 * * * *`
+    # is the one spelling most likely to run late or not at all.
+    - cron: '17 5 * * *'
+
+# Least privilege at workflow scope. `probe` and `prepare` inherit exactly this and nothing more;
+# the write grants live on `publish` alone, where they are declared again.
+permissions:
+  contents: read
+
+concurrency:
+  # One lane at a time for the whole repository, across every trigger: a scheduled run and a
+  # dispatch that overlap would prepare the same tag twice, race on the same update worktree, and
+  # can open two pull requests for one release.
+  group: upstream-update
+  # Never cancel a run in flight. `integrate` leaves an update worktree and a half-finished merge
+  # behind when it is killed, which the next run has to recognise and reconcile rather than start
+  # over; queueing costs a few minutes and avoids that state entirely.
+  cancel-in-progress: false
+
+jobs:
+  # ── Job 1: the probe. Decides whether this repository is a fork that opted in. ──
+  #
+  # It reads one file and answers one question, so it is cheap enough to run on every scheduled
+  # tick of every fork that never enabled the lane. The absent case is a NOTICE and a green exit
+  # rather than a skipped workflow: a run that ends green with a visible reason is legible, and a
+  # workflow that silently never starts looks identical to one that is broken.
+  probe:
+    name: probe the lane configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      enabled: ${{ steps.config.outputs.enabled }}
+      branch: ${{ steps.config.outputs.branch }}
+    steps:
+      # Sparse and credential-free: this job needs one file and holds no write grant, so it takes
+      # neither the rest of the tree nor an auth header it has no use for. A pattern that matches
+      # nothing leaves an empty working tree, which is exactly the canonical repository's case and
+      # is answered below rather than failed on.
+      - name: Checkout the lane configuration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .stamity/upstream.json
+          sparse-checkout-cone-mode: false
+
+      # Three answers, and they are not the same answer:
+      #   absent      — this is not a fork that opted in. Notice, `enabled=false`, exit 0.
+      #   unparseable — a fork TRIED to opt in and its config is broken. Error, exit 1, because a
+      #                 silent skip here is indistinguishable from the absent case, and the lane's
+      #                 own script exits 2 on a config it cannot read.
+      #   parsed      — `enabled=true`, plus the integration branch every later job checks out.
+      - name: Read the lane configuration
+        id: config
+        run: |
+          set -uo pipefail
+          CONFIG='.stamity/upstream.json'
+
+          if [ ! -f "$CONFIG" ]; then
+            {
+              echo 'enabled=false'
+              echo 'branch=main'
+            } >> "$GITHUB_OUTPUT"
+            echo "::notice title=Upstream update skipped::Upstream update skipped: this checkout carries no .stamity/upstream.json — a fork enables the lane by adding one; see docs/enterprise-forks.md"
+            exit 0
+          fi
+
+          if ! BRANCH="$(node -e '
+            const fs = require("node:fs");
+            const config = JSON.parse(fs.readFileSync(".stamity/upstream.json", "utf8"));
+            if (config === null || typeof config !== "object" || Array.isArray(config)) {
+              throw new Error("the configuration must be a JSON object");
+            }
+            const branch = config.branch ?? "main";
+            if (typeof branch !== "string" || branch.trim() === "") {
+              throw new Error("branch must be a non-empty string when present");
+            }
+            process.stdout.write(branch.trim());
+          ' 2> config.err)"; then
+            {
+              echo 'enabled=false'
+              echo 'branch=main'
+            } >> "$GITHUB_OUTPUT"
+            echo "::error title=Upstream configuration unreadable::.stamity/upstream.json exists but could not be read as the lane's configuration. The lane is not enabled and nothing was integrated. Node reported:"
+            cat config.err || true
+            exit 1
+          fi
+
+          {
+            echo 'enabled=true'
+            echo "branch=$BRANCH"
+          } >> "$GITHUB_OUTPUT"
+          echo "Upstream lane enabled; integration branch: $BRANCH"
+
+  # ── Job 2: prepare. Runs the fork's code. Holds no credential and no write grant. ──
+  #
+  # Everything expensive and everything untrusted happens here: the fetch, the merge, the
+  # regeneration, and the fork's own gates. The job's exit status carries a deliberate asymmetry
+  # that mirrors the script's exit codes — exit 1 is a RESULT (`conflict`, `validation-failed`,
+  # `ancestry-lost`), which is data for the publish job to act on rather than a broken run, while
+  # exit 2 is an operational error (no config the script can use, an unreachable remote, a git
+  # below the floor) and makes this job red with the message attached.
+  prepare:
+    name: prepare the update branch
+    needs: probe
+    if: needs.probe.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    # Generous, because the budget is the FORK'S: `integrate` runs whatever that repository
+    # declared as its gates, which is usually a full install-build-test ladder.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      outcome: ${{ steps.report.outputs.outcome }}
+      tag: ${{ steps.report.outputs.tag }}
+      branch: ${{ steps.report.outputs.branch }}
+      exit_code: ${{ steps.integrate.outputs.exit_code }}
+      has_bundle: ${{ steps.bundle.outputs.has_bundle }}
+    steps:
+      # `persist-credentials: false` is the boundary. Everything after this step runs the fork's
+      # own code, and the auth header the checkout would otherwise leave in `.git/config` is a
+      # push credential sitting in a directory that code can read.
+      #
+      # `fetch-depth: 0` because the whole lane is an ancestry question: the merge base, the
+      # "which release is already integrated" probe and the bundle range all need real history.
+      - name: Checkout the integration branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.probe.outputs.branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The declared engines floor, which is the oldest Node this package supports and therefore
+      # the one a fork is most likely to be pinned to. Known limit, stated rather than implied: a
+      # fork whose own toolchain requires something newer changes this line — the lane reads the
+      # fork's gates from its config, not its Node version.
+      #
+      # No `cache: npm`: an Actions cache is writable from any branch, and the artifact this job
+      # produces is the evidence the pull request is reviewed on.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.22.2'
+
+      # The checkout leaves HEAD on the integration branch already; this makes the LOCAL branch
+      # ref exist under that exact name whatever shape the checkout took, because the merge and
+      # the bundle range below both name it. `git switch` is safe here in a way it never is in a
+      # maintainer's tree: this is a throwaway runner checkout, not somebody's working copy.
+      - name: Ensure the integration branch exists locally
+        env:
+          INTEGRATION_BRANCH: ${{ needs.probe.outputs.branch }}
+        run: |
+          set -euo pipefail
+          if ! git switch "$INTEGRATION_BRANCH" 2>/dev/null; then
+            git switch -c "$INTEGRATION_BRANCH" "origin/$INTEGRATION_BRANCH"
+          fi
+          echo "On $(git rev-parse --abbrev-ref HEAD) at $(git rev-parse --short HEAD)"
+
+      # The one call this whole file exists to make. The report goes to a directory OUTSIDE the
+      # checkout: the script runs the fork's gates against this working tree, and dropping two
+      # untracked files into it mid-run is how a gate that diffs the tree reports a false red.
+      #
+      # `--release` is passed through `env:` and tested for emptiness in the shell rather than
+      # interpolated into the command line, the way release.yml passes VERSION. A dispatch input
+      # is attacker-controllable text in a repository that takes outside contributions, and
+      # `${{ }}` in a `run:` body is textual substitution into the script itself.
+      #
+      # `set +e` around the call is the point of the step: every outcome this lane names arrives
+      # as an exit code with a full JSON report on stdout, so the code is captured and the report
+      # is kept. A non-zero exit here is not yet a failure.
+      - name: Integrate the upstream release
+        id: integrate
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/upstream-update
+          RELEASE_INPUT: ${{ inputs.release }}
+        run: |
+          set -uo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+
+          ARGS=(integrate --json)
+          if [ -n "${RELEASE_INPUT:-}" ]; then
+            ARGS+=(--release "$RELEASE_INPUT")
+            echo "Requested release: $RELEASE_INPUT"
+          else
+            echo 'No release requested; the lane selects the newest stable upstream release.'
+          fi
+
+          set +e
+          node scripts/upstream.mjs "${ARGS[@]}" > "$ARTIFACT_DIR/upstream-report.json"
+          EXIT_CODE=$?
+          set -e
+
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "node scripts/upstream.mjs integrate --json exited $EXIT_CODE"
+
+      # Extraction, kept separate from the call so a malformed report is diagnosed rather than
+      # inherited. Nothing here fails the job: an unusable report becomes the `error` outcome and
+      # the verdict step at the end of this job turns that into a red run.
+      - name: Extract the outcome and the report
+        id: report
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/upstream-update
+          EXIT_CODE: ${{ steps.integrate.outputs.exit_code }}
+        run: |
+          set -uo pipefail
+          JSON="$ARTIFACT_DIR/upstream-report.json"
+          MARKDOWN="$ARTIFACT_DIR/upstream-report.md"
+
+          if [ ! -s "$JSON" ] || ! jq -e . "$JSON" > /dev/null 2>&1; then
+            echo "::error title=Upstream lane produced no report::The lane exited $EXIT_CODE and wrote no parseable JSON document to stdout. The run cannot say what happened, so it reports an error rather than a state."
+            printf '%s\n' '{"outcome":"error","messages":["the lane wrote no parseable JSON report"]}' > "$JSON"
+          fi
+
+          OUTCOME="$(jq -r '.outcome // "error"' "$JSON")"
+          TAG="$(jq -r '.target.tag // ""' "$JSON")"
+          BRANCH="$(jq -r '.branch // ""' "$JSON")"
+          MERGE_COMMIT="$(jq -r '.mergeCommit // ""' "$JSON")"
+
+          jq -r '.report // ""' "$JSON" > "$MARKDOWN"
+          if [ ! -s "$MARKDOWN" ]; then
+            {
+              echo '## Upstream update'
+              echo
+              echo "The lane reported \`$OUTCOME\` and carried no markdown report. The messages it did carry:"
+              echo
+              jq -r '(.messages // []) | if length == 0 then "- (none)" else (.[] | "- " + .) end' "$JSON"
+            } > "$MARKDOWN"
+          fi
+
+          {
+            echo "outcome=$OUTCOME"
+            echo "tag=$TAG"
+            echo "branch=$BRANCH"
+            echo "merge_commit=$MERGE_COMMIT"
+          } >> "$GITHUB_OUTPUT"
+          echo "outcome=$OUTCOME tag=${TAG:-(none)} branch=${BRANCH:-(none)} mergeCommit=${MERGE_COMMIT:-(none)}"
+
+      # The update branch, packaged for a job that will not have this checkout. A bundle is the
+      # right shape for the trust split: it is an inert file, it carries only the commits the
+      # merge added, and the receiving job verifies it against history it already has — a fetch
+      # from a bundle whose prerequisites are missing fails rather than inventing a base.
+      #
+      # No merge commit means no bundle, and that is a normal result: `conflict` stops before the
+      # commit by design.
+      - name: Bundle the update branch
+        id: bundle
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/upstream-update
+          INTEGRATION_BRANCH: ${{ needs.probe.outputs.branch }}
+          UPDATE_BRANCH: ${{ steps.report.outputs.branch }}
+          MERGE_COMMIT: ${{ steps.report.outputs.merge_commit }}
+        run: |
+          set -uo pipefail
+          if [ -z "${MERGE_COMMIT:-}" ] || [ -z "${UPDATE_BRANCH:-}" ]; then
+            echo 'has_bundle=false' >> "$GITHUB_OUTPUT"
+            echo 'No merge commit on this run, so there is no update branch to bundle.'
+            exit 0
+          fi
+
+          set -e
+          git bundle create "$ARTIFACT_DIR/update.bundle" "$INTEGRATION_BRANCH..$UPDATE_BRANCH"
+          git bundle verify "$ARTIFACT_DIR/update.bundle"
+          echo 'has_bundle=true' >> "$GITHUB_OUTPUT"
+          echo "Bundled $INTEGRATION_BRANCH..$UPDATE_BRANCH ($(wc -c < "$ARTIFACT_DIR/update.bundle") bytes)"
+
+      # Seven days, matching release.yml's reasoning: the hand-off is not machine-paced. A publish
+      # job re-run after a maintainer fixes a repository setting — or a person pushing the bundle
+      # by hand because it touches workflow files — has to find the artifact still there.
+      - name: Upload the prepared update
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: upstream-update
+          path: ${{ runner.temp }}/upstream-update
+          if-no-files-found: error
+          retention-days: 7
+
+      # The report goes on the run itself, not only into the artifact, so the outcome is readable
+      # without downloading anything — including on the runs that open no pull request at all.
+      - name: Write the report to the run summary
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/upstream-update
+        run: |
+          set -euo pipefail
+          cat "$ARTIFACT_DIR/upstream-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # Last, so the artifact and the summary exist before the job can go red. Exit 2 is the
+      # script's "could not run" status and is the only one that fails this job: every exit-1
+      # outcome is a state the publish job reports on.
+      - name: Fail on an operational error
+        env:
+          EXIT_CODE: ${{ steps.integrate.outputs.exit_code }}
+          OUTCOME: ${{ steps.report.outputs.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "${EXIT_CODE:-2}" -ge 2 ]; then
+            echo "::error title=Upstream lane could not run::node scripts/upstream.mjs integrate exited ${EXIT_CODE:-2} with outcome '${OUTCOME:-error}'. That status means the lane could not run at all — a missing or invalid configuration, an unreachable upstream, or an environment below its floor — so nothing was integrated and nothing will be published. The full report is in the upstream-update artifact and in this run's summary."
+            exit 1
+          fi
+          echo "The lane exited ${EXIT_CODE:-0} with outcome '${OUTCOME:-unknown}', which is a result to publish rather than an error."
+
+  # ── Job 3: publish. The only job that can write, and it runs none of the fork's code. ──
+  #
+  # The condition, spelled out because it is what keeps a rehearsal a rehearsal:
+  #   - `needs.prepare.result == 'success'` — the lane ran and produced a result. A `prepare` that
+  #     went red (exit 2) publishes nothing;
+  #   - `needs.probe.outputs.enabled == 'true'` — restated rather than inherited, so a future edit
+  #     to `prepare`'s condition cannot hand this job a run in a repository that never opted in;
+  #   - `format('{0}', inputs.dry_run) != 'true'` — a SCHEDULED run publishes (inputs are empty on
+  #     a schedule) and a dispatch that ticked `dry_run` does not.
+  #
+  # Why `format()`. GitHub casts operands of differing types to numbers before comparing, and null,
+  # the empty string and false all cast to 0 — so `inputs.dry_run != true` is a comparison whose
+  # answer depends on the input's declared TYPE, and a later edit from `type: boolean` to a string
+  # input would silently turn `'true' != true` into a publish. `format()` renders the value as a
+  # string first, so an absent input renders as '' and only a literal true suppresses the publish.
+  # (docs.github.com/actions/reference/evaluate-expressions-in-workflows-and-actions.) Both arms
+  # are evaluated against every trigger shape in test/ci/upstreamWorkflow.test.ts.
+  publish:
+    name: publish the update
+    needs: [probe, prepare]
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      needs.probe.outputs.enabled == 'true' &&
+      format('{0}', inputs.dry_run) != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The write grants, and the reason for each: `contents` pushes the update branch, and
+    # `pull-requests` and `issues` are the two shapes a result can take — a reviewable pull
+    # request when the merge produced a commit, an issue when it produced a conflict a person has
+    # to resolve locally. No `id-token`: this job mints nothing and attests nothing. These grants
+    # bound the REPOSITORY token; when a fork configures `STAMITY_UPSTREAM_TOKEN` the operations
+    # below run with that token's own scopes instead, which is the point of it.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      # The fork's own token when it configured one, and the per-run repository token otherwise.
+      # The header explains what the first buys: workflow-touching releases can be pushed at all,
+      # and the pull request's `pull_request` runs start without an "Approve and run" prompt.
+      GH_TOKEN: ${{ secrets.STAMITY_UPSTREAM_TOKEN || github.token }}
+      GH_REPO: ${{ github.repository }}
+      ARTIFACT_DIR: ${{ runner.temp }}/upstream-update
+      INTEGRATION_BRANCH: ${{ needs.probe.outputs.branch }}
+      UPDATE_BRANCH: ${{ needs.prepare.outputs.branch }}
+      OUTCOME: ${{ needs.prepare.outputs.outcome }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      HAS_BUNDLE: ${{ needs.prepare.outputs.has_bundle }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      # This job's whole purpose is to push, so it KEEPS the credential the previous job refused —
+      # and it is the only job here that runs no code out of the repository it is pushing to. The
+      # `token:` is what the push below authenticates with, so it takes the same fork token the
+      # `gh` calls take.
+      #
+      # Full history because the bundle fetched below carries only the commits the merge added and
+      # is verified against the base this checkout provides.
+      - name: Checkout the integration branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.probe.outputs.branch }}
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ secrets.STAMITY_UPSTREAM_TOKEN || github.token }}
+
+      # Into the runner temp directory, not the workspace: nothing downloaded here should be able
+      # to land in the tree this job pushes from.
+      - name: Download the prepared update
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: upstream-update
+          path: ${{ runner.temp }}/upstream-update
+
+      # Which credential this run holds, decided once and read by every step after it. The secret
+      # is loaded into an env var and tested in the SHELL rather than compared inside an `if:`
+      # expression, the way nightly.yml arms its headless lane: the absent case then produces a
+      # notice a reader can find, instead of a skipped step that looks the same as one that
+      # passed.
+      - name: Detect the push credential
+        id: credential
+        env:
+          STAMITY_UPSTREAM_TOKEN: ${{ secrets.STAMITY_UPSTREAM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${STAMITY_UPSTREAM_TOKEN:-}" ]; then
+            echo 'workflow_scope=false' >> "$GITHUB_OUTPUT"
+            echo "::notice title=Running on the repository token::No STAMITY_UPSTREAM_TOKEN secret is configured, so this run uses the per-run repository token. Two consequences: an upstream release that touches .github/workflows/ CANNOT be pushed by this run (GitHub refuses the push without workflow permission) and is reported as an issue instead, and the pull request's own pull_request runs will wait for a human to click \"Approve and run\". See docs/enterprise-forks.md."
+            exit 0
+          fi
+          echo 'workflow_scope=true' >> "$GITHUB_OUTPUT"
+          echo 'STAMITY_UPSTREAM_TOKEN is configured: workflow-touching releases can be pushed and the pull request CI starts without an approval prompt.'
+
+      # The landing-policy check. The lane's claim that a release is "integrated" rests entirely on
+      # ANCESTRY — the release commit being reachable from the integration branch — and only a
+      # merge-commit landing preserves that. A branch that requires linear history, or that allows
+      # squash and rebase but not merge, silently destroys the marker: the release commit never
+      # joins the branch's history, every later run sees the release as un-integrated and offers it
+      # again, and every conflict resolved by hand comes back with it.
+      #
+      # Detected here rather than assumed, because it is readable: the rules endpoint returns the
+      # branch's EFFECTIVE rules, whatever ruleset or protection produced them. It is also
+      # permitted to fail — the endpoint answers 403 or 404 on some plans and for some tokens —
+      # and a failure is reported in one line rather than swallowed, because "no warning" and
+      # "could not check" must not look the same to whoever reads the pull request.
+      #
+      # The pull request opens either way. The decision belongs to the fork.
+      - name: Check the target branch's landing policy
+        id: landing
+        run: |
+          set -uo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          POLICY="$ARTIFACT_DIR/landing-policy.md"
+          RULES="$ARTIFACT_DIR/branch-rules.json"
+          RULES_ERR="$ARTIFACT_DIR/branch-rules.err"
+          : > "$POLICY"
+
+          if ! gh api "repos/${GH_REPO}/rules/branches/${INTEGRATION_BRANCH}" > "$RULES" 2> "$RULES_ERR"; then
+            {
+              echo '> [!NOTE]'
+              echo "> Could not read branch rules for \`$INTEGRATION_BRANCH\`, so the landing policy was NOT checked. This is expected on some plans and for some tokens; it is not evidence that the policy is safe. Confirm by hand that this branch allows MERGE COMMITS — see \`docs/enterprise-forks.md\`."
+              echo
+            } > "$POLICY"
+            echo 'checked=false' >> "$GITHUB_OUTPUT"
+            echo 'warning=false' >> "$GITHUB_OUTPUT"
+            echo "::notice title=Landing policy unchecked::could not read branch rules for $INTEGRATION_BRANCH; the pull request carries a note saying so. gh reported: $(tr '\n' ' ' < "$RULES_ERR" | cut -c1-300)"
+            exit 0
+          fi
+
+          LINEAR="$(jq -r '(if type=="array" then . else [] end) | [.[] | select(.type=="required_linear_history")] | length' "$RULES")"
+          NO_MERGE="$(jq -r '(if type=="array" then . else [] end) | [.[] | select(.type=="pull_request") | .parameters.allowed_merge_methods // empty] | map(select(index("merge") | not)) | length' "$RULES")"
+          METHODS="$(jq -r '(if type=="array" then . else [] end) | [.[] | select(.type=="pull_request") | .parameters.allowed_merge_methods // empty] | add // [] | unique | join(", ")' "$RULES")"
+
+          echo 'checked=true' >> "$GITHUB_OUTPUT"
+
+          if [ "${LINEAR:-0}" -eq 0 ] && [ "${NO_MERGE:-0}" -eq 0 ]; then
+            echo 'warning=false' >> "$GITHUB_OUTPUT"
+            echo "Landing policy on $INTEGRATION_BRANCH permits a merge commit; upstream ancestry will survive."
+            exit 0
+          fi
+
+          {
+            echo '> [!WARNING]'
+            echo "> **This branch's landing policy will destroy the upstream ancestry this pull request carries.**"
+            echo '>'
+            if [ "${LINEAR:-0}" -gt 0 ]; then
+              echo "> \`$INTEGRATION_BRANCH\` has a **required linear history** rule, which forbids the merge commit this pull request must land as."
+            fi
+            if [ "${NO_MERGE:-0}" -gt 0 ]; then
+              echo "> \`$INTEGRATION_BRANCH\` allows only these merge methods: **${METHODS:-none}** — \`merge\` is not among them."
+            fi
+            echo '>'
+            echo "> **Squash and rebase both lose it** — verified on git 2.52, not assumed: after either landing the upstream release commit is no longer an ancestor of \`$INTEGRATION_BRANCH\`, and the next integration re-conflicts on lines only the fork ever touched. The lane's marker for \"this release is integrated\" IS that ancestry, so the next run will offer the same release again, every conflict resolved here will come back, and \`status\` will report \`ancestry-lost\`."
+            echo '>'
+            echo "> Allow merge commits on \`$INTEGRATION_BRANCH\`, or keep a dedicated integration branch that does. \`docs/enterprise-forks.md\` has the settings."
+            echo
+          } > "$POLICY"
+          echo 'warning=true' >> "$GITHUB_OUTPUT"
+          echo "::warning title=Landing policy loses upstream ancestry::$INTEGRATION_BRANCH does not permit a merge-commit landing (required_linear_history=$LINEAR, merge-excluding pull_request rules=$NO_MERGE, allowed methods: ${METHODS:-unknown}). Landing this pull request by squash OR by rebase drops the upstream release out of the branch's history."
+
+      # One body, composed once and used for the pull request, the issues and the run summary, so
+      # they cannot disagree about what happened. The warning goes FIRST: a reader who stops after
+      # the first paragraph must still have seen it.
+      #
+      # Truncated at a margin below GitHub's 65536-character body limit, with the artifact named
+      # as the place the whole report lives — a body that exceeds the limit is rejected outright,
+      # which would turn a long report into no report at all.
+      - name: Compose the report body
+        env:
+          WORKFLOW_SCOPE: ${{ steps.credential.outputs.workflow_scope }}
+        run: |
+          set -euo pipefail
+          BODY="$ARTIFACT_DIR/body.md"
+          {
+            cat "$ARTIFACT_DIR/landing-policy.md"
+            cat "$ARTIFACT_DIR/upstream-report.md"
+            echo
+            echo '## Landing policy'
+            echo
+            echo "This pull request must land as a **merge commit**. The lane's record of which upstream release is integrated is derived from history — the release commit being an ancestor of \`$INTEGRATION_BRANCH\` — so a squash landing and a rebase landing both erase it, and the next run then reports \`ancestry-lost\` and offers the same release again."
+            echo
+            echo '## Provenance'
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| outcome | \`${OUTCOME:-unknown}\` |"
+            echo "| upstream release | \`${TAG:-unknown}\` |"
+            echo "| update branch | \`${UPDATE_BRANCH:-none}\` |"
+            echo "| integration branch | \`$INTEGRATION_BRANCH\` |"
+            echo "| prepared by | \`node scripts/upstream.mjs integrate --json\`, in a job with no write grant and no secret |"
+            if [ "${WORKFLOW_SCOPE:-false}" = 'true' ]; then
+              echo "| push credential | \`STAMITY_UPSTREAM_TOKEN\` (carries workflow scope) |"
+            else
+              echo "| push credential | the per-run repository token (no workflow scope) |"
+            fi
+            echo "| run | $RUN_URL |"
+            echo
+            echo "The fork's own gates ran in that job, on the merged tree, and their verdict is in the integration record on this branch — so this pull request is not the first place the merge is tested."
+            if [ "${WORKFLOW_SCOPE:-false}" != 'true' ]; then
+              echo
+              echo "This pull request was opened with the per-run repository token. Its \`pull_request\` workflow runs are created in an **approval-required** state: someone with write access clicks \"Approve and run\" to start them. Configuring a \`STAMITY_UPSTREAM_TOKEN\` secret removes that prompt — and is also what lets an upstream release that touches \`.github/workflows/\` be pushed at all."
+            fi
+          } > "$BODY"
+
+          if [ "$(wc -c < "$BODY")" -gt 60000 ]; then
+            head -c 60000 "$BODY" > "$BODY.cut"
+            {
+              echo
+              echo '---'
+              echo
+              echo "_Report truncated at 60000 characters to stay inside GitHub's body limit. The complete JSON and markdown reports are in the \`upstream-update\` artifact on [this run]($RUN_URL)._"
+            } >> "$BODY.cut"
+            mv "$BODY.cut" "$BODY"
+          fi
+          echo "Composed $(wc -c < "$BODY") bytes of report body."
+
+      # Restore the update branch from the bundle and push it — but only when two things hold.
+      #
+      # ONE: the remote does not already have the branch. There is no force flag in this step and
+      # there is none anywhere in this file: `stamity-upstream/<tag>` is a branch a human may have
+      # pushed a conflict resolution or a review fixup onto, and overwriting it would delete work
+      # the lane cannot re-derive. An existing remote branch is reported, not replaced, which is
+      # also what makes the second run of the same release a no-op instead of a duplicate.
+      #
+      # TWO: the push is one this run's credential can actually make. The repository token cannot
+      # push a commit that creates or modifies anything under `.github/workflows/`; GitHub refuses
+      # it outright. Upstream releases of this product routinely touch workflow files, so that is
+      # not an edge case — it is the normal shape of a release that adds a lane. The check runs
+      # BEFORE the push rather than letting git fail halfway: the branch is left unpushed, the
+      # next step opens an issue with the commands that land it by hand, and the run goes red.
+      - name: Restore and push the update branch
+        id: push
+        if: needs.prepare.outputs.has_bundle == 'true'
+        env:
+          WORKFLOW_SCOPE: ${{ steps.credential.outputs.workflow_scope }}
+        run: |
+          set -euo pipefail
+          BUNDLE="$ARTIFACT_DIR/update.bundle"
+          test -f "$BUNDLE"
+
+          git bundle verify "$BUNDLE"
+          git fetch "$BUNDLE" "$UPDATE_BRANCH:refs/heads/$UPDATE_BRANCH"
+          echo "Restored $UPDATE_BRANCH at $(git rev-parse --short "refs/heads/$UPDATE_BRANCH")"
+
+          WORKFLOW_FILES="$(git diff --name-only "$INTEGRATION_BRANCH..$UPDATE_BRANCH" -- .github/workflows)"
+          if [ -n "$WORKFLOW_FILES" ] && [ "${WORKFLOW_SCOPE:-false}" != 'true' ]; then
+            {
+              echo 'workflow_files<<WORKFLOW_FILES_EOF'
+              printf '%s\n' "$WORKFLOW_FILES"
+              echo 'WORKFLOW_FILES_EOF'
+              echo 'ready=false'
+              echo 'pushed=false'
+              echo 'blocked=workflow-permission'
+            } >> "$GITHUB_OUTPUT"
+            echo "::error title=Push refused before it was attempted::This release changes files under .github/workflows/ and this run holds only the per-run repository token, which GitHub does not allow to create or update workflow files. Nothing was pushed. An issue with the commands that land it by hand follows."
+            printf '%s\n' "$WORKFLOW_FILES"
+            exit 0
+          fi
+
+          if [ -n "$(git ls-remote --heads origin "$UPDATE_BRANCH")" ]; then
+            {
+              echo 'ready=true'
+              echo 'pushed=false'
+            } >> "$GITHUB_OUTPUT"
+            echo "::notice title=Update branch already on the remote::origin already has $UPDATE_BRANCH, so this run did not touch it. That branch may carry a conflict resolution or a review fixup, and this lane never force-updates it. The pull request below is updated in place."
+            exit 0
+          fi
+
+          git push origin "refs/heads/$UPDATE_BRANCH:refs/heads/$UPDATE_BRANCH"
+          {
+            echo 'ready=true'
+            echo 'pushed=true'
+          } >> "$GITHUB_OUTPUT"
+          echo "Pushed $UPDATE_BRANCH to origin"
+
+      # The other half of the workflow-permission case: one issue per release, found by EXACT
+      # title, carrying the report and the commands a person runs to land the branch from a
+      # checkout whose credential does carry workflow scope.
+      - name: Open or update the workflow-permission issue
+        id: workflow_issue
+        if: steps.push.outputs.blocked == 'workflow-permission'
+        env:
+          WORKFLOW_FILES: ${{ steps.push.outputs.workflow_files }}
+        run: |
+          set -euo pipefail
+          TITLE="Upstream ${TAG:-unknown} needs a push with workflow permission"
+          ISSUE_BODY="$ARTIFACT_DIR/workflow-permission.md"
+
+          {
+            cat "$ARTIFACT_DIR/body.md"
+            echo
+            echo '## Why this could not be pushed'
+            echo
+            echo "The merge succeeded and \`${UPDATE_BRANCH:-the update branch}\` is complete — it is just not on the remote. This release changes files under \`.github/workflows/\`, and GitHub refuses a push of workflow changes made with the per-run repository token (*refusing to allow a GitHub App to create or update workflow ... without \`workflows\` permission*). The run did not attempt the push, so nothing is half-applied."
+            echo
+            echo 'Workflow files this release changes:'
+            echo
+            printf '%s\n' "$WORKFLOW_FILES" | sed 's/^/- `/; s/$/`/'
+            echo
+            echo '## Landing it by hand'
+            echo
+            echo "Download the \`upstream-update\` artifact from [this run]($RUN_URL), unzip it, then from a clone of this repository whose credential carries **workflow** scope:"
+            echo
+            echo '```sh'
+            echo "git fetch /path/to/update.bundle '${UPDATE_BRANCH:-stamity-upstream/<tag>}:refs/heads/${UPDATE_BRANCH:-stamity-upstream/<tag>}'"
+            echo "git push origin 'refs/heads/${UPDATE_BRANCH:-stamity-upstream/<tag>}'"
+            echo "gh pr create --head '${UPDATE_BRANCH:-stamity-upstream/<tag>}' --base '$INTEGRATION_BRANCH' --title 'Upstream release ${TAG:-unknown}'"
+            echo '```'
+            echo
+            echo "Re-running the lane locally reaches the same branch without the artifact: \`node scripts/upstream.mjs integrate --release ${TAG:-<tag>}\`."
+            echo
+            echo '## Making this automatic'
+            echo
+            echo 'Configure a `STAMITY_UPSTREAM_TOKEN` repository secret — a fine-grained personal access token or GitHub App token with **Contents: write**, **Pull requests: write** and **Workflows: write**. With it this lane pushes workflow-touching releases on its own, and the pull request it opens starts its own CI without an "Approve and run" prompt. `docs/enterprise-forks.md` has the steps.'
+          } > "$ISSUE_BODY"
+
+          NUMBER="$(gh issue list --search "$TITLE in:title" --state open --limit 50 --json number,title | jq -r --arg title "$TITLE" 'map(select(.title == $title)) | .[0].number // empty')"
+
+          if [ -z "$NUMBER" ]; then
+            # Same reason as the pull request: the issue's number comes from `gh issue create`'s
+            # own output, because GitHub's issue search is eventually consistent and a
+            # create-then-search can return nothing for a few seconds.
+            CREATED="$(gh issue create --title "$TITLE" --body-file "$ISSUE_BODY")"
+            printf '%s\n' "$CREATED"
+            NUMBER="$(printf '%s\n' "$CREATED" | grep -Eo 'https?://[^[:space:]]+' | tail -1 | grep -Eo '[0-9]+$' || true)"
+            echo 'action=created' >> "$GITHUB_OUTPUT"
+          else
+            gh issue edit "$NUMBER" --body-file "$ISSUE_BODY"
+            echo 'action=updated' >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Workflow-permission issue #$NUMBER: $TITLE"
+
+      # One pull request per upstream release, created once and updated in place afterwards. The
+      # search is by HEAD BRANCH rather than by title: a title is editable by a reviewer and a
+      # head branch is the identity the lane actually owns.
+      #
+      # A `gh pr create` failure is diagnosed rather than swallowed. The likeliest cause is a
+      # repository or organization setting rather than a bug — "Allow GitHub Actions to create and
+      # approve pull requests" must be enabled for the repository token to open one at all — so
+      # the message names that setting and the token that sidesteps it, then fails.
+      #
+      # The label on a failed validation is best-effort by design — a fork need not have the label
+      # — and the failure is announced rather than swallowed, because a silently unlabelled pull
+      # request and a silently un-run labelling step look identical afterwards.
+      - name: Open or update the pull request
+        id: pr
+        if: >-
+          needs.prepare.outputs.has_bundle == 'true' &&
+          steps.push.outputs.ready == 'true' &&
+          (needs.prepare.outputs.outcome == 'integrated' ||
+           needs.prepare.outputs.outcome == 'validation-failed')
+        run: |
+          set -euo pipefail
+          BODY="$ARTIFACT_DIR/body.md"
+          TITLE="Upstream release ${TAG:-unknown}"
+
+          NUMBER="$(gh pr list --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --state open --limit 20 --json number,url | jq -r '.[0].number // empty')"
+
+          if [ -n "$NUMBER" ]; then
+            gh pr edit "$NUMBER" --title "$TITLE" --body-file "$BODY"
+            URL="$(gh pr view "$NUMBER" --json url | jq -r '.url')"
+            echo 'action=updated' >> "$GITHUB_OUTPUT"
+          else
+            # The URL comes from `gh pr create`'s own stdout rather than from a second search.
+            # GitHub's pull-request search is eventually consistent, so a create-then-search can
+            # legitimately return nothing for a few seconds — and a run that failed there would
+            # be a red run reporting "no pull request" over a pull request that exists.
+            if ! CREATED="$(gh pr create --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --title "$TITLE" --body-file "$BODY")"; then
+              echo "::error title=Could not open the pull request::gh pr create failed. The update branch IS pushed, so nothing is lost — only the pull request is missing. The usual cause is a repository or organization setting rather than a defect: \"Allow GitHub Actions to create and approve pull requests\" (Settings -> Actions -> General -> Workflow permissions) must be enabled before the per-run repository token may open one. Enable it, or configure a STAMITY_UPSTREAM_TOKEN secret so the pull request is opened as that token's owner, or open it by hand: gh pr create --head $UPDATE_BRANCH --base $INTEGRATION_BRANCH"
+              exit 1
+            fi
+            printf '%s\n' "$CREATED"
+            URL="$(printf '%s\n' "$CREATED" | grep -Eo 'https?://[^[:space:]]+' | tail -1 || true)"
+            NUMBER="$(printf '%s' "$URL" | grep -Eo '[0-9]+$' || true)"
+            echo 'action=created' >> "$GITHUB_OUTPUT"
+          fi
+
+          {
+            echo "number=$NUMBER"
+            echo "url=$URL"
+          } >> "$GITHUB_OUTPUT"
+          echo "Pull request ${NUMBER:+#$NUMBER }${URL:-(url not resolved)}"
+
+          if [ "$OUTCOME" = 'validation-failed' ] && [ -n "$NUMBER" ]; then
+            LABEL='upstream-validation-failed'
+            LABELS="$(gh label list --limit 200 --json name 2>/dev/null | jq -r '.[].name' 2>/dev/null || true)"
+            if printf '%s\n' "$LABELS" | grep -Fxq "$LABEL"; then
+              if ! gh pr edit "$NUMBER" --add-label "$LABEL"; then
+                echo "::notice title=Label not applied::The \"$LABEL\" label exists but could not be applied to #$NUMBER. The gates still failed and this run is red; the label is a convenience, not the signal."
+              fi
+            else
+              echo "::notice title=Label not applied::This repository has no \"$LABEL\" label (or the label list could not be read), so #$NUMBER was not labelled. Create the label if you want failed-gate update branches tagged; the red run and the report in the body are the signal either way."
+            fi
+          fi
+
+      # A conflict has no commit and therefore no branch to push, so the result takes the other
+      # shape a person can act on: one issue per release, found by EXACT title so a near-miss
+      # opens nothing new, carrying the report and the local commands that resolve it.
+      - name: Open or update the conflict issue
+        id: issue
+        if: needs.prepare.outputs.outcome == 'conflict'
+        run: |
+          set -euo pipefail
+          TITLE="Upstream ${TAG:-unknown} needs conflict resolution"
+          ISSUE_BODY="$ARTIFACT_DIR/issue.md"
+
+          {
+            cat "$ARTIFACT_DIR/body.md"
+            echo
+            echo '## Resolving this locally'
+            echo
+            echo 'The merge stopped on a conflict, so nothing was committed and neither the integration branch nor anybody'"'"'s working tree was touched. Resolve it in the update worktree the lane prepares:'
+            echo
+            echo '```sh'
+            echo "node scripts/upstream.mjs integrate --release ${TAG:-<tag>}   # re-enters the prepared worktree"
+            echo '# resolve the conflicted paths there, then:'
+            echo 'node scripts/upstream.mjs continue'
+            echo '```'
+            echo
+            echo '`continue` refuses while any conflict marker or unmerged index entry remains, regenerates the generated tree from its sources, re-runs the gates and commits the merge. `node scripts/upstream.mjs abort` throws the attempt away without touching the integration branch.'
+          } > "$ISSUE_BODY"
+
+          NUMBER="$(gh issue list --search "$TITLE in:title" --state open --limit 50 --json number,title | jq -r --arg title "$TITLE" 'map(select(.title == $title)) | .[0].number // empty')"
+
+          if [ -z "$NUMBER" ]; then
+            # Same reason as the pull request: the issue's number comes from `gh issue create`'s
+            # own output, because GitHub's issue search is eventually consistent and a
+            # create-then-search can return nothing for a few seconds.
+            CREATED="$(gh issue create --title "$TITLE" --body-file "$ISSUE_BODY")"
+            printf '%s\n' "$CREATED"
+            NUMBER="$(printf '%s\n' "$CREATED" | grep -Eo 'https?://[^[:space:]]+' | tail -1 | grep -Eo '[0-9]+$' || true)"
+            echo 'action=created' >> "$GITHUB_OUTPUT"
+          else
+            gh issue edit "$NUMBER" --body-file "$ISSUE_BODY"
+            echo 'action=updated' >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Conflict issue #$NUMBER: $TITLE"
+
+      # The verdict, in one place, so the mapping from outcome to run colour is readable as a
+      # table rather than inferred from which earlier step happened to fail. Runs last and always,
+      # so the summary is written even when a step above went red — a failed step has already set
+      # this job's conclusion and nothing here clears it.
+      #
+      # An outcome this file does not model exits 1: a lane that grows a state the GitHub layer
+      # has never heard of must be noticed, not defaulted to green.
+      - name: Record the outcome and set the run's verdict
+        if: always()
+        env:
+          PR_URL: ${{ steps.pr.outputs.url }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          BLOCKED: ${{ steps.push.outputs.blocked }}
+          WORKFLOW_ISSUE_NUMBER: ${{ steps.workflow_issue.outputs.number }}
+          PUSHED: ${{ steps.push.outputs.pushed }}
+          LANDING_WARNING: ${{ steps.landing.outputs.warning }}
+        run: |
+          set -uo pipefail
+          {
+            echo "### Upstream update — \`${OUTCOME:-unknown}\`"
+            echo
+            if [ "${BLOCKED:-}" = 'workflow-permission' ]; then
+              echo "> [!IMPORTANT]"
+              echo "> The update branch was prepared but **not pushed**: this release changes files under \`.github/workflows/\`, which the per-run repository token may not push. Issue #${WORKFLOW_ISSUE_NUMBER:-?} carries the commands that land it by hand, and configuring a \`STAMITY_UPSTREAM_TOKEN\` secret makes future releases push themselves."
+              echo
+            fi
+            cat "$ARTIFACT_DIR/body.md" 2>/dev/null || echo '_No report body was composed._'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${BLOCKED:-}" = 'workflow-permission' ]; then
+            echo "::error title=Upstream ${TAG:-unknown} needs a push with workflow permission::The merge is clean and the branch is complete, but it changes .github/workflows/ and this run's token may not push that. Nothing was pushed and no pull request was opened. Issue #${WORKFLOW_ISSUE_NUMBER:-?} has the commands."
+            exit 1
+          fi
+
+          case "${OUTCOME:-unknown}" in
+            up-to-date)
+              echo "::notice title=Already up to date::${INTEGRATION_BRANCH} already carries the newest upstream release. Nothing to prepare."
+              exit 0
+              ;;
+            update-available)
+              echo "::notice title=Update available, not integrated::The lane reported an available update without integrating it. Nothing was published. See the report on this run."
+              exit 0
+              ;;
+            integrated)
+              echo "Integrated ${TAG:-unknown}. Pull request: ${PR_URL:-(none)} (branch pushed: ${PUSHED:-n/a}, landing-policy warning: ${LANDING_WARNING:-unknown})"
+              exit 0
+              ;;
+            validation-failed)
+              echo "::error title=Upstream ${TAG:-unknown} failed this repository's gates::The merge is clean and the update branch is pushed, but the gates declared in .stamity/upstream.json FAILED on the merged tree. The pull request carries the failing gate's output; this run is red so the check on it is red. Pull request: ${PR_URL:-(none)}"
+              exit 1
+              ;;
+            conflict)
+              echo "::error title=Upstream ${TAG:-unknown} conflicts::The merge stopped on a conflict, so there is nothing to push. Issue #${ISSUE_NUMBER:-?} carries the conflicted paths and the commands that resolve them locally."
+              exit 1
+              ;;
+            conflict-pending|update-branch-stale|regenerate-failed|ancestry-missing|ancestry-lost)
+              echo "::error title=Upstream lane reported ${OUTCOME}::No pull request or issue was created or changed on this run. The report on this run and in the upstream-update artifact names what has to happen before the lane can proceed."
+              exit 1
+              ;;
+            *)
+              echo "::error title=Unrecognised outcome::The lane reported '${OUTCOME:-unknown}', which this workflow does not model. Nothing was published. Failing closed rather than treating an unknown state as success."
+              exit 1
+              ;;
+          esac
