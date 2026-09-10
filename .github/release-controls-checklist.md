@@ -174,6 +174,11 @@ artifact, no tag, and a release without one is blocked by this checklist rather 
 memory. (Added 2026-09-01, with the set; repointed to `SET-v3.md` on 2026-09-02, and to
 `SET-v4.md` on 2026-09-04.)
 
+Name the model profile from `evals/MODEL-PROFILES-v1.md` before dispatch; the existing
+Claude profile remains the default. The artifact records the selected pair, rubric,
+reasoning/decoding and harness controls, with calibration for that configuration. A Codex
+profile's result starts a separate baseline and cannot be presented as the Claude run.
+
 A third line rides the same cut and lands *before* the tag as well: confirm the repository's own
 public metadata is current — the GitHub repository description and topics still describe what this
 release ships — and review the admin roster, so the set of accounts holding admin on this repository
