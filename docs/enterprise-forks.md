@@ -100,6 +100,7 @@ configuration error (exit 2).
   ],
   "generatedPaths": [
     ".apm/**", ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json",
+    ".stamity/generated/**",
     "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**",
     "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**",
     "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"
