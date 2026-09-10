@@ -61,11 +61,16 @@
 
 import { renderAgentsMd, AGENTS_MD_FILE, type AgentsMdPlan } from "./agentsMd.ts";
 import { planHooksInfra, type CoreHooksPlan } from "./hooksInfra.ts";
-import { projectSkills, SKILLS_PROJECTION_DIR, type ProjectedFile } from "./skillsProjection.ts";
+import {
+  projectSkills,
+  SKILLS_PROJECTION_DIR,
+  type ProjectedFile,
+  type ProjectedSkillFile,
+} from "./skillsProjection.ts";
 import {
   contentRootsOf,
+  layerRankOf,
   type CatalogItem,
-  type ContentOrigin,
   type ContentRoots,
 } from "../content/catalog.ts";
 import type { PackSuppliedServer } from "../mcp/catalog.ts";
@@ -438,18 +443,24 @@ export async function buildCoreEmissionPlan(
  * catches it, because `resolvedPacks.skillRows` (this function's other input)
  * comes from a lane that never saw the override tree at all and would emit
  * the pack skill's own rows regardless. Two shapes, caught before the generic
- * directory-collision throw above ever fires on them:
+ * directory-collision throw above ever fires on them, and both arriving as ONE
+ * path collision because of the projection's directory rule
+ * (`../emit/skillsProjection.ts` → `projectSkills`: a customizing skill that
+ * took a shipped id projects into the REPLACED skill's directory):
  *
- * - **Same directory.** An override skill's DIRECTORY is also a pack skill's
- *   directory. Falling through to the directory-collision throw would name
- *   the corpus skill and tell the operator to rename or remove the PACK —
- *   wrong on both counts, since the row sharing that directory is the
+ * - **Same directory, different id.** An override skill's DIRECTORY is also a
+ *   pack skill's directory. Falling through to the directory-collision throw
+ *   would name the corpus skill and tell the operator to rename or remove the
+ *   PACK — wrong on both counts, since the row sharing that directory is the
  *   override, not a corpus skill, and the pack was never the thing that moved.
- * - **Different directory, same id.** An override claims a pack skill's
- *   catalog id from a directory of its own. Paths never collide, so nothing
- *   upstream throws at all: both bodies would project, silently, under one
- *   catalog id — two files answering to the same identity, at emission
- *   instead of at the index.
+ * - **Same id.** An override claims a pack skill's catalog id, from whatever
+ *   directory its author filed it under. The index resolved the override over
+ *   the pack skill (the pack roots are in the lookup, so this is a shadow),
+ *   the projection therefore laid it down in the pack skill's directory, and
+ *   the pack lane — which never saw the override tree — projects the pack
+ *   skill there too. Before the directory rule this shape collided on no
+ *   path at all and both bodies projected silently under one catalog id; now
+ *   it is the same collision the first shape is, told apart by the id.
  *
  * Pack-skill overrides are unsupported today. Both shapes refuse naming the
  * OVERRIDE file as the thing to remove or rename; removing the pack is the
@@ -465,30 +476,24 @@ export async function buildCoreEmissionPlan(
  * is the same one.
  */
 function mergeSkillProjections(
-  corpusSkills: readonly ProjectedFile[],
+  corpusSkills: readonly ProjectedSkillFile[],
   packs: ResolvedPackContent,
 ): ProjectedFile[] {
   refuseOverrideDirectoryClash(corpusSkills);
   const corpusByPath = new Map(corpusSkills.map((row) => [row.path, row]));
-  const overridesById = new Map(
-    corpusSkills.filter((row) => isCustomizingRow(row)).map((row) => [row.artifactId, row]),
-  );
   for (const row of packs.skillRows) {
     const corpusRow = corpusByPath.get(row.path);
+    if (corpusRow === undefined) continue;
     const packId = packSupplierOf(packs.items, row.artifactId);
-    const overrideRow =
-      corpusRow !== undefined && isCustomizingRow(corpusRow)
-        ? corpusRow
-        : overridesById.get(row.artifactId);
-    if (overrideRow !== undefined) {
-      const overridePath = customizingSkillFilePath(overrideRow);
-      const noun = customizingNounOf(overrideRow);
+    if (isCustomizingRow(corpusRow)) {
+      const overridePath = customizingSkillFilePath(corpusRow);
+      const noun = customizingNounOf(corpusRow);
       const shape =
-        overrideRow.path === row.path
-          ? `shares its directory with the pack skill "${row.artifactId}"'s`
-          : `claims the catalog id ("${row.artifactId}") of ${
+        corpusRow.artifactId === row.artifactId
+          ? `takes the catalog id ("${row.artifactId}") of ${
               packId === undefined ? "an installed pack" : `installed pack "${packId}"`
-            }'s skill, from a different directory`;
+            }'s skill, and so projects into that skill's directory`
+          : `shares its directory with the pack skill "${row.artifactId}"'s`;
       throw new EngineError(
         `Pack-skill overrides are unsupported today: the ${noun} at "${overridePath}" ${shape} ` +
           `(both would project to the client). Remove or rename ${overridePath}, or remove ` +
@@ -496,7 +501,6 @@ function mergeSkillProjections(
         { code: "VALIDATION_ERROR" },
       );
     }
-    if (corpusRow === undefined) continue;
     throw new EngineError(
       `${packId === undefined ? "An installed pack" : `Installed pack "${packId}"`} supplies ` +
         `skill "${row.artifactId}" under a directory the corpus skill ` +
@@ -522,12 +526,15 @@ function projectionDirOf(path: string): string {
  * an OVERRIDE skill's directory is also a CORPUS skill's directory, under two
  * different catalog ids.
  *
- * A skill projects into `<SKILLS_PROJECTION_DIR>/<dir>/`, and `<dir>` is the
- * authored directory name (`../emit/skillsProjection.ts`), not the id. So an
- * override authored at `.stamity/overrides/skills/st-verify/SKILL.md` that
- * declares `id: st-probe` is a NEW artifact — it shadows nothing, the catalog
- * indexes both — and both project into `.agents/skills/st-verify/`, file for
- * file. The catalog records the id/directory mismatch as a collision and
+ * A skill projects into `<SKILLS_PROJECTION_DIR>/<dir>/`, and for a skill that
+ * replaced nothing `<dir>` is the authored directory name
+ * (`../emit/skillsProjection.ts`), not the id. So an override authored at
+ * `.stamity/overrides/skills/st-verify/SKILL.md` that declares `id: st-probe`
+ * is a NEW artifact — it shadows nothing, the catalog indexes both — and both
+ * project into `.agents/skills/st-verify/`, file for file. (A skill that DID
+ * take a shipped id projects into the replaced skill's directory, whose
+ * previous occupant left the index with the id, so a replacement never lands
+ * here.) The catalog records the id/directory mismatch as a collision and
  * `validate` reports it; emission reads no such field, so `sync` fell through
  * to the composer's content-equality refusal, which names four adapters, the
  * shared path and neither the override nor the skill it collided with.
@@ -542,12 +549,12 @@ function projectionDirOf(path: string): string {
  * the HIGHER layer is the one that moves, because the lower one is shipped
  * content from where that author stands.
  */
-function refuseOverrideDirectoryClash(corpusSkills: readonly ProjectedFile[]): void {
+function refuseOverrideDirectoryClash(corpusSkills: readonly ProjectedSkillFile[]): void {
   // Only a lower-layer row can be the thing a customizing row collides WITH:
   // two shipped skills sharing a directory under two ids cannot be authored,
   // because there the directory is the id. Keep the lowest layer's row per
   // directory, so the refusal names the most shipped thing in the way.
-  const lowestByDir = new Map<string, ProjectedFile>();
+  const lowestByDir = new Map<string, ProjectedSkillFile>();
   for (const row of corpusSkills) {
     const dir = projectionDirOf(row.path);
     const held = lowestByDir.get(dir);
@@ -588,17 +595,6 @@ function isCustomizingRow(row: ProjectedFile): boolean {
   return row.origin === "user" || row.origin === "fork";
 }
 
-/**
- * Precedence as a rank, for the directory-clash rule: the row of the higher
- * layer is the one that moves. Mirrors the catalog's order (user > fork >
- * pack > corpus) without importing its table — an unstamped row reads as
- * corpus, the way `originOf` reads an item without an origin.
- */
-function layerRankOf(row: ProjectedFile): number {
-  const origin: ContentOrigin = row.origin ?? "corpus";
-  return origin === "user" ? 3 : origin === "fork" ? 2 : origin === "pack" ? 1 : 0;
-}
-
 /** How a refusal calls the customizing row it names: the file the author can move. */
 function customizingNounOf(row: ProjectedFile): string {
   return row.origin === "fork" ? "fork skill" : "override";
@@ -615,18 +611,17 @@ function packSupplierOf(items: readonly CatalogItem[], skillId: string): string 
 
 /**
  * The source file an `origin: "user"` or `origin: "fork"` skill row was
- * rendered from, reconstructed from its emitted path rather than carried
- * alongside it — `ProjectedFile` has no source-path field, and the projection
- * dir name is the authored directory name unchanged (`skillsProjection.ts`'s
- * own naming guarantee), so the join back is exact. A fork row names the
- * package-relative `fork/skills/<dir>/SKILL.md`, the spelling a fork author
- * edits; an override row names the repo-relative override tree.
+ * rendered from, read off the row's own `artifactPath` rather than off its
+ * emitted path: a replacement projects under the REPLACED skill's directory
+ * (`skillsProjection.ts` → `projectSkills`), so the emitted directory no longer
+ * says where the author's file is. A fork row names the package-relative
+ * `fork/skills/<dir>/SKILL.md`, the spelling a fork author edits; an override
+ * row names the repo-relative override tree.
  */
-function customizingSkillFilePath(row: ProjectedFile): string {
-  const dir = row.path.slice(`${SKILLS_PROJECTION_DIR}/`.length).split("/")[0];
+function customizingSkillFilePath(row: ProjectedSkillFile): string {
   return row.origin === "fork"
-    ? `fork/skills/${dir}/SKILL.md`
-    : `${STATE_DIR}/overrides/skills/${dir}/SKILL.md`;
+    ? `fork/${row.artifactPath}`
+    : `${STATE_DIR}/overrides/${row.artifactPath}`;
 }
 
 // ── Composition ──────────────────────────────────────────────────

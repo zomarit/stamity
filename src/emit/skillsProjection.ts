@@ -50,7 +50,9 @@
  * ({@link ProjectSkillsOptions.contentRoot}), so a repo's own
  * `.stamity/overrides/skills/<dir>/SKILL.md` — or the package's own
  * `fork/skills/<dir>/SKILL.md`, one layer below it — wins the id it claims and
- * ITS directory — `SKILL.md` and every support file under it — is what projects.
+ * ITS directory — `SKILL.md` and every support file under it — is what projects,
+ * under the REPLACED skill's directory name and spec `name` when it took a
+ * shipped id ({@link projectSkills} states the rule).
  *
  * Pure planning: rows out, no filesystem writes. Reading the bundled corpus and
  * the repo's override tree (through the catalog's injectable filesystem seam) is
@@ -68,6 +70,7 @@ import { dirname, join, posix } from "node:path";
 import {
   assertSafePath,
   buildContentIndex,
+  replacedClaimantOf,
   typeIdKey,
   type CatalogFs,
   type CatalogItem,
@@ -143,6 +146,25 @@ export interface ProjectedFile {
 }
 
 /**
+ * A row THIS projection produced: a {@link ProjectedFile} that also names the
+ * artifact it was rendered from. Present on every row of a skill — its
+ * `SKILL.md` and each support file alike — because a refusal about the skill
+ * has to name the file its author wrote, and the emitted path no longer says:
+ * a replacement projects under the REPLACED skill's directory rather than its
+ * own ({@link projectSkills}), so the source directory cannot be read back off
+ * `path`. The composer's row wrapping drops it (only path, content and the
+ * artifact identity reach an emission plan), so it never lands in a ledger.
+ */
+export interface ProjectedSkillFile extends ProjectedFile {
+  /**
+   * POSIX path of the source skill's `SKILL.md` relative to the layer root
+   * that supplied it — `skills/<authored dir>/SKILL.md`, the catalog item's own
+   * `relativePath` — the same for the skill's support-file rows.
+   */
+  artifactPath: string;
+}
+
+/**
  * The slice of the emission context this projection reads. Structurally
  * satisfied by the CLI layer's `EmissionContext` (see the module note on the
  * import-graph boundary).
@@ -203,11 +225,23 @@ export interface ProjectSkillsOptions {
  *
  * `<dir>` is the catalog directory name as authored (`st-verify`, prefix
  * included) — the projection preserves the source's own naming so a skill's
- * internal relative links and its dispatch-table paths survive unchanged. For
- * an override that is the OVERRIDE's directory name: an author who files their
- * replacement under a different directory than the skill whose id it takes gets
- * it projected under theirs, because the alternative is emitting a directory
- * whose contents came from somewhere else.
+ * internal relative links and its dispatch-table paths survive unchanged — with
+ * one rule on top for the two customizing layers. A fork or user skill that
+ * REPLACES a bundled skill (it took a corpus or pack skill's id; the catalog
+ * recorded the shadow) projects under the REPLACED skill's directory, and its
+ * spec `name` is synthesized from that directory too. Those layers spell their
+ * ids bare (`fork/skills/verify/SKILL.md` is the only admissible spelling under
+ * `fork/`), while every corpus reference — the commands, rules and agents that
+ * invoke a skill by name — says `st-verify`, the directory the bundled skill
+ * projected under: a replacement that landed at `.agents/skills/verify/` with
+ * `name: verify` would leave every one of those references pointing at a skill
+ * that no longer ships and the bundled name pointing at nothing. Agents, rules
+ * and commands restore the prefix at emission for the same reason
+ * (`../content/catalog.ts` → `emittedIdFor`); skills carry the bundled
+ * directory instead because a fixture corpus may spell one bare. A customizing
+ * skill that is an ADDITION replaced nothing and keeps its authored directory.
+ * The skill's OWN files — `SKILL.md` and every support file under it — are
+ * what project either way; only the directory they land in follows the rule.
  *
  * Rows are returned sorted by path (codepoint order), one row per regular
  * file; within a skill that places `SKILL.md` before its `references/`
@@ -221,7 +255,7 @@ export interface ProjectSkillsOptions {
 export async function projectSkills(
   ctx: SkillsEmissionContext,
   options: ProjectSkillsOptions = {},
-): Promise<ProjectedFile[]> {
+): Promise<ProjectedSkillFile[]> {
   const fs = options.fs ?? defaultFs;
   const index = await buildContentIndex(options.contentRoot, { fs });
 
@@ -239,13 +273,20 @@ export async function projectSkills(
 
   const perSkill = await Promise.all(
     admitted.map((item) =>
-      projectOneSkill(fs, item, (raw, skillDir) =>
+      // The directory rule above: the replaced skill's directory when this
+      // item took a shipped id, its own otherwise.
+      projectOneSkill(fs, item, skillDirOf(replacedClaimantOf(index, item) ?? item), (raw, skillDir) =>
         renderSkillBody(raw, skillDir, item.relativePath, detection, gates),
       ),
     ),
   );
 
   return perSkill.flat().toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/** `skills/<dir>/SKILL.md` → `<dir>`; the catalog validated the whole path. */
+function skillDirOf(item: Pick<CatalogItem, "relativePath">): string {
+  return posix.basename(posix.dirname(item.relativePath));
 }
 
 /**
@@ -270,9 +311,14 @@ export async function projectSkills(
  * Rows come back path-sorted (codepoint order), the order every projection
  * boundary returns. Attribution stops at artifact identity: these are
  * {@link ProjectedFile} rows, and the ledger owner is the adapter's to assign
- * when it wraps them as its own single-owner residue.
+ * when it wraps them as its own single-owner residue. Generic over the row
+ * type because the spread carries every field through — a
+ * {@link ProjectedSkillFile} in is a `ProjectedSkillFile` out.
  */
-export function retargetProjection(rows: readonly ProjectedFile[], dir: string): ProjectedFile[] {
+export function retargetProjection<Row extends ProjectedFile>(
+  rows: readonly Row[],
+  dir: string,
+): Row[] {
   assertSafePath(dir, "native skills projection root");
   const prefix = `${SKILLS_PROJECTION_DIR}/`;
 
@@ -390,14 +436,17 @@ function renderSkillBody(
   return substituted.split(PLATFORM_TOOL_MARKER).join(buildAskUserPlatformTable());
 }
 
-/** All rows for one skill: its full source directory, recursively. */
+/**
+ * All rows for one skill: its full source directory, recursively, projected
+ * into `skillDir` — the directory {@link projectSkills}'s rule chose, which is
+ * the item's own for every skill that replaced nothing.
+ */
 async function projectOneSkill(
   fs: CatalogFs,
   item: CatalogItem,
+  skillDir: string,
   renderSkill: (raw: string, skillDir: string) => string,
-): Promise<ProjectedFile[]> {
-  // `skills/<dir>/SKILL.md` → `<dir>`; the catalog validated the whole path.
-  const skillDir = posix.basename(posix.dirname(item.relativePath));
+): Promise<ProjectedSkillFile[]> {
   const sourceDir = dirname(item.filePath);
   const files = await walkRegularFiles(fs, sourceDir, "");
 
@@ -425,6 +474,7 @@ async function projectOneSkill(
         content,
         artifactId: item.id,
         artifactType: item.type,
+        artifactPath: item.relativePath,
         origin: item.origin ?? "corpus",
       };
     }),

@@ -1441,6 +1441,79 @@ describe("validate — the fork layer", () => {
     expect(doc.shadows).toEqual([]);
   });
 
+  it("reports a fork patch the override tree replaced as shadowed by the override — not patched, judged against nothing", async () => {
+    // The mirror of the user-patch-over-fork-replacement case above: here the
+    // FORK patches and the USER replaces. A fork patch lands on the shipped
+    // item, and an override that took the id whole left it nothing to land on.
+    // The fork's body half carries a deny-pattern span so that, were the
+    // consumer's artifact judged as the fork's merge, an error would be
+    // addressed to the fork file — the misreport this case closes.
+    const repo = getRepo();
+    await seedForkLayer(repo, {
+      [`rules/${FORKED_ID}.customize.md`]: `Then ${DENY_SPAN} in the report.\n`,
+    });
+    await repo.seedFiles({
+      [`.stamity/overrides/rules/${FORKED_ID}.md`]: ruleArtifact(FORKED_ID),
+    });
+
+    const human = await runHuman(repo.dir);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("shadowing — 1 override takes a bundled id");
+    expect(human.stdout).not.toContain("fork overlay");
+    expect(human.stdout).not.toContain("patches");
+    expect(human.stdout).toContain(
+      `replaces ${FORKED_BASE}; shadows the fork patch ${FORK_BODY_HALF} — inert, the override ` +
+        `replaced the artifact it would have patched`,
+    );
+
+    const { code, doc } = await runJson(repo.dir);
+    expect(code).toBe(0);
+    expect(doc.findings).toEqual([]);
+    expect(doc.shadows).toEqual([
+      {
+        outcome: "replaced",
+        type: "rule",
+        id: FORKED_ID,
+        winner: "user",
+        path: `.stamity/overrides/rules/${FORKED_ID}.md`,
+        replaced: [FORKED_BASE],
+        shadowedOverlays: [FORK_BODY_HALF],
+        emits: true,
+      },
+    ]);
+  });
+
+  it("reports a fork patch of an id no shipped layer supplies as a warning naming what it waits for, at exit 0", async () => {
+    // The walk skips such a patch rather than refusing it — the fork layer is
+    // package-global, and this repository can fix nothing about a file in its
+    // package — and this command passes the walk's own reason through.
+    const repo = getRepo();
+    await seedForkLayer(repo, {
+      "rules/ops.customize.yaml": "description: The fork's ops floor.\n",
+    });
+
+    const { code, doc } = await runJson(repo.dir);
+    expect(code).toBe(0);
+    expect(doc.errorCount).toBe(0);
+    expect(doc.warningCount).toBe(1);
+    expect(doc.findings).toHaveLength(1);
+    expect(doc.findings[0]).toMatchObject({
+      source: "user-content",
+      path: "fork/rules/ops.customize.yaml",
+      severity: "warning",
+    });
+    expect(doc.findings[0]?.message).toContain("waits for an artifact no installed layer supplies");
+    expect(doc.findings[0]?.message).toContain('rule "ops"');
+    expect(doc.findings[0]?.message).toContain("it applies when a pack supplies");
+    expect(doc.shadows).toEqual([]);
+
+    const human = await runHuman(repo.dir);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("warning");
+    expect(human.stdout).toContain("fork/rules/ops.customize.yaml");
+    expect(human.stdout).not.toContain("shadowing");
+  });
+
   it("reads exactly as it did when the package ships no fork layer", async () => {
     // Pinned absent rather than left to the probe, so the case holds in a fork
     // checkout too — where the probe would find one.

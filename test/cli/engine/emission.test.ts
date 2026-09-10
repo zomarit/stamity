@@ -1147,6 +1147,36 @@ describe("fork content layer", () => {
     expect(paths).toContain(".claude/agents/stamity-acme-onboarding.md");
   });
 
+  it("emits a fork skill that takes a bundled skill's id under the BUNDLED directory spelling, and no bare one", async () => {
+    // `fork/skills/verify/` is the only spelling the fork layer admits; the
+    // corpus ships `st-verify`, and every command and rule that invokes the
+    // skill names it so. The replacement lands where those references point,
+    // in both skill trees, with the spec name to match.
+    const repo = getRepo();
+    await seedForkLayer(repo, { "skills/verify/SKILL.md": forkSkill("verify") });
+
+    const base = repoContext(repo.dir);
+    const rows = await getEmissionPlanner().plan({
+      ...base,
+      manifest: {
+        ...base.manifest,
+        selection: { items: { agent: [], skill: ["verify"], rule: [], command: [] } },
+      },
+    });
+
+    const carrying = rows.filter((row) => row.content.includes(FORK_MARKER));
+    expect(carrying.map((row) => row.path).toSorted()).toEqual([
+      ".agents/skills/st-verify/SKILL.md",
+      ".claude/skills/st-verify/SKILL.md",
+    ]);
+    expect(carrying.every((row) => row.content.includes("name: st-verify"))).toBe(true);
+    expect(rows.filter((row) => row.path.includes("/skills/verify/"))).toEqual([]);
+    // Not both bodies: the bundled skill and its references subtree left with the id.
+    const bundled = await corpusSkillMarker("verify");
+    expect(rows.filter((row) => row.content.includes(bundled))).toEqual([]);
+    expect(rows.filter((row) => row.path.includes("st-verify/references/"))).toEqual([]);
+  });
+
   it("never plans a path under the fork layer, so nothing in it is regenerated or reclaimed", async () => {
     const repo = getRepo();
     const source = `pkg/fork/rules/${SHADOWED_ID}.md`;
