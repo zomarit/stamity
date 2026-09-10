@@ -116,9 +116,11 @@ only Node built-ins and the `git` binary. It is invoked as `node scripts/upstrea
    and writes only an update branch, in its own worktree. No verb checks out, resets,
    commits to, or otherwise moves the target branch or the operator's working tree.
 2. **History is the marker.** A release is "integrated" only when its upstream commit is
-   an ancestor of the target branch AND the integration record for it says the gates
-   passed or that no gates were configured. A record without ancestry, or ancestry without
-   a passing record, is reported as exactly that, never as integrated.
+   an ancestor of the target branch AND no integration record for it says its gates
+   failed or were skipped. A record without ancestry is `ancestry-lost`; ancestry with a
+   record that says `failed` or `skipped` is `validation-failed`; ancestry with no record
+   at all counts, because records are evidence that may be deleted (REQ-UPSTREAM-010) and
+   a fork's history before the lane existed carries none.
 3. **No conflict marker is ever committed.** `continue` refuses while any unmerged index
    entry or any `<<<<<<<`/`=======`/`>>>>>>>` marker line remains in a tracked file.
 4. **No blanket side preference.** The lane never runs `merge -X ours`, `-X theirs`,
@@ -152,7 +154,7 @@ The fork declares its upstream in `.stamity/upstream.json` at the repository roo
     "node scripts/generate-plugin-manifests.mjs",
     "npm run build && node dist/cli.js sync"
   ],
-  "generatedPaths": [".apm/**", ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json", "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**", "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**", "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"],
+  "generatedPaths": [".apm/**", ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json", ".stamity/generated/**", "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**", "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**", "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"],
   "watch": ["content/charter/**", "src/types/core.ts"],
   "shadows": { "packs/acme/rules/acme-secrets.md": "content/rules/stamity-secrets.md" }
 }
@@ -222,9 +224,14 @@ release commit is no longer reachable, and the next merge re-conflicts on lines 
 fork touched, verified on git 2.52) — the outcome is `ancestry-lost`, the report names the
 record, the release and the commit that is not an ancestor, and the recovery: land update
 branches by merge commit (REQ-UPSTREAM-011), and for the release already lost, run
-`integrate` again; git will re-merge it, previously resolved conflicts may reappear, and
-`git rerere` (which the lane enables in the update worktree) replays recorded resolutions
-when it can. The guide also carries the manual rescue that restores the ancestry in one
+`integrate` again — `status` keeps diagnosing `ancestry-lost` until the history is
+repaired, but `preview` and `integrate` proceed for the selected release, carrying the
+lost records as report rows; git re-merges it, previously resolved conflicts may
+reappear, `git rerere` (which the lane runs its merges under) replays recorded
+resolutions when it can, and the new record written in the merge commit supersedes the
+stale one once the branch lands by merge commit. A release that truly is not wanted is
+recovered by deleting or correcting its stale record on the target branch. The guide
+also carries the manual rescue that restores the ancestry in one
 step when the record's upstream commit is trusted: `git merge-tree --write-tree
 --merge-base=<recorded upstream commit> <branch> <release>` (git 2.40 or newer) and a
 `git commit-tree` with both parents.
@@ -245,8 +252,11 @@ lane never touches it.
 
 `integrate` creates the branch `stamity-upstream/<tag>` from the target branch's current
 head, checks it out in the worktree `.stamity/upstream-work/<tag>/` (the directory is
-ignored by the repository's `.gitignore`), enables `rerere` there, and runs
-`git merge --no-ff --no-commit <release-commit>`.
+ignored by the repository's `.gitignore`), and runs
+`git merge --no-ff --no-commit <release-commit>` with `rerere` enabled for that
+invocation — the lane persists no configuration in the operator's repository; recorded
+resolutions land in the repository's shared `rr-cache`, which is where a later merge
+finds them.
 
 - **Clean merge**: the lane regenerates (REQ-UPSTREAM-007), runs the gates (REQ-UPSTREAM-009),
   writes the record (REQ-UPSTREAM-010), and commits the merge with the message
@@ -279,10 +289,17 @@ A path matching `generatedPaths` that git reports as conflicted is not offered t
 On a clean merge and on `continue`, after every non-generated conflict is resolved, the lane
 runs the `regenerate` commands in the update worktree in order, stops at the first
 non-zero exit (outcome `regenerate-failed`, exit 1, output captured in the report), then
-stages the generated paths. A generated path that still carries a marker after
-regeneration is a defect in the `generatedPaths` list and is reported as such rather than
-committed (invariant 3). The default list for this repository is written into the guide
-and mirrors `CONTRIBUTING.md`'s regeneration table.
+stages the generated paths that regeneration actually rewrote. A conflicted generated
+path that regeneration left untouched stays an unresolved conflict for the human, named
+as such; a generated path that still carries a marker after regeneration is a defect in
+the `generatedPaths` list and is reported as such rather than committed (invariant 3); and
+a tracked path that regeneration changed outside `generatedPaths` is reported with the
+fix (add it to the list) and the run ends `regenerate-failed` without a commit, so the
+merge commit always contains exactly the tree the gates tested. The commands run the
+merged tree's own scripts with the caller's environment — the report says so on the first
+run — which is why the GitHub layer runs them in a job that holds no credential. The
+default list for this repository is written into the guide and mirrors
+`CONTRIBUTING.md`'s regeneration table.
 
 ### REQ-UPSTREAM-008 — Drift a clean merge hides is reported
 
@@ -370,29 +387,36 @@ the canonical repository's own case. Two jobs follow:
   fork's gates run here, on code the run does not trust with a write token. It uploads the
   update branch as a git bundle plus the JSON and markdown reports as one artifact.
 - `publish` (`permissions: contents: write, pull-requests: write, issues: write`): runs
-  only git and `gh`. It fetches the bundle, pushes `stamity-upstream/<tag>` when no such
-  remote branch exists (an existing remote branch is never force-updated; the run reports
-  the existing pull request instead), opens one pull request per tag — or updates the body
-  of the open one — from the markdown report, applies the landing-policy check
-  (REQ-UPSTREAM-011), and marks the run failed when the outcome is `validation-failed` so
-  the check on the pull request is red. On `conflict` it cannot push a conflicted tree, so
-  it opens or updates one issue titled `Upstream <tag> needs conflict resolution` carrying
-  the report and the local commands, and exits 1. A `concurrency` group serialises runs.
+  only git and `gh`, and re-validates on its own side every value it takes from the
+  artifact — the tag's shape, the branch name as exactly `stamity-upstream/<tag>`, the
+  outcome word, the merge commit — because the job that produced them ran the fork's
+  code. It fetches the bundle, pushes `stamity-upstream/<tag>` when no such remote branch
+  exists, and opens one pull request per tag from the markdown report. An existing remote
+  branch is never force-updated and its pull request is never rewritten from a later run:
+  the run reports the existing pull request and touches nothing, which is also what makes
+  a second run idempotent. It applies the landing-policy check (REQ-UPSTREAM-011) and
+  marks the run failed when the outcome is `validation-failed` so the check on the pull
+  request is red. On `conflict` it cannot push a conflicted tree, so it opens or updates
+  one issue titled `Upstream <tag> needs conflict resolution` carrying the report and the
+  local commands, and exits 1. The lane's issues are identified by a marker it writes into
+  the issue body, not by their title alone. A `concurrency` group serialises runs.
 
 The workflow needs no personal token and no App to run, and two platform limits shape
-what the repository token can do. First, that token cannot push a commit that creates or
-changes a file under `.github/workflows/` — and upstream releases of this product do touch
-workflow files — so `publish` checks the bundle for workflow-file changes before pushing:
-with no `STAMITY_UPSTREAM_TOKEN` secret configured it does not push, uploads the bundle,
-opens or updates one issue (`Upstream <tag> needs a push with workflow permission`) carrying
-the report and the local push commands, and exits 1. Second, a pull request opened with the
-repository token starts the fork's own `pull_request` runs only in an approval-required
-state (GitHub's 2026-06-11 change; before it they did not start at all), and opening one at
-all requires the repository or organisation setting "Allow GitHub Actions to create and
-approve pull requests". The optional secret — a fine-grained token or App token with
-Contents, Pull requests and Workflows write — lifts both limits, is read only by `publish`,
-and is documented in the guide. The gates still run in `prepare`, and their result is on the
-branch and in the check either way.
+what it does. First, automation never pushes a branch that changes a file under
+`.github/workflows/` — with or without a secret: a pushed branch's own workflow files run on
+`push` under the pushing identity, so the thing that introduces workflow changes into the
+repository must be a person who reviewed them. Upstream releases of this product do touch
+workflow files, so `publish` checks the bundle for workflow-file changes before pushing and,
+when it finds them, does not push, uploads the bundle, opens or updates one issue
+(`Upstream <tag> needs a reviewed push`) carrying the report and the local commands, and
+exits 1. (The repository token could not push such a commit anyway.) Second, a pull request
+opened with the repository token starts the fork's own `pull_request` runs only in an
+approval-required state (GitHub's 2026-06-11 change; before it they did not start at all),
+and opening one at all requires the repository or organisation setting "Allow GitHub
+Actions to create and approve pull requests". The optional `STAMITY_UPSTREAM_TOKEN`
+secret — a fine-grained token or App token with Contents, Pull requests and Issues write — lifts
+that second limit only, is read by `publish` alone, and is documented in the guide. The
+gates still run in `prepare`, and their result is on the branch and in the check either way.
 
 ### REQ-UPSTREAM-014 — Portable clones and platform limits are documented, not assumed
 

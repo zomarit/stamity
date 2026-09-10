@@ -337,8 +337,9 @@ A `concurrency` group serialises runs and never cancels one in flight, because a
 ### The optional secret, and the one thing it buys
 
 The workflow needs no token and no App: `publish` falls back to the per-run repository token. The
-optional `STAMITY_UPSTREAM_TOKEN` — a fine-grained or App token with Contents: write and Pull
-requests: write, read only by `publish` — buys exactly one thing, the pull request's own CI. Since
+optional `STAMITY_UPSTREAM_TOKEN` — a fine-grained or App token with Contents: write, Pull
+requests: write and Issues: write, read only by `publish` — buys exactly one thing, the pull
+request's own CI. Since
 2026-06-11 a pull request created with the repository token does start `pull_request` runs, but
 in an approval-required state: someone clicks "Approve and run" on each, and with the secret they
 start on their own. It also sidesteps the second half of that limit — opening a pull request with
