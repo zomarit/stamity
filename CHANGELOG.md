@@ -29,6 +29,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [Unreleased]
+
+### Added
+
+- **An APM install route, served from this repository.**
+  `apm install zomarit/stamity --target claude` now deploys the package this repository already
+  generates — `apm.yml` plus the `.apm/` projection of the corpus — and
+  `apm install zomarit/stamity#v<tag> --target <claude|copilot|cursor|codex>` pins it to a release.
+  The route was correct and unreachable until APM's type-detection cascade was fixed: through
+  apm-cli 0.29.0 a root `plugin.json` carrying the Agent Plugins schema outranked an `apm.yml`, so
+  this tree typed as an Agent Plugin, deployed zero primitives and exited 0. 0.29.1 moved an
+  eligible manifest to the head of the cascade, which makes 0.29.1 the client floor for this route
+  and 0.30.0 the current tested client; an older client prints "Agent Plugins v1.0.0 packages
+  install natively only for the 'copilot' target" and deploys nothing, and the remedy is to upgrade
+  it. What arrives is 10 agents, 9 commands, 12 rules and 8 skills, each at the path its target
+  reads, with codex taking the agents and skills and folding instructions into `AGENTS.md` on
+  `apm compile`. CI proves it on every push: `scripts/apm-install-smoke.mjs` installs into a
+  throwaway consumer and reads the deployed tree at 0.29.1 and 0.30.0, plus a leg on 0.29.0 under
+  `--expect-failure` so the check keeps proving it can still see the original silent failure — and
+  the release workflow runs the same smoke against the canonical ref before the tarball is packed.
+  The README and `docs/getting-started.md` carry the route, its floor and its symptom.
+- **An enterprise upstream lane, for forks of this repository.** A fork that customises anything
+  here can now take an upstream release without losing that work. `node scripts/upstream.mjs` (also
+  `npm run upstream`) carries the verbs `status`, `preview`, `integrate`, `continue`, `validate`,
+  `abort` and `help`; one configuration file, `.stamity/upstream.json`, declares the upstream, the
+  integration branch, the release pattern, the fork's own gates, its regeneration commands, its
+  generated paths, watched globs and shadowed defaults; and every integration writes
+  `.stamity/upstream/integrations/<tag>.json` inside a merge commit carrying
+  `Stamity-Upstream-Release`, `Stamity-Upstream-Commit` and `Stamity-Upstream-Gates` trailers. The
+  merge happens on an isolated update branch in its own worktree, so the integration branch and the
+  operator's working tree are never written; generated paths are regenerated rather than
+  hand-merged; no conflict marker can be committed; and the fork's own gates decide whether the
+  outcome is `integrated` or `validation-failed`. `.github/workflows/upstream-update.yml` is the
+  opt-in GitHub layer — a probe that keeps a repository with no configuration green, a `prepare`
+  job that runs the fork's code with no secret in its environment, and a `publish` job that holds
+  the write grants and runs only git and `gh`. `test/upstream/lane.test.ts` is the acceptance suite
+  over temporary repositories, and `docs/enterprise-forks.md` is the guide. This repository carries
+  no `.stamity/upstream.json`, so nothing here runs the lane.
+
+### Removed
+
+- **The separate APM mirror repository, as a distribution channel.** It existed only because APM's
+  type-detection cascade routed past this repository's root, so it served a timed copy of the same
+  generated package under a name nobody contributes to. With the cascade fixed and the route proven
+  from `zomarit/stamity` at `main` and at every `v*` tag, consumers install from this repository;
+  the mirror's install command is replaced rather than redirected, and the mirror is retired after
+  this release.
+
 ## [1.3.0] - 2026-09-09
 
 ### Changed

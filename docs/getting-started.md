@@ -2,11 +2,12 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit f1a4749. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 45bc35d. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, a
-     verb joins or leaves the command surface, or a path joins or leaves `.stamity/`.
-     `test/docsPages.test.ts` holds this page to the hand-page contract; the generated
-     `docs/cli-reference.md` and `docs/capability-matrix.md` are what it must not contradict. -->
+     verb joins or leaves the command surface, a path joins or leaves `.stamity/`, or the APM
+     route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page to
+     the hand-page contract; the generated `docs/cli-reference.md` and
+     `docs/capability-matrix.md` are what it must not contradict. -->
 
 # Getting started
 
@@ -71,6 +72,41 @@ One default differs between the interactive and non-interactive paths on purpose
 detected previous setup is **migrated** when you answer the prompt and **skipped** when
 nobody is there to answer, because migrating strips files and no machine should consent to
 that on your behalf. `--dry-run` previews the whole run without writing.
+
+## Install through APM
+
+If your team already uses APM — the Agent Package Manager — the same corpus installs straight
+from this repository as an APM package, without npm and without the init walk:
+
+```sh
+apm install zomarit/stamity --target claude
+```
+
+Pin the ref for a repeatable install:
+
+```sh
+apm install zomarit/stamity#v<version> --target <claude|copilot|cursor|codex>
+```
+
+**The client floor is apm-cli 0.29.1**, the release that fixed the type-detection cascade that
+used to route this repository's tree past its own APM package; 0.30.0 is the current tested
+client. An older one fails without failing — it exits 0, deploys nothing, and prints
+
+```
+Agent Plugins v1.0.0 packages install natively only for the 'copilot' target
+```
+
+If you see that line with zero primitives deployed, upgrade the client and install again:
+`pip install --upgrade apm-cli`, `brew upgrade apm`, or whatever self-update your client offers.
+
+What arrives: 10 agents, 9 commands, 12 rules and 8 skills, each at the path its target reads.
+`codex` takes the agents and the skills only — APM's codex profile carries no command or rule
+class, and folds instructions into `AGENTS.md` when you run `apm compile`.
+
+One difference from the npm route to know about: an APM install clones this whole repository at
+the ref into the consumer's `apm_modules/` — tests, site and all — and deploys the primitives out
+of it. APM gitignores that directory itself, and the primitives it deploys are the corpus,
+projected for APM by this repository's own generator and byte-checked in CI.
 
 ## What lands
 

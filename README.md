@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit f1a4749. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 45bc35d. -->
 <!-- Re-open when: the corpus counts, the nine-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives the corpus counts from the
      content catalog and holds the client-surface prose to the generated capability matrix; the
@@ -32,29 +32,30 @@ npx @zomarit/stamity init
 without one, and `learn` and `handoff` ask only that `.stamity/` exists. Node `>= 22.22.2` is the
 only prerequisite for `init` and the other core verbs — none of them needs git: `init`, `sync` and
 `check` read it where it is and carry on where it is not, and the rest never call it; `worktree`
-additionally needs a `git` binary on PATH and refuses without one.
-Nothing is installed globally, and two network paths belong to a command's work: the Sigstore trust
-root, fetched when `add` installs a pack that declares a signature, and the repository's own
-`origin` remote, fetched by `worktree setup` when the requested branch has no local copy. A startup
-notice asks npm whether a newer version exists until you switch it off;
-[`SECURITY.md`](SECURITY.md) documents them all. Two of the nine touchpoints reach further —
-`/st-board` and `/st-pr-resolve` shell out to the GitHub CLI (`gh`), authenticated, when they work
-a real board or pull request. The package is `@zomarit/stamity` and it installs two names for the
-same binary — `stamity` and the short alias `st` — so an installed copy runs as `stamity sync` or
-`st sync`.
+additionally needs a `git` binary on PATH and refuses without one. Nothing is installed globally,
+and two network paths belong to a command's work: the Sigstore trust root, fetched when `add`
+installs a pack that declares a signature, and the repository's own `origin` remote, fetched by
+`worktree setup` when the requested branch has no local copy. A startup notice asks npm whether a
+newer version exists until you switch it off; [`SECURITY.md`](SECURITY.md) documents them all. Two
+of the nine touchpoints reach further — `/st-board` and `/st-pr-resolve` shell out to the GitHub
+CLI (`gh`), authenticated, when they work a real board or pull request. The package is
+`@zomarit/stamity`, and it installs two names for one binary — `stamity` and the alias `st`.
+
+A second route needs no npm: `apm install zomarit/stamity --target claude` deploys the APM package
+this repository generates, on apm-cli 0.29.1 or newer — an older client exits 0 and deploys
+nothing. [Getting started](docs/getting-started.md) has the pinned form and the remedy.
 
 ## How it works
 
 The corpus in `content/` is authored once; the emission core plans standards-first output —
-`AGENTS.md` and the skills projection under `.agents/skills/` — which Cursor, Copilot and
-Codex read where it lands, while Claude Code reaches the charter through a managed import
-block in `CLAUDE.md` and takes the skills as a copy. Four adapters add what a client cannot
-read without help: agents, rules, MCP documents, and — each on the three clients that have
-somewhere to put it — hook wiring and a command surface. The two three-of-four classes are
-different clients: Codex has no repository-level command home, so its touchpoints stay the
-charter's index, and Copilot takes no hook configuration, so its adapter declares that
-rather than emitting one. Setup state lives in `.stamity/`: a manifest, a per-file ledger,
-learnings, handoffs.
+`AGENTS.md` and the skills projection under `.agents/skills/` — which Cursor, Copilot and Codex
+read where it lands, while Claude Code reaches the charter through a managed import block in
+`CLAUDE.md` and takes the skills as a copy. Four adapters add what a client cannot read without
+help: agents, rules, MCP documents, and — each on the three clients that have somewhere to put it —
+hook wiring and a command surface. The two three-of-four classes are different clients: Codex has no
+repository-level command home, so its touchpoints stay the charter's index, and Copilot takes no
+hook configuration, so its adapter declares that rather than emitting one. Setup state lives in
+`.stamity/`: a manifest, a per-file ledger, learnings, handoffs.
 
 ## Commands
 
@@ -100,9 +101,9 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/cli-reference.md`](docs/cli-reference.md) | Generated: every command, flag and exit code, rendered from the program. |
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the `config` command's key registry, each row's unset value measured against a probe manifest. |
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class projected from artifact frontmatter, plus the pack inventory and the MCP server reference. |
-| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the eight guides, the charter and every generated reference page. |
+| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the nine guides, the charter and every generated reference page. |
 | [`plugin.json`](plugin.json) | Generated: the plugin surfaces — this Agent Plugins manifest, [`.claude-plugin/`](.claude-plugin/) and [`.cursor-plugin/`](.cursor-plugin/). |
-| [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus. |
+| [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus — the package `apm install zomarit/stamity` installs, served from this repository. |
 | [`website/`](website/) | The Docusaurus site that renders the `docs/` pages above directly from the tree. It holds one page of its own, the landing page at `website/src/pages/index.tsx`, and no docs page. |
 | [`SECURITY.md`](SECURITY.md) | What the engine defends today, what it does not, and how to report a vulnerability. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The dev loop, the three test lanes, and how to regenerate derived files. |
@@ -113,31 +114,30 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/doctrine.md`](docs/doctrine.md) | The root question every artifact answers, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
 | [`docs/customization.md`](docs/customization.md) | Where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries. |
 | [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — the manifest, the init offer, the status rows, and the cascade. |
+| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking upstream releases into a customized fork — the config, the verbs, conflicts, the gates that decide, and the opt-in workflow. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
 
-Hook scripts are absent from that row because they are not corpus content: the three
-portable bodies are generated from `src/hooks/scripts.ts` for every selected client, and
-Claude Code takes a fourth — the review gate — from its own adapter.
+Hook scripts are absent from that row because they are not corpus content: the three portable
+bodies are generated from `src/hooks/scripts.ts` for every selected client, and Claude Code takes
+a fourth — the review gate — from its own adapter.
 
-Seven rows above are marked Generated, and they come from four different generators: the
-capability matrix from `node scripts/generate-capability-matrix.mjs`; the four docs pages —
-`docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` — from
-`node scripts/generate-docs.mjs`; the plugin surfaces from
-`node scripts/generate-plugin-manifests.mjs`; and the APM package from
-`node scripts/generate-apm-package.mjs`. CONTRIBUTING.md's regeneration table is the
-one home for that split. Each generator's own suite existence-checks the paths it lists;
-this page's test resolves every link target and holds the corpus counts above to what the
-content catalog indexes. Every link on this page is repo-relative — the docs are read from
-the tree.
+Seven rows above are marked Generated, and they come from four different generators: the capability
+matrix from `node scripts/generate-capability-matrix.mjs`; the four docs pages —
+`docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` — from `node
+scripts/generate-docs.mjs`; the plugin surfaces from `node scripts/generate-plugin-manifests.mjs`;
+and the APM package from `node scripts/generate-apm-package.mjs`. CONTRIBUTING.md's regeneration
+table is the one home for that split. Each generator's own suite existence-checks the paths it
+lists; this page's test resolves every link target and holds the corpus counts above to what the
+content catalog indexes. Every link on this page is repo-relative — the docs are read from the
+tree.
 
 ## Tests
 
-Three lanes: virtual-filesystem unit tests of the generators, golden-file assertions on
-emitted artifacts, and serialized child-process end-to-end runs against a pseudo-home.
-Property tests cover the invariant-bearing cores, and every derived artifact is byte-diffed
-against a fresh render, so a stale generated file fails the build instead of drifting.
-Details in [CONTRIBUTING.md](CONTRIBUTING.md).
+Three lanes: virtual-filesystem unit tests of the generators, golden-file assertions on emitted
+artifacts, and serialized child-process end-to-end runs against a pseudo-home. Property tests cover the
+invariant-bearing cores, and every derived artifact is byte-diffed against a fresh render, so a stale
+generated file fails the build instead of drifting. Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Dogfooding
 

@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit f1a4749. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 45bc35d. -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or
      loses a regeneration command, either Node floor moves, a test lane joins or leaves, a
      coverage floor in `vitest.config.ts` moves, or the eval set's version bumps — the `evals/`
@@ -50,14 +50,21 @@ Every step exits 0 before a commit, and CI runs the same steps on the pull reque
 
 Two required status contexts gate a merge. `all-ci-checks` (`.github/workflows/ci.yml`) is the
 matrix above plus a generate-and-diff self-consistency step, the dogfood `node dist/cli.js check`
-and a tarball smoke, on every event. `all-pr-checks` (`.github/workflows/pr-checks.yml`) runs on
-pull requests only and carries what only a pull request can be asked: the DCO trailer on every
-commit, the conventional-commit title, and the dual size budget over the built `dist/` —
-bundled logic at most 2 MiB, staged corpus at most 1.5 MiB, both numbers read from
-`tsdown.config.mjs` so the gate and the build cannot disagree. `npm run check` does not run that
-budget separately; `npm run build` already evaluates it in its own build hook, so a local build
-fails on a violation before a push does. `node scripts/size-budget.mjs` prints both totals
-against a `dist/` you already built.
+and a tarball smoke, on every event. It also carries the APM route gate:
+`node scripts/apm-install-smoke.mjs` installs this repository's `apm.yml` + `.apm/` package into a
+throwaway consumer and verifies the deployed tree — every primitive id at its target's path,
+carrying its source heading — on apm-cli 0.29.1 (the minimum tested client), 0.30.0 (current), and
+once more on 0.29.0 with `--expect-failure`, so the check keeps proving it can still see the
+routing failure that shipped zero primitives while exiting 0. Run it locally with
+`node scripts/apm-install-smoke.mjs --apm <path-to-apm>` (or `STAMITY_APM_BIN=<path>`); apm-cli is
+a Python package and no step of `npm run check` needs it. `all-pr-checks`
+(`.github/workflows/pr-checks.yml`) runs on pull requests only and carries what only a pull request
+can be asked: the DCO trailer on every commit, the conventional-commit title, and the dual size
+budget over the built `dist/` — bundled logic at most 2 MiB, staged corpus at most 1.5 MiB, both
+numbers read from `tsdown.config.mjs` so the gate and the build cannot disagree. `npm run check`
+does not run that budget separately; `npm run build` already evaluates it in its own build hook, so
+a local build fails on a violation before a push does. `node scripts/size-budget.mjs` prints both
+totals against a `dist/` you already built.
 
 One Node floor for the package and its suite, and it is the one in `package.json`; the docs
 site under `website/` is a separate npm project and declares its own (`>=22.12` in
@@ -201,10 +208,11 @@ Something wrong that is not a vulnerability goes to the issue tracker,
 
 ## Where things live
 
-`src/` engine and CLI, `content/` the canonical corpus, `packs/` the first-party packs,
-`test/` the three lanes, `scripts/` generators and the leak gate, `docs/` the generated
-reference pages (`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `reference/`)
-beside the hand-written guides, `plans/` and `specs/`. The boundary between engine and CLI is
+`src/` engine and CLI, `content/` the canonical corpus, `packs/` the first-party packs, `test/` the
+three lanes, `scripts/` generators, the leak gate, the two smokes (publish shape, APM route) and
+the upstream lane (`upstream.mjs`, for forks), `docs/` the generated reference pages
+(`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `reference/`) beside the
+hand-written guides, `plans/` and `specs/`. The boundary between engine and CLI is
 enforced by a static import-graph test (`test/architecture/boundaries.test.ts`), not by
 convention: the engine never imports the CLI, and a new `src/` file that no entrypoint reaches
 fails that suite.

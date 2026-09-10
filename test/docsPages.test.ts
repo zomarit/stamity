@@ -14,11 +14,11 @@ import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 
 /**
- * The gate on the eleven hand-written pages: three at the root, eight guides
+ * The gate on the twelve hand-written pages: three at the root, nine guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * eleven are typed by a human, so the only guard is this file.
+ * twelve are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -50,7 +50,7 @@ import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all eleven pages because the hand bucket is
+ * Two properties are asserted on all twelve pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -110,6 +110,7 @@ const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
 // below carries the same decision for the README map).
 const CUSTOMIZATION = "docs/customization.md";
 const DOCTRINE = "docs/doctrine.md";
+const ENTERPRISE_FORKS = "docs/enterprise-forks.md";
 const GETTING_STARTED = "docs/getting-started.md";
 const MIGRATION = "docs/migration.md";
 const PACKS_AND_TRUST = "docs/packs-and-trust.md";
@@ -118,13 +119,13 @@ const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 const WORKSPACES = "docs/workspaces.md";
 
 /**
- * The eight hand-written guides under `docs/`.
+ * The nine hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these eight are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these nine are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  *
- * `docs/specs/` is outside the bucket and outside the site: three engineering
+ * `docs/specs/` is outside the bucket and outside the site: five engineering
  * design documents, excluded from the build by `website/docusaurus.config.ts`
  * and from the roster by `test/ci/docsRoster.test.ts`. They are not published
  * pages, so the published-page contract does not apply to them.
@@ -136,6 +137,7 @@ const GUIDES: readonly string[] = [
   MIGRATION,
   CUSTOMIZATION,
   WORKSPACES,
+  ENTERPRISE_FORKS,
   PACKS_AND_TRUST,
   TROUBLESHOOTING,
 ];
@@ -425,10 +427,10 @@ async function corpusCounts(): Promise<Map<string, number>> {
 
 describe("hand pages", () => {
   // Renamed on each growth of the bucket — "all seven" when the workflow guide joined, "all
-  // eight" when the customization guide did, "all nine" when the workspaces guide did: the name
-  // states the membership count, and the loop below is unchanged through all of them and still
-  // runs over every member.
-  it("all eleven exist and carry real content", () => {
+  // eight" when the customization guide did, "all nine" when the workspaces guide did, "all
+  // twelve" when the enterprise-forks guide did: the name states the membership count, and the
+  // loop below is unchanged through all of them and still runs over every member.
+  it("all twelve exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -1059,12 +1061,12 @@ describe("CONTRIBUTING.md", () => {
  * The guides, held to the claims each one exists to make.
  *
  * The block above proves a guide is datable, linkable and leak-free. It cannot
- * prove the page still SAYS the thing it was written to say, and four of these
- * eight make a claim about a mechanism that can move underneath it: the doctor's
+ * prove the page still SAYS the thing it was written to say, and five of these
+ * nine make a claim about a mechanism that can move underneath it: the doctor's
  * probe set, the trust ladder's rungs, whether signature verification is armed,
- * and what the predecessor's own uninstall verb destroys. So each assertion
- * below reads the mechanism rather than a second copy of it, the way the README
- * corpus counts do.
+ * what the predecessor's own uninstall verb destroys, and the upstream lane's
+ * verb and outcome vocabulary. So each assertion below reads the mechanism
+ * rather than a second copy of it, the way the README corpus counts do.
  *
  * TEST CHANGE, justified (strictly stronger): the workflow guide's gap closed, so
  * this paragraph reads three rather than four. Its touchpoint table is now a
@@ -1190,6 +1192,40 @@ describe("the guides", () => {
     expect(guide, "the workspaces guide's subcommand count is not the source's").toContain(
       subcommands.length === 3 ? "three subcommands" : `${String(subcommands.length)} subcommands`,
     );
+  });
+
+  it("the enterprise-forks guide names every lane verb and every exit-1 outcome", () => {
+    // Two literal lists on one page: the verbs `scripts/upstream.mjs` takes, and the outcome
+    // vocabulary a fork reads its exit status through. Both are closed literals in that script,
+    // so a verb or an outcome added there and not here leaves the page describing a surface the
+    // lane no longer has — the second hand-maintained copy this suite exists to catch. Read as
+    // text rather than imported, the way the workspace subcommands are: the claim is about the
+    // literal in the source, and the page is held to it rather than to a copy of it.
+    const source = read("scripts/upstream.mjs");
+    const guide = read(ENTERPRISE_FORKS);
+
+    const declared = /export const VERBS = \[([^\]]+)\]/.exec(source)?.[1];
+    expect(declared, "the lane no longer declares a closed VERBS list").toBeDefined();
+    const verbs = [...(declared ?? "").matchAll(/'([a-z]+)'/g)].map((match) => match[1] ?? "");
+    expect(verbs.length, "no lane verb was read out of the source").toBeGreaterThanOrEqual(7);
+    for (const verb of verbs) {
+      expect(guide, `the enterprise-forks guide never names \`${verb}\``).toContain(`\`${verb}\``);
+    }
+
+    // Only the exit-1 outcomes, and that is the claim rather than a convenience: those are the
+    // states a fork has to act on, and this page's table is where it reads what each one means.
+    // The exit-0 pair `aborted` and `help` is described by the verbs that produce them.
+    const table = /export const OUTCOMES = Object\.freeze\(\{([\s\S]*?)^\}\)/m.exec(source)?.[1];
+    expect(table, "the lane no longer declares an OUTCOMES table").toBeDefined();
+    const actionable = [...(table ?? "").matchAll(/^\s*'?([a-z][a-z-]*)'?:\s*1,/gm)].map(
+      (match) => match[1] ?? "",
+    );
+    expect(actionable.length, "no exit-1 outcome was read out of the source").toBeGreaterThan(0);
+    for (const outcome of actionable) {
+      expect(guide, `the enterprise-forks guide never names \`${outcome}\``).toContain(
+        `\`${outcome}\``,
+      );
+    }
   });
 
   it("getting started shows the install line and the whole command surface", () => {

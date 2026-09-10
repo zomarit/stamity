@@ -72,6 +72,7 @@ const categories = [
     items: present([
       'customization',
       'workspaces',
+      'enterprise-forks',
       'packs-and-trust',
       'troubleshooting',
     ]),
