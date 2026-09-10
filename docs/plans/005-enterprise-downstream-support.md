@@ -211,6 +211,14 @@ Official dependency/platform sources checked 2026-09-10:
   current APM manifest support exists, but that fact neither selects nor proves a particular
   downstream's deployed distribution engine. Reuse its existing configuration and observe it.
 
+## Execution exception for 1.6.0
+
+On 2026-09-10 the maintainer explicitly authorized reusing [run 10](../../evals/runs/2026-09-10-run-10/RESULTS.md) for this release, with its
+recorded limitations. This is a one-release exception to U6's fresh-eval requirement; the
+standing release policy remains unchanged. The attempted fresh Codex run is unadmitted and
+does not supply replacement scores. The [execution record](../../.stamity/runs/2026-09-10_enterprise-downstreams/record.md)
+owns the authorization, input comparison and evidence details.
+
 ## Risks
 
 - **Critical**: unavailable authorized fixtures, private credentials, actual Renovate runs or

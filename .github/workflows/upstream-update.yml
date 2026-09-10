@@ -836,7 +836,7 @@ jobs:
             echo '```sh'
             echo "git fetch /path/to/update.bundle '${UPDATE_BRANCH:-stamity-upstream/<tag>}:refs/heads/${UPDATE_BRANCH:-stamity-upstream/<tag>}'"
             echo "git push origin 'refs/heads/${UPDATE_BRANCH:-stamity-upstream/<tag>}'"
-            echo "gh pr create --head '${UPDATE_BRANCH:-stamity-upstream/<tag>}' --base '$INTEGRATION_BRANCH' --title 'Upstream release ${TAG:-unknown}'"
+            echo "gh pr create --head '${UPDATE_BRANCH:-stamity-upstream/<tag>}' --base '$INTEGRATION_BRANCH' --title 'chore(upstream): integrate ${TAG:-unknown}'"
             echo '```'
             echo
             echo "Re-running the lane locally reaches the same branch without the artifact: \`node scripts/upstream.mjs integrate --release ${TAG:-<tag>}\`."
