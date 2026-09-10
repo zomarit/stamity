@@ -26,3 +26,8 @@ archived separately. Twelve actual focus screenshots were captured; mobile dark
 and desktop light enterprise-table captures were opened. No visual comparison
 baseline exists, so no visual-regression pass or refreshed baseline is claimed.
 Human screen-reader and complete keyboard journeys remain unperformed.
+
+Candidate binding: all 1,071 verified source inputs and54 render-source inputs match
+implementation commit `4e649f8a703021a3c0e4e057c258942b2330220f`. The bundle is
+`.stamity/evidence/browser-99c1094-dirty.json`; its original dirty run identity is
+preserved alongside the subsequent byte-comparison binding.

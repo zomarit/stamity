@@ -121,3 +121,19 @@ from H1 to H3 on six ungrouped reference pages. Six regression cases failed befo
 the repair. Independent review verified that all 52 generated heading changes
 preserve names, slug inputs and every other byte. The failed browser bundle is
 retained; the next sweep includes all six pages and keeps every scanner rule.
+
+
+## Reviewed candidate and fresh eval attempt
+
+Implementation commit `4e649f8a703021a3c0e4e057c258942b2330220f` is DCO-signed.
+All 15 local gate categories pass:194 test files,7,662 tests,2 existing opt-in skips,
+and unchanged coverage floors. Browser verification passes46 scenarios, including
+44 theme/width scans with zero violations. Candidate binding compares every
+recorded source input against the committed blob; no product byte differs.
+
+New run 12uses the committed codex-astra profile, SET-v5, rubric-v5 and exact
+harness/source hashes. It exits1 with `OPENAI_API_KEY-unavailable` before any API
+call. Calibration is unmeasured, all 78 cases have0/3 admitted samples, and no
+aggregate score exists. This is the required honest blocked artifact, not a
+reused eval or a passing deterministic substitute. Actual CI/rehearsal follows
+on the candidate PR. Human QA remains unsigned; no tag or release was created.
