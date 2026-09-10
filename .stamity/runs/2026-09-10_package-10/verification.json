@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "recordedAt": "2026-09-10T21:59:36.171857+00:00",
   "verifier": "independent review_client_behavior agent; authored no product source or tracked generated-file edits",
-  "result": "PASS: configured local gates and independent integration review; external proof gaps remain",
+  "result": "PASS: independently repaired local gates; replacement CI/release and behavioral/human/platform proof remain open",
   "packageVersion": "1.7.0",
   "environment": {
     "platform": "Darwin",
@@ -1218,5 +1218,471 @@
       "sha256": "694c2826e71fd31089ea318e47e0123fa7b2af03974a85e03625efa3a0961c7b"
     }
   ],
-  "historicalCoverageSummaryPath": "/tmp/stamity-package10-verifier-53zp_wt0/coverage-3-summary.json"
+  "historicalCoverageSummaryPath": "/tmp/stamity-package10-verifier-53zp_wt0/coverage-3-summary.json",
+  "originalResult": "PASS: configured local gates and independent integration review; external proof gaps remain",
+  "packedScanCorrection": {
+    "recordedAt": "2026-09-10T22:22:48.197588+00:00",
+    "discoveredBy": "Actual Linux Node 22.22.2 CI run 34535881719 and non-publishing Release run 34535889890 at candidate 41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+    "finding": "A reserved migration marker leaked into dist/types/migration/detect.d.ts through an inferred literal type. Earlier local packed-consumer commands exited zero, but their copied scanner was never invoked because the macOS temporary-path alias disagreed with the scanner direct-entry check.",
+    "correction": "The historical packed-tree leak-scan PASS assertion and overall local-gate verdict are superseded. Original command exits, timestamps, and log hashes remain unchanged. The executed external TypeScript/JavaScript and CLI consumer stages remain observed; they did not establish a successful packed scan.",
+    "remediationStatus": "PASS for the combined six-file repair and configured local gates; replacement actual CI and non-publishing Release are pending"
+  },
+  "ciRemediationVerification": {
+    "recordedAt": "2026-09-10T22:27:05.319475+00:00",
+    "result": "PASS for the combined six-file repair and configured local gates; replacement actual CI and non-publishing Release are pending",
+    "baselineHead": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+    "sourceInputSha256": "5ef6446414d8bc5c2787a40f6712bf9eb55ffef5a35369554536527085bca37d",
+    "sourceFileCount": 1075,
+    "inputDefinition": ".stamity/runs/2026-09-10_package-10/ is excluded; otherwise the same tracked/untracked-not-ignored inventory definition as the historical verification record",
+    "beforeInventorySha256": "99715d29786545f22032e85a56dc60357ca9ca23a22279b25f5989671fcfdd36",
+    "afterInventorySha256": "dd43534dc3d532660e98e9733e15ab42bfbb08f48af99f245bb6861f5704e815",
+    "beforeAfterFilesIdentical": true,
+    "reviewedSources": [
+      {
+        "path": "scripts/tarball-smoke.mjs",
+        "kind": "file",
+        "bytes": 10389,
+        "sha256": "1ec42ca7efc1e161c48dfd3d3cfc94b8650f37ef2d02d056aa16c297dcfaa4df"
+      },
+      {
+        "path": "src/migration/detect.ts",
+        "kind": "file",
+        "bytes": 18548,
+        "sha256": "c9cc08cf775c315766c67df580eb6f5efb13f27a5bc51adb8494568743c6c7ed"
+      },
+      {
+        "path": "test/ci/tarballStaging.test.ts",
+        "kind": "file",
+        "bytes": 8401,
+        "sha256": "52b64c4ad30f93bf73cd4e38357978d0f1da2181d053ecd387f76a6cddc66a66"
+      },
+      {
+        "path": "test/evals/manualRunner.test.ts",
+        "kind": "file",
+        "bytes": 23226,
+        "sha256": "f74b0703a7937d45c8d73afc38add839ea9a14696540a1468a1207743587e493"
+      },
+      {
+        "path": "test/hooks/portableRunner.test.ts",
+        "kind": "file",
+        "bytes": 10848,
+        "sha256": "4b0f0cfa7197f60c873e7ec5013c18c60cf5ead29c917946059678d557c06a8f"
+      },
+      {
+        "path": "test/migration/detect.test.ts",
+        "kind": "file",
+        "bytes": 15373,
+        "sha256": "a07898f242b96eb88502016b0455a223edddbd1ff4f2f39336447f00a4123b3e"
+      }
+    ],
+    "review": [
+      "Explicit string annotation changes the internal migration declaration type while preserving the runtime marker and public entrypoint. No scanner rule or exemption changed.",
+      "The copied artifact scanner receives a canonical physical path, executes with --include-build, and must return both exit zero and a nonempty PASS summary. A symlinked actual packed artifact passes; a reconstructed former leaking declaration fails. Silent, failed, and zero-file scanners returning zero are refused.",
+      "Windows test repairs use a file URL for dynamic import and physical path equality for child cwd; exit assertions expose stderr. The full 196-input committed load, five calibration fixtures, rubric midrun drift, first-read working-tree mismatch and existing 20-second timeout remain. Only a redundant second full traversal was removed; no runner product source changed."
+    ],
+    "focusedTests": {
+      "command": [
+        "npx",
+        "vitest",
+        "run",
+        "test/migration/detect.test.ts",
+        "test/ci/tarballStaging.test.ts",
+        "test/evals/manualRunner.test.ts",
+        "test/hooks/portableRunner.test.ts"
+      ],
+      "startedAt": "2026-09-10T22:22:48.487562+00:00",
+      "durationSeconds": 3.246,
+      "exitCode": 0,
+      "logSha256": "8d3640cddcde34566f330a9a1077b7ed2585a113a77d114b7abfccb508bcd6e7",
+      "logFile": "ci-remediation-focused.log",
+      "archive": "durable private CI raw-evidence archive"
+    },
+    "focusedResult": {
+      "files": 4,
+      "passed": 101
+    },
+    "commands": [
+      {
+        "gate": "lint",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "lint"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:01.896087+00:00",
+        "durationSeconds": 1.514,
+        "exitCode": 0,
+        "logSha256": "9e3210e0d06c1256b6a0e68ccd2110f3dba273346e52ea7b7092ec9b6b9ab2de",
+        "logFile": "lint-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "typecheck",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:01.907499+00:00",
+        "durationSeconds": 0.937,
+        "exitCode": 0,
+        "logSha256": "6839e3dbc61b1490da5738d8819e13035ff0d6b3fe1ef7be4d08e92ce12f2952",
+        "logFile": "typecheck-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "coverage",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "test",
+          "--",
+          "--coverage"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:01.875097+00:00",
+        "durationSeconds": 105.948,
+        "exitCode": 0,
+        "logSha256": "5f5152cd414df26d8434b526aa184107a7a533806e22373924021c9fddf645ed",
+        "logFile": "coverage-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "build",
+        "attempt": 4,
+        "command": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:22:48.499575+00:00",
+        "durationSeconds": 0.643,
+        "exitCode": 0,
+        "logSha256": "da0c33fa7e09a0591082d2609d7d6ea41ad914ebc57cf0ea7ff2ea76e1cc901a",
+        "logFile": "build-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "leak",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "gate"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.551787+00:00",
+        "durationSeconds": 6.633,
+        "exitCode": 0,
+        "logSha256": "b3ee794b0aaf68c44a1fffedfc559ffabb666604d1e5ab889f36db6d7d4b40f4",
+        "logFile": "leak-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "knip",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "knip"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.578809+00:00",
+        "durationSeconds": 2.165,
+        "exitCode": 0,
+        "logSha256": "af5c61c720eb77a28c0d9ebdf6a87dd6f6399485243c3f437a39b8cbe9039a65",
+        "logFile": "knip-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "size",
+        "attempt": 4,
+        "command": [
+          "node",
+          "scripts/size-budget.mjs"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.651445+00:00",
+        "durationSeconds": 0.546,
+        "exitCode": 0,
+        "logSha256": "ed1630f5254b9c9438432352b328c3cbda9f35e0a298acd3a899d3a13a8d58db",
+        "logFile": "size-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "generator-packs",
+        "attempt": 3,
+        "command": [
+          "node",
+          "scripts/generate-pack-manifests.mjs",
+          "--check"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.717729+00:00",
+        "durationSeconds": 0.422,
+        "exitCode": 0,
+        "logSha256": "03fd7f06c8dec9f7e5c80abbb2f8567fef9b341c5ef357e78ae585222a3a38f6",
+        "logFile": "generator-packs-3.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "generator-plugins",
+        "attempt": 3,
+        "command": [
+          "node",
+          "scripts/generate-plugin-manifests.mjs",
+          "--check"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.793942+00:00",
+        "durationSeconds": 0.524,
+        "exitCode": 0,
+        "logSha256": "09c488353f050f3091d1207d1753a357a873386629a2f8981bd01eb2df4f1298",
+        "logFile": "generator-plugins-3.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "generator-apm",
+        "attempt": 3,
+        "command": [
+          "node",
+          "scripts/generate-apm-package.mjs",
+          "--check"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.739227+00:00",
+        "durationSeconds": 0.554,
+        "exitCode": 0,
+        "logSha256": "2030f7c9aa1842b7521bcb934013b8138a73d10264033b43beb1ff195810091d",
+        "logFile": "generator-apm-3.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "generator-docs",
+        "attempt": 4,
+        "command": [
+          "python3",
+          "/tmp/stamity-package10-verifier-53zp_wt0/compare_generators.py"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.721221+00:00",
+        "durationSeconds": 1.209,
+        "exitCode": 0,
+        "logSha256": "199a3e20f18666df7cfdc935c1a2f223c73358799f4a99c3bf7f22f73f8e1412",
+        "logFile": "generator-docs-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "dogfood",
+        "attempt": 4,
+        "command": [
+          "node",
+          "dist/cli.js",
+          "check"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.755986+00:00",
+        "durationSeconds": 0.887,
+        "exitCode": 0,
+        "logSha256": "64b67cc3c3a73605d72ba58c0a032a1b203bbcfbafb254cd853c2bfdcbbb03ff",
+        "logFile": "dogfood-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "packed-consumer",
+        "attempt": 4,
+        "command": [
+          "node",
+          "scripts/tarball-smoke.mjs"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:01.882351+00:00",
+        "durationSeconds": 18.422,
+        "exitCode": 0,
+        "logSha256": "a09cf506b66224e549e742bebe52044496ede6f98f7dad6ce8b42d3d125a305c",
+        "logFile": "packed-consumer-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      }
+    ],
+    "coverage": {
+      "testFiles": 194,
+      "passed": 7667,
+      "skipped": 2,
+      "total": {
+        "lines": {
+          "total": 12063,
+          "covered": 11732,
+          "skipped": 0,
+          "pct": 97.25
+        },
+        "statements": {
+          "total": 13833,
+          "covered": 13331,
+          "skipped": 0,
+          "pct": 96.37
+        },
+        "functions": {
+          "total": 2974,
+          "covered": 2935,
+          "skipped": 0,
+          "pct": 98.68
+        },
+        "branches": {
+          "total": 9131,
+          "covered": 8187,
+          "skipped": 0,
+          "pct": 89.66
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "perFileFloorsPassed": true,
+      "coverageConfigUnchanged": true,
+      "timeoutUnchangedMilliseconds": 20000,
+      "capabilityMatrix": {
+        "lines": {
+          "total": 106,
+          "covered": 106,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 43,
+          "covered": 43,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 121,
+          "covered": 119,
+          "skipped": 0,
+          "pct": 98.34
+        },
+        "branches": {
+          "total": 60,
+          "covered": 56,
+          "skipped": 0,
+          "pct": 93.33
+        }
+      },
+      "optInSkips": [
+        "actual APM client route requires STAMITY_APM_BIN",
+        "live Sigstore trust-root test requires STAMITY_SIGSTORE_NETWORK_TEST"
+      ],
+      "testCount": 7669
+    },
+    "packedProof": {
+      "recordedAt": "2026-09-10T22:24:26.656Z",
+      "command": "node /tmp/stamity-package10-verifier-53zp_wt0/packed-witness.mjs",
+      "controls": [
+        {
+          "name": "injected previous inferred declaration shape in actual packed tree",
+          "rejected": true,
+          "status": 1,
+          "logSha256": "2af758bfb2b10223ce2c08a0714b9ce84fae08b88576737a689cda80082cd04d"
+        },
+        {
+          "name": "exit-zero silent scanner",
+          "rejected": true
+        },
+        {
+          "name": "exit-zero failed scanner",
+          "rejected": true
+        },
+        {
+          "name": "exit-zero empty scanner",
+          "rejected": true
+        }
+      ],
+      "tarball": {
+        "name": "zomarit-stamity-1.7.0.tgz",
+        "bytes": 539105,
+        "sha256": "2f86a82c29aefc170dc3c787147b39f08246f0fe4d911353c37cccce0a3c3408",
+        "fileCount": 218
+      },
+      "actualPackedScan": {
+        "summary": "leak-gate: PASS - 0 hits for 18 rule(s) across 219 file(s)",
+        "logSha256": "929ec52029bd271729d903f99e1a55216951b0c6d1a8da27b450fdc850d7d3e7",
+        "throughSymlink": true
+      },
+      "result": "PASS"
+    },
+    "retainedSiteProof": {
+      "recordedAt": "2026-09-10T22:24:56.730256+00:00",
+      "result": "PASS",
+      "checks": [
+        {
+          "name": "render-inputs",
+          "fileCount": 54,
+          "mismatches": []
+        },
+        {
+          "name": "website-build",
+          "fileCount": 134,
+          "mismatches": []
+        },
+        {
+          "name": "website-typescript-config-package-inputs",
+          "fileCount": 20,
+          "mismatches": []
+        },
+        {
+          "name": "website-build-roster",
+          "unchanged": true
+        }
+      ],
+      "relevantSourceDiff": [],
+      "retainedRenderInputDigest": "4abffd583d67908f2222777e16010ab8cbce3193efa120d5dea2a2eec71b21d9",
+      "retainedWebsiteBuildDigest": "b55042d36fe1ccde8e13bb4f73752eb4b929e1e7671a89a621351504453eafa6",
+      "basis": "All 54 previously scanned render inputs and all 134 built site files still match byte-for-byte; website TypeScript/config/package files also match the earlier independently verified inventory. No browser or website gate was repeated."
+    },
+    "originalFailuresPreserved": {
+      "candidate": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+      "ciRun": 34535881719,
+      "releaseRun": 34535889890,
+      "packedFailureJobs": [
+        103067252092,
+        103067283722
+      ],
+      "windowsFailureJob": 103067252031
+    },
+    "archive": {
+      "description": "Durable private CI raw-evidence archive; full inventories, commands, logs, scanner controls and coverage summary retained",
+      "fileCount": 41,
+      "indexSha256": "5ab1fa564fe37511a39aa47339450a10ce2b3cff5094dfc7ffc4f2b6a592bb94"
+    },
+    "notDone": [
+      "Actual replacement Linux floor/LTS and Windows CI with all APM legs and aggregator.",
+      "Actual replacement non-publishing Release gates and APM route; no publish, tag, or deployment performed by this verifier.",
+      "Fresh admitted behavioral samples and judge calibration remain unavailable; no mock is counted as behavioral proof.",
+      "Human QA and platform approval remain required."
+    ],
+    "postRecordLeakGate": {
+      "gate": "leak",
+      "attempt": 6,
+      "command": [
+        "npm",
+        "run",
+        "gate"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T22:27:05.439119+00:00",
+      "durationSeconds": 4.679,
+      "exitCode": 0,
+      "logSha256": "b3ee794b0aaf68c44a1fffedfc559ffabb666604d1e5ab889f36db6d7d4b40f4",
+      "logFile": "leak-6.log",
+      "scannedFiles": 1095,
+      "hits": 0
+    }
+  }
 }

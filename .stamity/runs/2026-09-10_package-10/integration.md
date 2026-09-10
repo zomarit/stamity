@@ -222,3 +222,34 @@ Fresh admitted live behavior, final candidate-bound local/site/browser proof, ac
 non-publishing rehearsal, human QA and platform approval remain explicit outstanding
 controls. The integration records contain no confidential repository or ledger identifiers.
 This check performed no later-package measurement, final audit, cleanup or source edits.
+
+## CI declaration and packed-scan correction
+
+Linux floor CI found an internal migration prefix inferred into the new declaration
+output. The constant has one runtime reader using ordinary string operations and is
+absent from the public entry. An explicit `string` annotation preserves runtime behavior
+while removing the unnecessary literal from the declaration. The production declaration
+compiler regression and existing migration carry tests cover both sides.
+
+The same artifact exposed a separate false pass in local packed verification: macOS
+temporary directory aliases made the copied leak script's direct-entry guard see different
+path spellings and silently exit zero without scanning. The old smoke trusted that exit.
+The smoke now canonicalizes temporary/installed paths and requires an actual nonempty
+successful scan summary. It uses the existing import-safe entry helper; its extracted scan
+step is exercised with real symlinked clean/leaking artifact fixtures. Silent, failed or
+empty scan output with exit zero refuses. The scanner, all allowlists and all floors remain
+unchanged. Prior local packed PASS lines are superseded by this real-scanner proof.
+
+Preserved red evidence includes the original macOS false pass, the direct packed leak
+failure, and three failing regressions before the fix (29 other tests passed). The final
+five-file focused run passes 100 tests, then configured lint, typecheck and build pass.
+The corrected full tarball smoke passes its actual packed scan, strict external TypeScript
+consumer, JavaScript import and init/check. Source leak gate passes with zero hits across
+1,095 files and all 18 rules; Knip and dogfood drift pass. Logic is 1,261,336 bytes and
+corpus 538,084 bytes under unchanged caps. Script import is inert and diff checks pass.
+
+Exactly four source/test paths changed: migration detection and its test, tarball smoke
+and its staging test. Their hashes, commands and retained log paths are recorded in the
+JSON evidence. These files are frozen for independent verification and a new candidate CI;
+the separate Windows test repair remains owned by its assigned writer. No publication,
+full post-repair gate or human approval is implied by this focused proof.

@@ -1,9 +1,14 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CURATED_PACKS } from "../../src/pack/curated.ts";
 import { CONTENT_CLASSES } from "../../src/types/content.ts";
+import { PREDECESSOR_CONTENT_PREFIX } from "../../src/migration/detect.ts";
+import { useTempDir } from "../support/tempDir.ts";
+// @ts-expect-error — the smoke remains a native ESM source-checkout script.
+import { scanPackedArtifact } from "../../scripts/tarball-smoke.mjs";
 
 /**
  * READER coverage over the published artifact's shape.
@@ -30,6 +35,7 @@ import { CONTENT_CLASSES } from "../../src/types/content.ts";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const DIST = join(REPO_ROOT, "dist");
+const getPackedFixture = useTempDir("packed-leak-scan");
 
 /** Corpus directory name per content class: the reader scans `<root>/<class>s`. */
 const CLASS_DIRS = CONTENT_CLASSES.map((klass) => `${klass}s`);
@@ -88,12 +94,49 @@ describe("the publish artifact is scanned, not only the repository", () => {
   const SMOKE = readFileSync(join(REPO_ROOT, "scripts", "tarball-smoke.mjs"), "utf8");
   const GATE = readFileSync(join(REPO_ROOT, "scripts", "leak-gate.mjs"), "utf8");
 
-  it("runs the leak gate over the extracted package", () => {
-    expect(SMOKE).toContain("leak-gate.mjs");
-    // Copied in beside the extracted package: the gate derives its root from its own location,
-    // so it has to sit inside the tree it is meant to scan.
-    expect(SMOKE).toContain("copyFileSync(GATE");
-    expect(SMOKE).toContain("'--include-build'");
+  it("runs the real scanner through a symlinked artifact path and rejects a declaration leak", async () => {
+    // 2026-09-11: replace the old source-string wiring pin with a real process
+    // witness. macOS temp paths can alias /private/var; the copied scanner's
+    // direct-entry guard previously exited zero without scanning that alias.
+    const fixture = getPackedFixture();
+    await fixture.seedFiles({
+      "package/package.json": '{"type":"module"}',
+      "package/dist/types/migration/detect.d.ts":
+        `export declare const PREFIX = ${JSON.stringify(PREDECESSOR_CONTENT_PREFIX)};\n`,
+    });
+    const alias = fixture.path("alias");
+    await symlink(fixture.path("package"), alias, process.platform === "win32" ? "junction" : "dir");
+    expect(() => scanPackedArtifact(alias)).toThrow(/dist\/types\/migration\/detect\.d\.ts/);
+  });
+
+  it.each([
+    ["silent", "process.exitCode = 0;\n"],
+    ["failed", "console.log('leak-gate: FAIL - scan incomplete');\n"],
+    ["empty", "console.log('leak-gate: PASS - 0 hits for 18 rule(s) across 0 file(s)');\n"],
+  ])("rejects a %s scanner even when it exits zero", async (_kind, source) => {
+    // A no-op scanner reproduces the false-green outcome without a platform
+    // dependency. The replacement is the unavailable scan, not the scanner's
+    // detection behavior; the other fixture executes the real gate.
+    const fixture = getPackedFixture();
+    await fixture.seedFiles({
+      "package/package.json": '{"type":"module"}',
+      "no-op.mjs": source,
+    });
+    expect(() => scanPackedArtifact(fixture.path("package"), fixture.path("no-op.mjs")))
+      .toThrow(/without a nonempty successful scan/);
+  });
+
+  it("accepts a clean declared artifact and retains the narrow runtime migration exemption", async () => {
+    const fixture = getPackedFixture();
+    await fixture.seedFiles({
+      "package/package.json": '{"type":"module"}',
+      "package/dist/types/migration/detect.d.ts": "export declare const PREFIX: string;\n",
+      "package/dist/src.js": `export const prefix = ${JSON.stringify(PREDECESSOR_CONTENT_PREFIX)};\n`,
+    });
+    const alias = fixture.path("alias");
+    await symlink(fixture.path("package"), alias, process.platform === "win32" ? "junction" : "dir");
+    expect(scanPackedArtifact(alias))
+      .toMatch(/leak-gate: PASS - 0 hits for \d+ rule\(s\) across [1-9]\d* file\(s\)/);
   });
 
   it("fails the smoke when the artifact carries a hit, rather than reporting and continuing", () => {

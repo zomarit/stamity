@@ -1,13 +1,19 @@
 # Package 10 candidate handoff
 
-Implementation and independent source reviews are complete. Required local gates pass.
-The reviewed source digest is
-`b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d`.
-Implementation commit: `4e649f8a703021a3c0e4e057c258942b2330220f`.
-`candidate-binding.json` confirms all 1,071 verified inputs match that commit; the
-browser bundle independently binds all 54 render inputs. Actual PR/CI and release
-rehearsal receipts will be added before final handoff. Baseline `v1.6.0` / `99c1094953346ef19a8aaab3ee0bd7d292c36ba6`
-is retained. Version 1.7.0 is prepared and unpublished.
+Implementation and independent source reviews are complete, including the six-file
+repair prompted by actual CI. The corrected full local gate passes 7,667 tests with
+two existing opt-in skips and unchanged floors. The current source digest is
+`5ef6446414d8bc5c2787a40f6712bf9eb55ffef5a35369554536527085bca37d`
+over 1,075 inputs. All 54 render inputs and the built site are unchanged, preserving
+the passing browser evidence.
+
+The initial implementation was `4e649f8a703021a3c0e4e057c258942b2330220f`; its
+recorded input binding remains historical. The local packed-scan claim was corrected
+explicitly after CI exposed the scanner's skipped entry path. `verification.md`
+preserves the old receipts and adds genuine positive and negative packed-scan proof.
+The repaired commit/PR binding and fresh CI/rehearsal receipts follow before final
+handoff. Draft PR #34 remains unmerged; 1.7.0 is prepared and unpublished. Baseline
+`v1.6.0` / `99c1094953346ef19a8aaab3ee0bd7d292c36ba6` is retained.
 
 | Item | Implemented outcome | Proof / remaining boundary |
 |---|---|---|
@@ -22,7 +28,7 @@ is retained. Version 1.7.0 is prepared and unpublished.
 | 10D six behavior repairs | Independently classified retained transcripts; repaired injection wording, closure routing, credential fragments, security categories, reviewer evidence basis and benign-skip wording | `u2-evidence.json`, `review-u1-u2.md`; changed source/Briefs synchronized. Affected three-sample behavior remains unmeasured. |
 | 10D bootstrap/declarations | Shared import-inert native TypeScript helper; supported declaration compiler; public types and size accounting | `u3-signing-distribution.md`, `verification.md`: external strict TS (`skipLibCheck:false`), JS import and packed CLI pass. |
 | 10D dependencies | Dated primary-source recheck retains exact unmet Docusaurus-v4/image-size fix triggers | `SECURITY.md`; no supported fix/migration found; site typecheck/build pass. |
-| 10E integration/accessibility | APM, customization, upstream and CLI contracts preserved; all generated surfaces reconciled; shared reference heading defect repaired | `integration.md`, `verification.md`, `browser-review.md`:15 local gates pass;194 test files/7,662 tests,2 existing opt-in skips;46browser scenarios/44 zero-violation scans. Human walks remain open. |
+| 10E integration/accessibility | APM, customization, upstream and CLI contracts preserved; all generated surfaces reconciled; shared reference heading defect repaired | `integration.md`, `verification.md`, `browser-review.md`:15 local gates pass;194 test files/7,667 tests,2 existing opt-in skips;46browser scenarios/44 zero-violation scans. Human walks remain open. |
 
 All actionable independent source-review findings are fixed and rechecked. Red coverage
 and browser attempts are retained. `history-preservation.json` confirms91 original
