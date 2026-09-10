@@ -424,6 +424,12 @@ html[data-theme='dark'] .landing::before {
   opacity: 1;
 }
 
+.markdown {
+  /* Dark-mode violet is readable on the page but only 2.73:1 against surrounding text. An
+   * underline distinguishes prose links without relying on color; navigation keeps its styling. */
+  --ifm-link-decoration: underline;
+}
+
 /*
  * HYPHENATED CODE SPANS DO NOT BREAK AT THEIR HYPHENS IN A TABLE CELL. `/st-pr-resolve` and
  * `--use-existing` are single names, and a browser treats every hyphen in them as a soft wrap
@@ -442,6 +448,14 @@ html[data-theme='dark'] .landing::before {
  */
 .markdown table :not(pre) > code {
   white-space: nowrap;
+}
+
+/* Overflowing MDX tables are keyboard scroll targets; keep their native table semantics and
+ * make the focus target visible in either color mode. The MDX component adds the tab stop only
+ * while the table actually overflows, including after a viewport or font-size change. */
+.markdown table:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
 }
 
 /*
