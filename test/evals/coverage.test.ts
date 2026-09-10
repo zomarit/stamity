@@ -1,6 +1,6 @@
 // The eval-coverage gate: every model-executed artifact is measured or exempted.
 //
-// `SET-v4.md` states the obligation the AI-evals rule imposes — every behaviour the
+// `SET-v5.md` states the obligation the AI-evals rule imposes — every behaviour the
 // corpus claims maps to at least one case — and v2 had nothing enforcing it. This is
 // the enforcement. It derives both sides from the files rather than from a list kept
 // here, because a hand-maintained roster is a literal that drifts silently green.
@@ -44,11 +44,12 @@ describe("eval coverage — the derivation is not vacuous", () => {
     expect(sourced.size).toBeGreaterThan(0);
   });
 
-  it("reads at least one heading out of the exemption file", () => {
-    // Zero headings would pass every "artifact is covered or exempt" assertion for
-    // the covered artifacts and fail loudly for the rest; this guard is here so a
-    // parser change that stops matching headings cannot read as "nothing exempt".
-    expect(exempted.length, `${EXEMPTIONS_FILE} declares no exemption rows`).toBeGreaterThan(0);
+  it("accounts for every artifact even when no exemption remains", () => {
+    // SET-v5 fulfils all seven next-version triggers. Requiring a nonempty
+    // exemption list would force retaining a false exemption; coverage itself
+    // remains load-bearing through exact artifact accounting and the tests below.
+    expect(artifacts.length).toBeGreaterThan(0);
+    expect(new Set([...sourced, ...exempted]).size).toBe(artifacts.length);
   });
 });
 

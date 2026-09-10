@@ -1,0 +1,7 @@
+{
+  "signing": {
+    "method": "sigstore",
+    "signer": "https://token.actions.githubusercontent.com https://github.com/example/pack/.github/workflows/sign.yml@refs/tags/v1.0.0",
+    "bundlePath": "pack.sigstore.json"
+  }
+}

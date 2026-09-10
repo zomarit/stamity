@@ -195,7 +195,7 @@ describe("nextStepsForTool", () => {
       // No repo-committed command surface exists on this client, so the row
       // points at the vendor-neutral skills tree it does read.
       expect(steps).toContain(SKILLS_PROJECTION_DIR);
-      expect(steps).not.toContain("/st-onboard");
+      expect(steps).toContain("then type: $st-onboard");
     } else {
       expect(steps).toContain(CODEX_COMMANDS_DIR);
       expect(steps).toContain("/st-onboard");
@@ -214,7 +214,7 @@ describe("nextStepsForTool", () => {
     // panel ever prints a slash invocation with no emitted file behind it.
     if (NATIVE_SKILL_DIRS.cursor === undefined) {
       expect(steps).toContain(SKILLS_PROJECTION_DIR);
-      expect(steps).not.toContain("/st-onboard");
+      expect(steps).toContain("in the chat, type: /st-onboard");
     } else {
       expect(steps).toContain(`${NATIVE_SKILL_DIRS.cursor}/st-onboard/SKILL.md`);
       expect(steps).toContain("/st-onboard");

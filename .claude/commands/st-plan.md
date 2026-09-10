@@ -276,6 +276,28 @@ plan-review sub-agent loop at this seam produced no measured quality gain, so no
 | L3 | **Edge cases non-empty** | every unit lists at least one edge case with its expected behavior. `none` is admissible only with a one-line reason. | derive the missing cases from the unit's inputs and failure modes, re-run the pass |
 | L4 | **Requirement ids cited** | every unit's `requirements` names at least one `REQ-<area>-<nnn>` carried by the spec, or states `spec carries no ids`. A blank field fails; an id absent from `docs/specs/` fails as a dangling reference. | cite the requirement the unit implements, or record that the spec carries none, re-run the pass |
 
+**Structural coverage pass.** Before handoff, locate the installed verify skill and run
+`node <verify-skill>/scripts/spec-plan-coverage.mjs <plan.md> <spec.md|spec-directory> ...`.
+Use its `scripts/` companion relative to that skill's own location, never an assumed
+client directory. If the client cannot execute it, report that check unrun; do not
+replace a missing result with a claimed pass. A scratch draft may be checked before
+publishing the plan. This pass supplements L2/L4 and changes no plan head key.
+
+The checker reads existing Markdown requirement headings and bullet/table unit fields.
+It catches duplicate definitions/unit IDs/references, dangling IDs/dependencies and
+requirements in the Spec delta that no unit covers. Shared coverage across units is valid.
+List full IDs in new artifacts; existing shortened IDs and ranges remain readable.
+Removed IDs retain their definition and a retirement disposition. Requirements outside
+this plan's delta are outside its reverse-coverage scope, not silently assigned work.
+An empty delta states its reason. No check here certifies semantic clarity.
+
+**Semantic coverage review.** Compare each scoped requirement with its implementing
+unit and acceptance criterion in both directions. A structurally complete plan can
+still have competing meanings: identify the requirement and unit, state both readings,
+and return `BLOCKED_AMBIGUITY` with the smallest clarification that decides between them.
+Sub-agents return that finding to the orchestrator; only the orchestrator asks the user.
+Resolve it through the existing clarification step before handoff.
+
 A failing check blocks the write. Three consecutive failed passes on the same check means the
 request is under-specified: stop and return `BLOCKED_AMBIGUITY` naming the check and the unit that
 keeps failing.
@@ -364,6 +386,7 @@ Close the run with:
 - `status` plus a one-line outcome.
 - `intent chosen: <intent> because <matched signals>`.
 - Artifact path(s) written, with the unit count.
+- Structural coverage result and unresolved semantic readings; structural pass alone is not handoff approval.
 - Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail`.
 - `sub_agents_spawned: <count> · task_structure: parallelizable | sequential | mixed`.
 - Open questions carried; a non-empty list blocks handoff.

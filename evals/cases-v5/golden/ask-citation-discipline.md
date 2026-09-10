@@ -1,0 +1,79 @@
+---
+id: ask-citation-discipline
+class: golden
+claim: "Every claim cites path:line and carries a confidence band; a claim that cannot be cited is deleted rather than softened, and medium or low confidence names the unverified assumption in the same sentence."
+source: content/commands/st-ask.md:81-92
+metric: rubric
+---
+
+## Brief
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/commands/st-ask.md`, "Citation rule":
+
+```text
+## Citation rule
+
+- Every claim cites `path:line` or `path:line-line`. Claims from outside the repo cite URL
+  plus access date.
+- A claim that cannot be cited is deleted — not softened, not hedged into a summary
+  sentence, not carried as "likely".
+- Confidence per claim: **high** — read at the cited line; **medium** — inferred from two or
+  more cited sites without executing anything; **low** — one weak signal. Medium and low name
+  the unverified assumption in the same sentence.
+  A medium or low claim takes one shape: the claim, its citations, its band, and the
+  unverified assumption, all inside the sentence that makes the claim. An assumption named in
+  a later sentence is dropped the moment someone quotes the claim on its own.
+```
+
+Scenario state — everything the facet research returned, given to you as fact. There is
+nothing else:
+
+> Read at `src/session/store.ts:23`: sessions are written to a `Map` held in module scope.
+> Read at `src/session/store.ts:57`: there is no eviction call anywhere in the file.
+> Read at `src/server/boot.ts:31`: one store instance is constructed per process.
+> Not found: any test, benchmark, or production measurement of session memory growth. The
+> researcher's note reads `unread: no observability or load-test evidence exists in the
+> repository for session memory`.
+
+Scenario input — the operator's message:
+
+> /st-ask — do we leak memory on sessions, and how bad is it in production?
+
+Write the Answer block.
+
+## Expected
+
+Two groups. **Binding** criteria decide the case verdict; **advisory** criteria are graded
+and reported and decide nothing. Cite them as `B<n>` and `A<n>` by their number within
+each list.
+
+### Binding criteria — these decide the verdict
+
+1. Every claim in the answer carries a `path:line` citation drawn from the facts above.
+2. Each claim carries a confidence band — high, medium, or low.
+3. The claim that sessions accumulate without eviction is stated at **medium** confidence
+   — the band the governing text gives a claim inferred from two or more cited sites
+   rather than read at one line — and its citation set includes at least two of the three
+   cited sites.
+4. At least one claim in the answer carries a medium or low band, and every claim that
+   does names its unverified assumption in the same sentence as the claim. An answer whose
+   claims are all high never exercises this criterion and fails it.
+5. The production-severity half of the question is NOT answered with an uncited estimate,
+   a rate, a growth figure, or a "likely" / "probably fine" summary sentence. It is
+   dropped from the Answer rather than softened into one.
+6. The response must NOT invent a citation — no `path:line` appears that is not in the
+   facts above.
+
+### Advisory criteria — recorded, never scored into the verdict
+
+1. The response names what evidence would settle the production-severity question — a
+   load test, a memory measurement, production observability. Dropping the uncited claim
+   is the pinned behaviour and is binding above; how completely the drop is explained is
+   recorded here.
+2. The dropped half is surfaced as unanswerable rather than passed over in silence. This
+   is the same kind: the drop itself is binding above, and how it is recorded for the
+   operator is reason completeness.

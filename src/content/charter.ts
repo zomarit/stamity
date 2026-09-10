@@ -125,10 +125,10 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   cursor: 97,
   claude: 240,
   copilot: 240,
-  // 1082 -> 1065 on 2026-09-02: the closure run folded the learnings-schema
-  // authoring contract into the writer that enforces it, and the rule set is
-  // what this client loads whole.
-  codex: 1065,
+  // 1065 -> 1063 on 2026-09-10: Package 10 removes repeated security-reporting
+  // prose while preserving the rule floors and repaired behavior. This client
+  // loads the whole rule set, so its measured reduction tightens the ratchet.
+  codex: 1063,
 };
 
 /**
@@ -138,7 +138,7 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * Selecting codex does not add a codex file: it rewrites the file every other
  * selected client already reads, so a claude+codex repo hands claude the codex
  * rules appendix too. Against {@link ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX} that
- * is ≈6.4x the always-on bytes every co-selected client pays — a today-measured
+ * is ≈6.3x the always-on bytes every co-selected client pays — a today-measured
  * figure like the ceilings above, not a target.
  *
  * **A tripwire AND a published figure**, which are two different jobs.
@@ -158,15 +158,12 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * is the failure an earlier wording of this comment had twice: first claiming a
  * disclosure that did not exist, then claiming its absence after it did.
  */
-// 29_303 -> 29_326 on 2026-09-07: the injection-screening rule's body reworded
-// its run-time-ingress item and the gate bullet that restates it (+23 bytes), so
-// a hit on tool ingress is reported by class, source, position and outcome and
-// names no pattern id where no catalog scan ran. The rule's frontmatter moved
-// too (+89, description and obsolete_when) and reaches this figure not at all:
-// the appendix inlines heading, attachment note and body, and the note takes the
-// `**Attaches to:**` branch, which does not print the description. The charter
-// itself was not touched, which is why the sibling figure below is unmoved.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_326;
+// 29_326 -> 29_071 on 2026-09-10: Package 10's reviewed injection-screening,
+// secrets and security-patterns edits reduce the emitted rule appendix by 255
+// bytes. The real cross-client init golden measures both Codex alone and the
+// four-client union at this value. The charter stays unchanged, so the sibling
+// figure below remains 4_614; this disclosure is measured bytes, not a cap.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_071;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.

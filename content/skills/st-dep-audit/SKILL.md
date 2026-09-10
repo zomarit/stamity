@@ -1,4 +1,6 @@
 ---
+license: MIT
+compatibility: Requires a supported coding client, repository access, and the project verification tools.
 id: dep-audit
 type: skill
 description: "Produces a standalone dependency audit over the installed graph — advisories, licenses, and update-risk classes — and reports without editing a manifest, a lockfile, or a source file. Triggers when someone asks what the installed packages are exposed to, before a release or an upgrade sweep, or when a lockfile change needs its risk stated."

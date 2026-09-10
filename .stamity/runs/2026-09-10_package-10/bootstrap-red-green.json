@@ -1,0 +1,67 @@
+[
+  {
+    "script": "generate-docs",
+    "baseline": {
+      "exit": 2,
+      "stdout": "",
+      "stderr": "Unknown argument: --not-a-generator-flag\nUsage: node scripts/generate-docs.mjs [--page <cli|config|reference|llms|all>] [--out-dir <dir>]\n"
+    },
+    "candidate": {
+      "exit": 0,
+      "stdout": "import completed\n",
+      "stderr": ""
+    }
+  },
+  {
+    "script": "generate-capability-matrix",
+    "baseline": {
+      "exit": 2,
+      "stdout": "",
+      "stderr": "Unknown argument: --not-a-generator-flag\nUsage: node scripts/generate-capability-matrix.mjs [--out <path>]\n"
+    },
+    "candidate": {
+      "exit": 0,
+      "stdout": "import completed\n",
+      "stderr": ""
+    }
+  },
+  {
+    "script": "generate-pack-manifests",
+    "baseline": {
+      "exit": 2,
+      "stdout": "",
+      "stderr": "Unknown argument: --not-a-generator-flag\nUsage: node scripts/generate-pack-manifests.mjs [--check|--write] [--packs-dir <dir>] [--pins <path>]\n"
+    },
+    "candidate": {
+      "exit": 0,
+      "stdout": "import completed\n",
+      "stderr": ""
+    }
+  },
+  {
+    "script": "generate-apm-package",
+    "baseline": {
+      "exit": 2,
+      "stdout": "",
+      "stderr": "Unknown argument: --not-a-generator-flag\nUsage: node scripts/generate-apm-package.mjs [--check] [--out-dir <dir>]\n"
+    },
+    "candidate": {
+      "exit": 0,
+      "stdout": "import completed\n",
+      "stderr": ""
+    }
+  },
+  {
+    "script": "generate-plugin-manifests",
+    "baseline": {
+      "exit": 2,
+      "stdout": "",
+      "stderr": "Unknown argument: --not-a-generator-flag\nUsage: node scripts/generate-plugin-manifests.mjs [--check] [--out-dir <dir>]\n"
+    },
+    "candidate": {
+      "exit": 0,
+      "stdout": "import completed\n",
+      "stderr": ""
+    }
+  }
+]

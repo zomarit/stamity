@@ -1,61 +1,11 @@
 /**
- * The Codex residue planner — the thinnest of the four adapters, because Codex
- * is the most standards-native client the engine targets.
- *
- * Everything portable is already planned by the core: the `AGENTS.md`
- * charter Codex reads natively, the vendor-neutral `.agents/skills/` tree, the
- * six-intent hook scripts, the MCP catalog. What is left here is residue in the
- * strict sense — four things Codex spells differently from every other client:
- *
- * 1. **`.codex/hooks.json`** — the core's portable interchange rows in the
- *    Claude SHAPE (PascalCase event names, exit-0/2 semantics), which Codex
- *    copies verbatim, so this is a config-dialect rename and not a semantic
- *    transform. Each engine-emitted script carries the SHA-256 of the exact
- *    bytes the same plan writes, because Codex trusts a committed script by
- *    content hash: a hash computed from anything other than the emitted bytes
- *    would pin a file that is not there.
- * 2. **`.codex/agents/*.toml`** — subagent definitions in TOML rather than
- *    markdown-with-frontmatter, written through this package's own narrow TOML
- *    writer ({@link serializeTomlDocument}).
- * 3. **`.codex/config.toml`** — a SINGLE-WRITER composed document. The core
- *    plan deliberately answers `mcpFor("codex")` with nothing so that this
- *    adapter can compose the MCP tables (rendered by `src/mcp/emit.ts`, caveat
- *    comments included) together with adapter-level tables into one file that
- *    exactly one emitter owns.
- * 4. **Glob-rule down-conversion + the 32 KiB budget** — the lossy one, and the
- *    reason this adapter is not free. Codex has no glob-scoped rule layer
- *    (upstream gap: open codex#34002), so a conditional rule is inlined into
- *    the `AGENTS.md` of the directory its globs anchor to, or into a root
- *    appendix when no anchor is derivable — including the case where the anchor
- *    would land inside the engine's own state directory, which is a store other
- *    code parses rather than a place to leave prose. Every inlined section
- *    opens by saying so. Codex also caps an `AGENTS.md` at
- *    {@link CODEX_AGENTS_MD_BUDGET_BYTES} bytes, so an over-budget file drops
- *    sections lowest-RISK-first and NAMES every rule it dropped: the loss is
- *    documented in the file that suffered it. That guarantee is per file, and
- *    the omission notice says as much — the client's ceiling is over the
- *    CONCATENATION a session loads, which nothing here measures, so a reader
- *    who generalized from the notice would be assuming a check that does not
- *    run.
- *
- * The root appendix is delivered through the composer's shared-path
- * replacement contract (`AdapterOutput.replacesSharedPath`): one `AGENTS.md`
- * row, content substituted, owners unioned. Codex reads the root file
- * hierarchically like every other client — there is no codex-private charter —
- * so forking a second file would give the repository two standards documents.
- *
- * A FIFTH surface was looked for and is not here: the nine touchpoint command
- * bodies. Every other client takes them somewhere repo-committed; this one
- * documents no project-scoped command surface at all
- * ({@link CODEX_COMMANDS_DIR}), so nothing is emitted and the gap is a declared
- * cap rather than an invented path.
- *
- * Planning is pure: corpus reads are reads of context, and nothing here writes.
- * The emitted bytes carry no clock and no randomness, which is what makes the
- * hook digests stable across runs.
+ * Codex residue: TOML agents, native hooks and AGENTS.md rule down-conversion.
+ * Hook command strings launch validated exec-form rows from the nearest initialized
+ * project. Native hook trust belongs to /hooks; Stamity's ledger detects drift.
+ * Current contract: https://learn.chatgpt.com/docs/hooks (2026-09-10).
  */
 
-import { createHash } from "node:crypto";
+import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
 import { buildContentIndex, typeIdKey, type CatalogItem } from "../content/catalog.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { isFloorTag } from "../content/tags.ts";
@@ -74,10 +24,7 @@ import {
   substituteVerificationGateTokens,
 } from "../emit/substitution.ts";
 import {
-  CANONICAL_HOOK_EVENTS,
   CLAUDE_EVENT_NAMES,
-  CLIENT_HOOK_GUARANTEES,
-  type HookInterchange,
 } from "../hooks/model.ts";
 import { emitCodexToml } from "../mcp/emit.ts";
 import {
@@ -209,13 +156,12 @@ const CODEX_FACTS: AdapterDialectFacts = {
     { name: "AGENTS.md budget", value: `${CODEX_AGENTS_MD_BUDGET_BYTES} bytes (32 KiB)` },
     {
       name: "hook enforcement",
-      value: "fail-closed — a refusing hook exits 2 and the pending action stops",
+      value: "exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement.",
     },
     {
       name: "per-agent tool allowlist",
       value:
-        "none documented (provisional, re-verified 2026-08-17) — the comma-list dialect is a " +
-        "placeholder and `sandbox_mode` is the native primitive that binds",
+        "no native per-agent tools list is documented as of 2026-09-10; no placeholder key is emitted. sandbox_mode carries the supported filesystem boundary; the policy grant remains a prompt-level restriction.",
     },
     {
       // The command-surface question answered for this client, recorded rather
@@ -229,14 +175,14 @@ const CODEX_FACTS: AdapterDialectFacts = {
   ],
   citations: [
     // Subagent key set + the project-scoped `.codex/agents/` location.
-    { url: "https://learn.chatgpt.com/docs/agent-configuration/subagents", accessDate: "2026-08-17" },
+    { url: "https://learn.chatgpt.com/docs/agent-configuration/subagents", accessDate: "2026-09-10" },
     // Project-level `.codex/hooks.json`, PascalCase events, exit-2 blocking,
     // and trust recorded against the hook's own hash.
-    { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-08-17" },
+    { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-09-10" },
     // `project_doc_max_bytes`, default 32768 — the budget shaped below.
-    { url: "https://learn.chatgpt.com/docs/config-file/config-reference", accessDate: "2026-08-17" },
+    { url: "https://learn.chatgpt.com/docs/config-file/config-reference", accessDate: "2026-09-10" },
     // Custom prompts: home-directory scope, deprecated — why no commands emit.
-    { url: "https://learn.chatgpt.com/docs/custom-prompts", accessDate: "2026-08-17" },
+    { url: "https://learn.chatgpt.com/docs/custom-prompts", accessDate: "2026-09-10" },
   ],
 };
 
@@ -266,6 +212,7 @@ export const codexResiduePlanner: ResiduePlanner = {
 
     const rows: AdapterOutput[] = [
       emissionRow(CODEX_HOOKS_FILE, buildHooksJson(core), HOOKS_ARTIFACT_ID, "infra"),
+      emissionRow(`.stamity/generated/hooks/codex/${PORTABLE_RUNNER_FILE}`, buildPortableHookRunner("codex"), "codex-portable-hook", "infra"),
       emissionRow(CODEX_CONFIG_FILE, composeConfigToml(core, ctx), CONFIG_ARTIFACT_ID, "infra"),
     ];
 
@@ -497,141 +444,25 @@ function bodyRenderer(ctx: EmissionContext): (raw: string) => string {
 
 // ── 1. Hook configuration ────────────────────────────────────────
 
-/** One command registration inside a hook group. */
-interface CodexHookEntry {
-  type: "command";
-  /** Exec form: argv, never a shell line. */
-  command: string[];
-  /** Seconds, the unit the interchange shape states timeouts in. */
-  timeout?: number;
-  /** Digest of the emitted script bytes; absent for a command this engine does not emit. */
-  sha256?: string;
-}
-
-/** Registrations sharing one event and matcher. */
-interface CodexHookGroup {
-  matcher?: string;
-  hooks: CodexHookEntry[];
-}
-
-/**
- * Render the core's portable hook rows as `.codex/hooks.json`.
- *
- * The transform is a rename plus a placement: canonical `snake_case` events
- * become the interchange's PascalCase names, rows group by event and matcher,
- * and the argv stays argv. Codex adopts the interchange shape verbatim
- * (`CLIENT_HOOK_GUARANTEES`), so anything more than that would be this adapter
- * inventing semantics the client did not ask for.
- *
- * Trust-by-hash: every command that runs a script THIS plan emits carries the
- * SHA-256 of those exact bytes, computed from the plan rather than from disk —
- * the file has not been written yet, and hashing what is about to be written is
- * the only way the digest and the file cannot disagree. A user-authored hook
- * carries no digest: its command is the user's own trust domain, wired
- * verbatim, and this engine emits none of its bytes to vouch for.
- *
- * The `stamity` block states what the client actually enforces (fail mode,
- * blocking exit status) beside the configuration it governs, so an operator
- * reading the file is not left to infer the guarantee from its shape.
- */
+/** Native Codex configuration: string commands and runtime-managed trust. */
 export function buildHooksJson(core: CoreEmissionPlan): string {
-  const digests = new Map<string, string>();
-  for (const script of core.hooks.scripts) {
-    if (script.tool === TOOL) digests.set(script.path, sha256Hex(script.content));
-  }
-
-  const rows = core.hooks.interchangeFor(TOOL);
-  const hooks: Record<string, CodexHookGroup[]> = {};
-  for (const event of CANONICAL_HOOK_EVENTS) {
-    const groups = groupRows(
-      rows.filter((row) => row.event === event),
-      digests,
-    );
-    if (groups.length > 0) hooks[CLAUDE_EVENT_NAMES[event]] = groups;
-  }
-
-  // A client with no guarantee row falls back to blocking, mirroring the script
-  // builders: an exit status a client ignores costs nothing, while assuming it
-  // ignores one would silently disarm the gate.
-  const guarantee = CLIENT_HOOK_GUARANTEES.find((row) => row.tool === TOOL);
-
-  return `${JSON.stringify(
-    {
-      hooks,
-      stamity: {
-        interchange: "claude-shape",
-        failMode: guarantee?.failMode ?? "fail-closed",
-        blockingExitCode: guarantee?.blockingExitCode ?? 2,
-        guarantee: guarantee?.notes ?? "",
-        trust:
-          "Each sha256 covers the generated script bytes this setup emits; verify with " +
-          "`stamity check` after any edit. User-authored hooks are wired verbatim and " +
-          "carry no digest — their commands are the repository's own trust domain.",
-      },
-    },
-    null,
-    2,
-  )}\n`;
-}
-
-/** Rows for one event, grouped by matcher in first-appearance order. */
-function groupRows(
-  rows: readonly HookInterchange[],
-  digests: ReadonlyMap<string, string>,
-): CodexHookGroup[] {
-  const groups: CodexHookGroup[] = [];
-  const byMatcher = new Map<string, CodexHookGroup>();
-
-  for (const row of rows) {
-    const key = row.matcher ?? "";
-    let group = byMatcher.get(key);
+  const hooks: Record<string, { matcher?: string; hooks: { type: string; command: string; commandWindows: string; timeout?: number }[] }[]> = {};
+  for (const row of core.hooks.interchangeFor(TOOL)) {
+    const event = CLAUDE_EVENT_NAMES[row.event]!;
+    const groups = hooks[event] ??= [];
+    let group = groups.find((entry) => entry.matcher === row.matcher);
     if (group === undefined) {
-      group = row.matcher === undefined ? { hooks: [] } : { matcher: row.matcher, hooks: [] };
-      byMatcher.set(key, group);
+      group = { ...(row.matcher === undefined ? {} : { matcher: row.matcher }), hooks: [] };
       groups.push(group);
     }
-    group.hooks.push(hookEntry(row, digests));
+    group.hooks.push({
+      type: "command",
+      command: portableHookCommand("codex", row),
+      commandWindows: portableHookCommand("codex", row),
+      ...(row.timeoutMs === undefined ? {} : { timeout: Math.min(row.event === "session_end" ? 3 : Infinity, Math.ceil(row.timeoutMs / 1000)) }),
+    });
   }
-  return groups;
-}
-
-function hookEntry(row: HookInterchange, digests: ReadonlyMap<string, string>): CodexHookEntry {
-  const digest = emittedScriptDigest(row.command, digests);
-  return {
-    type: "command",
-    command: [...row.command],
-    // Seconds, rounded UP: a sub-second request must not round to zero, which
-    // some clients read as "no timeout" and others as "expire immediately".
-    ...(row.timeoutMs === undefined ? {} : { timeout: Math.ceil(row.timeoutMs / 1000) }),
-    ...(digest === undefined ? {} : { sha256: digest }),
-  };
-}
-
-/**
- * The digest of the engine-emitted script a command runs, located by scanning
- * argv for a path THIS plan writes rather than by assuming the
- * interpreter-then-script argv shape the core happens to build today. A command
- * that grew an interpreter flag would otherwise lose its digest silently — a
- * hook that still runs while nothing vouches for its bytes is the exact failure
- * trust-by-hash exists to prevent, and it would fail open without a diagnostic.
- *
- * A user-authored hook names no emitted path, so it matches nothing and carries
- * no digest: the intended outcome for a command this engine does not write,
- * not a miss.
- */
-function emittedScriptDigest(
-  command: readonly string[],
-  digests: ReadonlyMap<string, string>,
-): string | undefined {
-  for (const argument of command) {
-    const digest = digests.get(argument);
-    if (digest !== undefined) return digest;
-  }
-  return undefined;
-}
-
-function sha256Hex(content: string): string {
-  return createHash("sha256").update(content, "utf8").digest("hex");
+  return `${JSON.stringify({ description: "Stamity hooks. Review and trust with /hooks; stamity check detects emitted-file drift. The role guard is telemetry because PreToolUse carries no agent identity.", hooks }, null, 2)}\n`;
 }
 
 // ── 2. Subagent definitions ──────────────────────────────────────
@@ -651,10 +482,8 @@ interface ModelOptions {
  * `body` defaults to the catalog body so the function is usable on a raw
  * catalog item; emission passes the substituted body instead.
  *
- * The tool grant is emitted twice, on purpose and with the difference stated in
- * the file: `tools` is the PROVISIONAL comma-list placeholder (Codex documents
- * no per-agent allowlist — verified again 2026-08-17), while `sandbox_mode` is
- * the native primitive that actually narrows what the agent can do. It widens
+ * No unsupported tools key is emitted. The grant is included in instructions,
+ * while sandbox_mode carries the documented filesystem boundary. It widens
  * to `workspace-write` only on a grant holding a mutating category, and the
  * test is membership in {@link MUTATING_CATEGORIES} rather than "not read-only":
  * a category from outside the grantable vocabulary matches nothing and leaves
@@ -680,7 +509,6 @@ export function buildAgentToml(
   const entries: [string, TomlValue][] = [
     ["name", runtimeId],
     ["description", item.description],
-    ["tools", toCodexToolsFrontmatter(allow)],
     [
       "sandbox_mode",
       allow.some((category) => MUTATING_CATEGORIES.has(category)) ? "workspace-write" : "read-only",
@@ -699,22 +527,25 @@ export function buildAgentToml(
 
   // Last: it is the long one, and a trailing multi-line string keeps the
   // scannable keys at the top of the file.
-  entries.push(["developer_instructions", `${body.trim()}\n`]);
+  const rolePolicy = allow.length === 0
+    ? "Role tool policy: no tool categories are granted. Decline tool use and return the missing permission to the parent."
+    : `Role tool policy: only use tools in these categories: ${allow.join(", ")}. If work needs another category, return that dependency to the parent. Native sandbox and approval controls still apply.`;
+  entries.push(["developer_instructions", `${body.trim()}\n\n${rolePolicy}\n`]);
 
   const comments = [
     `stamity — Codex subagent "${runtimeId}". Generated file: regenerate rather than`,
     "editing it; local edits are overwritten.",
     "",
-    "Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-08-17).",
-    "PROVISIONAL — Codex documents no per-agent tool allowlist, so `tools` carries the",
-    "placeholder comma-list dialect and `sandbox_mode` is the primitive that binds.",
+    "Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-09-10).",
+    `Stamity role grant: ${toCodexToolsFrontmatter(allow) || "none"}. No native tools key is documented.`,
+    "sandbox_mode binds the filesystem boundary; category restrictions remain prompt-level.",
   ];
   if (grant.source === "none") {
     comments.push(
       "",
       `No resolvable grant for "${runtimeId}" — neither a roster row nor capabilities this`,
       "engine can derive one from. The grant is empty by default, and the generated",
-      "pre-tool-use guard refuses every call it makes.",
+      "role must decline tool use; the identity-free hook cannot enforce that role grant.",
     );
   }
 

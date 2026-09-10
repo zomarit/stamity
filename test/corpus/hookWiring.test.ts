@@ -193,8 +193,10 @@ describe("core hook script set", () => {
         // mode this banner exists to prevent — and the two ways of not enforcing
         // are named apart, because a client that ignores the exit status still
         // reaches a verdict and one whose payload names no agent never does.
+        // TEST CHANGE (2026-09-10): the current identity-free banner names
+        // one missing-identity reason; punctuation follows that corrected text.
         expect(guard, guarantee.tool).toContain(
-          identityBearing ? "Reporting-only client:" : "Telemetry only on this client,",
+          identityBearing ? "Reporting-only client:" : "Telemetry only on this client:",
         );
         expect(guard, guarantee.tool).not.toContain("Blocking client:");
       }
@@ -204,23 +206,29 @@ describe("core hook script set", () => {
   it("keeps the guarantee ladder the hook model publishes", () => {
     const ladder = CLIENT_HOOK_GUARANTEES.map((row) => [row.tool, row.failMode, row.blockingExitCode]);
 
+    // TEST CHANGE (2026-09-10): the reviewed CLI/cloud command contract now
+    // denies Copilot preToolUse errors and explicit refusals. Native timeouts
+    // remain fail-open; role identity is an independent limitation below.
     expect(ladder).toEqual([
       ["claude", "fail-closed", 2],
       ["codex", "fail-closed", 2],
+      ["copilot", "fail-closed", 2],
       ["cursor", "opt-in-fail-closed", 2],
-      ["copilot", "fail-open", null],
     ]);
     expect(CLIENT_HOOK_GUARANTEES.map((row) => row.tool).toSorted()).toEqual([...TOOLS].toSorted());
+    const copilot = CLIENT_HOOK_GUARANTEES.find((row) => row.tool === "copilot");
+    expect(copilot?.notes).toContain("preToolUse exit 2, errors and JSON deny block");
+    expect(copilot?.notes).toContain("Timeouts always fail-open");
+    expect(copilot?.notes).toContain("identity-free core role guard is telemetry");
   });
 
   it("names the clients whose pre-tool-use payload carries no agent identity", () => {
-    // The posture above derives from this set, so the set itself is pinned by
-    // hand rather than derived: Cursor's tool-call payload carries no identity
-    // field (`src/adapters/cursor.ts`; cursor.com/docs/agent/hooks, accessed
-    // 2026-08-17) and every other client's does. A row arriving here downgrades
-    // that client's guard from a control to a record, which is a protocol
-    // finding about that client, never a refactor.
-    expect([...IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS]).toEqual(["cursor"]);
+    // TEST CHANGE: .github/client-contracts.md's 2026-09-10 official-source
+    // census finds identity-free tool-call payloads on all three clients.
+    // Keep the expected membership independent of the guard's own derivation.
+    expect([...IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS].toSorted()).toEqual([
+      "codex", "copilot", "cursor",
+    ]);
   });
 });
 
@@ -312,18 +320,33 @@ describe("the guard running on the shipped roster", () => {
     }
   });
 
-  it("reports the same refusal on a client that never blocks, and lets the call through", async () => {
-    const guard = await placeGuardFor("copilot");
+  // TEST CHANGE: native denial support does not supply the missing role
+  // identity. Even a synthetic role-bearing call must retain telemetry here.
+  it.each(["cursor", "codex", "copilot"] as const)(
+    "reports a synthetic role refusal without claiming enforcement on %s",
+    async (tool) => {
+      const guard = await placeGuardFor(tool);
 
-    const result = run(guard, call("stamity-reviewer", "Edit"));
+      const result = run(guard, call("stamity-reviewer", "Edit"));
 
-    expect(result.code).toBe(0);
-    expect(refusal(result)).toMatchObject({
-      blocked: false,
-      agentId: "stamity-reviewer",
-      reasonCode: "CATEGORY_DENIED",
-    });
-  });
+      expect(result.code).toBe(0);
+      expect(result.stdout).toBe("");
+      expect(refusal(result)).toMatchObject({
+        blocked: false,
+        agentId: "stamity-reviewer",
+        reasonCode: "CATEGORY_DENIED",
+      });
+    },
+  );
+
+  it.each(["cursor", "codex", "copilot"] as const)(
+    "does not invent a role verdict for %s documented identity-free payloads",
+    async (tool) => {
+      const guard = await placeGuardFor(tool);
+      const result = run(guard, JSON.stringify({ tool_name: "Edit", tool_input: {} }));
+      expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
+    },
+  );
 
   it("leaves callers outside the generated namespace alone", async () => {
     const guard = await placeGuardFor("claude");

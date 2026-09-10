@@ -179,6 +179,20 @@ Body sections, in order:
 7. **Concerns** — compact debt register. One row per item: claim, `file:line`
    evidence, impact, disposition. An item with no evidence gets no row.
 
+### Authoring checklist and change history
+
+Before returning a draft, the author checks each requirement for a named actor or
+subject, observable outcome, boundary/error case, acceptance proof and source/decision
+pointer. A judgment criterion names its deciding role. Compare its meaning with the
+plan unit in both directions; an incompatible reading becomes `[NEEDS CLARIFICATION]`
+and a concrete clarification, even when every ID resolves. Use the structural helper
+and semantic coverage review in `/st-plan` for changes with a persisted plan.
+
+The dated archive is the existing plan's `stamp`, its requirement delta, the run record
+and git history. At merge, record the date, resulting commit, affected IDs and plan path
+in the run record. Keep retired requirement IDs with their successor pointers. Do not
+copy current truth into a second archive tree or rewrite a converged spec to stamp it.
+
 ### Typed reference pointers
 
 | Pointer | Target | Rule |

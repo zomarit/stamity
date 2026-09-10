@@ -129,7 +129,7 @@ Then each client gets what it cannot read without help. The short version:
 |---|---|---|---|---|
 | Claude Code | managed import block in `CLAUDE.md` | `.claude/commands/` — `/st-<id>` | `.claude/settings.json` | copied to `.claude/skills/` |
 | Cursor | `AGENTS.md`, read natively | `.cursor/skills/` | `.cursor/hooks.json` | read from `.agents/skills/` |
-| Copilot | `AGENTS.md`, read natively | `.github/prompts/` — `/st-<id>` | none emitted | read from `.agents/skills/` |
+| Copilot | `AGENTS.md`, read natively | `.github/prompts/` — `/st-<id>` | `.github/hooks/stamity.json` | read from `.agents/skills/` |
 | Codex | `AGENTS.md`, read natively | none — no repo-level command home | `.codex/hooks.json` | read from `.agents/skills/` |
 
 Agents, rules and MCP documents land per client too, each in that client's own dialect.
@@ -147,17 +147,15 @@ of what is not done. It never ends on a claim.
 How you reach it depends on the client, and init prints the right line for yours:
 
 - **Claude Code** — type `/st-onboard`.
-- **Cursor** — ask in plain words: run the st-onboard workflow from `.agents/skills/`.
+- **Cursor** — type `/st-onboard`.
 - **Copilot** — in chat: `@workspace run the st-onboard workflow`.
-- **Codex** — ask in plain words: run the st-onboard workflow from `.agents/skills/`.
+- **Codex** — type `$st-onboard`.
 
-Cursor, Copilot and Codex get a plain-words line rather than a slash command because
-`st-onboard` reaches them only as the `.agents/skills/` projection, and no emitted file on
-those clients answers a `/st-onboard`: Cursor's `.cursor/skills/` holds the nine touchpoint
-command bodies alone — those are its `/st-<id>` — Copilot's `/st-<id>` are prompt files,
-and Codex has no repo-level command home. Only Claude Code takes a native copy of the
-skill, in `.claude/skills/`, where it is `/st-onboard`. Asking for it by name reaches a
-file that is genuinely on disk.
+Cursor and Codex discover skills in `.agents/skills/` and support their native
+invocation syntax from that directory. Copilot's named workflow request reaches the
+same projection. Claude Code receives its native copy under `.claude/skills/`.
+The nine touchpoint command names remain unchanged; Codex still has no emitted
+project command directory, so its charter lists the available workflow outcomes.
 
 ## The nine verbs
 
@@ -202,6 +200,15 @@ and the engine's output disagree — a managed file was hand-edited, a generated
 deleted, a pack's content no longer matches what was installed. A failing probe or any
 drift exits 1; warnings alone exit 0, so it is usable as a CI step unchanged.
 
+For a missing generated file, run `stamity sync`, then `stamity check` again. If you
+hand-edited managed content, preserve the edits through the documented
+[override path](customization.md) before syncing, and inspect any reported collision.
+An `unknown` verification gate needs the project's actual command configured and
+redetected; do not invent a command or run the literal word `unknown`.
+
+If the onboarding clock expires after a touched-test pass, that is partial evidence.
+Report `Not done:` until every declared test, lint and typecheck gate exits 0.
+
 Row by row, and what each remedy means: [troubleshooting](troubleshooting.md).
 
 ## Where state lives
@@ -227,7 +234,7 @@ Commit it. The manifest is the provenance record, and a teammate who clones the
 repository gets the same setup without re-running init. Everything init writes outside
 that directory commits for the same reason — `AGENTS.md`, `.agents/`,
 the managed block in `CLAUDE.md`, the client trees `.claude/`, `.cursor/`, `.github/`
-(agents, instructions, prompts and the `copilot-setup-steps.yml` workflow) and `.codex/`,
+(agents, instructions, prompts, hooks and the `copilot-setup-steps.yml` workflow) and `.codex/`,
 and the MCP documents `.mcp.json`, `.cursor/mcp.json` and `.vscode/mcp.json` when servers
 are selected — because that is what makes the clone arrive with working commands and
 skills already on disk, and because generated content earns no exemption from review: it

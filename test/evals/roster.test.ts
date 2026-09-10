@@ -1,6 +1,6 @@
 // The case-index gate: every roster row is derived, not typed.
 //
-// `SET-v4.md`'s case index opens by saying "Every row below is derived from the case
+// `SET-v5.md`'s case index opens by saying "Every row below is derived from the case
 // files rather than maintained by hand", and until this suite existed nothing derived
 // it. The coverage gate reads only the source→artifact mapping and the locator gate
 // only the quoted blocks, so a row's `B / A` counts, its pinned claim and its source
@@ -73,7 +73,7 @@ const cases = caseFiles();
 const rows = rosterRows();
 const byId = new Map(rows.map((row) => [row.id, row]));
 
-describe("SET-v4 case index — the derivation is not vacuous", () => {
+describe("SET-v5 case index — the derivation is not vacuous", () => {
   it("parses one row per case file, and no others", () => {
     expect(rows.length, `${SET_FILE}: the case-index parser matched no rows`).toBe(cases.length);
     expect(byId.size, `${SET_FILE}: duplicate case ids in the case index`).toBe(rows.length);
@@ -99,7 +99,7 @@ describe("SET-v4 case index — the derivation is not vacuous", () => {
 for (const file of cases) {
   const row = byId.get(file.basename);
   if (!row) continue;
-  describe(`SET-v4 case-index row ${file.basename}`, () => {
+  describe(`SET-v5 case-index row ${file.basename}`, () => {
     it("states the B / A counts the case file carries", () => {
       const derived = `${criteriaCount(file, "Binding")} / ${criteriaCount(file, "Advisory")}`;
       expect(

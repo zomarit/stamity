@@ -1,6 +1,6 @@
 {
   "name": "@zomarit/stamity",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Generates a tool-agnostic agentic coding setup — charter, commands, agents, skills, rules, hooks, MCP wiring — for Claude Code, Cursor, GitHub Copilot and Codex from one canonical source.",
   "keywords": [
     "agentic",
@@ -32,7 +32,10 @@
     "st": "./dist/cli.js"
   },
   "exports": {
-    ".": "./dist/index.js",
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -52,6 +55,8 @@
     "check": "npm run gate && npm run typecheck && npm run lint && npm run test && npm run build && npm run knip"
   },
   "dependencies": {
+    "@sigstore/rekor-types": "5.0.0",
+    "@types/make-fetch-happen": "10.0.4",
     "commander": "^15.0.0",
     "p-limit": "^7.3.1",
     "proper-lockfile": "^4.1.2",
@@ -75,5 +80,6 @@
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
-  }
+  },
+  "types": "./dist/types/index.d.ts"
 }

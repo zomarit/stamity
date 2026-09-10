@@ -80,7 +80,7 @@ describe("verificationCommandsFor — the four-manager matrix", () => {
     }
   });
 
-  it("gives an unrecognised language on package-manager evidence the Node scripts, minus the type check", () => {
+  it("honors every explicitly declared Node gate even when its language is unrecognised", () => {
     for (const { name, run } of MANAGERS) {
       const commands = verificationCommandsFor(
         detection({
@@ -90,13 +90,14 @@ describe("verificationCommandsFor — the four-manager matrix", () => {
         }),
       );
 
-      // The scripts are named because the repo declares them; the type check is
-      // NOT, because nothing identified a typed language. A `typecheck` script
-      // can exist in a repo the engine cannot call typed.
+      // REQ-FINISH-004: an explicit typecheck script is evidence of a required
+      // gate even without a typed-language classification. The former assertion
+      // omitted a user-defined check, reproducing the fresh-JS onboarding defect.
       expect(commands, name).toEqual({
         test: `${run} test`,
         lint: `${run} lint`,
-        all: `${run} lint && ${run} test`,
+        typecheck: `${run} typecheck`,
+        all: `${run} lint && ${run} typecheck && ${run} test`,
       });
     }
   });
@@ -226,7 +227,7 @@ describe("verificationCommandsFor — the type-check gate", () => {
     expect(commands.all).toBe("npm run lint && npm run test");
   });
 
-  it("never hands a plain-JS repo a TypeScript type check", () => {
+  it("honors a JS repository typecheck script without inventing a compiler fallback", () => {
     const declared = verificationCommandsFor(
       detection({ languages: ["javascript"], packageScripts: ["test", "lint", "typecheck"] }),
     );
@@ -234,9 +235,10 @@ describe("verificationCommandsFor — the type-check gate", () => {
       detection({ languages: ["javascript"], packageScripts: [], linters: ["eslint"] }),
     );
 
-    // JS has no separate type check, so it reports its static-analysis pass —
-    // the linter — exactly as every other such stack does.
-    expect(declared.typecheck).toBe("npm run lint");
+    // REQ-FINISH-004: explicit project checks now take precedence over the
+    // language fallback; JS without a typecheck script still uses its linter.
+    expect(declared.typecheck).toBe("npm run typecheck");
+    expect(declared.all).toBe("npm run lint && npm run typecheck && npm run test");
     expect(undeclared.typecheck).toBe("npx --no eslint .");
     for (const commands of [declared, undeclared]) {
       expect(JSON.stringify(commands)).not.toContain("tsc");

@@ -94,7 +94,7 @@ describe("CLIENT_HOOK_GUARANTEES", () => {
     { tool: "claude", failMode: "fail-closed", blockingExitCode: 2 },
     { tool: "codex", failMode: "fail-closed", blockingExitCode: 2 },
     { tool: "cursor", failMode: "opt-in-fail-closed", blockingExitCode: 2 },
-    { tool: "copilot", failMode: "fail-open", blockingExitCode: null },
+    { tool: "copilot", failMode: "fail-closed", blockingExitCode: 2 },
   ])("states $tool as $failMode", ({ tool, failMode, blockingExitCode }) => {
     const row = CLIENT_HOOK_GUARANTEES.find((entry) => entry.tool === tool);
     expect(row).toBeDefined();
@@ -155,10 +155,10 @@ describe("CLIENT_EXTENSION_EVENTS", () => {
     }
   });
 
-  it("claims an extension only on the client that fires it", () => {
-    // A row for a client with no such event is a gate an adapter would emit and
-    // never fire — the guarantee-honesty failure the tables here exist to
-    // prevent. One client publishes these three; the rest get the prose twin.
+  it("keeps the shared extension table scoped to the Claude integration", () => {
+    // 2026-09-10 native-contract reconciliation: these shared rows describe the
+    // Claude integration. Other clients can publish lifecycle events without
+    // this adapter wiring the work-review gate; they retain its prose twin.
     const claiming = new Set(CLIENT_EXTENSION_EVENTS.map((row) => row.tool));
 
     expect([...claiming]).toEqual(["claude"]);
@@ -193,7 +193,14 @@ describe("CLIENT_EXTENSION_EVENTS", () => {
     // The narrowed claim keeps its reason — the table is shared vocabulary, so a row lands
     // here when a consumer outside the declaring adapter reads it.
     expect(prose).toMatch(/the table's job is shared vocabulary, not a census/i);
-    expect(prose).toMatch(/not a claim that the other clients fire no extension events/i);
+    // 2026-09-10: event availability and an implemented verdict protocol are
+    // separate claims. Preserve both the integration boundary and disclosure
+    // that Copilot publishes subagentStop, without inventing another gate.
+    expect(prose).toMatch(/shared work-review gate is currently wired only for Claude/i);
+    expect(prose).toContain("Copilot's subagentStop");
+    expect(prose).toMatch(/event availability alone does not establish the verdict payload and decision behavior/i);
+    expect(prose).toMatch(/adapters retain the prompt-carried review ladder until that integration is implemented and verified/i);
+    expect(prose).toMatch(/this table does not claim those events are absent/i);
   });
 
   it("cites where each row was read, with an access date", () => {

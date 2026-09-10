@@ -343,6 +343,7 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/mcp/emit.ts": { unit: "p1-35", wave: 4 },
   "src/manifest/mcpFilter.ts": { unit: "p1-35", wave: 4 },
   "src/hooks/scripts.ts": { unit: "p1-36", wave: 4 },
+  "src/hooks/portableRunner.ts": { unit: "finish-client-hooks", wave: 4 },
   // The charter renderer reads the corpus (wave-3 charter loader) and the
   // wave-2 substitution/monorepo primitives — the bottom of the emission core.
   "src/emit/agentsMd.ts": { unit: "p4-u01", wave: 4 },
@@ -411,6 +412,8 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // the risk — the type edge is exempt from the cycle check, the runtime edge
   // runs one way, and a runtime import added in the other direction fails there.
   "src/pack/sigstoreVerifier.ts": { unit: "p5-trust-ladder", wave: 6 },
+  // Author signing consumes the existing wave-6 trust/verifier contract.
+  "src/pack/sign.ts": { unit: "finish-pack-signing", wave: 7 },
   "src/pack/orgPolicy.ts": { unit: "p5-org-policy", wave: 6 },
   // wave 7 — pack-install leaves over the trust ladder
   "src/pack/receipt.ts": { unit: "p5-install-pipeline", wave: 7 },

@@ -1,4 +1,6 @@
 ---
+license: MIT
+compatibility: Requires a supported coding client, repository access, and the project verification tools.
 id: learn
 type: skill
 description: "Records one verified, repo-specific finding into `.stamity/learnings/` through the `stamity learn capture` write path, applying the qualification bar, the summary standard, and a confidence rating. Triggers after a surprising failure is understood, when reading code reveals a constraint nobody wrote down, or when someone asks to save what this repository just taught them."

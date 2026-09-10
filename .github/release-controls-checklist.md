@@ -168,16 +168,24 @@ regenerate its kickoff prompt — so the record never trails the registry. (Adde
 day the record was found two releases stale.)
 
 A second line rides the same cut and lands *before* the tag rather than after it: the full eval set
-runs per `evals/SET-v4.md`, and the release carries its run artifact under `evals/runs/`. The corpus
+runs per `evals/SET-v5.md`, and the release carries its run artifact under `evals/runs/`. The corpus
 is model-executed prose, so a version cut with no run behind it ships behaviour nobody measured — no
 artifact, no tag, and a release without one is blocked by this checklist rather than by anyone's
 memory. (Added 2026-09-01, with the set; repointed to `SET-v3.md` on 2026-09-02, and to
-`SET-v4.md` on 2026-09-04.)
+`SET-v4.md` on 2026-09-04, and to `SET-v5.md` on 2026-09-10.)
 
 Name the model profile from `evals/MODEL-PROFILES-v1.md` before dispatch; the existing
 Claude profile remains the default. The artifact records the selected pair, rubric,
 reasoning/decoding and harness controls, with calibration for that configuration. A Codex
 profile's result starts a separate baseline and cannot be presented as the Claude run.
+
+The current full release run covers all 78 v5 cases, three admitted samples each.
+For a selected Codex profile, the manual stateless transport is documented in
+`evals/README.md`; fresh provider isolation/model/effort evidence and every retained
+calibration fixture must pass before scores are admitted. A blocked preflight, missing
+sample, calibration mismatch or red metric is not release evidence. Mock harness tests
+and prior release exceptions do not waive this gate; current human QA and platform
+approval still apply separately.
 
 A third line rides the same cut and lands *before* the tag as well: confirm the repository's own
 public metadata is current — the GitHub repository description and topics still describe what this

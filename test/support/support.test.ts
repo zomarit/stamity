@@ -558,6 +558,9 @@ describe("build size budgets", () => {
 
   it("sorts each emitted path into the half it belongs to", () => {
     expect(classifyDistEntry("cli.js")).toBe("logic");
+    expect(classifyDistEntry("types/index.d.ts")).toBe("logic");
+    expect(classifyDistEntry("types/shared.d.mts")).toBe("logic");
+    expect(classifyDistEntry("types/shared.d.cts")).toBe("logic");
     expect(classifyDistEntry("content/agents/a.md")).toBe("corpus");
     expect(classifyDistEntry("packs/ops/pack.json")).toBe("corpus");
     // A sourcemap counts against NEITHER budget: it is not emitted, and one that

@@ -33,6 +33,9 @@ elsewhere are reported as a count, not as a failure of this change.
 **`spec-requirement-coverage`** — behavior changes trace to a requirement id.
 How: cross the behavior-changing surfaces of the change against the `REQ-` ids
 named in the change, its tests, and its spec delta.
+For a persisted plan, run `scripts/spec-plan-coverage.mjs` from the verify skill
+with the plan and relevant specs; include its missing/dangling/duplicate findings.
+Its structural result leaves semantic review required.
 Threshold: every behavior-changing surface names at least one requirement id, or
 is recorded as an explicit out-of-spec change with its reason.
 

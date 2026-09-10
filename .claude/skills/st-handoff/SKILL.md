@@ -1,6 +1,8 @@
 ---
 description: Carries mid-work state across a session or tool boundary through five modes — prepare, resume, list, complete, prune — writing and reading `.stamity/handoffs/` with integrity, expiry, and git-drift validation. Triggers when a session ends mid-task, when work moves to another client, when context pressure builds, or when a saved handoff should be picked up, listed, closed, or swept.
 name: st-handoff
+license: MIT
+compatibility: Requires a supported coding client, repository access, and the project verification tools.
 metadata:
   id: handoff
   type: skill

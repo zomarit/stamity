@@ -259,8 +259,10 @@ describe("the ladder table shipped in the work command", () => {
     // resolvers, so the clause can neither drift back to the stronger claim nor
     // outlive the behaviour it describes.
     expect(prose).toMatch(
-      /the\s+key is left out rather than filled with a guess, and the client's own\s+default applies/,
+      /leaves selection to the client's own default/,
     );
+    expect(prose).toMatch(/check effective dispatch\s+identity/);
+    expect(prose).toMatch(/unresolved assignment/);
     for (const tool of TOOLS) {
       // The very first row of the table this paragraph introduces: no client
       // publishes a name for the top class, so with no pin it resolves nowhere

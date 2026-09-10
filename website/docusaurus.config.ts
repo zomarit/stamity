@@ -144,7 +144,7 @@ const config: Config = {
           // The repository's docs directory, read in place. The only narrowing is the `exclude`
           // below: a page added anywhere else under `docs/` appears without editing this file.
           path: '../docs',
-          // `docs/specs/` holds three engineering design documents for behaviour that is partly
+          // `docs/specs/` holds engineering design documents for behaviour that is partly
           // unbuilt. They are written for whoever implements the remainder, not for a reader of
           // the product documentation, and a published route would read as a description of what
           // ships. They stay in the tree, under review like any other file, and off the routes.

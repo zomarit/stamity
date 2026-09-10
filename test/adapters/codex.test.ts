@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   CODEX_AGENTS_DIR,
@@ -22,8 +21,7 @@ import {
   type EmissionContext,
 } from "../../src/emit/planner.ts";
 import type { CoreHooksPlan, PlannedHookScript } from "../../src/emit/hooksInfra.ts";
-import { CLAUDE_EVENT_NAMES, type HookInterchange } from "../../src/hooks/model.ts";
-import { buildPreToolUseGuardScript } from "../../src/hooks/scripts.ts";
+import { type HookInterchange } from "../../src/hooks/model.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
 import { emitCodexToml } from "../../src/mcp/emit.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
@@ -211,8 +209,7 @@ function ctxOf(options: CtxOptions): EmissionContext {
 const byPath = (rows: readonly AdapterOutput[]): Map<string, AdapterOutput> =>
   new Map(rows.map((row) => [row.path, row]));
 
-const sha256 = (content: string): string =>
-  createHash("sha256").update(content, "utf8").digest("hex");
+
 
 /** A synthetic catalog rule; `frontmatter.globs` is where anchoring reads from. */
 function ruleItem(id: string, options: RuleOptions = {}): CatalogItem {
@@ -304,140 +301,31 @@ function bulkyRule(id: string, options: RuleOptions = {}): CatalogItem {
 
 // ── 1. Hook configuration ────────────────────────────────────────
 
-describe("hooks.json — interchange shape plus trust-by-hash", () => {
-  it("renames canonical events to the interchange's PascalCase names, keeping exec-form argv", async () => {
-    const ctx = ctxOf({ contentRoot: await seedCorpus() });
-    const core = await buildCoreEmissionPlan(ctx);
-
-    const document = JSON.parse(buildHooksJson(core)) as {
-      hooks: Record<string, { matcher?: string; hooks: { type: string; command: string[] }[] }[]>;
-      stamity: Record<string, unknown>;
-    };
-
-    // Canonical order, canonical spelling: every key is a CLAUDE_EVENT_NAMES value.
+describe("hooks.json — native command strings and trust controls", () => {
+  it("registers canonical events through a repository-root launcher without unsupported trust fields", async () => {
+    const core = await buildCoreEmissionPlan(ctxOf({ contentRoot: await seedCorpus() }));
+    const document = JSON.parse(buildHooksJson(core));
     expect(Object.keys(document.hooks)).toEqual(["SessionStart", "PreToolUse"]);
-    for (const event of Object.keys(document.hooks)) {
-      expect(Object.values(CLAUDE_EVENT_NAMES)).toContain(event);
-    }
-
-    // The two session-start scripts share one matcher-less group; the guard is its own event.
-    expect(document.hooks.SessionStart).toHaveLength(1);
-    expect(document.hooks.SessionStart![0]!.hooks).toHaveLength(2);
-    expect(document.hooks.PreToolUse![0]!.hooks).toHaveLength(1);
-
-    for (const groups of Object.values(document.hooks)) {
+    expect(document.description).toContain("/hooks");
+    expect(document).not.toHaveProperty("stamity");
+    for (const groups of Object.values(document.hooks) as { hooks: { command: string; commandWindows: string }[] }[][]) {
       for (const entry of groups.flatMap((group) => group.hooks)) {
-        expect(entry.type).toBe("command");
-        // argv, never a shell line — the trust posture the core plan states.
-        expect(Array.isArray(entry.command)).toBe(true);
-        expect(entry.command[0]).toBe("node");
+        expect(entry.command).toContain("process.cwd()");
+        expect(entry.commandWindows).toContain("process.cwd()");
+        expect(entry).not.toHaveProperty("sha256");
       }
     }
-
-    // Guarantee honesty travels with the configuration it governs.
-    expect(document.stamity).toMatchObject({
-      interchange: "claude-shape",
-      failMode: "fail-closed",
-      blockingExitCode: 2,
-    });
-    expect(String(document.stamity.guarantee)).toContain("exit-2");
   });
-
-  it("carries a sha256 over the exact script bytes the same plan emits, for every codex script", async () => {
-    const ctx = ctxOf({ contentRoot: await seedCorpus() });
-    const core = await buildCoreEmissionPlan(ctx);
-
-    const document = JSON.parse(buildHooksJson(core)) as {
-      hooks: Record<string, { hooks: { command: string[]; sha256?: string }[] }[]>;
-    };
-    const entries = Object.values(document.hooks).flatMap((groups) =>
-      groups.flatMap((group) => group.hooks),
-    );
-    expect(entries).toHaveLength(3);
-
-    for (const entry of entries) {
-      const script = core.hooks.scripts.find(
-        (planned) => planned.tool === "codex" && planned.path === entry.command[1],
-      );
-      expect(script, entry.command[1]).toBeDefined();
-      // Recomputed here from the plan's own bytes: a digest taken from anything
-      // else would pin a file this run is not writing.
-      expect(entry.sha256).toBe(sha256(script!.content));
-    }
-
-    // Exactly the scripts the core planned FOR THIS TOOL — no more, and none
-    // missing. A digest for another client's copy would vouch for bytes this
-    // configuration never runs.
-    const digested = entries.map((entry) => entry.command[1]).toSorted();
-    const plannedForCodex = core.hooks.scripts
-      .filter((script) => script.tool === "codex")
-      .map((script) => script.path)
-      .toSorted();
-    expect(digested).toEqual(plannedForCodex);
-  });
-
-  it("locates the digest by argv scan, so a command that grows a flag keeps its trust hash", () => {
-    const script = guardFor("../../agent-tool-policies.json");
-    const document = JSON.parse(
-      buildHooksJson(
-        coreWithHooks(
-          hooksPlan(
-            [script],
-            [
-              {
-                event: "pre_tool_use",
-                command: ["node", "--enable-source-maps", script.path, "--strict"],
-              },
-            ],
-          ),
-        ),
-      ),
-    ) as { hooks: Record<string, { hooks: { sha256?: string }[] }[]> };
-
-    // Trust must not hang on the interpreter-then-script argv SHAPE the core
-    // builds today: a digest that vanished when a flag appeared would leave the
-    // hook running with nothing vouching for its bytes, and would do it without
-    // a diagnostic.
-    expect(document.hooks.PreToolUse![0]!.hooks[0]!.sha256).toBe(sha256(script.content));
-  });
-
-  it("re-hashes when the guard's baked policy path changes, and leaves user hooks unhashed", () => {
-    const userRow: HookInterchange = { event: "stop", command: ["./scripts/notify.sh"] };
-
-    const digestFor = (policiesJsonPath: string): string => {
-      const script = guardFor(policiesJsonPath);
-      const document = JSON.parse(
-        buildHooksJson(
-          coreWithHooks(hooksPlan([script], [{ event: "pre_tool_use", command: ["node", script.path] }, userRow])),
-        ),
-      ) as { hooks: Record<string, { hooks: { command: string[]; sha256?: string }[] }[]> };
-
-      const stop = document.hooks.Stop![0]!.hooks[0]!;
-      // A user hook is wired verbatim and vouched for by nobody: no digest.
-      expect(stop.command).toEqual(["./scripts/notify.sh"]);
-      expect(stop.sha256).toBeUndefined();
-
-      const guard = document.hooks.PreToolUse![0]!.hooks[0]!;
-      expect(guard.sha256).toBe(sha256(script.content));
-      return guard.sha256!;
-    };
-
-    // Substituting the policy path changes the guard bytes, so the digest must
-    // move with them — a stale pin is exactly what trust-by-hash must not allow.
-    expect(digestFor("../../agent-tool-policies.json")).not.toBe(
-      digestFor("../../elsewhere/agent-tool-policies.json"),
-    );
+  it("preserves user argv, matcher and millisecond timeout behind the native seconds request", () => {
+    const row: HookInterchange = { event: "pre_tool_use", command: ["node", "--enable-source-maps", "scripts/with space.mjs", "$(literal)"], matcher: "Bash", timeoutMs: 1501 };
+    const document = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [row]))));
+    const group = document.hooks.PreToolUse[0];
+    expect(group.matcher).toBe("Bash");
+    const entry = group.hooks[0];
+    expect(entry.timeout).toBe(2);
+    expect(JSON.parse(Buffer.from(entry.command.split(" ").at(-1), "base64url").toString())).toEqual(row);
   });
 });
-
-/** The guard script as the core plan places it for codex, for a given policy path. */
-function guardFor(policiesJsonPath: string): PlannedHookScript {
-  return {
-    path: ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs",
-    content: buildPreToolUseGuardScript({ policiesJsonPath, failMode: "fail-closed" }),
-    tool: "codex",
-  };
-}
 
 /** A hooks plan carrying just the rows a hook-config test needs. */
 function hooksPlan(scripts: PlannedHookScript[], rows: HookInterchange[]): CoreHooksPlan {
@@ -495,19 +383,20 @@ describe("subagent TOML", () => {
         '# stamity — Codex subagent "stamity-reviewer". Generated file: regenerate rather than',
         "# editing it; local edits are overwritten.",
         "#",
-        "# Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-08-17).",
-        "# PROVISIONAL — Codex documents no per-agent tool allowlist, so `tools` carries the",
-        "# placeholder comma-list dialect and `sandbox_mode` is the primitive that binds.",
+        "# Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-09-10).",
+        `# Stamity role grant: ${toolsValue}. No native tools key is documented.`,
+        "# sandbox_mode binds the filesystem boundary; category restrictions remain prompt-level.",
         "",
         'name = "stamity-reviewer"',
         'description = "Reviews a change set and returns a verdict."',
-        `tools = "${toolsValue}"`,
         'sandbox_mode = "read-only"',
         'model_reasoning_effort = "high"',
         'developer_instructions = """',
         "# reviewer",
         "",
         "Read the diff.",
+        "",
+        `Role tool policy: only use tools in these categories: ${grant.allow.join(", ")}. If work needs another category, return that dependency to the parent. Native sandbox and approval controls still apply.`,
         '"""',
         "",
       ].join("\n"),
@@ -527,7 +416,7 @@ describe("subagent TOML", () => {
     expect(grant.source).toBe("none");
 
     const toml = buildAgentToml(stray, grant);
-    expect(toml).toContain('tools = ""');
+    expect(toml).not.toContain("\ntools = ");
     expect(toml).toContain('sandbox_mode = "read-only"');
     // "No resolvable grant", not "no policy row": a pack agent legitimately has
     // no roster row and still resolves one from its own capabilities.
@@ -551,7 +440,6 @@ describe("subagent TOML", () => {
     expect(keyOrder).toEqual([
       "name",
       "description",
-      "tools",
       "sandbox_mode",
       "model",
       "model_reasoning_effort",
@@ -721,7 +609,7 @@ describe("grants reach this client through the shared resolver", () => {
     expect(grant.source).toBe("none");
 
     const toml = buildAgentToml(item, grant);
-    expect(toml).toContain('tools = ""');
+    expect(toml).not.toContain("\ntools = ");
     expect(toml).toContain('sandbox_mode = "read-only"');
     expect(toml).toContain("No resolvable grant");
   });
@@ -741,7 +629,7 @@ describe("grants reach this client through the shared resolver", () => {
 
     const toml = buildAgentToml(item, grant);
     expect(toml).toContain('sandbox_mode = "read-only"');
-    expect(toml).toContain('tools = ""');
+    expect(toml).not.toContain("\ntools = ");
   });
 
   it("emits the three specialists read-only, at the effort their declared class asks for", async () => {
@@ -1082,7 +970,7 @@ describe("state-directory globs anchor nowhere", () => {
     // The end state the finding was about: a fresh init has no engine-written
     // `AGENTS.md` inside `.stamity/`, so `stamity validate` reads the learnings
     // store and finds only learnings.
-    expect(rows.map((row) => row.path).filter((path) => path.startsWith(`${STATE_DIR}/`))).toEqual(
+    expect(rows.map((row) => row.path).filter((path) => path.startsWith(`${STATE_DIR}/`) && path.endsWith("AGENTS.md"))).toEqual(
       [],
     );
   });
@@ -1465,6 +1353,7 @@ describe("residue planning", () => {
       `${CODEX_AGENTS_DIR}/stamity-reviewer.toml`,
       CODEX_CONFIG_FILE,
       CODEX_HOOKS_FILE,
+      ".stamity/generated/hooks/codex/stamity-portable-hook.mjs",
       "AGENTS.md",
       "packages/a/AGENTS.md",
       "src/db/AGENTS.md",

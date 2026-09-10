@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // The dist size budget, as a standalone gate.
 //
-// The numbers and the classification are NOT redeclared here. Both halves — logic (every `.js`
-// tsdown emits at the top of dist/) and corpus (`dist/content` plus `dist/packs`, plus `dist/fork`
+// The numbers and the classification are NOT redeclared here. Both halves — logic (every JavaScript and declaration file
+// the build emits under dist/) and corpus (`dist/content` plus `dist/packs`, plus `dist/fork`
 // in a fork's build: the data the runtime reads) — come from `tsdown.config.mjs`, which is where
 // the build's own `build:done` hook reads them from too. One set of numbers, two callers: a budget
 // that a pull-request check and a build could disagree about would be worse than no check at all.

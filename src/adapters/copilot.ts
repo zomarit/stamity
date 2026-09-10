@@ -1,76 +1,14 @@
 /**
- * GitHub Copilot residue — the per-client half of a standards-first emission.
- *
- * The core already emitted everything portable: the `AGENTS.md` charter (which
- * Copilot reads natively, so this adapter emits NO entry-file mirror — no
- * `.github/copilot-instructions.md`, no second copy of the charter), the
- * vendor-neutral `.agents/skills/` projection Copilot reads directly, the hook
- * infrastructure, and the MCP substrate. Skills stay absent from this file for
- * that reason: the client reads the neutral tree, so a native second copy would
- * be duplicated context with no reader. What is left here is dialect and
- * placement only:
- *
- * 1. **Rules → `.github/instructions/*.instructions.md`.** Copilot scopes an
- *    instruction file with `applyTo:`, ONE glob string that carries several
- *    patterns comma-separated, so the rule's glob list is joined rather than
- *    emitted as a YAML sequence ({@link APPLY_TO_SEPARATOR} carries the
- *    separator decision and the evidence for it).
- * 2. **Agents → `.github/agents/*.agent.md`.** Repository-level custom agents,
- *    carrying `target: github-copilot`, a least-privilege `tools:` list, and a
- *    `model:` only where an operator pinned one.
- * 3. **Commands → `.github/prompts/*.prompt.md`.** The nine touchpoints, in
- *    the prompt-file shape Copilot's picker reads: a file emitted as
- *    `st-<id>.prompt.md` is invoked as `/st-<id>`, which is the route
- *    the charter's touchpoint list already tells the user about.
- * 4. **`.github/workflows/copilot-setup-steps.yml`.** The one workflow whose
- *    job name the coding agent runs before it starts work.
- * 5. **The MCP documents the core planned for this client**, placed verbatim
- *    at the paths the core chose — this adapter re-renders nothing.
- *
- * Four claims below are load-bearing enough to state rather than imply.
- *
- * **`tools:` is never omitted.** The reference is explicit that an omitted key
- * "defaults to all tools", MCP servers included, so omission is not a smaller
- * grant but the widest one. Every emitted agent therefore carries an explicit
- * list, and an agent whose grant resolves to nothing emits `[]` — Copilot's
- * documented "no tools" value and the same verdict the in-process check reaches
- * for an unrostered id (`src/tools/allowlist.ts`).
- *
- * **`model:` is pinned or absent, and effort is absent either way.** The agent
- * format reads a model ("If unset, inherits the default model"), so a class the
- * operator pinned an id for is expressible here and is emitted; with no pin the
- * key is dropped rather than filled with a name this engine chose, per the
- * ladder's never-invent rule (`src/roster/modelLadder.ts`). The EFFORT axis has
- * no carrier at all on this surface — the agent reference publishes no effort
- * key and no model-value parameter — which is a documented omission rather
- * than an oversight; the `effort-axis` cap row records it.
- *
- * **No hook configuration is emitted, and that is a decision.** The core hands
- * this adapter the same portable interchange rows as every other client
- * (`CoreEmissionPlan.hooks.interchangeFor("copilot")`), and v1 places none of
- * them: Copilot's hook surface never blocks — a hook that rejects, errors, or
- * times out is reported and the action proceeds (`CLIENT_HOOK_GUARANTEES`) —
- * and the VS Code deny-gate that could block a single tool call is still in
- * Preview ("Agent hooks are currently in Preview" —
- * code.visualstudio.com/docs/agent-customization/hooks, accessed 2026-08-17).
- * Emitting a config whose gate is advisory would ship the appearance of
- * enforcement; the honest surface is the guarantee row in
- * {@link COPILOT_DIALECT_FACTS}, which the generated capability matrix renders.
- * The revisit trigger is that gate reaching GA.
- *
- * **Two conversions are lossy, by the client's shape rather than by choice.**
- * Copilot has no description-pull activation mode, so a rule authored
- * `scope: agent-requested` emits `applyTo: "**"` and attaches everywhere; and
- * `precedence:` has no Copilot primitive at all, so rule ordering is simply not
- * expressible here. Both are declared in the dialect facts instead of being
- * silently absorbed.
- *
- * Planning is pure with respect to the working tree: the corpus is read, and
- * the repository root is probed for a lockfile so the setup workflow installs
- * with the manager the repo actually uses. Nothing is written, no clock is
- * read, and two plans over one repository produce identical bytes.
+ * Copilot residue: rules, agents, prompt files, setup workflow and repository hooks.
+ * Hook output translates from the portable schema. PreToolUse denies on explicit
+ * rejection and errors; timeouts remain fail-open. Identity-free role guards are
+ * telemetry. Other events retain their documented limitations.
+ * Current contract: https://docs.github.com/en/copilot/reference/hooks-reference
+ * (2026-09-10).
  */
 
+import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
+import { CLAUDE_EVENT_NAMES, type HookInterchange } from "../hooks/model.ts";
 import {
   buildContentIndex,
   emittedIdFor,
@@ -131,6 +69,8 @@ const AGENTS_DIR = ".github/agents";
  * and unmentioned, so the panel reads the directory from here rather than
  * spelling a second copy that can drift (`../cli/commands/init/panel.ts`).
  */
+export const COPILOT_HOOKS_PATH = ".github/hooks/stamity.json";
+
 export const COPILOT_PROMPTS_DIR = ".github/prompts";
 const PROMPTS_DIR = COPILOT_PROMPTS_DIR;
 
@@ -190,7 +130,7 @@ const NODE_LANGUAGES: ReadonlySet<string> = new Set(["javascript", "typescript"]
  * that verified only some of them would have to split the constant rather than
  * quietly re-stamp the rest.
  */
-const ACCESS_DATE = "2026-08-17";
+const ACCESS_DATE = "2026-09-10";
 
 // ── Dialect facts ────────────────────────────────────────────────
 
@@ -207,7 +147,7 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
   tool: TOOL,
   ruleShape:
     "`.github/instructions/<id>.instructions.md` with `applyTo:` — ONE glob string, patterns comma-separated, never a YAML list",
-  hooksConfigPath: null,
+  hooksConfigPath: COPILOT_HOOKS_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:
     "`.github/agents/<id>.agent.md` — frontmatter (`name`, `description`, `target: github-copilot`, `tools:` alias list, `model:` only under an operator pin) over a markdown prompt",
@@ -234,12 +174,12 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
       value:
         HOOK_GUARANTEE === undefined
           ? "undeclared"
-          : `${HOOK_GUARANTEE.failMode} — blocking exit code: ${HOOK_GUARANTEE.blockingExitCode ?? "none"}; no hook config emitted v1`,
+          : HOOK_GUARANTEE.notes,
     },
     {
       name: "deny-gate",
       value:
-        "VS Code PreToolUse `permissionDecision: \"deny\"` is Preview — emitted when it reaches GA",
+        "Repository hooks target Copilot CLI/cloud. preToolUse denies via native JSON or nonzero exit; timeouts fail-open. The core role guard has no calling-agent identity and remains telemetry.",
     },
     {
       name: "rule-activation",
@@ -298,9 +238,8 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
       url: "https://code.visualstudio.com/docs/copilot/customization/prompt-files",
       accessDate: ACCESS_DATE,
     },
-    // Hook status: "Agent hooks are currently in Preview." The deny outcome
-    // exists there and is why the row below names a revisit trigger.
-    { url: "https://code.visualstudio.com/docs/agent-customization/hooks", accessDate: ACCESS_DATE },
+    // Repository hook discovery, PascalCase matcher aliases and fail behavior.
+    { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-09-10" },
   ],
 };
 
@@ -338,6 +277,8 @@ export const copilotResiduePlanner: ResiduePlanner = {
       }
     });
 
+    rows.push({ path: COPILOT_HOOKS_PATH, content: buildCopilotHooksJson(core.hooks.interchangeFor(TOOL)), owner: owner("copilot-hooks", "infra") });
+    rows.push({ path: `.stamity/generated/hooks/copilot/${PORTABLE_RUNNER_FILE}`, content: buildPortableHookRunner("copilot"), owner: owner("copilot-portable-hook", "infra") });
     rows.push({
       path: COPILOT_SETUP_STEPS_PATH,
       content: buildSetupSteps(packageManager, ctx.manifest.detected?.languages ?? []),
@@ -347,7 +288,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
 
-    return { outputs: rows };
+    return { outputs: rows, warnings: ["hook fallback [copilot]: sessionStart output does not inject the learning/handoff index. Read .stamity/learnings/ and active handoffs manually. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
   },
 };
 
@@ -752,4 +693,17 @@ function bodyOf(rendered: string): string {
  */
 function yamlScalar(value: string): string {
   return JSON.stringify(value.replace(/\s*[\r\n]+\s*/g, " ").trim());
+}
+
+/** PascalCase selects canonical tool names and matcher aliases in Copilot. */
+export function buildCopilotHooksJson(rows: readonly HookInterchange[]): string {
+  const hooks: Record<string, object[]> = {};
+  for (const row of rows) {
+    (hooks[CLAUDE_EVENT_NAMES[row.event]] ??= []).push({
+      type: "command", command: portableHookCommand("copilot", row), cwd: ".",
+      ...(row.matcher === undefined ? {} : { matcher: row.matcher }),
+      ...(row.timeoutMs === undefined ? {} : { timeoutSec: Math.ceil(row.timeoutMs / 1000) }),
+    });
+  }
+  return `${JSON.stringify({ version: 1, hooks }, null, 2)}\n`;
 }

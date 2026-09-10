@@ -97,7 +97,10 @@ stale copy produces findings the gates disagree with.
   transcript, hook-gate outcome, session log. (2) A structured result file on disk. (3) A
   self-quoted completion marker, which is the fallback when no artifact exists. Each
   citation names the class it belongs to, so a class-3 claim is visibly weaker than a
-  class-1 one rather than reading identically.
+  class-1 one rather than reading identically. Every finding row, including
+  ledgered Minor rows, carries an evidence-basis field. When none of these
+  three classes fits, name the actual source, such as a directly read diff
+  hunk; do not upgrade that reading to a native artifact or a completed test.
 - **Verdict and confidence.** The verdict is one of `approve`, `request-changes`,
   `blocked`; confidence is high, medium, or low with its basis stated — direct evidence,
   inference, or unverified reading. An approval below the flow's confidence gate is

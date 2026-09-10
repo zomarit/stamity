@@ -236,7 +236,7 @@ const TAMPER_NOTICE_SCRIPT_FILE = "stamity-config-tamper-notice.mjs";
  * The whole citation set is stamped with the same date because they were
  * re-verified together.
  */
-const ACCESS_DATE = "2026-08-18";
+const ACCESS_DATE = "2026-09-10";
 
 // ── Permissions chain ────────────────────────────────────────────
 
@@ -312,7 +312,7 @@ export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
     {
       name: "entry-file-budget",
       value:
-        "~200-line CLAUDE.md working target; the bridge emits one managed block (import + skills pointer), leaving the budget to the user",
+        "~200-line CLAUDE.md working target; the bridge emits one managed import block, leaving the budget to the user",
     },
     { name: "permission-rows", value: String(CLAUDE_PERMISSION_ROWS.length) },
     {
@@ -484,31 +484,9 @@ function modelFrontmatter(item: CatalogItem, ctx: EmissionContext): string[] {
 
 // ── Builders ─────────────────────────────────────────────────────
 
-/**
- * The `CLAUDE.md` bridge: one managed block, stamped with the engine version,
- * holding the `@AGENTS.md` import and a pointer line locating the skills. The
- * row content IS the block — default-on, no opt-in conditional — and user prose
- * around it on disk is the merge engine's to preserve, not this planner's to
- * read.
- *
- * The pointer names {@link CLAUDE_SKILLS_DIR} — the directory this client
- * reads, not the vendor-neutral tree it cannot. That is the whole difference
- * the native copy buys: the pointer can now describe how the client actually
- * reaches a skill instead of disclaiming a load path, and a reader following
- * the first line gets the documented behaviour rather than a dead end. With no
- * native location declared, the pointer is dropped rather than aimed at a tree
- * this client does not read.
- */
+/** Import the charter once; the charter and native skill catalog provide discovery. */
 function buildClaudeMd(engineVersion: string): AdapterOutput {
-  const inner = [
-    `@${AGENTS_MD_FILE}`,
-    ...(CLAUDE_SKILLS_DIR === ""
-      ? []
-      : [
-          "",
-          `Skills for this setup are markdown procedures under \`${CLAUDE_SKILLS_DIR}/\`. Claude Code reads them from there: it loads one when the work matches its description, and you can invoke any of them directly by name — \`/st-onboard\`, for example.`,
-        ]),
-  ].join("\n");
+  const inner = `@${AGENTS_MD_FILE}`;
   return {
     path: CLAUDE_MD_PATH,
     content: wrapInManagedBlock(inner, CLAUDE_MD_PATH, engineVersion),

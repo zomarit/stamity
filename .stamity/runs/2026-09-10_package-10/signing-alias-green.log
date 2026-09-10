@@ -1,0 +1,8 @@
+
+ RUN  v5.0.0 /Users/denismasatovic/Projects/zomarit/stamity
+
+
+ Test Files  1 passed (1)
+      Tests  24 passed (24)
+   Start at  23:14:02
+   Duration  579ms (transform 44%, tests 42%, import 13%)

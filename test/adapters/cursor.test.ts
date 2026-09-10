@@ -791,10 +791,12 @@ describe("touchpoint commands", () => {
 
 interface HooksDocument {
   version: number;
-  hooks: Record<string, { command: string; matcher?: string; failClosed?: boolean }[]>;
+  hooks: Record<string, { command: string; matcher?: string; failClosed?: boolean; timeout?: number }[]>;
 }
 
 const parseHooks = (raw: string): HooksDocument => JSON.parse(raw) as HooksDocument;
+const childArgv = (command: string): string[] => JSON.parse(Buffer.from(command.split(" ").at(-1)!, "base64url").toString()).command as string[];
+const childCommand = (command: string): string => childArgv(command).join(" ");
 
 /**
  * Every agent-hook event this client documents, transcribed from
@@ -874,31 +876,14 @@ describe("`.cursor/hooks.json`", () => {
 
     // The three core scripts land on their renamed events.
     const sessionStart = doc.hooks[EVENT_RENAME.session_start] ?? [];
-    expect(sessionStart.map((entry) => entry.command)).toEqual([
+    expect(sessionStart.map((entry) => childCommand(entry.command))).toEqual([
       "node .stamity/generated/hooks/cursor/stamity-session-start.mjs",
       "node .stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs",
     ]);
     const preToolUse = doc.hooks[EVENT_RENAME.pre_tool_use] ?? [];
-    expect(preToolUse).toEqual([
-      {
-        command: `node ${PRE_TOOL_USE_GUARD_PATH}`,
-        // No `failClosed`, and its ABSENCE is what this row asserts.
-        //
-        // This assertion previously required the flag, on the reading that "the
-        // script exits with the blocking status". That is no longer what the
-        // emitter writes: this client's tool-call payload names no calling
-        // agent, so `planCoreHookScripts` generates the guard body as telemetry
-        // — `BLOCKING = false`, exit 0 on every path — and the next assertion
-        // reads that out of the emitted bytes rather than taking it on trust.
-        //
-        // The test is not weakened by dropping the flag; it is inverted onto the
-        // stronger claim. `failClosed` on a row that reaches no verdict
-        // advertises an enforcement point the bytes cannot reach, and its only
-        // residual reach would be a crashed record-keeper blocking a tool call.
-        // The blocking claim the suite still binds moved to the guards below and
-        // to authored rows (the two tests after this one).
-      },
-    ]);
+    expect(preToolUse).toHaveLength(1);
+    expect(childArgv(preToolUse[0]!.command)).toEqual(["node", PRE_TOOL_USE_GUARD_PATH]);
+    expect(preToolUse[0]!.failClosed).toBeUndefined();
     // Same fact from the other side: the config row and the script body agree
     // that nothing here blocks, so the pair cannot drift into disagreement.
     const guardBody = contentAt(plan, PRE_TOOL_USE_GUARD_PATH);
@@ -934,10 +919,10 @@ describe("`.cursor/hooks.json`", () => {
     // cannot reach a verdict on this client, and the gate event keeps its
     // meaning for a hook the repo wrote to decide: that hook reads whatever the
     // payload does carry, so its exit status is its own to mean.
-    expect(doc.hooks[EVENT_RENAME.pre_tool_use]).toEqual([
-      { command: `node ${PRE_TOOL_USE_GUARD_PATH}` },
-      { command: "node .stamity/hooks/gate.mjs", matcher: "Bash", failClosed: true },
-    ]);
+    const pre = doc.hooks[EVENT_RENAME.pre_tool_use]!;
+    expect(pre.map((entry) => childArgv(entry.command))).toEqual([["node", PRE_TOOL_USE_GUARD_PATH], ["node", ".stamity/hooks/gate.mjs"]]);
+    expect(pre[0]!.failClosed).toBeUndefined();
+    expect(pre[1]).toMatchObject({ matcher: "Bash", failClosed: true });
   });
 
   it("does not count the core pre-tool-use guard among the matrix's blocking emissions", async () => {
@@ -978,7 +963,7 @@ describe("`.cursor/hooks.json`", () => {
     const plan = await planFor(corpus);
     const doc = parseHooks(contentAt(plan, P.hooksConfig));
 
-    expect((doc.hooks[EVENT_RENAME.session_start] ?? []).map((entry) => entry.command)).toEqual([
+    expect((doc.hooks[EVENT_RENAME.session_start] ?? []).map((entry) => childCommand(entry.command))).toEqual([
       "node .stamity/generated/hooks/cursor/stamity-session-start.mjs",
       "node .stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs",
       "node .stamity/hooks/greet.mjs",
@@ -1002,7 +987,7 @@ describe("`.cursor/hooks.json`", () => {
     const doc = parseHooks(raw);
 
     expect(Object.keys(doc.hooks)).toContain("beforeSubmitPrompt");
-    expect((doc.hooks["beforeSubmitPrompt"] ?? []).map((entry) => entry.command)).toEqual([
+    expect((doc.hooks["beforeSubmitPrompt"] ?? []).map((entry) => childCommand(entry.command))).toEqual([
       "node .stamity/hooks/prompt.mjs",
     ]);
     // Not renamed twice, and not left behind: the config a client reads carries
@@ -1010,16 +995,15 @@ describe("`.cursor/hooks.json`", () => {
     expect(raw).not.toContain("userPromptSubmit");
   });
 
-  it("quotes an argv token that needs it and drops a timeout the dialect cannot carry", () => {
+  it("preserves spaced argv and converts the requested timeout to native seconds", () => {
     const rows: HookInterchange[] = [
       { event: "stop", command: ["node", ".stamity/hooks/my hook.mjs"], matcher: "git push", timeoutMs: 5000 },
     ];
     const doc = parseHooks(buildHooksJson(rows));
 
-    expect(doc.hooks[EVENT_RENAME.stop]).toEqual([
-      { command: "node '.stamity/hooks/my hook.mjs'", matcher: "git push" },
-    ]);
-    expect(JSON.stringify(doc)).not.toContain("5000");
+    const entry = doc.hooks[EVENT_RENAME.stop]![0]!;
+    expect(childArgv(entry.command)).toEqual(rows[0]!.command);
+    expect(entry).toMatchObject({ matcher: "git push", timeout: 5 });
   });
 
   it("emits the config, and both guards, with no rows to wire", async () => {

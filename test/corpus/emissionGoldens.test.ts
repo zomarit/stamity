@@ -15,6 +15,7 @@ import {
   type VerificationGateSet,
 } from "../../src/emit/substitution.ts";
 import { planCoreHookScripts } from "../../src/hooks/scripts.ts";
+import { buildPortableHookRunner } from "../../src/hooks/portableRunner.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import {
   AGENT_TOOL_POLICIES_FILE,
@@ -81,6 +82,18 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  *
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
+ *
+ *   - 2026-09-10, Package 10 client and authoring integration. The three
+ *     core script paths and portable event triple are unchanged. Codex's role
+ *     guard now declares BLOCKING=false; its header and the Cursor/Copilot
+ *     headers identify their documented identity-free payloads. Three new
+ *     full-byte portable-runner snapshots cover src/hooks/portableRunner.ts;
+ *     its shell-free child execution and native output/timeout translations
+ *     also have process fixtures. The work substitution moves only with the
+ *     canonical structural/semantic coverage, browser-skip and effective-model
+ *     clauses. Charter and test-runner substitution, catalog, rule companion
+ *     heads, policy document, session-start and tamper scripts are unchanged.
+ *     The sibling tree/residue refresh accounts for every projected dialect.
  *
  *   - 2026-09-09, the dev-group bump (vitest 4.1.10 -> 5.0.0 and its siblings).
  *     Nothing in this suite moved: its snapshot keys carry no interpolated
@@ -678,16 +691,13 @@ describe("emission goldens — hook scripts", () => {
    * Blocking posture per tool, held by hand so the emitted bytes are pinned by
    * something other than the code that produced them.
    *
-   * Two client facts decide a row, not one. `copilot` is `false` for the fail
-   * mode the guarantee ladder publishes — it never honours a hook exit status.
-   * `cursor` is `false` for the second, independent reason: its tool-call
-   * payload carries no agent identity, so the guard's scope test never matches
-   * and no refusal is ever reached to enforce. A body claiming otherwise
-   * advertises an enforcement point that returns early on every call it sees.
+   * TEST CHANGE: current Codex, Cursor and Copilot tool-call payloads carry no
+   * agent identity, so their core role guard is telemetry even where a native
+   * user hook can deny. Claude retains the identity-bearing exit-2 role gate.
    */
   const BLOCKING_BY_TOOL: Record<Tool, boolean> = {
     claude: true,
-    codex: true,
+    codex: false,
     cursor: false,
     copilot: false,
   };
@@ -719,16 +729,28 @@ describe("emission goldens — hook scripts", () => {
     }
   });
 
-  it("gives claude the exit-2 blocking path and copilot the reporting-only path", () => {
+  it("gives Claude the exit-2 role gate and identity-free clients explicit telemetry", () => {
     const claudeGuard = at(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, "claude"), 1);
     expect(claudeGuard.content).toContain("Blocking client: a refusal exits 2 and the action stops.");
     expect(claudeGuard.content).toContain("const BLOCK_EXIT = 2;");
     expect(claudeGuard.content).toContain("const BLOCKING = true;");
 
-    const copilotGuard = at(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, "copilot"), 1);
-    expect(copilotGuard.content).toContain(
-      "Reporting-only client: this client never blocks on a hook exit status,",
-    );
-    expect(copilotGuard.content).toContain("const BLOCKING = false;");
+    for (const tool of ["cursor", "copilot", "codex"] as const) {
+      const guard = at(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool), 1);
+      expect(guard.content).toContain("its hook payload carries no calling-agent");
+      expect(guard.content).toContain("this script does not enforce a role grant");
+      expect(guard.content).toContain("const BLOCKING = false;");
+    }
   });
+
+  // These new adapter launchers sit beside the three unchanged core paths.
+  // Golden their full bytes here, as promised by the cross-client exclusions.
+  it.each(["cursor", "copilot", "codex"] as const)(
+    "preserves the deterministic portable runner bytes for %s",
+    (tool) => {
+      const script = buildPortableHookRunner(tool);
+      expect(buildPortableHookRunner(tool)).toBe(script);
+      expect(script).toMatchSnapshot();
+    },
+  );
 });

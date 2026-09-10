@@ -861,7 +861,9 @@ process.stdout.write(render().join("\\n") + "\\n");
  * `agentId.startsWith(GOVERNED_PREFIX)` and a payload with no identity field
  * can never satisfy it.
  *
- * Cursor is the row. Its own adapter states the same fact from the other side:
+ * Cursor, Codex and Copilot document identity-free tool-call payloads (checked
+ * 2026-09-10). Agent identity belongs to separate subagent lifecycle events.
+ * Cursor’s adapter states the same fact from the other side:
  * `subagentStart` carries `subagent_type` and is "the only Cursor payload field"
  * that names an agent (`../adapters/cursor.ts`; cursor.com/docs/agent/hooks,
  * accessed 2026-08-17), so the tool-call events this guard rides carry none.
@@ -879,7 +881,7 @@ process.stdout.write(render().join("\\n") + "\\n");
  * deriving that posture from the fail mode alone gets Cursor wrong, and a fact
  * kept private is one every such caller has to restate by hand.
  */
-export const IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS: ReadonlySet<Tool> = new Set<Tool>(["cursor"]);
+export const IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS: ReadonlySet<Tool> = new Set<Tool>(["cursor", "codex", "copilot"]);
 
 export interface GuardScriptOptions {
   /**
@@ -892,10 +894,10 @@ export interface GuardScriptOptions {
   failMode: HookFailMode;
   /**
    * Whether the target client's pre-tool-use payload names the calling agent
-   * (see {@link IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS}). Defaults to `true` — the
-   * shape every documented payload but Cursor's carries — and a `false` here
-   * downgrades the body to telemetry, because a guard that cannot identify the
-   * caller cannot deny it.
+   * (see {@link IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS}). The API defaults to
+   * `true` for identity-bearing callers. Core planning explicitly passes
+   * `false` for Cursor, Codex and Copilot, whose documented payloads cannot
+   * identify the calling role; their guard therefore remains telemetry.
    */
   identityBearing?: boolean;
 }
@@ -959,11 +961,10 @@ export function buildPreToolUseGuardScript(opts: GuardScriptOptions): string {
               "is the client's own permission rules.",
             ]
           : [
-              "Telemetry only on this client, for two independent reasons. Its hook",
-              "payload carries no agent identity, so the scope test below can never",
-              "match and this guard reaches no verdict at all; and even a refusal it",
-              "did reach would not stop the call. The gate that binds here is the",
-              "client's own permission rules — this file is a record, not a control.",
+              "Telemetry only on this client: its hook payload carries no calling-agent",
+              "identity, so the role scope test cannot match a documented tool call.",
+              "Native permissions and the agent definition remain the role boundary;",
+              "this script does not enforce a role grant on identity-free payloads.",
             ]),
     ],
     [

@@ -4,6 +4,8 @@ type: skill
 description: "Guides the first real change in a repository this setup was just installed into — orients on the actual code, settles on one small change with the operator, runs it through the touchpoints the install shipped, and closes on a passing verification gate. Triggers right after `stamity init` finishes, when someone opens a freshly set-up repository and asks what to do next, or when a repository carries the setup but has no first proven change through it yet."
 tags: [planning]
 load: on-demand
+license: MIT
+compatibility: Requires a supported coding client, repository access, and the project verification tools.
 obsolete_when: clients walk a newcomer through a proven change on their own code at session start, leaving no guided first run to script
 ---
 
@@ -35,12 +37,13 @@ planned direction instead of quietly overrunning:
 | 2 Pick | 3 min | the candidate list narrows to one, offered rather than chosen from |
 | 3 Name the proof | 2 min | nothing — a change with no named proof is not a proven change |
 | 4 Change | 4 min | the lane narrows from `/st-work` to `/st-quick`: one file, one behavior |
-| 5 Prove | 3 min | the full gate narrows to `${STAMITY:VERIFY_GATE_TEST}` over the touched files |
+| 5 Prove | 3 min | nothing — every mandatory gate still runs, or the change is `Not done:` |
 | 6 Note | — | dropped first, always; it is the one optional phase |
 
 **The minimum proven change**: one file, one behavior, one test that fails
-without the edit and passes with it, and `${STAMITY:VERIFY_GATE_TEST}` green over
-the files it touched. Anything below that produced a tour, and the handback says
+without the edit and passes with it, and `${STAMITY:VERIFY_GATE_ALL}` green.
+Touched tests alone do not prove completion. Anything below that produced an
+incomplete walk, and the handback says
 so rather than calling it a proven change.
 
 **A repository too large to orient on in three minutes** narrows phase 1 to a
@@ -113,13 +116,16 @@ before it is visible in the gate.
 
 ## Phase 5 — Prove it
 
-Run `${STAMITY:VERIFY_GATE_ALL}`. Under clock pressure narrow to
-`${STAMITY:VERIFY_GATE_TEST}` over the touched files and name the gates that did
-not run — an unrun gate is reported as unrun, because silence reads as green.
+Run `${STAMITY:VERIFY_GATE_ALL}`. The timer may narrow the change before work
+starts or stop the walk with `Not done:`; it cannot omit mandatory gates.
+`${STAMITY:VERIFY_GATE_TEST}` over touched files may supply partial evidence,
+but missing lint, typecheck or tests
+keep the change incomplete. Name every gate not run and the command to resume.
 A single red static gate re-runs on its own, `${STAMITY:VERIFY_GATE_LINT}` or
 `${STAMITY:VERIFY_GATE_TYPECHECK}`, instead of the whole chain again.
 
-Green closes the walk: the first proven change is done. Red closes it just as
+Only every required gate exiting zero closes a proven change as done. A red or
+unrun gate closes the walk just as
 honestly — a `Not done:` list naming each open gap, quoting the failing gate
 output rather than summarising it.
 

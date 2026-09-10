@@ -112,9 +112,10 @@ npx @zomarit/stamity sync
 ```
 
 `config` edits state and never regenerates output — the `sync` is what writes the files.
-Note that some absences are correct rather than broken: Codex has no repository-level
-command home, and Copilot takes no hook configuration. [The capability matrix](capability-matrix.md)
-is the one home for which client gets what.
+Codex has no repository-level command home, so that absence is expected. Copilot CLI/cloud
+hooks are emitted at `.github/hooks/stamity.json`; a selected Copilot setup missing that file
+needs a sync. [The capability matrix](capability-matrix.md) states each client's supported
+surfaces and enforcement limits.
 
 ### `CONFIG_ERROR` naming a missing corpus
 

@@ -130,8 +130,9 @@ A release is built and published by `.github/workflows/release.yml`, and what a 
 check are properties of that file rather than of a maintainer's laptop:
 
 - **The job that builds does not hold the credential.** One job runs the build, the suite, the
-  leak gate and the packed-artifact smoke on the shipping commit; a second job holds the publish
-  credential, takes no checkout, and runs only npm, the GitHub CLI and three SHA-pinned actions (harden-runner, setup-node, download-artifact) against a tarball
+  leak gate and the packed-artifact smoke on the shipping commit; an isolated `apm-route` job
+  runs the third-party APM interpreter without publishing credentials or access to the tarball.
+  The `publish` job holds the publishing credential, takes no checkout, and runs only npm, the GitHub CLI and three SHA-pinned actions (harden-runner, setup-node, download-artifact) against a tarball
   whose SHA-256 it verifies against the first job's OUTPUT — a channel separate from the artifact
   under verification. A compromised build-time dependency runs in the job that has no credential.
 - **No stored npm token.** Publishing is `npm publish --provenance` over GitHub OIDC trusted
@@ -228,7 +229,9 @@ The documentation site under `website/` builds with Docusaurus, which reaches `i
 through its MDX loader. Two high-severity advisories describe denial of service through
 infinite loops in that package's ICNS, JXL and HEIF parsers, and **no fixed version exists**:
 both advisories publish no patched release, every published version including the newest is
-in range, the upstream project is archived, and no Docusaurus release moves off it. It is
+in range, the upstream project is archived, and no Docusaurus release moves off it. Rechecked
+2026-09-10: Docusaurus stable remains 3.10.2, with v4 GA still unavailable; both
+advisories still list no patched version ([dated primary sources](.github/release-egress.md)). It is
 accepted rather than fixed because the exposure does not reach anyone installing this
 package: `image-size` is a build-time dependency of the documentation site, absent from the
 published npm package entirely, and the only images it parses are files committed to this
@@ -238,13 +241,13 @@ attestation, which is a bar this package meets for its own artifacts and will no
 transitive one. **Re-open when** Docusaurus drops the dependency, an advisory publishes a
 patched version, or the site starts parsing images it did not author.
 
-Three gaps, tracked as work rather than accepted as risk:
+Implementation and remaining proofs, tracked separately from accepted risk:
 
-| Gap | Why it is deferred |
+| Work | Current boundary |
 |---|---|
-| Ship the author-side signing step | The verifier is armed and the payload is specified, but nothing in this package produces a bundle: signing a pack is a manual step against `src/pack/trust.ts::sigstoreSignedPayload`, so the rung is checkable and not yet exercised by anything published here |
+| Pack-author signing | `scripts/sign-pack.mjs` signs the existing payload, verifies the declared identity and writes the detached bundle atomically. See [the author workflow](docs/packs-and-trust.md). Local cryptographic fixtures substitute the external identity service; authenticated live signing remains a separate required proof. |
 | Write the standards mapping above | Needs version-pinned catalogue reads against a final client set |
-| Narrow the release runner's egress allowlists | The two jobs on the release path — `gates` and `publish` — block egress against a hand-written allowlist; the third job, the rehearsal-only `dry-run-summary`, runs no third-party code and writes only the step summary, so it carries no harden-runner step at all. The allowlist is a first pass reasoned from what each step contacts rather than from observed traffic — the wildcard covering the artifact hand-off between the two jobs especially — and the run insights from the first release are what narrow it |
+| Release egress | `gates`, `apm-route` and `publish` use fail-closed per-job policies. Artifact storage is limited to the current official GitHub account roster, supported by two observed runs; [endpoint evidence and proof boundaries](.github/release-egress.md) distinguish implementation, changed-job rehearsal and the final credential-bearing publish path. The rehearsal-only summary executes no third-party code. |
 
 A threat model over the emitted surfaces is a fourth item and is deliberately NOT on this
 list as "re-run a pass": no threat-model document exists to re-run, and the table above is a
