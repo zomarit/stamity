@@ -3,9 +3,11 @@
 # ARMING CONDITION. Both facts outside this file that a deploy depends on now hold: GitHub Pages
 # is enabled on this repository with "GitHub Actions" as its source, and `stamity.dev` — the
 # domain `website/static/CNAME` claims and `website/docusaurus.config.ts` declares as `url` — is
-# claimed and serves this site. Neither is a property of the checkout, so a fork or a repository
-# with Pages not enabled still fails at `actions/configure-pages`, which is where that failure
-# belongs. What did NOT change is that publishing stays a deliberate act: the deploy job is
+# claimed and serves this site. Neither is a property of the checkout. The deploy job therefore
+# checks GitHub's repository identity and visibility before receiving publication grants:
+# downstreams, including private copies retaining the canonical CNAME, cannot deploy here.
+# A canonical repository with Pages not enabled still fails at `actions/configure-pages`.
+# Publishing stays a deliberate act: the deploy job is
 # reachable from two arming paths and merging to `main` is neither of them — a `workflow_dispatch`
 # that explicitly sets `deploy` to true, and a Release run that completed successfully on a real
 # `v*` tag push (stated with the trigger below, enforced by the `if` on the deploy job). Every
@@ -148,7 +150,10 @@ jobs:
     # run succeeded AND was a real `v*` tag push. `workflow_run.event == 'push'` excludes the
     # dry-run rehearsals (dispatch-triggered), and the head_branch prefix excludes any non-tag
     # ref, so a red release or a rehearsal still ends at build-and-stop.
-    if: (github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    if: >-
+      github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' &&
+      ((github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v')))
     runs-on: ubuntu-latest
     # Download, package, publish. No install and no build, so this is generous already.
     timeout-minutes: 10

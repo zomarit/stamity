@@ -753,6 +753,84 @@ const TAG_PUSH: ExpressionContext = {
 const DISPATCH_DRY = dispatch("refs/heads/main", { dry_run: true });
 const DISPATCH_REAL = dispatch("refs/heads/main", { dry_run: false });
 
+/** Platform context, not package metadata, decides the public distribution destination. */
+function repositoryContext(
+  context: ExpressionContext,
+  repository = "zomarit/stamity",
+  privateValue: unknown = false,
+): ExpressionContext {
+  const github = context["github"] as Record<string, unknown> | undefined;
+  const event = github?.["event"] as Record<string, unknown> | undefined;
+  return {
+    ...context,
+    github: { ...github, repository, event: { ...event, repository: { private: privateValue } } },
+  };
+}
+
+describe("canonical distribution destinations", () => {
+  const jobs = [
+    { label: "release gates", job: jobOf(release, "gates"), context: TAG_PUSH },
+    { label: "canonical APM", job: jobOf(release, "apm-route"), context: TAG_PUSH },
+    { label: "npm publication", job: jobOf(release, "publish"), context: TAG_PUSH },
+    {
+      label: "docs deployment",
+      job: jobOf(docsSite, "deploy"),
+      context: { github: { event_name: "workflow_dispatch" }, inputs: { deploy: true } },
+    },
+  ];
+
+  for (const { label, job, context } of jobs) {
+    it(`${label} runs only for an explicitly public canonical repository`, () => {
+      const condition = job.if ?? "";
+      expect(condition, "the destination must be checked before the job receives grants").not.toBe("");
+      for (const [repository, privateValue, allowed] of [
+        ["zomarit/stamity", false, true],
+        ["acme/stamity", false, false],
+        ["acme/stamity", true, false],
+        ["zomarit/stamity", true, false],
+        ["zomarit/stamity", null, false],
+        ["zomarit/stamity", "", false],
+      ] as const) {
+        expect(
+          evaluateWorkflowExpression(condition, repositoryContext(context, repository, privateValue)),
+          `${repository} private=${String(privateValue)}`,
+        ).toBe(allowed);
+      }
+      expect(evaluateWorkflowExpression(condition, context), "absent privacy is not public").toBe(false);
+      const github = context["github"] as Record<string, unknown>;
+      expect(
+        evaluateWorkflowExpression(condition, { ...context, github: { ...github, repository: "zomarit/stamity" } }),
+        "canonical identity with missing visibility must remain excluded",
+      ).toBe(false);
+    });
+  }
+
+  it.skipIf(process.platform === "win32")("the publication backstop refuses a private or different destination before networking", () => {
+    // The actual Ubuntu step is plain bash and opens no socket, so execute it directly.
+    const steps = stepsOf(release, "publish");
+    const step = stepOf(steps, "Refuse a noncanonical publication destination");
+    expect(step.env).toEqual({
+      RELEASE_REPOSITORY: "${{ github.repository }}",
+      RELEASE_REPOSITORY_PRIVATE: "${{ github.event.repository.private }}",
+    });
+    expect(indexOf(steps, step.name ?? "")).toBeLessThan(indexOf(steps, "Harden runner"));
+    for (const [repository, privacy, status] of [
+      ["zomarit/stamity", "false", 0],
+      ["zomarit/stamity", "true", 1],
+      ["zomarit/stamity", "", 1],
+      ["acme/stamity", "false", 1],
+      ["acme/stamity", "true", 1],
+    ] as const) {
+      const result = spawnSync("bash", ["-c", step.run ?? ""], {
+        encoding: "utf8",
+        env: { ...process.env, RELEASE_REPOSITORY: repository, RELEASE_REPOSITORY_PRIVATE: privacy },
+      });
+      expect(result.status, `${repository} private=${privacy}`).toBe(status);
+      if (status !== 0) expect(result.stdout).toContain("separate private downstream release path");
+    }
+  });
+});
+
 /**
  * Every shape a run of this workflow can arrive in, and whether the publish job may start on it.
  *
@@ -1127,8 +1205,11 @@ describe("release.yml — the only publishing path", () => {
   describe("a dry run cannot publish", () => {
     /** The condition this file must carry, character for character. */
     const PUBLISH_CONDITION =
-      "(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || " +
-      "(github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) == 'false')";
+      // The downstream contract adds a platform destination guard; trigger semantics stay
+      // unchanged for canonical contexts, which the existing table now supplies explicitly.
+      "github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && " +
+      "((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || " +
+      "(github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) == 'false'))";
 
     const condition = (publish.if ?? "").replace(/\s+/g, " ").trim();
 
@@ -1139,7 +1220,7 @@ describe("release.yml — the only publishing path", () => {
 
     it("admits a tag push and an explicit dry_run=false, and nothing else", () => {
       for (const shape of TRIGGER_SHAPES) {
-        expect(evaluateWorkflowExpression(condition, shape.context), shape.label).toBe(
+        expect(evaluateWorkflowExpression(condition, repositoryContext(shape.context)), shape.label).toBe(
           shape.publishes,
         );
       }
@@ -1193,7 +1274,7 @@ describe("release.yml — the only publishing path", () => {
       // whatever the input is. The gap the earlier `inputs.dry_run == true` left was a dispatch
       // that published nothing AND reported nothing.
       for (const shape of DISPATCH_SHAPES) {
-        const publishes = evaluateWorkflowExpression(condition, shape.context);
+        const publishes = evaluateWorkflowExpression(condition, repositoryContext(shape.context));
         const reports = evaluateWorkflowExpression(summaryCondition, shape.context);
         expect(publishes !== reports, `${shape.label}: exactly one of publish/report`).toBe(true);
         expect(reports, shape.label).toBe(!shape.publishes);
@@ -1708,9 +1789,12 @@ describe("docs-site.yml — builds on every change, deploys only when armed", ()
   describe("nothing but an armed dispatch or a succeeded real release can deploy", () => {
     /** The condition this file must carry, character for character. */
     const DEPLOY_CONDITION =
-      "(github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true') || " +
+      // Private/downstream deployment is now excluded by platform context; the existing
+      // arming-input and successful-release cases still exercise canonical behavior.
+      "github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && " +
+      "((github.event_name == 'workflow_dispatch' && format('{0}', inputs.deploy) == 'true') || " +
       "(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && " +
-      "github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v'))";
+      "github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v')))";
 
     const condition = (deploy.if ?? "").replace(/\s+/g, " ").trim();
 
@@ -1793,7 +1877,7 @@ describe("docs-site.yml — builds on every change, deploys only when armed", ()
 
     it("admits an explicit deploy=true dispatch, and nothing else", () => {
       for (const shape of SHAPES) {
-        expect(evaluateWorkflowExpression(condition, shape.context), shape.label).toBe(
+        expect(evaluateWorkflowExpression(condition, repositoryContext(shape.context)), shape.label).toBe(
           shape.deploys,
         );
       }
