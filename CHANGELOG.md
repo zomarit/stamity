@@ -72,6 +72,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Upstream access and missing-history failures include recovery steps.** Diagnostics identify
   approved network, authentication and history restoration checks, including the separation
   between credential-free preparation and the publish-only update token.
+- **Landing-policy checks include repository settings and classic branch protection.**
+  Paginated rulesets, merge queues and repository merge methods are checked together; unreadable
+  constraints stay explicitly unverified while known ancestry restrictions still warn.
+- **Downstream updates satisfy inherited contribution checks.** New PRs and manual recovery
+  commands use conventional titles. Configured committers sign off new integration commits;
+  the local placeholder never certifies a DCO. The no-config test uses an isolated checkout,
+  so configured downstreams can run the same suite.
+- **Documentation remains readable across themes and wide tables support keyboard access.**
+  Text and code colors retain contrast, and scrollable tables expose a visible keyboard focus.
 
 ## [1.5.0] - 2026-09-10
 

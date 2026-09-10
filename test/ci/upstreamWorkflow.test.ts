@@ -573,6 +573,9 @@ describe("upstream-update.yml — what each outcome produces", () => {
     expect(run).toContain("upstream-update");
     expect(run).toContain("git fetch /path/to/update.bundle");
     expect(run).toContain("git push origin");
+    // The issue's copyable manual recovery command must pass the same inherited
+    // conventional-title check as a PR created automatically by the lane.
+    expect(run).toContain("--title 'chore(upstream): integrate ${TAG:-unknown}'");
     expect(run).toContain("STAMITY_UPSTREAM_TOKEN");
     // And it must not claim the secret would have made this push automatic. It would not.
     expect(run).toContain("It does NOT make this push automatic");

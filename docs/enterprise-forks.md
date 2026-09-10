@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 17da583. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 034c681. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes (`src/content/catalog.ts`),
      the job split or the permissions in `.github/workflows/upstream-update.yml` change, or
@@ -127,6 +127,9 @@ reviewed workflow and explicit private destination before enabling it.
 
 Commit identity, customization and `.stamity/upstream.json`, setting its `branch` to the
 intended integration branch. Run the regeneration table and behavior gates before pushing.
+Align the downstream CI workflows' `push` and `pull_request` branch filters with that branch,
+and match its protection's required check names to the jobs that actually run. Verify those
+checks on a real update PR; inherited filters limited to `main` do not cover another branch.
 Only then enable the approved CI/upstream/private-release workflows and repository Actions,
 after the organization owner verifies the bot permissions and actual required PR checks.
 Do not copy canonical branch rules blindly: this integration branch must allow merge ancestry;
