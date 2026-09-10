@@ -77,13 +77,21 @@ interface WorkflowStep {
   readonly "continue-on-error"?: boolean;
 }
 
+/**
+ * A matrix row from either matrix job. `check` legs carry os/node/label; `apm-install` legs carry
+ * apm/role, so every field is optional — one interface over two matrices, with each suite
+ * asserting the whole row it expects rather than trusting the type to have narrowed it.
+ */
 interface MatrixInclude {
-  readonly os: string;
-  readonly node: string;
-  readonly label: string;
+  readonly os?: string;
+  readonly node?: string;
+  readonly label?: string;
   readonly coverage?: boolean;
   readonly toolchain?: boolean;
   readonly tarball_smoke?: boolean;
+  readonly apm?: string;
+  readonly role?: string;
+  readonly expect_failure?: boolean;
 }
 
 interface WorkflowJob {
@@ -209,9 +217,10 @@ describe("ci.yml — the merge-blocking gate", () => {
   const jobs = ci.workflow.jobs;
   const check = stepsOf(ci, "check");
 
-  it("keeps the four lanes: the matrix gate, two advisory probes, and one stable aggregator", () => {
+  it("keeps the five lanes: two matrix gates, two advisory probes, and one stable aggregator", () => {
     expect(Object.keys(jobs)).toEqual([
       "check",
+      "apm-install",
       "supply-chain",
       "dependency-review",
       "all-ci-checks",
@@ -386,8 +395,9 @@ describe("ci.yml — the merge-blocking gate", () => {
 
     expect(aggregator.name).toBe("all-ci-checks");
     // `dependency-review` is advisory AND pull-request-only: requiring it would make every push
-    // wait on a job that never reports.
-    expect(aggregator.needs).toEqual(["check", "supply-chain"]);
+    // wait on a job that never reports. `apm-install` runs on every trigger this workflow
+    // declares, so requiring it costs no push a wait on a job that will not report.
+    expect(aggregator.needs).toEqual(["check", "supply-chain", "apm-install"]);
     // `if: always()` is what makes it run after a FAILED dependency; without it the aggregator is
     // skipped, and a skipped required check reads as green.
     expect(aggregator.if).toBe("always()");
@@ -395,6 +405,9 @@ describe("ci.yml — the merge-blocking gate", () => {
     // It must assert on the result rather than merely echo it: `needs` alone cannot express
     // "cancelled is not success".
     expect(report).toContain('test "${{ needs.check.result }}" = "success"');
+    // The APM route is merge-blocking on the same terms: a deployment that stopped happening is
+    // not something to read in a log afterwards.
+    expect(report).toContain('test "${{ needs.apm-install.result }}" = "success"');
     // The advisory lane is reported, never required — it exists not to block.
     expect(report).toContain("needs.supply-chain.result");
   });
@@ -428,6 +441,10 @@ describe("ci.yml — the merge-blocking gate", () => {
       "tarball-smoke",
       "leak-gate",
       "all-ci-checks",
+      // The APM route lane, whose whole claim is that it reads a deployed tree rather than an
+      // exit code. A map that did not name it would leave the reader thinking the generated
+      // package's byte-diff is the only thing guarding that surface.
+      "apm-install",
       // The pull-request gates live in a sibling file; a lane map that did not name them would
       // read as if this workflow were the whole merge gate.
       "pr-checks",
@@ -600,7 +617,7 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
   it("stays out of ci.yml's aggregator, because the two do not run on the same events", () => {
     // Requiring a pull-request-only job through `all-ci-checks` would make every push to `main`
     // wait on a job that never reports. Two contexts, each required where it runs.
-    expect(jobOf(ci, "all-ci-checks").needs).toEqual(["check", "supply-chain"]);
+    expect(jobOf(ci, "all-ci-checks").needs).toEqual(["check", "supply-chain", "apm-install"]);
     expect(triggersOf(ci.workflow)).toContain("push");
     expect(triggersOf(prChecks.workflow)).not.toContain("push");
   });
@@ -855,6 +872,12 @@ describe("release.yml — the only publishing path", () => {
     );
     expect(gatesAllow).not.toContain("token.actions.githubusercontent.com");
     expect(gatesAllow).not.toContain("sigstore.dev");
+    // And the three the APM route smoke needs: pip's index and CDN, plus setup-python's fallback
+    // versions manifest. harden-runner fails CLOSED, so a host dropped from this list is a
+    // release that stops at the step rather than a release that leaks.
+    expect(gatesAllow).toContain("pypi.org:443");
+    expect(gatesAllow).toContain("files.pythonhosted.org:443");
+    expect(gatesAllow).toContain("raw.githubusercontent.com:443");
 
     const publishAllow = String(
       publishSteps.find((step) => (step.uses ?? "").startsWith("step-security/harden-runner@"))
@@ -911,22 +934,42 @@ describe("release.yml — the only publishing path", () => {
     );
   });
 
-  it("runs the whole ladder on the shipping commit, before the pack boundary", () => {
+  it("runs the whole ladder on the shipping commit, in order, before the pack boundary", () => {
     const pack = indexOf(gatesSteps, "Pack tarball");
-    for (const step of [
+    const ladder = [
       "Install",
       "Build",
       "Test",
       "Leak gate",
       "Dogfood check",
       "Tarball smoke (publish shape)",
-    ]) {
+      // The published SHAPE is proven by the step above; this one proves the published ROUTE, at
+      // the canonical remote and the exact shipping commit. A package whose bytes are right and
+      // whose resolver cannot reach it is the failure that put this step here, and it is a reason
+      // not to pack rather than a note to file after publishing.
+      "APM route smoke (canonical ref)",
+    ];
+    let previous = -1;
+    for (const step of ladder) {
       const at = indexOf(gatesSteps, step);
       expect(at, `${step} must run in the gates job`).toBeGreaterThanOrEqual(0);
       expect(at, `${step} must precede the pack`).toBeLessThan(pack);
+      expect(at, `${step} must follow the step before it in the ladder`).toBeGreaterThan(previous);
+      previous = at;
     }
     expect(runOf(gatesSteps, "Leak gate")).toBe("npm run gate");
     expect(runOf(gatesSteps, "Tarball smoke (publish shape)")).toBe("node scripts/tarball-smoke.mjs");
+
+    // The remote, at this commit — not the working tree. An install from the checkout would prove
+    // the local files deploy and say nothing about whether the resolver can reach them.
+    const smoke = runOf(gatesSteps, "APM route smoke (canonical ref)");
+    expect(smoke).toContain("node scripts/apm-install-smoke.mjs");
+    expect(smoke).toContain('--source "zomarit/stamity#${SHA}"');
+    expect(smoke).toContain("--targets claude,copilot,cursor,codex");
+    // The sha reaches the shell through `env:`, like every other value in this file.
+    expect(stepOf(gatesSteps, "APM route smoke (canonical ref)").env?.["SHA"]).toBe(
+      "${{ github.sha }}",
+    );
   });
 
   it("hands the publish job a digest on a channel the artifact does not carry", () => {
@@ -1814,13 +1857,22 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
   it("reads only the secrets this repository knowingly holds", () => {
     // A closed list, so adding a secret is a decision recorded here rather than a line nobody
     // reviews. GITHUB_TOKEN is the per-run token; ANTHROPIC_API_KEY arms the nightly headless
-    // lane and is absent by design, which that lane says out loud.
+    // lane and is absent by design, which that lane says out loud. STAMITY_UPSTREAM_TOKEN is
+    // read by the upstream lane's `publish` job alone, is absent here by design (this repository
+    // is not a fork), and exists so a FORK can push a release that touches workflow files and
+    // let the pull request's own CI start without the approval prompt — both limits of the
+    // per-run token, which `upstream-update.yml`'s header states. Its holder is the one job
+    // `test/ci/upstreamWorkflow.test.ts` pins.
     const referenced = new Set(
       ALL_WORKFLOWS.flatMap(({ source }) =>
         [...source.matchAll(/secrets\.([A-Z_][A-Z0-9_]*)/g)].map((match) => match[1] ?? ""),
       ),
     );
-    expect([...referenced].toSorted()).toEqual(["ANTHROPIC_API_KEY", "GITHUB_TOKEN"]);
+    expect([...referenced].toSorted()).toEqual([
+      "ANTHROPIC_API_KEY",
+      "GITHUB_TOKEN",
+      "STAMITY_UPSTREAM_TOKEN",
+    ]);
   });
 
   it("pins each action to a full commit SHA and names the exact version it resolves to", () => {
@@ -1854,14 +1906,21 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     for (const [file, id, job] of ALL_JOBS) {
       expect(job.permissions, `${file}:${id} must declare its own permissions`).toBeDefined();
     }
-    // Two jobs in the repository may write, each behind its own fail-closed condition: the one
-    // that creates the release, and the one that publishes the docs site. Neither is reachable
-    // from a push, a pull request or an unarmed dispatch, and the conditions that make that true
-    // are evaluated — not read for substrings — in their own suites above.
+    // Three jobs in the repository may write, each behind its own fail-closed condition: the one
+    // that creates the release, the one that publishes the docs site, and the upstream lane's
+    // `publish` job, which pushes an update branch and opens a pull request or an issue in a
+    // FORK — here it never runs, because the `probe` job it depends on finds no lane config. None
+    // is reachable from a push, a pull request or an unarmed dispatch, and the conditions that
+    // make that true are evaluated — not read for substrings — in their own suites (the two
+    // above, and `test/ci/upstreamWorkflow.test.ts` for the third).
     const writers = ALL_JOBS.filter(([, , job]) =>
       Object.values(job.permissions ?? {}).includes("write"),
     ).map(([file, id]) => `${file}:${id}`);
-    expect(writers).toEqual(["docs-site.yml:deploy", "release.yml:publish"]);
+    expect(writers).toEqual([
+      "docs-site.yml:deploy",
+      "release.yml:publish",
+      "upstream-update.yml:publish",
+    ]);
     // And neither of them can start on its own: a write grant behind a condition that is missing
     // is a write grant on every trigger the workflow declares.
     for (const holder of writers) {
@@ -1885,6 +1944,7 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
       "scripts/generate-pack-manifests.mjs",
       "scripts/size-budget.mjs",
       "scripts/tarball-smoke.mjs",
+      "scripts/apm-install-smoke.mjs",
     ]) {
       expect(referenced).toContain(script);
     }
