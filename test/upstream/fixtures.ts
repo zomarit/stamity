@@ -42,6 +42,13 @@ import { carriedProcessEnv, NO_GIT_CONFIG } from "../support/repoFixtures.ts";
  *           textual merge that changes behaviour, which the fork's gate catches
  *   v1.3.0  renames `beta.md` to `gamma.md` and deletes `delta.md` (rename and modify/delete
  *           against a fork that edited them)
+ *   v1.1.1  a maintenance release cut on a side branch from v1.1.0 AFTER v1.3.0: older by
+ *           version than v1.2.0 and v1.3.0, and in neither one's ancestry, so a merge of those
+ *           covers it only if the lane reasons by ancestry rather than by version order
+ *
+ * Besides the sources, v1.0.0 carries a binary `assets/logo.bin` that v1.1.0 changes: a fork
+ * that also changes it gets a conflict git cannot merge and leaves "ours" in the worktree for —
+ * the case where staging a generated path nothing regenerated would prefer a side.
  *
  * Machines without git: the first git call throws an Error whose `name` is
  * `"GitUnavailableError"`; the suite converts that to a skip.
@@ -131,8 +138,8 @@ export function gitAvailable(): boolean {
   }
 }
 
-/** Writes (string) or deletes (null) files keyed by POSIX repository-relative path. */
-export function writeFiles(dir: string, files: Record<string, string | null>): void {
+/** Writes (a string, or bytes for a binary file) or deletes (null) files keyed by POSIX repository-relative path. */
+export function writeFiles(dir: string, files: Record<string, string | Uint8Array | null>): void {
   for (const [key, content] of Object.entries(files)) {
     const target = join(dir, ...key.split("/"));
     if (content === null) {
@@ -140,7 +147,8 @@ export function writeFiles(dir: string, files: Record<string, string | null>): v
       continue;
     }
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, content, "utf8");
+    if (typeof content === "string") writeFileSync(target, content, "utf8");
+    else writeFileSync(target, content);
   }
 }
 
@@ -232,6 +240,19 @@ console.log('gate: effective tier is enterprise')
 `;
 
 /**
+ * `scripts/stray.mjs`: a generator that rewrites a tracked file no `generatedPaths` glob of the
+ * base configuration covers (`README.md`), with the same bytes on every run.
+ */
+export const STRAY_GENERATOR_SOURCE = `import { writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+writeFileSync(fileURLToPath(new URL('../README.md', import.meta.url)), '# Fixture upstream\\n\\nRules: rewritten by scripts/stray.mjs\\n')
+`;
+
+/** The bytes of `README.md` after `scripts/stray.mjs` ran. */
+export const README_STRAY = "# Fixture upstream\n\nRules: rewritten by scripts/stray.mjs\n";
+
+/**
  * `scripts/slow-gate.mjs`: writes the sentinel named by `FIXTURE_SENTINEL`, idles for
  * `FIXTURE_HOLD_MS` (default 3000) so a test can kill the lane while a gate is running, then
  * writes `<sentinel>.done` on its way out so the test can wait for the orphan. With no sentinel
@@ -254,6 +275,12 @@ setTimeout(() => {
 export const RELEASE_TAGS = ["v1.0.0", "v1.1.0", "v1.2.0", "v1.3.0"] as const;
 export const PRERELEASE_TAG = "v1.4.0-rc.1";
 export const OFF_PATTERN_TAG = "nightly-2026-09-10";
+export const MAINTENANCE_TAG = "v1.1.1";
+
+/** `assets/logo.bin` at v1.0.0, at v1.1.0, and as a fork changes it: three binaries, one path. */
+export const LOGO_V1 = Uint8Array.from([0x89, 0x4c, 0x4f, 0x47, 0x4f, 0x00, 0x01]);
+export const LOGO_V1_1 = Uint8Array.from([0x89, 0x4c, 0x4f, 0x47, 0x4f, 0x00, 0x02]);
+export const LOGO_FORK = Uint8Array.from([0x89, 0x4c, 0x4f, 0x47, 0x4f, 0x00, 0xff]);
 
 export const ALPHA_V1 = "# Alpha\n\nAlpha line one.\nAlpha line two.\nAlpha line three.\n";
 export const ALPHA_V1_1 = "# Alpha\n\nAlpha line one.\nAlpha line two, revised upstream.\nAlpha line three.\n";
@@ -365,16 +392,18 @@ export function createUpstream(parent: string): UpstreamFixture {
     "scripts/resolve-tier.mjs": RESOLVER_V1,
     "defaults.json": '{\n  "tier": "team"\n}\n',
     "config.json": "{}\n",
+    "assets/logo.bin": LOGO_V1,
   });
   regenerate(repo);
   commitAll(repo, "release 1.0.0");
   tagHead(repo, "v1.0.0", { annotated: false });
 
-  // v1.1.0 — the overlapping edit, two new sources, the pin file.
+  // v1.1.0 — the overlapping edit, two new sources, the pin file, the binary.
   writeFiles(dir, {
     "content/rules/alpha.md": ALPHA_V1_1,
     "content/rules/beta.md": BETA_V1_1,
     "content/rules/delta.md": DELTA_V1_1,
+    "assets/logo.bin": LOGO_V1_1,
     "README.md": "# Fixture upstream\n\nRules: 3\n",
     "CHANGELOG.md": changelogWith(SECTION_V1_1),
     "package.json": `${JSON.stringify({ name: "fixture-upstream", version: "1.1.0", private: true, type: "module" }, null, 2)}\n`,
@@ -410,8 +439,17 @@ export function createUpstream(parent: string): UpstreamFixture {
   tagHead(repo, PRERELEASE_TAG, { annotated: true });
   tagHead(repo, OFF_PATTERN_TAG, { annotated: false });
 
+  // v1.1.1 — the maintenance release, cut last, on a side branch from v1.1.0.
+  git(repo, ["checkout", "--quiet", "-b", "maint-1.1", "v1.1.0"]);
+  writeFiles(dir, {
+    "package.json": `${JSON.stringify({ name: "fixture-upstream", version: "1.1.1", private: true, type: "module" }, null, 2)}\n`,
+  });
+  commitAll(repo, "release 1.1.1");
+  tagHead(repo, MAINTENANCE_TAG, { annotated: true });
+  git(repo, ["checkout", "--quiet", "main"]);
+
   const tags: Record<string, string> = {};
-  for (const name of [...RELEASE_TAGS, PRERELEASE_TAG, OFF_PATTERN_TAG]) {
+  for (const name of [...RELEASE_TAGS, PRERELEASE_TAG, OFF_PATTERN_TAG, MAINTENANCE_TAG]) {
     tags[name] = git(repo, ["rev-parse", `${name}^{commit}`]).stdout.trim();
   }
   return { ...repo, tags };
@@ -429,8 +467,8 @@ export interface ForkOptions {
   editAlpha?: boolean;
   /** `config.json` tier enterprise plus `scripts/gate.mjs`, the behaviour gate. */
   enterprise?: boolean;
-  /** Extra files (or deletions) for the customization commit. */
-  files?: Record<string, string | null>;
+  /** Extra files (a string, bytes for a binary, or null for a deletion) for the customization commit. */
+  files?: Record<string, string | Uint8Array | null>;
   /** Run the generator before the customization commit. */
   regenerate?: boolean;
   /** A directory name under `parent` (default `fork`). */
@@ -466,7 +504,7 @@ export function createFork(upstream: UpstreamFixture, parent: string, options: F
   if (cloned.length > 0) git(repo, ["tag", "-d", ...cloned]);
 
   const config = options.config === null ? null : { ...baseConfig(upstream), ...options.config };
-  const files: Record<string, string | null> = { ...options.files };
+  const files: Record<string, string | Uint8Array | null> = { ...options.files };
   if (config !== null) files[".stamity/upstream.json"] = `${JSON.stringify(config, null, 2)}\n`;
   if (options.editAlpha === true) files["content/rules/alpha.md"] = ALPHA_FORK;
   if (options.enterprise === true) {
@@ -529,9 +567,11 @@ export interface LaneDocument {
     renamedFrom?: string;
     renamedTo?: string;
     resolvedBy?: string;
+    regenerated?: boolean;
   }[];
   gates: { name: string; run: string; status: string; exitCode: number | null; durationMs: number; outputTail: string }[];
   regenerate: { run: string; status: string; exitCode: number; durationMs: number; outputTail: string }[];
+  unlistedGenerated: { path: string; change: string }[];
   branch: string | null;
   worktree: string | null;
   mergeCommit: string | null;
@@ -680,6 +720,12 @@ export function linkedWorktrees(repo: Repo): string[] {
 export function fileAt(repo: Repo, commit: string, path: string): string | null {
   const result = git(repo, ["show", `${commit}:${path}`], { allowFailure: true });
   return result.status === 0 ? result.stdout : null;
+}
+
+/** The blob id of `path` at `commit`, or null: how two binaries are compared without decoding them. */
+export function blobIdAt(repo: Repo, commit: string, path: string): string | null {
+  const result = git(repo, ["rev-parse", "-q", "--verify", `${commit}:${path}`], { allowFailure: true });
+  return result.status === 0 ? result.stdout.trim() : null;
 }
 
 /** The parents of a commit, in order. */

@@ -44,15 +44,22 @@
 //                      as integrated
 //   --recreate         with integrate: delete a stale update branch that carries nothing but the
 //                      lane's own merge commit, and start over
-//   --branch <name>    evaluate `status` against another branch than the configured one — the
-//                      update branch itself, typically
+//   --branch <name>    take <name> as the target branch instead of the configured one, for every
+//                      verb: `status` against the update branch itself, or `integrate` from a
+//                      runner checkout whose branch carries another name
+//
+// The regenerate commands and the gates are the fork's own, read from the MERGED tree: `integrate`,
+// `continue` and `validate` run them through the shell with the caller's environment, so a release
+// is reviewed before those verbs run on a workstation holding credentials, or they run in CI, where
+// the prepare job holds none. The report says so on the first run of either per invocation.
 //
 // Invariants, quoted from the spec; every verb below is written against them.
 //   1. The target branch is never written. The lane reads the fork's integration branch and
 //      writes only an update branch, in its own worktree.
 //   2. History is the marker. A release is "integrated" only when its upstream commit is an
-//      ancestor of the target branch AND the integration record for it says the gates passed or
-//      that no gates were configured.
+//      ancestor of the target branch AND no integration record for it says the gates failed or
+//      were skipped. Ancestry with no record at all counts: records are evidence that may be
+//      deleted (REQ-UPSTREAM-010), and a fork's history from before the lane carries none.
 //   3. No conflict marker is ever committed. `continue` refuses while any unmerged index entry
 //      or any `<<<<<<<`/`=======`/`>>>>>>>` marker line remains in a tracked file.
 //   4. No blanket side preference. The lane never runs `merge -X ours`, `-X theirs`,
@@ -70,7 +77,8 @@
 //   1  validation-failed, conflict, conflict-pending, update-branch-stale, regenerate-failed,
 //      ancestry-missing, ancestry-lost — a result the caller must act on, with a full report
 //   2  not-a-fork (no `.stamity/upstream.json`), a usage or configuration error, git missing or
-//      older than 2.20, a remote of the configured name with a different URL, a failed fetch
+//      older than 2.24 (the floor is `--end-of-options`, which guards every revision a record
+//      supplies), a remote of the configured name with a different URL, a failed fetch
 //
 // THE JSON DOCUMENT (`--json`). One object, the same shape for every verb and every outcome, so a
 // consumer — the opt-in GitHub workflow is the first — branches on `outcome` and reads the rest:
@@ -88,14 +96,20 @@
 //   skipped       the candidate tags the target's single merge covers besides the target itself
 //   divergence    { behindRelease, aheadOfRelease, upstreamAheadOfRelease }
 //   affected      { overlaps, watched, shadowed, renamed } — the drift rows of REQ-UPSTREAM-008
-//   conflicts     [{ path, kind, generated, deletedBy?, renamedFrom?, renamedTo?, resolvedBy? }]
-//                 kind is one of content, modify/delete, rename/delete, add/add, other
+//   conflicts     [{ path, kind, generated, deletedBy?, renamedFrom?, renamedTo?, resolvedBy?,
+//                 regenerated? }] kind is one of content, modify/delete, rename/delete, add/add,
+//                 other; `regenerated: false` marks a generated path that regeneration left
+//                 untouched, which stays unmerged for the human
 //   gates         [{ name, run, status, exitCode, durationMs, outputTail }] status is one of
 //                 passed, failed, skipped
 //   regenerate    [{ run, status, exitCode, durationMs, outputTail }]
+//   unlistedGenerated  [{ path, change }] tracked paths the regenerate commands rewrote that no
+//                 `generatedPaths` glob covers — outcome `regenerate-failed`, nothing committed
 //   branch        the update branch name or null;  worktree  its absolute path or null
 //   mergeCommit   the merge commit's sha or null;  record  the record's repository path or null
-//   lostRecords   [{ path, tag, commit }] the records whose release the history lacks
+//   lostRecords   [{ path, tag, commit }] the records whose release the history lacks — the
+//                 diagnosis `status` reports as `ancestry-lost`; `preview` and `integrate` carry
+//                 the rows and proceed for the selected release
 //   releaseNotes  the `## [<version>]` section of upstream's CHANGELOG.md at the release, or null
 //   diffStat      the merged diff stat (preview), or null
 //   report        the markdown report, as one string;  messages  human guidance, one per line
@@ -110,11 +124,24 @@
 // Design decisions the spec leaves to the implementation, so nobody re-derives them:
 //   - The target branch head is read from the local branch named in the configuration, then
 //     from `refs/remotes/origin/<branch>`; when neither exists the run exits 2 naming both.
-//   - `rerere.enabled` is set with `git config` inside the update worktree. Worktrees share the
-//     repository configuration, so the setting reaches the whole repository; recorded
-//     resolutions are the point, and the setting is harmless elsewhere.
+//   - `rerere` is enabled per command (`-c rerere.enabled=true` on the merge and on the merge
+//     commit), never persisted: a linked worktree shares the repository configuration, and a
+//     `git config` write there would have changed the operator's repository for good. The
+//     recorded preimages and resolutions still land in the shared `rr-cache` of the repository,
+//     which is the point — the next merge of the same conflict replays them.
 //   - Gates and regenerate commands run through the platform shell with the update worktree as
 //     cwd, output captured, the last lines kept in the report. `--no-gates` records `skipped`.
+//   - Regeneration is measured, not trusted. Every conflicted generated path's content is
+//     fingerprinted at merge time (kept in the lane state) and a path is staged only once its
+//     content differs from that fingerprint — regeneration produced it, this run or an earlier
+//     one; a path regeneration left as git left it stays unmerged for the human, since staging
+//     it would have preferred a side (a binary conflict carries "ours" in the worktree). Tracked
+//     paths outside `generatedPaths` are fingerprinted before and after regeneration, and one
+//     regeneration rewrote fails the run: the gates would test what the commit lacks.
+//   - The upstream URL is echoed without its userinfo (`user:password@`) in every document,
+//     message and log line; git itself receives the URL as configured.
+//   - `validate` commits a new record on every run: a validation is an event, and the record
+//     commit is its evidence, so a second run is a second record rather than a no-op.
 //   - Git runs through `execFile`-style spawning with no shell, real paths are composed with
 //     `node:path`, and gitignore-style globs (`*`, `**`, `?`, a leading `/` anchor, a `/`
 //     directory suffix) are compiled to regular expressions here rather than through a
@@ -137,9 +164,10 @@
 //     `continue` can name what the human resolved without re-deriving it.
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const TOOL = 'stamity-upstream-lane'
@@ -149,7 +177,7 @@ export const RECORD_DIRECTORY = '.stamity/upstream/integrations'
 export const WORK_DIRECTORY = '.stamity/upstream-work'
 export const REF_NAMESPACE = 'refs/stamity-upstream'
 export const BRANCH_PREFIX = 'stamity-upstream/'
-export const GIT_FLOOR = [2, 20]
+export const GIT_FLOOR = [2, 24]
 export const VERBS = ['status', 'preview', 'integrate', 'continue', 'validate', 'abort', 'help']
 
 /** Outcome -> exit status. The spec's vocabulary plus `aborted` and `help` (see the header). */
@@ -181,15 +209,19 @@ const STATE_FILE = 'stamity-upstream-lane.json'
 const OUTPUT_TAIL_LINES = 40
 const MAX_BUFFER = 256 * 1024 * 1024
 const FALLBACK_IDENTITY = { name: 'Stamity upstream lane', email: 'upstream-lane@stamity.invalid' }
+const TRUST_NOTICE =
+  '`integrate`, `continue` and `validate` run the merged tree\'s regenerate commands and gates with the caller\'s environment: ' +
+  'review the release before running them on a workstation holding credentials, or run them in CI, where the prepare job holds none'
+/** A full SHA-1 or SHA-256 object id — the only shape a record may supply as a revision. */
+const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
 /** A failure the lane classifies: `outcome` and `exitCode` travel with the message. */
 export class LaneError extends Error {
-  constructor(message, { outcome = 'error', exitCode, messages = [] } = {}) {
+  constructor(message, { outcome = 'error', exitCode } = {}) {
     super(message)
     this.name = 'LaneError'
     this.outcome = outcome
     this.exitCode = exitCode ?? exitCodeFor(outcome)
-    this.messages = messages
   }
 }
 
@@ -386,6 +418,25 @@ export function selectReleases(tags, { pattern = 'v*', prerelease = false } = {}
     .map((tag) => parseReleaseTag(tag, pattern))
     .filter((release) => release !== null && (prerelease || release.prerelease === null))
     .toSorted(compareReleases)
+}
+
+/**
+ * Why a tag name cannot become the lane's branch, ref or directory — or null when it can. A tag
+ * reaches argv as `stamity-upstream/<tag>` and `refs/stamity-upstream/tags/<tag>`, and the disk
+ * as `.stamity/upstream-work/<tag>/`, so a leading `-`, a control character, whitespace, or a
+ * `.`/`..` segment is refused here, before any of those; `git check-ref-format` covers the rest.
+ */
+export function checkTagShape(tag) {
+  if (typeof tag !== 'string' || tag === '') return 'it is empty'
+  if (tag.startsWith('-')) return 'it starts with "-", which a command would read as an option'
+  for (const char of tag) {
+    const code = char.codePointAt(0)
+    if (code < 0x20 || code === 0x7f || /\s/.test(char)) return 'it contains a control character or whitespace'
+  }
+  if (tag.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    return 'it contains an empty, "." or ".." path segment'
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -757,20 +808,22 @@ function checkGitVersion(git) {
   }
 }
 
+// The three revision readers take `--end-of-options` (git 2.24) so that a revision a record or a
+// state file supplied — an object id it claims — can never be read as an option.
 function revParse(git, cwd, ref) {
-  const result = git(['rev-parse', '-q', '--verify', `${ref}^{commit}`], { cwd, check: false })
+  const result = git(['rev-parse', '-q', '--verify', '--end-of-options', `${ref}^{commit}`], { cwd, check: false })
   return result.status === 0 ? result.stdout.trim() : null
 }
 
 function isAncestor(git, cwd, ancestor, descendant) {
-  const result = git(['merge-base', '--is-ancestor', ancestor, descendant], { cwd, check: false })
+  const result = git(['merge-base', '--is-ancestor', '--end-of-options', ancestor, descendant], { cwd, check: false })
   if (result.status === 0) return true
   if (result.status === 1) return false
   throw new LaneError(`git merge-base --is-ancestor ${ancestor} ${descendant} failed: ${result.stderr.trim()}`)
 }
 
 function countCommits(git, cwd, ...revisions) {
-  return Number(git(['rev-list', '--count', ...revisions], { cwd }).stdout.trim())
+  return Number(git(['rev-list', '--count', '--end-of-options', ...revisions], { cwd }).stdout.trim())
 }
 
 function showFile(git, cwd, commit, path) {
@@ -849,6 +902,24 @@ function normalizeUrl(url) {
   return url.trim().replace(/\/+$/, '').replace(/\.git$/, '')
 }
 
+const URL_USERINFO = /^([a-z][a-z0-9+.-]*:\/\/)([^/]*)@/i
+
+/**
+ * The URL without its userinfo — `https://user:token@host/x` becomes `https://host/x` — which is
+ * the only form a document, a message or a log line carries. An scp-like `git@host:x` has no
+ * `://` and is left alone: its user is not a secret. Git itself receives the URL as configured.
+ */
+export function redactUrl(url) {
+  return url.replace(URL_USERINFO, '$1')
+}
+
+/** Git's own output with the configured URL's `userinfo@` removed wherever it echoed it. */
+function redactText(text, url) {
+  const match = URL_USERINFO.exec(url)
+  if (match === null || match[2] === '') return text
+  return text.split(`${match[2]}@`).join('')
+}
+
 function ensureRemote(context, config) {
   const { git, root } = context
   const current = git(['remote', 'get-url', config.remote], { cwd: root, check: false })
@@ -859,7 +930,7 @@ function ensureRemote(context, config) {
   const existing = current.stdout.trim()
   if (normalizeUrl(existing) !== normalizeUrl(config.upstream)) {
     throw new LaneError(
-      `remote ${JSON.stringify(config.remote)} points at ${existing} and the configuration names ${config.upstream}; ` +
+      `remote ${JSON.stringify(config.remote)} points at ${redactUrl(existing)} and the configuration names ${redactUrl(config.upstream)}; ` +
         'the lane does not repoint a remote — change one of them',
     )
   }
@@ -868,13 +939,13 @@ function ensureRemote(context, config) {
 
 function fetchUpstream(context, config) {
   const { git, root } = context
-  log(`fetching release tags from ${config.remote} (${config.upstream})`)
+  log(`fetching release tags from ${config.remote} (${redactUrl(config.upstream)})`)
   const tags = git(
     ['fetch', '--no-tags', '--prune', '--quiet', config.remote, `+refs/tags/*:${REF_NAMESPACE}/tags/*`],
     { cwd: root, check: false },
   )
   if (tags.status !== 0) {
-    throw new LaneError(`fetch from ${config.remote} (${config.upstream}) failed: ${tags.stderr.trim()}`)
+    throw new LaneError(`fetch from ${config.remote} (${redactUrl(config.upstream)}) failed: ${redactText(tags.stderr.trim(), config.upstream)}`)
   }
   const head = git(
     ['fetch', '--no-tags', '--quiet', config.remote, `+refs/heads/${config.branch}:${REF_NAMESPACE}/heads/${config.branch}`],
@@ -882,7 +953,7 @@ function fetchUpstream(context, config) {
   )
   return head.status === 0
     ? []
-    : [`upstream has no branch ${JSON.stringify(config.branch)} (${head.stderr.trim()}); the release tags were fetched, the default-branch comparison is unavailable`]
+    : [`upstream has no branch ${JSON.stringify(config.branch)} (${redactText(head.stderr.trim(), config.upstream)}); the release tags were fetched, the default-branch comparison is unavailable`]
 }
 
 function listUpstreamTags(context) {
@@ -896,6 +967,11 @@ function listUpstreamTags(context) {
     if (line === '') continue
     const [refname, type, objectname, peeled, peeledType, date] = line.split('\0')
     const tag = refname.slice(prefix.length)
+    const refused = checkTagShape(tag)
+    if (refused !== null) {
+      messages.push(`tag ${JSON.stringify(tag)} was ignored: ${refused}`)
+      continue
+    }
     let commit = objectname
     if (type === 'tag') commit = peeledType === 'commit' ? peeled : revParse(git, root, refname)
     else if (type !== 'commit') commit = null
@@ -911,23 +987,42 @@ function listUpstreamTags(context) {
 // ---------------------------------------------------------------------------------------------
 // Derived state (REQ-UPSTREAM-003, -004, -008)
 
+/**
+ * The integration records under `RECORD_DIRECTORY` at `head`, keyed by release. Every entry that
+ * is not a well-formed record — not `.json`, unreadable, not JSON, not an object, or without a
+ * `releaseCommit` that is an object id — is reported by path and left out, never skipped
+ * silently: the record is evidence, and evidence that cannot be read is worth a line.
+ */
 function readRecords(context, head) {
   const { git, root } = context
-  const listing = git(['ls-tree', '-r', '--name-only', head, '--', `${RECORD_DIRECTORY}/`], { cwd: root, check: false })
+  const listing = git(['ls-tree', '-r', '-z', '--name-only', head, '--', `${RECORD_DIRECTORY}/`], { cwd: root, check: false })
   const records = new Map()
   const messages = []
   if (listing.status !== 0) return { records, messages }
-  for (const path of listing.stdout.split('\n')) {
-    if (!path.endsWith('.json')) continue
+  for (const path of listing.stdout.split('\0')) {
+    if (path === '') continue
+    if (!path.endsWith('.json')) {
+      messages.push(`${path} under ${RECORD_DIRECTORY}/ is not a .json record and was ignored`)
+      continue
+    }
     const text = showFile(git, root, head, path)
-    if (text === null) continue
+    if (text === null) {
+      messages.push(`record ${path} could not be read at ${shortSha(head)} and was ignored`)
+      continue
+    }
+    let record
     try {
-      const record = JSON.parse(text)
-      const tag = typeof record.release === 'string' ? record.release : path.slice(RECORD_DIRECTORY.length + 1, -'.json'.length)
-      records.set(tag, { path, record })
+      record = JSON.parse(text)
     } catch (error) {
       messages.push(`record ${path} is not valid JSON and was ignored (${describeError(error)})`)
+      continue
     }
+    if (!isPlainObject(record) || typeof record.releaseCommit !== 'string' || !OBJECT_ID.test(record.releaseCommit)) {
+      messages.push(`record ${path} does not name its release commit as a full object id in "releaseCommit" and was ignored`)
+      continue
+    }
+    const tag = typeof record.release === 'string' ? record.release : path.slice(RECORD_DIRECTORY.length + 1, -'.json'.length)
+    records.set(tag, { path, record })
   }
   return { records, messages }
 }
@@ -1027,6 +1122,7 @@ function computeAffected(context, config, base, targetHead, releaseCommit, relea
 function selectTarget(context, config, releases, allTags) {
   const explicit = context.options.release
   if (explicit !== undefined) {
+    assertTagShape(context, explicit)
     const fetched = allTags.find((entry) => entry.tag === explicit)
     if (fetched === undefined) {
       throw new LaneError(`release ${JSON.stringify(explicit)} is not among the tags fetched from ${config.remote}`)
@@ -1065,7 +1161,6 @@ function deriveState(context, config, target) {
   messages.push(...recordMessages)
   const lostRecords = []
   for (const [tag, { path, record }] of records) {
-    if (typeof record.releaseCommit !== 'string') continue
     if (revParse(git, root, record.releaseCommit) === null || !isAncestor(git, root, record.releaseCommit, target.head)) {
       lostRecords.push({ path, tag, commit: record.releaseCommit })
     }
@@ -1103,9 +1198,18 @@ function deriveState(context, config, target) {
 
   const integratedRelease = integrated === null ? null : known.get(integrated.tag)
   const candidates = releases.filter((release) => integratedRelease === null || compareReleases(release, integratedRelease) > 0)
-  const skipped = candidates.filter((release) => compareReleases(release, selected) < 0).map((release) => release.tag)
+  // A release the single merge covers is one the selected commit CONTAINS, not merely one that
+  // sorts below it: a maintenance release cut on a side branch after a newer one (v1.1.1 after
+  // v1.2.0) is older by version and still not in v1.2.0's ancestry.
+  const skipped = candidates
+    .filter((release) => compareReleases(release, selected) < 0 && isAncestor(git, root, release.commit, selected.commit))
+    .map((release) => release.tag)
 
   const upstreamHead = revParse(git, root, `${REF_NAMESPACE}/heads/${config.branch}`)
+  // `outcome` is the diagnosis `status` reports; `releaseOutcome` is the selected release's own
+  // standing, which `preview` and `integrate` act on. They differ in exactly one case: a lost
+  // record (`ancestry-lost`) is reported by `status` and carried — not obeyed — by the other two,
+  // since the re-merge is what repairs it (REQ-UPSTREAM-004).
   const state = {
     releases,
     selected,
@@ -1122,11 +1226,13 @@ function deriveState(context, config, target) {
     affected: null,
     messages,
     outcome: null,
+    releaseOutcome: null,
   }
 
   const mergeBase = git(['merge-base', target.head, selected.commit], { cwd: root, check: false })
   if (mergeBase.status !== 0) {
     state.outcome = 'ancestry-missing'
+    state.releaseOutcome = 'ancestry-missing'
     return state
   }
   state.mergeBase = mergeBase.stdout.trim()
@@ -1137,10 +1243,10 @@ function deriveState(context, config, target) {
   }
   state.affected = computeAffected(context, config, state.mergeBase, target.head, selected.commit, selected.tag)
 
-  if (lostRecords.length > 0) state.outcome = 'ancestry-lost'
-  else if (ancestorTags.has(selected.tag)) {
-    state.outcome = unverified.some((release) => release.tag === selected.tag) ? 'validation-failed' : 'up-to-date'
-  } else state.outcome = 'update-available'
+  if (ancestorTags.has(selected.tag)) {
+    state.releaseOutcome = unverified.some((release) => release.tag === selected.tag) ? 'validation-failed' : 'up-to-date'
+  } else state.releaseOutcome = 'update-available'
+  state.outcome = lostRecords.length > 0 ? 'ancestry-lost' : state.releaseOutcome
   return state
 }
 
@@ -1149,6 +1255,16 @@ function deriveState(context, config, target) {
 
 function branchNameFor(tag) {
   return `${BRANCH_PREFIX}${tag}`
+}
+
+/** Refuses (exit 2) a `--release` value that cannot be the lane's branch, ref or directory. */
+function assertTagShape(context, tag) {
+  const refused = checkTagShape(tag)
+  if (refused !== null) throw new LaneError(`release ${JSON.stringify(tag)} is refused: ${refused}`)
+  const check = context.git(['check-ref-format', '--branch', branchNameFor(tag)], { cwd: context.root, check: false })
+  if (check.status !== 0) {
+    throw new LaneError(`release ${JSON.stringify(tag)} is refused: ${branchNameFor(tag)} is not a valid branch name (git check-ref-format)`)
+  }
 }
 
 function worktreePathFor(root, tag) {
@@ -1245,7 +1361,10 @@ function outcomeFromRecord(record, config) {
 
 /** The tag the human means for continue/validate/abort: --release, the cwd's branch, or the only one. */
 function resolveLaneTag(context) {
-  if (context.options.release !== undefined) return context.options.release
+  if (context.options.release !== undefined) {
+    assertTagShape(context, context.options.release)
+    return context.options.release
+  }
   if (context.currentBranch !== null && context.currentBranch.startsWith(BRANCH_PREFIX)) {
     return context.currentBranch.slice(BRANCH_PREFIX.length)
   }
@@ -1332,14 +1451,62 @@ function runRegenerate(context, config, session) {
   return results
 }
 
-function stageGeneratedPaths(git, worktree, generatedPaths) {
+function absolutePathIn(worktree, path) {
+  return join(worktree, ...path.split('/'))
+}
+
+/** A sha256 of the file's bytes, or null when no regular file is there: content, not identity. */
+function fingerprintFile(absolute) {
+  let stat
+  try {
+    stat = statSync(absolute)
+  } catch {
+    return null
+  }
+  if (!stat.isFile()) return null
+  return createHash('sha256').update(readFileSync(absolute)).digest('hex')
+}
+
+function fingerprintPaths(worktree, paths) {
+  return new Map(paths.map((path) => [path, fingerprintFile(absolutePathIn(worktree, path))]))
+}
+
+/** The tracked paths whose working-tree content differs from the index, unmerged ones included. */
+function dirtyTrackedPaths(git, worktree) {
+  const output = git(['diff', '--name-only', '-z'], { cwd: worktree }).stdout
+  return [...new Set(output.split('\0').filter((path) => path !== ''))].toSorted()
+}
+
+/** Fingerprints of the dirty tracked paths no `generatedPaths` glob covers. */
+function fingerprintOutsideGenerated(git, worktree, generatedPaths) {
+  return fingerprintPaths(
+    worktree,
+    dirtyTrackedPaths(git, worktree).filter((path) => !matchesAnyGlob(path, generatedPaths)),
+  )
+}
+
+/** The paths `after` carries that `before` did not, or whose content moved: what a run rewrote. */
+function rewrittenBetween(before, after) {
+  const rows = []
+  for (const [path, print] of after) {
+    if (before.has(path) && before.get(path) === print) continue
+    rows.push({ path, change: print === null ? 'deleted' : 'modified' })
+  }
+  return rows
+}
+
+/**
+ * Stages every generated path the status names, except the ones in `skip` — the conflicted
+ * generated paths regeneration left as the merge left them, which stay unmerged for the human
+ * rather than being staged as the side git happened to leave in the worktree.
+ */
+function stageGeneratedPaths(git, worktree, generatedPaths, skip = new Set()) {
   if (generatedPaths.length === 0) return []
   const status = git(['status', '--porcelain=v2', '-z', '--untracked-files=all'], { cwd: worktree }).stdout
   const paths = []
   for (const entry of parsePorcelainStatus(status)) {
-    if (entry.kind === 'ignored') continue
-    if (matchesAnyGlob(entry.path, generatedPaths)) paths.push(entry.path)
-    if (entry.kind === 'renamed' && matchesAnyGlob(entry.from, generatedPaths)) paths.push(entry.from)
+    if (matchesAnyGlob(entry.path, generatedPaths) && !skip.has(entry.path)) paths.push(entry.path)
+    if (entry.kind === 'renamed' && matchesAnyGlob(entry.from, generatedPaths) && !skip.has(entry.from)) paths.push(entry.from)
   }
   // A path the generator removed — or the merge already deleted — has nothing left for `add`
   // to match; its index entry (unmerged or not) is dropped instead, which is the deletion.
@@ -1391,9 +1558,11 @@ function identityArguments(git, worktree) {
   return { args: ['-c', `user.name=${FALLBACK_IDENTITY.name}`, '-c', `user.email=${FALLBACK_IDENTITY.email}`], fallback: true }
 }
 
-function commitInWorktree(git, worktree, message) {
+/** Commits the index; `rerere` records the resolution of the merge being committed (see the header). */
+function commitInWorktree(git, worktree, message, { rerere = false } = {}) {
   const identity = identityArguments(git, worktree)
-  git([...identity.args, 'commit', '--quiet', '--no-verify', '-m', message], { cwd: worktree })
+  const rerereArgs = rerere ? ['-c', 'rerere.enabled=true'] : []
+  git([...identity.args, ...rerereArgs, 'commit', '--quiet', '--no-verify', '-m', message], { cwd: worktree })
   return { sha: git(['rev-parse', 'HEAD'], { cwd: worktree }).stdout.trim(), fallbackIdentity: identity.fallback }
 }
 
@@ -1410,12 +1579,12 @@ function recordRelativePath(tag) {
 }
 
 function writeRecordFile(git, worktree, tag, record) {
-  const relative = recordRelativePath(tag)
-  const absolute = join(worktree, ...relative.split('/'))
+  const recordPath = recordRelativePath(tag)
+  const absolute = absolutePathIn(worktree, recordPath)
   mkdirSync(dirname(absolute), { recursive: true })
   writeFileSync(absolute, `${JSON.stringify(record, null, 2)}\n`)
-  git(['add', '--', relative], { cwd: worktree })
-  return relative
+  git(['add', '--', recordPath], { cwd: worktree })
+  return recordPath
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1441,6 +1610,7 @@ function createDocument(verb) {
     conflicts: [],
     gates: [],
     regenerate: [],
+    unlistedGenerated: [],
     branch: null,
     worktree: null,
     mergeCommit: null,
@@ -1558,15 +1728,24 @@ export function renderReport(doc) {
       if (conflict.deletedBy !== undefined) bits.push(`deleted by ${conflict.deletedBy}`)
       if (conflict.renamedFrom !== undefined) bits.push(`renamed from \`${conflict.renamedFrom}\``)
       if (conflict.renamedTo !== undefined && conflict.renamedTo !== conflict.path) bits.push(`renamed to \`${conflict.renamedTo}\``)
-      if (conflict.generated) bits.push('generated: regenerated on `continue`, no hand edit needed')
+      if (conflict.generated) {
+        bits.push(
+          conflict.regenerated === false
+            ? 'generated, but regeneration did not produce it: resolve it by hand and `git add` it, or fix the regenerate list'
+            : 'generated: regenerated on `continue`, no hand edit needed',
+        )
+      }
       if (conflict.resolvedBy !== undefined) bits.push(`resolved by ${conflict.resolvedBy}`)
       lines.push(`- \`${conflict.path}\` — ${bits.join('; ')}`)
     }
     lines.push('')
   }
-  if (doc.regenerate.length > 0) {
+  if (doc.regenerate.length > 0 || doc.unlistedGenerated.length > 0) {
     lines.push('## Regeneration', '')
     for (const step of doc.regenerate) lines.push(`- \`${step.run}\` — ${step.status} (exit ${step.exitCode}, ${step.durationMs} ms)`)
+    for (const row of doc.unlistedGenerated) {
+      lines.push(`- \`${row.path}\` — ${row.change} by regeneration, and no generatedPaths glob covers it: add it to generatedPaths`)
+    }
     const failed = doc.regenerate.find((step) => step.status === 'failed')
     if (failed !== undefined && failed.outputTail !== '') lines.push('', '```', failed.outputTail, '```')
     lines.push('')
@@ -1606,8 +1785,19 @@ const ANCESTRY_MISSING_TEXT = [
 function ancestryLostText(lost) {
   return [
     `The integration record ${lost.path} claims release ${lost.tag} at ${lost.commit}, and that commit is not an ancestor of the target branch. The usual cause is a squash or rebase landing of an earlier update branch.`,
-    `Recovery: land update branches by merge commit (allow merge commits on the integration branch, or keep a dedicated integration branch that does). For the release already lost, run \`integrate --release ${lost.tag}\` again; git will re-merge it, previously resolved conflicts may reappear, and \`git rerere\` (enabled in the update worktree) replays recorded resolutions when it can.`,
+    `Recovery: land update branches by merge commit (allow merge commits on the integration branch, or keep a dedicated integration branch that does). For the release already lost, run \`integrate --release ${lost.tag}\` again: \`preview\` and \`integrate\` proceed under this diagnosis, and only \`status\` keeps reporting ancestry-lost until the history is repaired. Git re-merges the release, previously resolved conflicts may reappear, \`git rerere\` (the lane runs its merges and merge commits under it) replays recorded resolutions when it can, and the record written in the new merge commit supersedes the stale one at the same path once that branch lands by merge commit.`,
+    `When ${lost.tag} truly is not wanted, delete or correct ${lost.path} on the target branch instead: the diagnosis clears with the record.`,
   ]
+}
+
+function validationFailedText(state, target) {
+  const branch = branchNameFor(state.selected.tag)
+  const gates = state.unverified.find((release) => release.tag === state.selected.tag)?.gates
+  return (
+    `${state.selected.tag} is in ${target.branch}'s history and its record says the gates ${gates}, so it is not integrated: ` +
+    `run \`validate --release ${state.selected.tag}\` on the update branch ${branch} to re-run them and commit a passing record, then land that commit; ` +
+    `when the branch is gone, re-create it from the target head first (\`git branch ${branch} ${target.branch}\`)`
+  )
 }
 
 function conflictText(worktree, conflicts) {
@@ -1629,17 +1819,19 @@ function conflictText(worktree, conflicts) {
 
 function prepare(context, doc, { fetch = true } = {}) {
   const config = loadConfig(context)
-  doc.config = config
+  // The document's copy of the configuration is what the report and the workflow's pull-request
+  // body carry, so the URL's userinfo stops here; git reads `config` itself, unredacted.
+  doc.config = { ...config, upstream: redactUrl(config.upstream) }
   const target = resolveTarget(context, config)
   const remote = ensureRemote(context, config)
-  if (remote.created) doc.messages.push(`remote ${JSON.stringify(config.remote)} was created with ${config.upstream}`)
+  if (remote.created) doc.messages.push(`remote ${JSON.stringify(config.remote)} was created with ${redactUrl(config.upstream)}`)
   if (fetch && !context.options.offline) doc.messages.push(...fetchUpstream(context, config))
   else if (fetch) {
     const anything = context.git(['for-each-ref', '--count=1', `${REF_NAMESPACE}/tags/`], { cwd: context.root }).stdout.trim()
     if (anything === '') throw new LaneError(`--offline, and nothing was fetched from ${config.remote} yet; run once without --offline`)
   }
   doc.upstream = {
-    url: remote.url,
+    url: redactUrl(remote.url),
     remote: config.remote,
     branch: config.branch,
     defaultBranchHead: revParse(context.git, context.root, `${REF_NAMESPACE}/heads/${config.branch}`),
@@ -1654,9 +1846,7 @@ function runStatus(context, doc) {
   doc.outcome = state.outcome
   if (state.outcome === 'ancestry-missing') doc.messages.push(...ANCESTRY_MISSING_TEXT)
   if (state.outcome === 'ancestry-lost') for (const lost of state.lostRecords) doc.messages.push(...ancestryLostText(lost))
-  if (state.outcome === 'validation-failed') {
-    doc.messages.push(`${state.selected.tag} is in the target branch's history, but its record says the gates ${state.unverified.find((release) => release.tag === state.selected.tag)?.gates}; it is not integrated until \`validate\` writes a passing record`)
-  }
+  if (state.outcome === 'validation-failed') doc.messages.push(validationFailedText(state, target))
   if (state.outcome === 'update-available') doc.messages.push(`run \`preview --release ${state.selected.tag}\` to see the merge, or \`integrate --release ${state.selected.tag}\` to prepare the update branch`)
   return doc
 }
@@ -1671,10 +1861,11 @@ function runPreview(context, doc) {
   const { config, target } = prepare(context, doc)
   const state = deriveState(context, config, target)
   fillStateInto(doc, state, config)
-  if (state.outcome !== 'update-available') {
-    doc.outcome = state.outcome
-    if (state.outcome === 'ancestry-missing') doc.messages.push(...ANCESTRY_MISSING_TEXT)
-    if (state.outcome === 'ancestry-lost') for (const lost of state.lostRecords) doc.messages.push(...ancestryLostText(lost))
+  // A lost record is carried, not obeyed: the rows and the recovery text travel with the preview.
+  for (const lost of state.lostRecords) doc.messages.push(...ancestryLostText(lost))
+  if (state.releaseOutcome !== 'update-available') {
+    doc.outcome = state.releaseOutcome
+    if (state.releaseOutcome === 'ancestry-missing') doc.messages.push(...ANCESTRY_MISSING_TEXT)
     doc.messages.push('no merge was attempted')
     return doc
   }
@@ -1719,6 +1910,21 @@ function finishMerge(context, config, doc, session) {
   doc.branch = session.branch
   doc.worktree = worktree
 
+  // What regeneration is measured against (see the header): each generated conflict's content
+  // as the merge left it — persisted at merge time, or read now for a merge the lane did not
+  // start — its content as this run begins, which paths are still unmerged, and the tracked
+  // paths outside `generatedPaths` that already differ from the index.
+  const generatedConflicts = session.state.conflicts.filter((conflict) => conflict.generated)
+  const generatedConflictPaths = generatedConflicts.map((conflict) => conflict.path)
+  const mergeTime = session.state.conflictedBlobs ?? {}
+  const asMerged = new Map(
+    generatedConflictPaths.map((path) => [path, Object.hasOwn(mergeTime, path) ? mergeTime[path] : fingerprintFile(absolutePathIn(worktree, path))]),
+  )
+  const atStart = fingerprintPaths(worktree, generatedConflictPaths)
+  const unmergedBefore = new Set(unmergedPaths(git, worktree))
+  const outsideBefore = fingerprintOutsideGenerated(git, worktree, config.generatedPaths)
+
+  if (config.regenerate.length > 0 || (config.gates.length > 0 && context.options.noGates !== true)) doc.messages.push(TRUST_NOTICE)
   doc.regenerate = runRegenerate(context, config, session)
   if (doc.regenerate.some((step) => step.status === 'failed')) {
     writeLaneState(git, worktree, session.state)
@@ -1726,19 +1932,34 @@ function finishMerge(context, config, doc, session) {
     doc.messages.push(`a regenerate command failed in ${worktree}; the merge is still in progress there — fix the cause, then run \`continue\``)
     return doc
   }
-  stageGeneratedPaths(git, worktree, config.generatedPaths)
+  doc.unlistedGenerated = rewrittenBetween(outsideBefore, fingerprintOutsideGenerated(git, worktree, config.generatedPaths))
+  if (doc.unlistedGenerated.length > 0) {
+    writeLaneState(git, worktree, session.state)
+    doc.outcome = 'regenerate-failed'
+    for (const row of doc.unlistedGenerated) {
+      doc.messages.push(
+        `regeneration ${row.change} \`${row.path}\`, a tracked path no generatedPaths glob covers: the gates would test it and the merge commit would not contain it — add it to generatedPaths, then run \`continue\``,
+      )
+    }
+    doc.messages.push(`nothing was staged or committed; the merge is still in progress in ${worktree}`)
+    return doc
+  }
+
+  const afterRun = fingerprintPaths(worktree, generatedConflictPaths)
+  const untouched = new Set(generatedConflictPaths.filter((path) => unmergedBefore.has(path) && afterRun.get(path) === asMerged.get(path)))
+  stageGeneratedPaths(git, worktree, config.generatedPaths, untouched)
 
   const conflictedPaths = session.state.conflicts.map((conflict) => conflict.path)
   const unmerged = unmergedPaths(git, worktree)
   const markers = scanMarkers(worktree, touchedPaths(git, worktree, conflictedPaths))
   if (unmerged.length > 0 || markers.length > 0) {
     writeLaneState(git, worktree, session.state)
-    doc.conflicts = session.state.conflicts
+    doc.conflicts = session.state.conflicts.map((conflict) => (untouched.has(conflict.path) ? { ...conflict, regenerated: false } : conflict))
     doc.outcome = 'conflict'
     for (const path of unmerged) {
       doc.messages.push(
         matchesAnyGlob(path, config.generatedPaths)
-          ? `${path} is still unmerged after regeneration: the regenerate commands did not rewrite it, so either the generatedPaths list or the regenerate list is wrong`
+          ? `${path} is still unmerged after regeneration: the regenerate commands did not produce it, so either the generatedPaths list or the regenerate list is wrong — fix the list, or resolve it by hand and \`git add\` it, then run \`continue\``
           : `${path} is still unmerged: resolve it and \`git add\` it, then run \`continue\``,
       )
     }
@@ -1755,7 +1976,16 @@ function finishMerge(context, config, doc, session) {
 
   doc.gates = runGates(context, config, session)
   const verdict = gatesVerdict(doc.gates, { skipped: context.options.noGates === true })
-  const conflicts = session.state.conflicts.map((conflict) => ({ ...conflict, resolvedBy: conflict.generated ? 'regeneration' : 'human' }))
+  // Who resolved a generated conflict: regeneration when it rewrote the path this run, or when
+  // the path was still unmerged as this run began (its content had moved since the merge, which
+  // is what got it staged); the human when they had staged it and regeneration left it alone.
+  const conflicts = session.state.conflicts.map((conflict) => ({
+    ...conflict,
+    resolvedBy:
+      conflict.generated && (unmergedBefore.has(conflict.path) || afterRun.get(conflict.path) !== atStart.get(conflict.path))
+        ? 'regeneration'
+        : 'human',
+  }))
   const record = buildRecord({
     release: session.release.tag,
     releaseCommit: session.release.commit,
@@ -1773,7 +2003,7 @@ function finishMerge(context, config, doc, session) {
   doc.record = writeRecordFile(git, worktree, session.release.tag, record)
   doc.conflicts = conflicts
   const message = `Merge upstream release ${session.release.tag} into ${session.target.branch}\n\n${trailers(session, verdict)}\n`
-  const committed = commitInWorktree(git, worktree, message)
+  const committed = commitInWorktree(git, worktree, message, { rerere: true })
   if (committed.fallbackIdentity) doc.messages.push(`no git identity was configured; the merge commit uses ${FALLBACK_IDENTITY.name} <${FALLBACK_IDENTITY.email}>`)
   doc.mergeCommit = committed.sha
   clearLaneState(git, worktree)
@@ -1797,11 +2027,19 @@ function startMerge(context, config, doc, session) {
   doc.branch = session.branch
   doc.worktree = worktree
   log(`merging ${session.release.tag} (${shortSha(session.release.commit)}) on ${session.branch}`)
-  const merge = git([...identityArguments(git, worktree).args, 'merge', '--no-ff', '--no-commit', session.release.commit], { cwd: worktree, check: false })
+  const merge = git(
+    [...identityArguments(git, worktree).args, '-c', 'rerere.enabled=true', 'merge', '--no-ff', '--no-commit', session.release.commit],
+    { cwd: worktree, check: false },
+  )
   if (merge.status > 1) throw new LaneError(`git merge failed in ${worktree}: ${merge.stderr.trim()}`)
   const status = git(['status', '--porcelain=v2', '-z'], { cwd: worktree }).stdout
   const conflicts = classifyConflicts(status, `${merge.stdout}\n${merge.stderr}`, config.generatedPaths)
   session.state.conflicts = conflicts
+  // Each generated conflict's content as the merge left it: what `continue` measures regeneration
+  // against, however many runs later (see the header).
+  session.state.conflictedBlobs = Object.fromEntries(
+    conflicts.filter((conflict) => conflict.generated).map((conflict) => [conflict.path, fingerprintFile(absolutePathIn(worktree, conflict.path))]),
+  )
   writeLaneState(git, worktree, session.state)
   if (conflicts.some((conflict) => !conflict.generated)) {
     doc.conflicts = conflicts
@@ -1820,11 +2058,13 @@ function runIntegrate(context, doc) {
   const { config, target } = prepare(context, doc)
   const state = deriveState(context, config, target)
   fillStateInto(doc, state, config)
-  if (state.outcome !== 'update-available') {
-    doc.outcome = state.outcome
-    if (state.outcome === 'ancestry-missing') doc.messages.push(...ANCESTRY_MISSING_TEXT)
-    if (state.outcome === 'ancestry-lost') for (const lost of state.lostRecords) doc.messages.push(...ancestryLostText(lost))
-    if (state.outcome === 'up-to-date') doc.messages.push(`${state.selected.tag} is already in the target branch's history; nothing to integrate`)
+  // A lost record is carried, not obeyed: the re-merge below is what repairs it (REQ-UPSTREAM-004).
+  for (const lost of state.lostRecords) doc.messages.push(...ancestryLostText(lost))
+  if (state.releaseOutcome !== 'update-available') {
+    doc.outcome = state.releaseOutcome
+    if (state.releaseOutcome === 'ancestry-missing') doc.messages.push(...ANCESTRY_MISSING_TEXT)
+    if (state.releaseOutcome === 'up-to-date') doc.messages.push(`${state.selected.tag} is already in the target branch's history; nothing to integrate`)
+    if (state.releaseOutcome === 'validation-failed') doc.messages.push(validationFailedText(state, target))
     doc.messages.push('no update branch was created')
     return doc
   }
@@ -1908,7 +2148,6 @@ function runIntegrate(context, doc) {
     mkdirSync(dirname(worktreePath), { recursive: true })
     git(['worktree', 'add', '--quiet', worktreePath, located.branch], { cwd: root })
   }
-  git(['config', 'rerere.enabled', 'true'], { cwd: worktreePath })
 
   const session = {
     release,
@@ -2001,7 +2240,7 @@ function runValidate(context, doc) {
   }
   doc.worktree = located.worktree.path
   if (located.worktree.inProgress) throw new LaneError(`a merge is in progress in ${located.worktree.path}; finish it with \`continue\` or discard it with \`abort\` before validating`)
-  const dirty = parsePorcelainStatus(git(['status', '--porcelain=v2', '-z'], { cwd: located.worktree.path }).stdout).filter((entry) => entry.kind !== 'untracked' && entry.kind !== 'ignored')
+  const dirty = parsePorcelainStatus(git(['status', '--porcelain=v2', '-z'], { cwd: located.worktree.path }).stdout).filter((entry) => entry.kind !== 'untracked')
   if (dirty.length > 0) {
     throw new LaneError(`${located.worktree.path} has uncommitted changes (${dirty.map((entry) => entry.path).join(', ')}); commit them first so the record describes a commit`)
   }
@@ -2012,6 +2251,7 @@ function runValidate(context, doc) {
   if (config.gates.length === 0) doc.messages.push(NO_GATES_NOTICE)
 
   const session = { release, target: { branch: existing?.targetBranch ?? target.branch }, branch: located.branch, worktree: located.worktree.path }
+  if (config.gates.length > 0 && context.options.noGates !== true) doc.messages.push(TRUST_NOTICE)
   doc.gates = runGates(context, config, session)
   const verdict = gatesVerdict(doc.gates, { skipped: context.options.noGates === true })
   const record = {
@@ -2053,6 +2293,11 @@ function runAbort(context, doc) {
     doc.messages.push(`no update branch ${located.branch} exists; nothing to abort`)
     return doc
   }
+  if (located.worktree !== null && isInsideDirectory(context.cwd, located.worktree.path)) {
+    throw new LaneError(
+      `the current directory ${context.cwd} is inside the update worktree ${located.worktree.path}, which abort removes — leave the directory first`,
+    )
+  }
   let cutPoint = null
   if (located.worktree !== null) {
     doc.worktree = located.worktree.path
@@ -2082,8 +2327,22 @@ function runAbort(context, doc) {
   return doc
 }
 
+/** A path in the form two paths are compared in: resolved, and case-folded where the platform is. */
+function comparablePath(value) {
+  return process.platform === 'win32' ? resolve(value).toLowerCase() : resolve(value)
+}
+
+/** True when `path` is `directory` or lies under it, by the platform's own path rules. */
+function isInsideDirectory(path, directory) {
+  const between = relative(comparablePath(directory), comparablePath(path))
+  return between === '' || (!isAbsolute(between) && between.split(sep)[0] !== '..')
+}
+
 function resolveLaneTagOrNull(context) {
-  if (context.options.release !== undefined) return context.options.release
+  if (context.options.release !== undefined) {
+    assertTagShape(context, context.options.release)
+    return context.options.release
+  }
   if (context.currentBranch !== null && context.currentBranch.startsWith(BRANCH_PREFIX)) return context.currentBranch.slice(BRANCH_PREFIX.length)
   const branches = context.git(['for-each-ref', '--format=%(refname:short)', `refs/heads/${BRANCH_PREFIX}`], { cwd: context.root })
     .stdout.split('\n')
@@ -2107,6 +2366,14 @@ verbs
   validate   re-run the gates on an existing update branch and commit a fresh record
   abort      abort the in-progress merge, remove the worktree, delete an untouched branch
   help       this text
+
+--branch <name> takes <name> as the target branch instead of the configured one, for every verb:
+status against the update branch itself, or integrate from a runner checkout whose branch
+carries another name.
+
+integrate, continue and validate run the merged tree's regenerate commands and gates with the
+caller's environment: review the release before running them on a workstation holding
+credentials, or run them in CI, where the prepare job holds none.
 
 exit status: 0 up-to-date | update-available | integrated; 1 a result to act on (conflict,
 validation-failed, update-branch-stale, ancestry-missing, ...); 2 usage, configuration or
@@ -2182,7 +2449,7 @@ export function main(argv) {
     if (error instanceof LaneError) {
       doc.outcome = error.outcome
       doc.exitCode = error.exitCode
-      doc.messages.unshift(error.message, ...error.messages)
+      doc.messages.unshift(error.message)
     } else {
       doc.outcome = 'error'
       doc.exitCode = 2

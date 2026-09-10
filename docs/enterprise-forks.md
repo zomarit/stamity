@@ -21,7 +21,7 @@ configuration file (`.stamity/upstream.json`), and one opt-in GitHub workflow ov
 It is a repository tool rather than a CLI verb, because it has to run in a tree that is mid-merge,
 where `src/` may not compile and `dist/` may be stale. Run it as `node scripts/upstream.mjs
 <verb>` or `npm run upstream -- <verb>`, and `help` for the verb and flag list: Node built-ins and
-`git` 2.20 or newer, nothing imported from `src/`.
+`git` 2.24 or newer, nothing imported from `src/`.
 
 Three things it does not promise. **A conflict-free upgrade for arbitrary edits** — two edits to
 the same lines are a conflict, and the lane's job is to report one well, not guess at it.
