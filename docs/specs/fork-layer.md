@@ -213,6 +213,8 @@ bare names; replacements retain the original bundled skill's name. Corpus output
 fork layer stays byte-identical apart from deliberate release metadata. This 2026-09-10
 extension repairs APM's reader of the layer shipped in 1.5.0; the earlier dated design
 context remains historical evidence.
+The extension targets 1.6.0, with publication and required compatibility evidence recorded
+separately before it is treated as shipped.
 
 ### REQ-FORK-011 — Public and private compatibility is proved independently
 
