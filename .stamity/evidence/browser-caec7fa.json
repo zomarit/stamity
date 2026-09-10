@@ -1,9 +1,9 @@
 {
-  "sha": "da7d8a76bad16eec38cf734a5bfeb01d0c419d38",
-  "timestamp": "2026-09-10T16:12:16.531Z",
+  "sha": "caec7fac5e45d82ad1b766c30affd3696829c690",
+  "timestamp": "2026-09-10T16:58:52.296Z",
   "target": {
-    "build": "Fresh isolated da7d8a7 production website/build",
-    "address": "http://127.0.0.1:4183",
+    "build": "Fresh isolated final documentation candidate website/build",
+    "address": "http://127.0.0.1:4184",
     "widths": [
       375,
       1440
@@ -34,7 +34,7 @@
     {
       "id": "serving-path",
       "status": "pass",
-      "evidence": "Fresh isolated candidate build served on a dedicated local port"
+      "evidence": "Fresh isolated final documentation candidate build served on a dedicated local port"
     },
     {
       "id": "browser",
@@ -53,98 +53,98 @@
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-enterprise-forks-375-light.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-enterprise-forks-375-light.json"
     },
     {
       "id": "enterprise-forks-375-dark",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-enterprise-forks-375-dark.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-enterprise-forks-375-dark.json"
     },
     {
       "id": "enterprise-forks-1440-light",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-enterprise-forks-1440-light.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-enterprise-forks-1440-light.json"
     },
     {
       "id": "enterprise-forks-1440-dark",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-enterprise-forks-1440-dark.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-enterprise-forks-1440-dark.json"
     },
     {
       "id": "getting-started-375-light",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-getting-started-375-light.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-getting-started-375-light.json"
     },
     {
       "id": "getting-started-375-dark",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-getting-started-375-dark.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-getting-started-375-dark.json"
     },
     {
       "id": "getting-started-1440-light",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-getting-started-1440-light.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-getting-started-1440-light.json"
     },
     {
       "id": "getting-started-1440-dark",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-getting-started-1440-dark.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-getting-started-1440-dark.json"
     },
     {
       "id": "customization-375-light",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-customization-375-light.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-customization-375-light.json"
     },
     {
       "id": "customization-375-dark",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-customization-375-dark.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-customization-375-dark.json"
     },
     {
       "id": "customization-1440-light",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-customization-1440-light.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-customization-1440-light.json"
     },
     {
       "id": "customization-1440-dark",
       "origin": "change-description",
       "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-customization-1440-dark.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/scenario-customization-1440-dark.json"
     },
     {
       "id": "resize-and-font-size",
       "origin": "change-description",
       "requirement": "ResizeObserver tracks viewport and row-group width",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/resize-and-font-size.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/resize-and-font-size.json"
     },
     {
       "id": "ssr-no-javascript",
       "origin": "change-description",
       "requirement": "Pre-hydration tables retain headers and keyboard stops",
       "status": "pass",
-      "evidence": "/tmp/stamity-p13-release-verification/a11y/ssr-no-javascript.json"
+      "evidence": "/tmp/stamity-p13-final-site-verification/a11y/ssr-no-javascript.json"
     }
   ],
   "accessibility": [
@@ -161,7 +161,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-enterprise-forks-375-light.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-enterprise-forks-375-light.json"
     },
     {
       "surface": "enterprise-forks-375-dark",
@@ -176,7 +176,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-enterprise-forks-375-dark.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-enterprise-forks-375-dark.json"
     },
     {
       "surface": "enterprise-forks-1440-light",
@@ -191,7 +191,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-enterprise-forks-1440-light.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-enterprise-forks-1440-light.json"
     },
     {
       "surface": "enterprise-forks-1440-dark",
@@ -206,7 +206,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-enterprise-forks-1440-dark.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-enterprise-forks-1440-dark.json"
     },
     {
       "surface": "getting-started-375-light",
@@ -221,7 +221,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-getting-started-375-light.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-getting-started-375-light.json"
     },
     {
       "surface": "getting-started-375-dark",
@@ -236,7 +236,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-getting-started-375-dark.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-getting-started-375-dark.json"
     },
     {
       "surface": "getting-started-1440-light",
@@ -251,7 +251,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-getting-started-1440-light.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-getting-started-1440-light.json"
     },
     {
       "surface": "getting-started-1440-dark",
@@ -266,7 +266,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-getting-started-1440-dark.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-getting-started-1440-dark.json"
     },
     {
       "surface": "customization-375-light",
@@ -281,7 +281,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-customization-375-light.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-customization-375-light.json"
     },
     {
       "surface": "customization-375-dark",
@@ -296,7 +296,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-customization-375-dark.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-customization-375-dark.json"
     },
     {
       "surface": "customization-1440-light",
@@ -311,7 +311,7 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-customization-1440-light.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-customization-1440-light.json"
     },
     {
       "surface": "customization-1440-dark",
@@ -326,32 +326,32 @@
       "serious": 0,
       "critical": 0,
       "totalViolations": 0,
-      "results": "/tmp/stamity-p13-release-verification/a11y/axe-customization-1440-dark.json"
+      "results": "/tmp/stamity-p13-final-site-verification/a11y/axe-customization-1440-dark.json"
     }
   ],
   "screenshots": [
     {
-      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-enterprise-forks-375-light.png",
+      "candidate": "/tmp/stamity-p13-final-site-verification/a11y/keyboard-enterprise-forks-375-light.png",
       "baseline": null,
       "diff": null,
       "changedPixelRatio": null,
       "opened": true,
       "status": "skipped",
       "reason": "No committed visual baseline; independent focus capture only",
-      "observation": "Visible table focus outline and readable text in this mobile capture; no baseline comparison claimed."
+      "observation": "Verifier opened this final mobile capture and observed a visible focus outline and readable table text; no screenshot baseline comparison claimed."
     },
     {
-      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-enterprise-forks-375-dark.png",
+      "candidate": "/tmp/stamity-p13-final-site-verification/a11y/keyboard-enterprise-forks-375-dark.png",
       "baseline": null,
       "diff": null,
       "changedPixelRatio": null,
       "opened": true,
       "status": "skipped",
       "reason": "No committed visual baseline; independent focus capture only",
-      "observation": "Visible table focus outline and readable text in this mobile capture; no baseline comparison claimed."
+      "observation": "Verifier opened this final mobile capture and observed a visible focus outline and readable table text; no screenshot baseline comparison claimed."
     },
     {
-      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-enterprise-forks-1440-light.png",
+      "candidate": "/tmp/stamity-p13-final-site-verification/a11y/keyboard-enterprise-forks-1440-light.png",
       "baseline": null,
       "diff": null,
       "changedPixelRatio": null,
@@ -360,7 +360,7 @@
       "reason": "No committed visual baseline; independent focus capture only"
     },
     {
-      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-enterprise-forks-1440-dark.png",
+      "candidate": "/tmp/stamity-p13-final-site-verification/a11y/keyboard-enterprise-forks-1440-dark.png",
       "baseline": null,
       "diff": null,
       "changedPixelRatio": null,
@@ -369,7 +369,7 @@
       "reason": "No committed visual baseline; independent focus capture only"
     },
     {
-      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-getting-started-375-light.png",
+      "candidate": "/tmp/stamity-p13-final-site-verification/a11y/keyboard-getting-started-375-light.png",
       "baseline": null,
       "diff": null,
       "changedPixelRatio": null,
@@ -378,7 +378,7 @@
       "reason": "No committed visual baseline; independent focus capture only"
     },
     {
-      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-getting-started-375-dark.png",
+      "candidate": "/tmp/stamity-p13-final-site-verification/a11y/keyboard-getting-started-375-dark.png",
       "baseline": null,
       "diff": null,
       "changedPixelRatio": null,
@@ -387,7 +387,7 @@
       "reason": "No committed visual baseline; independent focus capture only"
     },
     {
-      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-customization-375-light.png",
+      "candidate": "/tmp/stamity-p13-final-site-verification/a11y/keyboard-customization-375-light.png",
       "baseline": null,
       "diff": null,
       "changedPixelRatio": null,
@@ -396,7 +396,7 @@
       "reason": "No committed visual baseline; independent focus capture only"
     },
     {
-      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-customization-375-dark.png",
+      "candidate": "/tmp/stamity-p13-final-site-verification/a11y/keyboard-customization-375-dark.png",
       "baseline": null,
       "diff": null,
       "changedPixelRatio": null,
@@ -407,8 +407,8 @@
   ],
   "summary": "Independent review: 14 scenarios passed; 12 theme/viewport scans have zero serious, critical or other violations. Actual Tab and ArrowRight probes confirmed all 20 overflowing table instances. Human screen-reader and complete keyboard journey remain QA; no visual regression baseline exists.",
   "retention": {
-    "rawBundleSha256": "52227104c66f028af124ffc5a3aff01ac02ffae6108ba698b14f80fe6b9aa3e4",
-    "rawBundlePath": "/tmp/stamity-p13-release-verification/a11y/bundle.json",
-    "note": "Raw current-candidate browser evidence is retained with the maintainer release evidence. Paths record the original run location; source and artifact hashes permit identifying archived copies. The earlier public projection before final screenshot inspection remains in commit bdc7965."
+    "rawBundleSha256": "e850c00f4ea0a85e17a79de7c1d6f9118a3a657e03c2c8d991f3370757c26f2b",
+    "rawBundlePath": "/tmp/stamity-p13-final-site-verification/a11y/bundle.json",
+    "note": "Final current-document browser evidence is retained with the maintainer release evidence. Paths identify original run locations; the raw bundle was finalized after screenshot inspection and before its hash was recorded."
   }
 }

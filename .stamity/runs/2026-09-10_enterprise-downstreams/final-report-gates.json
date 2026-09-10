@@ -1,0 +1,90 @@
+[
+  {
+    "name": "build",
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "cwd": "/tmp/stamity-p13-final-report-verification/checkout",
+    "exitCode": 0,
+    "seconds": 1.28
+  },
+  {
+    "name": "full-gate",
+    "command": [
+      "bash",
+      "-c",
+      "npm run lint && npm run typecheck && npm run test"
+    ],
+    "cwd": "/tmp/stamity-p13-final-report-verification/checkout",
+    "exitCode": 0,
+    "seconds": 116.62
+  },
+  {
+    "name": "coverage",
+    "command": [
+      "npm",
+      "test",
+      "--",
+      "--coverage"
+    ],
+    "cwd": "/tmp/stamity-p13-final-report-verification/checkout",
+    "exitCode": 0,
+    "seconds": 102.46
+  },
+  {
+    "name": "leak",
+    "command": [
+      "npm",
+      "run",
+      "gate"
+    ],
+    "cwd": "/tmp/stamity-p13-final-report-verification/checkout",
+    "exitCode": 0,
+    "seconds": 4.54
+  },
+  {
+    "name": "knip",
+    "command": [
+      "npm",
+      "run",
+      "knip"
+    ],
+    "cwd": "/tmp/stamity-p13-final-report-verification/checkout",
+    "exitCode": 0,
+    "seconds": 1.74
+  },
+  {
+    "name": "generators",
+    "command": [
+      "bash",
+      "-c",
+      "node scripts/generate-capability-matrix.mjs && node scripts/generate-docs.mjs && node scripts/generate-pack-manifests.mjs --check && node scripts/generate-plugin-manifests.mjs --check && node scripts/generate-apm-package.mjs --check && git diff --exit-code"
+    ],
+    "cwd": "/tmp/stamity-p13-final-report-verification/checkout",
+    "exitCode": 0,
+    "seconds": 1.21
+  },
+  {
+    "name": "dogfood-check",
+    "command": [
+      "node",
+      "dist/cli.js",
+      "check"
+    ],
+    "cwd": "/tmp/stamity-p13-final-report-verification/checkout",
+    "exitCode": 0,
+    "seconds": 0.25
+  },
+  {
+    "name": "tarball-smoke",
+    "command": [
+      "node",
+      "scripts/tarball-smoke.mjs"
+    ],
+    "cwd": "/tmp/stamity-p13-final-report-verification/checkout",
+    "exitCode": 0,
+    "seconds": 4.82
+  }
+]
