@@ -241,6 +241,31 @@ describe("applyInit — fresh repo", () => {
     });
   });
 
+  it("selects the fork layer's artifacts beside the corpus's: an addition listed, a replacement listed once", async () => {
+    // The fork root resolves as the corpus root's sibling `fork/`
+    // (`src/content/contentRoot.ts`), so it sits beside the pinned fixture the
+    // way it sits beside the bundled corpus in a fork's package. A selection
+    // read off the corpus alone left every fork artifact out of the manifest
+    // `init` writes, and out of every count derived from it.
+    await getTemp().seedFiles({
+      [`${CONTENT_FIXTURE}/agents/stamity-reviewer.md`]:
+        "---\nid: reviewer\ndescription: Reviews diffs\ntags: [review]\n---\nBody.\n",
+      [`${CONTENT_FIXTURE}/rules/stamity-security.md`]:
+        "---\nid: security\ndescription: Security floor\ntags: [security]\n---\nBody.\n",
+      "fork/agents/acme-onboarding.md":
+        "---\nid: acme-onboarding\ndescription: The fork's onboarding agent\ntags: [review]\n---\nBody.\n",
+      "fork/rules/security.md":
+        "---\nid: security\ndescription: The fork's security floor\ntags: [security]\n---\nFork body.\n",
+    });
+    const root = await makeRepo();
+    await applyInit(optionsFor(root));
+
+    const manifest = await readManifest(root);
+    expect(manifest?.selection).toEqual({
+      items: { agent: ["reviewer", "acme-onboarding"], skill: [], rule: ["security"], command: [] },
+    });
+  });
+
   it("records a platform when the decisions carry one", async () => {
     const root = await makeRepo();
     await applyInit(

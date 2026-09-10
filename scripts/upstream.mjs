@@ -717,10 +717,12 @@ const SHADOW_ROOTS = Object.freeze(['.stamity/overrides/', 'fork/'])
  * The prefix the engine mints a class's corpus filenames under, keyed by the DIRECTORY name both
  * shadow trees use for that class.
  *
- * A copy of `contentPrefixFor` (`src/types/markers.ts:216-231`): the invocable classes (`command`,
+ * A copy of `contentPrefixFor` (`src/types/markers.ts:227-231`): the invocable classes (`command`,
  * `skill`) take `st-`, every other class takes `stamity-`. Copied rather than imported because
  * this script imports nothing from `src/` — it has to run in a tree that is mid-merge, where
- * `src/` may not compile. The four keys are the closed content-class set
+ * `src/` may not compile. The copy is held to the original by a drift gate that reads this
+ * table as TEXT (`test/upstream/lane.test.ts`, "the class→prefix table"), so the two cannot
+ * disagree silently. The four keys are the closed content-class set
  * (`CONTENT_CLASSES`, `src/types/content.ts:14`) in its directory spelling; a directory that is
  * not one of them is not a content class at all, so it has no minted spelling and only the bare
  * name is a candidate for it.

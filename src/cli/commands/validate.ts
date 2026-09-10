@@ -85,8 +85,19 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * `fork/...` path, a patched row carries `layer: "fork"` and the fork's halves,
  * and the human rendering marks each with "fork layer". The merged artifact a
  * fork patch produces goes through the same gate a repo's own patch does — the
- * layer relaxes no floor — with the finding addressed to the fork file. This
- * repository ships no `fork/`, so here the block reads exactly as it did.
+ * layer relaxes no floor — with the finding addressed to the fork file. Two
+ * fork patches are NOT `patched` rows, because nothing was merged. One whose
+ * id this repo's override tree REPLACED is inert — a fork patch lands on the
+ * item the corpus or a pack supplies, and an override that took the id whole
+ * left it nothing to land on — so it is named on that override's `replaced`
+ * row (`shadowedOverlays`), and no finding is addressed to the fork file: the
+ * artifact in force is the consumer's own, judged as such with every other
+ * override. One whose base no shipped layer supplies is SKIPPED by the walk
+ * rather than refused (the fork layer is package-global, so refusing it would
+ * fail every consumer without the pack that supplies the base) and reported
+ * here as a warning naming the artifact it waits for — exit 0, because the
+ * consumer can fix nothing about it. This repository ships no `fork/`, so here
+ * the block reads exactly as it did.
  *
  * Non-mutating: no `--dry-run`, nothing written, nothing created to find out
  * that it is absent. Exit 1 iff a finding is an error; warnings alone exit 0 —
@@ -141,6 +152,16 @@ interface ValidateReplaced {
    * it is false they are still what emits.
    */
   replaced: string[];
+  /**
+   * Package-relative paths (`fork/...`) of the fork-layer overlay halves
+   * addressed at this id that the replacement SHADOWED. A fork patch lands on
+   * the item the corpus or a pack supplies, and a user override that took the
+   * id whole left it nothing to land on — so the patch is inert, and it is
+   * reported here, under the replacement that made it so, rather than as a
+   * `patched` row claiming a merge that never reached the artifact. Present
+   * only when `winner` is `user` and the fork layer patches the id.
+   */
+  shadowedOverlays?: string[];
   /**
    * Whether taking the id also took over EMISSION: true for the classes in
    * `OVERRIDE_EMITTING_CLASSES` (`../engine/emission.ts`), which is every
@@ -576,24 +597,37 @@ async function collectCustomization(
       // fork paths against the same root the walk read them from.
       ...(inputs.forkRoot === undefined ? {} : { forkRoot: inputs.forkRoot }),
     });
+    const forkOutcomes = classifyForkOverlays(engine, index, inputs.forkOverlays, display);
     const patched = await Promise.all([
-      ...inputs.forkOverlays.map((overlay) => judgePatched(engine, index, overlay, "fork", display)),
+      ...forkOutcomes.judgeable.map((overlay) =>
+        judgePatched(engine, index, overlay, "fork", display),
+      ),
       ...inputs.overlays.map((overlay) => judgePatched(engine, index, overlay, "user", display)),
     ]);
     return {
       shadows: [
-        ...(index.shadows ?? []).map((shadow) => ({
-          outcome: "replaced" as const,
-          type: shadow.type,
-          id: shadow.id,
-          winner: customizingLayerOf(catalog.originOf(shadow.winner)),
-          path: display(shadow.winner.filePath),
-          replaced: shadow.shadowed.map((item) => layerPathOf(engine, item)),
-          emits: OVERRIDE_EMITTING_CLASSES.includes(shadow.type),
-        })),
+        ...(index.shadows ?? []).map((shadow): ValidateReplaced => {
+          const row: ValidateReplaced = {
+            outcome: "replaced",
+            type: shadow.type,
+            id: shadow.id,
+            winner: customizingLayerOf(catalog.originOf(shadow.winner)),
+            path: display(shadow.winner.filePath),
+            replaced: shadow.shadowed.map((item) => layerPathOf(engine, item)),
+            emits: OVERRIDE_EMITTING_CLASSES.includes(shadow.type),
+          };
+          const shadowedOverlays = forkOutcomes.shadowedByKey.get(
+            catalog.typeIdKey(shadow.type, shadow.id),
+          );
+          // Set only when present: an absent key is what every replaced row
+          // carried before, and a CI consumer diffing envelopes should see
+          // nothing move for a repo the fork layer does not patch.
+          if (shadowedOverlays !== undefined) row.shadowedOverlays = shadowedOverlays;
+          return row;
+        }),
         ...patched.flatMap((result) => result.rows),
       ],
-      findings: patched.flatMap((result) => result.findings),
+      findings: [...patched.flatMap((result) => result.findings), ...forkOutcomes.waiting],
     };
   } catch (cause) {
     const named = overlayFailure(overlays, display, cause);
@@ -643,6 +677,73 @@ function halfPaths(overlay: UserContentOverlay): string[] {
   );
 }
 
+/** What the walk did with the fork layer's pairs, sorted into the three outcomes the report has for them. */
+interface ForkOverlayOutcomes {
+  /** Pairs the walk merged: they take the `patched` row and the merged-artifact judgement. */
+  readonly judgeable: readonly UserContentOverlay[];
+  /**
+   * Displayed half paths of the pairs a user override made inert, keyed by
+   * the type-qualified id the override took — attached to that override's
+   * `replaced` row as `shadowedOverlays`.
+   */
+  readonly shadowedByKey: ReadonlyMap<string, string[]>;
+  /** One warning per half the walk skipped for want of a base, in the walk's own words. */
+  readonly waiting: readonly ValidateFinding[];
+}
+
+/**
+ * Sort the fork layer's pairs by what the merged index says happened to each.
+ *
+ * Three outcomes, read off the walk rather than re-derived. A half the walk
+ * SKIPPED is in `index.skipped` with its reason — the fork stage found no
+ * base in the corpus, a pack or the fork layer, and skips rather than refuses
+ * because the fork layer is package-global (`../../content/catalog.ts`, the
+ * overlay-layer header) — and passes through here as a warning in the engine's
+ * own words, at exit 0: nothing in this repository can fix it. A pair whose
+ * id resolves to a USER artifact was made inert by that override — the fork
+ * patch landed on the shipped item in stage one and the override then took
+ * the id whole — so it is neither judged (the artifact in force is the
+ * consumer's own file, already judged as such) nor reported as `patched`; it
+ * is attached to the override's replaced row. Everything else merged, and is
+ * judged like a repo's own pair.
+ */
+function classifyForkOverlays(
+  engine: EngineRegistry,
+  index: ContentIndex,
+  forkOverlays: readonly UserContentOverlay[],
+  display: PathDisplay,
+): ForkOverlayOutcomes {
+  const { catalog } = engine.content;
+  const forkHalves = new Set(forkOverlays.flatMap(halfPaths));
+  const skipped = (index.skipped ?? []).filter((entry) => forkHalves.has(entry.filePath));
+  const skippedPaths = new Set(skipped.map((entry) => entry.filePath));
+
+  const judgeable: UserContentOverlay[] = [];
+  const shadowedByKey = new Map<string, string[]>();
+  for (const overlay of forkOverlays) {
+    const halves = halfPaths(overlay);
+    if (halves.some((path) => skippedPaths.has(path))) continue;
+    const key = catalog.typeIdKey(
+      overlay.type,
+      catalog.applyCommandPrefix(overlay.slug, overlay.type),
+    );
+    const item = index.byKey.get(key);
+    if (item !== undefined && catalog.originOf(item) === "user") {
+      shadowedByKey.set(key, [...(shadowedByKey.get(key) ?? []), ...halves.map(display)]);
+      continue;
+    }
+    judgeable.push(overlay);
+  }
+
+  return {
+    judgeable,
+    shadowedByKey,
+    waiting: skipped.map((entry) =>
+      finding("user-content", display(entry.filePath), "warning", entry.reason),
+    ),
+  };
+}
+
 /**
  * One overlay pair: its report row, and every finding the MERGED artifact earns.
  *
@@ -670,8 +771,10 @@ async function judgePatched(
   const { catalog, userContent } = engine.content;
   const id = catalog.applyCommandPrefix(overlay.slug, overlay.type);
   const item = index.byKey.get(catalog.typeIdKey(overlay.type, id));
-  // Unreachable through the walk, which refuses an orphan outright; carried so a
-  // future walk that reported one instead of throwing cannot crash this report.
+  // Unreachable: the walk refuses a user-stage orphan outright, and a fork-stage
+  // one is skipped by the walk and sorted out before this call
+  // (`classifyForkOverlays`). Carried so a walk that ever reported one some
+  // other way cannot crash this report.
   if (item === undefined) return { rows: [], findings: [] };
 
   const check = await userContent.checkUserArtifact({
@@ -1112,7 +1215,17 @@ function renderShadows(ctx: CliContext, shadows: readonly ValidateShadow[]): voi
     // The fork layer is marked on the row as well as in the header: a row read
     // on its own — grepped out of a CI log — still says which layer did it.
     const layer = customizedBy(row) === "fork" ? " — fork layer" : "";
-    ctx.io.out(`  ${row.type} ${palette.bold(row.id)}  ${palette.dim(path)}  ${outcome}${layer}\n`);
+    // A fork patch the override made inert is named on the override's row: the
+    // reader who wonders why the fork's patch is not in the artifact finds the
+    // answer beside the replacement that is.
+    const shadowedOverlays =
+      row.outcome === "replaced" && row.shadowedOverlays !== undefined
+        ? `; shadows the fork patch ${row.shadowedOverlays.join(", ")} — inert, ` +
+          `the override replaced the artifact it would have patched`
+        : "";
+    ctx.io.out(
+      `  ${row.type} ${palette.bold(row.id)}  ${palette.dim(path)}  ${outcome}${layer}${shadowedOverlays}\n`,
+    );
   }
   ctx.io.out("\n");
 }

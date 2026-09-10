@@ -60,9 +60,17 @@ import type { SkippedUserEntry } from "./userContent.ts";
  * `items` so no consumer emits both bodies, and the replacement is recorded as
  * a {@link ContentShadow}. A shadow is a legitimate state — it is how a fork
  * or a repo customizes a shipped artifact — so it is reported, never thrown.
- * Packs are the one exception and stay strict: a pack claiming an id the
- * corpus, an earlier pack or the fork layer holds is refused (see
- * {@link buildContentIndex}).
+ * Packs are the one exception and stay strict: a pack and any other layer
+ * never share an id. A pack claiming an id the corpus or an earlier pack holds
+ * is refused, and so is a pack whose id the fork layer — walked AFTER it —
+ * turns out to claim: the refusal fires on contact from either side of the
+ * seam, and the pack is the party at fault whichever was walked first (see
+ * {@link resolveLayerInto}). The fork layer is held one notch more strictly
+ * than the corpus in exactly one place: a reserved-prefix filename under
+ * `fork/` is refused on the NAME, before the file is opened ({@link scanClass}),
+ * because a fork has no save gate to meet the rule at and the prefix is what
+ * the engine mints onto its emissions — a source file wearing it would index as
+ * a second spelling of one identity.
  *
  * Customization comes in two shapes, and exactly one of them applies to any
  * `(class, id)` WITHIN a layer. REPLACEMENT is the override above: a whole
@@ -117,7 +125,8 @@ export type CatalogFs = Pick<typeof NodeFsPromises, "readdir" | "readFile">;
  * skill claims one id or one projection directory — the difference between
  * naming the file the operator or the fork wrote and naming four adapters that
  * had nothing to do with it; and `refuseOverrideDirectoryClash` ranks the
- * layers to decide which of two rows in one directory is the one to move.
+ * layers through {@link layerRankOf} to decide which of two rows in one
+ * directory is the one to move.
  * `../cli/commands/validate.ts` reads it to label a shadow row's winner and a
  * patched row's base layer, so a reader can tell the fork layer from a consumer
  * override. This walk itself ranks the layers ({@link buildContentIndex}) and
@@ -150,6 +159,19 @@ const LAYER_RANK: Readonly<Record<ContentOrigin, number>> = {
   fork: 2,
   user: 3,
 };
+
+/**
+ * The rank of the layer that supplied one artifact or projected row —
+ * {@link LAYER_RANK} read through {@link originOf}, so a subject that carries
+ * no origin ranks as the corpus. The one table, exported: the emission
+ * planner's directory-clash rule (`../emit/planner.ts` →
+ * `refuseOverrideDirectoryClash`) decides which of two rows in one directory
+ * moves by this same order, and a second copy of the table over there was a
+ * second place for the precedence chain to be stated.
+ */
+export function layerRankOf(subject: Pick<CatalogItem, "origin">): number {
+  return LAYER_RANK[originOf(subject)];
+}
 
 /** One indexed artifact: its identity, where it came from, and its full text. */
 export interface CatalogItem {
@@ -349,8 +371,10 @@ export interface ContentIndex {
   shadows?: readonly ContentShadow[];
   /**
    * Entries the walk passed over that an author plausibly meant as artifacts —
-   * today, a symlinked `SKILL.md`. Optional for the same hand-assembled-index
-   * reason as {@link shadows}; always set by {@link buildContentIndex}.
+   * a symlinked `SKILL.md`, and a fork-layer overlay half whose base no shipped
+   * layer supplies ({@link forkOrphanSkipReason}). Optional for the same
+   * hand-assembled-index reason as {@link shadows}; always set by
+   * {@link buildContentIndex}.
    *
    * Reported rather than thrown, and reported rather than silently dropped:
    * following the link is the wrong answer (its target sits wherever it likes,
@@ -673,7 +697,9 @@ export async function buildContentIndex(
   // Stage one: everything the package ships, corpus and packs first, then the
   // fork layer over them. Fork patches run on what THIS stage resolved — the
   // item the corpus or a pack supplies, or the fork's own replacement of it,
-  // which the exclusivity rule inside `applyOverlays` refuses.
+  // which the exclusivity rule inside `applyOverlays` refuses. A fork patch
+  // with no base here is skipped and reported, never thrown (the overlay-layer
+  // header): the base may be a pack this repository has not installed.
   resolveLayerInto({ byKey, holders, duplicates, shadowedKeys }, [...shippedItems, ...forkItems]);
   const forkPatched = await applyOverlays(fs, forkOverlays, byKey, "fork");
 
@@ -701,7 +727,7 @@ export async function buildContentIndex(
     const key = typeIdKey(item.type, item.id);
     if (!shadowedKeys.has(key)) return true;
     const holder = holders.get(key);
-    return holder !== undefined && LAYER_RANK[originOf(item)] === LAYER_RANK[originOf(holder)];
+    return holder !== undefined && layerRankOf(item) === layerRankOf(holder);
   };
   const resolved = [...shippedItems, ...forkItems, ...userItems].filter(survives);
   // A patch does not move an item: the merged artifact takes the base's place in
@@ -709,28 +735,37 @@ export async function buildContentIndex(
   // over a fork-patched item composes — the fork's merge is the base the user's
   // merge was applied to, so the second map is read through the first.
   const items =
-    forkPatched.size === 0 && userPatched.size === 0
+    forkPatched.patched.size === 0 && userPatched.patched.size === 0
       ? resolved
       : resolved.map((item) => {
-          const afterFork = forkPatched.get(item) ?? item;
-          return userPatched.get(afterFork) ?? afterFork;
+          const afterFork = forkPatched.patched.get(item) ?? item;
+          return userPatched.patched.get(afterFork) ?? afterFork;
         });
   return {
     items,
     byKey,
     collisions,
     shadows: buildShadows([...shippedItems, ...forkItems, ...userItems], holders, shadowedKeys),
+    // The fork stage's skipped patches ride with the walk's other skipped
+    // entries; the user stage refuses instead of skipping, so its list is
+    // always empty and is not read.
     skipped: [
       ...scanned.flatMap((result) => result.skipped),
       ...packScanned.flat().flatMap((result) => result.skipped),
       ...forkScanned.flatMap((result) => result.skipped),
       ...overrideScanned.flatMap((result) => result.skipped),
+      ...forkPatched.skipped,
     ],
   };
 }
 
-/** The layer an item came from; `corpus` for an item assembled without one. */
-export function originOf(item: CatalogItem): ContentOrigin {
+/**
+ * The layer an item came from; `corpus` for an item assembled without one.
+ * Structural on the one field it reads, so a projected row that carries the
+ * same optional `origin` (`../emit/skillsProjection.ts` → `ProjectedFile`)
+ * answers through the same rule an item does.
+ */
+export function originOf(item: Pick<CatalogItem, "origin">): ContentOrigin {
   return item.origin ?? "corpus";
 }
 
@@ -782,7 +817,7 @@ function resolveLayerInto(state: ResolutionState, claimants: readonly CatalogIte
     // Layers are walked low to high, so a higher-ranked claimant is a
     // replacement: it takes the id, and what it replaced is reported instead of
     // vanishing. Equal ranks fall through to the duplicate report below.
-    if (LAYER_RANK[originOf(item)] > LAYER_RANK[originOf(existing)]) {
+    if (layerRankOf(item) > layerRankOf(existing)) {
       byKey.set(key, item);
       holders.set(key, item);
       shadowedKeys.add(key);
@@ -799,16 +834,45 @@ function resolveLayerInto(state: ResolutionState, claimants: readonly CatalogIte
  * against those the earlier claimant is always the cited owner; against the
  * fork layer the pack was walked first and the fork item is what it turned
  * out to be claiming.
+ *
+ * The two arms differ in what they can honestly say about how the state
+ * arose and who can fix it. Against the corpus or an earlier pack, `add`
+ * refused the pack at install time by this walk's own id rule, so the state
+ * was assembled some other way and the consumer's remedies are the whole
+ * answer. Against the fork layer the pack may well have been installed
+ * cleanly — the fork file can arrive later, with a package upgrade — and the
+ * collision has an author on each side: the consumer can remove the pack or
+ * ask for a rename, and the fork can patch the pack's artifact instead of
+ * replacing it, or ship its own under another id. Both are named, because
+ * the reader may be either party.
  */
 function refusePackShadow(packItem: CatalogItem, other: CatalogItem): never {
   const pack = packItem.provenance?.pack ?? "<pack-id>";
-  throw new EngineError(
+  const supplies =
     `Installed pack "${pack}" supplies ${packItem.type} "${packItem.id}" ` +
-      `(${packItem.relativePath}), but that id is already ${claimantOf(other)}. Packs must ` +
-      `not shadow existing content — \`add\` refuses this at install time, deriving the ` +
-      `pack's ids by the same rule this walk uses, and this walk refuses it again as ` +
-      `defence in depth for state assembled some other way. Remove the pack ` +
-      `(clean --pack ${pack}) or rename the artifact in the pack.`,
+    `(${packItem.relativePath}), but that id is already ${claimantOf(other)}. Packs must ` +
+    `not shadow existing content`;
+  if (originOf(other) === "fork") {
+    // The fork's patch spelling for this id: the fork file's own path with the
+    // overlay suffix in place of the artifact extension, which is the layout for
+    // a file class (`rules/ops.customize.yaml`) and a skill (`skills/ops/SKILL.customize.yaml`) alike.
+    const patch = `fork/${other.relativePath.slice(0, -ARTIFACT_EXTENSION.length)}`;
+    throw new EngineError(
+      `${supplies}, and a pack and the fork layer never share an id: the pack is refused on ` +
+        `contact whichever arrived first, so a fork file that came with a package upgrade ` +
+        `refuses a pack that was installed before it. From this repository, remove the pack ` +
+        `(clean --pack ${pack}) or ask the pack's author to rename the artifact. From the ` +
+        `fork, patch the pack's artifact with ${patch}${OVERLAY_FRONTMATTER_SUFFIX} or ` +
+        `${patch}${OVERLAY_BODY_SUFFIX} instead of replacing it, or ship the fork's artifact ` +
+        `under another id.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  throw new EngineError(
+    `${supplies} — \`add\` refuses this at install time, deriving the pack's ids by the same ` +
+      `rule this walk uses, and this walk refuses it again as defence in depth for state ` +
+      `assembled some other way. Remove the pack (clean --pack ${pack}) or rename the ` +
+      `artifact in the pack.`,
     { code: "VALIDATION_ERROR" },
   );
 }
@@ -849,15 +913,34 @@ function buildShadows(
   // Only the claimant that actually won the key wins a row: a second override
   // of the same id replaced nothing, and is reported as a duplicate instead.
   return claimants.flatMap((winner) => {
-    if (LAYER_RANK[originOf(winner)] < LAYER_RANK.fork) return [];
+    if (layerRankOf(winner) < LAYER_RANK.fork) return [];
     const key = typeIdKey(winner.type, winner.id);
     if (holders.get(key) !== winner) return [];
-    const rank = LAYER_RANK[originOf(winner)];
-    const shadowed = (contested.get(key) ?? []).filter(
-      (item) => LAYER_RANK[originOf(item)] < rank,
-    );
+    const rank = layerRankOf(winner);
+    const shadowed = (contested.get(key) ?? []).filter((item) => layerRankOf(item) < rank);
     return shadowed.length === 0 ? [] : [{ type: winner.type, id: winner.id, winner, shadowed }];
   });
+}
+
+/**
+ * The lowest-layer claimant a customizing artifact replaced — the corpus or
+ * pack artifact whose id it took, or the fork artifact it took an id from when
+ * that one was the fork's own addition — or `undefined` for an artifact that
+ * replaced nothing: a shipped one, or a fork or user addition.
+ *
+ * Read from {@link ContentIndex.shadows} by KEY rather than by identity, so
+ * the item in force under a customized id answers the same whether it is the
+ * winner itself or a patch's merge over it (`items` carries the merge, the
+ * shadow row carries the winner). `shadowed` is in walk order, so its first
+ * entry is the lowest layer's reachable claimant — the one whose emitted
+ * spelling a replacement inherits (`../emit/skillsProjection.ts`).
+ */
+export function replacedClaimantOf(
+  index: ContentIndex,
+  item: Pick<CatalogItem, "type" | "id">,
+): CatalogItem | undefined {
+  const shadow = (index.shadows ?? []).find((row) => row.type === item.type && row.id === item.id);
+  return shadow?.shadowed[0];
 }
 
 /** How a refusal names the artifact already holding a contested id. */
@@ -894,6 +977,21 @@ function claimantOf(existing: CatalogItem): string {
  * artifact, and for the same reason. Warn-and-skip was the alternative and its
  * observable outcome is exactly the bug this layer closes: a tree that looks
  * customized and a sync that ships the bundled body.
+ *
+ * One defect is judged by STAGE, because the two customizing layers have
+ * different reach. A USER pair addressed at an id no layer supplies is refused
+ * ({@link refuseOrphanOverlay}): the file is the repo's own, the fix is one
+ * rename, and a typo that stops a run is cheaper than a patch that silently
+ * never lands. A FORK pair whose base neither the corpus, an installed pack nor
+ * the fork layer supplies is SKIPPED — not applied, not thrown — and reported
+ * through {@link ContentIndex.skipped} with {@link forkOrphanSkipReason}. The
+ * fork layer is package-global where the override tree is per-repository: a
+ * fork patch of a pack-supplied id is legitimate in the fork's own checkout and
+ * in every consumer that installed the pack, and refusing it would hard-fail
+ * `sync`, `check` and `validate` in every consumer repository WITHOUT the pack
+ * — over a file inside their `node_modules` that they can fix nothing about.
+ * The fork author still sees the skip: `stamity validate` prints it as a
+ * warning naming the artifact the patch waits for.
  */
 
 /** Which half of a pair an overlay file is. */
@@ -1108,13 +1206,16 @@ function appendOverlayBody(base: string, appended: string): string {
 }
 
 /**
- * An overlay addressed at an id no layer supplies.
+ * A USER-stage overlay addressed at an id no layer supplies — the four layers
+ * the message names are all resolved by the time a user pair is applied.
  *
  * Loud rather than inert: an overlay is addressed BY its filename, so a typo in
  * that filename is the likeliest authoring mistake and is otherwise undetectable
  * — the author sees a file on disk and an unchanged artifact, with nothing
  * connecting the two. The cost is real (a typo stops a run that used to
- * succeed), and the fix is one step either way.
+ * succeed), and the fix is one step either way. The fork stage takes the other
+ * posture ({@link forkOrphanSkipReason}) for the reason the overlay-layer
+ * header gives.
  */
 function refuseOrphanOverlay(paths: readonly string[], type: ContentClass, id: string): never {
   throw new EngineError(
@@ -1123,6 +1224,25 @@ function refuseOrphanOverlay(paths: readonly string[], type: ContentClass, id: s
       `layer, not the override tree. An overlay is addressed by its filename, so this is usually ` +
       `a typo in it. Correct the filename, or remove the file.`,
     { code: "VALIDATION_ERROR" },
+  );
+}
+
+/**
+ * Why a fork-stage overlay with no base was passed over — the fork stage's
+ * answer to the user stage's {@link refuseOrphanOverlay}, and stage-aware in
+ * what it claims was searched: the override tree is not resolved when a fork
+ * pair is applied, so it is not among the layers this text names. Reported
+ * rather than thrown for the reason the overlay-layer header gives (the fork
+ * layer is package-global), and phrased after the file path the way a skipped
+ * entry's reason is (`./userContent.ts` → `SkippedUserEntry`), so `stamity
+ * validate` prints it verbatim as `<fork file>  <reason>`.
+ */
+function forkOrphanSkipReason(type: ContentClass, id: string): string {
+  return (
+    `waits for an artifact no installed layer supplies — neither the corpus, an installed ` +
+    `pack nor the fork layer holds ${type} "${id}", so this fork patch is skipped and nothing ` +
+    `in it reaches emission; it applies when a pack supplies ${type} "${id}". If no pack ` +
+    `ever will, the filename is a typo in the fork: correct it there, or remove the file.`
   );
 }
 
@@ -1342,15 +1462,21 @@ async function scanSkillOverlays(
  * Validating the overlay in isolation was the alternative and does not work: a
  * removal is only judgeable against its base, since `description:` is a no-op
  * alone and a missing required field once merged.
+ *
+ * A pair with no base is the one place the two layers part: the user stage
+ * refuses it, the fork stage skips it and answers the skipped halves in
+ * `skipped` (the overlay-layer header states why). `skipped` is therefore
+ * always empty for the user layer.
  */
 async function applyOverlays(
   fs: CatalogFs,
   overlays: readonly DiscoveredOverlay[],
   byKey: Map<string, CatalogItem>,
   layer: CustomizingOrigin,
-): Promise<Map<CatalogItem, CatalogItem>> {
+): Promise<{ patched: Map<CatalogItem, CatalogItem>; skipped: SkippedUserEntry[] }> {
   const patched = new Map<CatalogItem, CatalogItem>();
-  if (overlays.length === 0) return patched;
+  const skipped: SkippedUserEntry[] = [];
+  if (overlays.length === 0) return { patched, skipped };
 
   // Read first, merge second: bounded concurrency for the same reason the
   // artifact reads are bounded, and it keeps the merge loop synchronous so a
@@ -1367,7 +1493,16 @@ async function applyOverlays(
     const id = applyCommandPrefix(overlay.slug, overlay.type);
     const key = typeIdKey(overlay.type, id);
     const base = byKey.get(key);
-    if (base === undefined) refuseOrphanOverlay(overlayPaths, overlay.type, id);
+    if (base === undefined) {
+      // Judged by stage (the overlay-layer header): the user stage refuses,
+      // the fork stage skips and reports. Refused AFTER the exclusivity check
+      // above on purpose — a fork replacement beside a fork patch of one id is
+      // the fork author's own defect whether or not a base exists.
+      if (layer === "user") refuseOrphanOverlay(overlayPaths, overlay.type, id);
+      const reason = forkOrphanSkipReason(overlay.type, id);
+      skipped.push(...overlayPaths.map((filePath) => ({ type: overlay.type, filePath, reason })));
+      continue;
+    }
     // Exclusivity again, read by IDENTITY rather than by filename: a
     // replacement in this same layer whose declared id disagrees with its own
     // filename still REPLACED this id, and within one layer an id is either
@@ -1400,7 +1535,7 @@ async function applyOverlays(
     byKey.set(key, built.item);
     patched.set(base, built.item);
   }
-  return patched;
+  return { patched, skipped };
 }
 
 /** Every overlay path of one pair, frontmatter half first. */

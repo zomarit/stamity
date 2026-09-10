@@ -581,6 +581,28 @@ describe("the fork layer through the composed planner", () => {
     ]);
   });
 
+  it("projects a fork skill that takes a bundled skill's id under the BUNDLED directory spelling, in both trees", async () => {
+    // `fork/skills/verify/` is the only spelling the fork layer admits, the
+    // corpus ships `st-verify`, and every command and rule that invokes the
+    // skill names it so: the replacement lands where those references point,
+    // with the spec name to match, and no bare directory is emitted.
+    await seedFork({ "skills/verify/SKILL.md": forkSkill("verify") });
+
+    const plan = await composeEmissionPlanner(ADAPTER_REGISTRY).plan(
+      ctxOf(manifestFor(["claude", "cursor"]), { forkRoot: forkRootOf() }),
+    );
+
+    expect(pathsCarrying(plan, FORK_MARKER)).toEqual([
+      ".agents/skills/st-verify/SKILL.md",
+      ".claude/skills/st-verify/SKILL.md",
+    ]);
+    expect(contentOf(plan, ".agents/skills/st-verify/SKILL.md")).toContain("name: st-verify");
+    expect(plan.filter((row) => row.path.includes("/skills/verify/"))).toEqual([]);
+    // The bundled skill's references subtree left with the id: the fork
+    // directory is the unit that ships.
+    expect(plan.filter((row) => row.path.includes("st-verify/references/"))).toEqual([]);
+  });
+
   it("refuses a fork skill claiming an installed pack skill's id, naming the fork file", async () => {
     const packDir = await stagePack(PACK_ID, {
       "skills/stamity-triage/SKILL.md": forkSkill("triage").replace(FORK_MARKER, "Pack body."),

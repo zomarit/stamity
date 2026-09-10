@@ -1,7 +1,10 @@
 import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { buildContentIndex } from "../../../content/catalog.ts";
-import { resolveBundledContentRoot } from "../../../content/contentRoot.ts";
+import { buildContentIndex, type ContentRoots } from "../../../content/catalog.ts";
+import {
+  resolveBundledContentRoot,
+  resolveBundledForkRoot,
+} from "../../../content/contentRoot.ts";
 import {
   replaceAdapterEntries,
   toLedgerEntries,
@@ -549,22 +552,30 @@ async function composeManifest(
 }
 
 /**
- * The full-core selection over the bundled catalog. A checkout whose corpus
+ * The full-core selection over the bundled catalog — the corpus AND the
+ * package's fork layer (`docs/specs/fork-layer.md`), the two roots a package
+ * ships, so a fork's own artifacts are listed in the manifest `init` writes
+ * and counted where the selection is summarised. The roots are named
+ * explicitly rather than left to the walk's default: a string root pins the
+ * layer set to the corpus alone (`buildContentIndex`'s contract), which is
+ * exactly the shape that dropped the fork layer here. A checkout whose corpus
  * has not been staged resolves no content root at all — that absence is the
  * documented pre-corpus state, not a failure, and it selects the same
  * all-empty arrays an empty corpus does. Every future sync recomputes this.
  */
 async function loadFullSelection(): Promise<ContentSelection> {
-  let contentRoot: string;
+  let roots: ContentRoots;
   try {
-    contentRoot = resolveBundledContentRoot();
+    const root = resolveBundledContentRoot();
+    const forkRoot = resolveBundledForkRoot();
+    roots = { root, ...(forkRoot === undefined ? {} : { forkRoot }) };
   } catch (error) {
     if (error instanceof EngineError && error.code === "CONFIG_ERROR") {
       return fullCoreSelection({ items: [], byKey: new Map(), collisions: [] });
     }
     throw error;
   }
-  return fullCoreSelection(await buildContentIndex(contentRoot));
+  return fullCoreSelection(await buildContentIndex(roots));
 }
 
 /** True when `path` is a directory. Any filesystem refusal reads as absent. */

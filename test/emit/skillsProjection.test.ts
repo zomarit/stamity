@@ -508,6 +508,41 @@ describe("projectSkills over an override tree", () => {
     );
   });
 
+  it("emits an override filed under a BARE directory under the bundled skill's directory and spec name", async () => {
+    // The same rule the fork layer takes (`projectSkills`): the override
+    // replaced `st-alpha`, so it lands where every corpus reference to the
+    // skill points, not beside it under a name nothing invokes.
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/skills/alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The house version of this skill, authored in this repo.",
+        `${HOUSE_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/skills/alpha/references/house.md`]: "House reference.\n",
+    });
+
+    const rows = await projectSkills(contextOf(["alpha"]), {
+      contentRoot: { root: volume.corpusRoot, overrideRoot: volume.overrideRoot },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+
+    expect(pathsOf(rows)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`,
+      `${SKILLS_PROJECTION_DIR}/st-alpha/references/house.md`,
+    ]);
+    const main = rows[0];
+    expect(main?.content).toContain(HOUSE_MARKER);
+    expect(main?.content).toContain("name: st-alpha");
+    expect(main?.origin).toBe("user");
+    expect(main?.artifactPath).toBe("skills/alpha/SKILL.md");
+    expect(rows.filter((row) => row.content.includes(SHIPPED_MARKER))).toEqual([]);
+  });
+
   it("emits a user skill the corpus never shipped", async () => {
     const volume = volumeOf({
       [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
@@ -682,18 +717,30 @@ describe("projectSkills over the fork layer", () => {
     };
   }
 
-  it("emits the FORK body for a skill whose id a corpus skill holds, and stamps its origin", async () => {
+  /**
+   * TEST CHANGE, justified: this case used to pin the replacement under the
+   * FORK's own directory (`.agents/skills/alpha/`, `name: alpha`). The fork
+   * layer admits only the bare spelling, but every corpus reference — the
+   * commands, rules and agents that invoke the skill by name — says `st-alpha`,
+   * the directory the bundled skill projected under; a replacement landing
+   * beside that name left every reference pointing at a skill that no longer
+   * shipped. The replacement now takes the REPLACED skill's directory and spec
+   * `name`, the way agents, rules and commands restore the prefix at emission.
+   */
+  it("emits the FORK body under the BUNDLED skill's directory and spec name, and stamps its origin", async () => {
     const volume = volumeOf({
       [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
         "alpha",
         "The bundled version of this skill.",
         `${SHIPPED_MARKER}\n`,
       ),
+      [`${CORPUS_DIR}/skills/st-alpha/references/shipped.md`]: "Bundled reference.\n",
       [`${FORK_DIR}/skills/alpha/SKILL.md`]: skillDoc(
         "alpha",
         "The fork's version of this skill.",
         `${FORK_MARKER}\n`,
       ),
+      [`${FORK_DIR}/skills/alpha/references/house.md`]: "Fork reference.\n",
       [`${CORPUS_DIR}/skills/st-beta/SKILL.md`]: skillDoc(
         "beta",
         "A bundled skill no fork touches.",
@@ -707,14 +754,26 @@ describe("projectSkills over the fork layer", () => {
     });
     const byPath = new Map(rows.map((row) => [row.path, row]));
 
-    // Under the FORK's directory name — the bare slug the fork layer requires.
-    const forked = byPath.get(`${SKILLS_PROJECTION_DIR}/alpha/SKILL.md`);
+    // Under the BUNDLED skill's directory — the spelling every corpus
+    // reference names — with the spec name synthesized from that directory.
+    const forked = byPath.get(`${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`);
     expect(forked?.content).toContain(FORK_MARKER);
+    expect(forked?.content).toContain("name: st-alpha");
     expect(forked?.origin).toBe("fork");
     expect(forked?.artifactId).toBe("alpha");
-    // Not both bodies, and not the shipped one anywhere in the plan.
+    // The row still names the file the fork author wrote, for any refusal
+    // about it: the emitted directory no longer says where the source is.
+    expect(forked?.artifactPath).toBe("skills/alpha/SKILL.md");
+    // The fork DIRECTORY is the unit that ships, under the bundled name: its
+    // support files land there and the shadowed corpus skill's do not.
+    expect(pathsOf(rows)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`,
+      `${SKILLS_PROJECTION_DIR}/st-alpha/references/house.md`,
+      `${SKILLS_PROJECTION_DIR}/st-beta/SKILL.md`,
+    ]);
+    // Not both bodies, not the shipped one anywhere, and no bare directory.
     expect(rows.filter((row) => row.content.includes(SHIPPED_MARKER))).toEqual([]);
-    expect(byPath.has(`${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`)).toBe(false);
+    expect(rows.filter((row) => row.path.includes("/alpha/"))).toEqual([]);
     // The untouched skill still projects: a replacement, not a filter.
     expect(byPath.get(`${SKILLS_PROJECTION_DIR}/st-beta/SKILL.md`)?.origin).toBe("corpus");
   });
@@ -778,10 +837,54 @@ describe("projectSkills over the fork layer", () => {
       ...(volume.fs === undefined ? {} : { fs: volume.fs }),
     });
 
-    expect(pathsOf(rows)).toEqual([`${SKILLS_PROJECTION_DIR}/alpha/SKILL.md`]);
+    // TEST CHANGE, justified: the path moved from `alpha/` to `st-alpha/` with
+    // the directory rule above — the override replaced the fork skill, which
+    // replaced the corpus skill, and the spelling inherited is the CORPUS one,
+    // the lowest claimant in the chain, so the bundled name is what lands.
+    expect(pathsOf(rows)).toEqual([`${SKILLS_PROJECTION_DIR}/st-alpha/SKILL.md`]);
     expect(rows[0]?.content).toContain(HOUSE_MARKER);
+    expect(rows[0]?.content).toContain("name: st-alpha");
     expect(rows[0]?.origin).toBe("user");
+    expect(rows[0]?.artifactPath).toBe("skills/alpha/SKILL.md");
     expect(rows.filter((row) => row.content.includes(FORK_MARKER))).toEqual([]);
+  });
+
+  it("lets a user skill take a fork ADDITION's id under the fork's own directory, which replaced nothing", async () => {
+    const volume = volumeOf({
+      [`${CORPUS_DIR}/skills/st-alpha/SKILL.md`]: skillDoc(
+        "alpha",
+        "The bundled version of this skill.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${FORK_DIR}/skills/acme-review/SKILL.md`]: skillDoc(
+        "acme-review",
+        "A skill the fork authored and the corpus never had.",
+        `${FORK_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/skills/house-review/SKILL.md`]: skillDoc(
+        "acme-review",
+        "The house version of the fork's skill.",
+        `${HOUSE_MARKER}\n`,
+      ),
+    });
+
+    const rows = await projectSkills(contextOf(["alpha"]), {
+      contentRoot: {
+        root: volume.corpusRoot,
+        forkRoot: volume.forkRoot,
+        overrideRoot: volume.overrideRoot,
+      },
+      ...(volume.fs === undefined ? {} : { fs: volume.fs }),
+    });
+
+    // The lowest claimant is the fork's addition, so ITS authored directory is
+    // the spelling the override inherits — not the override's own.
+    const review = rows.find((row) => row.artifactId === "acme-review");
+    expect(review?.path).toBe(`${SKILLS_PROJECTION_DIR}/acme-review/SKILL.md`);
+    expect(review?.content).toContain(HOUSE_MARKER);
+    expect(review?.content).toContain("name: acme-review");
+    expect(review?.artifactPath).toBe("skills/house-review/SKILL.md");
+    expect(rows.filter((row) => row.path.includes("house-review"))).toEqual([]);
   });
 
   it("plans byte-identically to a corpus-only projection when the package ships no fork layer", async () => {
@@ -1078,13 +1181,21 @@ describe("retargetProjection", () => {
     // assertion this case protects, that re-targeting spreads the row rather
     // than reconstructing it — so `origin` belongs in the list, not a reason
     // to drop the case.
+    //
+    // TEST CHANGE, justified: `artifactPath` joined the shape with the
+    // directory rule (`projectSkills`): a replacement projects under the
+    // REPLACED skill's directory, so a refusal naming the author's file can
+    // no longer read it off the emitted path and the row carries it instead.
+    // Same property under test — the spread carries it through.
     expect(Object.keys(native ?? {}).toSorted()).toEqual([
       "artifactId",
+      "artifactPath",
       "artifactType",
       "content",
       "origin",
       "path",
     ]);
+    expect(native?.artifactPath).toBe("skills/st-handoff/SKILL.md");
   });
 
   it("refuses a target root that could aim the copy outside the repo", () => {

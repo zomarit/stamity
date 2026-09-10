@@ -1,7 +1,9 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { CONTENT_CLASSES } from "../../src/types/content.ts";
+import { contentPrefixFor, ENGINE_CONTENT_PREFIXES } from "../../src/types/markers.ts";
 import {
   BRANCH_PREFIX,
   CONFIG_DEFAULTS,
@@ -425,6 +427,45 @@ describe("release notes (the release.yml extraction rule)", () => {
     expect(extractReleaseNotes(changelog, "9.9.9")).toBeNull();
     expect(extractReleaseNotes("## [1.0.0]\n\n   \n\n## [0.9.0]\n\n- x\n", "1.0.0")).toBeNull();
     expect(extractReleaseNotes("## [1.0.0]\n\n[a]: b\n", "1.0.0")).toBeNull();
+  });
+});
+
+describe("the class→prefix table the lane copies from the engine (REQ-FORK-008)", () => {
+  /**
+   * `scripts/upstream.mjs` restates `contentPrefixFor` and `ENGINE_CONTENT_PREFIXES` rather than
+   * importing them — it has to run in a tree where `src/` may not compile — and a copy with no gate
+   * drifts silently: a class whose minted prefix moved would derive its pairs against files that
+   * do not exist and report no drift for exactly the artifacts a fork shadows. The script's tables
+   * are read as TEXT, the way the lane reads everything, so the gate needs nothing the script does
+   * not already carry.
+   */
+  const SCRIPT = readFileSync(join(REPO_ROOT, "scripts", "upstream.mjs"), "utf8");
+
+  it("mints the same prefix per class directory as `contentPrefixFor`", () => {
+    const table = /const CLASS_CONTENT_PREFIX = new Map\(\[([\s\S]*?)\]\)\n/.exec(SCRIPT);
+    expect(table, "CLASS_CONTENT_PREFIX table not found in scripts/upstream.mjs").not.toBeNull();
+    const rows = new Map(
+      [...(table?.[1] ?? "").matchAll(/\['([a-z]+)', '([a-z-]+)'\]/g)].map(
+        (match) => [match[1] ?? "", match[2] ?? ""] as const,
+      ),
+    );
+
+    // The directory spelling of a class is its name plus `s` — the layout the
+    // catalog keeps private (`CLASS_LAYOUT`, `src/content/catalog.ts`) and both
+    // shadow trees share; the closed class set is the engine's own.
+    const directories = CONTENT_CLASSES.map((type) => `${type}s`);
+    expect([...rows.keys()].toSorted()).toEqual([...directories].toSorted());
+    for (const type of CONTENT_CLASSES) {
+      expect(rows.get(`${type}s`), `prefix for ${type}`).toBe(contentPrefixFor({ type }));
+    }
+  });
+
+  it("freezes the same prefix set as `ENGINE_CONTENT_PREFIXES`, in the same order", () => {
+    const frozen = /const ENGINE_CONTENT_PREFIXES = Object\.freeze\(\[([^\]]*)\]\)/.exec(SCRIPT);
+    expect(frozen, "ENGINE_CONTENT_PREFIXES not found in scripts/upstream.mjs").not.toBeNull();
+    const prefixes = [...(frozen?.[1] ?? "").matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
+
+    expect(prefixes).toEqual([...ENGINE_CONTENT_PREFIXES]);
   });
 });
 

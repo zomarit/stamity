@@ -10,7 +10,9 @@ import {
   buildContentIndex,
   contentRootsOf,
   getAllItemsById,
+  layerRankOf,
   originOf,
+  replacedClaimantOf,
   resolveArtifactFilePath,
   toPosixDisplayPath,
   typeIdKey,
@@ -1229,6 +1231,9 @@ describe("the overlay layer", () => {
       // unchanged artifact, with no signal connecting the two.
       expect(refusal.message).toContain("overrides/rules/no-such-rule.customize.yaml");
       expect(refusal.message).toContain("no-such-rule");
+      // Stage-aware: every layer named here IS resolved by the time a user
+      // pair is applied (the fork stage, which is not, skips instead).
+      expect(refusal.message).toContain("not the fork layer, not the override tree");
     });
 
     it("refuses an overlay that coexists with a full override of the same slug", async () => {
@@ -1610,7 +1615,67 @@ describe("the fork layer", () => {
       expect(refusal.message).toContain('Installed pack "ops"');
       expect(refusal.message).toContain("must not shadow existing content");
       expect(refusal.message).toContain("fork-layer artifact at fork/rules/ops.md");
+      // Order-independent by rule, and said so: the pack may well have been
+      // installed cleanly before the fork file arrived with a package upgrade,
+      // so the message must not claim `add` refused it at install time.
+      expect(refusal.message).toContain("whichever arrived first");
+      expect(refusal.message).not.toContain("`add` refuses this at install time");
+      // Both remedies from both sides: the consumer's and the fork author's.
       expect(refusal.message).toContain("clean --pack ops");
+      expect(refusal.message).toContain("ask the pack's author to rename the artifact");
+      expect(refusal.message).toContain("fork/rules/ops.customize.yaml");
+      expect(refusal.message).toContain("fork/rules/ops.customize.md");
+      expect(refusal.message).toContain("instead of replacing it");
+      expect(refusal.message).toContain("under another id");
+    });
+
+    it("spells the fork-side patch remedy for a skill as the carrier directory's halves", async () => {
+      const refusal = await expectRejection(
+        () =>
+          forkIndexOf(
+            {},
+            {
+              "skills/triage/SKILL.md": artifact(
+                "id: triage\ntype: skill\ndescription: The fork's triage drill.",
+              ),
+            },
+            {},
+            {
+              ops: {
+                "skills/stamity-triage/SKILL.md": artifact(
+                  "id: triage\ntype: skill\ndescription: Pack triage drill.",
+                ),
+              },
+            },
+          ),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("fork-layer artifact at fork/skills/triage/SKILL.md");
+      expect(refusal.message).toContain("fork/skills/triage/SKILL.customize.yaml");
+      expect(refusal.message).toContain("fork/skills/triage/SKILL.customize.md");
+    });
+
+    it("keeps the install-time claim for a pack colliding with the corpus, where it is true", async () => {
+      const refusal = await expectRejection(
+        () =>
+          forkIndexOf(
+            CORPUS,
+            {},
+            {},
+            {
+              sec: {
+                "rules/stamity-security.md": artifact(
+                  "id: security\ntype: rule\ndescription: Pack security floor.",
+                ),
+              },
+            },
+          ),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain("`add` refuses this at install time");
+      expect(refusal.message).not.toContain("whichever arrived first");
     });
 
     it("still names the corpus when a pack claims a corpus id the fork also replaces", async () => {
@@ -1903,15 +1968,78 @@ describe("the fork layer", () => {
       expect(refusal.message).toContain("fork/rules/security.customize.yaml");
     });
 
-    it("refuses an orphan fork overlay, naming the fork file and the fork layer among the layers searched", async () => {
+    /**
+     * TEST CHANGE, justified: this case used to pin a REFUSAL of an orphan fork
+     * overlay, the user stage's posture. The fork layer is package-global where
+     * the override tree is per-repository: a fork patch of a pack-supplied id
+     * works in the fork's checkout and, refused, breaks `sync`, `check` and
+     * `validate` in every consumer without that pack — over a file in their
+     * `node_modules` they can fix nothing about. The walk now SKIPS a fork
+     * pair with no base and reports it through `skipped`; the user-stage
+     * refusal (the overlay-layer suite above) is unchanged.
+     */
+    it("skips a fork overlay whose base no shipped layer supplies, reporting each half rather than throwing", async () => {
+      const fork = {
+        "rules/ops.customize.yaml": "description: The fork's ops floor.\n",
+        "rules/ops.customize.md": "Fork addendum.\n",
+      };
+      const { index, forkRoot } = await forkIndexOf(BASE_CORPUS, fork);
+
+      // Not applied: nothing is in force under the id, and the corpus is untouched.
+      expect(index.byKey.has(typeIdKey("rule", "ops"))).toBe(false);
+      expect(itemAt(index, "rule", "security").description).toBe("Security floor.");
+      expect(index.shadows).toEqual([]);
+      // Reported, one row per half, in the stage-aware words `validate` prints:
+      // the override tree is not among the layers a fork pair can reach.
+      const skipped = index.skipped ?? [];
+      expect(skipped.map((entry) => entry.filePath)).toEqual([
+        join(forkRoot, "rules", "ops.customize.yaml"),
+        join(forkRoot, "rules", "ops.customize.md"),
+      ]);
+      for (const entry of skipped) {
+        expect(entry.type).toBe("rule");
+        expect(entry.reason).toContain("waits for an artifact no installed layer supplies");
+        expect(entry.reason).toContain('rule "ops"');
+        expect(entry.reason).toContain("it applies when a pack supplies");
+        expect(entry.reason).not.toContain("override tree");
+      }
+
+      // The same fork files apply the moment a pack supplies the base.
+      const supplied = await forkIndexOf(BASE_CORPUS, fork, {}, { ops: OPS_PACK });
+      const item = itemAt(supplied.index, "rule", "ops");
+      expect(item.description).toBe("The fork's ops floor.");
+      expect(item.body).toBe("Body text.\n\nFork addendum.\n");
+      expect(supplied.index.skipped).toEqual([]);
+    });
+
+    it("still skips a fork overlay when only the override tree supplies the id: a fork patch never lands on a user artifact", async () => {
+      const { index, forkRoot } = await forkIndexOf(
+        BASE_CORPUS,
+        { "rules/ops.customize.yaml": "description: The fork's ops floor.\n" },
+        { "rules/ops.md": artifact("id: ops\ntype: rule\ndescription: The repo's ops floor.") },
+      );
+
+      const item = itemAt(index, "rule", "ops");
+      expect(originOf(item)).toBe("user");
+      expect(item.description).toBe("The repo's ops floor.");
+      expect((index.skipped ?? []).map((entry) => entry.filePath)).toEqual([
+        join(forkRoot, "rules", "ops.customize.yaml"),
+      ]);
+    });
+
+    it("refuses a fork replacement beside a fork patch of one id even when no base exists — the exclusivity defect is the fork's own", async () => {
       const refusal = await expectRejection(
-        () => forkIndexOf(BASE_CORPUS, { "rules/no-such-rule.customize.yaml": "description: x\n" }),
+        () =>
+          forkIndexOf(BASE_CORPUS, {
+            "rules/ops.md": artifact("id: ops\ntype: rule\ndescription: The fork's ops floor."),
+            "rules/ops.customize.yaml": "description: x\n",
+          }),
         "VALIDATION_ERROR",
       );
 
-      expect(refusal.message).toContain("fork/rules/no-such-rule.customize.yaml");
-      expect(refusal.message).toContain("no-such-rule");
-      expect(refusal.message).toContain("not the fork layer");
+      expect(refusal.message).toContain("never both");
+      expect(refusal.message).toContain("fork/rules/ops.md");
+      expect(refusal.message).toContain("fork/rules/ops.customize.yaml");
     });
 
     it.each([
@@ -1952,6 +2080,49 @@ describe("originOf", () => {
 
     expect(originOf(handBuilt)).toBe("corpus");
     expect(originOf(itemAt(index, "rule", "security"))).toBe("corpus");
+  });
+});
+
+describe("layerRankOf", () => {
+  it("ranks the layers corpus < pack < fork < user, an unstamped subject as corpus", () => {
+    // The one precedence table, exported: the emission planner's directory-
+    // clash rule ranks projected rows by it rather than by a copy of its own.
+    const ranks = (["corpus", "pack", "fork", "user"] as const).map((origin) =>
+      layerRankOf({ origin }),
+    );
+    expect(ranks).toEqual([...ranks].toSorted((a, b) => a - b));
+    expect(new Set(ranks).size).toBe(4);
+    expect(layerRankOf({})).toBe(layerRankOf({ origin: "corpus" }));
+  });
+});
+
+describe("replacedClaimantOf", () => {
+  const FORK_SKILL = artifact("id: recipe\ntype: skill\ndescription: The fork's recipe.");
+
+  it("answers the lowest-layer claimant a replacement took its id from — the corpus one through the whole chain", async () => {
+    const { index, root } = await forkIndexOf(
+      CORPUS,
+      { "skills/recipe/SKILL.md": FORK_SKILL },
+      { "skills/recipe/SKILL.md": FORK_SKILL.replace("fork's", "repo's") },
+    );
+
+    // The user item is in force; what it replaced is read by key, and the
+    // first shadowed claimant is the corpus skill — the one whose directory
+    // spelling (`stamity-recipe`) a projection of the replacement inherits.
+    const replaced = replacedClaimantOf(index, itemAt(index, "skill", "recipe"));
+    expect(replaced?.filePath).toBe(join(root, "skills", "stamity-recipe", "SKILL.md"));
+    expect(replaced?.origin).toBe("corpus");
+  });
+
+  it("answers undefined for an addition, a shipped artifact, and a hand-assembled index", async () => {
+    const { index } = await forkIndexOf(CORPUS, {
+      "skills/acme-review/SKILL.md": artifact("id: acme-review\ntype: skill"),
+    });
+
+    expect(replacedClaimantOf(index, itemAt(index, "skill", "acme-review"))).toBeUndefined();
+    expect(replacedClaimantOf(index, itemAt(index, "skill", "recipe"))).toBeUndefined();
+    const handBuilt: ContentIndex = { items: [], byKey: new Map(), collisions: [] };
+    expect(replacedClaimantOf(handBuilt, { type: "skill", id: "recipe" })).toBeUndefined();
   });
 });
 

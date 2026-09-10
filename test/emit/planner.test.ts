@@ -728,7 +728,13 @@ describe("pack skill directory clashing with a corpus skill", () => {
 });
 
 describe("fork skill directory clashing with a lower layer's skill", () => {
-  /** A fixture corpus whose skill directory is BARE — the only shape a bare-named fork directory can collide with. */
+  /**
+   * A fixture corpus whose skill directory is BARE — the only shape a bare-named
+   * fork directory can COLLIDE with under a different id. The bundled corpus
+   * spells its directories with the prefix, and a bare fork directory that
+   * takes such a skill's id is the REPLACEMENT shape, pinned last in this
+   * block over the prefixed `seedCorpus()`.
+   */
   async function seedBareCorpus(): Promise<{ corpus: string; fork: string }> {
     const temp = getTemp();
     await temp.seedFiles({
@@ -778,6 +784,38 @@ describe("fork skill directory clashing with a lower layer's skill", () => {
     expect(core.skills.find((row) => row.path.endsWith("/alpha/SKILL.md"))?.content).toContain(
       "Do the fork's thing.",
     );
+    expect(core.skills.some((row) => row.content.includes("Do the thing."))).toBe(false);
+  });
+
+  it("projects a fork replacement under the PREFIXED corpus skill's directory — the shape the bundled corpus ships", async () => {
+    // `fork/skills/alpha/` is the only admissible spelling under `fork/`, and
+    // the fixture corpus files the skill as `stamity-alpha/` — so the fork's
+    // directory lands under THAT name, with the spec name to match, where
+    // every corpus reference to the skill already points.
+    const corpus = await seedCorpus();
+    const temp = getTemp();
+    await temp.seedFiles({
+      "fork/skills/alpha/SKILL.md": forkSkill("alpha", "Do the fork's thing."),
+      "fork/skills/alpha/references/house.md": "Fork reference.\n",
+    });
+    const ctx = {
+      ...ctxOf(["claude"], corpus),
+      contentRoot: { root: corpus, forkRoot: temp.path("fork") },
+    };
+
+    const core = await buildCoreEmissionPlan(ctx);
+
+    // The fork DIRECTORY is the unit: its reference ships under the bundled
+    // name, the corpus skill's own reference is gone with the id, and no bare
+    // `alpha/` directory is emitted anywhere.
+    expect(core.skills.map((row) => row.path)).toEqual([
+      P.skillMain,
+      ".agents/skills/stamity-alpha/references/house.md",
+    ]);
+    const main = core.skills.find((row) => row.path === P.skillMain);
+    expect(main?.content).toContain("Do the fork's thing.");
+    expect(main?.content).toContain("name: stamity-alpha");
+    expect(main?.origin).toBe("fork");
     expect(core.skills.some((row) => row.content.includes("Do the thing."))).toBe(false);
   });
 });
