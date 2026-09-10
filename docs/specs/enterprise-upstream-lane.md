@@ -160,7 +160,7 @@ The fork declares its upstream in `.stamity/upstream.json` at the repository roo
 }
 ```
 
-`upstream` is required. Every other key has a default: `remote` "upstream", `branch`
+`version: 1` and `upstream` are required. The remaining keys have defaults: `remote` "upstream", `branch`
 "main", `releases.pattern` "v*", `releases.prerelease` false, `gates` empty (and the report
 then says so in words: *no gates configured — a clean merge proves nothing about behaviour*),
 `regenerate` empty, `generatedPaths` empty, `watch` empty, `shadows` empty. An unknown key,
@@ -381,7 +381,10 @@ work.
 ### REQ-UPSTREAM-013 — The GitHub layer is thin, split by trust, and idempotent
 
 `.github/workflows/upstream-update.yml` runs on `workflow_dispatch` (inputs: `release`, an
-optional tag; `dry_run`, default false) and on a daily schedule. Its first job probes
+optional tag; `dry_run`, default false) and on a configurable schedule, hourly at minute 17
+by default. Enterprises may review and change the cron to meet their operating policy;
+scheduled delivery is best effort and an upstream release does not dispatch this workflow.
+Its first job probes
 `.stamity/upstream.json`; when absent it writes a notice and the run ends green, which is
 the canonical repository's own case. Two jobs follow:
 
@@ -396,9 +399,11 @@ the canonical repository's own case. Two jobs follow:
   outcome word, the merge commit — because the job that produced them ran the fork's
   code. It fetches the bundle, pushes `stamity-upstream/<tag>` when no such remote branch
   exists, and opens one pull request per tag from the markdown report. An existing remote
-  branch is never force-updated and its pull request is never rewritten from a later run:
-  the run reports the existing pull request and touches nothing, which is also what makes
-  a second run idempotent. It applies the landing-policy check (REQ-UPSTREAM-011) and
+  branch is never force-updated and its pull request is never rewritten from a later run.
+  The workflow queries pull requests in all states: an existing open pull request is reported
+  read-only; a deliberately closed or merged one is never reopened or replaced. An existing
+  branch with no pull request is recovered only under REQ-UPSTREAM-016. A second run therefore
+  preserves branch bytes and existing pull-request metadata. It applies the landing-policy check (REQ-UPSTREAM-011) and
   marks the run failed when the outcome is `validation-failed` so the check on the pull
   request is red. On `conflict` it cannot push a conflicted tree, so it opens or updates
   one issue titled `Upstream <tag> needs conflict resolution` carrying the report and the
@@ -418,8 +423,10 @@ opened with the repository token starts the fork's own `pull_request` runs only 
 approval-required state (GitHub's 2026-06-11 change; before it they did not start at all),
 and opening one at all requires the repository or organisation setting "Allow GitHub
 Actions to create and approve pull requests". The optional `STAMITY_UPSTREAM_TOKEN`
-secret — a fine-grained token or App token with Contents, Pull requests and Issues write — lifts
-that second limit only, is read by `publish` alone, and is documented in the guide. The
+secret — a fine-grained PAT with Contents, Pull requests and Issues write — lifts
+that second limit only, is read by `publish` alone, and is documented in the guide. A GitHub
+App integration must mint its short-lived installation token on each run; storing an
+expiring installation token as this static secret is not a supported setup. The
 gates still run in `prepare`, and their result is on the branch and in the check either way.
 
 ### REQ-UPSTREAM-014 — Portable clones and platform limits are documented, not assumed
@@ -442,6 +449,63 @@ in the plan's research section.
 The canonical repository ships the script, the workflow and the `.gitignore` entry and
 nothing else: no config, no record, no worktree. Nothing under `.stamity/upstream/` or
 `.stamity/upstream-work/` exists here, and the workflow's first job ends at the probe.
+
+### REQ-UPSTREAM-016 — Recover an owned branch whose pull request was never created
+
+If the push succeeded and pull-request creation failed, a retry may create the missing PR
+without rewriting the remote branch. Ownership is checked from the remote branch's actual
+merge topology, integration record and tree, against the selected upstream release and
+integration target. The existing record schema remains the contract: `tool`, `version`,
+`release`, `releaseCommit`, `targetBranch`, `targetHead` and gates. Its expected non-record
+tree and semantic record must agree with the prepared integration; timestamps alone cannot
+make independently prepared commits equal. The retained remote merge commit must have no
+human follow-up or unexplained changed tree. Target movement requires manual review.
+Reports and PR provenance identify the remote SHA and its validation result, never a freshly
+prepared commit that was not pushed. The restored bundle head must equal its reported SHA;
+authentication failures during remote lookup must not be treated as an absent branch.
+
+Query all PR states before creating: one open matching PR is read-only; a closed or merged
+matching PR is a retained disposition. Multiple candidates, wrong base/ownership, invalid
+records, changed release identity or a human-modified branch require operator recovery and
+do not create, reopen, edit or overwrite anything. No release config or credential bypasses
+the workflow-file guard. If the branch was deliberately closed, the operator decides whether
+to reopen its existing PR or preserve it and use a separately reviewed recovery branch.
+
+### REQ-UPSTREAM-017 — Private bootstrap and operational recovery
+
+Document an independent private `github.com` repository created from approved upstream
+history, with a downstream `origin`, upstream URL/config and an integration branch allowing
+reviewed merge commits. Verify actual `private: true`, absence of a GitHub fork relationship,
+and ancestry at the imported upstream commit. A shallow clone first restores full history
+from its authorized remote; an import without common history is reconstructed from a known
+upstream commit with local commits replayed for review. Preserve the original checkout and
+evidence until recovery is verified; do not use an unrelated-history merge.
+
+The guide covers conflicts, failed regeneration/gates, unreachable upstreams, missing
+authentication/permissions, lost ancestry and workflow-file refusal, naming retained reports
+and the next local command or owner action. Network access or approved operational mirrors
+are selected and probed explicitly. The canonical no-config workflow remains a clean skip.
+Private release destinations follow REQ-APM-008 and survive upstream regeneration.
+
+### REQ-UPSTREAM-018 — Monitoring and real platform evidence
+
+The operating owner routes failed workflow runs through the organization's existing
+notification destination, and an external monitor checks the last attempted/successful poll
+against an agreed threshold. A disabled workflow cannot report its own missed run. Record
+and test a failure signal and a stale/disabled-run signal using approved fixtures; local
+report tests do not establish delivery to a live notification destination.
+
+An authorized private lifecycle records import privacy/history, downstream customization,
+generated private APM release and authenticated install, controlled ordinary-file upstream
+release, one update PR, its actual required checks, reviewed merge retaining ancestry and
+customization, a second private package release and the existing Renovate engine's observed
+consumer update PR and installed content. Preserve run IDs, exact refs/SHAs, reports, PR
+metadata, rule responses and outcomes in the approved evidence location before cleanup.
+Prove missing-PR recovery after injected creation failure, unchanged repeat behavior,
+closed/human-modified refusals and a separate reviewed workflow-change recovery. A rules API
+response forbidding merge commits must produce the ancestry warning while still permitting
+PR creation. Unavailable credentials, fixture authorization, Renovate observation or
+monitoring produce specific `Not done:` items while independent work continues.
 
 ## Acceptance criteria
 
@@ -504,11 +568,9 @@ generator script, a default in `config.json`, a pin file `README.md`, a gate scr
 
 ## Non-goals for v1
 
-- An "org overlay" content layer inside the fork's package (a bundled directory that adds
-  and shadows corpus artifacts without editing `content/`). It would reduce the most
-  common fork edit to zero conflicts and is the natural next step; it touches the catalog's
-  precedence chain and the corpus-count pins, so it gets its own spec. Trigger: the first
-  fork that reports recurring conflicts on content additions.
+- The original bundled-content-layer deferral was fulfilled by the fork layer in 1.5.0;
+  `docs/specs/fork-layer.md` records the decision, precedence and drift behavior. The
+  2026-09-10 APM compatibility extension completes that layer's package projection.
 - Landing the pull request. The lane prepares; people merge.
 - Any model-assisted resolution or suggestion.
 - A GitLab or Bitbucket pipeline. The script is the portable half; the guide names the

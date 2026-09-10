@@ -197,6 +197,33 @@ edit" in its table, a section on authoring under `fork/` (layout, replace, patch
 `docs/specs/overlay-layers.md`'s "four-layer precedence is retired" note is amended to name
 the chain that now applies; the CHANGELOG's Unreleased section records the addition.
 
+### REQ-FORK-010 — APM consumes the resolved package layer
+
+`scripts/generate-apm-package.mjs` emits reachable corpus and fork winners from the catalog,
+including patched bodies, through the four APM primitive classes. Selecting only
+corpus-origin items after resolution removes the original and its fork replacement together
+and is forbidden. Direct source edits remain valid. Package generation does not read a
+consumer's override tree; the packaged CLI continues to apply user > fork > bundled
+precedence where its existing emission supports it. No CLI signature changes are required.
+
+Skill directory identity is derived from `replacedClaimantOf(index, item)` or the addition's
+own authored directory. APM and CLI use that rule, preserve the winning skill's supported
+companion files and refuse unsafe paths and target collisions. Bare additions retain their
+bare names; replacements retain the original bundled skill's name. Corpus output without a
+fork layer stays byte-identical apart from deliberate release metadata. This 2026-09-10
+extension repairs APM's reader of the layer shipped in 1.5.0; the earlier dated design
+context remains historical evidence.
+
+### REQ-FORK-011 — Public and private compatibility is proved independently
+
+Privacy changes authentication and publication destinations, not catalog precedence.
+Independent fixtures specify expected additions, replacements and patches in all four
+classes, plus skill support files and collision refusals. Real APM installation verifies
+consumer bytes and discovery; a tarball install verifies CLI source edits, fork precedence
+and supported clients. Neither a clean textual upstream merge nor successful generation
+proves arbitrary downstream source changes semantically compatible; downstream behavior
+gates remain necessary. See REQ-APM-006 through -009 in the APM distribution spec.
+
 ## Acceptance criteria
 
 - GIVEN no `fork/` directory WHEN the index, the plan and the goldens are built THEN they are

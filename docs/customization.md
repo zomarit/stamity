@@ -33,6 +33,12 @@ shadowing line you did not author reads as somebody else's rather than as yours.
 layer is a fork maintainer's job, and [enterprise forks](enterprise-forks.md) describes it; [the
 fork-layer spec](specs/fork-layer.md) is the design reference.
 
+These are CLI consumer overrides. An APM package author instead customizes `content/` or
+the bundled `fork/` layer and regenerates its four primitive classes; package generation
+does not read the consumer's override tree. The [enterprise guide](enterprise-forks.md)
+covers public and independent private APM authoring, identity, authentication and updates,
+including which runtime capabilities require the packaged CLI.
+
 Two of those rows are about your repository rather than about the fork. A fork patch aimed at an id
 your own override has replaced is reported as inert under that override rather than as applied —
 your file won the id, so nothing patches it. And a fork patch of an artifact only a pack supplies
