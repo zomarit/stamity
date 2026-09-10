@@ -6,5 +6,19 @@
   "allCommittedInputsMatch": true,
   "browserBuildDigest": "b55042d36fe1ccde8e13bb4f73752eb4b929e1e7671a89a621351504453eafa6",
   "browserRenderInputsMatch": true,
-  "bindingRule": "Every inventoried source file matches the implementation commit. Subsequent current-run/browser/eval receipts are evidence only; any product-input change requires affected verification."
+  "bindingRule": "Every inventoried source file matches the implementation commit. Subsequent current-run/browser/eval receipts are evidence only; any product-input change requires affected verification.",
+  "repairedCandidate": {
+    "commit": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+    "sourceDigest": "5ef6446414d8bc5c2787a40f6712bf9eb55ffef5a35369554536527085bca37d",
+    "verifiedInputCount": 1075,
+    "manifestSha256": "99715d29786545f22032e85a56dc60357ca9ca23a22279b25f5989671fcfdd36",
+    "allCommittedInputsMatch": true,
+    "renderInputCount": 54,
+    "allRenderInputsMatch": true,
+    "browserBuildDigest": "b55042d36fe1ccde8e13bb4f73752eb4b929e1e7671a89a621351504453eafa6",
+    "evalRun12InputCount": 196,
+    "allEvalRun12InputsMatch": true,
+    "evalBoundary": "Run12 remains the original BLOCKED request on4e649f8. No live measurement was performed on either candidate; unchanged input hashes do not convert an unavailable run into a score.",
+    "verifiedAt": "2026-09-10T22:29:47.328154+00:00"
+  }
 }

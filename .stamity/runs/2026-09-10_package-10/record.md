@@ -177,3 +177,20 @@ then rejected the injected old declaration shape and invalid zero-exit scanners.
 Corrected packed strictTS/JS/CLI checks pass. All54render inputs,134site output
 files and20website TypeScript/config/package inputs are unchanged. Fresh actual
 CI and non-publishing rehearsal now follow on the combined repair commit.
+
+
+## Corrected candidate platform proof
+
+Reviewed repair `713c057e113c0447ef0c2a2980d9cfc7ccea1379` now passes actual
+CI34537631703 (Linux floor/LTS, Windows, three APM legs and aggregator),
+PRchecks34537631663, Docs34537631620 and non-publishing Release34537639076.
+The release gates/pack, canonical APM and summary pass; publication is skipped.
+Its tarball SHA256 `2f86a82c29aefc170dc3c787147b39f08246f0fe4d911353c37cccce0a3c3408`
+matches the independently scanned local tarball; an SBOM is included. Complete
+job identities, checkout/tree comparisons, timestamps and log hashes are retained
+in `ci-verification.md`/JSON. Original failed runs remain unchanged.
+
+No actionable source finding remains. Final evidence-only records bind this
+implementation and preserve all open live-eval/human/owner proofs. The final PR
+head must also clear its required checks before handback; no merge/tag/release
+is authorized by the failed-to-dispatch run12 or by unsigned current QA.

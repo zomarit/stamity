@@ -31,3 +31,10 @@ Candidate binding: all 1,071 verified source inputs and54 render-source inputs m
 implementation commit `4e649f8a703021a3c0e4e057c258942b2330220f`. The bundle is
 `.stamity/evidence/browser-99c1094-dirty.json`; its original dirty run identity is
 preserved alongside the subsequent byte-comparison binding.
+
+Repaired-candidate binding: `713c057e113c0447ef0c2a2980d9cfc7ccea1379`
+changes only the declaration/smoke implementation and Windows fixtures outside
+the rendered surface. All 54 render inputs, 134 built-site files and 20 website
+TypeScript/config/package inputs match the original passing browser/site proofs.
+The original dirty-run identity and screenshots remain unchanged;
+`candidate-binding.json` records the subsequent commit comparison.
