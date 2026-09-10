@@ -1,7 +1,7 @@
 ---
 id: fork-layer
 # A design document, authored outside the spec command and excluded from the site build.
-status: shipped-with-1.5.0
+status: shipped — unreleased (on main after pull request #29; the next cut is 1.5.0)
 obsolete_when: the enterprise-forks guide and the customization page stop carrying the fork layer's behaviour, or a decision cuts the surface
 ---
 # The fork layer
@@ -107,7 +107,7 @@ corpus or pack → fork (a full replacement or a patch) → user (a full replace
 `fork/<class>/<id>.md` for agents, rules and commands; `fork/skills/<id>/SKILL.md` plus the
 skill's own files for skills; `fork/<class>/<id>.customize.yaml` and
 `fork/<class>/<id>.customize.md` (and `fork/skills/<id>/SKILL.customize.*`) for patches —
-the same layout the override tree uses (`docs/customization.md:26-33`), rooted at the package
+the same layout the override tree uses (`docs/customization.md:26-34`), rooted at the package
 instead of at a consumer repository. Ids are bare slugs: a filename spelled with the reserved
 `stamity-`/`st-` prefix is refused at index time with the canonical spelling named, the way an
 overlay filename is today (`catalog.ts:984-998`). A bare slug that matches a prefixed corpus
@@ -145,7 +145,7 @@ fork patch of one id are refused together, as the user pair is today (`catalog.t
 across layers, a user full override simply replaces a fork-patched item. Every overlay
 refusal (`REQ-OVERLAY-005` through `-010`) applies unchanged, naming the fork file — with one
 asymmetry the layer's scope forces: the fork layer is package-global and packs are
-per-repository, so a fork patch whose base exists in neither the corpus nor the fork layer is
+per-repository, so a fork patch whose base exists in none of the corpus, an installed pack and the fork layer is
 not an orphan error but a patch that waits — skipped in that repository and reported by
 `validate` as a warning that names the artifact it waits for — while a consumer's
 own orphan patch stays the error it is today, because the consumer can fix the file.
@@ -240,7 +240,7 @@ the chain that now applies; the CHANGELOG's Unreleased section records the addit
 ## Test plan sketch
 
 `test/content/catalog.test.ts` (precedence, shadows, patches, exclusivity, prefix refusal,
-absent-directory identity, pack refusal), `test/content/forkRoot` cases beside the content-root
+absent-directory identity, pack refusal), the fork-root cases in `test/content/contentRoot.test.ts` beside the content-root
 tests, `test/cli/engine/emission.test.ts` (fork body to every client; skills), `test/emit/`
 (the planner's three origin seams under the paired shape), `test/cli/commands/validate.test.ts`
 (the fork rows), `test/support/support.test.ts` (the budget prefix), `test/upstream/lane.test.ts`
