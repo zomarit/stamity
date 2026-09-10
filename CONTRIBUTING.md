@@ -189,6 +189,11 @@ case at a zero-break bar, because guardrail behaviour is a property of the model
 rather than of the prose alone. Thresholds, the run-artifact contract and the case index live in
 `evals/SET-v4.md`; runs are manual, in a harness session, on the operator's word.
 
+Select the model pair through `evals/MODEL-PROFILES-v1.md`: the original Claude profile
+remains the default, while `codex-astra` and `codex-astra-judge` support Astra in either
+role. Calibrate the selected judge/rubric and record the full profile; never pool results
+from different profiles into one baseline.
+
 ## Commits
 
 Conventional-commit subjects (`feat:`, `fix:`, `docs:`, `chore:`), imperative mood, one unit

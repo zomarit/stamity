@@ -254,6 +254,20 @@ export function renderConfigReferenceFrom(specs: readonly ConfigKeySpec[]): stri
     "the client would have picked anyway — and pinning `model.frontier` to an id your client accepts",
     "is how an operator opts into the rung.",
     "",
+    "For a Codex setup with access to GPT-6 Astra, pin its exact id to the classes you want:",
+    "",
+    "```sh",
+    "stamity config set model.advanced gpt-6-astra",
+    "stamity config set model.frontier gpt-6-astra",
+    "stamity sync",
+    "```",
+    "",
+    "The same id is accepted for `model.standard` and `model.economy`. Pins are global per class",
+    "across the selected clients: Stamity checks their shape, and each client must support the",
+    "model you name. Codex emits `model = \"gpt-6-astra\"`; effort remains the class's existing",
+    "level unless you set its `effort.*` key. A pin configures emitted agents; eval runners",
+    "configure their scenario and judge model pins separately.",
+    "",
     // The `mcp.servers` hint calls its value set "curated" and, until the
     // reference page shipped, pointed at a list no page published: the ids lived
     // in src/mcp/catalog.ts and nowhere a reader would look. The pointer lives in

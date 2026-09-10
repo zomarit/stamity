@@ -803,6 +803,38 @@ describe("config — the model ladder's nine keys", () => {
     expect(get.stdout).toContain("model.standard  vendor-x-1");
   });
 
+  it.each(MODEL_CLASSES)("persists and resolves an Astra pin for %s without changing effort", async (modelClass) => {
+    const handle = tempDir();
+    await seedManifest(handle, {
+      tools: ["codex"],
+      models: {
+        pins: { [modelClass]: "previous-model" },
+        effort: { [modelClass]: "medium" },
+        reviewCap: 6,
+      },
+    });
+
+    const key = `model.${modelClass}`;
+    const set = await run(handle, ["set", key, "gpt-6-astra"]);
+    expect(set.code).toBe(0);
+    expect(set.stdout).toContain("-> gpt-6-astra");
+
+    const manifest = await readManifest(handle.dir);
+    expect(manifest?.models).toEqual({
+      pins: { [modelClass]: "gpt-6-astra" },
+      effort: { [modelClass]: "medium" },
+      reviewCap: 6,
+    });
+    expect(getConfigValue(manifest as SetupManifest, key)).toEqual({
+      value: "gpt-6-astra",
+      isDefault: false,
+      resolved: "gpt-6-astra",
+    });
+    const get = await run(handle, ["get", key]);
+    expect(get.code).toBe(0);
+    expect(get.stdout).toContain(`${key}  gpt-6-astra`);
+  });
+
   it("resolves a pinned row to exactly what the adapter will write for that client", async () => {
     const handle = tempDir();
     await seedManifest(handle, { tools: ["cursor"] });

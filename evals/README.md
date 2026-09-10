@@ -11,7 +11,9 @@ baselines.
 | Path | What it is |
 |---|---|
 | `SET-v4.md` | **The current set document** — scope, versioned inputs, thresholds, the run-artifact contract, the hard triggers, the case index and the coverage table. Read it first. |
-| `rubric-v4.md` | **The current judge rubric**: verdict vocabulary, the binding/advisory grouping, grading procedure, the judge's four inputs, and the calibration protocol with its fixtures. |
+| `rubric-v4.md` | **The default Claude judge rubric**: verdict vocabulary, the binding/advisory grouping, grading procedure, the judge's four inputs, and the calibration protocol with its fixtures. |
+| `MODEL-PROFILES-v1.md`, `model-profiles-v1.json` | Explicit model/rubric profiles: the original Claude default, Astra scenarios with Sol judging, or Sol scenarios with Astra judging. |
+| `rubric-v5.md` | The alternate profiles' model-neutral rubric; grading rules and calibration fixtures are retained verbatim from v4. |
 | `cases-v4/golden/` | Cases pinning the behaviour the corpus promises. |
 | `cases-v4/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
 | `cases-v4/probes/` | Skill-selection classification cases: eight that should trigger, four that should not. |
@@ -38,11 +40,18 @@ golden, 16 adversarial (12 guardrail, 4 benign twins), 12 probes, with 20 carryi
 
 ## The judge is pinned to an explicit id, and its inputs are stated
 
-`rubric-v4.md` declares the judge as **`claude-fable-5-1`** and the model under test as
-`claude-opus-5`, the same two ids v3 declared. Every verdict role runs at an explicit model
-id — a tier alias is never sufficient — and the run records the id each agent attests rather
+The default `claude` profile retains `rubric-v4.md`, judge **`claude-fable-5-1`** and model
+under test `claude-opus-5`, the same two ids v3 declared. Every verdict role runs at an
+explicit model id — a tier alias is never sufficient — and the run records the id each agent attests rather
 than the id the harness requested. Run 1 is why: it measured an alias that resolved to a
 different model than the set declared.
+
+For Codex, explicitly select `codex-astra` to measure `gpt-6-astra` with `gpt-5.6-sol`
+judging, or `codex-astra-judge` to reverse them. Both roles use `high` reasoning effort.
+These profiles select `rubric-v5.md`; they preserve distinct scenario and judge models,
+sealed fresh contexts and calibration before scoring. Availability of a profile does not
+establish a passing eval. Read [the profile contract](MODEL-PROFILES-v1.md) for preflight,
+isolation controls and evidence requirements. Existing Claude baselines remain separate.
 
 What v4 moved is the judge's input set. Per transcript the judge receives four things and
 nothing else: the rubric, the case's `## Brief` verbatim, the case's `## Expected` block, and
@@ -52,7 +61,8 @@ undecidable — and an undecidable criterion is graded `fail`.
 
 A judge-model change is a calibration event, and so is an edit to the rubric. Calibration runs
 against five fixtures today, and that number is not a literal maintained in this file: it is
-the count of `### Fixture` headings in `evals/rubric-v4.md`, which is the source of truth.
+the count of `### Fixture` headings in the selected profile's rubric. The default uses
+`evals/rubric-v4.md`, and `rubric-v5.md` retains the same fixtures verbatim.
 `test/evals/fixtureCount.test.ts` derives it and fails if this page, `SET-v4.md`, or the
 runner skill states a different one.
 
@@ -146,13 +156,21 @@ one scenario agent per case, grades each transcript against that case's `## Expe
 criteria, aggregates the per-metric scores beside their declared thresholds, and writes the
 run artifact.
 
+For example: **Run the full eval set with profile `codex-astra`.** With no profile named,
+the runner keeps `claude`; it never substitutes a profile to match the available tools.
+Before calibration it resolves the profile and verifies its exact model/effort controls and
+fresh input isolation. The run records requested and resolved IDs, reasoning/decoding,
+harness, isolation controls and rubric/profile hashes. Tool access prohibited only by the
+Brief is recorded as instruction-only isolation and checked against tool traces.
+
 Two things to get right before starting one.
 
 - **The runner and both hard-trigger pointers name v4.** The skill's preconditions,
   calibration and fan-out steps, the contributing guide's corpus-edit trigger, and the
-  release checklist all point at `evals/SET-v4.md`, `evals/rubric-v4.md` and
-  `evals/cases-v4/**`. They move together, because a runner naming one version while a
-  trigger names another scores one instrument and labels the result with the other's name.
+  release checklist all point at `evals/SET-v4.md` and `evals/cases-v4/**`;
+  `model-profiles-v1.json` selects `rubric-v4.md` or `rubric-v5.md`. They move together,
+  because a runner naming one version while a trigger names another scores one instrument
+  and labels the result with the other's name.
   v1's, v2's and v3's own documents still name their own paths, which is correct: they
   describe the baselines they are.
 - **Pin the model ids explicitly, never by tier alias — for the judge as well.** Run 1

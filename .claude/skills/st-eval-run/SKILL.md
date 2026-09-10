@@ -12,29 +12,17 @@ metadata:
 
 # Eval run
 
-The manual runner for the eval set under `evals/`. One operator, one harness
-session, one committed result. Nothing here fires on a schedule and nothing
-here reaches a provider endpoint of its own accord: every case is executed by
-an agent session the operator started, and the session closes when the run
-artifact lands.
-
-## Quick Start
-
-1. Preconditions — read the set, pin the sha, confirm the set is committed.
-2. Calibration gate — the judge earns the right to grade.
-3. Scenario fan-out — one agent per case, sealed brief in, transcript out.
-4. Judging — a separate agent grades each transcript against the rubric.
-5. Aggregate — per-metric scores beside their declared thresholds.
-6. Artifact — write the run record and commit it.
-7. Verdict — a metric under its threshold reads as a red test.
+The manual runner for `evals/`: one operator-started harness session, one
+committed result. No schedule or automatic provider calls.
 
 ## 1. Preconditions
 
-Read `evals/SET-v4.md` first. It is the contract this runner executes: the case
-roster, the declared thresholds, the run-artifact shape, and the versioned
-inputs — prompt text, the model-under-test id, the judge id, decoding settings,
-tool schemas, retrieval corpus. Read `evals/rubric-v4.md` next for the written
-grading rubric and its calibration fixtures.
+Read `evals/SET-v4.md` first for the case roster, thresholds and run-artifact
+shape. Resolve the operator's named profile from `evals/model-profiles-v1.json`
+(its `defaultProfile` is `claude` when none was named), following
+`evals/MODEL-PROFILES-v1.md`. Read the selected profile's `rubric` next for the
+grading rules and calibration fixtures. The profile contract defines each pair
+and its effort controls, including Astra in either role.
 
 Then pin the run:
 
@@ -46,17 +34,27 @@ Then pin the run:
   than the change, so the set predates the run or the run does not start.
 - Name the change that caused the run — a content edit, a release, or a model
   change. That name decides the case scope in step 3.
+- Before any model call, check that the named profile exists and the harness
+  supports its exact, distinct scenario/judge IDs and requested effort settings.
+  Check fresh input isolation and visibility of scenario tool use. Follow the
+  profile contract's isolation rules; do not claim shared-workspace tools are
+  disabled when they are only prohibited by the sealed Brief. Unknown or
+  unavailable profiles, models, controls or isolation evidence stop the run with
+  the unmet requirement named. No fallback or per-role substitution is allowed.
+- Record the profile JSON's version/path/hash, selected profile, harness/version,
+  model metadata, reasoning/decoding settings and isolation controls. If loaders
+  are used, pin them to the profile's scenario model/effort and record their role.
 
 ## 2. Calibration gate
 
-Spawn one judge agent, pinned to the judge id `evals/SET-v4.md` declares —
+Spawn the judge with the selected profile's exact judge model and effort —
 the explicit model id, never a tier alias, because a verdict role dispatched
 by alias grades on a model the set never named. Grade **every fixture the
-rubric declares**: read them out of `evals/rubric-v4.md` rather than working to
+rubric declares**: read them out of the selected rubric rather than working to
 a remembered count, since the rubric is the only place that number lives.
 
 Hand the judge an **excised rubric**: the grading sections only — the text of
-`evals/rubric-v4.md` above the `## Calibration protocol` heading. That heading
+the selected rubric above the `## Calibration protocol` heading. That heading
 and everything under it, the fixtures and their `Expected verdict` lines
 included, is never handed to the judge in any call, at calibration or at
 scoring. The labels are the answer key; a rubric handed in whole is an open
@@ -76,9 +74,9 @@ separately.
 
 Record the calibration outcome — the fixtures run, the matches, and the judge
 id the agent attested rather than the id requested — because the artifact in
-step 6 carries it. A calibration result is valid only for the judge model and
-rubric version that produced it, so a judge-model change re-runs this gate
-before any score behind it counts.
+step 6 carries it. A calibration result belongs to the selected profile's judge
+model, effort, rubric bytes, harness and isolation controls. Calibrate this
+configuration before scoring; a different profile's calibration never transfers.
 
 ## 3. Scenario fan-out
 
@@ -88,11 +86,18 @@ them, and there is none.
 
 Each scenario agent gets exactly what the case seals and no more.
 
+Each case/sample starts in a fresh agent with no inherited conversation or
+earlier sample. In Codex dispatch with `fork_turns: "none"`, the profile's exact
+`model`, and its `reasoning_effort`. Do not reuse a scenario through a follow-up
+task. Keep model selection in dispatch controls; the profile document is never
+part of the sealed Brief. Inspect tool traces before admitting a sample; any
+scenario tool use or extra repository read invalidates it and requires a redo.
+
 | Handed in | Withheld |
 |---|---|
 | the case's `## Brief`, verbatim and whole | the case's `## Expected` |
-| the model-under-test id `evals/SET-v4.md` declares, explicit and never a tier alias | the rubric |
-| the decoding settings that set declares | tools, repo reads, the rest of the case file |
+| the selected scenario model via dispatch controls, explicit and never a tier alias | the rubric |
+| the selected effort/decoding settings via dispatch controls | tool results, repo reads, the rest of the case file |
 
 Four rules keep a transcript worth grading:
 
@@ -112,10 +117,11 @@ Four rules keep a transcript worth grading:
 
 Spawn the judge separately from the scenario agents. The judge grades; it
 produces no scenario output, and no transcript is graded by the agent that
-wrote it.
+wrote it. Use a fresh judge context for each transcript and calibration fixture,
+with the selected judge model/effort; do not inherit the harness conversation.
 
 Per transcript, hand the judge four things: the same excised rubric step 2
-handed in — `evals/rubric-v4.md` above the `## Calibration protocol` heading —
+handed in — the selected rubric above the `## Calibration protocol` heading —
 that case's `## Brief` verbatim, that case's `## Expected` block, and the
 transcript verbatim. The excision is not a calibration-only measure: the
 fixtures are live cases in the set, so a judge holding that section grades some
@@ -159,10 +165,16 @@ and a score with no decoding note beside it cannot be reproduced or compared.
 Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
 `evals/SET-v4.md` declares for it. At minimum it records:
 
-- the set version and the rubric version,
-- the repo sha,
+- the set/rubric versions and repo sha,
+- the selected model profile, profile document version/path/hash, and exact
+  rubric path/hash; use the same selected rubric for calibration and scoring,
 - the model-under-test id and the judge id **as each agent attested them**,
   not as the dispatch requested them, plus the decoding settings,
+- requested/resolved model IDs and requested/effective reasoning effort for all
+  roles, with provider/harness metadata recorded separately from attestation;
+  record unavailable metadata as unavailable, never as independent proof,
+- harness/version and isolation controls, including whether tools were removed
+  or only prohibited and whether the tool trace confirms no scenario tool use,
 - run counts, re-runs from steps 3 and 4 included,
 - the calibration result from step 2, and beside it the **sha256 of the excised
   rubric text** every judge call received — the bytes above the
@@ -172,15 +184,13 @@ Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
 - a per-case table — case id, class, verdict, cited span,
 - per-metric scores beside the threshold each was measured against.
 
-Commit it with the change that caused the run. A result that lives only in the
-session transcript is not an artifact, and a result committed apart from its
-change cannot be traced back to what moved.
+Commit the artifact with the change that caused the run; results left only in
+the session transcript do not satisfy the artifact contract.
 
 ## 7. Verdict
 
 A metric under its declared threshold fails the change the way a red test does.
 Report it as a failure — the metric, the score, the threshold — and stop.
-Advisory eval output trains a team to scroll past it.
 
 A clean run reports the artifact path and one line per metric.
 
@@ -188,10 +198,11 @@ A clean run reports the artifact path and one line per metric.
 
 - Manual harness sessions only. No scheduler, no unattended lane, no automation
   that starts a run on its own.
-- Every role runs at the explicit model id `evals/SET-v4.md` declares — the
-  model under test and the judge alike. A tier alias is never sufficient, and
-  the run records the id each agent attests rather than the id it was asked
-  for.
+- Every role uses the selected profile's explicit model and effort. A tier
+  alias is never sufficient; the scenario and judge are distinct models.
+- An unestablished exact pin or input isolation stops scoring. A new profile
+  starts a separate baseline. Keep scores and advisory-repeat tracking separate
+  by model, effort, rubric, harness, isolation controls and versioned inputs.
 - A content edit re-runs the affected cases, found by the `source` field each
   case declares, and carries their result.
 - Every release runs the full set rather than the affected slice.

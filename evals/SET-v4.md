@@ -968,6 +968,18 @@ passed every advisory criterion at run 9 and start their count at one.
 
 ## Versioned inputs
 
+**Additive model profiles.** `MODEL-PROFILES-v1.md` and its machine-readable
+`model-profiles-v1.json` select the model, effort, harness and rubric values below; decoding
+and isolation controls are recorded from the selected harness. The `claude` default retains
+the configuration used by historical runs. An explicitly selected `codex-astra`
+profile measures `gpt-6-astra` with `gpt-5.6-sol` judging; `codex-astra-judge` reverses them.
+Both use `high` reasoning effort and `rubric-v5.md`, whose grading rules and fixtures are
+v4's verbatim with a model-neutral introduction. Case files, expected criteria, metric
+thresholds and the judge's four inputs remain this set's. Resolve the profile before choosing
+a rubric or calling a model; no
+fallback is allowed. A new profile is a separate instrument configuration and baseline,
+not a result for either model. `rubric-v4.md` and historical run artifacts are unchanged.
+
 Everything that shapes an output is recorded per run. Changing any one of them re-runs the
 set.
 
@@ -975,17 +987,18 @@ set.
 |---|---|
 | Case files | `evals/cases-v4/**`, at the repository sha of the run. The run artifact records that sha. |
 | Set document | this file, `evals/SET-v4.md`, at the same sha. |
-| Judge rubric | `evals/rubric-v4.md`, at the same sha. |
-| Model under test | `claude-opus-5` |
-| Judge model | `claude-fable-5-1` — an explicit model id, never a tier alias; never the model under test, never grading its own output. |
+| Judge rubric | The selected profile's `rubric`, at the same sha; the default `claude` profile uses `evals/rubric-v4.md`. |
+| Model under test | The selected profile's `scenario.model`; the default is `claude-opus-5`. |
+| Judge model | The selected profile's `judge.model`; the default is `claude-fable-5-1`. An explicit model id, never a tier alias; never the model under test, never grading its own output. |
 | Judge inputs | Four, and only four: the rubric, the case's `## Brief` verbatim, the case's `## Expected` block, and the transcript verbatim. The Brief is the scenario's facts, never a second source of criteria. |
-| Decoding settings | Harness defaults. The Claude Code Agent tool exposes no temperature, top-p, or seed control, so there is nothing to pin and nothing is claimed as pinned; the run records "harness defaults, no decoding control exposed" verbatim rather than inventing a number. |
+| Decoding settings | Record the selected harness's actual exposed settings and the controls or effective values it does not expose, separately from each role's reasoning effort. For the legacy `claude` profile, the Claude Code Agent tool exposes no temperature, top-p, or seed control; its note is "harness defaults, no decoding control exposed". That legacy note is not prescribed for Codex: record its actual controls, including unavailable metadata, without copying a claim about another harness. |
 | Tool schemas | None. Every brief is sealed and tool-free: it inlines the governing corpus text and the scenario input, and instructs the scenario model to use no tools and read no files. |
 | Retrieval corpus | None. No retrieval runs, so there is no corpus to version and no retrieval-grounded metric in this set. |
 
-**Neither model id moved between v3 and v4.** The model under test and the judge are the same
-two ids v3 declared, so trigger 3 does not fire on this version. What did move is the judge's
-input set, which is why it is a row of this table rather than a line in the runner skill alone.
+**At v4's introduction, neither model id moved from v3.** The original Claude pair used the
+same two ids v3 declared, so that version transition did not fire trigger 3. The judge's
+input set did move. A subsequent profile/model change follows the hard triggers below;
+the historical transition does not exempt it.
 
 The sealed-brief design is what makes the first row do any work. A brief that told the
 scenario model to go read `content/commands/st-quick.md` would be measuring the repository at
@@ -1127,7 +1140,13 @@ run. Results are artifacts, not chat. The file records, at minimum:
 1. **Set version and sha** — `SET-v4`, the rubric version, and the repository sha the case
    files were read at.
 2. **Versioned inputs** — every row of the table above, as used, including the attested model
-   ids for every role, the judge's input set, and the decoding note verbatim.
+   ids for every role, the judge's input set, and the selected harness's actual decoding
+   settings or unavailable controls. The legacy Claude decoding note applies only to that
+   profile. Include the
+   selected profile and profile JSON version/path/hash, the selected rubric path/hash,
+   requested/resolved model IDs and reasoning effort per role, harness/version and isolation
+   controls, as `MODEL-PROFILES-v1.md` specifies. Separate harness metadata from attestation;
+   record controls or metadata not exposed without claiming to have measured them.
 3. **Why the run happened** — which of the three hard triggers fired, and what caused it (the
    `content/` paths edited, the release being cut, or the model change).
 4. **Run count per case** and, where cases were run a different number of times, which; plus
@@ -1141,12 +1160,13 @@ run. Results are artifacts, not chat. The file records, at minimum:
    misses go unlisted, and a case that passed on binding while missing an advisory criterion is
    reported as exactly that, in one line, rather than as an unqualified pass.
 8. **Advisory repeats** — any advisory criterion that has now failed in two consecutive runs,
-   named, so the obligation above has something to act on.
+   named, so the obligation above has something to act on. Track repeats within the same
+   full model/rubric/harness/input configuration; a profile change starts a separate baseline.
 9. **Judge calibration result** — one verdict line per fixture, for **every fixture the rubric
    declares under a `### Fixture` heading — five today** — whether all of them matched, the
    advisory labels on the fixtures whose cases declare advisory criteria, and any recalibration
-   attempt with its reason. The count is derived by reading `evals/rubric-v4.md`, never typed
-   from memory; `test/evals/fixtureCount.test.ts` holds this file, `evals/README.md` and the
+   attempt with its reason. The count is derived by reading the selected profile's rubric,
+   never typed from memory; `test/evals/fixtureCount.test.ts` holds this file, `evals/README.md` and the
    rubric to one number.
 10. **Redone judge calls** — any degraded or errored call, and why it was redone, reported
     separately from a mismatch. An errored call is not a mismatch and the two are never folded
@@ -1395,22 +1415,25 @@ Three deterministic gates hold the shape, and they run in `npm run test` with ev
 
 ## Running v4
 
-Read this file first, then `rubric-v4.md`. The runner is the `st-eval-run` skill, invoked by
-name in a harness session, with the model ids pinned explicitly rather than by tier alias — for
-the judge as well as for the model under test.
+Read this file first, resolve the named profile from `model-profiles-v1.json` under
+`MODEL-PROFILES-v1.md`, then read that profile's selected rubric. With no profile named, use
+the `claude` default. The runner is the `st-eval-run` skill, invoked by name in a harness
+session, with the profile's exact model and effort controls for every role.
 
-The skill's own text names `evals/SET-v4.md`, `evals/rubric-v4.md` and `evals/cases-v4/**` in
-its preconditions, its calibration step and its fan-out step, and its calibration step names no
-literal fixture count: it grades every fixture the rubric declares. Those pointers move together
-with the release checklist and the contributing guide, because a runner naming one version while
-a trigger names another scores one instrument and labels the result with the other's name.
+The skill's preconditions select the profile and its rubric before calibration; its case
+scope remains `evals/cases-v4/**`. Calibration grades every fixture the selected rubric
+declares, with no competing literal count. The set/profile/rubric pointers move together with
+the release checklist and contributing guide, because a runner naming one instrument while
+a trigger names another mislabels the result. Calibrate the selected judge/rubric
+configuration before any case score counts and record the selected harness's actual
+reasoning, decoding and isolation controls.
 
 The judge is handed four things per transcript and nothing else: the rubric, the case's
 `## Brief` verbatim, the case's `## Expected` block, and the transcript verbatim. The scenario
 agent's inputs are unchanged and are a different list — it gets the Brief and never the
 Expected block.
 
-Before the first v4 run, one thing is not optional: **calibration is re-run.** Not because the
-judge model changed — it did not; `claude-fable-5-1` is the same id v3 declared — but because
-the rubric's wording did, and a calibration result is valid only for the judge model and rubric
-version it was produced with. The fixture calls now hand in each fixture case's `## Brief` too.
+**Historical first-v4 calibration.** Before the first v4 run, calibration had to run again
+because the rubric wording changed. Its Claude judge model had not changed from v3.
+Those fixture calls also added each fixture case's `## Brief`. That historical requirement
+does not supply calibration for a newly selected profile or rubric.

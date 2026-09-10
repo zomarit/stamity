@@ -72,6 +72,20 @@ what its cell above says. Nothing is broken by that — the deepest work simply 
 the client would have picked anyway — and pinning `model.frontier` to an id your client accepts
 is how an operator opts into the rung.
 
+For a Codex setup with access to GPT-6 Astra, pin its exact id to the classes you want:
+
+```sh
+stamity config set model.advanced gpt-6-astra
+stamity config set model.frontier gpt-6-astra
+stamity sync
+```
+
+The same id is accepted for `model.standard` and `model.economy`. Pins are global per class
+across the selected clients: Stamity checks their shape, and each client must support the
+model you name. Codex emits `model = "gpt-6-astra"`; effort remains the class's existing
+level unless you set its `effort.*` key. A pin configures emitted agents; eval runners
+configure their scenario and judge model pins separately.
+
 `mcp.servers` is the one row whose closed list is kept on a page of its own rather than spelled
 in its cell, and [the MCP server reference](reference/mcp-servers.md) is that page: every id this
 repo resolves on its own, with the version each is pinned to, the credentials it needs and the

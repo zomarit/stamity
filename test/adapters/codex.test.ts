@@ -29,7 +29,7 @@ import { emitCodexToml } from "../../src/mcp/emit.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
 import { toCodexToolsFrontmatter } from "../../src/tools/translator.ts";
 import { outputOwners, type AdapterOutput, type RulePrecedence } from "../../src/types/content.ts";
-import type { Tool } from "../../src/types/core.ts";
+import { MODEL_CLASSES, type Tool } from "../../src/types/core.ts";
 import type { PackageEntry } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
@@ -628,6 +628,22 @@ describe("model allocation", () => {
     expect(buildAgentToml(agentItem("standard"), grantOf(agentItem("standard")), "Body.", {
       pins: { advanced: "gpt-fixture-pro" },
     })).not.toContain("\nmodel = ");
+  });
+
+  it.each(MODEL_CLASSES)("emits an exact Astra pin for %s with its existing default effort", (modelClass) => {
+    const expectedEffort = { frontier: "high", advanced: "high", standard: "medium", economy: "low" };
+    const item = agentItem(modelClass);
+    const grant = grantOf(item);
+
+    const unpinned = buildAgentToml(item, grant, "Body.");
+    const pinned = buildAgentToml(item, grant, "Body.", {
+      pins: { [modelClass]: "gpt-6-astra" },
+    });
+
+    expect(unpinned).not.toContain("\nmodel = ");
+    expect(tomlValue(pinned, "model")).toBe('"gpt-6-astra"');
+    expect(tomlValue(pinned, "model_reasoning_effort")).toBe(`"${expectedEffort[modelClass]}"`);
+    expect(tomlValue(pinned, "model_reasoning_effort")).toBe(tomlValue(unpinned, "model_reasoning_effort"));
   });
 
   it("omits the model key entirely with no pin, because this client publishes no class aliases", () => {
