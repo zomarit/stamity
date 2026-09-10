@@ -335,10 +335,24 @@ pending, and the next merge re-conflicts on lines only the fork touched, because
 regressed to the root. This repository's own `main` ruleset requires linear history and allows
 squash and rebase only — exactly the policy a fork must not copy onto its integration branch.
 
-On GitHub the workflow reads the branch's effective rules and, when `required_linear_history` is
-set or merge commits are not among the allowed methods, writes a warning into the pull request
-body and the job summary naming the setting to change. It still opens the pull request: the
-decision is yours. When policy genuinely forbids merge commits, construct the merge by hand from
+On GitHub the workflow checks active rulesets across all response pages, repository merge
+settings, and classic branch protection. A linear-history requirement or a restriction to
+squash/rebase (including a merge queue) produces a warning in the PR and job summary. Classic
+protection needs Administration: read; unavailable, 404 or malformed responses are marked
+**not fully checked**, while restrictions already observed still produce warnings. Confirm
+unreadable settings with the repository administrator; do not broaden the automation token
+just to suppress the note. The PR still opens and the landing decision remains yours.
+
+New and recovered PRs use a conventional title (`chore(upstream): integrate <tag>`). Existing
+PR titles, bodies and labels remain untouched. Lane-created commits use the configured
+committer's DCO sign-off under this repository's contribution policy; the workflow configures
+its automation identity. The local placeholder fallback remains available but carries no
+DCO sign-off: configure an approved contributor identity and review/sign off the contribution
+before submitting it to a DCO-gated repository. Upstream commits retain their original
+messages; missing upstream sign-offs need maintainer resolution and do not justify exempting
+the update PR from required checks.
+
+When policy forbids merge commits, construct the merge by hand from
 the record's upstream commit (git 2.40 or newer), then move your branch onto the result:
 
 ```sh
@@ -520,6 +534,27 @@ from imported upstream tags that its version policy accepts: `v1.5.0-acme.1`, fo
 is a prerelease and needs a consumer policy allowing that prerelease. Update package version,
 regenerate, run full gates, review and commit on the integration branch before tagging.
 
+The existing update engine must also order those tags correctly. Native Renovate APM updates
+use a coerced version policy by default, which can treat `.1` and `.2` prerelease tags as the
+same version. For that manager, merge a rule scoped to this private dependency into the
+existing configuration, then prove it offers the second tag:
+
+```json
+{
+  "packageRules": [{
+    "matchManagers": ["apm"],
+    "matchPackageNames": ["acme/stamity-private"],
+    "versioning": "semver",
+    "ignoreUnstable": false
+  }]
+}
+```
+
+If the deployed engine uses another manager, apply its equivalent supported policy or choose
+its supported stable tag convention. Keep the existing engine; do not infer ordering from a
+successful APM install. The [version-policy source notes](https://github.com/zomarit/stamity/blob/main/docs/specs/enterprise-upstream-lane.md)
+record the dependency contracts behind this prerequisite.
+
 ```sh
 set -euo pipefail
 STAMITY_PRIVATE_TAG='v1.5.0-acme.1'
@@ -538,9 +573,15 @@ objects, add one on that same private repository using its reviewed notes and
 Check actual visibility immediately before release. These releases remain separate from
 canonical Stamity's public npm/APM/docs release.
 
-The consumer names the private ref in `apm.yml` in the same form as a public dependency:
+The consumer names the private ref in `apm.yml` in the same form as a public dependency.
+Also declare the intended supported clients in `targets`; this example selects Claude.
+Native Renovate APM runs plain `apm install` to refresh the lock and deployed files. A
+manual `--target` flag is not remembered for that run, and multiple detected clients without
+manifest targets can fail noninteractive installation. List every intended client explicitly
+(for example, `[claude, copilot]` when both are required).
 
 ```yaml
+targets: [claude]
 dependencies:
   apm:
     - acme/stamity-private#v1.5.0-acme.1
@@ -555,7 +596,7 @@ complete organization SSO authorization where needed. Keep values out of manifes
 command history, logs and evidence.
 
 ```sh
-apm install --target claude
+apm install
 ```
 
 Read `apm.lock.yaml`: the dependency must be `apm_package` and resolve the intended private

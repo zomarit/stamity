@@ -1648,11 +1648,14 @@ function identityArguments(git, worktree) {
   return { args: ['-c', `user.name=${FALLBACK_IDENTITY.name}`, '-c', `user.email=${FALLBACK_IDENTITY.email}`], fallback: true }
 }
 
-/** Commits the index; `rerere` records the resolution of the merge being committed (see the header). */
+/** Commits the index; configured committers follow CONTRIBUTING.md's sign-off policy.
+ * The placeholder fallback is not an authorized contributor and never certifies a DCO.
+ * `rerere` records the resolution of the merge being committed (see the header). */
 function commitInWorktree(git, worktree, message, { rerere = false } = {}) {
   const identity = identityArguments(git, worktree)
   const rerereArgs = rerere ? ['-c', 'rerere.enabled=true'] : []
-  git([...identity.args, ...rerereArgs, 'commit', '--quiet', '--no-verify', '-m', message], { cwd: worktree })
+  const signoffArgs = identity.fallback ? [] : ['--signoff']
+  git([...identity.args, ...rerereArgs, 'commit', '--quiet', '--no-verify', ...signoffArgs, '-m', message], { cwd: worktree })
   return { sha: git(['rev-parse', 'HEAD'], { cwd: worktree }).stdout.trim(), fallbackIdentity: identity.fallback }
 }
 
@@ -2099,7 +2102,7 @@ function finishMerge(context, config, doc, session) {
   doc.conflicts = conflicts
   const message = `Merge upstream release ${session.release.tag} into ${session.target.branch}\n\n${trailers(session, verdict)}\n`
   const committed = commitInWorktree(git, worktree, message, { rerere: true })
-  if (committed.fallbackIdentity) doc.messages.push(`no git identity was configured; the merge commit uses ${FALLBACK_IDENTITY.name} <${FALLBACK_IDENTITY.email}>`)
+  if (committed.fallbackIdentity) doc.messages.push(`no git identity was configured; the merge commit uses ${FALLBACK_IDENTITY.name} <${FALLBACK_IDENTITY.email}> and is unsigned for DCO. Before submitting to a DCO-gated repository, configure an approved contributor identity and review/sign off the contribution; a placeholder cannot certify its origin.`)
   doc.mergeCommit = committed.sha
   clearLaneState(git, worktree)
   if (verdict === 'passed' || verdict === 'none') {
@@ -2366,7 +2369,7 @@ function runValidate(context, doc) {
   }
   doc.record = writeRecordFile(git, located.worktree.path, tag, record)
   const committed = commitInWorktree(git, located.worktree.path, `upstream lane: gates re-run for ${tag}\n\n${trailers(session, verdict)}\n`)
-  if (committed.fallbackIdentity) doc.messages.push(`no git identity was configured; the record commit uses ${FALLBACK_IDENTITY.name} <${FALLBACK_IDENTITY.email}>`)
+  if (committed.fallbackIdentity) doc.messages.push(`no git identity was configured; the record commit uses ${FALLBACK_IDENTITY.name} <${FALLBACK_IDENTITY.email}> and is unsigned for DCO. Before submitting to a DCO-gated repository, configure an approved contributor identity and review/sign off the contribution; a placeholder cannot certify its origin.`)
   doc.mergeCommit = findLaneMergeCommit(git, root, located.head, target.head, tag)
   doc.outcome = verdict === 'passed' || verdict === 'none' ? 'integrated' : 'validation-failed'
   doc.messages.push(`record commit ${committed.sha} on ${located.branch} says the gates ${verdict}`)

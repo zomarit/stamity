@@ -103,6 +103,10 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     expect(retry.calls.filter((args) => args[0] === "pr")).toEqual([
       expect.arrayContaining(["create", "--head", f.env.UPDATE_BRANCH]),
     ]);
+    for (const calls of [first.calls, retry.calls]) {
+      const create = calls.find((args) => args[0] === "pr" && args[1] === "create")!;
+      expect(create[create.indexOf("--title") + 1]).toBe("chore(upstream): integrate v1.1.0");
+    }
     expect(readFileSync(f.env.CREATED_BODY, "utf8")).toContain(f.sha);
     expect(git(f.fork, ["ls-remote", "--heads", "origin", "main"]).stdout).toContain(f.fork.head);
     expect(git(f.fork, ["ls-remote", "--heads", "origin", f.env.UPDATE_BRANCH]).stdout).toContain(f.sha);

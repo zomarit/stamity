@@ -506,7 +506,7 @@ describe("upstream-update.yml — what each outcome produces", () => {
     expect(run).toContain('gh api --paginate --slurp -X GET "repos/$GH_REPO/pulls"');
     expect(run).toContain("-f state=all");
     expect(run).toContain('gh pr create --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH"');
-    expect(run).toContain('TITLE="Upstream release ${TAG:-unknown}"');
+    expect(run).toContain('TITLE="chore(upstream): integrate ${TAG:-unknown}"');
     expect(run).toContain("Allow GitHub Actions to create and approve pull requests");
     expect(run).toContain("::error title=Could not open the pull request");
     expect(run).toContain("::notice title=Label not applied");
@@ -611,11 +611,13 @@ describe("upstream-update.yml — what each outcome produces", () => {
 });
 
 describe("upstream-update.yml — the landing policy", () => {
-  it("reads the target branch's effective rules and warns without blocking", () => {
+  it("reads rulesets, repository merge settings and classic protection and warns without blocking", () => {
     const run = runOf("publish", "Check the target branch's landing policy");
-    // The endpoint that answers for rulesets AND classic protection, on the branch the pull
-    // request targets.
-    expect(run).toContain('gh api "repos/${GH_REPO}/rules/branches/${INTEGRATION_BRANCH}"');
+    // The ruleset endpoint does not include classic protection; both and the repository
+    // settings must be observed. The executable boundary suite verifies their combination.
+    expect(run).toContain('gh api --paginate --slurp "repos/${GH_REPO}/rules/branches/${BRANCH_PATH}"');
+    expect(run).toContain('gh api "repos/${GH_REPO}"');
+    expect(run).toContain('gh api "repos/${GH_REPO}/branches/${BRANCH_PATH}/protection"');
     // The two conditions that destroy the ancestry the lane's "integrated" claim rests on.
     expect(run).toContain('select(.type=="required_linear_history")');
     expect(run).toContain('select(.type=="pull_request")');
@@ -634,7 +636,7 @@ describe("upstream-update.yml — the landing policy", () => {
     const run = runOf("publish", "Check the target branch's landing policy");
     expect(run).toContain("::notice title=Landing policy unchecked");
     expect(run).toContain("checked=false");
-    expect(run).toContain("Could not read branch rules for");
+    expect(run).toContain("NOT fully checked");
     // The pull request still opens. The decision belongs to the fork.
     expect(run).not.toContain("exit 1");
   });

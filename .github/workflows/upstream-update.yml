@@ -253,6 +253,8 @@ jobs:
           # The merge commit's author. A runner has no git identity, and git resolves one at
           # `merge` time; the script carries a placeholder for that case, but the commit a
           # reviewer sees on the pull request should name the automation that made it.
+          # The script signs off new commits as this configured committer under
+          # CONTRIBUTING.md's DCO policy; it never certifies a placeholder identity.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           echo "On $(git rev-parse --abbrev-ref HEAD) at $(git rev-parse --short HEAD)"
@@ -566,11 +568,14 @@ jobs:
       # joins the branch's history, every later run sees the release as un-integrated and offers it
       # again, and every conflict resolved by hand comes back with it.
       #
-      # Detected here rather than assumed, because it is readable: the rules endpoint returns the
-      # branch's EFFECTIVE rules, whatever ruleset or protection produced them. It is also
-      # permitted to fail — the endpoint answers 403 or 404 on some plans and for some tokens —
-      # and a failure is reported in one line rather than swallowed, because "no warning" and
-      # "could not check" must not look the same to whoever reads the pull request.
+      # Three separate GitHub surfaces govern merge ancestry: active rulesets (paginated),
+      # repository merge methods and classic branch protection. The rules endpoint does NOT
+      # include classic protection. Its endpoint requires Administration: read, which the
+      # repository token does not have. An unreadable/404/malformed response is unknown, never
+      # evidence of no restriction. Keep known warnings even if another surface is unreadable.
+      # Official contracts: docs.github.com/en/rest/repos/rules#get-rules-for-a-branch,
+      # /en/rest/repos/repos#get-a-repository and
+      # /en/rest/branches/branch-protection#get-branch-protection (checked 2026-09-10).
       #
       # The pull request opens either way. The decision belongs to the fork.
       - name: Check the target branch's landing policy
@@ -580,30 +585,60 @@ jobs:
           mkdir -p "$ARTIFACT_DIR"
           POLICY="$ARTIFACT_DIR/landing-policy.md"
           RULES="$ARTIFACT_DIR/branch-rules.json"
-          RULES_ERR="$ARTIFACT_DIR/branch-rules.err"
+          REPOSITORY="$ARTIFACT_DIR/repository-policy.json"
+          PROTECTION="$ARTIFACT_DIR/branch-protection.json"
+          BRANCH_PATH="$(jq -rn --arg branch "$INTEGRATION_BRANCH" '$branch | @uri')"
+          UNCHECKED=()
+          LINEAR=0
+          NO_MERGE=0
+          QUEUE_NO_MERGE=0
+          REPOSITORY_NO_MERGE=0
+          METHODS=''
           : > "$POLICY"
 
-          if ! gh api "repos/${GH_REPO}/rules/branches/${INTEGRATION_BRANCH}" > "$RULES" 2> "$RULES_ERR"; then
-            {
-              echo '> [!NOTE]'
-              echo "> Could not read branch rules for \`$INTEGRATION_BRANCH\`, so the landing policy was NOT checked. This is expected on some plans and for some tokens; it is not evidence that the policy is safe. Confirm by hand that this branch allows MERGE COMMITS — see \`docs/enterprise-forks.md\`."
-              echo
-            } > "$POLICY"
-            echo 'checked=false' >> "$GITHUB_OUTPUT"
-            echo 'warning=false' >> "$GITHUB_OUTPUT"
-            echo "::notice title=Landing policy unchecked::could not read branch rules for $INTEGRATION_BRANCH; the pull request carries a note saying so. gh reported: $(tr '\n' ' ' < "$RULES_ERR" | cut -c1-300)"
-            exit 0
+          if gh api --paginate --slurp "repos/${GH_REPO}/rules/branches/${BRANCH_PATH}" > "$ARTIFACT_DIR/branch-rules-pages.json" 2> "$ARTIFACT_DIR/branch-rules.err" &&
+            jq -e 'type == "array" and all(.[]; type == "array" and all(.[]; type == "object" and (.type | type == "string")))' "$ARTIFACT_DIR/branch-rules-pages.json" > /dev/null &&
+            jq 'add // []' "$ARTIFACT_DIR/branch-rules-pages.json" > "$RULES"; then
+            LINEAR="$(jq '[.[] | select(.type=="required_linear_history")] | length' "$RULES")"
+            NO_MERGE="$(jq '[.[] | select(.type=="pull_request") | .parameters.allowed_merge_methods | select(type == "array") | select(index("merge") | not)] | length' "$RULES")"
+            QUEUE_NO_MERGE="$(jq '[.[] | select(.type=="merge_queue") | .parameters.merge_method | select(. == "SQUASH" or . == "REBASE")] | length' "$RULES")"
+            METHODS="$(jq -r '[.[] | select(.type=="pull_request") | .parameters.allowed_merge_methods | select(type == "array")] | add // [] | unique | join(", ")' "$RULES")"
+            jq -e 'all(.[]; if .type == "pull_request" then (.parameters.allowed_merge_methods | type == "array" and length > 0 and all(.[]; IN("merge", "squash", "rebase"))) elif .type == "merge_queue" then (.parameters.merge_method | IN("MERGE", "SQUASH", "REBASE")) else true end)' "$RULES" > /dev/null || UNCHECKED+=('ruleset merge methods')
+          else
+            UNCHECKED+=('active branch rulesets')
           fi
 
-          LINEAR="$(jq -r '(if type=="array" then . else [] end) | [.[] | select(.type=="required_linear_history")] | length' "$RULES")"
-          NO_MERGE="$(jq -r '(if type=="array" then . else [] end) | [.[] | select(.type=="pull_request") | .parameters.allowed_merge_methods // empty] | map(select(index("merge") | not)) | length' "$RULES")"
-          METHODS="$(jq -r '(if type=="array" then . else [] end) | [.[] | select(.type=="pull_request") | .parameters.allowed_merge_methods // empty] | add // [] | unique | join(", ")' "$RULES")"
+          if gh api "repos/${GH_REPO}" > "$REPOSITORY" 2> "$ARTIFACT_DIR/repository-policy.err" &&
+            jq -e '.allow_merge_commit | type == "boolean"' "$REPOSITORY" > /dev/null; then
+            [ "$(jq -r '.allow_merge_commit' "$REPOSITORY")" = 'true' ] || REPOSITORY_NO_MERGE=1
+          else
+            UNCHECKED+=('repository merge methods')
+          fi
 
-          echo 'checked=true' >> "$GITHUB_OUTPUT"
+          if gh api "repos/${GH_REPO}/branches/${BRANCH_PATH}/protection" > "$PROTECTION" 2> "$ARTIFACT_DIR/branch-protection.err" &&
+            jq -e '.required_linear_history.enabled | type == "boolean"' "$PROTECTION" > /dev/null; then
+            [ "$(jq -r '.required_linear_history.enabled' "$PROTECTION")" != 'true' ] || LINEAR=$((LINEAR + 1))
+          else
+            UNCHECKED+=('classic branch protection (Administration: read required; 404 is also unverified)')
+          fi
 
-          if [ "${LINEAR:-0}" -eq 0 ] && [ "${NO_MERGE:-0}" -eq 0 ]; then
+          if [ "${#UNCHECKED[@]}" -gt 0 ]; then
+            {
+              echo '> [!NOTE]'
+              echo "> The landing policy for \`$INTEGRATION_BRANCH\` was NOT fully checked. Unverified: ${UNCHECKED[*]}. An unreadable constraint is not permission to merge. Confirm these settings with the repository administrator before landing by MERGE COMMIT — see \`docs/enterprise-forks.md\`."
+              echo
+            } >> "$POLICY"
+            echo 'checked=false' >> "$GITHUB_OUTPUT"
+            echo "::notice title=Landing policy unchecked::Unverified settings for $INTEGRATION_BRANCH: ${UNCHECKED[*]}. The pull request carries this limitation."
+          else
+            echo 'checked=true' >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$LINEAR" -eq 0 ] && [ "$NO_MERGE" -eq 0 ] && [ "$QUEUE_NO_MERGE" -eq 0 ] && [ "$REPOSITORY_NO_MERGE" -eq 0 ]; then
             echo 'warning=false' >> "$GITHUB_OUTPUT"
-            echo "Landing policy on $INTEGRATION_BRANCH permits a merge commit; upstream ancestry will survive."
+            if [ "${#UNCHECKED[@]}" -eq 0 ]; then
+              echo "The checked merge-method and linear-history settings on $INTEGRATION_BRANCH permit a merge commit. Required checks and review still apply; land by merge commit to preserve ancestry."
+            fi
             exit 0
           fi
 
@@ -617,14 +652,20 @@ jobs:
             if [ "${NO_MERGE:-0}" -gt 0 ]; then
               echo "> \`$INTEGRATION_BRANCH\` allows only these merge methods: **${METHODS:-none}** — \`merge\` is not among them."
             fi
+            if [ "$QUEUE_NO_MERGE" -gt 0 ]; then
+              echo '> Its merge queue requires SQUASH or REBASE instead of MERGE.'
+            fi
+            if [ "$REPOSITORY_NO_MERGE" -gt 0 ]; then
+              echo '> The repository merge-method setting disables merge commits (`allow_merge_commit=false`).'
+            fi
             echo '>'
             echo "> **Squash and rebase both lose it** — verified on git 2.52, not assumed: after either landing the upstream release commit is no longer an ancestor of \`$INTEGRATION_BRANCH\`, and the next integration re-conflicts on lines only the fork ever touched. The lane's marker for \"this release is integrated\" IS that ancestry, so the next run will offer the same release again, every conflict resolved here will come back, and \`status\` will report \`ancestry-lost\`."
             echo '>'
             echo "> Allow merge commits on \`$INTEGRATION_BRANCH\`, or keep a dedicated integration branch that does. \`docs/enterprise-forks.md\` has the settings."
             echo
-          } > "$POLICY"
+          } >> "$POLICY"
           echo 'warning=true' >> "$GITHUB_OUTPUT"
-          echo "::warning title=Landing policy loses upstream ancestry::$INTEGRATION_BRANCH does not permit a merge-commit landing (required_linear_history=$LINEAR, merge-excluding pull_request rules=$NO_MERGE, allowed methods: ${METHODS:-unknown}). Landing this pull request by squash OR by rebase drops the upstream release out of the branch's history."
+          echo "::warning title=Landing policy loses upstream ancestry::$INTEGRATION_BRANCH has a merge-ancestry restriction (required_linear_history=$LINEAR, merge-excluding pull_request rules=$NO_MERGE, merge queue=$QUEUE_NO_MERGE, repository disables merge=$REPOSITORY_NO_MERGE). Landing this pull request by squash OR by rebase drops the upstream release out of the branch's history."
 
       # One body, composed once and used for the pull request, the issues and the run summary, so
       # they cannot disagree about what happened. The warning goes FIRST: a reader who stops after
@@ -846,7 +887,7 @@ jobs:
         run: |
           set -euo pipefail
           BODY="$ARTIFACT_DIR/body.md"
-          TITLE="Upstream release ${TAG:-unknown}"
+          TITLE="chore(upstream): integrate ${TAG:-unknown}"
           EVIDENCE="$ARTIFACT_DIR/publish-result.json"
           REMOTE_SHA=''
           [ "${PUSHED:-false}" != 'true' ] || REMOTE_SHA="$MERGE_COMMIT"

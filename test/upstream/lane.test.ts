@@ -63,7 +63,6 @@ import {
   git,
   gitAvailable,
   isAncestor,
-  isolatedEnv,
   linkedWorktrees,
   makeScratch,
   parentsOf,
@@ -809,6 +808,7 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       expect(message).toContain("Merge upstream release v1.1.0 into main");
       expect(message).toContain(`Stamity-Upstream-Commit: ${upstream.tags["v1.1.0"]}`);
       expect(message).toContain("Stamity-Upstream-Gates: none");
+      expect(message).toContain("Signed-off-by: Fixture Fork <fork@fixture.invalid>");
 
       expect(result.doc.record).toBe(".stamity/upstream/integrations/v1.1.0.json");
       expect(recordAt(fork, merge!, "v1.1.0")).toMatchObject({
@@ -837,6 +837,20 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     CASE_TIMEOUT_MS,
   );
 
+  it("signs off a new integration as its configured automation committer", () => {
+    const fork = createFork(upstream, forkDir());
+    const result = runLane(fork, ["integrate", "--release", "v1.1.0"], {
+      env: {
+        GIT_COMMITTER_NAME: "github-actions[bot]",
+        GIT_COMMITTER_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com",
+      },
+    });
+    expectOutcome(result, "integrated");
+    const message = git(fork, ["log", "-1", "--format=%B", result.doc.mergeCommit!]).stdout;
+    expect(message).toContain("Signed-off-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>");
+    expect(message).not.toContain("Signed-off-by: Fixture Fork");
+  }, CASE_TIMEOUT_MS);
+
   // A headless runner has no git identity, and git resolves the committer identity at `merge`
   // time, `--no-commit` notwithstanding. The lane's fallback identity therefore has to cover
   // the merge, not only the commit; the first dispatch on GitHub Actions failed at exactly this
@@ -860,6 +874,8 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       expect(merge).not.toBeNull();
       expect(parentsOf(fork, merge!)).toEqual([fork.head, upstream.tags["v1.1.0"]]);
       expect(git(fork, ["log", "-1", "--format=%ce", merge!]).stdout.trim()).toMatch(/\.invalid$/);
+      expect(git(fork, ["log", "-1", "--format=%B", merge!]).stdout).not.toContain("Signed-off-by:");
+      expect(result.doc.messages.join("\n")).toContain("unsigned");
     },
     CASE_TIMEOUT_MS,
   );
@@ -1560,11 +1576,16 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       expect(result.doc.messages[0]).toContain("not a fork");
       expect(result.doc.report).toContain("not-a-fork");
 
-      // This checkout carries no configuration; the probe exits before any write.
-      const canonical = runLane({ dir: REPO_ROOT, env: isolatedEnv(bare.dir) }, ["status"]);
+      // A source checkout can itself be a configured downstream. Model the canonical
+      // no-config state in an isolated repository, never in the operator's checkout.
+      const canonicalFixture = createFork(upstream, forkDir(), { config: null });
+      git(canonicalFixture, ["remote", "set-url", "origin", "https://github.com/zomarit/stamity.git"]);
+      const before = snapshotRepo(canonicalFixture);
+      const canonical = runLane(canonicalFixture, ["status"]);
       expect(canonical.code).toBe(2);
       expect(canonical.doc.outcome).toBe("not-a-fork");
       expect(canonical.doc.messages[0]).toContain(".stamity/upstream.json");
+      expect(snapshotRepo(canonicalFixture)).toBe(before);
     },
     CASE_TIMEOUT_MS,
   );
