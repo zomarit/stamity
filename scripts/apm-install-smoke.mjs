@@ -52,10 +52,20 @@
 //
 // `--expect-failure` inverts the verdict, and it is a gate in its own right: run against a client
 // from before the fix, a passing verification would mean this check cannot see the outage it was
-// written for. CI runs that leg on 0.29.0 on every push.
+// written for. CI runs that leg on 0.29.0 on every push. IT IS SATISFIED ONLY BY A ROUTING
+// FAILURE — the lockfile typing this package as something other than `apm_package`, a target that
+// received none of a class it supports, or an expected id that never landed. An `apm install` that
+// could not run at all — a non-zero exit, a timeout, a spawn error, an index it could not reach —
+// is exit 2, "the smoke could not run", in BOTH modes and carries the captured output. Without
+// that split the witness passed on any breakage whatsoever: a client too broken to install, a
+// wheel that would not build, an offline runner all "detected a failure" and turned the leg green
+// while proving nothing about the outage it exists to watch for.
 //
-// Exit codes: 0 verified (or, under --expect-failure, correctly detected a failure),
-//             1 verification failed, 2 the smoke could not run.
+// Exit codes: 0 verified (or, under --expect-failure, saw the ROUTING failure),
+//             1 verification failed (or, under --expect-failure, the client deployed everything, or
+//               failed in a way that is not the routing failure this witness proves),
+//             2 the smoke could not run — which includes every `apm install` process failure, in
+//               both modes.
 
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
@@ -380,6 +390,64 @@ export function verifyDeployment(consumerDir, expectations, targets) {
   return { ok: problems.length === 0, problems, counts, lockfile }
 }
 
+/**
+ * The problems that count as EVIDENCE OF THE ROUTING FAILURE, keyed on the sentence
+ * `verifyDeployment` writes for each one.
+ *
+ * This is what `--expect-failure` is allowed to pass on, and the list is deliberately short. The
+ * witness leg exists to prove ONE thing: that this check can still see an install which reports
+ * success and deploys nothing. Any other failure — a client that will not start, a wheel that will
+ * not build, a network that will not answer — also produces problems, and treating those as the
+ * witness would turn the leg green on evidence of something else entirely. Those are process
+ * failures and never reach here: the caller turns them into exit 2 in both modes.
+ *
+ * Matched on wording only the named problem carries. The suite feeds REAL `verifyDeployment`
+ * output through this, so a reworded problem fails a test rather than silently narrowing the
+ * witness to nothing.
+ */
+const ROUTING_PROBLEM_PATTERNS = [
+  // The lockfile typed the dependency as something other than an APM package. `agent_plugin`
+  // through 0.29.0 and `marketplace_plugin` for the other plugin surface are the two typings
+  // observed; the pattern keys on the mismatch, which is the fact the cascade failure records.
+  /, not `apm_package`/,
+  // A target that supports a class and received none of it.
+  /: 0 of \d+ deployed —/,
+  // An expected id that never landed at the path its target deploys to.
+  /` is missing — nothing at /,
+]
+
+/** Whether one problem line is evidence of the routing failure. */
+export function isRoutingProblem(problem) {
+  return ROUTING_PROBLEM_PATTERNS.some((pattern) => pattern.test(String(problem)))
+}
+
+/** Whether a verdict's problems satisfy `--expect-failure`. Pure over the problem list. */
+export function satisfiesExpectedFailure(problems) {
+  return problems.some((problem) => isRoutingProblem(problem))
+}
+
+/**
+ * Why `apm install` could not run, or `null` when it ran to completion and exited 0.
+ *
+ * A process failure is not a verdict about this package: nothing was installed, so nothing can be
+ * read off the consumer, and the run has no evidence either way. It is exit 2 in both modes — the
+ * "could not run" status — rather than a verification failure in one mode and a passing witness in
+ * the other. `spawnSync` reports a timeout as `error` with the child signalled, so the error arm
+ * covers it.
+ */
+export function describeInstallFailure(install) {
+  if (install.error !== undefined && install.error !== null) {
+    return `\`apm install\` could not run: ${install.error.message}`
+  }
+  if (install.signal !== undefined && install.signal !== null) {
+    return `\`apm install\` was killed by ${install.signal} before it finished`
+  }
+  if (install.status !== 0) {
+    return `\`apm install\` exited ${install.status ?? '<unknown>'}`
+  }
+  return null
+}
+
 /** Every tracked-or-untracked-but-not-ignored file of `sourceDir`, copied into `destDir`. */
 function exportTree(sourceDir, destDir) {
   let listing
@@ -539,8 +607,18 @@ function main(argv) {
       maxBuffer: 64 * 1024 * 1024,
     })
     const durationMs = Date.now() - started
-    if (install.error !== undefined) {
-      console.error(`apm-install-smoke: ERROR - \`${options.apm} install\` could not run: ${install.error.message}`)
+
+    // BOTH modes stop here. Under --expect-failure this is the split that keeps the witness
+    // honest: a client that could not install proves nothing about routing, so it is "could not
+    // run" rather than "correctly detected a failure".
+    const installFailure = describeInstallFailure(install)
+    if (installFailure !== null) {
+      console.error(
+        `apm-install-smoke: ERROR - ${installFailure} (\`${options.apm}\`, ${durationMs} ms). ` +
+          'Nothing was installed, so there is nothing to verify and no verdict to give — in either mode. ' +
+          'Output follows.\n' +
+          `${(install.stdout ?? '').trim()}\n${(install.stderr ?? '').trim()}`,
+      )
       return 2
     }
 
@@ -562,14 +640,12 @@ function main(argv) {
     }
     const expectations = readExpectedPrimitives(expectationSource)
 
+    // Every problem from here on is a statement about the DEPLOYED TREE: the install ran and
+    // exited 0, which the step above is what guarantees.
     const result = verifyDeployment(consumer, expectations, options.targets)
     const problems = [...result.problems]
-    if (install.status !== 0) {
-      problems.unshift(
-        `\`apm install\` exited ${install.status ?? '<signalled>'}:\n${(install.stderr ?? '').trim() || (install.stdout ?? '').trim()}`,
-      )
-    }
     const ok = problems.length === 0
+    const routing = satisfiesExpectedFailure(problems)
 
     const report = {
       ok,
@@ -589,6 +665,7 @@ function main(argv) {
         deployedFiles: result.lockfile.rows.reduce((total, row) => total + row.deployedFiles.length, 0),
       },
       installStatus: install.status,
+      routingFailure: routing,
       durationMs,
       problems,
     }
@@ -623,8 +700,18 @@ function main(argv) {
         )
         return 1
       }
+      if (!routing) {
+        console.error(
+          `apm-install-smoke: FAIL - --expect-failure, and ${apmVersion} did fail — but not in the way this witness exists to prove. ` +
+            'It is satisfied only by a ROUTING failure: a lockfile typing this package as something other than `apm_package`, ' +
+            'a target that received none of a class it supports, or an expected id that never landed. ' +
+            `The ${problems.length} problem(s) here are of none of those kinds, so passing on them would let an unrelated ` +
+            `breakage stand in for the outage this check watches for. First: ${problems[0]}`,
+        )
+        return 1
+      }
       verdict(
-        `apm-install-smoke: PASS (expected failure) - ${apmVersion} did not deploy this package, and the check saw it: ` +
+        `apm-install-smoke: PASS (expected failure) - ${apmVersion} did not ROUTE to this package, and the check saw it: ` +
           `${problems.length} problem(s), first: ${problems[0]}`,
       )
       return 0

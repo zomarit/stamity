@@ -38,10 +38,21 @@ import { evaluateWorkflowExpression, type ExpressionContext } from "./workflowEx
  *                        under it. `expect(condition).toContain(...)` would pass on a condition
  *                        that had lost the property.
  *
- *   the two hard limits  A repository token may not push `.github/workflows/` changes, and a
- *                        pull request it opens starts its CI only after a human approves the
- *                        run. Both are handled rather than hoped about, and the handling is
- *                        pinned here so it survives an edit that "simplifies" the push step.
+ *   the workflow refusal A branch's own workflow files run on `push`, under the identity that
+ *                        pushed them, so this lane never pushes a range that touches
+ *                        `.github/workflows/` — UNCONDITIONALLY, whatever credential the run
+ *                        holds. The platform's own refusal for the repository token is a second
+ *                        reason, not the reason. Pinned here so an edit that "simplifies" the
+ *                        push step cannot make the refusal depend on a secret again.
+ *
+ *   the trusted re-check `publish` acts on control data — tag, update branch, outcome, merge
+ *                        commit — emitted by the job that RAN THE FORK'S CODE. It validates the
+ *                        shape of each field before any of it reaches `git`, `gh` or an issue
+ *                        body, and fails naming the field.
+ *
+ *   marker identity      Both issue paths find their issue by an HTML-comment marker the lane
+ *                        writes into every body it creates, not by a title a reviewer can edit
+ *                        and a fuzzy search can near-miss.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -252,8 +263,9 @@ describe("upstream-update.yml — the trust split", () => {
 
   it("reads exactly one secret, in the publish job, and it is optional", () => {
     // The whole repository's secret surface for this lane. A fork that configures nothing runs on
-    // the per-run repository token; a fork that configures this one gets workflow-file pushes and
-    // an unprompted pull-request CI. Any other name appearing here is a decision that has to land
+    // the per-run repository token; a fork that configures this one gets an unprompted
+    // pull-request CI — and nothing else: it does NOT buy a workflow-file push, which this lane
+    // refuses under every credential. Any other name appearing here is a decision that has to land
     // with a line in this list.
     expect(secretsReadBy("publish")).toEqual(["STAMITY_UPSTREAM_TOKEN"]);
     expect(secretsReadBy("probe")).toEqual([]);
@@ -368,6 +380,54 @@ describe("upstream-update.yml — the lane call", () => {
   });
 });
 
+describe("upstream-update.yml — the trusted side re-checks what the untrusted side produced", () => {
+  it("validates every control field before any of it reaches git, gh or a body", () => {
+    const steps = jobOf("publish").steps;
+    const download = steps.findIndex((step) => step.name === "Download the prepared update");
+    const validate = steps.findIndex((step) => step.name === "Validate the prepared control data");
+    // First thing after the hand-off and before every consumer of these values: the credential
+    // detection, the landing policy, the body, the push, the issues and the verdict all follow it.
+    expect(download).toBeGreaterThanOrEqual(0);
+    expect(validate).toBe(download + 1);
+
+    const run = runOf("publish", "Validate the prepared control data");
+    // The tag is a release tag, the branch is the one the lane names for it, the merge commit is
+    // an object name, and the outcome is a word the lane reports. Each miss names its own field.
+    expect(run).toContain("^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$");
+    expect(run).toContain('[ "$UPDATE_BRANCH" != "stamity-upstream/${TAG:-}" ]');
+    expect(run).toContain("^[0-9a-f]{40}$");
+    for (const field of ["TAG", "UPDATE_BRANCH", "OUTCOME", "MERGE_COMMIT"]) {
+      expect(run, `the rejection must name ${field}`).toContain(`reject ${field}`);
+    }
+    // Every outcome the verdict maps, plus the `error` fallback this workflow writes itself.
+    for (const outcome of [
+      "up-to-date",
+      "update-available",
+      "integrated",
+      "validation-failed",
+      "conflict",
+      "conflict-pending",
+      "update-branch-stale",
+      "regenerate-failed",
+      "ancestry-missing",
+      "ancestry-lost",
+      "error",
+    ]) {
+      expect(run, `the closed list must admit ${outcome}`).toContain(outcome);
+    }
+    expect(run).toContain("exit 1");
+
+    // The merge commit only became checkable when `prepare` published it: the report step always
+    // extracted it, and without the job output it stopped at the trust boundary.
+    expect(jobOf("prepare").outputs?.["merge_commit"]).toBe(
+      "${{ steps.report.outputs.merge_commit }}",
+    );
+    expect(jobOf("publish").env?.["MERGE_COMMIT"]).toBe(
+      "${{ needs.prepare.outputs.merge_commit }}",
+    );
+  });
+});
+
 describe("upstream-update.yml — the push can never destroy work", () => {
   it("carries no force flag on any git push, anywhere in the file", () => {
     // `stamity-upstream/<tag>` may already carry a human's conflict resolution or a review
@@ -397,32 +457,49 @@ describe("upstream-update.yml — the push can never destroy work", () => {
     expect(run).toContain("Update branch already on the remote");
   });
 
-  it("refuses a workflow-touching push before attempting it, rather than failing halfway", () => {
-    // The platform limit this handles: the per-run repository token may not create or update
-    // anything under `.github/workflows/`, and upstream releases of this product routinely do.
-    // The diff runs against the FETCHED bundle and before the push, so a release that cannot be
-    // pushed leaves nothing half-applied.
+  it("refuses a workflow-touching push UNCONDITIONALLY, whatever credential the run holds", () => {
+    // The reason is not a missing permission. A pushed branch's own workflow files run on `push`,
+    // under the identity that pushed them, so automation must never be the thing that introduces
+    // a workflow change into the repository — a diff nobody read would execute the moment it
+    // landed. The platform's refusal for the repository token is a second reason, and an elevated
+    // token lifts THAT; it must not lift this. The diff runs against the FETCHED bundle and before
+    // the push, so a release that will not be pushed leaves nothing half-applied.
     const run = runOf("publish", "Restore and push the update branch");
     expect(run).toContain(
       'git diff --name-only "$INTEGRATION_BRANCH..$UPDATE_BRANCH" -- .github/workflows',
     );
     expect(run.indexOf("git diff --name-only")).toBeGreaterThan(run.indexOf("git fetch"));
     expect(run.indexOf("git diff --name-only")).toBeLessThan(run.indexOf("git push origin"));
-    expect(run).toContain("blocked=workflow-permission");
-    // The elevated token is what lifts the block, and it is read from an env var in the shell —
-    // the nightly.yml arming pattern — so the absent case produces a notice rather than a step
-    // that silently did not run.
-    expect(runOf("publish", "Detect the push credential")).toContain(
-      'if [ -z "${STAMITY_UPSTREAM_TOKEN:-}" ]; then',
-    );
+    expect(run).toContain("blocked=workflow-files");
+
+    // THE PROPERTY: the guard reads the diff and nothing else. A credential term anywhere in this
+    // step — the old `[ "${WORKFLOW_SCOPE:-false}" != 'true' ]` conjunct, or any respelling of it
+    // — is what made a workflow-touching release landable with a secret configured.
+    const guard = run
+      .split("\n")
+      .find((line) => line.includes('if [ -n "$WORKFLOW_FILES" ]'));
+    expect(guard, "the workflow-file guard must exist").toBeDefined();
+    expect(guard).toBe('if [ -n "$WORKFLOW_FILES" ]; then');
+    expect(run).not.toMatch(/WORKFLOW_SCOPE|ELEVATED_TOKEN|STAMITY_UPSTREAM_TOKEN/);
+    expect(stepOf("publish", "Restore and push the update branch").env ?? {}).toEqual({});
+
+    // The credential is still detected, and still reported — it just no longer decides this. It
+    // is read from an env var in the shell — the nightly.yml arming pattern — so the absent case
+    // produces a notice rather than a step that silently did not run.
+    const credential = runOf("publish", "Detect the push credential");
+    expect(credential).toContain('if [ -z "${STAMITY_UPSTREAM_TOKEN:-}" ]; then');
     expect(stepOf("publish", "Detect the push credential").env).toEqual({
       STAMITY_UPSTREAM_TOKEN: "${{ secrets.STAMITY_UPSTREAM_TOKEN }}",
     });
+    // And the file must not go on advertising what the secret no longer buys.
+    expect(credential).toContain("this lane never pushes workflow files");
+    expect(SOURCE).not.toMatch(/workflow-touching releases can be pushed/);
+    expect(SOURCE).toContain("WORKFLOW FILES ARE NEVER PUSHED FROM HERE, WITH OR WITHOUT A SECRET");
   });
 });
 
 describe("upstream-update.yml — what each outcome produces", () => {
-  it("opens one pull request per release, keyed on the head branch", () => {
+  it("opens one pull request per release, and only ever writes to one this run pushed", () => {
     const run = runOf("publish", "Open or update the pull request");
     // Found by HEAD BRANCH rather than by title: a reviewer can edit a title, and the head
     // branch is the identity the lane owns. One per release, created once, updated after.
@@ -438,15 +515,58 @@ describe("upstream-update.yml — what each outcome produces", () => {
     expect(run).toContain("::error title=Could not open the pull request");
     // The label is best-effort by design and says so when it does not land.
     expect(run).toContain("::notice title=Label not applied");
+
+    // AN EXISTING REMOTE BRANCH IS REPORTED, NEVER REWRITTEN. When origin already had the branch
+    // this run pushed nothing, and the report it composed describes the tree THIS run merged —
+    // not the tree that branch carries, which may since have taken a conflict resolution or a
+    // review fixup. So the not-pushed arm reports the open pull request and returns before any
+    // write: no body edit, no title edit, no comment, no label.
+    const notPushed = run.slice(
+      run.indexOf('if [ "${PUSHED:-false}" != \'true\' ]; then'),
+      run.indexOf('gh pr list --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --state open --limit'),
+    );
+    expect(notPushed, "the not-pushed arm must come first").not.toBe("");
+    expect(notPushed).toContain("action=reported");
+    expect(notPushed).toContain("$GITHUB_STEP_SUMMARY");
+    expect(notPushed).toContain("::notice title=Existing pull request reported");
+    expect(notPushed).toContain("exit 0");
+    // Over COMMAND positions, not bytes: the arm's own annotation names `gh pr create` as the
+    // command a person would run by hand, which is prose rather than a write.
+    const notPushedCommands = notPushed
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => !line.startsWith("echo") && !line.startsWith("printf"))
+      .join("\n");
+    for (const write of ["gh pr edit", "gh pr create", "gh pr comment", "--add-label"]) {
+      expect(notPushedCommands, `the not-pushed arm must not ${write}`).not.toContain(write);
+    }
+    // Every write in this step therefore sits AFTER the arm that returns, which is what makes the
+    // edit path reachable only on a run that pushed the branch.
+    expect(stepOf("publish", "Open or update the pull request").env).toEqual({
+      PUSHED: "${{ steps.push.outputs.pushed }}",
+    });
+    expect(run.indexOf('if [ "${PUSHED:-false}" != \'true\' ]; then')).toBeLessThan(
+      run.indexOf('gh pr edit "$NUMBER"'),
+    );
   });
 
-  it("opens the conflict issue under the exact title the lane looks for", () => {
+  it("opens the conflict issue under the exact title, and finds it by the lane's own marker", () => {
     const run = runOf("publish", "Open or update the conflict issue");
     expect(run).toContain('TITLE="Upstream ${TAG:-unknown} needs conflict resolution"');
-    // Searched, then filtered by EXACT title: GitHub's `in:title` search is fuzzy, and a
-    // near-miss must not update somebody else's issue or open a second one.
-    expect(run).toContain('gh issue list --search "$TITLE in:title" --state open');
-    expect(run).toContain("map(select(.title == $title))");
+    // IDENTITY IS THE MARKER, NOT THE TITLE. A title is editable by anyone with write access and
+    // GitHub's `in:title` search is fuzzy, so a retitle used to open a second issue for the same
+    // release and a near-miss could match somebody else's. The marker is written into the body
+    // this lane creates, searched for as a phrase, then matched EXACTLY in the bodies returned —
+    // which is also why no `--limit` is relied on to keep the answer single.
+    expect(run).toContain(
+      'MARKER="<!-- stamity-upstream-lane: ${TAG:-unknown} conflict -->"',
+    );
+    expect(run).toContain(`printf '%s\\n' "$MARKER"`);
+    expect(run).toContain(
+      'gh issue list --state open --search "\\"stamity-upstream-lane: ${TAG:-unknown} conflict\\" in:body" --json number,body',
+    );
+    expect(run).toContain('contains($marker)');
+    expect(run).not.toContain("--limit 50");
     expect(run).toContain("gh issue create --title");
     expect(run).toContain('gh issue edit "$NUMBER"');
     // The local commands, because a conflict is resolved on somebody's machine and not here.
@@ -457,18 +577,30 @@ describe("upstream-update.yml — what each outcome produces", () => {
     );
   });
 
-  it("opens the workflow-permission issue under its own exact title", () => {
-    const run = runOf("publish", "Open or update the workflow-permission issue");
+  it("opens the reviewed-push issue under its own title, found by the same marker", () => {
+    const run = runOf("publish", "Open or update the reviewed-push issue");
+    // "Reviewed", because that is what the issue asks for: a person reads the workflow diff and
+    // pushes it under their own identity. The old title named a missing permission, which is no
+    // longer what stops the push.
+    expect(run).toContain('TITLE="Upstream ${TAG:-unknown} needs a reviewed push"');
     expect(run).toContain(
-      'TITLE="Upstream ${TAG:-unknown} needs a push with workflow permission"',
+      'MARKER="<!-- stamity-upstream-lane: ${TAG:-unknown} reviewed-push -->"',
     );
-    expect(run).toContain("map(select(.title == $title))");
+    expect(run).toContain(`printf '%s\\n' "$MARKER"`);
+    expect(run).toContain(
+      'gh issue list --state open --search "\\"stamity-upstream-lane: ${TAG:-unknown} reviewed-push\\" in:body" --json number,body',
+    );
+    expect(run).toContain('contains($marker)');
+    expect(run).not.toContain("--limit 50");
     // It has to name the artifact a person downloads and the two commands that land the branch
     // from a checkout whose credential does carry workflow scope.
     expect(run).toContain("upstream-update");
     expect(run).toContain("git fetch /path/to/update.bundle");
     expect(run).toContain("git push origin");
     expect(run).toContain("STAMITY_UPSTREAM_TOKEN");
+    // And it must not claim the secret would have made this push automatic. It would not.
+    expect(run).toContain("It does NOT make this push automatic");
+    expect(run).not.toMatch(/pushes workflow-touching releases on its own/);
   });
 
   it("maps every outcome the lane can report to a colour, and fails closed on a new one", () => {
@@ -595,7 +727,7 @@ describe("upstream-update.yml — the conditions, evaluated", () => {
 
     expect(evaluateWorkflowExpression(prCondition, pushShape("integrated", "true"))).toBe(true);
     expect(evaluateWorkflowExpression(prCondition, pushShape("validation-failed", "true"))).toBe(true);
-    // Blocked by the workflow-permission limit: the push step set `ready=false`.
+    // Blocked by the workflow-file refusal: the push step set `ready=false`.
     expect(evaluateWorkflowExpression(prCondition, pushShape("integrated", "false"))).toBe(false);
     // The step was skipped entirely, so its outputs are empty.
     expect(evaluateWorkflowExpression(prCondition, pushShape("integrated", ""))).toBe(false);

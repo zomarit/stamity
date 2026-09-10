@@ -18,26 +18,34 @@
 # the same line for the same reason; this is that discipline applied to a lane whose untrusted half
 # is an arbitrary downstream repository's build.
 #
-# THE OPTIONAL SECRET, AND THE TWO PLATFORM FACTS BEHIND IT. `publish` uses
-# `secrets.STAMITY_UPSTREAM_TOKEN` when the fork configures one — a fine-grained personal access
-# token or GitHub App token with Contents: write, Pull requests: write and Workflows: write — and
-# falls back to the per-run repository token when it does not. Two things change with it:
+# WORKFLOW FILES ARE NEVER PUSHED FROM HERE, WITH OR WITHOUT A SECRET. A branch's own workflow
+# files run on `push`, under the identity that pushed them — so automation that pushes a workflow
+# change is automation that introduces executable configuration into the repository AND starts it,
+# with no person between the two. Upstream releases of this product routinely touch
+# `.github/workflows/`, so that is the ordinary shape of such a release rather than an edge case,
+# and the answer does not depend on which credential the run holds: `publish` checks the update
+# branch for workflow changes BEFORE pushing and, when it finds them, pushes NOTHING and opens an
+# issue with the commands a person runs locally. That person reads the workflow diff and pushes it
+# under their own identity, which is the review no token can perform.
 #
-#   1. WORKFLOW FILES CAN LAND. The repository token cannot push a commit that creates or modifies
-#      anything under `.github/workflows/` — the push is refused outright ("refusing to allow a
-#      GitHub App to create or update workflow ... without `workflows` permission"). Upstream
-#      releases of this product routinely touch workflow files, so without the secret those
-#      releases cannot be pushed at all. The publish job checks the update branch for workflow
-#      changes BEFORE pushing and, when it finds them with no elevated token, opens an issue with
-#      the commands a person runs locally instead of failing halfway through a push.
-#   2. THE PULL REQUEST'S OWN CI STARTS WITHOUT A PROMPT. Since GitHub's 2026-06-11 change a pull
-#      request created or updated with the repository token DOES create `pull_request` workflow
-#      runs, but in an approval-required state — someone has to click "Approve and run" on each.
-#      With a personal access token or an App token the runs start on their own. Either way the
-#      fork's gates already ran in `prepare` and their verdict is committed into the integration
-#      record on the update branch, so the pull request is never the first place the merged tree
-#      is tested; a `validation-failed` verdict makes THIS run red so the check on the pull
-#      request is red too.
+# The platform limit that used to be the whole reason still exists and is still real — the per-run
+# repository token cannot push a commit touching `.github/workflows/` ("refusing to allow a GitHub
+# App to create or update workflow ... without `workflows` permission") — but it is no longer what
+# decides this. An elevated token would lift that refusal; the lane refuses anyway.
+#
+# THE OPTIONAL SECRET, AND THE ONE THING IT CHANGES. `publish` uses
+# `secrets.STAMITY_UPSTREAM_TOKEN` when the fork configures one — a fine-grained personal access
+# token or GitHub App token with Contents: write, Pull requests: write and Issues: write (this
+# lane opens issues under the same token) — and falls back to the per-run repository token when it
+# does not. What it buys is the pull request's own CI: since GitHub's 2026-06-11 change a pull
+# request created or updated with the repository token DOES create `pull_request` workflow runs,
+# but in an approval-required state — someone has to click "Approve and run" on each. With a
+# personal access token or an App token the runs start on their own. It does NOT let a
+# workflow-touching release land, because that path is closed above for every credential. Either
+# way the fork's gates already ran in `prepare` and their verdict is committed into the integration
+# record on the update branch, so the pull request is never the first place the merged tree is
+# tested; a `validation-failed` verdict makes THIS run red so the check on the pull request is
+# red too.
 #
 # The secret is referenced in `publish` and nowhere else. `prepare` sees no secret at all, and that
 # is the property that makes it safe to run the fork's code there.
@@ -46,7 +54,9 @@
 # human's conflict resolution, a review fixup, or a follow-up commit. Overwriting it would delete
 # work the lane cannot re-derive, so the push is conditional on the branch being ABSENT from the
 # remote and there is no force flag anywhere in this file. When the branch is already there the run
-# reports the existing pull request instead — which is also what makes a second run idempotent.
+# REPORTS the existing pull request and stops: it does not edit that pull request's body, because
+# this run's report describes the tree this run merged and not the tree that branch carries. The
+# same property is what makes a second run of the same release idempotent.
 #
 # WHY NO EGRESS ALLOWLIST. release.yml pins its network with step-security/harden-runner because
 # every host it needs is known at authoring time. This lane's most important destination is the
@@ -199,6 +209,9 @@ jobs:
       outcome: ${{ steps.report.outputs.outcome }}
       tag: ${{ steps.report.outputs.tag }}
       branch: ${{ steps.report.outputs.branch }}
+      # Carried forward so `publish` can VALIDATE it. The report step already extracts it; without
+      # the output it stopped at the job boundary and the trusted side had nothing to check.
+      merge_commit: ${{ steps.report.outputs.merge_commit }}
       exit_code: ${{ steps.integrate.outputs.exit_code }}
       has_bundle: ${{ steps.bundle.outputs.has_bundle }}
     steps:
@@ -426,14 +439,17 @@ jobs:
       issues: write
     env:
       # The fork's own token when it configured one, and the per-run repository token otherwise.
-      # The header explains what the first buys: workflow-touching releases can be pushed at all,
-      # and the pull request's `pull_request` runs start without an "Approve and run" prompt.
+      # The header explains what the first buys, and what it does not: the pull request's
+      # `pull_request` runs start without an "Approve and run" prompt, and a release that touches
+      # `.github/workflows/` is still not pushed from here — that refusal takes no credential into
+      # account.
       GH_TOKEN: ${{ secrets.STAMITY_UPSTREAM_TOKEN || github.token }}
       GH_REPO: ${{ github.repository }}
       INTEGRATION_BRANCH: ${{ needs.probe.outputs.branch }}
       UPDATE_BRANCH: ${{ needs.prepare.outputs.branch }}
       OUTCOME: ${{ needs.prepare.outputs.outcome }}
       TAG: ${{ needs.prepare.outputs.tag }}
+      MERGE_COMMIT: ${{ needs.prepare.outputs.merge_commit }}
       HAS_BUNDLE: ${{ needs.prepare.outputs.has_bundle }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
@@ -466,6 +482,66 @@ jobs:
           name: upstream-update
           path: ${{ runner.temp }}/upstream-update
 
+      # THE CONTROL DATA THIS JOB ACTS ON WAS PRODUCED BY THE JOB THAT RAN THE FORK'S CODE. The tag,
+      # the update branch, the outcome and the merge commit all reach this job as `prepare` outputs,
+      # and `prepare` executes an arbitrary downstream repository's merge, regeneration and gates.
+      # It holds no credential, which is what makes running that code safe; it is not what makes the
+      # values it emits well-formed. Everything below interpolates them into `git`, into `gh`
+      # arguments and into issue and pull-request bodies, so the trusted side re-checks their SHAPE
+      # first and fails naming the field, rather than letting a malformed value reach a command line.
+      #
+      # Absent is not malformed. `up-to-date`, `update-available` and the ancestry outcomes
+      # legitimately carry no update branch and no merge commit, and every step below already reads
+      # an empty one as "nothing to do". What must not pass is a NON-EMPTY value of the wrong shape
+      # — and, on the runs that actually push a branch, a missing one.
+      - name: Validate the prepared control data
+        run: |
+          set -euo pipefail
+          REJECTED=''
+          reject() {
+            REJECTED="$REJECTED $1"
+            echo "::error title=Prepared control data rejected::$2"
+          }
+
+          # The closed list of outcomes the lane reports, plus `error`, which is the fallback the
+          # `Extract the outcome and the report` step writes itself when the lane's JSON is
+          # unreadable. Anything else is a value neither side produces.
+          case "${OUTCOME:-}" in
+            up-to-date|update-available|integrated|validation-failed|conflict) ;;
+            conflict-pending|update-branch-stale|regenerate-failed) ;;
+            ancestry-missing|ancestry-lost|error) ;;
+            *)
+              reject OUTCOME "OUTCOME is '${OUTCOME:-<empty>}', which is not an outcome this lane reports. The verdict step's case statement is the closed list."
+              ;;
+          esac
+
+          if [ -n "${TAG:-}" ] && ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            reject TAG "TAG is '$TAG', which is not a v<major>.<minor>.<patch>[-prerelease] release tag. It reaches issue titles, branch names and \`gh\` arguments below."
+          fi
+
+          if [ -n "${UPDATE_BRANCH:-}" ] && [ "$UPDATE_BRANCH" != "stamity-upstream/${TAG:-}" ]; then
+            reject UPDATE_BRANCH "UPDATE_BRANCH is '$UPDATE_BRANCH'. The lane names its update branch stamity-upstream/<tag>, which for this run is 'stamity-upstream/${TAG:-<empty>}'. A branch name that does not follow the tag is a ref this job must not push or fetch."
+          fi
+
+          if [ -n "${MERGE_COMMIT:-}" ] && ! printf '%s' "$MERGE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+            reject MERGE_COMMIT "MERGE_COMMIT is '$MERGE_COMMIT', which is not a 40-character hexadecimal object name."
+          fi
+
+          # The shape that pushes a branch and opens a pull request. Here the three fields are not
+          # optional: a bundle with no tag, no branch or no merge commit is a report that lost its
+          # own subject somewhere between the two jobs.
+          if [ "${HAS_BUNDLE:-false}" = 'true' ]; then
+            [ -n "${TAG:-}" ] || reject TAG 'HAS_BUNDLE is true — this run pushes a branch — but TAG is empty.'
+            [ -n "${UPDATE_BRANCH:-}" ] || reject UPDATE_BRANCH 'HAS_BUNDLE is true — this run pushes a branch — but UPDATE_BRANCH is empty.'
+            [ -n "${MERGE_COMMIT:-}" ] || reject MERGE_COMMIT 'HAS_BUNDLE is true — the bundle step only runs with a merge commit — but MERGE_COMMIT is empty.'
+          fi
+
+          if [ -n "$REJECTED" ]; then
+            echo "::error title=Publish refuses unvalidated control data::Rejected field(s):$REJECTED. Nothing was pushed, edited or opened. The upstream-update artifact and this run's summary carry what the lane reported."
+            exit 1
+          fi
+          echo "Control data validated: outcome=${OUTCOME:-<empty>} tag=${TAG:-<none>} branch=${UPDATE_BRANCH:-<none>} mergeCommit=${MERGE_COMMIT:-<none>} hasBundle=${HAS_BUNDLE:-false}"
+
       # Which credential this run holds, decided once and read by every step after it. The secret
       # is loaded into an env var and tested in the SHELL rather than compared inside an `if:`
       # expression, the way nightly.yml arms its headless lane: the absent case then produces a
@@ -478,12 +554,12 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${STAMITY_UPSTREAM_TOKEN:-}" ]; then
-            echo 'workflow_scope=false' >> "$GITHUB_OUTPUT"
-            echo "::notice title=Running on the repository token::No STAMITY_UPSTREAM_TOKEN secret is configured, so this run uses the per-run repository token. Two consequences: an upstream release that touches .github/workflows/ CANNOT be pushed by this run (GitHub refuses the push without workflow permission) and is reported as an issue instead, and the pull request's own pull_request runs will wait for a human to click \"Approve and run\". See docs/enterprise-forks.md."
+            echo 'elevated=false' >> "$GITHUB_OUTPUT"
+            echo "::notice title=Running on the repository token::No STAMITY_UPSTREAM_TOKEN secret is configured, so this run uses the per-run repository token. One consequence: the pull request's own pull_request runs wait for a human to click \"Approve and run\". A release that touches .github/workflows/ is reported as an issue rather than pushed EITHER WAY — this lane never pushes workflow files, whatever credential it holds. See docs/enterprise-forks.md."
             exit 0
           fi
-          echo 'workflow_scope=true' >> "$GITHUB_OUTPUT"
-          echo 'STAMITY_UPSTREAM_TOKEN is configured: workflow-touching releases can be pushed and the pull request CI starts without an approval prompt.'
+          echo 'elevated=true' >> "$GITHUB_OUTPUT"
+          echo 'STAMITY_UPSTREAM_TOKEN is configured: the pull request CI starts without an approval prompt. A release that touches .github/workflows/ is still not pushed by this lane.'
 
       # The landing-policy check. The lane's claim that a release is "integrated" rests entirely on
       # ANCESTRY — the release commit being reachable from the integration branch — and only a
@@ -561,7 +637,7 @@ jobs:
       # which would turn a long report into no report at all.
       - name: Compose the report body
         env:
-          WORKFLOW_SCOPE: ${{ steps.credential.outputs.workflow_scope }}
+          ELEVATED_TOKEN: ${{ steps.credential.outputs.elevated }}
         run: |
           set -euo pipefail
           BODY="$ARTIFACT_DIR/body.md"
@@ -582,17 +658,17 @@ jobs:
             echo "| update branch | \`${UPDATE_BRANCH:-none}\` |"
             echo "| integration branch | \`$INTEGRATION_BRANCH\` |"
             echo "| prepared by | \`node scripts/upstream.mjs integrate --json\`, in a job with no write grant and no secret |"
-            if [ "${WORKFLOW_SCOPE:-false}" = 'true' ]; then
-              echo "| push credential | \`STAMITY_UPSTREAM_TOKEN\` (carries workflow scope) |"
+            if [ "${ELEVATED_TOKEN:-false}" = 'true' ]; then
+              echo "| push credential | \`STAMITY_UPSTREAM_TOKEN\` |"
             else
-              echo "| push credential | the per-run repository token (no workflow scope) |"
+              echo "| push credential | the per-run repository token |"
             fi
             echo "| run | $RUN_URL |"
             echo
             echo "The fork's own gates ran in that job, on the merged tree, and their verdict is in the integration record on this branch — so this pull request is not the first place the merge is tested."
-            if [ "${WORKFLOW_SCOPE:-false}" != 'true' ]; then
+            if [ "${ELEVATED_TOKEN:-false}" != 'true' ]; then
               echo
-              echo "This pull request was opened with the per-run repository token. Its \`pull_request\` workflow runs are created in an **approval-required** state: someone with write access clicks \"Approve and run\" to start them. Configuring a \`STAMITY_UPSTREAM_TOKEN\` secret removes that prompt — and is also what lets an upstream release that touches \`.github/workflows/\` be pushed at all."
+              echo "This pull request was opened with the per-run repository token. Its \`pull_request\` workflow runs are created in an **approval-required** state: someone with write access clicks \"Approve and run\" to start them. Configuring a \`STAMITY_UPSTREAM_TOKEN\` secret removes that prompt. It changes nothing about what this lane pushes: a release that touches \`.github/workflows/\` is never pushed by automation here, whatever credential the run holds."
             fi
           } > "$BODY"
 
@@ -613,20 +689,23 @@ jobs:
       # ONE: the remote does not already have the branch. There is no force flag in this step and
       # there is none anywhere in this file: `stamity-upstream/<tag>` is a branch a human may have
       # pushed a conflict resolution or a review fixup onto, and overwriting it would delete work
-      # the lane cannot re-derive. An existing remote branch is reported, not replaced, which is
-      # also what makes the second run of the same release a no-op instead of a duplicate.
+      # the lane cannot re-derive. An existing remote branch is reported, not replaced — and the
+      # step after this one reports it without editing anything, which is what makes the second run
+      # of the same release a no-op instead of a duplicate.
       #
-      # TWO: the push is one this run's credential can actually make. The repository token cannot
-      # push a commit that creates or modifies anything under `.github/workflows/`; GitHub refuses
-      # it outright. Upstream releases of this product routinely touch workflow files, so that is
-      # not an edge case — it is the normal shape of a release that adds a lane. The check runs
-      # BEFORE the push rather than letting git fail halfway: the branch is left unpushed, the
-      # next step opens an issue with the commands that land it by hand, and the run goes red.
+      # TWO: the range touches nothing under `.github/workflows/`. This check is UNCONDITIONAL and
+      # takes no notice of which credential the run holds. A pushed branch's own workflow files run
+      # on `push`, under the identity that pushed them, so automation must never be the thing that
+      # introduces a workflow change into this repository: the diff a person has not read would run
+      # as soon as it landed. Upstream releases of this product routinely touch workflow files, so
+      # this is the ordinary shape of such a release, not an edge case. The check runs BEFORE the
+      # push rather than letting git fail halfway: the branch is left unpushed, the next step opens
+      # an issue with the commands that land it after a person has reviewed the diff, and the run
+      # goes red. (The repository token could not make that push in any case — GitHub refuses it
+      # outright — but an elevated token would, and the lane still will not.)
       - name: Restore and push the update branch
         id: push
         if: needs.prepare.outputs.has_bundle == 'true'
-        env:
-          WORKFLOW_SCOPE: ${{ steps.credential.outputs.workflow_scope }}
         run: |
           set -euo pipefail
           BUNDLE="$ARTIFACT_DIR/update.bundle"
@@ -636,27 +715,29 @@ jobs:
           git fetch "$BUNDLE" "$UPDATE_BRANCH:refs/heads/$UPDATE_BRANCH"
           echo "Restored $UPDATE_BRANCH at $(git rev-parse --short "refs/heads/$UPDATE_BRANCH")"
 
+          # The existing-branch answer comes first: when origin already has the branch there is
+          # nothing to push and nothing to ask a person to push, whatever the range touches.
+          if [ -n "$(git ls-remote --heads origin "$UPDATE_BRANCH")" ]; then
+            {
+              echo 'ready=true'
+              echo 'pushed=false'
+            } >> "$GITHUB_OUTPUT"
+            echo "::notice title=Update branch already on the remote::origin already has $UPDATE_BRANCH, so this run did not touch it. That branch may carry a conflict resolution or a review fixup, and this lane never force-updates it. The step below REPORTS its pull request and edits nothing."
+            exit 0
+          fi
+
           WORKFLOW_FILES="$(git diff --name-only "$INTEGRATION_BRANCH..$UPDATE_BRANCH" -- .github/workflows)"
-          if [ -n "$WORKFLOW_FILES" ] && [ "${WORKFLOW_SCOPE:-false}" != 'true' ]; then
+          if [ -n "$WORKFLOW_FILES" ]; then
             {
               echo 'workflow_files<<WORKFLOW_FILES_EOF'
               printf '%s\n' "$WORKFLOW_FILES"
               echo 'WORKFLOW_FILES_EOF'
               echo 'ready=false'
               echo 'pushed=false'
-              echo 'blocked=workflow-permission'
+              echo 'blocked=workflow-files'
             } >> "$GITHUB_OUTPUT"
-            echo "::error title=Push refused before it was attempted::This release changes files under .github/workflows/ and this run holds only the per-run repository token, which GitHub does not allow to create or update workflow files. Nothing was pushed. An issue with the commands that land it by hand follows."
+            echo "::error title=Push refused before it was attempted::This release changes files under .github/workflows/, and this lane never pushes those — a pushed workflow file runs on the push, under the pushing identity, so a person reviews that diff and pushes it themselves. No credential changes this. Nothing was pushed. An issue with the commands that land it follows."
             printf '%s\n' "$WORKFLOW_FILES"
-            exit 0
-          fi
-
-          if [ -n "$(git ls-remote --heads origin "$UPDATE_BRANCH")" ]; then
-            {
-              echo 'ready=true'
-              echo 'pushed=false'
-            } >> "$GITHUB_OUTPUT"
-            echo "::notice title=Update branch already on the remote::origin already has $UPDATE_BRANCH, so this run did not touch it. That branch may carry a conflict resolution or a review fixup, and this lane never force-updates it. The pull request below is updated in place."
             exit 0
           fi
 
@@ -667,25 +748,34 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Pushed $UPDATE_BRANCH to origin"
 
-      # The other half of the workflow-permission case: one issue per release, found by EXACT
-      # title, carrying the report and the commands a person runs to land the branch from a
-      # checkout whose credential does carry workflow scope.
-      - name: Open or update the workflow-permission issue
+      # The other half of the workflow-file refusal: one issue per release, carrying the report
+      # and the commands a person runs to land the branch once they have read the workflow diff.
+      #
+      # IDENTITY IS A MARKER THE LANE OWNS, NOT THE TITLE. A title is editable by anyone with write
+      # access, and GitHub's `in:title` search is fuzzy — so an edited title used to make the lane
+      # open a SECOND issue for the same release, and a near-miss could have matched somebody
+      # else's. The marker is an HTML comment written into every issue body this lane creates: it
+      # is invisible in the rendered issue, it survives a retitle, and it is matched EXACTLY in the
+      # bodies the search returns rather than trusted from the search's own ranking.
+      - name: Open or update the reviewed-push issue
         id: workflow_issue
-        if: steps.push.outputs.blocked == 'workflow-permission'
+        if: steps.push.outputs.blocked == 'workflow-files'
         env:
           WORKFLOW_FILES: ${{ steps.push.outputs.workflow_files }}
         run: |
           set -euo pipefail
-          TITLE="Upstream ${TAG:-unknown} needs a push with workflow permission"
-          ISSUE_BODY="$ARTIFACT_DIR/workflow-permission.md"
+          TITLE="Upstream ${TAG:-unknown} needs a reviewed push"
+          MARKER="<!-- stamity-upstream-lane: ${TAG:-unknown} reviewed-push -->"
+          ISSUE_BODY="$ARTIFACT_DIR/reviewed-push.md"
 
           {
+            printf '%s\n' "$MARKER"
+            echo
             cat "$ARTIFACT_DIR/body.md"
             echo
-            echo '## Why this could not be pushed'
+            echo '## Why this was not pushed'
             echo
-            echo "The merge succeeded and \`${UPDATE_BRANCH:-the update branch}\` is complete — it is just not on the remote. This release changes files under \`.github/workflows/\`, and GitHub refuses a push of workflow changes made with the per-run repository token (*refusing to allow a GitHub App to create or update workflow ... without \`workflows\` permission*). The run did not attempt the push, so nothing is half-applied."
+            echo "The merge succeeded and \`${UPDATE_BRANCH:-the update branch}\` is complete — it is just not on the remote. This release changes files under \`.github/workflows/\`, and this lane never pushes those: a branch's own workflow files run on \`push\`, under the identity that pushed them, so automation must not be the thing that introduces a workflow change into this repository. A person reads the diff and pushes it under their own identity. The run did not attempt the push, so nothing is half-applied. (The per-run repository token could not have made this push in any case — GitHub refuses it outright: *refusing to allow a GitHub App to create or update workflow ... without \`workflows\` permission*. An elevated token would lift that refusal; this lane refuses anyway.)"
             echo
             echo 'Workflow files this release changes:'
             echo
@@ -693,7 +783,7 @@ jobs:
             echo
             echo '## Landing it by hand'
             echo
-            echo "Download the \`upstream-update\` artifact from [this run]($RUN_URL), unzip it, then from a clone of this repository whose credential carries **workflow** scope:"
+            echo "Read the workflow diff above first — that review is the whole reason this branch is not already pushed. Then download the \`upstream-update\` artifact from [this run]($RUN_URL), unzip it, and from a clone of this repository whose credential carries **workflow** scope:"
             echo
             echo '```sh'
             echo "git fetch /path/to/update.bundle '${UPDATE_BRANCH:-stamity-upstream/<tag>}:refs/heads/${UPDATE_BRANCH:-stamity-upstream/<tag>}'"
@@ -703,12 +793,14 @@ jobs:
             echo
             echo "Re-running the lane locally reaches the same branch without the artifact: \`node scripts/upstream.mjs integrate --release ${TAG:-<tag>}\`."
             echo
-            echo '## Making this automatic'
+            echo '## Why no secret automates this away'
             echo
-            echo 'Configure a `STAMITY_UPSTREAM_TOKEN` repository secret — a fine-grained personal access token or GitHub App token with **Contents: write**, **Pull requests: write** and **Workflows: write**. With it this lane pushes workflow-touching releases on its own, and the pull request it opens starts its own CI without an "Approve and run" prompt. `docs/enterprise-forks.md` has the steps.'
+            echo 'A `STAMITY_UPSTREAM_TOKEN` repository secret — a fine-grained personal access token or GitHub App token with **Contents: write**, **Pull requests: write** and **Issues: write** (this lane opens issues under the same token) — lifts the "Approve and run" prompt on the pull requests this lane opens. It does NOT make this push automatic. The check above is unconditional, because what it answers is not a missing permission: it is that a workflow file pushed by automation runs under the identity that pushed it, before anyone has read it. `docs/enterprise-forks.md` has the steps.'
           } > "$ISSUE_BODY"
 
-          NUMBER="$(gh issue list --search "$TITLE in:title" --state open --limit 50 --json number,title | jq -r --arg title "$TITLE" 'map(select(.title == $title)) | .[0].number // empty')"
+          # Searched by the marker's own text, then matched EXACTLY in the bodies that come back —
+          # GitHub's search is fuzzy and eventually consistent, so its ranking decides nothing here.
+          NUMBER="$(gh issue list --state open --search "\"stamity-upstream-lane: ${TAG:-unknown} reviewed-push\" in:body" --json number,body | jq -r --arg marker "$MARKER" 'map(select((.body // "") | contains($marker))) | .[0].number // empty')"
 
           if [ -z "$NUMBER" ]; then
             # Same reason as the pull request: the issue's number comes from `gh issue create`'s
@@ -724,11 +816,20 @@ jobs:
           fi
 
           echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
-          echo "Workflow-permission issue #$NUMBER: $TITLE"
+          echo "Reviewed-push issue #$NUMBER: $TITLE"
 
       # One pull request per upstream release, created once and updated in place afterwards. The
       # search is by HEAD BRANCH rather than by title: a title is editable by a reviewer and a
       # head branch is the identity the lane actually owns.
+      #
+      # WHAT THIS RUN PUSHED DECIDES WHETHER IT WRITES. When origin already had the branch, this
+      # run pushed nothing — and the report it composed describes the tree THIS run merged, not the
+      # tree that branch carries: a person may have resolved a conflict or pushed a review fixup
+      # onto it since. Writing this run's report over that pull request's body would replace an
+      # accurate account with an inaccurate one, silently. So the already-there case REPORTS the
+      # open pull request — a run annotation and a summary line naming its URL — and edits nothing:
+      # no body, no title, no comment, no label. Only a run that actually pushed the branch creates
+      # or edits the pull request for it.
       #
       # A `gh pr create` failure is diagnosed rather than swallowed. The likeliest cause is a
       # repository or organization setting rather than a bug — "Allow GitHub Actions to create and
@@ -745,10 +846,39 @@ jobs:
           steps.push.outputs.ready == 'true' &&
           (needs.prepare.outputs.outcome == 'integrated' ||
            needs.prepare.outputs.outcome == 'validation-failed')
+        env:
+          PUSHED: ${{ steps.push.outputs.pushed }}
         run: |
           set -euo pipefail
           BODY="$ARTIFACT_DIR/body.md"
           TITLE="Upstream release ${TAG:-unknown}"
+
+          if [ "${PUSHED:-false}" != 'true' ]; then
+            EXISTING="$(gh pr list --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --state open --json number,url)"
+            NUMBER="$(printf '%s' "$EXISTING" | jq -r '.[0].number // empty')"
+            URL="$(printf '%s' "$EXISTING" | jq -r '.[0].url // empty')"
+            {
+              echo "number=$NUMBER"
+              echo "url=$URL"
+              echo 'action=reported'
+            } >> "$GITHUB_OUTPUT"
+            {
+              echo "### Upstream ${TAG:-unknown} — reported, not rewritten"
+              echo
+              if [ -n "$URL" ]; then
+                echo "\`$UPDATE_BRANCH\` was already on the remote, so this run pushed nothing and changed nothing on it. Its open pull request is $URL."
+              else
+                echo "\`$UPDATE_BRANCH\` was already on the remote, so this run pushed nothing and changed nothing on it. No OPEN pull request has that head; open one by hand if the branch is still wanted."
+              fi
+              echo
+            } >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "$URL" ]; then
+              echo "::notice title=Existing pull request reported::origin already has $UPDATE_BRANCH, so this run left it and its pull request alone: $URL. This run's report describes a different tree, and overwriting the body would have replaced an accurate account with an inaccurate one."
+            else
+              echo "::notice title=Existing branch, no open pull request::origin already has $UPDATE_BRANCH and no OPEN pull request has that head. Nothing was pushed or edited. Open one by hand if the branch is still wanted: gh pr create --head $UPDATE_BRANCH --base $INTEGRATION_BRANCH"
+            fi
+            exit 0
+          fi
 
           NUMBER="$(gh pr list --head "$UPDATE_BRANCH" --base "$INTEGRATION_BRANCH" --state open --limit 20 --json number,url | jq -r '.[0].number // empty')"
 
@@ -790,17 +920,21 @@ jobs:
           fi
 
       # A conflict has no commit and therefore no branch to push, so the result takes the other
-      # shape a person can act on: one issue per release, found by EXACT title so a near-miss
-      # opens nothing new, carrying the report and the local commands that resolve it.
+      # shape a person can act on: one issue per release, carrying the report and the local
+      # commands that resolve it. Identified by the same lane-owned body marker as the issue above,
+      # for the same reason — the title is a reviewer's to edit, and the marker is the lane's.
       - name: Open or update the conflict issue
         id: issue
         if: needs.prepare.outputs.outcome == 'conflict'
         run: |
           set -euo pipefail
           TITLE="Upstream ${TAG:-unknown} needs conflict resolution"
+          MARKER="<!-- stamity-upstream-lane: ${TAG:-unknown} conflict -->"
           ISSUE_BODY="$ARTIFACT_DIR/issue.md"
 
           {
+            printf '%s\n' "$MARKER"
+            echo
             cat "$ARTIFACT_DIR/body.md"
             echo
             echo '## Resolving this locally'
@@ -816,7 +950,9 @@ jobs:
             echo '`continue` refuses while any conflict marker or unmerged index entry remains, regenerates the generated tree from its sources, re-runs the gates and commits the merge. `node scripts/upstream.mjs abort` throws the attempt away without touching the integration branch.'
           } > "$ISSUE_BODY"
 
-          NUMBER="$(gh issue list --search "$TITLE in:title" --state open --limit 50 --json number,title | jq -r --arg title "$TITLE" 'map(select(.title == $title)) | .[0].number // empty')"
+          # Searched by the marker's own text, then matched EXACTLY in the bodies that come back —
+          # GitHub's search is fuzzy and eventually consistent, so its ranking decides nothing here.
+          NUMBER="$(gh issue list --state open --search "\"stamity-upstream-lane: ${TAG:-unknown} conflict\" in:body" --json number,body | jq -r --arg marker "$MARKER" 'map(select((.body // "") | contains($marker))) | .[0].number // empty')"
 
           if [ -z "$NUMBER" ]; then
             # Same reason as the pull request: the issue's number comes from `gh issue create`'s
@@ -845,6 +981,7 @@ jobs:
         if: always()
         env:
           PR_URL: ${{ steps.pr.outputs.url }}
+          PR_ACTION: ${{ steps.pr.outputs.action }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           BLOCKED: ${{ steps.push.outputs.blocked }}
           WORKFLOW_ISSUE_NUMBER: ${{ steps.workflow_issue.outputs.number }}
@@ -855,16 +992,16 @@ jobs:
           {
             echo "### Upstream update — \`${OUTCOME:-unknown}\`"
             echo
-            if [ "${BLOCKED:-}" = 'workflow-permission' ]; then
+            if [ "${BLOCKED:-}" = 'workflow-files' ]; then
               echo "> [!IMPORTANT]"
-              echo "> The update branch was prepared but **not pushed**: this release changes files under \`.github/workflows/\`, which the per-run repository token may not push. Issue #${WORKFLOW_ISSUE_NUMBER:-?} carries the commands that land it by hand, and configuring a \`STAMITY_UPSTREAM_TOKEN\` secret makes future releases push themselves."
+              echo "> The update branch was prepared but **not pushed**: this release changes files under \`.github/workflows/\`, and this lane never pushes those — a pushed workflow file runs on the push, under the pushing identity, so a person reviews that diff and pushes it themselves. No secret changes this. Issue #${WORKFLOW_ISSUE_NUMBER:-?} carries the commands."
               echo
             fi
             cat "$ARTIFACT_DIR/body.md" 2>/dev/null || echo '_No report body was composed._'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${BLOCKED:-}" = 'workflow-permission' ]; then
-            echo "::error title=Upstream ${TAG:-unknown} needs a push with workflow permission::The merge is clean and the branch is complete, but it changes .github/workflows/ and this run's token may not push that. Nothing was pushed and no pull request was opened. Issue #${WORKFLOW_ISSUE_NUMBER:-?} has the commands."
+          if [ "${BLOCKED:-}" = 'workflow-files' ]; then
+            echo "::error title=Upstream ${TAG:-unknown} needs a reviewed push::The merge is clean and the branch is complete, but it changes .github/workflows/, and this lane never pushes workflow files under any credential — a person reads that diff and pushes it under their own identity. Nothing was pushed and no pull request was opened. Issue #${WORKFLOW_ISSUE_NUMBER:-?} has the commands."
             exit 1
           fi
 
@@ -878,7 +1015,7 @@ jobs:
               exit 0
               ;;
             integrated)
-              echo "Integrated ${TAG:-unknown}. Pull request: ${PR_URL:-(none)} (branch pushed: ${PUSHED:-n/a}, landing-policy warning: ${LANDING_WARNING:-unknown})"
+              echo "Integrated ${TAG:-unknown}. Pull request: ${PR_URL:-(none)} (branch pushed: ${PUSHED:-n/a}, pull request ${PR_ACTION:-none}, landing-policy warning: ${LANDING_WARNING:-unknown})"
               exit 0
               ;;
             validation-failed)
