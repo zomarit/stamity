@@ -1,6 +1,6 @@
 # Enterprise downstream release QA
 
-Reviewable candidate: `caec7fac5e45d82ad1b766c30affd3696829c690`, prepared version 1.6.0. This checkpoint is unsigned. Product gates bind to `0f7b0e9a457c6c78c96eb3cb9c24c3802d85718b`; the [final source comparison](final-site-source-binding.json) proves the subsequent changes are only the guide, plan and inbox. Actual public and private fixture lifecycles are complete within the explicit external limits below.
+Reviewable candidate: `caec7fac5e45d82ad1b766c30affd3696829c690`, prepared version 1.6.0. This checkpoint is unsigned. Product gates bind to `0f7b0e9a457c6c78c96eb3cb9c24c3802d85718b`; the [final source comparison](final-site-source-binding.json) proves the subsequent changes are only the guide, plan and inbox. Actual public and private fixture lifecycles are complete within the explicit external limits below. The subsequent [ledger retirement correction](retirement-verification.md) is independently verified and changes no product, corpus, workflow or rendered-document input.
 
 The [independent full gate](final-report-verification.md) passed 7,458 tests with two existing skips; coverage and all configured per-file floors passed. Product evidence pointers bind to that candidate; final browser evidence binds to `caec7fa`. The browser bundle is [browser-caec7fa.json](../../evidence/browser-caec7fa.json); all 12 theme/viewport scans and 20 actual table keyboard probes passed. These automate specific assertions, not a complete human accessibility review.
 
