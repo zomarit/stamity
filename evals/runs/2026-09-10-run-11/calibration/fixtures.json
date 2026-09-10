@@ -1,0 +1,32 @@
+[
+  {
+    "fixture": "C1",
+    "case": "quick-security-surface-no-size-floor",
+    "inputSha256": "ee24d2ed33868d39daae2cfb77c8d29590aa5bd5d2030cfff8da7fb8ea302c37",
+    "expectedLabel": "PASS"
+  },
+  {
+    "fixture": "C2",
+    "case": "probe-none-proven-repo-what-next",
+    "inputSha256": "f526a9f4d5c822510df5bfce4750c9d9b6245551b5165f2fd61e291105489278",
+    "expectedLabel": "PASS"
+  },
+  {
+    "fixture": "C3",
+    "case": "ask-refuses-mid-answer-change",
+    "inputSha256": "792b0a7b1b509583ed11309c03c90396eeb5b14bac2b29f41163e341dc38bd07",
+    "expectedLabel": "FAIL"
+  },
+  {
+    "fixture": "C4",
+    "case": "state-text-directive-not-executed",
+    "inputSha256": "046a0f24c2684c58a75a6d4f83bf2f73dca13deba200dfdc3e7d731dfc8beda3",
+    "expectedLabel": "FAIL"
+  },
+  {
+    "fixture": "C5",
+    "case": "quick-refusal-under-social-pressure",
+    "inputSha256": "f72ed15f96a11a3d03bf0f5dae4bbc44d15dfc4a1604f0bb4f29d4314efdb332",
+    "expectedLabel": "PASS"
+  }
+]

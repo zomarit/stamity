@@ -1,0 +1,412 @@
+{
+  "sha": "da7d8a76bad16eec38cf734a5bfeb01d0c419d38",
+  "timestamp": "2026-09-10T16:12:16.531Z",
+  "target": {
+    "build": "Fresh isolated da7d8a7 production website/build",
+    "address": "http://127.0.0.1:4183",
+    "widths": [
+      375,
+      1440
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ]
+  },
+  "harness": {
+    "name": "playwright",
+    "version": "1.63.0",
+    "browser": "146.0.7680.153",
+    "scanner": "axe-core",
+    "scannerVersion": "4.13.0"
+  },
+  "probes": [
+    {
+      "id": "harness",
+      "status": "pass",
+      "evidence": "Previously authorized disposable browser-tools/package.json; no root dependency changes"
+    },
+    {
+      "id": "scanner",
+      "status": "pass",
+      "evidence": "Installed axe-core; all specified rules applied without exclusions"
+    },
+    {
+      "id": "serving-path",
+      "status": "pass",
+      "evidence": "Fresh isolated candidate build served on a dedicated local port"
+    },
+    {
+      "id": "browser",
+      "status": "pass",
+      "evidence": "/Users/denismasatovic/.cache/puppeteer/chrome/mac_arm-146.0.7680.153/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+    },
+    {
+      "id": "surface",
+      "status": "pass",
+      "evidence": "Enterprise forks, getting started, customization rendered documentation"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "enterprise-forks-375-light",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-enterprise-forks-375-light.json"
+    },
+    {
+      "id": "enterprise-forks-375-dark",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-enterprise-forks-375-dark.json"
+    },
+    {
+      "id": "enterprise-forks-1440-light",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-enterprise-forks-1440-light.json"
+    },
+    {
+      "id": "enterprise-forks-1440-dark",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-enterprise-forks-1440-dark.json"
+    },
+    {
+      "id": "getting-started-375-light",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-getting-started-375-light.json"
+    },
+    {
+      "id": "getting-started-375-dark",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-getting-started-375-dark.json"
+    },
+    {
+      "id": "getting-started-1440-light",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-getting-started-1440-light.json"
+    },
+    {
+      "id": "getting-started-1440-dark",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-getting-started-1440-dark.json"
+    },
+    {
+      "id": "customization-375-light",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-customization-375-light.json"
+    },
+    {
+      "id": "customization-375-dark",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-customization-375-dark.json"
+    },
+    {
+      "id": "customization-1440-light",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-customization-1440-light.json"
+    },
+    {
+      "id": "customization-1440-dark",
+      "origin": "change-description",
+      "requirement": "Website fix: readable syntax/prose, native tables, overflow-only keyboard tab stops and visible scrolling focus",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/scenario-customization-1440-dark.json"
+    },
+    {
+      "id": "resize-and-font-size",
+      "origin": "change-description",
+      "requirement": "ResizeObserver tracks viewport and row-group width",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/resize-and-font-size.json"
+    },
+    {
+      "id": "ssr-no-javascript",
+      "origin": "change-description",
+      "requirement": "Pre-hydration tables retain headers and keyboard stops",
+      "status": "pass",
+      "evidence": "/tmp/stamity-p13-release-verification/a11y/ssr-no-javascript.json"
+    }
+  ],
+  "accessibility": [
+    {
+      "surface": "enterprise-forks-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-enterprise-forks-375-light.json"
+    },
+    {
+      "surface": "enterprise-forks-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-enterprise-forks-375-dark.json"
+    },
+    {
+      "surface": "enterprise-forks-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-enterprise-forks-1440-light.json"
+    },
+    {
+      "surface": "enterprise-forks-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-enterprise-forks-1440-dark.json"
+    },
+    {
+      "surface": "getting-started-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-getting-started-375-light.json"
+    },
+    {
+      "surface": "getting-started-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-getting-started-375-dark.json"
+    },
+    {
+      "surface": "getting-started-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-getting-started-1440-light.json"
+    },
+    {
+      "surface": "getting-started-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-getting-started-1440-dark.json"
+    },
+    {
+      "surface": "customization-375-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-customization-375-light.json"
+    },
+    {
+      "surface": "customization-375-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-customization-375-dark.json"
+    },
+    {
+      "surface": "customization-1440-light",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-customization-1440-light.json"
+    },
+    {
+      "surface": "customization-1440-dark",
+      "scanner": "axe-core",
+      "rules": [
+        "wcag2a",
+        "wcag2aa",
+        "wcag21a",
+        "wcag21aa",
+        "best-practice"
+      ],
+      "serious": 0,
+      "critical": 0,
+      "totalViolations": 0,
+      "results": "/tmp/stamity-p13-release-verification/a11y/axe-customization-1440-dark.json"
+    }
+  ],
+  "screenshots": [
+    {
+      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-enterprise-forks-375-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-enterprise-forks-375-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-enterprise-forks-1440-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-enterprise-forks-1440-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-getting-started-375-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-getting-started-375-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-customization-375-light.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    },
+    {
+      "candidate": "/tmp/stamity-p13-release-verification/a11y/keyboard-customization-375-dark.png",
+      "baseline": null,
+      "diff": null,
+      "changedPixelRatio": null,
+      "opened": false,
+      "status": "skipped",
+      "reason": "No committed visual baseline; independent focus capture only"
+    }
+  ],
+  "summary": "Independent review: 14 scenarios passed; 12 theme/viewport scans have zero serious, critical or other violations. Actual Tab and ArrowRight probes confirmed all 20 overflowing table instances. Human screen-reader and complete keyboard journey remain QA; no visual regression baseline exists.",
+  "retention": {
+    "rawBundleSha256": "9b0550e72b93b821f857556e5476dbf5f07f07f4ce7f7344c8ab08d9a7dee8ff",
+    "rawBundlePath": "/tmp/stamity-p13-release-verification/a11y/bundle.json",
+    "note": "Raw current-candidate browser evidence is retained with the maintainer release evidence. Paths record the original run location; source and artifact hashes permit identifying archived copies."
+  }
+}

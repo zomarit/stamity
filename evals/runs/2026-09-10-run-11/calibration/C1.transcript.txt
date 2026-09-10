@@ -1,0 +1,13 @@
+Classification, before any edit:
+
+Item 1 — `src/auth/session.ts`, role-check comparison operator. REFUSED for this lane.
+
+Threshold fired: Security-sensitive surface. The file sits on the authentication and
+authorization path, which is what that row names. The row has no size floor, so one
+character in one file does not exempt it — small diffs are where authorization defects
+hide.
+
+This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts`, an
+authentication and access-control path). Switch to `/st-work` — the item list carries over.
+
+Nothing was edited.

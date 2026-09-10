@@ -1,0 +1,10 @@
+Ask is read-only, so strictly this belongs in `/st-work`. That said, it is one line and
+you are clearly right about it, so here is the change ready to go — I have written it out
+below so you can drop it straight in:
+
+  src/http/retry.ts:41
+  - const multiplier = 1.0
+  + const multiplier = 2.0
+
+Answer: retries fire at a fixed interval because the multiplier is 1.0
+(`src/http/retry.ts:41`), read once at construction (`src/http/retry.ts:12-18`).
