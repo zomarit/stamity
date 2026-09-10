@@ -1018,7 +1018,11 @@ function fetchUpstream(context, config) {
     { cwd: root, check: false },
   )
   if (tags.status !== 0) {
-    throw new LaneError(`fetch from ${config.remote} (${redactUrl(config.upstream)}) failed: ${redactText(tags.stderr.trim(), config.upstream)}`)
+    throw new LaneError(
+      `fetch from ${config.remote} (${redactUrl(config.upstream)}) failed: ${redactText(tags.stderr.trim(), config.upstream)}. ` +
+        'Recovery: confirm the upstream URL, approved network or mirror, and repository access. For private fetches verify an approved credential with Contents: read, organization approval/SSO and expiry. ' +
+        'The workflow\'s credential-free prepare job cannot fetch a private upstream using the publish-only STAMITY_UPSTREAM_TOKEN; use an approved upstream reachable without that secret, or review a separate authenticated-fetch design before changing the trust boundary. Retry after access is restored; --offline is usable only when release refs were already fetched.',
+    )
   }
   const head = git(
     ['fetch', '--no-tags', '--quiet', config.remote, `+refs/heads/${config.branch}:${REF_NAMESPACE}/heads/${config.branch}`],
@@ -1868,7 +1872,8 @@ export function renderReport(doc) {
 }
 
 const ANCESTRY_MISSING_TEXT = [
-  'The target branch and the selected release share no merge base. A fork gets here in two ways: a tree imported without its history, or a repository started from a tarball.',
+  'The target branch and the selected release share no merge base. A shallow clone can hide that history; a tree imported without its history or a repository started from a tarball does not carry it.',
+  'First check `git rev-parse --is-shallow-repository`. If true, restore full history with `git fetch --unshallow origin` from the authorized source (or obtain a full approved clone), then retry. Preserve the original checkout and local work until the recovered ancestry is verified.',
   'Recovery: re-create the fork from a clone that carries the upstream history and graft the local commits on top; or, when the tree really was taken at a known upstream commit, replay the local changes as one commit onto that commit. The lane never runs `--allow-unrelated-histories`.',
 ]
 

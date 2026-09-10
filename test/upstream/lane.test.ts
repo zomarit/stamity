@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CONTENT_CLASSES } from "../../src/types/content.ts";
 import { contentPrefixFor, ENGINE_CONTENT_PREFIXES } from "../../src/types/markers.ts";
@@ -1343,6 +1343,37 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
   );
 
   // Criterion 13
+  it("retains an operational report with credential and network remedies when the upstream cannot be fetched", () => {
+    const fork = createFork(upstream, forkDir(), {
+      config: { upstream: join(upstream.dir, "unavailable.git") },
+    });
+    const result = runLane(fork, ["integrate", "--release", "v1.1.0"]);
+    expectOutcome(result, "error");
+    expect(result.doc.report).toContain("Contents: read");
+    expect(result.doc.report).toContain("approved network or mirror");
+    expect(result.doc.report).toContain("credential-free prepare job");
+    expect(branchHead(fork, "main")).toBe(fork.head);
+    expect(updateBranches(fork)).toEqual([]);
+  });
+
+  it("recovers a shallow private import by fetching its existing authorized history", () => {
+    const source = createFork(upstream, forkDir());
+    const shallowDir = join(forkDir(), "shallow");
+    git(source, ["clone", "--quiet", "--depth=1", pathToFileURL(source.dir).href, shallowDir]);
+    const shallow = { ...source, dir: shallowDir };
+    expect(git(shallow, ["rev-parse", "--is-shallow-repository"]).stdout.trim()).toBe("true");
+    const before = runLane(shallow, ["status", "--release", "v1.1.0"]);
+    expectOutcome(before, "ancestry-missing");
+    expect(before.doc.report).toContain("fetch --unshallow origin");
+    git(shallow, ["fetch", "--unshallow", "origin"]);
+    expect(git(shallow, ["rev-parse", "--is-shallow-repository"]).stdout.trim()).toBe("false");
+    const recovered = runLane(shallow, ["integrate", "--release", "v1.1.0"]);
+    expectOutcome(recovered, "integrated");
+    expect(isAncestor(shallow, source.head, recovered.doc.mergeCommit!)).toBe(true);
+    expect(isAncestor(shallow, upstream.tags["v1.1.0"]!, recovered.doc.mergeCommit!)).toBe(true);
+    expect(branchHead(shallow, "main")).toBe(source.head);
+  });
+
   it(
     "names missing ancestry and attempts no merge for a fork with an unrelated history",
     () => {
@@ -1351,6 +1382,8 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       expectOutcome(status, "ancestry-missing");
       expect(status.doc.messages.join("\n")).toContain("re-create the fork from a clone that carries the upstream history");
       expect(status.doc.messages.join("\n")).toContain("never runs `--allow-unrelated-histories`");
+      expect(status.doc.messages.join("\n")).toContain("--is-shallow-repository");
+      expect(status.doc.messages.join("\n")).toContain("fetch --unshallow");
       expect(status.doc.integrated).toBeNull();
       expect(status.doc.divergence).toBeNull();
 
