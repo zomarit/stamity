@@ -1,7 +1,7 @@
 import {resolve} from 'node:path';
 import type * as Preset from '@docusaurus/preset-classic';
 import type {Config} from '@docusaurus/types';
-import {themes as prismThemes} from 'prism-react-renderer';
+import {themes as prismThemes, type PrismTheme} from 'prism-react-renderer';
 import repoLinks from './src/remark/repoLinks';
 
 /**
@@ -31,6 +31,39 @@ const SITE_DIR = typeof __dirname === 'string' ? __dirname : process.cwd();
 const REPO_ROOT = resolve(SITE_DIR, '..');
 const DOCS_DIR = resolve(REPO_ROOT, 'docs');
 const REPO_URL = 'https://github.com/zomarit/stamity';
+
+/**
+ * Keep the existing syntax families and backgrounds, with AA text contrast. GitHub's pale
+ * teal/blue/comments fail against its #f6f8fa ground; Dracula's comments fail on #282a36.
+ * Each replacement clears 4.5:1. Namespace opacity must stay at 1 so it cannot fade a passing
+ * token below the floor. Derive fresh styles rather than mutating the shared upstream themes.
+ */
+function readablePrismTheme(theme: PrismTheme, colors: Record<string, string>): PrismTheme {
+  return {
+    ...theme,
+    styles: theme.styles.map(({style, ...rule}) => ({
+      ...rule,
+      style: {
+        ...style,
+        ...(typeof style.color === 'string' && colors[style.color]
+          ? {color: colors[style.color]}
+          : {}),
+        ...(style.opacity === undefined ? {} : {opacity: 1}),
+      },
+    })),
+  };
+}
+
+const lightPrismTheme = readablePrismTheme(prismThemes.github, {
+  '#999988': '#66665a',
+  '#e3116c': '#bf0d5b',
+  '#36acaa': '#1b6967',
+  '#00a4db': '#006b8f',
+  '#d73a49': '#b52b38',
+});
+const darkPrismTheme = readablePrismTheme(prismThemes.dracula, {
+  'rgb(98, 114, 164)': '#98a6d4',
+});
 
 const config: Config = {
   title: 'stamity',
@@ -263,8 +296,8 @@ const config: Config = {
       },
     },
     prism: {
-      theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
+      theme: lightPrismTheme,
+      darkTheme: darkPrismTheme,
       additionalLanguages: ['bash', 'json', 'toml'],
     },
   } satisfies Preset.ThemeConfig,
