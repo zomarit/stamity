@@ -68,6 +68,10 @@ jobs:
   # ── Job 1: gates + pack. No id-token, no publish credential. ────────────────
   gates:
     name: gates and pack
+    # Imported repositories may retain canonical metadata and historical tags. Only GitHub's
+    # current repository context authorizes this public release path; downstreams configure
+    # their own private release lane. String comparison refuses absent privacy metadata too.
+    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -435,6 +439,9 @@ jobs:
   # runs beside it, on the same triggers.
   apm-route:
     name: apm route smoke
+    # This credential-free job resolves the canonical remote, so a downstream/private SHA
+    # cannot be sent through it as if it were a canonical release candidate.
+    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -528,8 +535,9 @@ jobs:
     name: publish
     needs: [gates, apm-route]
     if: >-
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-      (github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) == 'false')
+      github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' &&
+      ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) == 'false'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The single approval point. Configure required reviewers and a `v*` deployment tag policy on
@@ -561,6 +569,18 @@ jobs:
         run: |
           echo "::error::This dispatch did not set dry_run to false, and the publish job started anyway. The job condition has drifted. Failing closed."
           exit 1
+
+      # Restate the destination before any network interaction if a later edit widens `if:`.
+      - name: Refuse a noncanonical publication destination
+        env:
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          set -euo pipefail
+          if [ "$RELEASE_REPOSITORY" != 'zomarit/stamity' ] || [ "$RELEASE_REPOSITORY_PRIVATE" != 'false' ]; then
+            echo '::error::Canonical public publication requires the public zomarit/stamity repository. Configure a separate private downstream release path.'
+            exit 1
+          fi
 
       # Same fail-closed egress policy, on the job that holds the highest-value credential in the
       # repository. Allowlist is the publish-capability subset plus the artifact download:
