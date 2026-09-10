@@ -264,6 +264,12 @@ finds them.
   `Stamity-Upstream-Release: <tag>`, `Stamity-Upstream-Commit: <sha>`,
   `Stamity-Upstream-Gates: passed | failed | none`. Outcome `integrated` (exit 0) or
   `validation-failed` (exit 1).
+- **Commit sign-off**: newly created merge and validation-record commits carry the
+  configured committer's `Signed-off-by` trailer under `CONTRIBUTING.md`. The GitHub
+  workflow configures its automation identity. The local placeholder fallback preserves
+  CLI operation but never certifies a DCO; its report names the missing sign-off and asks
+  for an approved contributor identity and review before DCO-gated submission. Historical
+  commits and existing update branches are never amended to add trailers.
 - **Conflict**: the merge is left in progress in the update worktree, nothing is committed,
   and the report lists every conflicted path, its kind, whether it is a generated path
   (resolved by regeneration on `continue`, so the human need not touch it), and the
@@ -354,14 +360,23 @@ detailed.
 ### REQ-UPSTREAM-011 — Landing policy: detected on GitHub, derived everywhere
 
 Because the marker is ancestry, only a merge commit landing preserves it. On GitHub, the
-workflow (REQ-UPSTREAM-013) reads the target branch's effective rules
-(`GET /repos/{owner}/{repo}/rules/branches/{branch}`) and, when `required_linear_history`
-is present or merge commits are not among the allowed methods, writes a warning into the
-pull request body and the job summary naming the setting to change; the pull request is
-still opened, because the decision belongs to the fork. Everywhere else — GitLab, a
+workflow (REQ-UPSTREAM-013) reads all pages of active rulesets
+(`GET /repos/{owner}/{repo}/rules/branches/{branch}`), repository merge settings
+(`GET /repos/{owner}/{repo}`), and classic protection
+(`GET /repos/{owner}/{repo}/branches/{branch}/protection`). Linear-history requirements
+and merge-method restrictions, including the merge queue, produce a warning in the PR
+and job summary. Classic protection requires Administration: read; unreadable, 404 or
+malformed responses mark the overall check incomplete and name the unverified surface.
+Known restrictions still warn under partial access, and no incomplete check claims that
+merge commits are permitted. The PR still opens because the decision belongs to the fork.
+Everywhere else — GitLab, a
 self-hosted remote, a policy the API cannot see — the same condition surfaces after the
 first squash as `ancestry-lost` (REQ-UPSTREAM-004), and the guide lists the equivalent
 settings per host as far as they were verified.
+
+Official endpoint contracts rechecked 2026-09-10: [active branch rulesets](https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch),
+[repository merge settings](https://docs.github.com/en/rest/repos/repos#get-a-repository),
+and [classic branch protection](https://docs.github.com/en/rest/branches/branch-protection#get-branch-protection).
 
 ### REQ-UPSTREAM-012 — Abort and recovery
 
@@ -409,6 +424,9 @@ the canonical repository's own case. Two jobs follow:
   one issue titled `Upstream <tag> needs conflict resolution` carrying the report and the
   local commands, and exits 1. The lane's issues are identified by a marker it writes into
   the issue body, not by their title alone. A `concurrency` group serialises runs.
+
+  New and recovered PRs use `chore(upstream): integrate <tag>` to satisfy the inherited
+  conventional-title check. An existing PR's title remains its reviewer's property.
 
 The workflow needs no personal token and no App to run, and two platform limits shape
 what it does. First, automation never pushes a branch that changes a file under
@@ -491,6 +509,28 @@ are selected and probed explicitly. The canonical no-config workflow remains a c
 Private release destinations follow REQ-APM-008 and survive upstream regeneration.
 
 ### REQ-UPSTREAM-018 — Monitoring and real platform evidence
+
+#### Private tag ordering
+
+The existing consumer update engine must distinguish successive private releases. Native
+Renovate APM's GitHub-tag route defaults to `semver-coerced`, whose coercion can remove the
+prerelease portion. Prerelease-style private tags therefore require a dependency-scoped
+`packageRules` entry selecting `versioning: "semver"` and `ignoreUnstable: false`, or the
+deployed engine's supported stable tag convention. A successful private APM install does
+not prove update ordering; the actual next-release consumer PR does.
+
+Official contracts rechecked 2026-09-10: [APM manager](https://docs.renovatebot.com/modules/manager/apm/),
+[coerced semantic versioning](https://docs.renovatebot.com/modules/versioning/semver-coerced/),
+and [prerelease eligibility](https://docs.renovatebot.com/configuration-options/#ignoreunstable).
+
+Consumer manifests also declare explicit `targets` for their intended supported clients.
+Native Renovate refreshes APM artifacts with plain `apm install`; CLI-only target flags from
+a previous manual install do not configure its later noninteractive invocation. Without
+manifest targets, detection of multiple clients can fail that update. See the official
+[APM target precedence](https://microsoft.github.io/apm/reference/cli/install/) and
+[manifest target guidance](https://microsoft.github.io/apm/reference/cli/targets/).
+
+#### Operational proof
 
 The operating owner routes failed workflow runs through the organization's existing
 notification destination, and an external monitor checks the last attempted/successful poll
