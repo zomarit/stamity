@@ -2,12 +2,13 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e58b6ad. -->
-<!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or
-     leaves `.stamity/upstream.json`, the job split or the permissions in
-     `.github/workflows/upstream-update.yml` change, or CONTRIBUTING.md's regeneration table
-     moves. `test/docsPages.test.ts` holds this page to the hand-page contract, and
-     `test/upstream/lane.test.ts` is the acceptance suite that owns every behaviour below. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8b6dbba. -->
+<!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
+     `.stamity/upstream.json`, the fork layer's layout or precedence changes (`src/content/catalog.ts`),
+     the job split or the permissions in `.github/workflows/upstream-update.yml` change, or
+     CONTRIBUTING.md's regeneration table moves. `test/docsPages.test.ts` holds this page to the
+     hand-page contract, and `test/upstream/lane.test.ts` is the acceptance suite that owns every
+     behaviour below. -->
 
 # Enterprise forks
 
@@ -283,9 +284,10 @@ git commit-tree <the tree that printed> -p <your branch> -p <release> -m "Merge 
 | Boundary | Where it lives | Conflict cost | What the lane reports |
 |---|---|---|---|
 | Replacement override | `.stamity/overrides/<class>/<id>.md` | None. The file is yours; upstream never writes it. | An override-drift row when the release changes the artifact behind it: *the default behind `<path>` changed in `<tag>`; the override still applies and hides the change — review it*. Reads *orphaned* when the upstream side was deleted, naming the rename target when git found one. |
-| Patch overlay | `.stamity/overrides/<class>/<id>.customize.yaml` or `.customize.md` | None on the merge. The risk is a patch that quietly stops matching what it patches. | The same drift rows — those pairs are derived from the override path, so nothing has to be declared. |
+| Patch overlay | `.stamity/overrides/<class>/<id>.customize.yaml` or `.customize.md` | None on the merge. The risk is a patch that quietly stops matching what it patches. | The same drift rows, derived rather than declared. Both shadow roots — `.stamity/overrides/` and `fork/` — spell their ids as bare slugs, so the counterpart is whichever corpus spelling EXISTS at the release rather than the bare name: `rules/secrets.md` pairs with `content/rules/stamity-secrets.md`, and `skills/qa/SKILL.customize.yaml` with `content/skills/st-qa/SKILL.md`. |
 | Pack | `packs/<id>/` and its `pack.json` | None while the pack only adds. | Nothing, unless the pack shadows a bundled id — declare that in `shadows` and it is reported like an override. |
-| Direct core edit | `content/**`, `src/**`, the roster, the MCP catalog, the hook bodies | The real cost. Same lines on both sides: a conflict. Same file, different lines: a clean merge that may still be wrong. | `overlaps`, one row per path both sides changed — *merged cleanly on both sides' edits; semantic review needed* — and one `watched` row per changed path a `watch` glob matches, each with the upstream line delta. |
+| Fork layer | `fork/<class>/<id>.md` and `fork/skills/<id>/SKILL.md` inside the package, with `.customize.yaml` / `.customize.md` siblings for a patch instead of a replacement. | None. Upstream never writes under `fork/`, so no release can conflict with it; a replaced or patched default that moves upstream is drift, not a conflict. | A `shadowed` row per fork file whose bundled counterpart changed, resolved to the prefixed corpus file — `fork/rules/secrets.md` pairs with `content/rules/stamity-secrets.md`. Reads *orphaned* when that counterpart was deleted or renamed. A fork ADDITION has no counterpart, so it derives no pair and the lane says nothing about it. |
+| Direct core edit | `src/**`, the roster, the MCP catalog, the hook bodies — and `content/**` for what the fork layer cannot express: the charter template under `content/charter/`, which is not a content class, and an edit to the middle of a bundled body that has to keep tracking upstream, which a whole replacement stops doing and an appended patch cannot state | The real cost. Same lines on both sides: a conflict. Same file, different lines: a clean merge that may still be wrong. | `overlaps`, one row per path both sides changed — *merged cleanly on both sides' edits; semantic review needed* — and one `watched` row per changed path a `watch` glob matches, each with the upstream line delta. |
 
 Those rows are the lane's honest limit: it can say *look here*, and it cannot say *this is fine*.
 
@@ -295,11 +297,113 @@ held to the catalog's own count by `test/docsPages.test.ts` — and, if your for
 that test's page-roster literals. Expect that conflict, and resolve it by re-deriving the counts
 for your fork rather than taking either side whole.
 
-A bundled org-overlay layer — a directory inside the package that adds and shadows corpus
-artifacts without editing `content/` — would reduce the most common fork edit to zero conflicts.
-It is a stated non-goal here: it touches the content catalog's precedence chain and those same
-corpus-count pins, so it gets its own spec, and the trigger is the first fork that reports
-recurring conflicts on content additions.
+A bundled layer — a directory inside the package that adds and shadows corpus artifacts without
+editing `content/` — used to be a non-goal on this page, with a trigger: the first fork reporting
+recurring conflicts on content additions. The trigger was pulled, and the layer is the **fork
+layer** in the table above: it is what turns the most common core edit into a boundary that costs a
+fork nothing. [Authoring in the fork layer](#authoring-in-the-fork-layer) is the whole of it.
+
+## Authoring in the fork layer
+
+`fork/` is a directory inside the package that a fork of this repository fills with its own agents,
+rules, commands and skills. It exists for one reason: the most common core edit — our wording of
+that rule, our extra agent, that default with our tags — becomes a file upstream never touches, so
+what used to be a conflict every release is a file every release merges past.
+
+**The layout** is the override tree's, rooted at the package instead of at a consumer repository:
+
+| Class | Replace it whole | Patch it |
+|---|---|---|
+| agent | `fork/agents/<id>.md` | `fork/agents/<id>.customize.yaml`, `fork/agents/<id>.customize.md` |
+| rule | `fork/rules/<id>.md` | `fork/rules/<id>.customize.yaml`, `fork/rules/<id>.customize.md` |
+| command | `fork/commands/<id>.md` | `fork/commands/<id>.customize.yaml`, `fork/commands/<id>.customize.md` |
+| skill | `fork/skills/<id>/SKILL.md`, plus the skill's own files | `fork/skills/<id>/SKILL.customize.yaml`, `fork/skills/<id>/SKILL.customize.md` |
+
+In a checkout that is `fork/` beside `content/`; in the package your build publishes it is
+`dist/fork` beside `dist/content`, staged by `tsdown.config.mjs` only when the checkout has one and
+counted in the corpus half of the size budget. A package with no `fork/` directory indexes, plans
+and emits byte-identically to one built before the layer existed — this repository ships none.
+
+**Replace or patch, never both for one id.** A fork file claiming an id the corpus holds replaces
+that artifact whole, and the replaced one leaves the index: one identity, one body. A
+`.customize.yaml` instead patches the resolved artifact's frontmatter key by key and a
+`.customize.md` appends to its body, with the base still flowing from the corpus or the pack that
+supplies it — so the patch survives an upstream rewrite of everything it did not name. The two
+shapes are mutually exclusive per layer: `fork/rules/testing.md` beside
+`fork/rules/testing.customize.md` is refused naming both files, exactly as that pair is refused in a
+consumer's override tree.
+
+**Ids are bare slugs.** The corpus spells its own filenames with the prefix the engine mints —
+`stamity-` for agents and rules, `st-` for commands and skills — and a fork file wearing that prefix
+is refused at index time: *a fork-layer filename carries the engine content prefix, which names the
+generated corpus, not the fork's own artifact. Save it under the bare spelling
+"security-patterns" instead — a bare slug that matches a bundled artifact's id replaces it, prefix
+and all.* The same refusal covers a skill directory (`fork/skills/st-qa/`); the engine mints the
+prefix onto what it emits, so you never spell it yourself. So `fork/rules/security-patterns.md` is
+how you replace `content/rules/stamity-security-patterns.md`, and the bare spelling is what the
+drift derivation above resolves back to the prefixed corpus file.
+
+**The precedence chain** any `(class, id)` resolves through is corpus or pack → fork (a full
+replacement or a patch) → user (a full replacement or a patch). A consumer of your fork can still
+replace or patch what your fork layer put there, because their `.stamity/overrides/` tree sits above
+it.
+
+**A pack and the fork layer never share an id.** Whichever of the two arrives first, the pack is the
+one refused on contact, with *Packs must not shadow existing content* — the same rule that already
+holds between a pack and the corpus, and the same two remedies for whoever meets it: remove the
+pack, or ask its author to rename the artifact. From the fork's side there is no reason to reach for
+a pack's id at all. To change what a pack supplies, patch it —
+`fork/<class>/<id>.customize.yaml`, `fork/<class>/<id>.customize.md` — or ship your own artifact
+under an id of your own.
+
+**A fork patch can outrun the pack it patches.** The fork layer is package-global and packs are
+per-repository, so a fork patch addressed at an id only an installed pack supplies is skipped in a
+consumer repository that does not carry that pack, and `validate` shows a warning row naming the
+artifact the patch waits for (the pack itself cannot be named: nothing installed supplies it) —
+never an error, because nothing there is wrong. A consumer's own orphan
+patch keeps its error: it names an id nothing in that repository supplies, which is almost always a
+typo in the filename. And where a consumer's own override has already replaced the id a fork patch
+addresses, the patch is reported as inert under that override rather than as applied.
+
+**What `validate` shows.** Every id the layer replaces or patches is a row, marked so a reader can
+tell a fork's customization from a consumer's:
+
+```text
+shadowing — 1 fork replacement takes a bundled id, 1 fork overlay patches one
+
+  rule security-patterns  fork/rules/security-patterns.md  replaces rules/stamity-security-patterns.md — fork layer
+  rule testing  fork/rules/testing.customize.yaml  patches rules/stamity-testing.md (corpus) — fork layer
+```
+
+The JSON envelope carries the same rows — a replacement as `winner: "fork"`, a patch as
+`layer: "fork"` — and, like every shadowing line, they are information and never move the exit code.
+Nothing about the layer relaxes a floor: a fork artifact passes the index-time contract a bundled
+one passes, and the merged artifact a fork patch produces goes through the same gate a consumer's
+patch does, with the finding addressed to the fork file.
+
+**Fork artifacts are always on for your consumers.** Selection admits one by presence, the way it
+admits a consumer's override: a fork ships what it put under `fork/`, and no selection record
+deselects it. Each then reaches every client location its class reaches for corpus content, and the
+per-client copy is an adapter-owned, regenerated, reclaimable file while the source under `fork/` is
+never planned, never wrapped in a managed block and never reclaimed.
+
+**A fork skill that replaces a bundled one keeps the bundled spelling.** The directory you author is
+bare — `fork/skills/verify/SKILL.md` — and because `verify` is the id the bundled `st-verify` holds,
+it projects to every client as `st-verify`, directory and `name` alike, so every call site and every
+cross-reference to that skill keeps working. A fork skill whose id nothing bundled holds is an
+addition, and projects under its own bare directory. Either way the directory travels whole:
+`SKILL.md` plus every support file beneath it. What a fork skill cannot do is land in a projection
+directory another skill already occupies under a different id — that is refused, naming the file to
+move.
+
+**Your generated reference pages will list your artifacts.** `docs/reference/` is rendered from the
+built index, so in a fork `node scripts/generate-docs.mjs` writes the fork's agents, rules, commands
+and skills into those pages and moves their count lines with them — which is what a fork's own
+reference should say. This repository's README counts and its corpus census read `content/` alone,
+so those do not move.
+
+[The fork-layer spec](specs/fork-layer.md) is the design reference behind all of it: what was
+decided, what was dropped, and why.
 
 ## The GitHub workflow
 

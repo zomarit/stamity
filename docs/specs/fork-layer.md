@@ -1,8 +1,8 @@
 ---
 id: fork-layer
 # A design document, authored outside the spec command and excluded from the site build.
-status: design
-obsolete_when: the fork layer ships and the enterprise-forks guide plus the customization page carry its behaviour, or a decision cuts the surface
+status: shipped-with-1.5.0
+obsolete_when: the enterprise-forks guide and the customization page stop carrying the fork layer's behaviour, or a decision cuts the surface
 ---
 # The fork layer
 
@@ -85,10 +85,12 @@ corpus or pack → fork (a full replacement or a patch) → user (a full replace
    ledger and its goldens to the package today. This repository ships no `fork/`.
 2. **Upstream never writes under `fork/`.** No generator, no `sync`, no emission targets it;
    the directory is the fork's, the way `.stamity/overrides/` is the consumer's.
-3. **One identity, one body.** A fork artifact claiming a corpus or pack id replaces it whole
-   and the replaced item leaves the index; a user override claiming a fork id does the same to
-   the fork item. Precedence is user > fork > pack > corpus, decided in the one loop that
-   decides it today.
+3. **One identity, one body.** A fork artifact claiming a corpus id replaces it whole and the
+   replaced item leaves the index; a user override claiming a fork id does the same to the fork
+   item. A pack and the fork layer never share an id: the pack is refused on contact whichever
+   arrived first, the rule packs already meet against the corpus, and a fork that wants to change
+   a pack's artifact patches it or ships its own under another id. Precedence is user > fork >
+   pack > corpus, decided in the one loop that decides it today.
 4. **The same gate.** A fork artifact passes the index-time contract the corpus passes and
    the safety screen user content passes; nothing about the layer relaxes a floor.
 5. **Same emission, same ownership.** A fork artifact reaches every client location its class
@@ -124,10 +126,12 @@ directory is absent.
 
 ### REQ-FORK-003 — Precedence in the one loop
 
-In the resolve loop: a fork item claiming a corpus or pack id takes the slot and the claimant
-is recorded as shadowed; a pack claiming an id a fork item holds is refused with the existing
-"must not shadow" error, naming the fork; a user item claiming a fork id takes the slot as it
-takes any lower layer's. Duplicate ids inside `fork/` are the existing duplicate-id collision.
+In the resolve loop: a fork item claiming a corpus id takes the slot and the claimant is
+recorded as shadowed; a pack and a fork item claiming one id are refused on contact with the
+existing "must not shadow" error, whichever was installed first, and the message names both
+remedies — the consumer's (remove the pack, or ask its author to rename) and the fork author's
+(patch the pack's artifact with `fork/<class>/<id>.customize.*`, or ship the artifact under
+another id); a user item claiming a fork id takes the slot as it takes any lower layer's. Duplicate ids inside `fork/` are the existing duplicate-id collision.
 `originOf` returns `"fork"` for fork items; `ContentOrigin` is `"corpus" | "pack" | "fork" |
 "user"`, and every reader the union's doc block enumerates (`catalog.ts:96-113`) is updated
 or verified.
@@ -139,23 +143,34 @@ applies to the item resolved from corpus or pack, and a user patch applies after
 whatever the fork stage produced. Exclusivity holds per layer: a fork full replacement and a
 fork patch of one id are refused together, as the user pair is today (`catalog.ts:1000-1010`);
 across layers, a user full override simply replaces a fork-patched item. Every overlay
-refusal (`REQ-OVERLAY-005` through `-010`) applies unchanged, naming the fork file.
+refusal (`REQ-OVERLAY-005` through `-010`) applies unchanged, naming the fork file — with one
+asymmetry the layer's scope forces: the fork layer is package-global and packs are
+per-repository, so a fork patch whose base exists in neither the corpus nor the fork layer is
+not an orphan error but a patch that waits — skipped in that repository and reported by
+`validate` as a warning that names the artifact it waits for — while a consumer's
+own orphan patch stays the error it is today, because the consumer can fix the file.
 
 ### REQ-FORK-005 — Selection, emission, skills
 
 Fork items are admitted by presence, as user items are (`selection.ts:182`): a fork ships what
 it put there. Every class emits to every client location its class reaches; the copy is
 adapter-owned. Fork skills project through the corpus-and-override skills lane with the fork
-root among the widened roots; a fork skill claiming a pack skill's id is refused the way a
-user override of a pack skill is (`planner.ts:457-473`); the directory-clash refusal treats a
-fork skill as it treats a user skill (`:524-546`). The per-file coverage floors on
+root among the widened roots. A customizing skill — fork or user — that replaces a bundled
+skill projects under the bundled skill's emitted spelling (its `st-` directory and `name`), so
+every reference to the skill keeps resolving; a customizing skill that is an addition projects
+under its own bare directory. A fork skill claiming a pack skill's id is refused the way a user
+override of a pack skill is (`planner.ts:457-473`); the directory-clash refusal treats a fork
+skill as it treats a user skill (`:524-546`). The per-file coverage floors on
 `src/emit/planner.ts` and `src/emit/skillsProjection.ts` hold.
 
 ### REQ-FORK-006 — Validate names the fork
 
 `validate` reports a fork replacement as a shadow row with `winner: "fork"` and a fork patch
-as a `patched` row with origin `fork`, rendered so a reader can tell the fork layer from a
-consumer override; the JSON envelope's `shadows` list carries the same rows.
+as a `patched` row with `layer: "fork"`, rendered so a reader can tell the fork layer from a
+consumer override; a fork patch whose id a consumer override replaced is reported as inert
+under that override, never as a patch, and no finding about the consumer's artifact is
+addressed to the fork file; a fork patch that waits for a pack is a warning row; the JSON
+envelope's `shadows` list carries the same rows.
 
 ### REQ-FORK-007 — Shipping and the size budget
 
@@ -197,12 +212,18 @@ the chain that now applies; the CHANGELOG's Unreleased section records the addit
 - GIVEN `fork/rules/security.md` and `.stamity/overrides/rules/security.md` in a consumer
   repository THEN the user override wins, the fork item leaves the index, and the shadow row
   lists both lower claimants.
-- GIVEN a pack claiming an id a fork item holds THEN the pack refuses on contact, naming the
-  fork.
+- GIVEN a pack and a fork item claiming one id, in either install order, THEN the pack is
+  refused on contact and the message names the fork file and both remedies.
+- GIVEN `fork/rules/ops.customize.yaml` where only a pack supplies `ops` WHEN the pack is not
+  installed THEN the index builds, the patch is skipped, and `validate` shows a warning that it
+  waits for the pack; WHEN the pack is installed THEN the patch applies.
+- GIVEN `fork/rules/security.customize.yaml` and a consumer override of `security` THEN the
+  index carries the override, and `validate` reports the fork patch as inert under it.
 - GIVEN `fork/rules/stamity-security.md` THEN the index refuses, naming `security.md`.
 - GIVEN `fork/skills/acme-review/SKILL.md` THEN the skill projects to every client's skills
-  location the corpus skills reach; GIVEN a fork skill claiming a pack skill's id THEN it is
-  refused.
+  location the corpus skills reach under its bare directory; GIVEN `fork/skills/verify/SKILL.md`
+  replacing the bundled `st-verify` THEN it projects under `st-verify` with that `name` and no
+  bare directory is emitted; GIVEN a fork skill claiming a pack skill's id THEN it is refused.
 - GIVEN a `fork/` directory in a built package THEN `dist/fork/**` exists and its bytes count
   in the corpus budget.
 - GIVEN a fork checkout with `fork/rules/security.md` WHEN the lane's census runs THEN a

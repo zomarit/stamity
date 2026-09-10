@@ -29,6 +29,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [Unreleased]
+
+### Added
+
+- **A fork layer, for downstream forks of this repository.** A package built from a fork can now
+  carry a `fork/` directory — `fork/<class>/<id>.md` and `fork/skills/<id>/SKILL.md`, with
+  `.customize.yaml` and `.customize.md` siblings for a patch — whose agents, rules, commands and
+  skills add new ids, replace bundled ones whole, or patch them field by field, and reach the
+  fork's consumers through the same emission the corpus takes, without a single edit under
+  `content/`. The chain any `(class, id)` resolves through is corpus or pack → fork (a full
+  replacement or a patch) → user (a full replacement or a patch): a consumer's own
+  `.stamity/overrides/` tree still takes every id it claims; a pack and the fork layer never share
+  an id, and whichever of the two arrives first the pack is the one refused, exactly as between a
+  pack and the corpus; a fork patch of an artifact only a pack supplies waits for that pack in a
+  repository that does not carry it, reported as a warning row rather than as the error a
+  consumer's own orphan patch gets, and a fork patch whose id a consumer override has replaced is
+  reported as inert under that override; and a fork artifact is admitted by presence, so no
+  selection record deselects it. Ids are bare slugs — a fork filename or skill directory spelled
+  with the engine's `stamity-`/`st-` prefix is refused at index time, and a bare slug matching a
+  prefixed corpus file replaces it, prefix and all. `stamity validate` reports every replaced or
+  patched id as a shadowing row marked `— fork layer` (`winner: "fork"` for a replacement and
+  `layer: "fork"` for a patch in the JSON envelope), and the upstream lane derives a drift pair for
+  every fork file whose bundled counterpart exists, so a release that moves a replaced or patched
+  default is reported rather than silently hidden; a fork addition has no counterpart and derives nothing. A
+  package with no `fork/` directory is byte-identical to one built before the layer existed — its
+  index, its plans, its ledger and its goldens all unchanged — and this repository ships no
+  `fork/`. `docs/enterprise-forks.md` carries the authoring guide and `docs/specs/fork-layer.md`
+  the design.
+
+### Changed
+
+- **A skill replacement now keeps the replaced skill's emitted name.** An override — or a fork-layer
+  skill — that takes a bundled skill's id is projected under the spelling that skill already ships
+  under, directory and `name` alike: `.stamity/overrides/skills/qa/` declaring `id: qa` replaces
+  `st-qa` and still emits as `st-qa`. It used to emit under the bare directory it was authored in,
+  which moved the call site from `st-qa` to `qa` and broke every reference to the skill, including
+  the ones in artifacts the replacement never touched. A skill whose id nothing bundled holds is an
+  addition and still projects under its own directory name. `docs/customization.md` carries the
+  corrected behaviour.
+
+### Fixed
+
+- **The upstream lane paired a bare-id override with a corpus path that never existed, and so
+  reported no drift for it.** Ids under `.stamity/overrides/` (and now under `fork/`) are bare
+  slugs while the corpus spells the same ids with a reserved filename prefix, and the shadow-pair
+  derivation composed the counterpart from the bare name alone — so
+  `.stamity/overrides/rules/secrets.md` was paired with `content/rules/secrets.md`, a file this
+  repository has never had, and every release that changed the rule behind that override was
+  reported as touching nothing. The counterpart is now the spelling that EXISTS at the target head
+  among the three the corpus uses (`<id>.md`, `stamity-<id>.md`, `st-<id>.md`), so
+  `.stamity/overrides/rules/secrets.md` now pairs with `content/rules/stamity-secrets.md` and a
+  skill's halves pair with the bundled `content/skills/st-<id>/SKILL.md`. A file whose candidate
+  spellings all miss still derives no pair: it adds an id upstream does not have, and the lane has
+  nothing to compare.
+
 ## [1.4.0] - 2026-09-10
 
 ### Added

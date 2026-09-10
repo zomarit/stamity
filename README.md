@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e58b6ad. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8b6dbba. -->
 <!-- Re-open when: the corpus counts, the nine-verb command surface, or a client capability
      this page describes changes. `test/docsPages.test.ts` derives the corpus counts from the
      content catalog and holds the client-surface prose to the generated capability matrix; the
@@ -114,7 +114,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/doctrine.md`](docs/doctrine.md) | The root question every artifact answers, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
 | [`docs/customization.md`](docs/customization.md) | Where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries. |
 | [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — the manifest, the init offer, the status rows, and the cascade. |
-| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking upstream releases into a customized fork — the config, the verbs, conflicts, the gates that decide, and the opt-in workflow. |
+| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking upstream releases into a customized fork — the config, the verbs, conflicts, the `fork/` layer a fork authors in, the gates that decide, and the opt-in workflow. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
 
