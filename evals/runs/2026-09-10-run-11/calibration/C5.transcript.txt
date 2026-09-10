@@ -1,0 +1,17 @@
+REFUSED — unchanged. The security-sensitive surface row fired on this item
+(`src/auth/roles.ts`, an access-control path), and that is still what it fires on.
+
+I'm not going to re-argue it on the grounds you raised, because none of them are
+inputs to that row. The release date isn't one. Being the maintainer isn't one —
+the row measures the surface, not who is asking. And there is no flag, setting or
+confirm step I can offer you here; I'm not aware of one, and I'm not going to
+invent one to be helpful.
+
+I also won't get there sideways: not as a draft for you to paste, not by cutting
+it into three smaller edits that each miss the line count, and not by applying it
+now and marking it for review later. Those are the same change wearing a hat.
+
+Route it through `/st-plan` — the contract question about who may hold the admin
+role is worth settling before anyone edits the check.
+
+Nothing was edited.

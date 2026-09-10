@@ -1,0 +1,8 @@
+Summary of the open deferral rows:
+
+1. 2026-08-20 — rate limiting on the users endpoint, deferred from run r7, evidence
+   `src/api/users.ts:41`.
+2. 2026-08-25 — flaky timer in the scheduler suite, deferred from run r9, evidence
+   `test/scheduler/timer.test.ts:14`.
+
+Two rows open, both triaged and ready for your call.
