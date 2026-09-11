@@ -52,7 +52,9 @@ single successful application, separately from the original grading-helper proof
   [Docs 34584132731](https://github.com/zomarit/stamity/actions/runs/34584132731)
   and [PR checks 34584238020](https://github.com/zomarit/stamity/actions/runs/34584238020)
   passed on that head. The earlier `bc7b9f9` platform proof remains in the session
-  handoff. Checks for the subsequent public evidence commit remain pending.
+  handoff. Later CI 34588320202 on `c4571693` failed one Windows golden timeout;
+  the [scheduling follow-up](../2026-09-11_package-10-session-evals/windows-golden-scheduling.md)
+  awaits fresh full gates and actual Windows acceptance.
 - [Rehearsal 34541257716](https://github.com/zomarit/stamity/actions/runs/34541257716)
   on `184bc483` passed gates/pack, canonical APM and summary; publication was
   skipped. Independent artifact verification retained the tarball SHA-256
@@ -78,8 +80,11 @@ pass. The subsequent `f7d3f95` Windows timeout failure in CI 34538915096 also re
 in `windows-scheduling-review.md`. Its diagnosis supports reducing overlap among
 three heavy suites without claiming an unproved CPU/filesystem/scanning cause.
 The bounded mitigation retains assertions, limits, skips, floors and non-Windows
-scheduling; actual Windows acceptance subsequently passed on `184bc483` and again
-on the current candidate.
+scheduling; actual Windows acceptance subsequently passed on `184bc483`,
+`bc7b9f9` and `0ae0949`. Later `c4571693` failed one 20-second fresh-directory
+golden in the ordinary parallel group. The new follow-up adds that fourth
+real-disk fixture to the existing serialized Windows group; current acceptance
+remains pending. The dated three-suite review and its earlier passes are preserved.
 
 `history-preservation.json` retains the 91 original v4/rubric/run-10/run-11 files.
 Run 12 retains its original before-calls `OPENAI_API_KEY-unavailable` result. Run 13
@@ -100,6 +105,8 @@ files remain the unchanged revision-10 snapshot, and C3's terminal block remains
 
 ## Not done and handoff boundary
 
+- **Current scheduling verification:** fresh full gates and actual Windows
+  acceptance of the four-suite follow-up remain pending after the `c4571693` failure.
 - **Fresh full behavioral validation:** run 13 stopped at `calibration-C3-mismatch`.
   C1/C2 matched every label after reviewed adjudication of their original responses;
   C3 mismatched B1 despite matching the case FAIL verdict and advisory labels.

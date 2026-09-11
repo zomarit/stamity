@@ -90,13 +90,19 @@ also passed. On evidence head `0ae0949f573f2a7413d1718d07e7d3325b7a9ba7`,
 [Docs 34584132731](https://github.com/zomarit/stamity/actions/runs/34584132731) and
 [PR checks 34584238020](https://github.com/zomarit/stamity/actions/runs/34584238020)
 passed, including actual Windows acceptance and unchanged measured inputs.
-Checks on the subsequent public evidence commit remain pending. The original
+Later [CI 34588320202](https://github.com/zomarit/stamity/actions/runs/34588320202)
+on `c4571693c1baefddf9c53d74a683e8ff193d0295` failed one Windows fresh-directory
+golden at its unchanged 20-second limit. The [Windows scheduling follow-up](windows-golden-scheduling.md)
+adds that fixture to the existing serialized group; fresh full gates and actual
+Windows acceptance remain pending. The original
 implementation and `713c057`/`184bc483` proofs remain in the
 [Package 10 handoff](../2026-09-10_package-10/handoff.md), with their original
 runtime, packed artifact, rehearsal and browser bindings.
 
 ## Not done
 
+- Current scheduling verification: fresh full gates and actual Windows acceptance
+  of the four-suite follow-up after the `c4571693` failure.
 - Fresh full behavioral validation: C3's terminal calibration-label mismatch;
   zero scenario samples and no aggregate release score.
 - Current human QA: H1 native-client/trust, H2 screen-reader and H3 complete
