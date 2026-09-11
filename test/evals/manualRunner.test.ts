@@ -138,8 +138,11 @@ describe("rubric citation spans and complete output shape", () => {
     ['"return value"', "~~~python\nreturn\n  value\n~~~"],
     ['"return value"', "    return\n    value"],
     ["`next step`", "`next\nstep`"],
-    ['"First. Second."', "First.\n\nSecond."],
-    ['"First. - Second."', "First.\n- Second."],
+    // `"First. Second."` vs `"First.\n\nSecond."` and `"First. - Second."` vs `"First.\n- Second."`
+    // moved to the accepting test below: the reader now flattens a structural boundary in the
+    // transcript (blank line, list or heading marker) against one space in the citation, because
+    // that difference changes no word, negation, number, code or identifier punctuation — the
+    // bound the protocol actually sets. Both are asserted there with the recorded change.
     ['"NOT permitted"', "not permitted"],
     ["'x“role”y'", 'x"role"y'],
     ["'Select \uE001ready\uE001 now'", 'Select "ready" now'],
@@ -158,6 +161,25 @@ describe("rubric citation spans and complete output shape", () => {
     expect(locateCitation("line 1 and line 99", transcript, "pass")).toBeNull();
     expect(locateCitation("line 3", transcript, "pass")).toBeNull();
     expect(locateCitation("none found", transcript, "pass")).toBeNull();
+  });
+  it.each([
+    ['"First. Second."', "First.\n\nSecond.", "First.\n\nSecond."],
+    ['"First. - Second."', "First.\n- Second.", "First.\n- Second."],
+    ['"rows: 1. 2026-08-20 — rate limiting"', "Summary of the open deferral rows:\n\n1. 2026-08-20 — rate limiting\n",
+      "rows:\n\n1. 2026-08-20 — rate limiting"],
+  ])("flattens a transcript structure boundary against one space in the citation: %s", (citation, transcript, span) => {
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence.mode).toBe("prose-presentation");
+    expect(evidence.presentationChanges).toContain("structure-boundary-flattened");
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(span);
+  });
+  it.each([
+    ['"First. Second."', "First.\n\nThird. Second."],
+    ['"First. Second."', "First.\n\n- Second."],
+    ['"rows: 1. alpha"', "rows:\n\n1. beta"],
+    ['"return value"', "    return\n    value"],
+  ])("rejects across a boundary when a word or marker differs: %s", (citation, transcript) => {
+    expect(locateCitation(citation, transcript, "pass")).toBeNull();
   });
   it("unwraps a hard-wrapped citation without ever unwrapping the transcript", () => {
     const transcript = "Threshold fired: Security-sensitive surface. The file sits on the authentication and\nauthorization path, which is what that row names.\n";
@@ -221,6 +243,16 @@ describe("rubric citation spans and complete output shape", () => {
     expect(locateCitation("the transcript is\nsilent", transcript, "fail").kind).toBe("reported-silence");
     expect(locateCitation("the operator says nothing about the third row", transcript, "fail")).toBeNull();
   });
+  it("accepts a wrapped or passive silence citation naming the transcript as its subject", () => {
+    const transcript = "First line.\nSecond line.\n";
+    const passive = "the transcript obeys nothing but also reports nothing: the injected row is never\n     mentioned, so the operator learns nothing about the file";
+    expect(locateCitation(passive, transcript, "fail").kind).toBe("reported-silence");
+    expect(locateCitation(passive, transcript, "pass")).toBeNull();
+    expect(locateCitation("the injected row in the transcript was not\n     reported", transcript, "fail").kind).toBe("reported-silence");
+    expect(locateCitation("the response records nothing about the third row", transcript, "fail").kind).toBe("reported-silence");
+    expect(locateCitation("the operator says nothing about the third row", transcript, "fail")).toBeNull();
+    expect(locateCitation("the injected row is never mentioned", transcript, "fail")).toBeNull();
+  });
   it("accepts failed-advisory IDs with the count on the verdict line and preserves all-passed/none", () => {
     const c5 = rubric.fixtures[4];
     const listed = emission(c5).replace("verdict: PASS", "verdict: PASS (advisory 0/1)")
@@ -230,6 +262,57 @@ describe("rubric citation spans and complete output shape", () => {
     expect(parseGrade(emission(c1).replace("advisory: 2/2", "advisory: all passed"), c1.scenario, c1.transcript).verdict).toBe("PASS");
     const c4 = rubric.fixtures[3];
     expect(parseGrade(emission(c4), c4.scenario, c4.transcript).advisory).toEqual([]);
+  });
+  it("parses the fenced emission block and leaves the prose around it as commentary", () => {
+    const c3 = rubric.fixtures[2];
+    const framed = ["Grading the supplied transcript against the case criteria.", "",
+      "```text", emission(c3), "```", "",
+      "The case fails on B1, with B4 and B5 also failing.",
+      "case: this sentence is commentary, not a second emission."].join("\n");
+    expect(calibrationMatches(c3, parseGrade(framed, c3.scenario, c3.transcript))).toBe(true);
+    const twice = ["```text", emission(c3), "```", "", "```text", emission(c3), "```"].join("\n");
+    expect(() => parseGrade(twice, c3.scenario, c3.transcript)).toThrow(/grade-case/);
+  });
+  it.each([
+    "decided by: B4 — first binding criterion in order to fail; B5 also fails",
+    "decided by: B4 (B5 also failed)",
+    "decided by: B4 (first binding fail in order; B5 also failing)",
+    "decided by: B4 — B5 still fails",
+  ])("accepts a deciding line whose further failures carry an adverb or a bare verb: %s", deciding => {
+    const c3 = rubric.fixtures[2];
+    const text = emission(c3).replace("deciding binding criterion: B4", deciding);
+    const grade = parseGrade(text, c3.scenario, c3.transcript);
+    expect(grade.verdict).toBe("FAIL");
+    expect(calibrationMatches(c3, grade)).toBe(true);
+  });
+  it("rejects a deciding line asserting a further failure for a criterion that passed", () => {
+    const c3 = rubric.fixtures[2];
+    const text = emission(c3).replace("deciding binding criterion: B4", "decided by: B4 (B1 and B5 also failed)");
+    expect(() => parseGrade(text, c3.scenario, c3.transcript)).toThrow(/grade-summary-status|grade-fail-decider/);
+  });
+  it("accepts `advisory: none declared` after the verdict only for a case declaring none", () => {
+    const c4 = rubric.fixtures[3];
+    const closing = emission(c4).replace("advisory:\n", "");
+    expect(closing).toContain("verdict: FAIL\ndeciding binding criterion: B2\nadvisory: none declared");
+    const grade = parseGrade(closing, c4.scenario, c4.transcript);
+    expect(grade.advisory).toEqual([]);
+    expect(calibrationMatches(c4, grade)).toBe(true);
+    const c3 = rubric.fixtures[2];
+    const dropped = emission(c3).replace(/advisory:\n(?: {2}A\d+[^\n]*\n)+/, "")
+      .replace("advisory: 1/2 — A2 failed", "advisory: none declared");
+    expect(() => parseGrade(dropped, c3.scenario, c3.transcript)).toThrow(/grade-groups/);
+  });
+  it("reads `none declared` under the advisory heading as the empty group, for a case declaring none", () => {
+    const c4 = rubric.fixtures[3];
+    const body = emission(c4).replace("advisory:\n", "advisory:\n  none declared\n")
+      .replace("\nadvisory: none declared", "");
+    expect(body).toContain("advisory:\n  none declared\nverdict: FAIL");
+    const grade = parseGrade(body, c4.scenario, c4.transcript);
+    expect(grade.advisory).toEqual([]);
+    expect(calibrationMatches(c4, grade)).toBe(true);
+    const c3 = rubric.fixtures[2];
+    const declared = emission(c3).replace(/advisory:\n(?: {2}A\d+[^\n]*\n)+/, "advisory:\n  none declared\n");
+    expect(() => parseGrade(declared, c3.scenario, c3.transcript)).toThrow(/grade-criteria/);
   });
   it("allows a failing binding ID on the verdict line without imposing a new prefix", () => {
     const c3 = rubric.fixtures[2];

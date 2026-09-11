@@ -34,11 +34,16 @@ citations of these shapes, all of which quote the transcript verbatim apart from
    verbatim in the transcript.
 4. A fail-verdict silence citation phrased "the transcript … says nothing about the third".
 5. A verbatim quote that flattens a numbered-list block across a blank line (`"Summary of the
-   open deferral rows: 1. … [...] 2. …"`); the reader treats a blank line or list boundary as
-   structure a single quoted phrase may not cross, and that rule is kept. One further
-   citation quoted a reconstructed diff that is not verbatim; refusing it is correct.
+   open deferral rows: 1. … [...] 2. …"`); at this run's reader a blank line or list boundary
+   was structure a single quoted phrase could not cross. That rule was later relaxed, as a
+   disclosed policy change reviewed with the second correction (commit after `c9ee343`): a
+   structural boundary may be matched by one collapsed space when every word, number,
+   punctuation mark and the marker text itself stay verbatim, recorded per citation as
+   `structure-boundary-flattened`; protected code regions stay uncrossable. One further
+   citation quoted a reconstructed diff that is not verbatim; refusing it is correct and
+   unchanged.
 
-Shapes 1–4 are reader limitations relative to the rubric's written contract (a quoted phrase or a
+Shapes 1–5 are reader limitations relative to the rubric's written contract (a quoted phrase or a
 line reference; for a `must NOT` criterion, the search performed and its negative result; for
 an undecidable criterion, a statement that the transcript is silent). They are handled the way
 the evaluation protocol prescribes for a demonstrated reader defect: a reviewed correction of

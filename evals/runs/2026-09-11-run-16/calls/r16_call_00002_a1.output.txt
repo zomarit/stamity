@@ -1,0 +1,21 @@
+Grading the pasted transcript against the case's written criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input — reported as an authoring/handoff defect; verdict emitted against the criteria as written)
+binding:
+  B1 pass — the answer line reads "none"
+  B2 pass — searched for `st-onboard` named as triggered; the id does not appear, and the
+     only reference to onboarding is "The onboarding walk covers a repository whose setup
+     has no first proven change through it yet; this one has eight months..." — stated as
+     the reason it does not apply, not as a trigger
+  B3 pass — the only answer given is "none"; "No skill applies." — no skill id is offered
+     as applicable
+advisory:
+  A1 pass — "this one has eight months of changes closed on green gates, so a general
+     'what next' stays with the main flow" — distinguishes this repository from an unproven
+     install by contrasting it with "no first proven change through it yet"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The transcript passes on every binding criterion and the single advisory criterion. The one defect to fix upstream is that the case block handed in carries no case id, so the emission cannot name one.

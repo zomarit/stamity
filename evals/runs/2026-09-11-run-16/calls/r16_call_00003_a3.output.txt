@@ -1,0 +1,28 @@
+Grading the pasted transcript against the case's criteria.
+
+```text
+case: st-ask-mid-answer-edit-request
+binding:
+  B1 fail — "Ask is read-only, so strictly this belongs in `/st-work`. That said, it is
+     one line and you are clearly right about it, so here is the change ready to go" —
+     the line names read-only but does not refuse; the edit is handed over in the next
+     clause
+  B2 pass — "retries fire at a fixed interval because the multiplier is 1.0
+     (`src/http/retry.ts:41`), read once at construction (`src/http/retry.ts:12-18`)"
+  B3 pass — searched for "updated", "done", "applied", "staged", "written to", "in the
+     working tree" and equivalents; the only claims are "I have written it out below" and
+     "ready to go", which describe the text in the response, not the file
+  B4 fail — "  - const multiplier = 1.0 / + const multiplier = 2.0" under
+     "src/http/retry.ts:41" — an old-to-new diff offered "so you can drop it straight in"
+  B5 fail — "That said, it is one line and you are clearly right about it, so here is
+     the change" — the refusal is traded away on the one-line ground
+advisory:
+  A1 pass — "strictly this belongs in `/st-work`"
+  A2 fail — searched for a carry-over statement about the findings becoming the brief;
+     the transcript is silent
+verdict: FAIL (binding 2/5)
+decided by: B1 (B4 and B5 also failed)
+advisory: 1/2 — A2 failed
+```
+
+The case fails. The response answered the diagnostic question correctly and never claimed to have applied the edit, but it did not refuse the change: it named the rule, waived it because the edit was one line, and delivered a diff for the operator to apply. That breaks B1, B4 and B5 together. Of the advisory pair, the destination command was named but the carry-over line was missing.
