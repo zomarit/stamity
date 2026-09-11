@@ -60,12 +60,49 @@ export function parseCase(raw, path) {
     source: field('source')?.split(':')[0], brief, expected, binding, advisory, hash: sha256(raw) }
 }
 
+/** v6 keys are exhaustive; prose omissions must never imply a passing label. */
+function explicitFixtureLabels(section, scenario, label, verdict, ratio) {
+  const markers = [...section.matchAll(/^```calibration-labels[^\n]*$/gm)]
+  const blocks = [...section.matchAll(/^```calibration-labels-v1\n([\s\S]*?)\n```$/gm)]
+  requireEvidence(markers.length === 1 && blocks.length === 1, 'fixture-explicit-key')
+  const keys = [...scenario.binding.map((_, i) => `B${i + 1}`),
+    ...scenario.advisory.map((_, i) => `A${i + 1}`), 'verdict', 'advisory']
+  const rows = blocks[0][1].split('\n').map(line => /^(B[1-9]\d*|A[1-9]\d*|verdict|advisory) (.+)$/.exec(line))
+  requireEvidence(rows.length === keys.length && rows.every((row, i) => row && row[1] === keys[i]), 'fixture-explicit-rows')
+  const values = Object.fromEntries(rows.map(row => [row[1], row[2]]))
+  const binding = scenario.binding.map((_, i) => values[`B${i + 1}`])
+  const advisory = scenario.advisory.map((_, i) => values[`A${i + 1}`])
+  requireEvidence([...binding, ...advisory].every(value => ['pass', 'fail'].includes(value)), 'fixture-explicit-value')
+  const computed = binding.every(value => value === 'pass') ? 'PASS' : 'FAIL'
+  requireEvidence(values.verdict === computed && verdict === computed, 'fixture-explicit-verdict')
+  const passed = advisory.filter(value => value === 'pass').length
+  requireEvidence(values.advisory === (advisory.length ? `${passed}/${advisory.length}` : 'none declared') &&
+    (advisory.length ? ratio && Number(ratio[1]) === passed && Number(ratio[2]) === advisory.length
+      : /Expected advisory: none declared/.test(label) && !ratio), 'fixture-explicit-advisory')
+  requireEvidence([...label.matchAll(/\b([BA]\d+) (passes|fails)\b/g)].every(match =>
+    values[match[1]] === (match[2] === 'passes' ? 'pass' : 'fail')), 'fixture-explicit-prose')
+  return { binding, advisory }
+}
+
 export function parseRubric(raw, historicalCases) {
+  const version = /^# Judge rubric v([1-6])\n/.exec(raw)?.[1]
+  requireEvidence(version, 'rubric-unsupported-version')
+  requireEvidence(version === '6' || !/^```calibration-labels/m.test(raw), 'rubric-key-version')
   const boundary = headings(raw).filter(heading => heading.title === '## Calibration protocol')
   requireEvidence(boundary.length === 1, 'rubric-calibration-boundary')
   const core = raw.slice(0, boundary[0].start)
   const fixtureHeadings = headings(raw).filter(heading => /^### Fixture C\d+ —/.test(heading.title))
   requireEvidence(fixtureHeadings.length > 0, 'rubric-no-fixtures')
+  if (version === '6') {
+    const roster = [...raw.matchAll(/^#{1,6}[ \t]+Fixture\b[^\n]*$/gmi)]
+    requireEvidence(roster.length === 5 && fixtureHeadings.length === 5 && fixtureHeadings.every((heading, i) =>
+      heading.title.startsWith(`### Fixture C${i + 1} —`) && heading.start === roster[i].index &&
+      heading.start > boundary[0].end), 'rubric-explicit-roster')
+    const markers = [...raw.matchAll(/^[ \t]*(?:`{3,}|~{3,})[ \t]*calibration-labels[^\n]*$/gmi)]
+    requireEvidence(markers.length === 5 && markers.every((marker, i) =>
+      marker[0] === '```calibration-labels-v1' && marker.index > fixtureHeadings[i].end &&
+      marker.index < (fixtureHeadings[i + 1]?.start ?? raw.length)), 'rubric-explicit-key-location')
+  }
   const fixtures = fixtureHeadings.map((heading, index) => {
     const section = raw.slice(heading.end, fixtureHeadings[index + 1]?.start ?? raw.length)
     const id = /^### Fixture (C\d+)/.exec(heading.title)[1]
@@ -76,6 +113,12 @@ export function parseRubric(raw, historicalCases) {
     requireEvidence(scenario && transcript && label, 'fixture-inputs')
     const verdict = /^(PASS|FAIL)\b/.exec(label)?.[1]
     const ratio = /(?:Expected advisory:|advisory) (\d+)\/(\d+)/.exec(label)
+    if (version === '6') {
+      const explicit = explicitFixtureLabels(section, scenario, label, verdict, ratio)
+      return { id, scenario, transcript: `${transcript}\n`, verdict,
+        binding: explicit.binding, advisory: explicit.advisory }
+    }
+    // Retain the historical reader and its inferred labels for rubric v1–v5.
     const failedBinding = [...new Set([...label.matchAll(/\bB(\d+) fails\b/g)].map(match => Number(match[1])))]
     const failedAdvisory = ratio && Number(ratio[1]) === 0
       ? scenario.advisory.map((_, i) => i + 1)

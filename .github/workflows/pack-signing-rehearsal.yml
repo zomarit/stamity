@@ -1,0 +1,290 @@
+# Nonpublishing public-identity witness. Never grants release or deployment approval.
+name: Pack signing rehearsal
+
+on:
+  push:
+    branches: [feat/package-10-finish-implementation]
+    paths:
+      - .github/workflows/pack-signing-rehearsal.yml
+      - scripts/pack-signing-rehearsal.mjs
+      - test/ci/packSigningRehearsal.test.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pack-signing-rehearsal-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Source identity is distinct from this workflow's execution SHA.
+  SIGNING_SOURCE_SHA: 237c6ad915c01f47040e03fb94141c4ab86ffb0f
+  STAMITY_NO_UPDATE_CHECK: '1'
+
+jobs:
+  prepare:
+    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/feat/package-10-finish-implementation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      input_sha256: ${{ steps.pack.outputs.input_sha256 }}
+    steps:
+      - name: Bound runner egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-sudo: true
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            productionresultssa0.blob.core.windows.net:443
+            productionresultssa1.blob.core.windows.net:443
+            productionresultssa2.blob.core.windows.net:443
+            productionresultssa3.blob.core.windows.net:443
+            productionresultssa4.blob.core.windows.net:443
+            productionresultssa5.blob.core.windows.net:443
+            productionresultssa6.blob.core.windows.net:443
+            productionresultssa7.blob.core.windows.net:443
+            productionresultssa8.blob.core.windows.net:443
+            productionresultssa9.blob.core.windows.net:443
+            productionresultssa10.blob.core.windows.net:443
+            productionresultssa11.blob.core.windows.net:443
+            productionresultssa12.blob.core.windows.net:443
+            productionresultssa13.blob.core.windows.net:443
+            productionresultssa14.blob.core.windows.net:443
+            productionresultssa15.blob.core.windows.net:443
+            productionresultssa16.blob.core.windows.net:443
+            productionresultssa17.blob.core.windows.net:443
+            productionresultssa18.blob.core.windows.net:443
+            productionresultssa19.blob.core.windows.net:443
+            registry.npmjs.org:443
+      - name: Checkout reviewed signing source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SIGNING_SOURCE_SHA }}
+          path: source
+          persist-credentials: false
+      - name: Checkout this exact rehearsal implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: runner
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.22.2'
+      - name: Install production dependencies without scripts
+        working-directory: source
+        run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Prepare bounded signing inputs
+        run: |
+          set -euo pipefail
+          cp runner/scripts/pack-signing-rehearsal.mjs source/scripts/pack-signing-rehearsal.mjs
+          node source/scripts/pack-signing-rehearsal.mjs prepare
+      - name: Archive only reviewed input paths
+        id: pack
+        run: |
+          set -euo pipefail
+          tar -czf signing-input.tgz -C source src node_modules package.json package-lock.json scripts/sign-pack.mjs scripts/native-typescript.mjs scripts/pack-signing-rehearsal.mjs rehearsal
+          echo "input_sha256=$(sha256sum signing-input.tgz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Retain prepared input
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signing-input
+          path: signing-input.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    needs: prepare
+    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/feat/package-10-finish-implementation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      signed_sha256: ${{ steps.pack.outputs.signed_sha256 }}
+    steps:
+      - name: Bound runner egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-sudo: true
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            productionresultssa0.blob.core.windows.net:443
+            productionresultssa1.blob.core.windows.net:443
+            productionresultssa2.blob.core.windows.net:443
+            productionresultssa3.blob.core.windows.net:443
+            productionresultssa4.blob.core.windows.net:443
+            productionresultssa5.blob.core.windows.net:443
+            productionresultssa6.blob.core.windows.net:443
+            productionresultssa7.blob.core.windows.net:443
+            productionresultssa8.blob.core.windows.net:443
+            productionresultssa9.blob.core.windows.net:443
+            productionresultssa10.blob.core.windows.net:443
+            productionresultssa11.blob.core.windows.net:443
+            productionresultssa12.blob.core.windows.net:443
+            productionresultssa13.blob.core.windows.net:443
+            productionresultssa14.blob.core.windows.net:443
+            productionresultssa15.blob.core.windows.net:443
+            productionresultssa16.blob.core.windows.net:443
+            productionresultssa17.blob.core.windows.net:443
+            productionresultssa18.blob.core.windows.net:443
+            productionresultssa19.blob.core.windows.net:443
+            token.actions.githubusercontent.com:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.22.2'
+      - name: Download prepared input
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signing-input
+      - name: Verify prepared digest before safe extraction
+        env:
+          EXPECTED_INPUT_SHA256: ${{ needs.prepare.outputs.input_sha256 }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, os, pathlib, re, tarfile
+          path = pathlib.Path('signing-input.tgz')
+          expected = os.environ['EXPECTED_INPUT_SHA256']
+          if not re.fullmatch(r'[a-f0-9]{64}', expected):
+              raise SystemExit('Missing or invalid independently transported digest')
+          if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+              raise SystemExit('Artifact digest mismatch')
+          with tarfile.open(path) as archive:
+              archive.extractall('source', filter='data')
+          PY
+      - name: Sign two revisions with the real production service
+        run: node source/scripts/pack-signing-rehearsal.mjs sign
+      - name: Archive nonsecret signing evidence
+        id: pack
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -d source/rehearsal ]; then
+            exit 1
+          fi
+          tar -czf signed-packs.tgz -C source rehearsal
+          echo "signed_sha256=$(sha256sum signed-packs.tgz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Preserve signed packs including incomplete attempts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-packs
+          path: signed-packs.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  verify:
+    needs: [prepare, sign]
+    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/feat/package-10-finish-implementation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Bound runner egress
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-sudo: true
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            productionresultssa0.blob.core.windows.net:443
+            productionresultssa1.blob.core.windows.net:443
+            productionresultssa2.blob.core.windows.net:443
+            productionresultssa3.blob.core.windows.net:443
+            productionresultssa4.blob.core.windows.net:443
+            productionresultssa5.blob.core.windows.net:443
+            productionresultssa6.blob.core.windows.net:443
+            productionresultssa7.blob.core.windows.net:443
+            productionresultssa8.blob.core.windows.net:443
+            productionresultssa9.blob.core.windows.net:443
+            productionresultssa10.blob.core.windows.net:443
+            productionresultssa11.blob.core.windows.net:443
+            productionresultssa12.blob.core.windows.net:443
+            productionresultssa13.blob.core.windows.net:443
+            productionresultssa14.blob.core.windows.net:443
+            productionresultssa15.blob.core.windows.net:443
+            productionresultssa16.blob.core.windows.net:443
+            productionresultssa17.blob.core.windows.net:443
+            productionresultssa18.blob.core.windows.net:443
+            productionresultssa19.blob.core.windows.net:443
+            tuf-repo-cdn.sigstore.dev:443
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.22.2'
+      - name: Download prepared input
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signing-input
+      - name: Download signed packs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-packs
+      - name: Verify both digests before safe extraction
+        env:
+          EXPECTED_INPUT_SHA256: ${{ needs.prepare.outputs.input_sha256 }}
+          EXPECTED_SIGNED_SHA256: ${{ needs.sign.outputs.signed_sha256 }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, os, pathlib, re, tarfile
+          path = pathlib.Path('signing-input.tgz')
+          expected = os.environ['EXPECTED_INPUT_SHA256']
+          if not re.fullmatch(r'[a-f0-9]{64}', expected):
+              raise SystemExit('Missing or invalid independently transported digest')
+          if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+              raise SystemExit('Artifact digest mismatch')
+          with tarfile.open(path) as archive:
+              archive.extractall('source', filter='data')
+          PY
+          python3 - <<'PY'
+          import hashlib, os, pathlib, re, tarfile
+          path = pathlib.Path('signed-packs.tgz')
+          expected = os.environ['EXPECTED_SIGNED_SHA256']
+          if not re.fullmatch(r'[a-f0-9]{64}', expected):
+              raise SystemExit('Missing or invalid independently transported digest')
+          if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+              raise SystemExit('Artifact digest mismatch')
+          with tarfile.open(path) as archive:
+              archive.extractall('source', filter='data')
+          PY
+      - name: Verify install update and negative controls without signing credentials
+        run: node source/scripts/pack-signing-rehearsal.mjs verify
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signing-verification
+          path: |
+            source/rehearsal/context.json
+            source/rehearsal/inputs.json
+            source/rehearsal/signing.json
+            source/rehearsal/verification.json
+            source/rehearsal/packs
+          if-no-files-found: error
+          retention-days: 7

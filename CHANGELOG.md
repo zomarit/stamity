@@ -43,11 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Spec and plan workflows can check structural coverage.** A projected `st-verify` companion
   detects missing, duplicate and dangling requirement or unit references in existing Markdown
   formats. Semantic review remains a separate required step.
-- **A manual isolated eval transport records admission evidence.** The source-checkout runner
-  records exact inputs, provider model controls, traces and bounded retries, and requires every
-  selected calibration fixture to pass before accepting scores. It uses the configured model
-  profile and an authorized API credential; deterministic runner tests do not establish live
-  model behavior.
+- **Manual evaluation records admission evidence.** Session-native evaluation uses fresh
+  agents without an API credential, with recorded ambient instructions and native visibility
+  limits. The optional stateless API transport uses an authorized API credential. Both record
+  exact inputs, model controls, traces and bounded retries, and require every calibration label
+  to match before accepting scores. Deterministic tests do not establish live model behavior.
 
 ### Changed
 

@@ -1981,17 +1981,24 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     expect(publishing.map(([file, job]) => `${file}:${job}`)).toEqual(["release.yml:publish"]);
   });
 
-  it("hands the OIDC grant to exactly the two jobs that exchange it for a deployment", () => {
-    // A CLOSED list, which is the property — not a count. Two jobs hold `id-token: write`:
+  it("hands OIDC only to the named deployment and nonpublishing signing jobs", () => {
+    // A CLOSED list, which is the property — not a count. The existing deployment holders are:
     // `release.yml:publish` exchanges it for npm's provenance attestation, and
     // `docs-site.yml:deploy` exchanges it for a GitHub Pages deployment token. Both are gated by
     // a `format()`-compared condition that fails closed, and the docs-site one is evaluated
     // against every trigger shape below, so admitting it here does not widen what can reach it.
-    // A third holder is a decision that lands with a line in this list and a fence to match.
+    // The new pack-signing-rehearsal sign job exchanges OIDC for a Sigstore certificate on
+    // the named public candidate branch. Its exact grants and absence of publication or
+    // deployment capability are pinned in packSigningRehearsal.test.ts. This explicit addition
+    // reconciles the reviewed signing workflow; any other holder still fails the closed list.
     const holders = ALL_JOBS.filter(([, , job]) =>
       Object.keys(job.permissions ?? {}).includes("id-token"),
     ).map(([file, id]) => `${file}:${id}`);
-    expect(holders).toEqual(["docs-site.yml:deploy", "release.yml:publish"]);
+    expect(holders).toEqual([
+      "docs-site.yml:deploy",
+      "pack-signing-rehearsal.yml:sign",
+      "release.yml:publish",
+    ]);
   });
 
   it("stores no npm credential at step, job or workflow scope", () => {
@@ -2077,22 +2084,26 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     for (const [file, id, job] of ALL_JOBS) {
       expect(job.permissions, `${file}:${id} must declare its own permissions`).toBeDefined();
     }
-    // Three jobs in the repository may write, each behind its own fail-closed condition: the one
+    // Three jobs may publish repository or deployment state behind their own conditions: the one
     // that creates the release, the one that publishes the docs site, and the upstream lane's
     // `publish` job, which pushes an update branch and opens a pull request or an issue in a
     // FORK — here it never runs, because the `probe` job it depends on finds no lane config. None
     // is reachable from a push, a pull request or an unarmed dispatch, and the conditions that
     // make that true are evaluated — not read for substrings — in their own suites (the two
     // above, and `test/ci/upstreamWorkflow.test.ts` for the third).
+    // The reviewed signing rehearsal adds only an OIDC write grant for a nonpublishing witness
+    // on the named public candidate branch. packSigningRehearsal.test.ts pins that job's exact
+    // read-plus-OIDC permissions and keeps its prepare/verify siblings at read only.
     const writers = ALL_JOBS.filter(([, , job]) =>
       Object.values(job.permissions ?? {}).includes("write"),
     ).map(([file, id]) => `${file}:${id}`);
     expect(writers).toEqual([
       "docs-site.yml:deploy",
+      "pack-signing-rehearsal.yml:sign",
       "release.yml:publish",
       "upstream-update.yml:publish",
     ]);
-    // And neither of them can start on its own: a write grant behind a condition that is missing
+    // None of these holders can start unconditionally: a write grant behind a missing condition
     // is a write grant on every trigger the workflow declares.
     for (const holder of writers) {
       const [file, id] = holder.split(":");

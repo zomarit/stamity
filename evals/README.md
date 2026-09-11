@@ -15,6 +15,8 @@ baselines.
 | `MODEL-PROFILES-v1.md`, `model-profiles-v1.json` | Explicit model/rubric profiles: the original Claude default, Astra scenarios with Sol judging, or Sol scenarios with Astra judging. |
 | `session-native-v1.md` | Opt-in session protocol accepting recorded ambient client/repository instructions, with fresh native agents and unchanged calibration and scoring bars. |
 | `rubric-v5.md` | The alternate profiles' model-neutral rubric; grading rules and calibration fixtures are retained verbatim from v4. |
+| `MODEL-PROFILES-v2.md`, `model-profiles-v2.json`, `session-native-v2.md` | Prospective native configuration retaining the same models, effort, default and ambient baseline; `codex-astra` selects v6, with mechanically checked staged task transfer and the final manual-transfer limit disclosed. |
+| `rubric-v6.md` | Explicit complete calibration keys and the independently assessed C3 B1 correction; all fixture transcripts, case criteria, grading rules, floors and thresholds remain. Historical keys and blocked runs are preserved. |
 | `cases-v5/golden/` | Cases pinning the behaviour the corpus promises. |
 | `cases-v5/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
 | `cases-v5/probes/` | Skill-selection classification cases: eight that should trigger, four that should not. |
@@ -60,10 +62,12 @@ different model than the set declared.
 
 For Codex, explicitly select `codex-astra` to measure `gpt-6-astra` with `gpt-5.6-sol`
 judging, or `codex-astra-judge` to reverse them. Both roles use `high` reasoning effort.
-These profiles select `rubric-v5.md`; they preserve distinct scenario and judge models,
-fresh contexts and calibration before scoring. Sealed input isolation is the default;
-an operator may prospectively select [the session-native protocol](session-native-v1.md)
-to accept recorded ambient client/repository instructions as a separate baseline.
+The v1 profile document selects `rubric-v5.md` for both Codex profiles. The prospective
+[v2 profile document](MODEL-PROFILES-v2.md) selects `rubric-v6.md` for `codex-astra` alone;
+unselected profiles and all model/effort controls remain unchanged. Both configurations
+require fresh contexts and calibration before scoring. Sealed input isolation is the
+default; an operator may prospectively select [session-native v2](session-native-v2.md)
+to retain the disclosed ambient baseline with the new rubric configuration.
 Availability of a profile does not
 establish a passing eval. Read [the profile contract](MODEL-PROFILES-v1.md) for preflight,
 isolation controls and evidence requirements. Existing Claude baselines remain separate.
@@ -77,7 +81,8 @@ undecidable — and an undecidable criterion is graded `fail`.
 A judge-model change is a calibration event, and so is an edit to the rubric. Calibration runs
 against five fixtures today, and that number is not a literal maintained in this file: it is
 the count of `### Fixture` headings in the selected profile's rubric. The default uses
-`evals/rubric-v4.md`, and `rubric-v5.md` retains the same fixtures verbatim.
+`evals/rubric-v4.md`, and `rubric-v5.md` retains the same fixtures verbatim. v6 retains
+their transcripts and original Brief/Expected blocks, with its explicit prospective key.
 `test/evals/fixtureCount.test.ts` derives it and fails if this page, `SET-v5.md`, or the
 runner skill states a different one.
 
@@ -178,16 +183,25 @@ fresh input isolation. The run records requested and resolved IDs, reasoning/dec
 harness, isolation controls and rubric/profile hashes. Tool access prohibited only by the
 Brief is recorded as instruction-only isolation and checked against tool traces.
 
-For this session's explicitly authorized ambient-context exception, read and commit
-[`session-native-v1.md`](session-native-v1.md) before calibration or scoring. It uses
+For the prospectively corrected native configuration, select and commit
+[`session-native-v2.md`](session-native-v2.md), `model-profiles-v2.json` and `rubric-v6.md`
+before calibration or scoring. The unchanged `session-native-v1.md` and v1 profiles remain
+the record of earlier configurations. This explicit selection overrides `st-eval-run`'s
+protocol/profile/rubric version pointers for that run only; all other skill gates hold.
+v2 uses
 fresh `fork_turns: "none"` native agents, the selected Astra/high and Sol/high pair,
 and no added neutrality wrapper. Ambient repository/client instructions are retained
-and disclosed, not claimed to be removed. All five original calibration fixtures,
-78 cases with three samples each, scoring thresholds, human QA and platform approval
-remain required. This baseline does not retroactively admit previous blocked runs.
+and disclosed, not claimed to be removed. All five retained calibration transcripts
+against their original case inputs, 78 cases with three samples each, scoring thresholds,
+human QA and platform approval remain required. Its staged task comparison and separate driver invocation claim do not
+establish plaintext visibility in an encrypted native trace. Run 13 remains terminal with
+its original C3 mismatch, invalid C4 and zero scenario samples. The new key correction
+is agent-authored and independently assessed; no fresh human per-criterion label is claimed.
+Calibration and a full passing evaluation are still required and are not promised.
 
 The repository also provides an optional manual stateless transport for the two declared
-Codex profiles. Select this API route explicitly; it is not needed for session-native
+Codex profiles from `model-profiles-v1.json`; it does not select the prospective v2 native
+configuration. Select this API route explicitly; it is not needed for session-native
 execution. Commit and review the final candidate and versioned eval inputs first, then
 start it explicitly with an authorized `OPENAI_API_KEY` in the process environment:
 
@@ -242,7 +256,9 @@ Two things to get right before starting one.
 - **The runner and both hard-trigger pointers name v5.** The skill's preconditions,
   calibration and fan-out steps, the contributing guide's corpus-edit trigger, and the
   release checklist all point at `evals/SET-v5.md` and `evals/cases-v5/**`;
-  `model-profiles-v1.json` selects `rubric-v4.md` or `rubric-v5.md`. They move together,
+  the selected profile document supplies the rubric. `model-profiles-v1.json` retains
+  `rubric-v4.md`/`rubric-v5.md`; the explicitly selected v2 native configuration uses
+  `rubric-v6.md` for `codex-astra`. Pin each version together,
   because a runner naming one version while a trigger names another scores one instrument
   and labels the result with the other's name.
   v1's, v2's and v3's own documents still name their own paths, which is correct: they
