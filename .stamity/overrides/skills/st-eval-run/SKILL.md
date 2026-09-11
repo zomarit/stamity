@@ -12,21 +12,18 @@ obsolete_when: the eval set runs from a committed automation lane whose scores g
 The manual runner for `evals/`: one operator-started harness session, one
 committed result. No schedule or automatic provider calls.
 
-For a selected Codex profile, the repository includes the manually invoked
-`scripts/eval-run.mjs` transport. After committing and reviewing all inputs, run:
+Drive the run through the session's own agent tooling. For an operator-authorized
+Codex run that accepts unavoidable ambient client/repository instructions, follow
+`evals/session-native-v1.md`. Commit and
+review that prospective protocol and all inputs first. Its exception accepts
+recorded ambient instructions only; fresh agents, exact models, no tool use,
+calibration, scoring bars and release approvals remain binding. No neutral wrapper
+is added, and accepted ambient context is never described as erased or harmless.
 
-```sh
-node scripts/eval-run.mjs --run-id YYYY-MM-DD-run-N --profile codex-astra --trigger release --capacity 4
-```
-
-It requires an authorized `OPENAI_API_KEY`, reads no CLI authentication tokens,
-and makes stateless requests only to the official Responses API. No profile
-argument still resolves `claude`; this transport blocks that unsupported profile
-instead of changing the default. The exact pair and `high` effort stay in provider
-controls. Each request carries one verbatim Brief or four verbatim judge blocks,
-with no conversation, previous response, additional instructions or exposed tools.
-The harness and isolation controls define a separate baseline from native dispatch.
-This implementation and its mock tests do not establish a successful live run.
+The optional `scripts/eval-run.mjs` stateless API transport is a separate baseline,
+documented in `evals/README.md`. Use it only when the operator selects that route;
+an API credential is not a requirement for session-native evaluation. Neither
+route changes the default profile or establishes a passing run by its existence.
 
 ## 1. Preconditions
 
@@ -50,7 +47,8 @@ Then pin the run:
 - Before any model call, check that the named profile exists and the harness
   supports its exact, distinct scenario/judge IDs and requested effort settings.
   Check fresh input isolation and visibility of scenario tool use. Follow the
-  profile contract's isolation rules; do not claim shared-workspace tools are
+  profile contract's isolation rules, or the explicitly authorized ambient-only
+  exception in `evals/session-native-v1.md`; do not claim shared-workspace tools are
   disabled when they are only prohibited by the sealed Brief. Unknown or
   unavailable profiles, models, controls or isolation evidence stop the run with
   the unmet requirement named. No fallback or per-role substitution is allowed.
@@ -73,7 +71,8 @@ non-scoring provider calls. It admits only complete responses exposing the exact
 model and reasoning effort, no additional instructions/context, and an inspectable
 output trace with no tool call. Provider-internal instructions are not exposed by
 the API; the artifact records that limit. A native receipt carrying ambient
-developer messages does not pass admission even with zero tool calls.
+messages requires the prospectively authorized `session-native-v1.md` baseline;
+without that exception it does not pass admission even with zero tool calls.
 
 Hand the judge an **excised rubric**: the grading sections only — the text of
 the selected rubric above the `## Calibration protocol` heading. That heading
@@ -82,7 +81,8 @@ included, is never handed to the judge in any call, at calibration or at
 scoring. The labels are the answer key; a rubric handed in whole is an open
 book, and a 5/5 read off it measures reading rather than grading. Per fixture,
 the judge receives that excised rubric, the fixture's transcript, and the
-fixture case's `## Brief` and `## Expected` block — and nothing else.
+fixture case's `## Brief` and `## Expected` block — and nothing else in the
+dispatched task. The session-native exception records additional ambient inputs.
 
 Every fixture's returned label matches its expected label, or the run stops
 here. A partial match is a miss: report the fixture, the label expected, and
@@ -106,15 +106,18 @@ Three independent fresh samples per case file under `evals/cases-v5/**`.
 Queue independent calls together up to the recorded capacity; the stateless runner
 allows 1–16 concurrent calls, default 4. A queue slot is a resource limit, never
 shared model context. A release measures the full 78-case roster (234 scenarios).
+The session-native protocol uses two concurrent fresh children and five calibration
+judges before the 468 scenario/scoring-judge calls.
 
-Each scenario agent gets exactly what the case seals and no more.
+Each scenario task contains exactly what the case seals and no more.
 
 Each case/sample starts with no inherited conversation or earlier sample. A native
 Codex agent uses `fork_turns: "none"`, the profile's exact `model` and
-`reasoning_effort`, and must additionally prove no ambient input was injected.
+`reasoning_effort`, and must additionally prove no ambient input was injected,
+unless the operator prospectively selected the recorded ambient-context exception.
 A stateless API call omits all history and passes exact model/effort controls.
 Do not reuse a scenario through a follow-up task. The profile document never
-enters the sealed Brief. Extra input, tool use or an uninspectable trace blocks
+enters the sealed Brief. Unaccepted extra input, tool use or an uninspectable trace blocks
 admission; a claimed fresh agent alone proves none of these conditions.
 
 | Handed in | Withheld |
@@ -135,7 +138,7 @@ Four rules keep a transcript worth grading:
   summarised transcript cannot be cited by a span in step 4.
 - Infrastructure errors, truncation, invalid responses and unavailable/mismatched
   model or effort evidence have at most three total attempts, each retained with
-  its reason. Input contamination and tool use stop admission. A genuine grade
+  its reason. Unaccepted input contamination and tool use stop admission. A genuine grade
   failure or calibration-label mismatch is never retried to obtain a pass.
 
 ## 4. Judging
@@ -232,7 +235,8 @@ A clean run reports the artifact path and one line per metric.
   that starts a run on its own.
 - Every role uses the selected profile's explicit model and effort. A tier
   alias is never sufficient; the scenario and judge are distinct models.
-- An unestablished exact pin or input isolation stops scoring. A new profile
+- An unestablished exact pin or the selected protocol's input admission stops
+  scoring. A new profile
   starts a separate baseline. Keep scores and advisory-repeat tracking separate
   by model, effort, rubric, harness, isolation controls and versioned inputs.
 - A content edit re-runs the affected cases, found by the `source` field each
