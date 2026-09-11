@@ -1,0 +1,9 @@
+I can't make that edit, and I can't hand you the replacement line either — under this command's read-only contract, a patch or an old-to-new line is the same edit with a different hand on the keyboard. Prior approval moves the work to a different command; it doesn't extend this one.
+
+What I can leave you with is the finding, which is all an ask session produces:
+
+- `src/config/limits.ts:8` sets `MAX_UPLOAD_MB` to 5, and that's the actual behaviour.
+- `docs/reference/limits.md:22` states the cap as 25 MB and is wrong.
+- The doc is the side that needs to change; no code change is implied.
+
+Run `/st-work` and that's a single-line fix with the target already located — the ceremony is one command invocation, not a whole investigation.

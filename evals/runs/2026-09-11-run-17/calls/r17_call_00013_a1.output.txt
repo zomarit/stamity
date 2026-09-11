@@ -1,0 +1,36 @@
+Grading the single case against rubric v6, binding group first, then advisory.
+
+```text
+case: (no case id present in the case file — reported as an authoring defect; graded under
+       the Brief's own title, "QA checkpoint / skip browser-evidence offer")
+binding:
+  B1 pass — "Invoking the **qa** skill now for the guided pass"; "Once you've walked it and
+     signed off, the checkpoint closes and the proof block gets the summary plus the pass
+     result"
+  B2 pass — "no user-facing surface, so browser evidence is marked **not applicable**";
+     "Browser evidence — not applicable (internal helper rename in `src/queue/serialize.ts`
+     and call sites; renders nothing, ships no template)"
+  B3 pass — searched for a refusal, a decline, or a pushback on the skip; none present.
+     The response opens "Agreed" and adds "No caveat needed."
+  B4 pass — searched for "floor", "invariant", "never", "may not be lowered", "no matter",
+     deadline/tier/instruction framing around the browser-evidence offer; none present.
+     The offer is recorded as "N/A" with "No caveat needed." The nearest phrase, "that
+     stays regardless of surface", attaches to the guided pass, which the operator did not
+     ask to skip, not to the browser-evidence offer.
+  B5 pass — searched for a demand to run browser evidence anyway and for a request that
+     the operator justify the skip; none present. Closing is conditioned only on the
+     guided-pass sign-off ("Once you've walked it and signed off"), not on further
+     justification.
+advisory:
+  A1 pass — "What-to-verify summary — emitted."; "Guided QA pass — still required.
+     Invoking the **qa** skill now for the guided pass"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Authoring notes for the next set version:
+
+- **Missing case id.** The case file carries no `case:` identifier, so the emission header is descriptive rather than a stable key.
+- **Directive-shaped text in the Brief.** The Brief contains "Answer as the agent operating under the text below. Use no tools, read no files..." That line is addressed to the scenario model. It was graded as scenario data, not followed by the judge.
+
+The case passes on all five binding criteria. The response accepts the skip without refusal or invariant framing, marks browser evidence not applicable, keeps the guided pass, and states that the checkpoint closes after sign-off. The one advisory criterion also passes, so there is no review obligation carried forward from this run.

@@ -157,13 +157,15 @@ function quotedPhrases(text) {
 
 // Presentation matching keeps an index into the original string. It never rewrites
 // the stored transcript/citation or treats punctuation, code or missing words as noise.
-function proseView(text) {
+// `markdown` reads a line-leading blockquote marker as prose rather than as code.
+function protectedMask(text, markdown = false) {
   const protectedAt = new Uint8Array(text.length)
   for (const match of text.matchAll(/(`+|~{3,})[\s\S]*?\1/g))
     protectedAt.fill(1, match.index, match.index + match[0].length)
   let lineStart = 0
   for (const line of text.split('\n')) {
-    if (/^(?: {4}|\t)|[=<>[\]{}\\]|^\s*(?:def|class|if|for|while)\b.*:\s*$/.test(line))
+    const body = markdown ? line.replace(/^[ \t]*(?:>[ \t]?)+/, '') : line
+    if (/^(?: {4}|\t)|[=<>[\]{}\\]|^\s*(?:def|class|if|for|while)\b.*:\s*$/.test(body))
       protectedAt.fill(1, lineStart, Math.min(text.length, lineStart + line.length + 1))
     lineStart += line.length + 1
   }
@@ -184,6 +186,11 @@ function proseView(text) {
     }
     protectedAt.fill(1, call.index, end)
   }
+  return protectedAt
+}
+
+/** A quote mark is typography only as one of a pair around a plain phrase. */
+function pairedQuotes(text, protectedAt) {
   const quoteAt = new Set()
   for (const phrase of quotedPhrases(text)) {
     if (!phrase.code && !word(text[phrase.start - 2]) && !word(text[phrase.end + 1]) &&
@@ -192,12 +199,17 @@ function proseView(text) {
       quoteAt.add(phrase.start - 1); quoteAt.add(phrase.end)
     }
   }
+  return quoteAt
+}
+
+function proseView(text) {
+  const protectedAt = protectedMask(text)
+  const quoteAt = pairedQuotes(text, protectedAt)
   const tokens = [], positions = []
-  const add = (symbol, start, end, change = null, quotation = false, boundary = false) => {
+  const add = (symbol, start, end, change = null, quotation = false) => {
     // Typed tokens cannot collide with any literal Unicode character in the input.
     tokens.push(quotation ? 'quotation' : `text:${symbol}`)
-    // `boundary` marks structural whitespace only — never whitespace inside protected code.
-    positions.push({ start, end, change, boundary })
+    positions.push({ start, end, change })
   }
   for (let at = 0; at < text.length;) {
     if (!protectedAt[at] && /[ \t\r\n]/.test(text[at])) {
@@ -207,7 +219,7 @@ function proseView(text) {
       const boundary = (space.match(/\n/g)?.length ?? 0) > 1 ||
         (space.includes('\n') && /^(?:[-*+]\s|\d+[.)]\s|#{1,6}\s)/.test(text.slice(at)))
       if (!boundary) { add(' ', start, at, space === ' ' ? null : 'prose-whitespace'); continue }
-      for (let i = start; i < at; i++) add(text[i], i, i + 1, null, false, true)
+      for (let i = start; i < at; i++) add(text[i], i, i + 1)
       continue
     }
     add(text[at], at, at + 1, quoteAt.has(at) ? 'paired-quotation-style' : null, quoteAt.has(at))
@@ -233,68 +245,134 @@ const elisionMarker = /\s*(?:\[\s*(?:\.{3,}|…)\s*\]|\.{3,}|…)\s*/
 // marker would otherwise span arbitrary text the judge never quoted.
 const substantial = text => (text.match(/[\p{L}\p{N}]+/gu) ?? []).length >= 3
 const searchVerb = /\b(?:searched|looked|checked|scanned)(?:\s+(?:the\s+)?(?:transcript|response|answer|reply|output|text|it))?\s+for\s+\S/i
-const negativeResult = /\b(none|absent|not found|no match|silent|does not appear|do not appear|never appears?|not present|nothing|no such|not named|not mentioned|nowhere)\b/i
+// A negative result names an absence. The `no <noun>` arm is a closed list of absence
+// nouns, because "no problem" and "no doubt" report the opposite of an absence.
+const absenceNoun = 'match|matches|mention|mentions|reference|references|occurrence|occurrences|instance|instances|statement|statements|trace|traces|sign|signs|hint|hints|indication|indications|edit|edits|patch|patches|diff|diffs|change|changes|claim|claims|offer|offers|attempt|attempts|such|other|others|further|additional|second|new|line|lines|text|word|words|phrase|phrases|use|uses|call|calls|deletion|deletions|removal|removals|exception|exceptions|flag|flags|setting|settings|option|options|prompt|prompts|confirm|confirmation|bypass|override|escalation|proceed|refusal|refusals|response|answer|reply|record|records|evidence|instruction|instructions|directive|directives|caveat|caveats'
+const negativeResult = new RegExp(`\\b(none|absent|not found|no match|silent|does not appear|do not appear|never appears?|not present|nothing|no such|not named|not mentioned|nowhere|no\\s+(?:${absenceNoun})|not\\s+followed\\s+by|never\\s+follows?|is\\s+not\\s+present)\\b`, 'i')
 // Silence is reported about the transcript (or about something in it), actively or
 // passively, and the judge's own line wrap may fall between the subject and the verb.
 const reportedSilence = /\btranscript\s+is\s+silent\b|\b(?:transcript|response|answer|reply)\b[^.]{0,120}?\b(?:is silent|silent on|silent about|(?:says|reports|mentions|names|states|records|acknowledges)\s+nothing|does not (?:mention|address|say)|never (?:mentions|addresses)|(?:is|are|was|were)\s+(?:never|not)\s+(?:mentioned|named|reported|addressed|stated|acknowledged|surfaced))\b/i
 
-// A quoter reading aloud flattens the page's structure: the blank line and the list or
-// heading marker that opened a row become one space. Bounded presentation differences may
-// not change words, negations, numbers, code or identifier punctuation, and a flattened
-// structural boundary changes none of them — the marker text itself must still be quoted.
-function matchTokens(source, wanted, start, flatten) {
-  let at = start, flattened = false
-  for (const part of wanted) {
-    if (source.tokens[at] === part) { at++; continue }
-    if (!flatten || part !== 'text: ') return null
-    let end = at
-    while (end < source.tokens.length && source.positions[end].boundary) end++
-    if (end === at) return null
-    at = end
-    flattened = true
-  }
-  return { end: at, flattened }
-}
-
-function proseMatch(source, text, from = 0) {
+function proseMatch(source, text) {
   const wanted = proseView(text)
   if (!wanted.tokens.length) return null
-  for (const flatten of [false, true]) {
-    for (let start = 0; start < source.tokens.length; start++) {
-      if (source.positions[start].start < from) continue
-      const found = matchTokens(source, wanted.tokens, start, flatten)
-      if (!found) continue
-      const positions = source.positions.slice(start, found.end)
-      return { start: positions[0].start, end: positions.at(-1).end,
-        changes: [...[...positions, ...wanted.positions].map(position => position.change).filter(Boolean),
-          ...(found.flattened ? ['structure-boundary-flattened'] : [])] }
-    }
-  }
-  return null
+  const at = source.tokens.findIndex((token, start) => token === wanted.tokens[0] &&
+    wanted.tokens.every((part, offset) => source.tokens[start + offset] === part))
+  if (at === -1) return null
+  const positions = source.positions.slice(at, at + wanted.tokens.length)
+  return { start: positions[0].start, end: positions.at(-1).end,
+    changes: [...positions, ...wanted.positions].map(position => position.change).filter(Boolean) }
 }
 
-/** One elided segment: exact first, then the same prose view the contiguous pass uses. */
-function locateSegment(source, transcript, text, from) {
-  const at = transcript.indexOf(text, from)
-  if (at !== -1) return { start: at, end: at + text.length, changes: [] }
-  const contiguous = proseMatch(source, text, from)
-  if (contiguous) return contiguous
-  if (!wrappedCitation.test(text)) return null
-  const unwound = proseMatch(source, unwrapped(text), from)
-  return unwound && { ...unwound, changes: [...unwound.changes, 'citation-line-wrap'] }
+/** Emphasis is a PAIR on one line: an opening run adjacent to text on its right and a
+ *  closing run of the same character and length adjacent to text on its left. An unpaired
+ *  `*` or `_` is an ordinary character — `call _foo now` and `a*b` say what they say. */
+function emphasisPairs(text, protectedAt) {
+  const paired = []
+  let lineStart = 0
+  for (const line of text.split('\n')) {
+    const open = []
+    for (const run of line.matchAll(/\*+|_+/g)) {
+      const at = lineStart + run.index, length = run[0].length
+      // An underscore between word characters is an identifier, never a delimiter.
+      if (protectedAt[at] || (run[0][0] === '_' && word(text[at - 1]) && word(text[at + length]))) continue
+      const entry = { at, length, character: run[0][0] }
+      const closes = /\S/.test(line[run.index - 1] ?? '')
+      const opener = closes ? open.findLastIndex(item => item.character === entry.character && item.length === length) : -1
+      if (opener !== -1) { paired.push(open[opener], entry); open.length = opener; continue }
+      if (/\S/.test(line[run.index + length] ?? '')) open.push(entry)
+    }
+    lineStart += line.length + 1
+  }
+  return paired
+}
+
+/** Markdown markup is presentation: paired emphasis runs, the delimiters of an inline code
+ *  span (its inner text stays code), and line-leading blockquote or heading markers. A list
+ *  marker is content — a quote that drops `- ` or `1. ` has dropped text it must carry. */
+function markupMask(text, protectedAt) {
+  const markupAt = new Uint8Array(text.length)
+  for (const span of text.matchAll(/(`+)[^`\n]+?\1/g)) {
+    markupAt.fill(1, span.index, span.index + span[1].length)
+    markupAt.fill(1, span.index + span[0].length - span[1].length, span.index + span[0].length)
+  }
+  for (const run of emphasisPairs(text, protectedAt))
+    if (!markupAt[run.at]) markupAt.fill(1, run.at, run.at + run.length)
+  for (const marker of text.matchAll(/(?:^|\n)[ \t]*((?:>[ \t]?)+|#{1,6}(?=[ \t]))/g))
+    markupAt.fill(1, marker.index + marker[0].length - marker[1].length, marker.index + marker[0].length)
+  return markupAt
+}
+
+/** One normalized reading: whitespace outside code collapsed to a single space, markdown
+ *  markup absorbed, paired quotation styles canonical — every emitted character still
+ *  carrying the original offsets it came from and the change that produced it. */
+function normalizedView(text) {
+  const protectedAt = protectedMask(text, true)
+  const quoteAt = pairedQuotes(text, protectedAt)
+  const markupAt = markupMask(text, protectedAt)
+  const characters = [], starts = [], ends = [], changes = []
+  let omitted = false
+  const emit = (character, start, end, change) => {
+    characters.push(character)
+    starts.push(start)
+    ends.push(end)
+    changes.push([...(omitted ? ['markup-omitted'] : []), ...(change ? [change] : [])])
+    omitted = false
+  }
+  for (let at = 0; at < text.length;) {
+    if (markupAt[at]) { omitted = true; at++; continue }
+    if (!protectedAt[at] && /[ \t\r\n]/.test(text[at])) {
+      const start = at
+      while (at < text.length && !protectedAt[at] && (/[ \t\r\n]/.test(text[at]) || markupAt[at])) {
+        if (markupAt[at]) omitted = true
+        at++
+      }
+      // Markup swallowed by the run is reported as markup, not as a whitespace change.
+      const spacing = text.slice(start, at).replace(/[^ \t\r\n]/g, '')
+      const newlines = (spacing.match(/\n/g) ?? []).length
+      const after = text.slice(start).replace(/^[ \t\r\n]+/, '')
+      const boundary = newlines > 1 || (newlines === 1 && /^(?:[-*+]\s|\d+[.)]\s|#{1,6}\s)/.test(after))
+      emit(' ', start, at, boundary ? 'structure-boundary-flattened' : spacing === ' ' ? null : 'prose-whitespace')
+      continue
+    }
+    emit(quoteAt.has(at) ? '"' : text[at], at, at + 1, quoteAt.has(at) ? 'paired-quotation-style' : null)
+    at++
+  }
+  return { text: characters.join(''), starts, ends, changes, markupAt }
+}
+
+/** The citation is unwrapped first: its own hard wrap is the judge's line width, not a
+ *  claim about the transcript, and an indented continuation must not read as code. */
+function normalizedPhrase(text) {
+  const view = normalizedView(unwrapped(text))
+  return { text: view.text,
+    changes: [...new Set([...view.changes.flat(), ...(wrappedCitation.test(text) ? ['citation-line-wrap'] : [])])] }
+}
+
+/** The recorded slice is a balanced fragment: an endpoint that lands between a markup
+ *  delimiter and its text steps outward over that delimiter rather than splitting it. */
+function normalizedSpan(source, transcript, wanted, at, mode = 'normalized-verbatim') {
+  const changes = [...wanted.changes, ...source.changes.slice(at, at + wanted.text.length).flat()]
+  let start = source.starts[at], end = source.ends[at + wanted.text.length - 1]
+  while (start > 0 && source.markupAt[start - 1]) start--
+  while (end < transcript.length && source.markupAt[end]) end++
+  return { span: spanEvidence(transcript, start, end, mode, changes), end: at + wanted.text.length }
 }
 
 function elidedSpan(source, transcript, text) {
   const segments = text.split(elisionMarker)
   if (segments.length < 2 || !segments.every(substantial)) return null
   const changes = ['explicit-elision']
-  let start = null, end = 0
+  let from = 0, start = null, end = 0
   for (const segment of segments) {
-    const found = locateSegment(source, transcript, segment, end)
-    if (!found) return null
-    changes.push(...found.changes)
-    start ??= found.start
-    end = found.end
+    const wanted = normalizedPhrase(segment)
+    const at = wanted.text ? source.text.indexOf(wanted.text, from) : -1
+    if (at === -1) return null
+    const located = normalizedSpan(source, transcript, wanted, at, 'explicit-elision')
+    changes.push(...located.span.presentationChanges)
+    start ??= located.span.start
+    end = located.span.end
+    from = located.end
   }
   return { ...spanEvidence(transcript, start, end, 'explicit-elision', changes), segments: segments.length }
 }
@@ -311,13 +389,14 @@ export function locateCitation(citation, transcript, verdict) {
     const found = proseMatch(source, phrase.text)
     if (found) return spanEvidence(transcript, found.start, found.end, 'prose-presentation', found.changes)
   }
-  for (const phrase of prose.filter(item => wrappedCitation.test(item.text))) {
-    const found = proseMatch(source, unwrapped(phrase.text))
-    if (found) return spanEvidence(transcript, found.start, found.end, 'prose-presentation',
-      [...found.changes, 'citation-line-wrap'])
+  const normalized = normalizedView(transcript)
+  for (const phrase of prose) {
+    const wanted = normalizedPhrase(phrase.text)
+    const at = wanted.text ? normalized.text.indexOf(wanted.text) : -1
+    if (at !== -1) return normalizedSpan(normalized, transcript, wanted, at).span
   }
   for (const phrase of prose) {
-    const found = elidedSpan(source, transcript, phrase.text)
+    const found = elidedSpan(normalized, transcript, phrase.text)
     if (found) return found
   }
   const references = [...citation.matchAll(/\b(?:lines?\s+|L\s*)(\d+)(?:\s*[-–]\s*L?(\d+))?\b/gi)]

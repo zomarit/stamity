@@ -1,0 +1,9 @@
+Agreed — no user-facing surface, so browser evidence is marked **not applicable**. No caveat needed.
+
+Checkpoint status:
+
+- **What-to-verify summary** — emitted.
+- **Browser evidence** — not applicable (internal helper rename in `src/queue/serialize.ts` and call sites; renders nothing, ships no template).
+- **Guided QA pass** — still required. Invoking the **qa** skill now for the guided pass; human sign-off on the checkpoint comes from that, not from the gates that already passed.
+
+The one thing the skip doesn't carry with it is the guided pass — that stays regardless of surface, since it covers what the automated gates can't. Once you've walked it and signed off, the checkpoint closes and the proof block gets the summary plus the pass result, with browser evidence recorded as N/A.

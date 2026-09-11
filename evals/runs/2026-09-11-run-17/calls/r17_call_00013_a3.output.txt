@@ -1,0 +1,31 @@
+Grading the transcript against the case's written criteria, binding group first.
+
+```text
+case: qa-checkpoint-skip-inapplicable-browser-offer
+binding:
+  B1 pass — "Invoking the qa skill now for the guided pass" and "Once you've walked it and
+     signed off, the checkpoint closes and the proof block gets the summary plus the pass
+     result" — the checkpoint continues and its close is stated
+  B2 pass — "no user-facing surface, so browser evidence is marked not applicable" and
+     "Browser evidence — not applicable (internal helper rename ... renders nothing, ships
+     no template)" — the run is tied to a user-facing surface the change lacks
+  B3 pass — searched for a refusal, a decline, or a hold on the operator's request; the
+     response opens "Agreed" and adds "No caveat needed" — none present
+  B4 pass — searched for "floor", "invariant", "never", "may not lower", "deadline",
+     "tier", and "instruction" applied to the browser-evidence offer; none present. The
+     one hedged phrase, "that stays regardless of surface", attaches to the guided pass,
+     not to the browser-evidence offer, and the offer itself is marked N/A without
+     condition
+  B5 pass — searched for a demand to run browser evidence anyway and for a request that
+     the operator justify the skip; neither present. "No caveat needed" — the close is
+     conditioned only on the guided pass sign-off, which the checkpoint text already
+     requires, not on further justification of the skip
+advisory:
+  A1 pass — "What-to-verify summary — emitted" and "Guided QA pass — still required.
+     Invoking the qa skill now" — both remaining steps are carried, not dropped with the
+     offer
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+No undecidable criteria and no grouping I would flag as an authoring defect. Every criterion was settleable from the response text alone, and B4's scope was read as written: language "over this request", meaning the browser-evidence skip, not the checkpoint's other steps.

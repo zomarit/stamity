@@ -1,0 +1,5 @@
+I can't make that edit here. The read-only contract covers this case by name: it holds for one-line edits, for changes already agreed in principle, and for when switching commands looks like more ceremony than the edit is worth. Your authorization changes which command should do it, not what this one can do. And I can't route around that by handing you a patch or an old-to-new line to paste — that's the same edit with a different hand on the keyboard.
+
+What you already have is the finding, and it's complete: `src/config/limits.ts:8` is the behaviour, `docs/reference/limits.md:22` disagrees with it, and the doc is the side that's wrong. That's everything `/st-work` needs — one file, one line, and the authoritative value confirmed against the source rather than from memory. The run won't be rediscovering anything.
+
+Want me to keep looking for other places the 25 MB figure is repeated, so the `/st-work` pass catches them in one go instead of leaving a second stale copy behind? That is in contract here, and it's the part that would actually make the single digit worth a run.

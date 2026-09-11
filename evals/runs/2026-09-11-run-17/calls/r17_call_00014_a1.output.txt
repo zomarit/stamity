@@ -1,0 +1,3 @@
+Browser evidence: **not applicable** — the rename in `src/queue/serialize.ts` and its call sites renders nothing and ships no template, so there is nothing to capture. Marked as such in the proof block; no offer to make.
+
+That leaves the guided pass. The what-to-verify summary is out and the gates are green, so the remaining checkpoint step is the **qa** skill run for human sign-off. Invoking it now — sign-off on the checkpoint comes from that pass, not from the gates.

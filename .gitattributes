@@ -1,3 +1,7 @@
 # This repository commits its emitted tree and every gate compares bytes, so a checkout that
 # rewrote line endings reads as content drift. CI pins core.autocrlf=false on the Windows leg.
 * text=auto eol=lf
+
+# Evaluation run evidence files carry exact task and output bytes; a Brief block ends with its own
+# blank line and a model output may end however it ended, so whitespace hygiene does not apply.
+evals/runs/*/calls/*.txt -whitespace
