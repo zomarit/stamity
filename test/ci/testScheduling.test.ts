@@ -8,16 +8,18 @@ import config, { fixtureScheduling } from "../../vitest.config.ts";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const HEAVY = [
   "test/cli/commands/syncMcpOwnership.test.ts",
+  "test/emit/crossClientGoldens.test.ts",
   "test/pack/installSmoke.e2e.test.ts",
   "test/upstream/lane.test.ts",
 ];
 
-// 2026-09-11: unchanged Windows inputs hit a common stall across these three
-// real-filesystem suites. Check Vitest's resolved projects and actual discovery,
-// not just our include literals: grouping must lose/duplicate no test, retain
-// the existing budgets, and leave the rest of the suite's parallelism intact.
+// 2026-09-11: CI 34588320202 also timed out the all-four fresh-directory golden
+// in the ordinary parallel group. That observed real-disk fixture extends the
+// earlier three-suite scheduling contract; no golden assertion/budget changes.
+// Check Vitest's resolved projects and actual discovery: grouping must lose or
+// duplicate no test and must leave the remaining parallelism intact.
 describe("Windows fixture scheduling", () => {
-  it("isolates exactly the observed three suites without losing or repeating any test file", async () => {
+  it("isolates exactly the observed four suites without losing or repeating any test file", async () => {
     const runner = await createVitest(
       { watch: false, run: true, config: false, root: ROOT },
       { test: { ...config.test, ...fixtureScheduling("win32") } },
@@ -35,8 +37,13 @@ describe("Windows fixture scheduling", () => {
       const heavy = runner.projects.find((project) => project.name === "windows-fixtures");
       expect(runner.projects.map((project) => project.name).toSorted())
         .toEqual(["parallel", "windows-fixtures"]);
-      expect(specs.filter((spec) => spec.project === heavy)
-        .map((spec) => relative(ROOT, spec.moduleId).replaceAll("\\", "/")).toSorted()).toEqual(HEAVY);
+      const fixtureFiles = specs.filter((spec) => spec.project === heavy)
+        .map((spec) => relative(ROOT, spec.moduleId).replaceAll("\\", "/"));
+      const parallelFiles = specs.filter((spec) => spec.project === parallel)
+        .map((spec) => relative(ROOT, spec.moduleId).replaceAll("\\", "/"));
+      expect(fixtureFiles.toSorted()).toEqual(HEAVY);
+      expect(parallelFiles.toSorted()).toEqual(files.filter((file) => !HEAVY.includes(file)).toSorted());
+      expect(parallelFiles.filter((file) => fixtureFiles.includes(file))).toEqual([]);
       expect(parallel?.config.maxWorkers).toBeUndefined();
       expect(parallel?.config.sequence.groupOrder).toBe(0);
       expect(heavy?.config.maxWorkers).toBe(1);

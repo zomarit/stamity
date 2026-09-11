@@ -41,7 +41,7 @@ import { makeTempDir } from "./tempDir.ts";
  * Serialization: vitest runs the tests within one file sequentially, and each
  * fixture owns its own mkdtemp tree (realpath-resolved base via tempDir.ts),
  * so per-fixture isolation preserves correctness across files. As of 2026-09-11,
- * vitest.config.ts separately schedules three measured heavy suites on Windows
+ * vitest.config.ts separately schedules four measured heavy suites on Windows
  * to limit shared disk/process contention; other files retain default parallelism.
  *
  * Lane discipline: like tempDir.ts/vfs.ts, this module imports nothing from

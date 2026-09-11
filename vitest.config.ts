@@ -1,9 +1,10 @@
 import { configDefaults, defineConfig, type TestUserConfig } from "vitest/config";
 
 /**
- * 2026-09-11: Windows CI showed a shared stall while these three real-disk
- * suites overlapped (normal cases before/after; unchanged inputs passed earlier).
- * Isolate that measured resource overlap, keeping all assertions and timeouts.
+ * 2026-09-11: Windows CI first showed overlapping stalls in three real-disk
+ * suites. CI 34588320202 later timed out the all-four fresh-directory golden
+ * while it ran in the ordinary parallel group. Isolate these four fixtures,
+ * keeping all assertions and timeouts.
  * The host-level cause remains unproved; an actual Windows run must verify this.
  * Vitest groups execute in order; one worker serializes only the second group:
  * https://vitest.dev/config/sequence.html#sequence-grouporder
@@ -14,6 +15,7 @@ export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfi
     "test/upstream/lane.test.ts",
     "test/pack/installSmoke.e2e.test.ts",
     "test/cli/commands/syncMcpOwnership.test.ts",
+    "test/emit/crossClientGoldens.test.ts",
   ];
   return {
     // Inline projects inherit arrays by concatenation. An empty root include
