@@ -193,10 +193,11 @@ function proseView(text) {
     }
   }
   const tokens = [], positions = []
-  const add = (symbol, start, end, change = null, quotation = false) => {
+  const add = (symbol, start, end, change = null, quotation = false, boundary = false) => {
     // Typed tokens cannot collide with any literal Unicode character in the input.
     tokens.push(quotation ? 'quotation' : `text:${symbol}`)
-    positions.push({ start, end, change })
+    // `boundary` marks structural whitespace only — never whitespace inside protected code.
+    positions.push({ start, end, change, boundary })
   }
   for (let at = 0; at < text.length;) {
     if (!protectedAt[at] && /[ \t\r\n]/.test(text[at])) {
@@ -206,7 +207,7 @@ function proseView(text) {
       const boundary = (space.match(/\n/g)?.length ?? 0) > 1 ||
         (space.includes('\n') && /^(?:[-*+]\s|\d+[.)]\s|#{1,6}\s)/.test(text.slice(at)))
       if (!boundary) { add(' ', start, at, space === ' ' ? null : 'prose-whitespace'); continue }
-      for (let i = start; i < at; i++) add(text[i], i, i + 1)
+      for (let i = start; i < at; i++) add(text[i], i, i + 1, null, false, true)
       continue
     }
     add(text[at], at, at + 1, quoteAt.has(at) ? 'paired-quotation-style' : null, quoteAt.has(at))
@@ -233,18 +234,43 @@ const elisionMarker = /\s*(?:\[\s*(?:\.{3,}|…)\s*\]|\.{3,}|…)\s*/
 const substantial = text => (text.match(/[\p{L}\p{N}]+/gu) ?? []).length >= 3
 const searchVerb = /\b(?:searched|looked|checked|scanned)(?:\s+(?:the\s+)?(?:transcript|response|answer|reply|output|text|it))?\s+for\s+\S/i
 const negativeResult = /\b(none|absent|not found|no match|silent|does not appear|do not appear|never appears?|not present|nothing|no such|not named|not mentioned|nowhere)\b/i
-const reportedSilence = /\btranscript\s+is\s+silent\b|\b(?:transcript|response|answer|reply)\b[^.\n]{0,80}?\b(?:is silent|says nothing|silent on|silent about|does not (?:mention|address|say)|never (?:mentions|addresses))\b/i
+// Silence is reported about the transcript (or about something in it), actively or
+// passively, and the judge's own line wrap may fall between the subject and the verb.
+const reportedSilence = /\btranscript\s+is\s+silent\b|\b(?:transcript|response|answer|reply)\b[^.]{0,120}?\b(?:is silent|silent on|silent about|(?:says|reports|mentions|names|states|records|acknowledges)\s+nothing|does not (?:mention|address|say)|never (?:mentions|addresses)|(?:is|are|was|were)\s+(?:never|not)\s+(?:mentioned|named|reported|addressed|stated|acknowledged|surfaced))\b/i
+
+// A quoter reading aloud flattens the page's structure: the blank line and the list or
+// heading marker that opened a row become one space. Bounded presentation differences may
+// not change words, negations, numbers, code or identifier punctuation, and a flattened
+// structural boundary changes none of them — the marker text itself must still be quoted.
+function matchTokens(source, wanted, start, flatten) {
+  let at = start, flattened = false
+  for (const part of wanted) {
+    if (source.tokens[at] === part) { at++; continue }
+    if (!flatten || part !== 'text: ') return null
+    let end = at
+    while (end < source.tokens.length && source.positions[end].boundary) end++
+    if (end === at) return null
+    at = end
+    flattened = true
+  }
+  return { end: at, flattened }
+}
 
 function proseMatch(source, text, from = 0) {
   const wanted = proseView(text)
   if (!wanted.tokens.length) return null
-  const at = source.tokens.findIndex((token, start) => token === wanted.tokens[0] &&
-    source.positions[start].start >= from &&
-    wanted.tokens.every((part, offset) => source.tokens[start + offset] === part))
-  if (at === -1) return null
-  const positions = source.positions.slice(at, at + wanted.tokens.length)
-  return { start: positions[0].start, end: positions.at(-1).end,
-    changes: [...positions, ...wanted.positions].map(position => position.change).filter(Boolean) }
+  for (const flatten of [false, true]) {
+    for (let start = 0; start < source.tokens.length; start++) {
+      if (source.positions[start].start < from) continue
+      const found = matchTokens(source, wanted.tokens, start, flatten)
+      if (!found) continue
+      const positions = source.positions.slice(start, found.end)
+      return { start: positions[0].start, end: positions.at(-1).end,
+        changes: [...[...positions, ...wanted.positions].map(position => position.change).filter(Boolean),
+          ...(found.flattened ? ['structure-boundary-flattened'] : [])] }
+    }
+  }
+  return null
 }
 
 /** One elided segment: exact first, then the same prose view the contiguous pass uses. */
@@ -314,7 +340,10 @@ export function locateCitation(citation, transcript, verdict) {
 
 const isDecision = line => /\b(?:decid\w*|decisiv\w*|fail(?:ure|ed|s)?|due\s+to)\b/i.test(line) && /\bB\d+\b/.test(line)
 const isAdvisoryList = line => /^\s*(?:failed(?:\s+(?:advisory\s+)?criteria)?\s*:\s*A\d+|A\d+(?:\s*(?:,|and)\s*A\d+)*\s+fail(?:ed|s)\b)/i.test(line)
-const summaryStatuses = line => [...line.matchAll(/\b([BA]\d+(?:\s*(?:,\s*(?:and\s+)?|and\s+)[BA]\d+)*)\s+(passed|failed|passes|fails)\b/gi)]
+// "B4 and B5 also fail" asserts the same two statuses as "B4 and B5 failed": an adverb
+// between the IDs and the verb, and the bare verb itself, carry no extra claim.
+const statusAssertion = /\b([BA]\d+(?:\s*(?:,\s*(?:and\s+)?|and\s+)[BA]\d+)*)\s+(?:(?:also|both|all|each|still|likewise|additionally|equally)\s+)*(passed|failed|passes|fails|pass|fail|passing|failing)\b/gi
+const summaryStatuses = line => [...line.matchAll(statusAssertion)]
   .flatMap(match => [...match[1].matchAll(/[BA]\d+/g)].map(id => ({ id: id[0],
     status: match[2].toLowerCase().startsWith('pass') ? 'pass' : 'fail', start: match.index + id.index })))
 function summaryDecisions(line) {
@@ -346,19 +375,32 @@ const isBodySummary = line => {
   return relations.length > 0 || isAdvisoryList(line) || /^\s*(?:advisory\s+count|failed\s+advisor(?:y|ies))\b/i.test(line)
 }
 
+/** One block per case: prose around the emission is commentary, not part of the grade. */
+function emissionBlock(raw) {
+  const blocks = [...raw.matchAll(/^[ \t]*(`{3,}|~{3,})[ \t]*(?:text)?[ \t]*\n([\s\S]*?)\n[ \t]*\1[ \t]*$/gm)]
+    .filter(block => /^case:/m.test(block[2]))
+  requireEvidence(blocks.length <= 1, 'grade-case', true)
+  const emission = blocks.find(block => /^verdict:/m.test(block[2]))
+  return emission ? emission[2] : raw.trim().replace(/^```(?:text)?\s*\n([\s\S]*?)\n```$/, '$1')
+}
+
 /** Parse the committed rubric's text shape; do not append a new output schema to the judge input. */
 export function parseGrade(raw, scenario, transcript) {
-  const text = raw.trim().replace(/^```(?:text)?\s*\n([\s\S]*?)\n```$/, '$1')
+  const text = emissionBlock(raw)
   const caseLines = [...text.matchAll(/^case:[ \t]*(\S[^\n]*)$/gm)]
   requireEvidence(caseLines.length === 1, 'grade-case', true)
   const bindingLines = [...text.matchAll(/^binding:[ \t]*$/gm)]
   const verdictMatches = [...text.matchAll(/^verdict:\s*(PASS|FAIL)\b[^\n]*$/gm)]
-  const advisoryLines = [...text.matchAll(/^advisory:(?:[ \t]*none declared)?[ \t]*$/gm)]
-    .filter(match => match.index < (verdictMatches[0]?.index ?? 0))
-  const bindingAt = bindingLines[0], advisoryAt = advisoryLines[0]
-  requireEvidence(bindingLines.length === 1 && advisoryLines.length === 1 && verdictMatches.length === 1 &&
-    caseLines[0].index < bindingAt.index &&
-    bindingAt.index < advisoryAt.index && advisoryAt.index < verdictMatches[0].index, 'grade-groups', true)
+  const advisoryHeadings = [...text.matchAll(/^advisory:(?:[ \t]*none declared)?[ \t]*$/gm)]
+  const advisoryLines = advisoryHeadings.filter(match => match.index < (verdictMatches[0]?.index ?? 0))
+  // A case declaring no advisory criteria may close with `advisory: none declared` after the
+  // verdict: there is no group to read, so its position carries nothing the reader needs.
+  const closingNone = advisoryLines.length === 0 && scenario.advisory.length === 0 &&
+    advisoryHeadings.length === 1 && /none declared/.test(advisoryHeadings[0]?.[0] ?? '')
+  const bindingAt = bindingLines[0], advisoryAt = advisoryLines[0] ?? advisoryHeadings[0]
+  requireEvidence(bindingLines.length === 1 && (advisoryLines.length === 1 || closingNone) && verdictMatches.length === 1 &&
+    caseLines[0].index < bindingAt.index && bindingAt.index < advisoryAt.index &&
+    (closingNone || advisoryAt.index < verdictMatches[0].index), 'grade-groups', true)
   const bodySummaries = []
   const parseGroup = (part, prefix, count) => {
     const rows = []
@@ -382,8 +424,13 @@ export function parseGrade(raw, scenario, transcript) {
       return { id: `${prefix}${row[2]}`, verdict: row[3], citation, evidence }
     })
   }
-  const binding = parseGroup(text.slice(bindingAt.index + bindingAt[0].length, advisoryAt.index), 'B', scenario.binding.length)
-  const advisory = parseGroup(text.slice(advisoryAt.index + advisoryAt[0].length, verdictMatches[0].index), 'A', scenario.advisory.length)
+  const bindingEnd = closingNone ? verdictMatches[0].index : advisoryAt.index
+  const binding = parseGroup(text.slice(bindingAt.index + bindingAt[0].length, bindingEnd), 'B', scenario.binding.length)
+  const advisoryBody = closingNone ? ''
+    : text.slice(advisoryAt.index + advisoryAt[0].length, verdictMatches[0].index)
+  // `advisory:` with `none declared` under it is the same empty group, spelled over two lines.
+  const bodyNone = scenario.advisory.length === 0 && /^\s*none declared\s*$/i.test(advisoryBody)
+  const advisory = parseGroup(bodyNone ? '' : advisoryBody, 'A', scenario.advisory.length)
   requireEvidence(text.split('\n').filter(line => /^\s*[BA]\d+\b/.test(line) && !isBodySummary(line)).length ===
     binding.length + advisory.length, 'grade-criteria', true)
   const verdict = binding.every(row => row.verdict === 'pass') ? 'PASS' : 'FAIL'
@@ -414,7 +461,7 @@ export function parseGrade(raw, scenario, transcript) {
         .map(match => `A${match[1]}`)
     })
   const allPassed = /^advisory:[ \t]*all passed[ \t]*$/m.test(suffix)
-  const noneDeclared = /^advisory:[ \t]*none declared[ \t]*$/m.test(text)
+  const noneDeclared = bodyNone || /^advisory:[ \t]*none declared[ \t]*$/m.test(text)
   requireEvidence([...suffix.matchAll(/^advisory:/gm)].length <= 1 &&
     advisoryRatios.every(match => Number(match[1]) === passed && Number(match[2]) === advisory.length) &&
     new Set(listed).size === listed.length && listed.length === failed.length && listed.every(id => failed.includes(id)),
