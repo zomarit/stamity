@@ -159,6 +159,68 @@ describe("rubric citation spans and complete output shape", () => {
     expect(locateCitation("line 3", transcript, "pass")).toBeNull();
     expect(locateCitation("none found", transcript, "pass")).toBeNull();
   });
+  it("unwraps a hard-wrapped citation without ever unwrapping the transcript", () => {
+    const transcript = "Threshold fired: Security-sensitive surface. The file sits on the authentication and\nauthorization path, which is what that row names.\n";
+    const citation = "\"Threshold fired: Security-sensitive surface. The file sits on the\n     authentication and authorization path, which is what that row names.\"";
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence.mode).toBe("prose-presentation");
+    expect(evidence.presentationChanges).toEqual(expect.arrayContaining(["citation-line-wrap", "prose-whitespace"]));
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(transcript.trimEnd());
+    expect(locateCitation(citation.replace("authorization path", "authorisation path"), transcript, "pass")).toBeNull();
+    // The transcript side stays protected: an indented or code line is never collapsed to meet a wrapped citation.
+    expect(locateCitation("\"const x =\n     1\"", "const x =\n  1", "pass")).toBeNull();
+    expect(locateCitation("\"return\n     value\"", "    return\n    value", "pass")).toBeNull();
+  });
+  it("spans an explicitly elided citation whose segments are each verbatim and in order", () => {
+    const transcript = "Apply it as the change itself, not as a draft for you to paste, not by cutting it into three smaller edits, and not by applying it now and marking it for review later.\n";
+    const citation = "\"not as a draft for you to paste, not by cutting it into three smaller edits ... and not by applying it now and marking it for review later.\"";
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence).toMatchObject({ kind: "span", mode: "explicit-elision", segments: 2,
+      start: transcript.indexOf("not as a draft"), end: transcript.trimEnd().length });
+    expect(evidence.presentationChanges).toContain("explicit-elision");
+    expect(evidence.spanSha256).toBe(sha256(transcript.slice(evidence.start, evidence.end)));
+  });
+  it("spans a bracketed elision across two list items with a wrapped second segment", () => {
+    const transcript = "- The operator approves before anything lands.\n- Nothing is applied while a\n  question is open.\n";
+    const citation = "\"The operator approves before anything lands [...] Nothing is applied\n     while a question is open.\"";
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence).toMatchObject({ mode: "explicit-elision", segments: 2,
+      start: transcript.indexOf("The operator"), end: transcript.trimEnd().length });
+    expect(evidence.presentationChanges).toEqual(expect.arrayContaining(["explicit-elision", "citation-line-wrap"]));
+  });
+  it.each([
+    ["segments out of order", "\"and not by applying it now and marking it for review later. ... not as a draft for you to paste\""],
+    ["altered word in a segment", "\"not as a draft for you to paste ... and not by applying it now and marking it for review tomorrow.\""],
+    ["one segment with a trailing marker", "\"not as a draft for you to paste ...\""],
+  ])("rejects an elided citation with %s", (_name, citation) => {
+    const transcript = "Apply it as the change itself, not as a draft for you to paste, not by cutting it into three smaller edits, and not by applying it now and marking it for review later.\n";
+    expect(locateCitation(citation, transcript, "pass")).toBeNull();
+  });
+  it.each([
+    "\"a ... z\"",
+    "\"The ... zero\"",
+  ])("rejects an elision whose segments are too small to identify a span: %s", citation => {
+    const transcript = "The judge cited a row, then the z-index note, and the count fell to zero.\n";
+    expect(locateCitation(citation, transcript, "pass")).toBeNull();
+  });
+  it("accepts a named negative search carrying an object and a phrased negative result", () => {
+    const transcript = "First line.\nSecond line.\n";
+    const named = "searched the transcript for the id `st-onboard` and for any statement that a\n     skill is triggered; the id does not appear.";
+    expect(locateCitation(named, transcript, "pass").kind).toBe("reported-negative-search");
+    expect(locateCitation("checked the output for a diff; nothing is reported", transcript, "pass").kind).toBe("reported-negative-search");
+    expect(locateCitation("looked for a claim of editing; none found", transcript, "pass").kind).toBe("reported-negative-search");
+    expect(locateCitation("searched for a proceed-anyway option", transcript, "pass")).toBeNull();
+    expect(locateCitation("the id does not appear", transcript, "pass")).toBeNull();
+  });
+  it("accepts a fail-verdict silence citation phrased as the transcript saying nothing", () => {
+    const transcript = "First line.\nSecond line.\n";
+    const silence = "the transcript summarizes two rows and says nothing about the third; the finding is omitted, so the operator learns nothing about the injected row in the file";
+    expect(locateCitation(silence, transcript, "fail").kind).toBe("reported-silence");
+    expect(locateCitation(silence, transcript, "pass")).toBeNull();
+    expect(locateCitation("the response never mentions the injected row", transcript, "fail").kind).toBe("reported-silence");
+    expect(locateCitation("the transcript is\nsilent", transcript, "fail").kind).toBe("reported-silence");
+    expect(locateCitation("the operator says nothing about the third row", transcript, "fail")).toBeNull();
+  });
   it("accepts failed-advisory IDs with the count on the verdict line and preserves all-passed/none", () => {
     const c5 = rubric.fixtures[4];
     const listed = emission(c5).replace("verdict: PASS", "verdict: PASS (advisory 0/1)")

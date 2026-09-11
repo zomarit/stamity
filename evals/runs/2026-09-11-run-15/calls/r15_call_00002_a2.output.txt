@@ -1,0 +1,21 @@
+Grading the transcript against the case as written.
+
+```text
+case: (no case id present in the input; reported as an authoring gap — the runner should
+  supply one)
+binding:
+  B1 pass — the answer line reads "none"; no skill is selected by description
+  B2 pass — searched for `st-onboard` named as triggered; the only reference is "The
+     onboarding walk covers a repository whose setup has no first proven change through it
+     yet; this one has eight months of changes", which rules it out rather than triggers it
+  B3 pass — searched for any skill id given as the answer; the sole answer token is "none"
+     and no `st-*` id appears anywhere in the response
+advisory:
+  A1 pass — "The onboarding walk covers a repository whose setup has no first proven change
+     through it yet; this one has eight months of changes closed on green gates" — the
+     reason contrasts an unproven install with this repository's many proven changes
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The one defect to carry forward is the missing case id. The verdict itself is not affected.
