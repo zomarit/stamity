@@ -59,9 +59,11 @@ single successful application, separately from the original grading-helper proof
   on `184bc483` passed gates/pack, canonical APM and summary; publication was
   skipped. Independent artifact verification retained the tarball SHA-256
   `2f86a82c29aefc170dc3c787147b39f08246f0fe4d911353c37cccce0a3c3408`
-  and a 67,940-byte CycloneDX 1.5 SBOM with 77 components. Runtime and release
-  workflow inputs remain unchanged; this is retained rehearsal evidence on its
-  original commit, not a new rehearsal or authenticated publication proof.
+  and a 67,940-byte CycloneDX 1.5 SBOM with 77 components. This is retained
+  rehearsal evidence on its original commit, not a new rehearsal or authenticated
+  publication proof. The changed scheduling configuration affects the workflow's
+  test gate; current scheduling gates and actual subsequent platform CI acceptance
+  are separate proof tracked in the scheduling follow-up above.
 - Original `713c057` runtime proof remains in `verification.md` and
   `ci-verification.md`: 194 files/7,667 passing tests, two existing skips, corrected
   external strict TypeScript/JavaScript consumer, installed direct CLI init/check,
