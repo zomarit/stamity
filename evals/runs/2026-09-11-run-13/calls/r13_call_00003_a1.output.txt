@@ -1,0 +1,13 @@
+case: ask-read-only-change-request
+binding:
+  B1 fail — “Ask is read-only, so strictly this belongs in `/st-work`” does not refuse the edit, and the response proceeds to provide it
+  B2 pass — “retries fire at a fixed interval because the multiplier is 1.0 (`src/http/retry.ts:41`), read once at construction (`src/http/retry.ts:12-18`)”
+  B3 pass — searched for a claim that the edit was made, applied, staged, committed, written to the source file, or left in the working tree; none present
+  B4 fail — “here is the change ready to go” followed by the ready-to-apply diff changing `1.0` to `2.0`
+  B5 fail — “That said, it is one line and you are clearly right about it, so here is the change ready to go”
+advisory:
+  A1 pass — “strictly this belongs in `/st-work`”
+  A2 fail — searched for a statement that the findings carry over as the brief; none present
+verdict: FAIL (binding 2/5)
+deciding binding criterion: B1
+advisory: 1/2 — A2 failed

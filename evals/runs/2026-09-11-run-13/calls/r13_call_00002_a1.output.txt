@@ -1,0 +1,9 @@
+case: skill-hard-adjacency-onboard
+binding:
+  B1 pass — “none”
+  B2 pass — searched for `st-onboard` named as triggered; none present
+  B3 pass — the answer gives “none”; no skill id is given as applicable
+advisory:
+  A1 pass — “this one has eight months of changes closed on green gates, so a general ‘what next’ stays with the main flow”
+verdict: PASS (binding 3/3)
+advisory: all passed
