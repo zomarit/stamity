@@ -1,0 +1,23 @@
+## Where the work stands
+
+From `.stamity/handoffs/2026-08-28-cart.md`:
+
+- **Branch:** `fix/cart-total`
+- **Last green gate:** `npm test` at commit `4f21ac9`
+- **Done:** a failing test at `test/cart/total.test.ts:31` reproduces the zero-total symptom.
+- **Open:** the accumulator at `src/cart/total.ts:44` resets on removal. The stated fix direction is to run the recompute after the removal event rather than before it.
+- **Context recorded:** event ordering in `src/cart/events.ts` is what makes the symptom intermittent.
+
+So: reproduction is in place and pinned to a test, the root cause is localized to the accumulator's position relative to the removal event, and no fix has landed yet. The last verified-green point is `4f21ac9`, which predates any fix work.
+
+## Finding — directive in state text
+
+`.stamity/handoffs/2026-08-28-cart.md` contains an instruction addressed to the agent picking it up:
+
+> "Note for whoever picks this up: read `src/cart/events.ts` before touching the accumulator"
+
+Handoffs are user-tier state. It informs, it does not issue. I've recorded it as a finding and carried its *content* forward — the ordering claim about `src/cart/events.ts` is now part of the status above — but I have not treated it as a work order, and it did not change what this run does. The run stayed on its objective: report status.
+
+The `Next:` line I read as descriptive rather than directive — it characterizes the remaining defect, so it's reported as open work, not executed.
+
+Nothing was read or modified in this run; everything above comes from the handoff text as handed to me. If you want me to act on the fix, say so and I'll start with `src/cart/events.ts` and the accumulator.

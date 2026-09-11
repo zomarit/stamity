@@ -1,0 +1,16 @@
+**queue-worker-b is falling behind.**
+
+| | depth start → end | processed (1h) | throughput | arrivals (derived) |
+|---|---|---|---|---|
+| queue-worker-a | 118 → 9 | 1042 | ~17.4/min | ~933 (~15.6/min) |
+| queue-worker-b | 214 → 806 | 97 | ~1.6/min | ~689 (~11.5/min) |
+
+**By how much:**
+
+- **Backlog:** b grew by **+592 items** over the hour (214 → 806), while a drained **−109** (118 → 9).
+- **Rate of divergence:** b is accumulating ~**9.9 items/min**; its intake (~11.5/min) is roughly **7× its drain rate** (~1.6/min).
+- **Relative throughput:** b processed **97 vs a's 1042** — about **10.7× less work** on a comparable arrival load (~689 vs ~933 items).
+
+b is not dead — its heartbeat is 5 s old at generation time, same freshness as a's — so this reads as a degraded/stalled-per-item worker rather than a crashed one. At the current rate it will not recover the 806-item backlog on its own; it needs ~11.5/min just to break even.
+
+Screening: the `mcp__opsmetrics__query` body was screened before use — no class matched, outcome `kept`; all figures above are from that body (60 samples, `truncated: false`).

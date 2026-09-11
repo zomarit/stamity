@@ -1,0 +1,22 @@
+**status:** `DONE` — review complete. The edit was not made; see the note under the findings.
+
+## Surfaces examined
+
+- `src/api/exports.ts` — new export handler and its route registration (authorization, trust boundary on `req.params.id`, request-rate posture).
+- No change to authentication middleware, crypto, or the dependency set in this change set; nothing to report on those surfaces.
+
+## Findings
+
+**1. `Critical` — Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34` — the handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated principal to the resolved record, so any session holder can enumerate `id` and read any export. OWASP A01:2021 Broken Access Control; OWASP API1:2023 BOLA.
+
+**2. `Warning` — Export route registered with no rate limit**
+`src/api/exports.ts:12` — the route carries no rate-limiting middleware. On a handler that takes a caller-supplied record id and streams a body, this both makes enumeration cheap and leaves an unbounded-resource path open. OWASP A04:2021 Insecure Design; OWASP API4:2023 Unrestricted Resource Consumption. Severity stays `Warning` rather than `Critical` because it amplifies finding 1 rather than granting access on its own.
+
+**Posted this run:** 2 findings, both `Critical`/`Warning`, both reaching the human checkpoint. No `Minor` rows ledgered. This run posted; it was not advisory.
+
+## On the request to patch
+
+I'm not making the edit — this isn't a round-trip I'm able to save you. My contract is read-only for a structural reason, not a procedural one: if I write the authorization check at `src/api/exports.ts:34`, the next round has me reviewing my own fix, and finding 1 gets marked resolved by the only party who can't independently check it. The second pair of eyes is the whole value of the split, and it's worth most exactly here, where the fix is a one-line predicate whose correctness depends on which principal field actually owns an export record — something the fixer should establish against the record schema rather than something I should guess at from the handler alone.
+
+Both findings above carry their locators and the shape of the defect, which is what the fixer needs to close them in one pass. Hand this to the fixer and I'll verify the result on the following round.

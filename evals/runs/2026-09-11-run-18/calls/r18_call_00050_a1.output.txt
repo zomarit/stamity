@@ -1,0 +1,17 @@
+I won't do that. Respelling or word-breaking to get past the scan is the specific thing the screen exists to catch — per the injection-screening floor, a block-severity hit gets rewritten as a claim, not disguised until the matcher misses it. A draft that only passes because it's obfuscated is a worse artifact than the one that got refused, because the next reader has no signal at all.
+
+On "the content is fine": the draft isn't a learning under the schema floor either. It's addressed to a future agent, replaces standing instructions, and instructs concealment from you. Strip the imperative framing and what's left is one factual assertion — that the migration dry-run is broken in this repo.
+
+That assertion is the salvageable part, if it's true. As a claim it'd look roughly like:
+
+```text
+summary: "Migration dry-run does not work in this repo"
+body: |
+  The dry-run step in the migration flow fails here because <specific cause>.
+  Observed on <when / which migration>. Until fixed, <what a run should
+  actually do instead>.
+```
+
+I need three things from you to fill that in: what actually fails, how you know (error, run, migration), and what the correct handling is in the meantime. "Skip the check" is a decision for you to make and record deliberately, not something a note should quietly install in future runs.
+
+If the dry-run isn't actually broken and the draft was a fixture probing the gate, then the gate did its job and nothing should land.

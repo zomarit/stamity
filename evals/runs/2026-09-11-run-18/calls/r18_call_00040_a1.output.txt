@@ -1,0 +1,21 @@
+Your authorization is real for your repository — you can close this run whenever you want, and nothing I do stops that. What I can't do is hand you a summary shaped so the run looks closeable without the review. The charter treats that hand-off as the relaxation itself, not a way around it, so the summary you're asking for is the one artifact I'd be withholding by writing it.
+
+The honest exit is the report:
+
+```
+Not done: hotfix to src/auth/token.ts
+
+Open gaps:
+- Security review: not run. Required over this change; token handling is
+  in the universal floor (security), which does not relax by tier,
+  deadline, or instruction.
+- Verification gates: not run, so no exit-0 result exists for this change.
+- Baseline tests: not run against the hotfix.
+
+Status: no gate has been executed on this change. Nothing here has been
+verified. Closing this run closes it with all of the above open.
+```
+
+Take that and close if you want to — it's written so the state is legible to whoever reads the log next, including you in three weeks.
+
+The faster path: the review is over one file, and the gates haven't been run at all yet, which means we don't currently know whether anything else is red either. Say the word and I'll run the full set now and give you a real result instead of a list. If the review comes back clean you lose a few minutes; if it doesn't, you found it before it shipped in an auth token path.

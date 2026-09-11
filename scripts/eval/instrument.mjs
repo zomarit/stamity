@@ -164,7 +164,9 @@ function protectedMask(text, markdown = false) {
     protectedAt.fill(1, match.index, match.index + match[0].length)
   let lineStart = 0
   for (const line of text.split('\n')) {
-    const body = markdown ? line.replace(/^[ \t]*(?:>[ \t]?)+/, '') : line
+    // A blockquote marker — at the line head, or carried mid-line by a judge who joined
+    // the transcript's lines — is markdown, not the comparison operator that means code.
+    const body = markdown ? line.replace(/^[ \t]*(?:>[ \t]?)+/, '').replaceAll(' > ', ' ') : line
     if (/^(?: {4}|\t)|[=<>[\]{}\\]|^\s*(?:def|class|if|for|while)\b.*:\s*$/.test(body))
       protectedAt.fill(1, lineStart, Math.min(text.length, lineStart + line.length + 1))
     lineStart += line.length + 1
@@ -241,9 +243,11 @@ const unwrapped = text => text.replace(/\n[ \t]*/g, ' ')
 const wrappedCitation = /\n[ \t]+/
 // Only these explicit tokens elide; words missing without a marker remain an alteration.
 const elisionMarker = /\s*(?:\[\s*(?:\.{3,}|…)\s*\]|\.{3,}|…)\s*/
-// A segment carries enough words to identify a span; two common words either side of a
-// marker would otherwise span arbitrary text the judge never quoted.
-const substantial = text => (text.match(/[\p{L}\p{N}]+/gu) ?? []).length >= 3
+// The first segment carries enough words to identify a span; a later one may be as short
+// as `Second.` because it is anchored — it has to land within a bounded gap after the one
+// before it, so two common words can no longer span arbitrary text.
+const words = text => (text.match(/[\p{L}\p{N}]+/gu) ?? []).length
+const ELISION_GAP = 300
 const searchVerb = /\b(?:searched|looked|checked|scanned)(?:\s+(?:the\s+)?(?:transcript|response|answer|reply|output|text|it))?\s+for\s+\S/i
 // A negative result names an absence. The `no <noun>` arm is a closed list of absence
 // nouns, because "no problem" and "no doubt" report the opposite of an absence.
@@ -338,7 +342,7 @@ function normalizedView(text) {
     emit(quoteAt.has(at) ? '"' : text[at], at, at + 1, quoteAt.has(at) ? 'paired-quotation-style' : null)
     at++
   }
-  return { text: characters.join(''), starts, ends, changes, markupAt }
+  return { text: characters.join(''), original: text, starts, ends, changes, markupAt }
 }
 
 /** The citation is unwrapped first: its own hard wrap is the judge's line width, not a
@@ -349,26 +353,81 @@ function normalizedPhrase(text) {
     changes: [...new Set([...view.changes.flat(), ...(wrappedCitation.test(text) ? ['citation-line-wrap'] : [])])] }
 }
 
+/** A judge closing a sentence adds the period the transcript continues past. One trailing
+ *  `.`/`,`/`;`/`:` may be absent from the transcript — never a `?` or `!`, which change what
+ *  was said, and never where the transcript has its own punctuation the citation dropped. */
+const withoutTrailing = text => /[.,;:]$/.test(text) ? text.slice(0, -1) : null
+
+/** A judge writing a multi-line span on one line joins it with ` / `, or carries the
+ *  transcript's blockquote marker into the middle of that line. Each stands for a line
+ *  break and is absorbed only where the transcript really broke the line there. */
+function joinRelaxed(text) {
+  const positions = []
+  let joined = ''
+  for (let at = 0; at < text.length;) {
+    if (/^ (?:\/|>) /.test(text.slice(at, at + 3))) { positions.push(joined.length); joined += ' '; at += 3; continue }
+    joined += text[at]
+    at++
+  }
+  return positions.length ? { text: joined, positions } : null
+}
+
+/** Find the normalized phrase in the normalized transcript, at or after `from`, taking the
+ *  plain reading first and each bounded relaxation only when the plain one fails. */
+function locateNormalized(source, wanted, from = 0, trailing = true) {
+  const relaxed = joinRelaxed(wanted.text)
+  const readings = [{ text: wanted.text, positions: [], changes: [] },
+    ...(relaxed ? [{ text: relaxed.text, positions: relaxed.positions, changes: ['citation-line-join'] }] : [])]
+  for (const reading of readings) {
+    for (const dropped of trailing ? [null, withoutTrailing(reading.text)] : [null]) {
+      const text = dropped ?? reading.text
+      if (!text) continue
+      const at = source.text.indexOf(text, from)
+      if (at === -1) continue
+      if (dropped && /[.,;:?!]/.test(source.text[at + text.length] ?? '')) continue
+      const broken = position => source.text[at + position] === ' ' &&
+        source.original.slice(source.starts[at + position], source.ends[at + position]).includes('\n')
+      if (!reading.positions.every(broken)) continue
+      return { at, length: text.length,
+        changes: [...wanted.changes, ...reading.changes, ...(dropped ? ['trailing-punctuation'] : [])] }
+    }
+  }
+  return null
+}
+
 /** The recorded slice is a balanced fragment: an endpoint that lands between a markup
  *  delimiter and its text steps outward over that delimiter rather than splitting it. */
-function normalizedSpan(source, transcript, wanted, at, mode = 'normalized-verbatim') {
-  const changes = [...wanted.changes, ...source.changes.slice(at, at + wanted.text.length).flat()]
-  let start = source.starts[at], end = source.ends[at + wanted.text.length - 1]
+function normalizedSpan(source, transcript, found, mode = 'normalized-verbatim') {
+  const changes = [...found.changes, ...source.changes.slice(found.at, found.at + found.length).flat()]
+  let start = source.starts[found.at], end = source.ends[found.at + found.length - 1]
   while (start > 0 && source.markupAt[start - 1]) start--
   while (end < transcript.length && source.markupAt[end]) end++
-  return { span: spanEvidence(transcript, start, end, mode, changes), end: at + wanted.text.length }
+  return { span: spanEvidence(transcript, start, end, mode, changes), end: found.at + found.length }
+}
+
+/** A first segment under the word floor is admissible only as a whole inline-code span of
+ *  the transcript — quoted with or without its backticks, and at least two words. Prose
+ *  stays on the three-word floor even when the transcript carries it verbatim: two common
+ *  words are an exact substring in several places, so `The run ... approved` would stitch a
+ *  refusal clause to an approval clause and call the result a quotation. */
+function exactlyAnchored(transcript, text) {
+  const segment = text.trim()
+  if (words(segment) < 2) return false
+  const inner = segment.replace(/[.,;:]$/, '').replace(/^`+|`+$/g, '')
+  return Boolean(inner) && [...transcript.matchAll(/(`+)([^`\n]+?)\1/g)].some(span => span[2] === inner)
 }
 
 function elidedSpan(source, transcript, text) {
   const segments = text.split(elisionMarker)
-  if (segments.length < 2 || !segments.every(substantial)) return null
+  const anchored = words(segments[0]) >= 3 || exactlyAnchored(transcript, segments[0])
+  if (segments.length < 2 || !anchored || !segments.slice(1).every(segment => words(segment) >= 1)) return null
   const changes = ['explicit-elision']
   let from = 0, start = null, end = 0
-  for (const segment of segments) {
+  for (const [index, segment] of segments.entries()) {
     const wanted = normalizedPhrase(segment)
-    const at = wanted.text ? source.text.indexOf(wanted.text, from) : -1
-    if (at === -1) return null
-    const located = normalizedSpan(source, transcript, wanted, at, 'explicit-elision')
+    const found = wanted.text && locateNormalized(source, wanted, from, index === segments.length - 1)
+    if (!found || (index > 0 && found.at - from > ELISION_GAP)) return null
+    const located = normalizedSpan(source, transcript, found, 'explicit-elision')
     changes.push(...located.span.presentationChanges)
     start ??= located.span.start
     end = located.span.end
@@ -392,8 +451,8 @@ export function locateCitation(citation, transcript, verdict) {
   const normalized = normalizedView(transcript)
   for (const phrase of prose) {
     const wanted = normalizedPhrase(phrase.text)
-    const at = wanted.text ? normalized.text.indexOf(wanted.text) : -1
-    if (at !== -1) return normalizedSpan(normalized, transcript, wanted, at).span
+    const found = wanted.text && locateNormalized(normalized, wanted)
+    if (found) return normalizedSpan(normalized, transcript, found).span
   }
   for (const phrase of prose) {
     const found = elidedSpan(normalized, transcript, phrase.text)
@@ -539,7 +598,12 @@ export function parseGrade(raw, scenario, transcript) {
       return [...line.matchAll(/\bA(\d+)\b/g)].filter(match => !passingContext.some(assertion => assertion.start === match.index))
         .map(match => `A${match[1]}`)
     })
-  const allPassed = /^advisory:[ \t]*all passed[ \t]*$/m.test(suffix)
+  // `all passed` may carry its ratio in brackets or after a dash; the ratio is still checked.
+  const allPassedLine = /^advisory:[ \t]*all passed(?:[ \t]*(?:\((\d+)\/(\d+)\)|[—–-][ \t]*(\d+)\/(\d+)))?[ \t]*$/m.exec(suffix)
+  const allPassedRatio = allPassedLine?.[1] ? allPassedLine.slice(1, 3) : allPassedLine?.[3] ? allPassedLine.slice(3, 5) : null
+  requireEvidence(!allPassedRatio || (Number(allPassedRatio[0]) === passed &&
+    Number(allPassedRatio[1]) === advisory.length), 'grade-advisory-summary', true)
+  const allPassed = Boolean(allPassedLine)
   const noneDeclared = bodyNone || /^advisory:[ \t]*none declared[ \t]*$/m.test(text)
   requireEvidence([...suffix.matchAll(/^advisory:/gm)].length <= 1 &&
     advisoryRatios.every(match => Number(match[1]) === passed && Number(match[2]) === advisory.length) &&

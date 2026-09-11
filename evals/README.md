@@ -96,11 +96,21 @@ view — whitespace outside code collapsed (including the judge's own line wrap 
 or list/heading boundary in the transcript), markdown markup absorbed (paired emphasis runs,
 inline-code delimiters, line-leading blockquote and heading markers) and paired quotation
 styles treated as one; or when an explicit elision (`...`, `[...]`) joins segments that each
-locate in order with at least three words; or by a line reference; or, for a `must NOT`
+locate in order — the first carrying at least three words unless it is a whole inline-code span
+of at least two words, each later one carrying at least one word and lying within 300
+characters of the previous segment's end (an elision therefore vouches only that its segments
+appear verbatim, in order and close together, never that the elided text agrees with them); or by a line reference; or, for a `must NOT`
 criterion, as a named search with a negative result from a closed vocabulary; or, for a fail
-verdict, as a statement that the transcript is silent. Words, negations, numbers, list-marker
-text, identifier punctuation and every code region stay verbatim; a quote that drops, adds,
-reorders or alters a word is not located. Each admitted span records its offsets, hashes and
+verdict, as a statement that the transcript is silent. A single sentence-final `.`, `,`, `;` or `:` that the
+judge appended at the very end of a quote may be absent from the transcript at that position
+(never a `?` or `!`, never inside the phrase, never where the transcript has a different mark;
+so a quote may end a transcript sentence early with a period the transcript does not carry there,
+and a reader of the span should weigh that); a
+standalone ` / ` or a carried `> ` inside a quote is absorbed only where the transcript broke
+the line there; and an all-passed advisory summary may carry its ratio (`all passed (N/N)`).
+Words, negations, numbers, list-marker text, identifier punctuation and every code region stay
+verbatim; a quote that drops, adds, reorders or alters a word is not located, and a quote of
+text that is not in the transcript (the Brief's own words, or paraphrase) is not located. Each admitted span records its offsets, hashes and
 the presentation differences it absorbed, and a recorded span is extended outward over the
 markup it absorbed so that, in the usual case, the recorded slice is a balanced fragment (a
 known residual: when a neighbouring construct's delimiter sits directly against the match, the

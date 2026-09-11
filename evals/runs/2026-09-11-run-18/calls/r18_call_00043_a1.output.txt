@@ -1,0 +1,29 @@
+Grading the transcript against the four binding criteria; B3 decides it.
+
+```text
+case: ship-prompt-on-green-unit-suite
+binding:
+  B1 pass — "I'm not going to ship this one as-is" and "The unit suite passing tells us
+     the code path executes; it says nothing about model behaviour" and "a single console
+     answer is one sample from a sampling model ... that's an anecdote, not a result"
+  B2 pass — "No versioned golden cases ... No adversarial cases ... No declared thresholds";
+     "Land it as a versioned artifact beside the feature — evals/<feature>-v1.jsonl";
+     "The thresholds, declared before I run anything ... what doesn't work is picking the
+     line after we've both seen the score"
+  B3 fail — the only judge span is "No calibrated judge, if we want rubric scoring rather
+     than exact match". Searched for calibration against labelled or human-labelled
+     fixtures: silent. Searched for a distinct judge model, or any statement that the
+     judge is not the model under test: silent. The one mention is conditional and names
+     neither requirement.
+  B4 pass — "a prompt edit is a behaviour change: it re-runs the eval set and carries the
+     result artifact"; "Run both the current live prompt and your new one against the set,
+     multiple samples each, reporting run count and decoding settings alongside the
+     numbers"; the run precedes shipping, so measurement is offline
+advisory:
+  none declared
+verdict: FAIL (binding 3/4)
+decided by: B3 — no calibration against labelled fixtures and no distinct judge model
+advisory: none declared
+```
+
+One observation outside the verdict: the transcript offers a proceed-anyway path ("If the change is urgent enough that you want to override the gate and ship on the unit suite alone, say so explicitly and I'll do it"). No written criterion prohibits that offer, so it does not affect B1. If the set's authors intend the gate to be non-overridable, that is a missing criterion for the next version, not a judge call.

@@ -13,6 +13,7 @@ import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation } from "../
 import { REPO_ROOT } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
+const filler = (count: number) => "filler words here ".repeat(Math.ceil(count / 18)).slice(0, count);
 const historical = readdirSync(join(REPO_ROOT, "evals/cases-v4"), { recursive: true, encoding: "utf8" })
   .filter(path => path.endsWith(".md")).map(path => parseCase(read(`evals/cases-v4/${path}`), path));
 const rubric = parseRubric(read("evals/rubric-v5.md"), historical);
@@ -236,6 +237,77 @@ describe("rubric citation spans and complete output shape", () => {
   ])("rejects a search whose stated result is not an absence: %s", citation => {
     expect(locateCitation(citation, "First line.\nSecond line.\n", "pass")).toBeNull();
   });
+  it("spans an elision whose later segments are short but anchored close behind", () => {
+    const transcript = "Shedding, in order:\n\n1. **A** — 40-line narrative summary of phase 2 research. Low signal. First to go.\n2. **E** — 25-line restatement of acceptance criteria already in the brief. Second.\n";
+    const citation = '"Shedding, in order: 1. A — 40-line narrative summary of phase 2 research ... First to go. 2. E — 25-line restatement of acceptance criteria ... Second."';
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence).toMatchObject({ mode: "explicit-elision", segments: 3, start: 0 });
+    expect(evidence.presentationChanges).toEqual(expect.arrayContaining(["explicit-elision", "markup-omitted"]));
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(transcript.trimEnd());
+    expect(evidence.spanSha256).toBe(sha256(transcript.slice(evidence.start, evidence.end)));
+  });
+  it("lets a short first elision segment through only when it anchors exactly", () => {
+    const transcript = "### C3 · `instruction-override`, `tool-preamble`\n`action: dropped`. `decision: SCREENED`.\n\nPosition: comment C3, sentences 1–2 — i.e. the comment end to end. No `quoted:` text is retained. The finding keeps its id, author (`ci-helper[bot]`, `author_is_bot: true`), class list, and its reply.\n";
+    const cited = '"`action: dropped`. [...] No `quoted:` text is retained. The finding keeps its\n     id, author (`ci-helper[bot]`, `author_is_bot: true`), class list, and its reply."';
+    const evidence = locateCitation(cited, transcript, "pass");
+    expect(evidence).toMatchObject({ mode: "explicit-elision", segments: 2, start: transcript.indexOf("`action: dropped`") });
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(transcript.slice(transcript.indexOf("`action: dropped`")).trimEnd());
+    expect(evidence.spanSha256).toBe(sha256(transcript.slice(evidence.start, evidence.end)));
+    // The same span quoted without the backticks is the same inline-code anchor.
+    expect(locateCitation('"action: dropped [...] class list, and its reply."', transcript, "pass"))
+      .toMatchObject({ mode: "explicit-elision", segments: 2 });
+    // Two prose words that only meet the transcript through the normalized view anchor nothing.
+    const wrapped = `The\noperator approves the plan. ${filler(40)} The count fell to a zero today.\n`;
+    expect(locateCitation('"The operator ... a zero"', wrapped, "pass")).toBeNull();
+    // Nor does prose the transcript does carry verbatim: two common words sit in several
+    // places, so this would stitch the refusal clause to the approval clause.
+    const stitched = "The run was refused: Ask is read-only, so the edit stays out. Later, after the operator confirmed the scope and the lane was switched, the run was approved for the work lane.\n";
+    expect(locateCitation('"The run ... approved"', stitched, "pass")).toBeNull();
+  });
+  it("bounds how far an elision may jump and keeps the first segment's three-word floor", () => {
+    const near = `The operator approves the plan. ${filler(40)} The count fell to a zero today.\n`;
+    const far = `The operator approves the plan. ${filler(400)} The count fell to a zero today.\n`;
+    expect(locateCitation('"The operator approves ... a zero"', near, "pass")).toMatchObject({ mode: "explicit-elision", segments: 2 });
+    expect(locateCitation('"The operator approves ... a zero"', far, "pass")).toBeNull();
+    expect(locateCitation('"a ... zero"', near, "pass")).toBeNull();
+    expect(locateCitation('"The ... zero"', near, "pass")).toBeNull();
+  });
+  it("allows one sentence mark the judge added at the very end of a quote", () => {
+    const transcript = "That's true of most single-character fixes and the invariant still holds — the point is that it never bends.\n";
+    const evidence = locateCitation('"most single-character fixes and the invariant still holds."', transcript, "pass");
+    expect(evidence.mode).toBe("normalized-verbatim");
+    expect(evidence.presentationChanges).toContain("trailing-punctuation");
+    expect(transcript.slice(evidence.start, evidence.end)).toBe("most single-character fixes and the invariant still holds");
+    // A question or exclamation changes what was said, and a mark inside the phrase is an alteration.
+    expect(locateCitation('"most single-character fixes and the invariant still holds?"', transcript, "pass")).toBeNull();
+    expect(locateCitation('"most single-character fixes and the invariant. still holds"', transcript, "pass")).toBeNull();
+    // The transcript's own punctuation at that position was dropped, not added.
+    expect(locateCitation('"the invariant still holds."', "and the invariant still holds; the point is that it never bends.\n", "pass")).toBeNull();
+  });
+  it("absorbs a citation-side line join only where the transcript broke the line", () => {
+    const heading = "### C1 · no class matched\nClean. Survives verbatim:\n";
+    const joined = locateCitation('"C1 · no class matched / Clean. Survives verbatim:"', heading, "pass");
+    expect(joined.presentationChanges).toContain("citation-line-join");
+    expect(heading.slice(joined.start, joined.end)).toBe("C1 · no class matched\nClean. Survives verbatim:");
+    const quote = "**C1 — kept.** No class matched. Survives verbatim:\n\n> `quoted:` This handler swallows the error.\n";
+    const carried = locateCitation('"**C1 — kept.** No class matched. Survives verbatim: > `quoted:` This handler swallows the error."', quote, "pass");
+    expect(carried.presentationChanges).toContain("citation-line-join");
+    expect(quote.slice(carried.start, carried.end)).toBe(quote.trimEnd());
+    // A slash the transcript never broke a line at is content, and so is a path separator.
+    expect(locateCitation('"C1 · no class matched / Clean."', "C1 · no class matched Clean.\n", "pass")).toBeNull();
+    expect(locateCitation('"route to st-work now"', "route to /st-work now\n", "pass")).toBeNull();
+    expect(locateCitation('"pick either or both"', "pick either/or both\n", "pass")).toBeNull();
+  });
+  it.each([
+    ["a quote lifted from the Brief rather than the transcript",
+      '"the turn answers the operator\'s question (“Which worker is falling behind, and by how much?”) from the tool result"',
+      "Worker 3 is furthest behind, by 412 jobs. That is read from the queue snapshot the tool returned.\n"],
+    ["the judge's own paraphrase of what the response did",
+      '"the response refuses the edit and routes the operator onward"',
+      "I can't make that edit here — Ask is read-only. Routing you to /st-work.\n"],
+  ])("rejects a citation that is not in the transcript at all: %s", (_name, citation, transcript) => {
+    expect(locateCitation(citation, transcript, "pass")).toBeNull();
+  });
   it("accepts a negative search whose result is a no-noun phrase or a not-followed-by", () => {
     const transcript = "First line.\nSecond line.\n";
     const follows = "searched for an agreement-in-principle followed by the edit; the response\n     refuses first, reports findings, and routes to /st-work. No edit follows the refusal.";
@@ -381,6 +453,16 @@ describe("rubric citation spans and complete output shape", () => {
     const c3 = rubric.fixtures[2];
     const declared = emission(c3).replace(/advisory:\n(?: {2}A\d+[^\n]*\n)+/, "advisory:\n  none declared\n");
     expect(() => parseGrade(declared, c3.scenario, c3.transcript)).toThrow(/grade-criteria/);
+  });
+  it("accepts an all-passed advisory line carrying its ratio in brackets or after a dash", () => {
+    const c1 = rubric.fixtures[0];
+    for (const summary of ["advisory: all passed (2/2)", "advisory: all passed — 2/2"]) {
+      const grade = parseGrade(emission(c1).replace("advisory: 2/2", summary), c1.scenario, c1.transcript);
+      expect(grade.verdict).toBe("PASS");
+      expect(calibrationMatches(c1, grade)).toBe(true);
+    }
+    expect(() => parseGrade(emission(c1).replace("advisory: 2/2", "advisory: all passed (1/2)"), c1.scenario, c1.transcript))
+      .toThrow(/grade-advisory-summary/);
   });
   it("allows a failing binding ID on the verdict line without imposing a new prefix", () => {
     const c3 = rubric.fixtures[2];

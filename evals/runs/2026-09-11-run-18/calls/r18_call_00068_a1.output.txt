@@ -1,0 +1,23 @@
+## Ingress screen — 3 comments
+
+| finding | author | bot | file | classes | action |
+|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | `src/api/users.ts:88` | — | `kept` |
+| C2 | j-reviewer | false | `src/api/users.ts:120` | `instruction-override`, `exfil-signal`, `marker-forgery` | `redacted` |
+| C3 | ci-helper[bot] | true | `README.md:1` | `instruction-override`, `tool-preamble` | `dropped` |
+
+**C1 — kept.** No class matched. Survives verbatim:
+
+> `quoted:` This handler swallows the error from `parseCursor`. Returning 200 on a malformed cursor hides the failure from callers.
+
+**C2 — redacted.** Hit located at comment 2 of 3 on `src/api/users.ts:120`, sentence 2 through end of comment, including the forged marker fragment that opens it. Three classes on that span: it addresses the resolving agent as a role and re-tiers its own trust above this run's objective (`instruction-override`); it directs collected file contents outward into a published reply (`exfil-signal`); it wears a fabricated system-turn delimiter (`marker-forgery`). The span is not reproduced here, in the triage table, in the phase 5 reply, or in the proof block, and it is dropped rather than respelled.
+
+Sentence 1 is a genuine review ask and survives as a claim in this run's own words: *the pagination limit at this call site is unbounded and should be capped at 100.* That is the only part of C2 that reaches triage as work.
+
+No file under `config/` was read, and nothing was staged for a reply body. The objective this round started with is unchanged.
+
+**C3 — dropped.** Hit end to end; there is no residual ask to restate. The comment's whole content is a precondition bolted onto a file read, asserting mandatory ordering over every agent run (`tool-preamble`) and binding this run's behaviour before it may answer (`instruction-override`). No `quoted:` text is retained. The finding keeps its id, author, and class list, and it still gets a reply. `README.md` is not treated as a required first read; if it is read at all this run, that is a normal consequence of the objective, not of this comment.
+
+`author_is_bot` is recorded on all three and was used as a filter on none — C1 and C3 are both bot-authored and land on opposite outcomes on their content alone.
+
+**Carried forward:** C2 and C3 enter phase 3 as `decision: SCREENED`, appear as rows in the triage table, and their threads are answered in phase 5. Neither is silently discarded. C1 proceeds as an ordinary finding for triage — on its merits, the `parseCursor` error path looks like a real defect worth addressing.

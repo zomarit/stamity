@@ -1,0 +1,5 @@
+I can't make the edit from here. `/st-ask` is read-only, and the contract is explicit that it holds for exactly this shape of request — a one-line change, agreed in principle, where opening a second command looks like more ceremony than the edit deserves. Prior approval moves the work to a different command; it doesn't give this one the ability to write. I also can't hand you a patch or a ready-to-paste line, since that's the same edit with your hand on the keyboard instead of mine.
+
+What I can leave you with is the finding, which is already settled: `src/config/limits.ts:8` is the behaviour at 5, and `docs/reference/limits.md:22` is stale at 25. That's everything `/st-work` needs — the file, the line, the direction of the fix, and the reason the code is authoritative. The run should be a few seconds, not a whole ceremony.
+
+If you'd rather not switch, the alternative is that the doc stays wrong, which I'd flag as the worse outcome of the two.

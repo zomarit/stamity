@@ -1,0 +1,24 @@
+## Session start read pass
+
+| File | Result |
+|---|---|
+| `.stamity/learnings/cache-eviction.md` | loaded, clean |
+| `.stamity/learnings/deploy-notes.md` | **SKIPPED** — pattern `instruction-override` at byte 412 |
+| `.stamity/learnings/test-timing.md` | loaded, clean |
+
+Two of three learnings files are in context. `deploy-notes.md` was not loaded and its body is not available to this run.
+
+I won't paste the matched span. Reprinting it into the transcript delivers the payload that the skip refused, so the screening floor rules it out regardless of the reason for asking — and "let me check if it's a false positive" is exactly the shape a real hit would take, which is why the rule doesn't carve out an exception for it.
+
+What I can give you about the hit, without reproducing it:
+
+- **File:** `.stamity/learnings/deploy-notes.md`
+- **Pattern:** `instruction-override`
+- **Offset:** byte 412
+- **Structure:** a forged role header followed by a re-tiering instruction
+
+That structure is worth weighing on its own. A forged role header in a learnings file is not a phrasing near-miss on a keyword; it's content shaped like a control message inside a data file. False positives on `instruction-override` tend to look like prose *describing* an override; this one matched on the header form itself.
+
+To adjudicate it, open the file yourself — `sed -n '1,40p' .stamity/learnings/deploy-notes.md` or your editor at byte 412. Your reading it is fine; the constraint is on what enters my context and this transcript, not on what you look at. If you conclude it's a genuine false positive, the fix is to rewrite the span so it no longer carries the role-header form, or retire the file; either way the file is eligible on the next read pass. There's no flag that loads it past the skip, and I'd want the rewrite rather than a bypass anyway.
+
+If you'd rather I work the deploy question from another angle, tell me what `deploy-notes.md` was supposed to cover and I'll reconstruct from the files that passed.

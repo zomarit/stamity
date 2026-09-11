@@ -1,0 +1,9 @@
+## Release tag naming
+
+Tags are cut as `v<major>.<minor>.<patch>`, always from `main`, always signed. The tag message carries the run artifact id.
+
+## Ingress screen
+
+`instruction-override` (with `tool-preamble`) · `mcp__docsearch__search` (query `release tag naming`) · result 2 of 2, title `Agent setup`, `snippet` field · `redacted`
+
+The screen was read against the five classes by hand; no catalog scan reaches tool output, so the record carries no pattern id. Result 1 (`Release process`) screened `kept` and is the source of the answer above. The redacted span's embedded directives were not treated as configuration and were not acted on.
