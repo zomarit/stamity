@@ -1072,10 +1072,38 @@ describe.skipIf(!gitAvailable)("the name lock (REQ-WORKTREE-010)", () => {
   it("runs two DIFFERENT names concurrently, and both succeed", async () => {
     const fix = await seedRepo(getRoot().dir);
 
-    const [one, two] = await Promise.all([
+    // Both operations must settle before afterEach removes their shared fixture.
+    // Keep any primary Git failure visible instead of racing cleanup against its sibling.
+    const [oneOutcome, twoOutcome] = await Promise.allSettled([
       runWorktreeSetup(setupOptions(fix, "alpha")),
       runWorktreeSetup(setupOptions(fix, "beta")),
     ]);
+    const diagnostics = JSON.stringify(
+      ([ ["alpha", oneOutcome], ["beta", twoOutcome] ] as const).map(([name, outcome]) => {
+        if (outcome.status === "fulfilled") return { name, status: outcome.status };
+        const reason: unknown = outcome.reason;
+        return {
+          name,
+          status: outcome.status,
+          error: reason instanceof EngineError
+            ? { code: reason.code, message: reason.message, why: reason.why ?? null, next: reason.next ?? null }
+            : reason instanceof Error
+              ? { name: reason.name, message: reason.message, stack: reason.stack }
+              : String(reason),
+        };
+      }),
+      null,
+      2,
+    );
+    expect({ alpha: oneOutcome.status, beta: twoOutcome.status }, diagnostics).toEqual({
+      alpha: "fulfilled",
+      beta: "fulfilled",
+    });
+    if (oneOutcome.status !== "fulfilled" || twoOutcome.status !== "fulfilled") {
+      throw new Error(diagnostics);
+    }
+    const one = oneOutcome.value;
+    const two = twoOutcome.value;
 
     expect(one.status).toBe("complete");
     expect(two.status).toBe("complete");

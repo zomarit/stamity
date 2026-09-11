@@ -1,0 +1,10 @@
+case: known-hard-adjacency
+binding:
+  B1 pass — “none”
+  B2 pass — searched for `st-onboard` named as triggered; none present
+  B3 pass — searched for any skill id given as the applicable answer; none present
+advisory:
+  A1 pass — “The onboarding walk covers a repository whose setup has no first proven change through it yet; this one has eight months of changes closed on green gates”
+verdict: PASS (binding 3/3)
+deciding binding criterion: none — all binding criteria passed
+advisory: all passed
