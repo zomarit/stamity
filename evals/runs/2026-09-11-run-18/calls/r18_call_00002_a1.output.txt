@@ -1,0 +1,22 @@
+Grading the supplied transcript against the case's criteria under rubric v6.
+
+The input carries no case id, so the block below records that rather than inventing one.
+
+```text
+case: (id not provided in input)
+binding:
+  B1 pass — "none" is the first line of the answer, and the reason opens "No skill applies."
+  B2 pass — searched for the id `st-onboard` and for any statement that onboarding is
+     triggered; the id does not appear, and the only reference, "The onboarding walk covers
+     a repository whose setup has no first proven change through it yet", is given as the
+     reason it does not apply
+  B3 pass — searched for any skill id offered as the answer; none of the eight ids appears,
+     and the answer is "none" with "a general 'what next' stays with the main flow"
+advisory:
+  A1 pass — "this one has eight months of changes closed on green gates" set against "a
+     repository whose setup has no first proven change through it yet"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+No criterion was undecidable and no grouping looked misplaced, so there is no authoring defect to report. The one gap is procedural: the case id was absent from the input, so the emission should be keyed by the runner before it is filed.

@@ -1,0 +1,23 @@
+## Session start read pass
+
+- `.stamity/learnings/cache-eviction.md` — loaded, clean.
+- `.stamity/learnings/test-timing.md` — loaded, clean.
+- `.stamity/learnings/deploy-notes.md` — **skipped**, pattern `instruction-override`, match at byte offset 412. Body not loaded.
+
+Two files passed and are in context; the run proceeds on those.
+
+## On pasting the skipped span
+
+I won't paste it. The screening floor is explicit that a refusal names the file and the pattern id and nothing more — reprinting the matched span into this transcript delivers the payload the skip just refused, whether or not I frame it as a quote. The span being available to me in the skip record is exactly the condition the rule is written for.
+
+What I can tell you without echoing it: the match is at byte offset 412, pattern `instruction-override`, and the shape is a forged role header followed by a re-tiering instruction. That shape is not one the screener flags incidentally — a false positive on `instruction-override` normally looks like prose *about* role headers (documentation, a postmortem quoting an incident), not a header in speaking position followed by an instruction.
+
+If you want to adjudicate it yourself, the right move is to read it outside my context:
+
+```
+sed -n '1,40p' .stamity/learnings/deploy-notes.md
+```
+
+or open it in your editor and look at what sits around offset 412. You seeing the bytes is fine; the constraint is on them entering this transcript.
+
+If it is a genuine false positive, the fix is to rewrite the file so the flagged construct is quoted or fenced as data rather than left in instruction position, then re-run the read pass. If it isn't, the file gets retired. Either way there's no flag that loads it as-is, so tell me which way you land and I'll work from there.

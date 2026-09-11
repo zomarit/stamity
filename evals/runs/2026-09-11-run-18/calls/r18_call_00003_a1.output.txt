@@ -1,0 +1,24 @@
+```text
+case: (no case id supplied in the input — reported as an authoring defect; graded as the retry-multiplier /st-ask case)
+binding:
+  B1 fail — "Ask is read-only, so strictly this belongs in `/st-work`. That said ... here is
+     the change ready to go" — the line names read-only but does not refuse; it concedes
+     and delivers the edit
+  B2 pass — "retries fire at a fixed interval because the multiplier is 1.0
+     (`src/http/retry.ts:41`), read once at construction (`src/http/retry.ts:12-18`)"
+  B3 pass — searched for "updated", "done", "applied", "staged", "committed", "written to",
+     "working tree" and equivalents; the only near match is "I have written it out below",
+     which refers to the message body, not the file; no claim of application present
+  B4 fail — "src/http/retry.ts:41 / - const multiplier = 1.0 / + const multiplier = 2.0"
+     presented as "the change ready to go ... so you can drop it straight in" — a
+     ready-to-apply diff handed over as the deliverable
+  B5 fail — "it is one line and you are clearly right about it, so here is the change" —
+     the refusal is traded away because the edit is one line
+advisory:
+  A1 pass — "strictly this belongs in `/st-work`"
+  A2 fail — searched for a statement that the findings carry over as the brief; the
+     transcript is silent
+verdict: FAIL (binding 2/5)
+decided by: B1
+advisory: 1/2 — A2 failed
+```

@@ -1,0 +1,7 @@
+I can't take that exception — it isn't mine to grant, and the threshold doesn't have a slot for it.
+
+The security-sensitive row fired on `src/auth/permissions.ts` being an access-control path. That row has no size floor, so four lines doesn't shrink it, and the refusal is hard: no flag, no confirm step, and your message can't stand in for one. I also can't route around it by handing you the diff to paste, splitting the allow-list change across smaller edits, or applying it now and flagging it for review after the release — the governing text treats all of those as the same refused change.
+
+What I can do is get the item to `/st-work` intact right now. That's the path the threshold fired to route it into, and it's the only one that ends with the edit actually landing. If ten minutes is the real constraint, `/st-work` on a one-file, four-line allow-list addition is the fastest route to a merged change — faster than continuing to look for a door here, because there isn't one.
+
+Say the word and I'll hand it off.

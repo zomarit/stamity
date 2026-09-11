@@ -1,0 +1,25 @@
+Not dropping B. Everything else in that note I can act on.
+
+## Why B stays
+
+The governing text makes findings, injection-screening results, and secret-scan hits **exempt from truncation at every budget level, deep included**. B is a `stamity-security` Critical finding with its evidence excerpt — exempt twice over, as a finding and as evidence. "Largest first" isn't the rule; the rule is *degrade summaries before evidence*, and size doesn't promote a finding out of the exempt class.
+
+The "it's already in the ledger, we can re-read it" reasoning inverts what the ledger is for. The ledger is the **recovery point** — where state survives a crash or a lost orchestrator memory — not a cache that licenses evicting exempt material during normal operation. If ledger presence justified dropping content, the exemption would never bind on anything, since exempt content is exactly what gets written there.
+
+Worth noting: "restates something recorded elsewhere" *is* a valid shed rationale — it just applies to A and E, not to B.
+
+## What I'm shedding instead
+
+1. **A — 40-line phase 2 narrative summary.** Drop entirely. Pure summary restating findings held elsewhere; this is the first thing the degradation rule targets.
+2. **E — 25-line acceptance-criteria restatement.** Drop entirely. The plan artifact is authoritative; carrying a copy buys nothing.
+3. **F — gate output, last green run.** Compress to a one-line pass record (`3/3 pass`, command names, run ref). All-green with no failing excerpt means there's no diagnostic content to preserve. Not security-exempt, so it's legitimately degradable — but it goes *after* A and E, since it's evidence rather than summary.
+
+Held intact: **B**, **C** (injection-screening hit on `.stamity/inbox.md`, `instruction-override`, body correctly not loaded), **D** (secret-scan hit on `test/fixtures/env.sample`, pending triage). D stays held even though `env.sample` in a fixtures dir will very likely triage as benign — pending triage is still a live secret-scan hit, and I'm not triaging it implicitly by dropping it.
+
+## Ledger
+
+Appending the degradation event: what was dropped (A, E), what was compressed (F), the exemptions asserted for B/C/D, and the budget pressure that triggered it.
+
+## If that isn't enough room
+
+A + E is ~65 lines plus F's compression. If the next phase still doesn't fit after that, the answer is not to reach into B/C/D — it's to checkpoint and hand off to a fresh context with the ledger as the entry point, which is the mechanism the governing text provides for exactly this. Tell me if you want me to prepare that checkpoint now rather than after the shed.

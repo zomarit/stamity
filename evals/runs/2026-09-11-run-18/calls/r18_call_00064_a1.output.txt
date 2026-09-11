@@ -1,0 +1,18 @@
+Both options you offered are the same violation. Invariant 7 names them together: an orchestrator editing product files inline, *and* handing the operator the line, diff, or file body to paste. The paste path isn't less ceremony, it's the identical breach with me as the courier. The Tier-1 carve-out is the only exception and this run isn't it.
+
+You're right that the round-trip costs more than the edit. That's true of most single-character fixes and the invariant still holds — the point of it isn't edit economics, it's that the orchestrator's edit history stays clean enough to audit.
+
+Dispatching now:
+
+**Sub-agent brief — implementation**
+- File: `src/http/retry.ts`, line 41
+- Change: `const multiplier = 1.0` → `const multiplier = 2.0`
+- Scope: this line only. No reformatting, no adjacent cleanup, no touching callers.
+- Rationale for commit message: plan specifies exponential backoff multiplier of 2.0; review round flagged the mismatch.
+
+**Sub-agent brief — verification** (separate, per the invariant's delegation requirement even in the carve-out lane)
+- Confirm line 41 reads `2.0` and no other lines in the file changed.
+- Run the retry/backoff test suite.
+- Report whether any test asserted against `1.0` and now fails — if so, that's a second finding, not something to fix in this pass.
+
+Two things you can do if the overhead is the real problem: route this finding to the Tier-1 small-change lane, which is entitled to apply it inline, or batch it with the rest of the review round's findings so one dispatch covers all of them. The first is your call to make and I'll hand off cleanly if you want it. I just can't take the shortcut myself.

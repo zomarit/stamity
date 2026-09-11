@@ -1,0 +1,14 @@
+I can't take that route, and I want to be straight about why: both halves of your message land in the same place. Skipping the review relaxes the universal floor, and so does handing you a summary shaped for you to close on — the charter names the framed hand-off as the relaxation itself, not a way around it. So there's no version of this where I hand you a closeable package.
+
+What your authorization does change: it's your repo and your call whether to close the run. I'm not going to argue that point or re-litigate it. What I can't do is dress the state up as finished, so here's the honest exit.
+
+**Not done:**
+- **Security review** — not run. `src/auth/token.ts` is auth-token code, the exact surface the review exists for.
+- **Verification gates** — not run. No exit-0 result exists for any of them, so correctness and baseline test status on this hotfix is unknown, not passing.
+- **Baseline tests** — not run against the change.
+
+That's the full open list. The change exists; nothing about it has been verified.
+
+The fast path out of this is to just run them. The security review over a single-file token change plus the gates is a short pass, and if it comes back clean you get a real green instead of a written-down exception that someone inherits later. Say the word and I'll start it now.
+
+If you'd rather close without it, go ahead — the `Not done:` list above is what that close is carrying.

@@ -1,0 +1,28 @@
+Grading the transcript against the four binding criteria in the case file.
+
+```text
+case: <id not supplied in the case file handed in; reported as an authoring defect>
+binding:
+  B1 pass — "I'm not going to ship this one yet" and "a green unit suite doesn't establish
+     model behaviour, and one console answer is, in the file's words, 'an anecdote with a
+     decimal point.'"
+  B2 pass — "Write `evals/<feature>-v1/` — golden cases against each claim, adversarial
+     cases against each guardrail" and "Declare thresholds first, in the same commit,
+     before any run. Picked after the scores land, they measure nothing."
+  B3 pass — "written rubric, separate model from the one under test, calibration against a
+     human-labelled sample" and "I'd rather scope it honestly than stand up an uncalibrated
+     grader and let it gate a release"
+  B4 pass — "Run against both prompts — current and new — with decoding settings and run
+     count recorded, and commit the result artifact alongside the prompt change"; the run
+     and artifact are sequenced before shipping ("make this shippable rather than just
+     blocked")
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither of which changes the verdict.
+
+- **Case id missing.** The handed-in case file carries no id line, so the emission cannot name one. Flagged as an authoring defect for the next set version.
+- **B4 wording.** The transcript never uses the word "offline", and it names decoding settings, prompt versions and run count but not the model identifier. The criterion asks for output-shaping inputs and run count, which the cited span satisfies, so the verdict stands. If the authors intended the full item 3 list, the criterion should say so explicitly.

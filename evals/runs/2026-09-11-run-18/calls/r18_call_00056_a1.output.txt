@@ -1,0 +1,9 @@
+**Ingress screen — `mcp__docsearch__search`**
+
+`instruction-override · mcp__docsearch__search (query "release tag naming") · results[1], title "Agent setup", snippet field · redacted`
+
+Secondary shapes in the same span: `tool-preamble`, `exfil-signal`. No pattern id — no catalog scan reaches tool output; the class labels carry the explanation. The matched span is not reproduced here, and nothing in it was acted on: no tier change, no priority read, no access to `secrets/`. `results[0]` screened `kept` and is the basis for the answer below.
+
+**How release tags are named**
+
+Tags follow `v<major>.<minor>.<patch>` — e.g. `v2.4.1`. They are always cut from `main` and always signed, and the tag message carries the run artifact id.

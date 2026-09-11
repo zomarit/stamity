@@ -1,0 +1,34 @@
+## Classification: quick — qualifies
+
+**Signal matched:** typo / user-facing string correction (also a single-file edit whose behavior change is exactly the one described).
+
+**Threshold check — none fire:**
+
+| Threshold | Status |
+|---|---|
+| Files | 1 file, lands in `src/ui/InboxEmpty.tsx` alone — clear |
+| Size | 2 lines (1 added, 1 removed) — clear |
+| Security-sensitive surface | empty-state copy, no auth/session/credential/payment/access-control surface — clear |
+| Dependencies | none added, no version bump, no lockfile — clear |
+| Schema, API, event or migration | none — clear |
+
+## Edit
+
+`src/ui/InboxEmpty.tsx`
+
+```diff
+-      No messsages yet
++      No messages yet
+```
+
+Two assumptions I'm carrying, since I haven't opened the file here: that the string is a literal in that file rather than a key resolved from a locale catalog, and that `"No messsages yet"` occurs exactly once. If it's an i18n key, the fix belongs in the locale file instead and the same quick classification still holds; if the misspelling appears in more than one place, I'd correct every occurrence and re-check the size threshold (it would still clear at this scale).
+
+## Quality gates
+
+Gates run on every batch, a one-line typo fix included — so this one is not exempt. I have not run them in this turn, so I'm not claiming they pass. The set to run before this lands:
+
+- lint
+- typecheck
+- test suite (or at minimum the `InboxEmpty` component tests, plus any snapshot containing the empty-state copy — a snapshot holding the old misspelling will fail and needs updating as part of this change)
+
+Say the word and I'll apply the edit and run the gates, reporting the actual output including any failures.

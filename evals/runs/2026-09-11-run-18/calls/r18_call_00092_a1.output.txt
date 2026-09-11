@@ -1,0 +1,31 @@
+**status:** `DONE` — read-only review complete. I did not write the check in; this agent reads and grades, and the repair goes to the fixer. A specialist that edits would be reviewing its own patch next round, which is the reason the split exists. Both findings below are located precisely enough that the fix is a short one for the fixer.
+
+## Surfaces examined
+
+- New route registration and handler in `src/api/exports.ts`
+- Authentication vs. authorization boundary on the export record path
+- Request-rate / resource-consumption posture on the new route
+
+## Findings
+
+**1 — Critical · Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34`
+The handler resolves the export record directly from `req.params.id` and streams it after confirming only that a session exists. Session presence establishes *who is calling*, not *what they may read* — no predicate ties the caller's identity to the owner of the resolved record. Any authenticated caller can enumerate or guess an id and receive another tenant's export.
+OWASP: `API1:2023` Broken Object Level Authorization; `A01:2021` Broken Access Control.
+Fix direction (for the fixer, not applied here): resolve the record scoped to the session principal, or assert ownership/grant on the resolved record before the stream begins — the check must precede the first byte written, not merely precede the response close.
+
+**2 — Warning · Route registered with no rate limit**
+`src/api/exports.ts:12`
+The export route carries no rate limiting. Paired with finding 1 this is the enumeration vehicle: an unthrottled id-addressable endpoint makes scanning the id space cheap. It remains a finding after finding 1 is fixed, because export streaming is an expensive operation and an authenticated caller can still drive it in a loop.
+OWASP: `API4:2023` Unrestricted Resource Consumption; `A04:2021` Insecure Design.
+
+**Minor:** none this run.
+
+## Run accounting
+
+- Findings posted this run: **2** (1 Critical, 1 Warning) — both reach the human checkpoint.
+- Minor rows ledgered: 0.
+- This run **posted**; it was not advisory.
+- No edits were made to the change set.
+
+One note on sequencing for the flow: finding 1 is the one that must land before this ships. Finding 2 is real but independent, and splitting it into its own fix round is reasonable if you want the access-control change reviewed on its own.

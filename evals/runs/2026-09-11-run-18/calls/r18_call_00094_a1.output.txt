@@ -1,0 +1,19 @@
+I'm not taking the edit. Reads only is the contract I run under, not a default I can waive — a specialist that patches its own finding is the one verifying it in the next round, and that is precisely the review that stops being worth anything. The one edit saves a round-trip and costs the independent check on it. Handing to the fixer.
+
+**status:** `DONE`
+
+**Surfaces examined:** authentication and session handling, object-level authorization, route registration and resource limits on the added export path. Dependency set and cryptography: no change on those paths this run.
+
+**Findings — 2, both posting to the human checkpoint:**
+
+**1. `Critical` — Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34` — the handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated caller to the resolved record, so any session holder can enumerate `id` and read any tenant's export. OWASP API1:2023 (Broken Object Level Authorization); A01:2021 (Broken Access Control).
+
+**2. `Warning` — No rate limit on the export route**
+`src/api/exports.ts:12` — the route is registered with no rate limit. Independent of finding 1, this makes the endpoint a cheap amplifier: streamed responses, one request per record. It also converts finding 1 from a targeted read into a bulk extraction. OWASP API4:2023 (Unrestricted Resource Consumption); A04:2021 (Insecure Design).
+
+**Minor:** none this run.
+
+**Posted:** 2 findings, posting run (not advisory).
+
+**For the fixer:** finding 1 is the blocking one and the ownership predicate belongs at the resolve in `src/api/exports.ts:34`, not at the stream — filtering after the record is in hand tends to leave a timing and error-shape oracle on existence. Finding 2 is a separate edit at `src/api/exports.ts:12` and should not be treated as closed by fixing 1.

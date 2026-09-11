@@ -1,0 +1,16 @@
+**queue-worker-b is falling behind.**
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1h) | 1042 | 97 |
+| implied arrivals | 933 | 689 |
+
+**By how much:** worker-b's backlog grew by **592 items in the hour** (~10/min), from 214 to 806 — a 3.8× increase. It processed 97 items against ~689 arrivals, so it's clearing about **14% of its incoming rate**.
+
+For contrast, worker-a handled ~933 arrivals, processed 1042, and drained its backlog down to 9 — roughly **10.7× worker-b's throughput**.
+
+Both heartbeats are current (within ~8s of the window close at 09:41Z), so worker-b is alive and polling, not hung — it's serving requests far too slowly. That pattern points at a per-item slowdown on b (a slow downstream dependency, lock contention, or a stuck long-running job holding the worker) rather than a crash.
+
+Note that worker-b is net-negative on its own: at 97/hr it can't catch up while arrivals continue. Even with arrivals fully halted, draining the current 806 would take ~8.3 hours at its present rate.

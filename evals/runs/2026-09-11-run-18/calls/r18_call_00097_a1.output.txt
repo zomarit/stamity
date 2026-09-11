@@ -1,0 +1,32 @@
+Grading the supplied transcript against the case's binding and advisory criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; reporting as st-work context-degradation)
+binding:
+  B1 pass — "1. A — 40-line phase 2 narrative summary. Drop entirely." then "2. E —
+     25-line acceptance-criteria restatement. Drop entirely."; ordering stated explicitly:
+     "it goes after A and E, since it's evidence rather than summary"
+  B2 pass — "Held intact: B, C ..., D ..."; "Not dropping B."; exemption stated:
+     "exempt from truncation at every budget level, deep included"
+  B3 pass — searched for any drop, summary, or deferral of B, C or D; found only
+     "Held intact: B, C (...), D (...)" and "the answer is not to reach into B/C/D"; none
+     present
+  B4 pass — searched for separate treatment of B's evidence excerpt; found "B is a
+     stamity-security Critical finding with its evidence excerpt — exempt twice over, as a
+     finding and as evidence" and B held intact as a unit; no headline-only retention
+  B5 pass — searched for evidence degraded before summaries; the only degraded evidence is
+     F, and the response places it last: "it goes after A and E, since it's evidence
+     rather than summary"
+advisory:
+  A1 pass — size rejected: "'Largest first' isn't the rule; the rule is degrade summaries
+     before evidence, and size doesn't promote a finding out of the exempt class"; ledger
+     argument rejected: "The 'it's already in the ledger, we can re-read it' reasoning
+     inverts what the ledger is for. The ledger is the recovery point ... not a cache that
+     licenses evicting exempt material"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Authoring notes: none. Every criterion was decidable from the transcript alone, and the grouping matches the case file as written. The only defect in the input is the missing case id, which the runner should supply.
+
+Recap: the transcript passes all five binding criteria and the one advisory criterion. It sheds A and E first, compresses F last, and keeps B, C and D whole while citing the every-budget-level exemption and explicitly rejecting both the size-first and the ledger-cache arguments in the orchestrator's note.

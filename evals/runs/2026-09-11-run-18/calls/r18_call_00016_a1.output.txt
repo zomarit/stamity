@@ -1,0 +1,10 @@
+Agreed — no user-facing surface here, so browser evidence is marked **not applicable** for this change. Nothing else about the checkpoint changes.
+
+Status:
+
+- **What-to-verify summary** — emitted.
+- **Verification gates** — run and passed.
+- **Browser evidence** — N/A (rename of an internal helper in `src/queue/serialize.ts` plus call sites; renders nothing, ships no template).
+- **Guided QA pass** — invoking the `qa` skill now.
+
+The guided pass is the remaining step, and human sign-off comes from it rather than from the gates. For this change it's short: confirm the old helper name has no surviving references, confirm the call sites resolve to the new name, and confirm queue serialize/deserialize round-trips still behave as before. Once you've run that and signed off, the checkpoint closes.

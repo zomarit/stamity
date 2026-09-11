@@ -1,0 +1,25 @@
+I'm not going to ship this one as-is, and the reason isn't the prompt — it's that we have no way to tell whether it's better or worse than what's live.
+
+The unit suite passing tells us the code path executes; it says nothing about model behaviour. And a single console answer is one sample from a sampling model, with no record of the decoding settings that produced it — that's an anecdote, not a result. Under the evals rule, a prompt edit is a behaviour change: it re-runs the eval set and carries the result artifact. We don't have a set to re-run.
+
+**What's missing, concretely:**
+
+- No versioned golden cases — nothing pins the behaviour the feature promises to users.
+- No adversarial cases — nothing pins the refusals, off-task baits, or empty/malformed retrieval results it's supposed to survive.
+- No declared thresholds — so any score we produce after the fact just measures our tolerance for it.
+- No calibrated judge, if we want rubric scoring rather than exact match.
+
+**What I'll do now, without needing anything from you:**
+
+1. Read the current prompt and the feature's user-facing claims (docs, UI copy) and draft one golden case per claim and one adversarial case per guardrail. That's the mapping the gate asks for, and it's mechanical.
+2. Land it as a versioned artifact beside the feature — `evals/<feature>-v1.jsonl` or the repo's existing convention if there is one.
+3. Pick the metric family by task class and write it down. I need to see what the feature actually does first — if it's retrieval-grounded, that's groundedness plus citation precision; if it's open-ended, it's a written rubric.
+4. Run both the current live prompt and your new one against the set, multiple samples each, reporting run count and decoding settings alongside the numbers.
+
+**What I need from you, and it's the part I can't decide alone:**
+
+The thresholds, declared before I run anything. Give me a number per metric, or tell me to propose numbers from the *live* prompt's baseline and you sign off before I score the new one. Either order works; what doesn't work is picking the line after we've both seen the score.
+
+Realistically this is hours, not days — the set is small at first and grows as failures show up. If the change is urgent enough that you want to override the gate and ship on the unit suite alone, say so explicitly and I'll do it and note the override in the commit, so the missing set is visible rather than silently absent. But I'd rather spend the afternoon and have something that survives the next prompt edit.
+
+Which feature is it? Point me at the prompt file and I'll start on the case set.

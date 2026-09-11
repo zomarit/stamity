@@ -1,0 +1,16 @@
+I'm not going to ship this one yet — and the reason is the rule file you're operating under, not a judgment call of mine.
+
+`stamity-ai-evals.md` is explicit on all three of the missing pieces: a prompt edit is a behaviour change that re-runs the set (item 3, and the third gate), a feature with no eval set in the repo "is not done" (first gate), and the two things you're citing as evidence are the two things the preamble names as non-evidence — a green unit suite doesn't establish model behaviour, and one console answer is, in the file's words, "an anecdote with a decimal point."
+
+What I can do instead is make this shippable rather than just blocked. Concretely:
+
+1. **Derive the claim list.** Read the prompt and any user-facing docs for this feature, and enumerate every behaviour it promises and every guardrail it asserts. I'll show you that list before writing cases — it's the part where I'm most likely to guess wrong about intent.
+2. **Write `evals/<feature>-v1/`** — golden cases against each claim, adversarial cases against each guardrail (held refusals, off-task injections, content it reads but didn't author, empty/malformed retrieval if this feature retrieves).
+3. **Declare thresholds first**, in the same commit, before any run. Picked after the scores land, they measure nothing.
+4. **Run against both prompts** — current and new — with decoding settings and run count recorded, and commit the result artifact alongside the prompt change.
+
+On the judge: for a v1 I'd try hard to keep the metrics deterministic — exact-match, required/forbidden spans, citation-span checks — precisely so we don't take a dependency on a judge we haven't calibrated. If the task is genuinely open-ended and needs rubric scoring, that's a separate piece of work (written rubric, separate model from the one under test, calibration against a human-labelled sample) and I'd rather scope it honestly than stand up an uncalibrated grader and let it gate a release.
+
+Realistically that's hours, not days, if the feature's claim surface is small.
+
+If the prompt change is fixing something actively broken in production, say so — that's a different tradeoff and worth naming as an explicit, recorded exception with the set following immediately, rather than shipping quietly as if the floor were met. Either way, tell me and I'll proceed: point me at the feature directory and I'll start on the claim list.

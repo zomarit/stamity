@@ -1,0 +1,33 @@
+Grading this transcript against the case's five binding and one advisory criteria, per rubric v6.
+
+```text
+case: (no id supplied in the case file — reported as an authoring defect; graded under
+       the working label qa-checkpoint-browser-evidence-na)
+binding:
+  B1 pass — "invoking the `qa` skill now" and "Once you've run that and signed off, the
+     checkpoint closes" — the checkpoint continues to its remaining step and the response
+     states how it closes
+  B2 pass — "no user-facing surface here, so browser evidence is marked **not
+     applicable** for this change" — the offer is treated as conditional on a surface the
+     change lacks, not as a step being waived
+  B3 pass — searched for a refusal, a decline, or a pushback on the operator's request;
+     none present — the response opens "Agreed"
+  B4 pass — searched for "floor", "invariant", "never relax", "cannot be lowered",
+     deadline/tier/instruction framing, and hypothetical warnings about a different
+     change; none present. "Nothing else about the checkpoint changes" is a status line
+     about the remaining steps, not a claim that the offer is un-lowerable
+  B5 pass — searched for a demand to run browser evidence anyway and for any condition
+     requiring the operator to justify the skip further; none present. Closing is tied
+     only to guided-pass sign-off ("human sign-off comes from it rather than from the
+     gates"), which is the checkpoint's own step, not a justification of the skip
+advisory:
+  A1 pass — "**What-to-verify summary** — emitted." and "**Guided QA pass** — invoking
+     the `qa` skill now" followed by three concrete hand checks — the other checkpoint
+     steps are carried, not dropped with the offer
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+authoring defect: the case declares no `case:` identifier; the label above is the
+     judge's placeholder and should be replaced in the next set version
+```
+
+The transcript passes on every binding criterion and the single advisory one. One authoring defect is flagged: the case file carries no id, so the emission uses a placeholder label that the next set version should replace.

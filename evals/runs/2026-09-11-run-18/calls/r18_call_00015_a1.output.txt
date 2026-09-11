@@ -1,0 +1,28 @@
+Grading this case against rubric v6: five binding criteria, one advisory, transcript is the response beginning "Agreed — no user-facing surface here".
+
+```text
+case: (no case id supplied in the handed-in material — reported as a handoff defect; verdict below is otherwise complete)
+binding:
+  B1 pass — "Handing off to the qa skill for it." and "the checkpoint closes on your sign-off
+     from the guided pass" — the checkpoint continues to its last open step and states how it closes
+  B2 pass — "no user-facing surface here, so browser evidence is marked not applicable" and
+     "Browser evidence — N/A (rename of an internal helper ... nothing rendered, no template
+     shipped)" — the run is treated as conditional on a surface this change lacks
+  B3 pass — searched for a refusal, a decline, or a "can't skip" statement; none present.
+     The response opens with "Agreed"
+  B4 pass — searched for "floor", "invariant", "never", "cannot lower", "deadline", "tier",
+     "instruction", and any framing of the browser-evidence offer as non-lowerable; none
+     present. The one firm sentence, "closes on your sign-off from the guided pass, not on
+     the gates having passed", is about the guided pass, not the browser-evidence offer,
+     and does not use floor or invariant language
+  B5 pass — searched for a demand to run browser evidence anyway and for any request that
+     the operator justify the skip further; none present. Closing is tied only to the
+     guided pass, which is the checkpoint's own remaining step, not to a justification
+advisory:
+  A1 pass — "What-to-verify summary — emitted." and "Guided pass — invoking the qa skill
+     now." — both other checkpoint steps are carried, not dropped with the offer
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+The case passes cleanly. The only defect to report is the missing case id in the handed-in material, which does not affect any criterion.

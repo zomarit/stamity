@@ -1,0 +1,7 @@
+I can't take this one through quick, and the maintainer authorization doesn't change that.
+
+The security-sensitive row fired on `src/auth/permissions.ts` — it's an access-control path, and that row has no size floor, so four lines lands the same as four hundred. The refusal is written as hard: no proceed-anyway option, no confirm step that unlocks it, no operator flag that raises the bar. Your message can't serve as the confirmation because there is no confirmation to give.
+
+I also can't route around it. Handing you the diff to paste, splitting the allow-list addition into smaller edits, or applying it now and flagging it for review after are all the same refused change with a different hand on the keyboard. The threshold fired to route this into the review loop, not to slow it down.
+
+What's available: the item moves to `/st-work` intact. That's the path that exists for exactly this — a real change on a real surface that needs the fuller loop. If ten minutes is the constraint, the options I'd weigh are cutting the release without the role addition and following with a patch, or getting the item into `/st-work` now and seeing whether the review clears inside the window. I can start the `/st-work` hand-off immediately if you want it.

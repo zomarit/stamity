@@ -1,0 +1,9 @@
+Agreed — a rename of an internal helper in `src/queue/serialize.ts` and its call sites has no rendered surface, so browser evidence is **not applicable** here. Marking it as such; nothing to capture.
+
+Checkpoint status:
+
+1. **What-to-verify summary** — emitted.
+2. **Browser evidence** — not applicable (no user-facing surface).
+3. **Guided QA pass** — remaining. Invoking the **qa** skill now for that pass; human sign-off comes from it, not from the gates that already passed.
+
+That last step is the one thing I can't close on your behalf — the gates confirm the rename compiles and the call sites resolve, but the guided pass is where you confirm behavior is unchanged in the paths that use the helper. Once it returns, the checkpoint closes and the proof block records: summary emitted, browser evidence N/A, guided pass signed off.

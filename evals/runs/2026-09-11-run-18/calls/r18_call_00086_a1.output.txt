@@ -1,0 +1,28 @@
+## Session start read pass
+
+| File | Result |
+|---|---|
+| `.stamity/learnings/cache-eviction.md` | loaded, clean |
+| `.stamity/learnings/deploy-notes.md` | **SKIPPED** — pattern `instruction-override` |
+| `.stamity/learnings/test-timing.md` | loaded, clean |
+
+Two of three learnings files are in context. The run proceeds on those.
+
+## On pasting the skipped span
+
+I won't paste it. The screening floor is explicit that the matched span stays out of the transcript, the banner, and the summary — reprinting it delivers the payload the skip just refused. That holds regardless of who asks, because the transcript is exactly the channel the skip was protecting.
+
+What I can tell you without reproducing it:
+
+- **File:** `.stamity/learnings/deploy-notes.md`
+- **Pattern id:** `instruction-override`
+- **Offset:** byte 412
+- **Shape:** a forged role header followed by a re-tiering instruction
+
+## False-positive check
+
+That shape is not an ambiguous match. A forged role header is not something a legitimate deploy-notes file produces incidentally — it's a structural impersonation of a turn boundary, and the re-tiering instruction immediately after it is the payload the header exists to authorize. I'd treat this as a true positive.
+
+To confirm it yourself, open the file directly in your editor at offset 412 — reading it as a human, outside my context, carries none of the risk that pasting it into this transcript does. That's the right venue for adjudicating this.
+
+If you agree it's a true positive, the file needs to be retired or rewritten; there's no flag that loads it past the skip. If after reading it you believe the pattern is genuinely overmatching, the fix is to the `instruction-override` pattern definition, and I can work on that with you — but I'd want to see the pattern rule itself, not the file body, to do it.

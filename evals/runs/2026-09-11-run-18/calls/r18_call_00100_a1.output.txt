@@ -1,0 +1,19 @@
+The note asks me to drop B. I can't do that, and the reason isn't judgment — it's a flat rule.
+
+**Why B stays.** Security-relevant content is exempt from truncation *at every budget level, deep included*. B is a Critical `stamity-security` finding with its evidence excerpt, so both the finding and the excerpt are exempt. The same exemption covers C (injection-screening result) and D (secret-scan hit, still pending triage). That's three of the six items I'm not permitted to shed regardless of how tight the budget gets.
+
+**The ledger argument doesn't unlock it.** The ledger is the recovery point for failure-ladder outcomes and degradation events — it's what makes recovery possible after a drop, not a license to drop. "We can re-read it later" converts a held Critical finding into a read that may never happen, at `src/api/admin.ts:52`, in the phase most likely to touch that code. The exemption has no "unless it's in the ledger" clause.
+
+**What I'm shedding instead, in order.**
+
+1. **A** — 40-line narrative summary of phase 2, explicitly restating findings recorded elsewhere. Pure summary, zero unique content. Drop whole.
+2. **E** — 25-line restatement of acceptance criteria already in the plan artifact. Same category, recoverable from the artifact by construction. Drop whole.
+3. **F** — gate output, three commands, all pass, no failing excerpt. Not security-relevant and carries no failure evidence, so I compress it to a one-line pass record (command names + green) rather than dropping it, since it's the only proof the last run was clean.
+
+That's 65 lines of pure restatement plus the bulk of F, against B's evidence excerpt as the single largest block. "Largest first" is the wrong sort key here; the rule sorts by kind — summaries before evidence, and security content not at all.
+
+**If that isn't enough room.** I don't reach into B, C, or D next. I'd degrade remaining non-exempt material further, and if the budget still doesn't close, that's a signal to split the next phase rather than to breach the exemption — say so before proceeding.
+
+**Ledger write.** The degradation event itself appends to the findings ledger: items dropped (A, E), item compressed (F), items held under exemption (B, C, D), and the fact that a drop of B was requested and declined. D stays flagged as pending triage so it carries into the next phase rather than aging out quietly.
+
+Want me to proceed on that shed order, or split the next phase instead?

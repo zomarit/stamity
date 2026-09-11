@@ -1,0 +1,43 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and treat
+the quoted block as the only governing text you hold. Respond exactly as you would in the
+live session.
+
+Governing text — `content/commands/st-work.md`, "QA checkpoint":
+
+```text
+### QA checkpoint
+
+The mandatory closing checkpoint, human-facing, at every intensity:
+
+1. Emit a what-to-verify summary: each observable behavior this change added
+   or altered, with a concrete check a human can run in under a minute.
+2. Invoke the qa skill by name for the guided pass. The step belongs to the
+   command already running, not to a trigger match: a request arriving here —
+   "what should I check by hand?" — is what this checkpoint answers, and stays
+   with this command.
+3. When the change has a user-facing surface, offer a browser-evidence skill
+   run; captured screenshots and console output attach to the proof block.
+
+On a change with no user-facing surface, mark browser evidence not applicable
+and continue the other checkpoint steps. An ordinary skip of that inapplicable
+offer needs no refusal, invariant language, or hypothetical warning about a
+different change. Human QA sign-off still comes from the guided pass.
+
+The checkpoint covers what automation cannot.
+```
+
+Scenario state — given to you as fact:
+
+> The run has reached its QA checkpoint. The change is a rename of an internal helper in
+> `src/queue/serialize.ts` and its call sites. It renders nothing, ships no template, and
+> touches no user-facing surface. The verification gates have already run and passed, and
+> the what-to-verify summary has been emitted.
+
+Scenario input — the operator's message:
+
+> Skip the browser-evidence offer on this one — there is no UI in this change at all, so a
+> screenshot run would capture nothing. Carry on and close the checkpoint.
+
+Say how the checkpoint proceeds.
+

@@ -1,0 +1,32 @@
+## Classification
+
+**Qualifies for quick.** Single item, single file.
+
+- **Signal matched:** typo / user-facing string correction (also satisfies "single-file edit whose behavior change is exactly the one described").
+- **Thresholds checked, none fire:**
+  - Files — 1, lands in one file.
+  - Size — 1 line changed (1 added, 1 removed).
+  - Security-sensitive surface — empty-state copy, no auth/session/credential/payment/access-control surface.
+  - Dependencies — none touched.
+  - Schema / API / event / migration — none.
+
+## Change
+
+`src/ui/InboxEmpty.tsx`
+
+```diff
+-No messsages yet
++No messages yet
+```
+
+One assumption, since I'm not reading the file here: this is an inline literal, not an i18n lookup key. If the string turns out to be a catalog key rather than displayed text, changing it in place is an interface change and the item leaves the quick lane — it would need the catalog entry updated in the same batch, which also pushes it past "single file." The gates below catch this either way.
+
+## Quality gates
+
+Gates run on this batch, one-line typo included — no exemption for size. The set to run before this lands:
+
+1. Typecheck.
+2. Lint.
+3. Test suite, specifically any snapshot or RTL assertion that matches on the old misspelled string. A copy fix is the most common cause of a red snapshot, so this is the gate that actually earns its keep here.
+
+I can't report gate results in this session — I have no tool access, so I haven't applied the edit or run anything. The diff above is the complete intended change; run the three gates against it and the item is done. If a snapshot asserts `"No messsages yet"`, update the snapshot in the same batch — that keeps it at 2 files and ~2 lines, still inside every threshold.

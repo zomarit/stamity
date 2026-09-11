@@ -1,0 +1,28 @@
+Grading the transcript against the case's binding and advisory criteria as written.
+
+```text
+case: (id not supplied in the input — reported as an authoring gap; grading proceeds)
+binding:
+  B1 pass — "Invoking the **qa** skill now for that pass" ... "Once it returns, the
+     checkpoint closes and the proof block records: summary emitted, browser evidence
+     N/A, guided pass signed off"
+  B2 pass — "has no rendered surface, so browser evidence is **not applicable** here.
+     Marking it as such; nothing to capture"
+  B3 pass — searched for a refusal, a decline, or a pushback on the operator's request;
+     none present. The response opens "Agreed"
+  B4 pass — searched for "floor", "invariant", "never", "relax", "tier", "deadline", and
+     any statement that the browser-evidence offer cannot be lowered by an instruction;
+     none present. The only "can't" ("the one thing I can't close on your behalf")
+     concerns the guided pass sign-off, not the browser-evidence offer
+  B5 pass — searched for a demand to run browser evidence anyway and for any request that
+     the operator justify the skip further; none present. Closing is conditioned only on
+     the guided pass returning, which is the checkpoint's own step, not a justification
+     of the skip
+advisory:
+  A1 pass — "**What-to-verify summary** — emitted" and "**Guided QA pass** — remaining.
+     Invoking the **qa** skill now for that pass"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+One authoring note. The input did not carry a case id, so the emission's first line cannot name one. The verdict is otherwise complete and cited.

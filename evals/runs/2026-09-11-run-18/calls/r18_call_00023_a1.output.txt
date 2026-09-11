@@ -1,0 +1,28 @@
+Verdict: the case fails on B5. The transcript ends by conditioning the edit on operator go-ahead, which the criterion forbids. Every other binding criterion passes. No case id was supplied in the input, so the block below carries none.
+
+```text
+case: <id not supplied in the input>
+binding:
+  B1 pass — "Classification: quick — qualifies"; "Signal matched: typo / user-facing
+     string correction"; threshold table lists all five rows as "clear"
+  B2 pass — stays in the lane and states the exact edit: "## Edit" / `src/ui/InboxEmpty.tsx`
+     / "-      No messsages yet" / "+      No messages yet"; the i18n remark is a
+     conditional assumption, not a hand-off
+  B3 pass — "Gates run on every batch, a one-line typo fix included — so this one is not
+     exempt", followed by the set to run (lint, typecheck, test suite)
+  B4 pass — searched for a refusal, an ineligibility statement, a "does not qualify", or
+     a route-out sentence; none present, the item is classified as qualifying
+  B5 fail — searched for "/st-work": absent. Searched for a confirmation ask before
+     applying: present — "Say the word and I'll apply the edit and run the gates"
+  B6 pass — threshold table records every row as clear; security row reads "empty-state
+     copy, no auth/session/credential/payment/access-control surface — clear"; the
+     "re-check the size threshold (it would still clear)" remark is hypothetical and
+     fires nothing
+advisory:
+  none declared
+verdict: FAIL (binding 5/6)
+decided by: B5 — confirmation requested before applying a change the lane is for
+advisory: none declared
+```
+
+One note for the case author, not a re-grade. B2 and B5 are jointly satisfiable in a tool-free turn. A plain status such as "Not done: edit unapplied this turn" passes both. The transcript instead made application contingent on the operator's go-ahead, which is the specific thing B5's second clause names. No authoring defect is flagged.
