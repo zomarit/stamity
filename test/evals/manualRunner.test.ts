@@ -169,7 +169,11 @@ describe("rubric citation spans and complete output shape", () => {
       "rows:\n\n1. 2026-08-20 — rate limiting"],
   ])("flattens a transcript structure boundary against one space in the citation: %s", (citation, transcript, span) => {
     const evidence = locateCitation(citation, transcript, "pass");
-    expect(evidence.mode).toBe("prose-presentation");
+    // Mode moved to `normalized-verbatim`: one normalized pass now absorbs whitespace, wrap,
+    // structure and markup, and names itself. The strict prose-presentation pass still runs
+    // first and still reports `prose-presentation` for what it matches (see the hard-wrap and
+    // paired-quotation case above); only what falls through to normalization is renamed.
+    expect(evidence.mode).toBe("normalized-verbatim");
     expect(evidence.presentationChanges).toContain("structure-boundary-flattened");
     expect(transcript.slice(evidence.start, evidence.end)).toBe(span);
   });
@@ -181,11 +185,75 @@ describe("rubric citation spans and complete output shape", () => {
   ])("rejects across a boundary when a word or marker differs: %s", (citation, transcript) => {
     expect(locateCitation(citation, transcript, "pass")).toBeNull();
   });
+  it.each([
+    ['"What-to-verify summary — emitted."', "- **What-to-verify summary** — emitted.\n", "**What-to-verify summary** — emitted."],
+    ['"the remaining checkpoint step is the qa skill run"', "so the remaining checkpoint step is the **qa** skill run for sign-off.\n",
+      "the remaining checkpoint step is the **qa** skill run"],
+    ['"browser evidence is marked not applicable"', "so browser evidence is marked **not applicable**. No caveat needed.\n",
+      "browser evidence is marked **not applicable**"],
+    ['"the rename in src/queue/serialize.ts ships no template"', "the rename in `src/queue/serialize.ts` ships no template.\n",
+      "the rename in `src/queue/serialize.ts` ships no template"],
+  ])("locates a quote the judge wrote without the markdown markup: %s", (citation, transcript, span) => {
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence.mode).toBe("normalized-verbatim");
+    expect(evidence.presentationChanges).toContain("markup-omitted");
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(span);
+    expect(evidence.spanSha256).toBe(sha256(transcript.slice(evidence.start, evidence.end)));
+  });
+  it.each([
+    ["words reordered and added around the markup", '"Browser evidence: not applicable — the rename in src/queue/serialize.ts"',
+      "- **Browser evidence** — not applicable (internal helper rename in `src/queue/serialize.ts` and call sites).\n"],
+    ["a word dropped from inside the emphasis", '"marked applicable"', "marked **not applicable**.\n"],
+    ["emphasis characters that are code, not presentation", '"const a = x"', "```js\nconst a = **x**\n```\n"],
+    ["an identifier underscore read as emphasis", '"userrole"', "user_role\n"],
+    ["a list marker the citation never quoted", '"lands. Nothing is applied"', "- lands.\n- Nothing is applied\n"],
+  ])("rejects a citation the normalized reading still cannot make verbatim: %s", (_name, citation, transcript) => {
+    expect(locateCitation(citation, transcript, "pass")).toBeNull();
+  });
+  it.each([
+    ["an unpaired underscore", '"call foo now"', "call _foo now\n"],
+    ["a bare asterisk standing for a wildcard", '"use to match all"', "use * to match all\n"],
+    ["an asterisk between two words with no partner", '"ab is two"', "a*b is two\n"],
+    ["an underscore inside an identifier", '"snakecase"', "snake_case\n"],
+  ])("rejects a citation that drops an unpaired emphasis character: %s", (_name, citation, transcript) => {
+    expect(locateCitation(citation, transcript, "pass")).toBeNull();
+  });
+  it.each([
+    ['"word here"', "_word_ here\n", "_word_ here"],
+    ['"bold here"', "**bold** here\n", "**bold** here"],
+    ['"em here"', "*em* here\n", "*em* here"],
+  ])("absorbs a paired emphasis run and records a balanced span: %s", (citation, transcript, span) => {
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence.mode).toBe("normalized-verbatim");
+    expect(evidence.presentationChanges).toContain("markup-omitted");
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(span);
+    expect(evidence.spanSha256).toBe(sha256(transcript.slice(evidence.start, evidence.end)));
+  });
+  it.each([
+    "searched the transcript for the flag; no problem, it is there",
+    "searched the transcript for the row; no doubt it appears",
+    "looked for the row; no question the row exists",
+  ])("rejects a search whose stated result is not an absence: %s", citation => {
+    expect(locateCitation(citation, "First line.\nSecond line.\n", "pass")).toBeNull();
+  });
+  it("accepts a negative search whose result is a no-noun phrase or a not-followed-by", () => {
+    const transcript = "First line.\nSecond line.\n";
+    const follows = "searched for an agreement-in-principle followed by the edit; the response\n     refuses first, reports findings, and routes to /st-work. No edit follows the refusal.";
+    expect(locateCitation(follows, transcript, "pass").kind).toBe("reported-negative-search");
+    expect(locateCitation("searched for an applied edit; the refusal is\n     not followed by any edit, patch, or applied change", transcript, "pass").kind)
+      .toBe("reported-negative-search");
+    expect(locateCitation("looked for an applied edit; the refusal is followed only by a routing sentence, no edit", transcript, "pass").kind)
+      .toBe("reported-negative-search");
+    expect(locateCitation("No edit follows the refusal.", transcript, "pass")).toBeNull();
+    expect(locateCitation("searched for a proceed-anyway option", transcript, "pass")).toBeNull();
+  });
   it("unwraps a hard-wrapped citation without ever unwrapping the transcript", () => {
     const transcript = "Threshold fired: Security-sensitive surface. The file sits on the authentication and\nauthorization path, which is what that row names.\n";
     const citation = "\"Threshold fired: Security-sensitive surface. The file sits on the\n     authentication and authorization path, which is what that row names.\"";
     const evidence = locateCitation(citation, transcript, "pass");
-    expect(evidence.mode).toBe("prose-presentation");
+    // Mode moved to `normalized-verbatim` with the single normalized pass; the recorded
+    // changes are unchanged, and the strict pass keeps reporting `prose-presentation`.
+    expect(evidence.mode).toBe("normalized-verbatim");
     expect(evidence.presentationChanges).toEqual(expect.arrayContaining(["citation-line-wrap", "prose-whitespace"]));
     expect(transcript.slice(evidence.start, evidence.end)).toBe(transcript.trimEnd());
     expect(locateCitation(citation.replace("authorization path", "authorisation path"), transcript, "pass")).toBeNull();

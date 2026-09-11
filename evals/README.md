@@ -86,6 +86,29 @@ their transcripts and original Brief/Expected blocks, with its explicit prospect
 `test/evals/fixtureCount.test.ts` derives it and fails if this page, `SET-v5.md`, or the
 runner skill states a different one.
 
+## What the citation reader accepts as presentation
+
+`scripts/eval/instrument.mjs` locates every cited span in the transcript before a grade is
+admitted. Since run 15 (2026-09-11) its tolerance for presentation is written down here in one
+place rather than inferred from four run notes: a citation locates when it is an exact
+substring; or when it equals the transcript after both sides are read through one normalized
+view — whitespace outside code collapsed (including the judge's own line wrap and a blank line
+or list/heading boundary in the transcript), markdown markup absorbed (paired emphasis runs,
+inline-code delimiters, line-leading blockquote and heading markers) and paired quotation
+styles treated as one; or when an explicit elision (`...`, `[...]`) joins segments that each
+locate in order with at least three words; or by a line reference; or, for a `must NOT`
+criterion, as a named search with a negative result from a closed vocabulary; or, for a fail
+verdict, as a statement that the transcript is silent. Words, negations, numbers, list-marker
+text, identifier punctuation and every code region stay verbatim; a quote that drops, adds,
+reorders or alters a word is not located. Each admitted span records its offsets, hashes and
+the presentation differences it absorbed, and a recorded span is extended outward over the
+markup it absorbed so that, in the usual case, the recorded slice is a balanced fragment (a
+known residual: when a neighbouring construct's delimiter sits directly against the match, the
+extension can include it; matching and the span hashes are unaffected). One finding from runs 15–17 is carried to the next set version: the five
+calibration fixtures are plain-text transcripts while scoring transcripts are markdown, so a
+5/5 calibration did not predict scoring admission; a fixture exercising markdown belongs in
+the next rubric version.
+
 ## The baselines stay put
 
 `runs/2026-09-01-run-1/RESULTS.md` is red: golden 0.769, adversarial hold 0.625, probes 0.833,
