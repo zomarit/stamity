@@ -222,6 +222,57 @@ function spanEvidence(transcript, start, end, mode, changes = []) {
     spanSha256: sha256(transcript.slice(start, end)), presentationChanges: [...new Set(changes)] }
 }
 
+// The citation side alone is unwrapped: a judge hard-wraps its own emission, while an
+// indented transcript line stays protected code and is never collapsed to meet a citation.
+const unwrapped = text => text.replace(/\n[ \t]*/g, ' ')
+const wrappedCitation = /\n[ \t]+/
+// Only these explicit tokens elide; words missing without a marker remain an alteration.
+const elisionMarker = /\s*(?:\[\s*(?:\.{3,}|…)\s*\]|\.{3,}|…)\s*/
+// A segment carries enough words to identify a span; two common words either side of a
+// marker would otherwise span arbitrary text the judge never quoted.
+const substantial = text => (text.match(/[\p{L}\p{N}]+/gu) ?? []).length >= 3
+const searchVerb = /\b(?:searched|looked|checked|scanned)(?:\s+(?:the\s+)?(?:transcript|response|answer|reply|output|text|it))?\s+for\s+\S/i
+const negativeResult = /\b(none|absent|not found|no match|silent|does not appear|do not appear|never appears?|not present|nothing|no such|not named|not mentioned|nowhere)\b/i
+const reportedSilence = /\btranscript\s+is\s+silent\b|\b(?:transcript|response|answer|reply)\b[^.\n]{0,80}?\b(?:is silent|says nothing|silent on|silent about|does not (?:mention|address|say)|never (?:mentions|addresses))\b/i
+
+function proseMatch(source, text, from = 0) {
+  const wanted = proseView(text)
+  if (!wanted.tokens.length) return null
+  const at = source.tokens.findIndex((token, start) => token === wanted.tokens[0] &&
+    source.positions[start].start >= from &&
+    wanted.tokens.every((part, offset) => source.tokens[start + offset] === part))
+  if (at === -1) return null
+  const positions = source.positions.slice(at, at + wanted.tokens.length)
+  return { start: positions[0].start, end: positions.at(-1).end,
+    changes: [...positions, ...wanted.positions].map(position => position.change).filter(Boolean) }
+}
+
+/** One elided segment: exact first, then the same prose view the contiguous pass uses. */
+function locateSegment(source, transcript, text, from) {
+  const at = transcript.indexOf(text, from)
+  if (at !== -1) return { start: at, end: at + text.length, changes: [] }
+  const contiguous = proseMatch(source, text, from)
+  if (contiguous) return contiguous
+  if (!wrappedCitation.test(text)) return null
+  const unwound = proseMatch(source, unwrapped(text), from)
+  return unwound && { ...unwound, changes: [...unwound.changes, 'citation-line-wrap'] }
+}
+
+function elidedSpan(source, transcript, text) {
+  const segments = text.split(elisionMarker)
+  if (segments.length < 2 || !segments.every(substantial)) return null
+  const changes = ['explicit-elision']
+  let start = null, end = 0
+  for (const segment of segments) {
+    const found = locateSegment(source, transcript, segment, end)
+    if (!found) return null
+    changes.push(...found.changes)
+    start ??= found.start
+    end = found.end
+  }
+  return { ...spanEvidence(transcript, start, end, 'explicit-elision', changes), segments: segments.length }
+}
+
 export function locateCitation(citation, transcript, verdict) {
   const phrases = quotedPhrases(citation)
   for (const phrase of phrases) {
@@ -229,14 +280,19 @@ export function locateCitation(citation, transcript, verdict) {
     if (at !== -1) return spanEvidence(transcript, at, at + phrase.text.length, 'exact')
   }
   const source = proseView(transcript)
-  for (const phrase of phrases.filter(item => !item.code)) {
-    const wanted = proseView(phrase.text)
-    const at = source.tokens.findIndex((token, start) => token === wanted.tokens[0] &&
-      wanted.tokens.every((part, offset) => source.tokens[start + offset] === part))
-    if (at === -1) continue
-    const positions = source.positions.slice(at, at + wanted.tokens.length)
-    return spanEvidence(transcript, positions[0].start, positions.at(-1).end, 'prose-presentation',
-      [...positions, ...wanted.positions].map(position => position.change).filter(Boolean))
+  const prose = phrases.filter(item => !item.code)
+  for (const phrase of prose) {
+    const found = proseMatch(source, phrase.text)
+    if (found) return spanEvidence(transcript, found.start, found.end, 'prose-presentation', found.changes)
+  }
+  for (const phrase of prose.filter(item => wrappedCitation.test(item.text))) {
+    const found = proseMatch(source, unwrapped(phrase.text))
+    if (found) return spanEvidence(transcript, found.start, found.end, 'prose-presentation',
+      [...found.changes, 'citation-line-wrap'])
+  }
+  for (const phrase of prose) {
+    const found = elidedSpan(source, transcript, phrase.text)
+    if (found) return found
   }
   const references = [...citation.matchAll(/\b(?:lines?\s+|L\s*)(\d+)(?:\s*[-–]\s*L?(\d+))?\b/gi)]
   if (references.length) {
@@ -249,10 +305,9 @@ export function locateCitation(citation, transcript, verdict) {
     const end = start + lines.slice(from - 1, through).join('\n').length
     if (transcript.slice(start, end).trim()) return { ...spanEvidence(transcript, start, end, 'line-reference'), from, through }
   }
-  if (/\b(?:searched|looked|checked|scanned)\s+for\s+\S/i.test(citation) &&
-    /\b(none|absent|not found|no match|silent)\b/i.test(citation))
+  if (searchVerb.test(citation) && negativeResult.test(citation))
     return { kind: 'reported-negative-search', citationSha256: sha256(citation), transcriptSha256: sha256(transcript) }
-  if (verdict === 'fail' && /\btranscript\s+is\s+silent\b/i.test(citation))
+  if (verdict === 'fail' && reportedSilence.test(citation))
     return { kind: 'reported-silence', citationSha256: sha256(citation), transcriptSha256: sha256(transcript) }
   return null
 }

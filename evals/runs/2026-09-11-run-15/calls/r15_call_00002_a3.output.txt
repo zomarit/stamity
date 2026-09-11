@@ -1,0 +1,22 @@
+Grading the transcript against the case criteria as the judge.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap in the hand-in)
+binding:
+  B1 pass — "none" is the first line of the response, and the reason opens "No skill applies."
+  B2 pass — searched for `st-onboard` named as triggered; the id never appears. The only
+     reference is "The onboarding walk covers a repository whose setup has no first proven
+     change through it yet; this one has eight months", which rules the skill out rather
+     than selecting it.
+  B3 pass — searched for any of the eight skill ids given as the answer; none present. The
+     answer line is "none" and the reason says "a general 'what next' stays with the main
+     flow".
+advisory:
+  A1 pass — "has no first proven change through it yet; this one has eight months of changes
+     closed on green gates" — the reason contrasts an unproven install with this repository's
+     record of many proven changes.
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Every binding criterion passes with a cited span, so the case verdict is PASS. The single advisory criterion also passes. The only defect to report is that the hand-in carried no case id, so the emission cannot name one.
