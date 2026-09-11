@@ -93,48 +93,241 @@ export function parseRubric(raw, historicalCases) {
   return { core, coreHash: sha256(core), fixtures }
 }
 
-function cited(citation, transcript, verdict) {
-  const quotes = [...citation.matchAll(/["“]([^"”]+)["”]/g)].map(match => match[1])
-  if (quotes.some(quote => transcript.includes(quote))) return true
-  const line = /\b(?:line|lines|L)\s*(\d+)(?:[-–](\d+))?\b/i.exec(citation)
-  if (line && Number(line[1]) > 0 && Number(line[2] ?? line[1]) >= Number(line[1]) &&
-      Number(line[2] ?? line[1]) <= transcript.split('\n').length) return true
-  if (/\bsearched for .+/i.test(citation) && /\b(none|absent|not found|no match|silent)\b/i.test(citation)) return true
-  return verdict === 'fail' && /\btranscript is silent\b/i.test(citation)
+const word = character => /[\p{L}\p{N}]/u.test(character ?? '')
+const apostrophe = (text, at) => /['’]/.test(text[at]) && word(text[at - 1]) && word(text[at + 1])
+
+function quotedPhrases(text) {
+  const phrases = [], closing = { '"': '"', '“': '”', "'": "'", '‘': '’', '`': '`' }
+  for (let start = 0; start < text.length; start++) {
+    const endMark = closing[text[start]]
+    if (!endMark || apostrophe(text, start) || text[start - 1] === '\\') continue
+    for (let end = start + 1; end < text.length; end++) {
+      if (text[end] !== endMark || apostrophe(text, end) || text[end - 1] === '\\') continue
+      if (text.slice(start + 1, end).trim()) phrases.push({ text: text.slice(start + 1, end), start: start + 1, end,
+        code: text[start] === '`' })
+      start = end
+      break
+    }
+  }
+  return phrases
+}
+
+// Presentation matching keeps an index into the original string. It never rewrites
+// the stored transcript/citation or treats punctuation, code or missing words as noise.
+function proseView(text) {
+  const protectedAt = new Uint8Array(text.length)
+  for (const match of text.matchAll(/(`+|~{3,})[\s\S]*?\1/g))
+    protectedAt.fill(1, match.index, match.index + match[0].length)
+  let lineStart = 0
+  for (const line of text.split('\n')) {
+    if (/^(?: {4}|\t)|[=<>[\]{}\\]|^\s*(?:def|class|if|for|while)\b.*:\s*$/.test(line))
+      protectedAt.fill(1, lineStart, Math.min(text.length, lineStart + line.length + 1))
+    lineStart += line.length + 1
+  }
+  // Bare call syntax is code too: quotation marks within call("value") are not prose typography.
+  for (const call of text.matchAll(/[\p{L}_$][\p{L}\p{N}_$]*\(/gu)) {
+    let depth = 0, quotedUntil = null, end = text.length
+    const closing = { '"': '"', "'": "'", '`': '`', '“': '”', '‘': '’' }
+    for (let at = call.index + call[0].length - 1; at < text.length; at++) {
+      const character = text[at]
+      if (quotedUntil) {
+        if (character === '\\') { at++; continue }
+        if (character === quotedUntil) quotedUntil = null
+        continue
+      }
+      if (closing[character]) quotedUntil = closing[character]
+      else if (character === '(') depth++
+      else if (character === ')' && --depth === 0) { end = at + 1; break }
+    }
+    protectedAt.fill(1, call.index, end)
+  }
+  const quoteAt = new Set()
+  for (const phrase of quotedPhrases(text)) {
+    if (!phrase.code && !word(text[phrase.start - 2]) && !word(text[phrase.end + 1]) &&
+      /^[\p{L}\p{N} ,!?-]+$/u.test(phrase.text) &&
+      !protectedAt.slice(phrase.start - 1, phrase.end + 1).some(Boolean)) {
+      quoteAt.add(phrase.start - 1); quoteAt.add(phrase.end)
+    }
+  }
+  const tokens = [], positions = []
+  const add = (symbol, start, end, change = null, quotation = false) => {
+    // Typed tokens cannot collide with any literal Unicode character in the input.
+    tokens.push(quotation ? 'quotation' : `text:${symbol}`)
+    positions.push({ start, end, change })
+  }
+  for (let at = 0; at < text.length;) {
+    if (!protectedAt[at] && /[ \t\r\n]/.test(text[at])) {
+      const start = at
+      while (at < text.length && !protectedAt[at] && /[ \t\r\n]/.test(text[at])) at++
+      const space = text.slice(start, at)
+      const boundary = (space.match(/\n/g)?.length ?? 0) > 1 ||
+        (space.includes('\n') && /^(?:[-*+]\s|\d+[.)]\s|#{1,6}\s)/.test(text.slice(at)))
+      if (!boundary) { add(' ', start, at, space === ' ' ? null : 'prose-whitespace'); continue }
+      for (let i = start; i < at; i++) add(text[i], i, i + 1)
+      continue
+    }
+    add(text[at], at, at + 1, quoteAt.has(at) ? 'paired-quotation-style' : null, quoteAt.has(at))
+    at++
+  }
+  return { tokens, positions }
+}
+
+function spanEvidence(transcript, start, end, mode, changes = []) {
+  return { kind: 'span', mode, offsetUnit: 'UTF-16-code-units', start, end,
+    byteOffsetUnit: 'UTF-8-bytes', startByte: Buffer.byteLength(transcript.slice(0, start)),
+    endByte: Buffer.byteLength(transcript.slice(0, end)), transcriptSha256: sha256(transcript),
+    spanSha256: sha256(transcript.slice(start, end)), presentationChanges: [...new Set(changes)] }
+}
+
+export function locateCitation(citation, transcript, verdict) {
+  const phrases = quotedPhrases(citation)
+  for (const phrase of phrases) {
+    const at = transcript.indexOf(phrase.text)
+    if (at !== -1) return spanEvidence(transcript, at, at + phrase.text.length, 'exact')
+  }
+  const source = proseView(transcript)
+  for (const phrase of phrases.filter(item => !item.code)) {
+    const wanted = proseView(phrase.text)
+    const at = source.tokens.findIndex((token, start) => token === wanted.tokens[0] &&
+      wanted.tokens.every((part, offset) => source.tokens[start + offset] === part))
+    if (at === -1) continue
+    const positions = source.positions.slice(at, at + wanted.tokens.length)
+    return spanEvidence(transcript, positions[0].start, positions.at(-1).end, 'prose-presentation',
+      [...positions, ...wanted.positions].map(position => position.change).filter(Boolean))
+  }
+  const references = [...citation.matchAll(/\b(?:lines?\s+|L\s*)(\d+)(?:\s*[-–]\s*L?(\d+))?\b/gi)]
+  if (references.length) {
+    const lines = transcript.split('\n')
+    const valid = references.every(reference => Number(reference[1]) > 0 &&
+      Number(reference[2] ?? reference[1]) >= Number(reference[1]) && Number(reference[2] ?? reference[1]) <= lines.length)
+    if (!valid) return null
+    const first = references[0], from = Number(first[1]), through = Number(first[2] ?? first[1])
+    const start = lines.slice(0, from - 1).reduce((length, line) => length + line.length + 1, 0)
+    const end = start + lines.slice(from - 1, through).join('\n').length
+    if (transcript.slice(start, end).trim()) return { ...spanEvidence(transcript, start, end, 'line-reference'), from, through }
+  }
+  if (/\b(?:searched|looked|checked|scanned)\s+for\s+\S/i.test(citation) &&
+    /\b(none|absent|not found|no match|silent)\b/i.test(citation))
+    return { kind: 'reported-negative-search', citationSha256: sha256(citation), transcriptSha256: sha256(transcript) }
+  if (verdict === 'fail' && /\btranscript\s+is\s+silent\b/i.test(citation))
+    return { kind: 'reported-silence', citationSha256: sha256(citation), transcriptSha256: sha256(transcript) }
+  return null
+}
+
+const isDecision = line => /\b(?:decid\w*|decisiv\w*|fail(?:ure|ed|s)?|due\s+to)\b/i.test(line) && /\bB\d+\b/.test(line)
+const isAdvisoryList = line => /^\s*(?:failed(?:\s+(?:advisory\s+)?criteria)?\s*:\s*A\d+|A\d+(?:\s*(?:,|and)\s*A\d+)*\s+fail(?:ed|s)\b)/i.test(line)
+const summaryStatuses = line => [...line.matchAll(/\b([BA]\d+(?:\s*(?:,\s*(?:and\s+)?|and\s+)[BA]\d+)*)\s+(passed|failed|passes|fails)\b/gi)]
+  .flatMap(match => [...match[1].matchAll(/[BA]\d+/g)].map(id => ({ id: id[0],
+    status: match[2].toLowerCase().startsWith('pass') ? 'pass' : 'fail', start: match.index + id.index })))
+function summaryDecisions(line) {
+  const ids = 'B\\d+(?:\\s*(?:,\\s*(?:and\\s+)?|and\\s+)B\\d+)*'
+  const patterns = [
+    // A decision label names the following IDs, not every ID in the sentence.
+    new RegExp(`\\b(?:decider(?:s)?|deciding|decided|decisive)(?:\\s+(?:the|binding|criterion|criteria|failure|case|by|is|are|was|were))*\\s*:?\\s*(${ids})\\b`, 'dgi'),
+    new RegExp(`\\b(?:due\\s+to|because\\s+of)(?:\\s+(?:the|binding|criterion|criteria))*\\s+(${ids})\\b`, 'dgi'),
+    // Conversely, these IDs are the subjects of an explicit decision predicate.
+    new RegExp(`\\b(${ids})\\s+(?:(?:is|are|was|were)\\s+)?(?:(?:also|jointly|both)\\s+)?(?:decide(?:s|d)?|(?:the\\s+)?decisive|(?:the\\s+)?decider(?:s)?)\\b`, 'dgi'),
+  ]
+  const relations = patterns.flatMap(pattern => [...line.matchAll(pattern)].flatMap(match =>
+    [...match[1].matchAll(/B\d+/g)].map(id => ({ id: id[0], start: match.indices[1][0] + id.index }))))
+  const verdictIds = new RegExp(`^verdict:\\s*FAIL(?:\\s*\\(binding\\s+\\d+\\/\\d+\\))?\\s*[—–-]\\s*(${ids})\\b`, 'dg')
+  const statuses = summaryStatuses(line)
+  for (const match of line.matchAll(verdictIds)) for (const id of match[1].matchAll(/B\d+/g)) {
+    const start = match.indices[1][0] + id.index
+    if (!statuses.some(status => status.start === start)) relations.push({ id: id[0], start })
+  }
+  return relations.filter((relation, index) => relations.findIndex(other => other.start === relation.start) === index)
+}
+const isBodySummary = line => {
+  if (/^\s*["'“‘`]/.test(line) || /^\s*[BA]\d+ (?:pass|fail)\s*[—–-]/.test(line)) return false
+  const relations = [...summaryStatuses(line), ...summaryDecisions(line)]
+  // A clause starting with a criterion ID must be a recognized prose assertion;
+  // malformed pass/fail rows or unknown third-level rows cannot hide as context.
+  const leadingIds = [...line.matchAll(/(?:^|;|\s[—–]\s)\s*([BA]\d+)\b/dg)]
+  if (!isAdvisoryList(line) && leadingIds.some(match => !relations.some(relation => relation.start === match.indices[1][0]))) return false
+  return relations.length > 0 || isAdvisoryList(line) || /^\s*(?:advisory\s+count|failed\s+advisor(?:y|ies))\b/i.test(line)
 }
 
 /** Parse the committed rubric's text shape; do not append a new output schema to the judge input. */
 export function parseGrade(raw, scenario, transcript) {
-  const text = raw.replace(/^```(?:text)?\s*$/gm, '').trim()
-  requireEvidence(/^case:\s*\S.+$/m.test(text), 'grade-case', true)
-  const bindingAt = /^binding:\s*$/m.exec(text)
-  const advisoryAt = /^advisory:(?:\s*none declared)?\s*$/m.exec(text)
+  const text = raw.trim().replace(/^```(?:text)?\s*\n([\s\S]*?)\n```$/, '$1')
+  const caseLines = [...text.matchAll(/^case:[ \t]*(\S[^\n]*)$/gm)]
+  requireEvidence(caseLines.length === 1, 'grade-case', true)
+  const bindingLines = [...text.matchAll(/^binding:[ \t]*$/gm)]
   const verdictMatches = [...text.matchAll(/^verdict:\s*(PASS|FAIL)\b[^\n]*$/gm)]
-  requireEvidence(bindingAt && advisoryAt && verdictMatches.length === 1 &&
+  const advisoryLines = [...text.matchAll(/^advisory:(?:[ \t]*none declared)?[ \t]*$/gm)]
+    .filter(match => match.index < (verdictMatches[0]?.index ?? 0))
+  const bindingAt = bindingLines[0], advisoryAt = advisoryLines[0]
+  requireEvidence(bindingLines.length === 1 && advisoryLines.length === 1 && verdictMatches.length === 1 &&
+    caseLines[0].index < bindingAt.index &&
     bindingAt.index < advisoryAt.index && advisoryAt.index < verdictMatches[0].index, 'grade-groups', true)
+  const bodySummaries = []
   const parseGroup = (part, prefix, count) => {
-    const rows = [...part.matchAll(/^\s*([BA])(\d+) (pass|fail)\s*[—–-]\s*(.+(?:\n(?!\s*[BA]\d+ |\w+:)[^\n]+)*)/gm)]
+    const rows = []
+    for (const line of part.split('\n')) {
+      if (!line.trim()) continue
+      if (isBodySummary(line)) { bodySummaries.push(line); continue }
+      if (/^\s*[BA]\d+\b/.test(line)) {
+        const row = /^\s*([BA])(\d+) (pass|fail)\s*[—–-]\s*(.+)$/.exec(line)
+        requireEvidence(row, 'grade-criteria', true)
+        rows.push(row)
+      } else {
+        requireEvidence(rows.length > 0, 'grade-criteria', true)
+        rows.at(-1)[4] += `\n${line}`
+      }
+    }
     requireEvidence(rows.length === count && rows.every((row, index) => row[1] === prefix && Number(row[2]) === index + 1), 'grade-criteria', true)
     return rows.map(row => {
       const citation = row[4].trim()
-      requireEvidence(cited(citation, transcript, row[3]), 'grade-citation', true)
-      return { id: `${prefix}${row[2]}`, verdict: row[3], citation }
+      const evidence = locateCitation(citation, transcript, row[3])
+      requireEvidence(evidence, 'grade-citation', true)
+      return { id: `${prefix}${row[2]}`, verdict: row[3], citation, evidence }
     })
   }
   const binding = parseGroup(text.slice(bindingAt.index + bindingAt[0].length, advisoryAt.index), 'B', scenario.binding.length)
   const advisory = parseGroup(text.slice(advisoryAt.index + advisoryAt[0].length, verdictMatches[0].index), 'A', scenario.advisory.length)
+  requireEvidence(text.split('\n').filter(line => /^\s*[BA]\d+\b/.test(line) && !isBodySummary(line)).length ===
+    binding.length + advisory.length, 'grade-criteria', true)
   const verdict = binding.every(row => row.verdict === 'pass') ? 'PASS' : 'FAIL'
   requireEvidence(verdictMatches[0][1] === verdict, 'grade-verdict-inconsistent', true)
-  const suffix = text.slice(verdictMatches[0].index + verdictMatches[0][0].length)
+  const suffix = [text.slice(verdictMatches[0].index), ...bodySummaries].join('\n')
+  const declared = [...binding, ...advisory]
+  requireEvidence(summaryStatuses(suffix).every(assertion => declared.some(row =>
+    row.id === assertion.id && row.verdict === assertion.status)), 'grade-summary-status', true)
+  const ratios = group => [...suffix.matchAll(new RegExp(`\\b${group}(?:\\s+count)?\\s*:?\\s*(\\d+)\\/(\\d+)\\b`, 'gi'))]
+  requireEvidence(ratios('binding').every(match => Number(match[1]) === binding.filter(row => row.verdict === 'pass').length &&
+    Number(match[2]) === binding.length), 'grade-binding-summary', true)
+  const decisionLines = suffix.split('\n').filter(isDecision)
+  const deciding = decisionLines.flatMap(line => {
+    const decisions = summaryDecisions(line), statuses = summaryStatuses(line)
+    requireEvidence([...line.matchAll(/\bB\d+\b/g)].every(match =>
+      binding.some(row => row.id === match[0]) && [...decisions, ...statuses].some(relation => relation.start === match.index)),
+    'grade-fail-decider', true)
+    return decisions.map(relation => relation.id)
+  })
+  requireEvidence((verdict === 'PASS' || deciding.length > 0) &&
+    deciding.every(id => binding.some(row => row.id === id && row.verdict === 'fail')), 'grade-fail-decider', true)
+  const advisoryRatios = ratios('advisory'), passed = advisory.filter(row => row.verdict === 'pass').length
+  const failed = advisory.filter(row => row.verdict === 'fail').map(row => row.id)
+  const listed = suffix.split('\n').filter(line => /\badvisor(?:y|ies)\b/i.test(line) || isAdvisoryList(line))
+    .flatMap(line => {
+      const passingContext = summaryStatuses(line).filter(assertion => assertion.status === 'pass')
+      return [...line.matchAll(/\bA(\d+)\b/g)].filter(match => !passingContext.some(assertion => assertion.start === match.index))
+        .map(match => `A${match[1]}`)
+    })
+  const allPassed = /^advisory:[ \t]*all passed[ \t]*$/m.test(suffix)
+  const noneDeclared = /^advisory:[ \t]*none declared[ \t]*$/m.test(text)
+  requireEvidence([...suffix.matchAll(/^advisory:/gm)].length <= 1 &&
+    advisoryRatios.every(match => Number(match[1]) === passed && Number(match[2]) === advisory.length) &&
+    new Set(listed).size === listed.length && listed.length === failed.length && listed.every(id => failed.includes(id)),
+  'grade-advisory-summary', true)
   if (scenario.advisory.length === 0) {
-    requireEvidence(/^advisory: none declared\s*$/m.test(text), 'grade-advisory-summary', true)
+    requireEvidence(noneDeclared && !allPassed, 'grade-advisory-summary', true)
   } else {
-    const passed = advisory.filter(row => row.verdict === 'pass').length
-    const ratio = /^advisory: (\d+)\/(\d+)\b/m.exec(suffix)
-    requireEvidence((ratio && Number(ratio[1]) === passed && Number(ratio[2]) === advisory.length) ||
-      (passed === advisory.length && /^advisory: all passed\s*$/m.test(suffix)), 'grade-advisory-summary', true)
+    requireEvidence(!noneDeclared && (failed.length ? !allPassed && advisoryRatios.length > 0
+      : allPassed || advisoryRatios.length > 0), 'grade-advisory-summary', true)
   }
-  return { caseId: scenario.id, emittedCase: /^case:\s*(.+)$/m.exec(text)[1], verdict, binding, advisory }
+  return { caseId: scenario.id, emittedCase: caseLines[0][1], verdict, binding, advisory }
 }
 
 export function calibrationMatches(fixture, grade) {
