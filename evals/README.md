@@ -13,6 +13,7 @@ baselines.
 | `SET-v5.md` | **The current set document** — scope, versioned inputs, thresholds, the run-artifact contract, the hard triggers, the case index and the coverage table. Read it first. |
 | `rubric-v4.md` | **The default Claude judge rubric**: verdict vocabulary, the binding/advisory grouping, grading procedure, the judge's four inputs, and the calibration protocol with its fixtures. |
 | `MODEL-PROFILES-v1.md`, `model-profiles-v1.json` | Explicit model/rubric profiles: the original Claude default, Astra scenarios with Sol judging, or Sol scenarios with Astra judging. |
+| `session-native-v1.md` | Opt-in session protocol accepting recorded ambient client/repository instructions, with fresh native agents and unchanged calibration and scoring bars. |
 | `rubric-v5.md` | The alternate profiles' model-neutral rubric; grading rules and calibration fixtures are retained verbatim from v4. |
 | `cases-v5/golden/` | Cases pinning the behaviour the corpus promises. |
 | `cases-v5/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
@@ -60,7 +61,10 @@ different model than the set declared.
 For Codex, explicitly select `codex-astra` to measure `gpt-6-astra` with `gpt-5.6-sol`
 judging, or `codex-astra-judge` to reverse them. Both roles use `high` reasoning effort.
 These profiles select `rubric-v5.md`; they preserve distinct scenario and judge models,
-sealed fresh contexts and calibration before scoring. Availability of a profile does not
+fresh contexts and calibration before scoring. Sealed input isolation is the default;
+an operator may prospectively select [the session-native protocol](session-native-v1.md)
+to accept recorded ambient client/repository instructions as a separate baseline.
+Availability of a profile does not
 establish a passing eval. Read [the profile contract](MODEL-PROFILES-v1.md) for preflight,
 isolation controls and evidence requirements. Existing Claude baselines remain separate.
 
@@ -133,11 +137,11 @@ The set runs when an operator says so, in a harness session, and at no other tim
 
 - **Nothing is scheduled.** No cron, no workflow trigger, no hook. A run happens because a
   person started one.
-- **No API lane is armed.** The harness drives the set through the session's own agent
-  tooling; there is no key, no client, and no billable path standing by in this repository.
-- **A run is a session, not a command.** There is no `npm run eval`, and its absence is the
-  design rather than a gap: a scored run costs model calls, and the thing that decides
-  whether to spend them is a person with a reason.
+- **Session tooling is the primary route.** The harness drives the set through the
+  session's own agents. No API credential is needed for that route. The optional
+  stateless API script below runs only when explicitly selected and invoked.
+- **A person starts the run.** There is no `npm run eval`: a scored run costs model
+  calls, and a person decides when and why to spend them.
 
 The three gates above are the exception that proves the rule: they are deterministic checks
 over the case files, they run in `npm run test` with everything else, and they score nothing.
@@ -174,8 +178,17 @@ fresh input isolation. The run records requested and resolved IDs, reasoning/dec
 harness, isolation controls and rubric/profile hashes. Tool access prohibited only by the
 Brief is recorded as instruction-only isolation and checked against tool traces.
 
-The repository also provides a manual stateless transport for the two declared Codex
-profiles. Commit and review the final candidate and versioned eval inputs first, then
+For this session's explicitly authorized ambient-context exception, read and commit
+[`session-native-v1.md`](session-native-v1.md) before calibration or scoring. It uses
+fresh `fork_turns: "none"` native agents, the selected Astra/high and Sol/high pair,
+and no added neutrality wrapper. Ambient repository/client instructions are retained
+and disclosed, not claimed to be removed. All five original calibration fixtures,
+78 cases with three samples each, scoring thresholds, human QA and platform approval
+remain required. This baseline does not retroactively admit previous blocked runs.
+
+The repository also provides an optional manual stateless transport for the two declared
+Codex profiles. Select this API route explicitly; it is not needed for session-native
+execution. Commit and review the final candidate and versioned eval inputs first, then
 start it explicitly with an authorized `OPENAI_API_KEY` in the process environment:
 
 ```sh
@@ -208,7 +221,9 @@ defines request controls and returned model/reasoning/output fields. Provider-in
 instructions are not exposed by that interface, and no independent model attestation is
 claimed. Requested controls, returned provider fields, unavailable decoding controls and
 that visibility limit are recorded separately. Native receipts with extra project or
-developer messages remain inadmissible. Deterministic fixture tests establish the
+developer messages remain inadmissible to this stateless baseline; an explicitly
+authorized session-native run follows its own ambient-input protocol. Deterministic
+fixture tests establish the
 runner's checks; live isolation and calibration remain unproved until actually observed.
 
 Every call writes its exact allowed request, raw successful provider response, hashes,
