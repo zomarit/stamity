@@ -102,6 +102,18 @@ Use the existing deterministic instrument functions for case/rubric parsing,
 grade validation, calibration comparison and aggregation; do not change their
 criteria or thresholds to accommodate output.
 
+A demonstrated reader defect is handled through an explicit adjudication
+amendment, independently reviewed and committed before reconsidering any
+response. Preserve the original inputs, responses, invalid decisions and journal
+entries; bind the old/new reader and configuration hashes and the exact affected
+receipts. Apply the corrected written rubric contract uniformly, without new
+model calls, rewritten citations or case-specific exceptions. Citation evidence
+retains original span offsets with declared units and hashes; bounded prose
+presentation differences cannot change words, negations, numbers, code or
+identifier punctuation. Record the new decision separately from the original.
+This process cannot turn an actual grade failure or calibration-label mismatch
+into an invalid attempt, reset attempts, or lower any score bar.
+
 For each attempt, retain the exact dispatched task and controls, agent/thread
 identity, complete native trace and its hash, requested and native-harness-
 resolved model and effort, output fragments, and admission decision. Native
