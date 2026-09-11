@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "id": "0003",
+  "runId": "2026-09-11-run-13",
+  "kind": "terminal-created-invalid-dispatch-bookkeeping-supplement",
+  "recordedAt": "2026-09-11T10:05:58.815Z",
+  "originalPublicExport": {
+    "directory": "evals/runs/2026-09-11-run-13",
+    "stateRevision": 10,
+    "files": 13,
+    "unchanged": true,
+    "sha256ByFile": {
+      "C4-DISPATCH-LIMITATION.json": "cb5be6b6ba505bbfcde1ea18d34be78edecdb464cceda9fe67523a1da8340c21",
+      "EXPORT.json": "2cd8b027e1de170887c95fc0189e271aa403b477e3daf04c15a488acc8a289a3",
+      "RESULTS.md": "15db0dd0aa71d42191109704029add3d481d87af09d7e34aaab70455330373b7",
+      "calls.json": "c4dd6529f9ad4b3aa5a5f2fd2441a6c68cffbdfa2fe8baa18421417c6f024db6",
+      "calls/r13_call_00001_a1.input.txt": "329d9170ea6920bee4e694ea5605de5d6d6c0afe8e555a77db6affed8241241d",
+      "calls/r13_call_00001_a1.output.txt": "220d646fff33f4046d68dd3536b42f9e45d072cc24861c9276eac0d95b03923a",
+      "calls/r13_call_00002_a1.input.txt": "0260e14e9b7381f200d862fcfa666e1e1fdb2b116aa65d3f6472d11c2009fd5c",
+      "calls/r13_call_00002_a1.output.txt": "43adc2eb2f2a088c7d1040a6b37f35df6c2ee7595b792023f87a46c595d41acb",
+      "calls/r13_call_00003_a1.input.txt": "9e86914fcec34a2049b0e1a71395cee6b035f49dbaf1492699a0e2a7148b501f",
+      "calls/r13_call_00003_a1.output.txt": "67fa2fd6572d7025acbcb8170f8d883275db5124baeb5ba9d68e6d0dae8f776b",
+      "calls/r13_call_00004_a1.input.txt": "94c83c38477dee69991b46c61b3ac0a133fcb0576879892bc3bd82132a542d65",
+      "inputs.json": "8a3ff81af3d6405628719d7f1a9055390b636fb777463bc7535d355e7f2b8b44",
+      "summary.json": "c544cfc0cfcb22c7f7aa587b0b091aaabf7e1fa9fc9a87fec9bc5a68d034c376"
+    },
+    "meaning": "The original export remains the unchanged revision-10 snapshot. This separate supplement records the later bookkeeping transition without replacing its observations or scores."
+  },
+  "application": {
+    "command": "record-created-invalid-dispatch",
+    "invocations": 2,
+    "successfulTransitions": 1,
+    "modelRetries": 0,
+    "firstInvocation": {
+      "exitCode": 1,
+      "successfulTransitions": 0,
+      "reason": "incident-preservation-roster",
+      "stateBeforeSha256": "7aaf5490f8280e15bd785c40e9c6a358aea4cd28a2c3dd207254442fa2d9a3ad",
+      "stateAfterSha256": "7aaf5490f8280e15bd785c40e9c6a358aea4cd28a2c3dd207254442fa2d9a3ad",
+      "receiptSha256": "b7cd2d4a09c1193519660e965ac4bdb4b5d42ed614c5f711eb917910b0c7a91f",
+      "meaning": "The caller placed capture files inside the frozen evidence roster. The command correctly refused before any incident, journal or state mutation."
+    },
+    "captureCorrection": {
+      "filesPreserved": 4,
+      "allBytesPreserved": true,
+      "relocationReceiptSha256": "e12cc824859f9e6ca72e87c7139c4a7a4a6da6aec5c0467edb57006dec5ac124",
+      "captureFileHashes": [
+        {
+          "bytes": 1808,
+          "sha256": "b7cd2d4a09c1193519660e965ac4bdb4b5d42ed614c5f711eb917910b0c7a91f"
+        },
+        {
+          "bytes": 321,
+          "sha256": "1bbea28c9e1b2f4b5f4bb36615662edf51986261ed35752e8f77862911494367"
+        },
+        {
+          "bytes": 59,
+          "sha256": "62f5381a3b46ad41c8d1717cd1e42967d59a90f53d283cfe5a739420523a0245"
+        },
+        {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "meaning": "The first invocation records were relocated byte-for-byte outside the frozen roster; the second invocation used a corrected capture destination and the same committed helper and descriptor."
+    },
+    "secondInvocation": {
+      "exitCode": 0,
+      "firstSuccessfulTransition": true,
+      "receiptSha256": "87e45945d8488da623f99930580ed8d20f449917db7ceb7bc7ef6b2069c65307",
+      "stateRevisionBefore": 10,
+      "stateRevisionAfter": 11,
+      "stateBeforeSha256": "7aaf5490f8280e15bd785c40e9c6a358aea4cd28a2c3dd207254442fa2d9a3ad",
+      "stateAfterSha256": "b33dba2bb019eed9f18722b1dc854032ff309fcc7162f46764160b89fb24f201",
+      "incidentSha256": "c28b31b66f0e5222fee9243a6b5a88e232422bd32f1fef38820932183ee3f8df",
+      "journalEventsAdded": 1,
+      "journalEventSha256": "c92947c882cb94f6caa24446c1a24934a286da313e70569137b9e68cdf1c429f",
+      "meaning": "This was the first successful bookkeeping transition, not a model retry, grade rerun or calibration resample."
+    }
+  },
+  "gradingContext": {
+    "candidate": "bc7b9f9bcb7fd5a5dd625ed8ee1a9dab0867a5ba",
+    "helperCommit": "ab1b09cfbee3e69d07ee023ea668583579604871",
+    "configurationHash": "3b81078c988d34a0bcbdd84970d70176f4c4041fd29232cafbeceefdd0e1d20d",
+    "unchanged": true
+  },
+  "bookkeepingContext": {
+    "helperCommit": "e56c7e8881b86c282ce6d3ce1bf29bf1bf0b156f",
+    "publicEvidenceHead": "0ae0949f573f2a7413d1718d07e7d3325b7a9ba7",
+    "configurationHash": "44619d11b608d498188767034eb25dc355eba834c4444d29543c4da05167f522",
+    "manifestSha256": "024e56955d417b19d352c7f13040295ec2a54988cc54c06ceb71f950c97d4561",
+    "changesGradingContext": false
+  },
+  "c4": {
+    "fixtureId": "C4",
+    "callStatus": "blocked",
+    "attemptStatus": "invalid",
+    "reason": "driver-transcription-omitted-rubric-paragraph",
+    "graded": false,
+    "admitted": false,
+    "retryable": false,
+    "knownChildCreated": true,
+    "validInputBinding": false,
+    "preparedTaskSha256": "94c83c38477dee69991b46c61b3ac0a133fcb0576879892bc3bd82132a542d65",
+    "driverReportedSentPlaintextSha256": "33a08fcc92470e1c2a5436ea46cbac3882ceb440d8dd2848d6265f8258da41d8",
+    "driverAttestsPreparedPlaintext": false,
+    "omittedSpan": {
+      "offsetUnit": "UTF-16-code-units",
+      "start": 5840,
+      "end": 6046,
+      "bytes": 210,
+      "sha256": "afbedb9d1fff2c325adedc859b2296528d34b058a7f7f3cec0949afccd4ad6eb"
+    },
+    "nativePlaintextVerification": "unavailable-native-encrypted",
+    "actualNativeTaskSha256": null,
+    "nativeChecks": {
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "high",
+      "toolCalls": 0,
+      "encryptedParentChildRouteChecked": true
+    },
+    "meaning": "The prepared and reported-sent hashes differ. The sent-message reconstruction is driver testimony; encrypted route checks do not independently reveal native plaintext. The bookkeeping gap is closed while the invalid original input and ungraded outcome remain preserved."
+  },
+  "unchanged": {
+    "measuredInputs": 197,
+    "priorPrivateEvidenceFiles": 47,
+    "c1ThroughC3CallsAndResults": true,
+    "otherCalls": true,
+    "priorJournalEvents": true,
+    "calibrationLabels": true,
+    "thresholds": true
+  },
+  "verification": {
+    "mechanismReviewSha256": "7849d7a85770b959d999c3734eb3b9181a36b9b6a92809eb63cdc87982b7078a",
+    "helperTests": {
+      "passed": 54,
+      "failed": 0,
+      "skipped": 0
+    },
+    "independentSyntheticChecks": {
+      "passed": 27,
+      "failed": 0,
+      "receiptSha256": "8a1b7d886c4dd469d7944e946168a5526c1e5435f0586287ac6db5579cf2d671"
+    },
+    "postApplicationIndependentReview": {
+      "decision": "PASS_APPLIED_RECORD_ONLY_TRANSITION",
+      "checksPassed": 14,
+      "receiptSha256": "c5d9dec6f214fdb0e467815cd9b8acbca8b5b2ba068c5d94e39dd1abc6847bff"
+    }
+  },
+  "terminalOutcome": {
+    "status": "BLOCKED",
+    "reason": "calibration-C3-mismatch",
+    "scenariosAdmitted": 0,
+    "scoringJudgesAdmitted": 0,
+    "aggregate": null,
+    "newModelCalls": 0,
+    "gradeParserCalls": 0,
+    "calibrationComparisonCalls": 0,
+    "replacementCalls": 0,
+    "runResumed": false
+  },
+  "release": {
+    "version": "1.7.0",
+    "status": "prepared-only",
+    "humanQA": "unsigned; H1, H2 and H3 remain unchecked",
+    "protectedPublicationApproval": "still required",
+    "fullFreshBehavioralValidation": "not done",
+    "subsequentPublicHeadGates": "pending",
+    "package11Or12Started": false,
+    "cleanupStarted": false
+  }
+}

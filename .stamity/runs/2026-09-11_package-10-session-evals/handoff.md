@@ -16,6 +16,13 @@ The independently reviewed sanitized
 [BLOCKED result](../../../evals/runs/2026-09-11-run-13/RESULTS.md) now exists with
 its input, output and limitation artifacts. All 13 exported files passed the
 independent binding and disclosure review; the evaluation remains BLOCKED.
+The separate [0003 bookkeeping supplement](bookkeeping-0003.json) records the
+subsequent revision-11 incident without changing any of those 13 files. C4's
+bookkeeping gap is closed: its created first attempt is invalid, ungraded and
+nonretryable. The first command invocation refused before mutation because the
+caller's capture files entered the frozen evidence roster. The records were
+relocated byte-for-byte; the second invocation used a corrected destination and
+made the first successful transition. No model retry or grade rerun occurred.
 
 ## Actual calibration outcome
 
@@ -24,7 +31,7 @@ independent binding and disclosure review; the evaluation remains BLOCKED.
 | C1 | Original completed response admitted after reviewed reader adjudication; every retained binding/advisory label matches. Its original invalid citation receipt and events remain preserved. |
 | C2 | Original completed response admitted after the same adjudication; every retained binding/advisory label matches. No replacement response was generated. |
 | C3 | Valid admitted response, terminal calibration mismatch. Expected binding: `[pass, pass, pass, fail, fail]`; actual: `[fail, pass, pass, fail, fail]`. Expected and actual advisory: `[pass, fail]`. Expected and actual case verdict: `FAIL`. The B1 mismatch stops the run despite matching the overall verdict. |
-| C4 | A separate driver copying error omitted 210 UTF-8 bytes from the prepared rubric. The child was created and completed, but the call remains unbound and ungraded. Its original diagnostics are retained; created-invalid-dispatch handling remains an open helper gap. |
+| C4 | A separate driver copying error omitted 210 UTF-8 bytes from the prepared rubric. The child was created and completed. Applied bookkeeping 0003 now records the call blocked and its first attempt invalid, ungraded and nonretryable, with the created identity kept separate from valid input binding. The original diagnostics and revision-10 export remain unchanged. |
 | C5 | Not dispatched after the terminal calibration stop. |
 
 The C4 error does not change C3's valid mismatch. No retry, parser reroll,
@@ -69,15 +76,22 @@ On `bc7b9f9`, `npm run lint`, `npm run typecheck` and
 skips. Coverage: statements 96.37%, branches 89.66%, functions 98.68%, lines 97.25%;
 all unchanged configured floors passed. Public parser tests passed 140 cases;
 independent native helper verification passed 49 tests; independent validator
-checks passed 92 cases. These results establish their tested contracts, not live
-scenario behavior or authenticated publication.
+checks passed 92 cases. The separate 0003 bookkeeping mechanism passed 54 helper
+tests and 27 independent synthetic checks before application. These results
+establish their tested contracts, not live scenario behavior or authenticated
+publication.
 
 [CI 34574708462](https://github.com/zomarit/stamity/actions/runs/34574708462) passed
 Windows, Linux floor/LTS, APM and required aggregation on that candidate.
 [Docs 34574708398](https://github.com/zomarit/stamity/actions/runs/34574708398) and
 [PR checks 34574741703](https://github.com/zomarit/stamity/actions/runs/34574741703)
-also passed. Any later evidence commit requires its own applicable final-head
-checks. The original implementation and `713c057`/`184bc483` proofs remain in the
+also passed. On evidence head `0ae0949f573f2a7413d1718d07e7d3325b7a9ba7`,
+[CI 34584132810](https://github.com/zomarit/stamity/actions/runs/34584132810),
+[Docs 34584132731](https://github.com/zomarit/stamity/actions/runs/34584132731) and
+[PR checks 34584238020](https://github.com/zomarit/stamity/actions/runs/34584238020)
+passed, including actual Windows acceptance and unchanged measured inputs.
+Checks on the subsequent public evidence commit remain pending. The original
+implementation and `713c057`/`184bc483` proofs remain in the
 [Package 10 handoff](../2026-09-10_package-10/handoff.md), with their original
 runtime, packed artifact, rehearsal and browser bindings.
 
@@ -85,8 +99,6 @@ runtime, packed artifact, rehearsal and browser bindings.
 
 - Fresh full behavioral validation: C3's terminal calibration-label mismatch;
   zero scenario samples and no aggregate release score.
-- The separate C4 created-invalid-dispatch handling gap and its completed,
-  unbound/ungraded call. Original evidence remains preserved.
 - Current human QA: H1 native-client/trust, H2 screen-reader and H3 complete
   keyboard observations remain unchecked in
   [qa.md](../2026-09-10_package-10/qa.md). Every H row must be walked and passing;

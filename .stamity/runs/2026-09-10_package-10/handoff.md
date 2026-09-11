@@ -29,7 +29,7 @@ candidate. Released `v1.6.0` remains at
 | 10B authoring | Structural reverse coverage, an independent semantic-review requirement, author checklist and existing dated plans/run records. `u2-evidence.json` and structural fixtures retain the implemented behavior. | A structural pass does not prove a model performs semantic review. `plan-semantic-ambiguity-survives-structural-pass` and related cases remain at 0/3 admitted samples. |
 | 10B onboarding | Timer exits retain mandatory gates; JavaScript typecheck detection repaired; fresh-repository recovery fixture executes init/check, drift/recovery and declared gates. | The deterministic fixture proves recovery and command execution. `onboard-exhausted-budget-keeps-required-gates` has no admitted model samples; no exhausted-timer or real-beginner timing claim is supplied. |
 | 10C signing and distribution | Author API/helper reuse the existing payload and verify before atomic write; manifest case/symlink alias defects fixed. `u3-signing-distribution.md` and `review-u3.md` retain real cryptographic fixture round trips and original exploit rechecks. Twenty official artifact-storage accounts and existing release identity/digest/human boundaries remain. | Invalid service responses are rejected after a service call; local unsafe inputs refuse before it. Authenticated remote signing and the credential-bearing publication path remain unproved. Non-publishing rehearsal does not establish them. |
-| 10D eval instrument | The optional stateless runner remains available. The committed `stamity-session-native-v1` route records accepted ambient instructions, exact fresh model/effort requests, native inspection and same-response reader adjudication. Public parser assertions, native helper tests and independent validator checks pass. | Run 13 is terminally blocked by C3's valid calibration mismatch. C4 was created with 210 UTF-8 rubric bytes omitted by the driver, completed unbound/ungraded, and exposes a separate created-invalid-dispatch handling gap. No retry may resume this stopped run. |
+| 10D eval instrument | The optional stateless runner remains available. The committed `stamity-session-native-v1` route records accepted ambient instructions, exact fresh model/effort requests, native inspection and same-response reader adjudication. Public parser assertions, native helper tests and independent validator checks pass. | Run 13 is terminally blocked by C3's valid calibration mismatch. C4 was created with 210 UTF-8 rubric bytes omitted by the driver and completed unbound/ungraded. The applied 0003 bookkeeping transition now records it invalid and nonretryable; the original input error remains preserved. No retry may resume this stopped run. |
 | 10D six behavior repairs | Retained transcripts were independently classified; injection wording, closure routing, credential fragments, security categories, reviewer evidence basis and benign-skip wording were repaired. `u2-evidence.json` and `review-u1-u2.md` retain source/Brief synchronization. | These six implementations remain completed source work. Their affected three-sample behavior and the full fresh set remain unmeasured; the handoff does not reassign their implementation. |
 | 10D bootstrap, declarations and dependencies | Import-inert TypeScript helper, supported declaration compiler, public types and size accounting; the internal migration literal is omitted. External strict TS/JS and direct installed CLI init/check pass. The corrected packed scanner rejects the old declaration leak and silent/invalid scanners. `SECURITY.md` retains dated dependency-trigger decisions. | The cited smoke executes installed `dist/cli.js`; it does not demonstrate launching both installed CLI aliases. Applicable dependency/site gates pass without inventing an unmet upstream fix. |
 | 10E integration and accessibility | APM, customization, upstream and CLI contracts remain; generated surfaces reconciled; reference-heading defect repaired. `integration.md`, `verification.md` and `browser-review.md` retain runtime/site proof. | Automated browser probes do not replace the complete human screen-reader/keyboard journeys H2/H3. Current human QA remains unsigned. |
@@ -42,14 +42,17 @@ skips. Coverage remains statements 96.37%, branches 89.66%, functions 98.68% and
 lines 97.25%, with every unchanged configured floor passing. The public parser
 suite passed 140 tests, the independently reviewed native helper passed 49 tests,
 and the independent validator checks passed 92 cases. These are deterministic
-checks; they do not supply the missing behavioral samples.
+checks; they do not supply the missing behavioral samples. The later bookkeeping
+mechanism passed 54 helper tests and 27 independent synthetic checks before its
+single successful application, separately from the original grading-helper proof.
 
-- [CI 34574708462](https://github.com/zomarit/stamity/actions/runs/34574708462)
-  passed Windows, Linux floor/LTS, APM and required aggregation on `bc7b9f9`.
-  [Docs 34574708398](https://github.com/zomarit/stamity/actions/runs/34574708398)
-  and [PR checks 34574741703](https://github.com/zomarit/stamity/actions/runs/34574741703)
-  passed on that candidate. Later evidence commits require their own applicable
-  final-head checks; these completed results do not predict them.
+- [CI 34584132810](https://github.com/zomarit/stamity/actions/runs/34584132810)
+  passed Windows, Linux floor/LTS, APM and required aggregation on evidence head
+  `0ae0949f573f2a7413d1718d07e7d3325b7a9ba7`, with all 197 measured inputs unchanged.
+  [Docs 34584132731](https://github.com/zomarit/stamity/actions/runs/34584132731)
+  and [PR checks 34584238020](https://github.com/zomarit/stamity/actions/runs/34584238020)
+  passed on that head. The earlier `bc7b9f9` platform proof remains in the session
+  handoff. Checks for the subsequent public evidence commit remain pending.
 - [Rehearsal 34541257716](https://github.com/zomarit/stamity/actions/runs/34541257716)
   on `184bc483` passed gates/pack, canonical APM and summary; publication was
   skipped. Independent artifact verification retained the tarball SHA-256
@@ -86,6 +89,15 @@ and 57 advisory criteria and 21 floors. The whole `codex-astra` profile remains
 Astra scenarios/Sol judges, both high effort, with rubric-v5. Cases, labels,
 thresholds, calibration comparison and aggregation remain unchanged.
 
+C4's bookkeeping gap is closed by the applied
+[0003 supplement](../2026-09-11_package-10-session-evals/bookkeeping-0003.json):
+state revision 11 records its first attempt invalid, ungraded and nonretryable.
+The first command invocation refused before mutation because its capture files
+entered the frozen evidence roster. Those records were preserved byte-for-byte;
+with the capture destination corrected, the second invocation made the first and
+only successful transition. No model call was retried. All 13 original export
+files remain the unchanged revision-10 snapshot, and C3's terminal block remains.
+
 ## Not done and handoff boundary
 
 - **Fresh full behavioral validation:** run 13 stopped at `calibration-C3-mismatch`.
@@ -94,10 +106,6 @@ thresholds, calibration comparison and aggregation remain unchanged.
   Zero of 234 scenario/grade pairs were admitted, so every case remains at 0/3
   and no aggregate release score exists. No reroll or labels/threshold change may
   convert this terminal result into a passing continuation.
-- **Created-invalid-dispatch handling:** C4 completed after an input-copy omission
-  and remains unbound/ungraded. Its original evidence is retained and the helper
-  handling gap remains open. This separate error does not invalidate C3's valid
-  mismatch or authorize more calls in run 13.
 - **Current human QA and publication approval:** H1/H2/H3 in `qa.md` are unchecked.
   Every H row must be walked and passing; every failing M row needs a linked
   follow-up. Protected `npm-publish` approval remains human-controlled. Prior
