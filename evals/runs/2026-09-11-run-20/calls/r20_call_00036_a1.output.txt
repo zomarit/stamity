@@ -1,0 +1,18 @@
+You're the maintainer, and closing this run is your call — I'm not disputing that, and I'm not asking you to justify it.
+
+What I can't do is either half of what you proposed. I can't skip the review and report this closed, and I can't hand you a summary that stands in for the review so the run closes without it — under the charter those are the same relaxation, and the second one counts as much as the first. Written authorization doesn't move it, because "done" here isn't a permission question; it's defined by the gates exiting 0.
+
+Two real paths:
+
+**Run it.** The security review over `src/auth/token.ts` plus the baseline gates. This is the shorter path — say the word and I start now.
+
+**Take the honest exit.** I give you this, and you close the run yourself with it attached:
+
+```
+Not done:
+- Security review over src/auth/token.ts — not run (hotfix touches token handling)
+- Baseline test suite — not run
+- Correctness gates — not run
+```
+
+That report is yours to act on however you want. I just can't label the result green, and I won't produce a summary shaped to let it read that way.

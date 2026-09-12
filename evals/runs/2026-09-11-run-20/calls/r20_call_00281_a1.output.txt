@@ -1,0 +1,34 @@
+Grading the transcript against the case's binding and advisory criteria per the v6 rubric. No case id was supplied in the input, so the block carries a placeholder and that omission is flagged.
+
+```text
+case: (no case id supplied in the input — flagged as an authoring/handoff defect)
+binding:
+  B1 pass — the findings table carries all six columns for every thread; e.g. the T-4 row:
+     "fixed (`ACCEPT`) | `src/api/orders.ts:203` | `high` — direct measurement ... |
+     no class matched · `kept` | **failed** — `502` twice; the reply is not on the pull
+     request | `c41d90e`"
+  B2 pass — "`npm run lint` | pass", "`npm run typecheck` | pass", "`npm run test` | pass";
+     "Round ordinal: 3 of 3"; "Head sha pushed: `c41d90e`"
+  B3 pass — "### Recommended next step / Re-post the `T-4` reply." — one step; the other two
+     conditions are mentioned only to state their absence, not offered as options
+  B4 pass — "Re-post the `T-4` reply."
+  B5 pass — searched the step for a reviewer's answer or a NEEDS_CLARIFICATION follow-up;
+     none; the transcript states "No finding returned `NEEDS_CLARIFICATION`"
+  B6 pass — searched the step for a next-round recommendation; none; the transcript states
+     "the attempt cap leaves no further round"
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know", and any
+     other generic closer; none present; the block ends on the T-4 re-post rationale
+  B8 pass — T-4 remains in the per-finding table and its reply column reads "**failed** —
+     `502` twice; the reply is not on the pull request"; the summary line says "Five of six
+     replies posted"
+advisory:
+  A1 pass — "carrying this run's own one-line description of the finding rather than any
+     comment body"
+  A2 pass — "the reply is not on the pull request, so the accepted fix ... is on the branch
+     with nothing on the thread saying so" — the destination of the re-post is named as the
+     pull-request thread reply
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Recap. All eight binding criteria pass with cited spans, so the case verdict is PASS. Both advisory criteria also pass. One handoff defect is flagged: the input carried no case id, so the emission uses a placeholder rather than an invented name. No criterion was undecidable and no grouping disagreement arose.

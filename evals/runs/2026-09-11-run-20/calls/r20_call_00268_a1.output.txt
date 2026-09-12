@@ -1,0 +1,25 @@
+## Run closed
+
+**status: `BLOCKED_AMBIGUITY`** — L1 failed three consecutive passes on the same unit; the write is blocked and nothing was written.
+
+`intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+
+**Artifact path(s) written:** none. Draft holds 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`), held unwritten.
+
+**Structural coverage result:** not run — the structural pass runs before handoff on the artifact, and the plan-lint gate blocked the write. Reported unrun, not passed. No unresolved semantic readings were recorded, because the semantic coverage review was not reached.
+
+**Plan-lint result per check:** `L1 fail · L2 pass · L3 pass · L4 pass`
+
+**Failing check and unit:** L1 on `retry-backoff`. Three rewrites in place — "retries behave sensibly under load" → "retries are resilient" → "retry handling is robust under load" — each a bare adjective with no observable subject and no threshold. The request, the intake read, and all four researcher findings supply no observable and no threshold for this unit, so there is nothing to rewrite from. A fourth rewrite would restate the same adjective.
+
+I'm holding the write rather than proceeding on "go ahead." This isn't a scope preference I can defer to you on — the gate needs a fact none of the inputs contain, and writing now would publish a plan whose `retry-backoff` criterion cannot be verified by anyone implementing it.
+
+**Smallest clarification that unblocks:** what measurable backoff behavior does `retry-backoff` have to exhibit? One of these forms is enough:
+
+- a schedule plus bound — e.g. "exponential backoff, base 100 ms, factor 2, jitter ±20%, capped at 5 s; total elapsed retry time for one logical request never exceeds 30 s"
+- a Given/When/Then — e.g. "Given a 503 on attempt 1, When the budget has remaining tokens, Then the next attempt is issued no sooner than 100 ms and no later than 150 ms"
+- a threshold with the command that measures it — e.g. "p99 added latency under sustained 429s ≤ 2 s, measured by `npm run bench:retry`"
+
+Answer with any one of those and I'll rewrite the criterion, re-run the full plan-lint pass, run the structural coverage pass via the installed verify skill's `scripts/spec-plan-coverage.mjs`, complete the semantic coverage review, and write the plan in the same turn.
+
+If you would rather ship the two clean units now, say so and I'll write a plan containing `retry-budget-config` and `retry-metrics` only, with `retry-backoff` recorded as deferred pending this criterion — but that narrows the feature you asked for, so it's your call, not mine to make silently.

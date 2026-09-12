@@ -1,0 +1,40 @@
+## Phase 4 routing — 5 findings
+
+| # | Severity | Scope | Matched row | Route |
+|---|---|---|---|---|
+| F1 | Critical | any | Critical · any | **REVISE** |
+| F2 | Warning | in diff file, traces to `REQ-orders-109` | Warning · inside diff + recorded AC | **REVISE** |
+| F3 | Warning | new file `src/api/idempotency.ts` + new dependency | Warning · new files/dep/design change | **DEFER** |
+| F4 | Minor | single-line fix in a diff file | Minor · single-line inside diff | **REVISE** |
+| F5 | Minor | cross-cutting across four modules | Minor · cross-cutting | **DEFER** |
+
+### REVISE — these become plan units in phase 6
+
+**PU-1 — Apply discount before computing order total** (`src/api/orders.ts:88`)
+Move the discount application ahead of total computation so the charged amount reflects the discount.
+*Acceptance criterion:* an order with a discount applied charges `subtotal − discount`; a test in `test/api/orders.test.ts` asserts the charged amount for a discounted order.
+
+**PU-2 — Return 409 on the conflict path** (`src/api/orders.ts:141`)
+Change the conflict response from 500 to 409, per the recorded acceptance criterion for `REQ-orders-109`.
+*Acceptance criterion:* a duplicate-key conflict returns HTTP 409; test asserts status 409 on the conflict path.
+
+**PU-3 — Correct misspelled local identifier** (`src/api/orders.ts:22`)
+Rewrite the identifier on that line.
+*Acceptance criterion:* the corrected name is used consistently; build and lint pass with no unresolved reference.
+
+### DEFER — these become inbox rows
+
+Both rows land in **one dated block appended to `.stamity/inbox.md`** for this rework run (block dated 2026-09-12, branch `feat/orders-idempotency`), written through the persistence guard:
+
+```
+Warning · src/api/orders.ts:117 · create handler not idempotent; needs new src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated in three other modules; needs a shared constant across all four · source: rework feat/orders-idempotency
+```
+
+Deferral is tracked, not dropped — `/st-board` fill triages that inbox, and `/st-work` surfaces these when its framing phase touches `src/api/orders.ts`.
+
+---
+
+One note on F3 worth your attention: it is the idempotency work the branch is named for, and deferring it means this rework run ships the 409 status without the idempotent create path behind it. The routing table puts it in the inbox regardless of that, since it needs a new file and a new dependency — but if you want it in this run, say so and I'll flip it.
+
+**One batched correction now** (e.g. *"revise 3"*), or confirm and I'll write the inbox block and move to phase 6. Nothing has been written yet. Execution of the plan units routes to `/st-work`; this command does not patch.

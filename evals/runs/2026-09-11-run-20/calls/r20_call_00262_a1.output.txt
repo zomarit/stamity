@@ -1,0 +1,41 @@
+Nothing written yet — here are the three pieces for review.
+
+## Path
+
+```
+docs/plans/003-status-json-flag.md
+```
+
+`001` and `002` are taken, so `003` is the next free number. The slug is mine: the scenario named only the unit slug (`json-flag-render`), and the plan slug names the change rather than the unit. Say the word if you want `003-json-flag-render.md` instead.
+
+## Head
+
+```text
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — it is migration-intent only and this is a feature. `depends_on` is omitted — this is not a follow-up run and not a split. Both are optional; the absent keys are a valid head and the freshness guard reads them as satisfied.
+
+## Unit `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag declaration** (registered on the `status` verb): name `--json`, boolean, default `false`, takes no value argument, no short alias.<br><br>**Stdout contract when `--json` is set** — exactly one JSON object, no other stdout output:<br>`{ "workspace": string, "branch": string, "managedFiles": integer, "driftedFiles": integer, "lastSync": string }`<br>Exactly these five keys; no additional keys.<br><br>**Exit codes**: `0` on success (no drift finding, i.e. `driftedFiles === 0`); `1` on a drift finding (`driftedFiles > 0`).<br><br>**Stderr**: empty on success.<br><br>**Default path**: with `--json` absent or `false`, the status verb's existing human-readable output and exit behavior are unchanged. |
+| `testCriteria` | 1. `stamity status --json` on a drift-free workspace writes stdout that `JSON.parse`s to a single object whose key set is exactly `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync`.<br>2. `workspace`, `branch`, `lastSync` are strings; `managedFiles` and `driftedFiles` are integers (not float, not string).<br>3. Drift-free run exits `0`.<br>4. Run with `driftedFiles > 0` exits `1`.<br>5. Stderr is empty on a successful run.<br>6. `stamity status` without the flag produces the pre-change human-readable output and its pre-change exit code. |
+| `edgeCases` | 1. **Drift finding.** The non-zero exit must not suppress output: the full five-key object is still written to stdout, then the process exits `1`.<br>2. **No short alias.** `stamity status -j` does not enable JSON output; it falls through to the CLI's existing unknown-flag handling, and stdout carries no JSON object.<br>3. **Never synced.** `lastSync` stays typed `string` and is emitted as `""` — the key is always present and is never `null` or omitted. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+## One flag before I write
+
+Edge case 3 is an assumption, not something `REQ-cli-140` states. The requirement types `lastSync` as a string but is silent on the value when a workspace has never synced; I chose `""` because it keeps the declared type and the fixed key set intact. If the intended value is a sentinel like `"never"`, tell me and I'll change the unit and the spec join rather than let the implementer pick.
+
+Everything else in `interfaces` comes straight from `REQ-cli-140` and the flag declaration as stated, so the field resolves without opening `docs/specs/cli-surface.md`. If you want the existing handler signature in `src/commands/status.ts` reproduced verbatim in `interfaces` as well, I'll re-read that file before the write instead of reconstructing it.

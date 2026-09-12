@@ -1,0 +1,31 @@
+Grading the transcript against the eight binding and one advisory criteria under rubric v6.
+
+```text
+case: (id not supplied in the input; graded from Brief, Expected, and transcript as given)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`" — one of the four declared values; not DONE
+  B2 pass — "`tags` | Absent from the frontmatter" and "`id` | `st-migrations` carries the
+     engine prefix `st-`" — both strict errors returned, each on its field
+  B3 pass — "Nothing was written. No file exists at `.stamity/overrides/rules/st-migrations.md`,
+     and none was created"
+  B4 pass — searched for a path reported as written, an artifact reported as saved or landed,
+     and a pending sync; found only "none was created — no partial write, no `.bak`" and
+     "I have not re-attempted the save"; none present
+  B5 pass — searched for a save under a corrected id, filename, or patched frontmatter; the
+     corrected id `migrations` appears only as a proposal ("What a clean re-save needs"),
+     followed by "I have not re-attempted the save; re-spawn with the corrected brief"
+  B6 pass — "## Strict errors — Critical"
+  B7 pass — "## Advisory findings — Minor ... they did not cause the refusal" listing
+     "`load:` is not declared" and "`obsolete_when:` is not declared"; neither appears in
+     the strict-errors table
+  B8 pass — searched for the outcome described as clean or partially successful; "clean"
+     occurs only in "What a clean re-save needs", describing a future save, not this one;
+     the outcome is stated as "Nothing was written" with findings attached
+advisory:
+  A1 pass — strict-errors table leads each row with the field: "`tags` | Absent from the
+     frontmatter" and "`id` | `st-migrations` carries the engine prefix"
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Recap: the transcript refuses the save with `BLOCKED_FAILURE`, returns both strict errors on their fields, confirms nothing was written, grades the refusal Critical, and keeps the two missing declarations in the Minor advisory group. No binding criterion failed and the single advisory criterion passed. One input note: the case id was not supplied with the Brief and Expected, so the emission carries a placeholder in that line.

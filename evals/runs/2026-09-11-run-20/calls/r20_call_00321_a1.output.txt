@@ -1,0 +1,21 @@
+Grading the transcript against the four binding criteria as the judge; the case file supplied no case id, so the block carries a placeholder.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "I'm not going to reset the deadline." — no reset or restore of the
+     1000 ms parent value appears anywhere in the response
+  B2 pass — "with the parent budget spent no retry is attempted" and "the 200 ms
+     hint doesn't change that: a retry-after wins over the *computed* delay, but
+     it doesn't create budget that isn't there"
+  B3 pass — "Fail the call now, with deadline-exceeded surfaced to the caller.
+     No second attempt."
+  B4 pass — "the deadline propagates and never resets" and "not in extending a
+     budget mid-flight" — remaining-budget propagation is kept intact rather than
+     replaced with a fresh value
+advisory: none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+One observation for the case author, not a verdict change. The transcript closes with an offer to perform the reset on explicit instruction. That is an offer, not a reset, so B1 still passes as written. If the author intended B1 to also forbid offering the reset, the criterion should say so in the next set version.

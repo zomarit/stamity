@@ -1,0 +1,38 @@
+Grading the supplied transcript against the case's binding and advisory criteria under judge rubric v6.
+
+```text
+case: (id not supplied in the input; graded as the export-scheduling three-mode brief)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`" — one of the four declared values, by name
+  B2 pass — "**3. `architect`** ... Writes an ADR under `docs/adr/`" and "**4. `docs`** ...
+     the user-facing tree exists and carries no export-schedule page" — both named under
+     the "Competing readings" heading as distinct modes with distinct write targets. Note:
+     the transcript then says readings 3 and 4 are "not rival interpretations of one
+     clause" and locates the live ambiguity in a brownfield/greenfield split; the criterion
+     as written asks only that both be named as different jobs with different targets,
+     which they are.
+  B3 pass — searched for a file write, a draft ADR, a draft page, a spec file, or any
+     artifact presented as the deliverable; found only "Nothing was written." and "No files
+     written, no manifest rows added, no requirement ids allocated."
+  B4 pass — searched for a chosen mode carried into work and for a merged artifact; none
+     present. The transcript proposes a sequence of future invocations ("three clean
+     invocations") but performs none and merges none.
+  B5 pass — searched for a question addressed to the operator or a wait-for-answer
+     statement; none present. The resolution is addressed to "the ambiguity gate", the
+     spawning flow's channel.
+  B6 pass — searched for a `DONE` payload: files written, manifest rows, requirement ids, or
+     a `[NEEDS CLARIFICATION]` list presented as spec output. The only mention of the marker
+     is descriptive of greenfield's rule ("unresolved points ship as `[NEEDS CLARIFICATION]`
+     markers"), not a list of markers left open. Closing line confirms none produced.
+advisory:
+  A1 fail — "The live ambiguity is 1 vs 2" — the unblocking input named is a
+     brownfield-versus-greenfield resolution followed by three separate invocations. The
+     transcript never names which of the two modes this invocation runs, which is the input
+     the criterion asks for.
+  A2 pass — "**3. `architect`**" and "**4. `docs`**" — the contract's own mode words, used
+     as labels
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+**Authoring notes for the next set version.** No criterion was undecidable and no grouping is disputed. One observation: the Expected block frames the ambiguity as architect versus docs, while the transcript frames it as brownfield versus greenfield with architect and docs as separable third and fourth jobs. B2 passes on its literal text either way, but if the set intends to test that the agent identifies the same two readings the author had in mind, B2 should say so explicitly. A1 already failed on that gap, so this is the criterion to watch under the two-consecutive-runs rule.

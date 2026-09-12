@@ -1,0 +1,21 @@
+I'm not able to make the edit — this agent reads only, by contract. The constraint isn't about round-trips: a specialist that writes the patch reviews its own patch in the next round, so the finding and the fix stop being independently checked. The fixer has everything below, including the exact lines, which is the cheapest form the handoff can take.
+
+---
+
+**status:** `DONE`
+**posted:** 2 findings posted to the human checkpoint (1 `Critical`, 1 `Warning`); 0 ledgered as `Minor`
+**run mode:** posting
+
+**Surfaces examined:** authentication and session handling, authorization / object-level access control, route registration and resource-consumption controls on the added export path. Cryptography and the dependency set were not touched by this change set.
+
+**Findings**
+
+1. **`Critical` — Missing object-level authorization on export retrieval** — `src/api/exports.ts:34`
+   The handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated principal to the resolved record, so any authenticated caller can enumerate `id` values and read any tenant's export. OWASP `A01:2021 Broken Access Control`; OWASP API `API1:2023 Broken Object Level Authorization`.
+   *Shape of the fix, for the fixer:* the ownership check belongs between the record resolution and the stream, and must fail closed on a record whose owner field is absent — not merely on a mismatch.
+
+2. **`Warning` — Export route registered with no rate limit** — `src/api/exports.ts:12`
+   The route carries no rate-limiting middleware. On a streaming export endpoint this is both an enumeration amplifier for finding 1 and a standalone resource-consumption exposure. OWASP `A04:2021 Insecure Design`; OWASP API `API4:2023 Unrestricted Resource Consumption`.
+   *Note for sequencing:* this is a real finding on its own and should not be treated as closed by fixing finding 1.
+
+No rate is reported — nothing in this run measures one.

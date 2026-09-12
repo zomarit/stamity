@@ -1,0 +1,77 @@
+One row blocks the record: `r7/review/2` reads `open`, and the close refuses to write the proof block while any row does. So I closed it first rather than emitting a record over it.
+
+It closes under the severity floor, not the ambiguity floor. It is Minor, its disposition is not one of several options differing materially in cost or blast radius, so there is nothing here to ask you about — the run closes it itself as `deferred`, with the rationale that put it below the floor, and that deferral earns a second inbox row. The run now holds two inbox rows, not one.
+
+```
+PROOF BLOCK — run r7
+====================
+
+GATES
+  npm run lint       pass    (no failing excerpt)
+  npm run typecheck  pass    (no failing excerpt)
+  npm test           pass    (no failing excerpt)
+
+REVIEW
+  round 1  stamity-reviewer  changes requested  confidence: high
+  round 2  stamity-reviewer  approved           confidence: high
+
+LEDGER (at exit — no row reads `open`)
+  r7/review/1    Warning   stamity-reviewer   src/api/users.ts:88    fixed
+  r7/review/2    Minor     stamity-reviewer   src/api/users.ts:120   deferred
+  r7/security/1  Warning   stamity-security   src/api/users.ts:41    deferred
+
+DECISIONS TRACE
+  gate  lint                  pass → proceed
+  gate  typecheck             pass → proceed
+  gate  test                  pass → proceed
+  gate  review round 1        changes requested → re-enter implement
+  gate  review round 2        approved → proceed to close
+  defer r7/security/1         rationale: rate limiting is tracked separately in
+                              the inbox
+  defer r7/review/2           rationale: Minor — below the QA checkpoint
+                              severity floor; sub-threshold at classification,
+                              carried to the inbox rather than actioned in-run.
+                              Closed by the run under the severity floor, not
+                              raised to the operator: its disposition is not
+                              itself ambiguous, so the ambiguity floor did not
+                              fire on the row.
+  ASK  outcomes               none — no ambiguity floor firing this run
+
+ARTIFACTS TOUCHED
+  src/api/users.ts            stamity-implementer
+  test/api/users.test.ts      stamity-implementer
+
+PER-ACTION ATTRIBUTION
+  stamity-implementer   file write   src/api/users.ts         applied
+  stamity-implementer   file write   test/api/users.test.ts   applied
+  stamity-reviewer      review       round 1                  changes requested
+  stamity-reviewer      review       round 2                  approved
+  stamity-security      review       src/api/users.ts:41      Warning raised
+  /st-work (close)      ledger write r7/review/2              open → deferred
+  /st-work (close)      inbox append .stamity/inbox.md        1 row appended
+                                                              (r7/review/2)
+  gap: per-action tool identity for the implementer edits is recorded at
+  file-write granularity only; finer tool attribution was not captured in-run.
+
+INBOX ROWS APPENDED (dated block, 2026-09-12)
+  Warning  src/api/users.ts:41   rate limiting not enforced on this handler
+           source: /st-work   Ref: <r7 ledger>#r7/security/1
+  Minor    src/api/users.ts:120  reviewer Minor, below QA severity floor
+           source: /st-work   Ref: <r7 ledger>#r7/review/2
+  (Ref paths resolve against this run's own ledger path for r7.)
+
+RECOMMENDED NEXT STEP
+  Two rows left this run deferred and both are now in .stamity/inbox.md:
+  r7/security/1 (rate limiting, src/api/users.ts:41) and r7/review/2
+  (src/api/users.ts:120). Take them at /st-board: r7/security/1 wants a lane,
+  trigger and owner before it ages, and r7/review/2 wants a fix-or-cut call.
+  Neither ledger row carries a `retired` field yet — that gets appended only
+  when its inbox row leaves. No acceptance criterion was left uncovered by this
+  run.
+
+NOT DONE
+  rate limiting on src/api/users.ts:41  →  inbox row, Ref <r7 ledger>#r7/security/1
+  Minor at src/api/users.ts:120         →  inbox row, Ref <r7 ledger>#r7/review/2
+```
+
+Two things worth your eye. The Minor rationale is thin by construction: what put the row below the floor is its severity classification, and the run holds no richer reason than that — I did not dress it up as an analysis it isn't. And `r7/security/1` is deferred against an inbox that tracks rate limiting; that deferral is now two rows deep in the same lane, which is the kind of thing that quietly becomes permanent if `/st-board` doesn't give it a trigger and an owner.

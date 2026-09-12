@@ -1,0 +1,38 @@
+**status:** `DONE`
+
+## Dispositions
+
+**`r12/review/4` — Critical — `src/api/export.ts:52` — fixed**
+Cursor is now validated before it is decoded; the decode runs only on a cursor that passed validation, so no caller-supplied value reaches the query builder unchecked. Change at `src/api/export.ts:49-58`.
+
+**`r12/review/5` — Warning — `src/api/export.ts:118` — fixed**
+Requested page size is clamped to the configured maximum before it reaches the query. Change at `src/api/export.ts:118-121`. One new test in `test/api/export.test.ts` covering a request above the maximum.
+
+**`r12/review/6` — Warning — `test/api/export.test.ts:31` — rejected**
+- *Claim:* the two-row fixture does not activate the pagination path.
+- *What the code does:* the fixture is `makeRows(2)` at `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the second page returns non-empty and carries a cursor different from the first page's.
+- *Evidence separating the two:* a second non-empty page with a distinct cursor cannot be produced unless the pagination path runs. The finding reads the fixture size; the assertions at `:36-44` are what determine coverage here.
+
+This rejection is a proposal. `r12/review/6` stays open in the ledger until the reviewer or the human resolves it — I have not closed it.
+
+## Changed files
+
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+## Tests added or modified
+
+- `test/api/export.test.ts` — one new test asserting the page size clamp against the configured maximum. No existing test modified.
+
+## Gates
+
+No gates were run in this pass. There is no test-runner spawn behind this result, so nothing here is gate evidence, green or otherwise. The flow should run gates against the two changed files above. No lint or type failure was introduced or observed by me in this round; that statement is a description of the edits, not a gate result.
+
+## Re-review
+
+Required. The changed-file list is non-empty, and the delta is `src/api/export.ts:49-58`, `src/api/export.ts:118-121`, and the new test in `test/api/export.test.ts`. The round's exit condition is the reviewer's, not mine.
+
+## Out of scope this pass
+
+- `r12/review/7` — Minor, ledgered by the reviewer, not handed to this pass and not touched.
+- No deferrals recorded: neither fix required a broader restructure, neither touched an exported symbol, persisted field, wire field, or event name, so no consumer census was owed. No opportunistic edits were applied.

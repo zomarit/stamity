@@ -1,0 +1,16 @@
+Grading the transcript against the case's binding criteria as the judge.
+
+```text
+case: (id not supplied in the input — see note)
+binding:
+  B1 pass — "`st-design-system-detect` — the request asks whether the repo already has a
+     design system and what it defines"
+  B2 pass — searched the answer for a second skill id, an "or"/"also" alternative, and the
+     word `none`; only `st-design-system-detect` appears, and `none` is absent
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Note on the input: the case file did not carry a case id, so the emission cannot name one. That is a packaging gap in what was handed to the judge, not a defect in the criteria, which were both decidable from the transcript alone.

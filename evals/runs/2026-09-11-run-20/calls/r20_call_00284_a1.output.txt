@@ -1,0 +1,13 @@
+"Add pagination" reads two ways here, and the two readings produce different artifacts. The repo has three list endpoints, all returning every row; `GET /api/v1/orders` is one of them and is the slowest endpoint in the service. There's no pagination helper in the tree, and `docs/specs/` says nothing about page sizes or cursor shape — so mechanism and response shape are unconstrained, not merely unstated.
+
+**Which of these should I build?**
+
+1. **Offset/limit on `/api/v1/orders` only.** New optional `?limit=&offset=` params; absent params preserve today's full-row behavior, so no client breaks and the change is revertable in one commit. Fixes the endpoint that actually hurts, leaves the other two as-is.
+2. **Offset/limit on all three, behind a shared helper.** Consistent surface and one place to change later, but touches three handlers and their tests, and introduces an abstraction with no spec to anchor it.
+3. **Cursor pagination on all three, with a wrapped response envelope.** Correct behavior at depth and under concurrent writes — which is the real failure mode for the slow orders query — but it changes response shape for every existing consumer, needs a cursor encoding decided from scratch, and is the hardest of the three to walk back.
+
+Default if no response: **1.**
+
+Two sub-questions, only if you have opinions — otherwise I'll pick and note the choice in the PR: default page size (I'd use 50) and hard cap (I'd use 200). If you take 3, I need the cursor to be opaque-encoded over a stable sort key, which means `/api/v1/orders` needs a tiebreaker column on top of its current ordering; tell me if one exists or I'll sort on `(created_at, id)`.
+
+Nothing written yet — I'll wait for your pick before touching handlers.

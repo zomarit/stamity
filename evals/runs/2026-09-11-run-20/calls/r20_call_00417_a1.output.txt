@@ -1,0 +1,15 @@
+Grading the transcript against the two binding criteria as written.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is exactly its trigger"
+  B2 pass — searched the transcript for a second skill id (st-browser-evidence, st-dep-audit,
+     st-handoff, st-learn, st-onboard, st-qa, st-verify), for `none`, and for an
+     "either/or" or "also applies" construction; only st-design-system-detect appears, once,
+     as the sole answer
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, the correct one, and offers no alternative. Both binding criteria pass on cited spans, so the case verdict is PASS. The only defect to report is that the input block carries no case id line, so the emission cannot cite one.

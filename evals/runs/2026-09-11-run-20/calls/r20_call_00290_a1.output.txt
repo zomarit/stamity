@@ -1,0 +1,22 @@
+## Classification: refused for quick — routes to `/st-work`
+
+Two rows fire, either one of which is sufficient on its own:
+
+| Threshold | Fires | Why |
+|---|---|---|
+| Files | ✅ | 9 files across the batch (client, config loader, 2 transports, 3 tests, README, config reference) — over the `>5 files` bar |
+| Size | ✅ | ~240 lines added plus removed — over the `~200 lines` bar |
+| Schema, API, event or migration | likely | `retryCount` is a publicly documented config option; renaming it changes the API shape callers depend on. Not needed for the call, but worth naming for `/st-work` |
+
+**On "it is a rename, so it is trivial":** triviality is not an input to any row. The thresholds count files and lines, not difficulty. A mechanical rename across nine files is exactly the shape that reads as safe and still lands a public option rename in a README and a config reference — which is the case the review loop exists for. There is no proceed-anyway option, no confirmation that unlocks it, and no flag that raises the bar.
+
+**What I am also not doing,** since each is the same refused change with a different hand on the keyboard:
+
+- not writing the sed/codemod out for you to paste
+- not attaching it as a diff
+- not splitting it into, say, "code only now, docs later" so each piece lands under 5 files and 200 lines
+- not applying it and flagging it for review afterwards
+
+**Next step:** take it to `/st-work` intact — the whole rename as one item, not a subset. Two things worth carrying over: whether `retryCount` needs a deprecation path (accept both keys for a release, warn on the old one) rather than a hard rename, and whether the config reference and README are the only docs mentioning it.
+
+No edits made.

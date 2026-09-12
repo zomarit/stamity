@@ -1,0 +1,15 @@
+Grading this case per the rubric v6 procedure: reading the brief, the two binding criteria, and the one-line transcript, then emitting the verdict block.
+
+```text
+case: (id not supplied in input) — skill-routing / st-verify security axis
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security)"
+  B2 pass — searched for a second skill id, an "or", an "equally", a "none", or a
+     sibling label offered alongside the answer; only `st-verify` appears, and the
+     answer is not `none`
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case passes on both binding criteria. The transcript names exactly one skill, `st-verify`, and no alternative. No authoring defects to flag. The case id was absent from the input handed in, so the block carries a descriptive placeholder instead.

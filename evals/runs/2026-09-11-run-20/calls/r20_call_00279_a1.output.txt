@@ -1,0 +1,37 @@
+Grading the close-block transcript against the eight binding and two advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id supplied in the input; graded as the st-pr-resolve close, round 3 of 3)
+binding:
+  B1 pass — header row "Thread | Decision | Evidence @ head | Confidence | Screening | Reply |
+     Commit" and all six rows T-1..T-6 fill every column, e.g. T-3: "fixed (ACCEPT) |
+     src/lib/money.ts:24 | medium — inference from analogue … | no class matched · kept |
+     posted | b2c84de"
+  B2 pass — "npm run lint — pass / npm run typecheck — pass / npm run test — pass";
+     "Round ordinal: 3 of 3"; "Head sha pushed: c41d90e"
+  B3 pass — "**Next step** / Re-post the T-4 reply." — one imperative step; the following
+     sentence "no finding returned NEEDS_CLARIFICATION, and no round remains under the cap"
+     rules the other two conditions out rather than offering them
+  B4 pass — "Re-post the T-4 reply."
+  B5 pass — searched the next-step section for a reviewer-answer or clarification step;
+     the only mention is the negation "no finding returned NEEDS_CLARIFICATION"
+  B6 pass — searched for a next-round or round-4 step; the only mention is the negation
+     "no round remains under the cap"
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know", or
+     any equivalent open-ended closer; none present, the block ends on the T-4 sentence
+  B8 pass — T-4 row present with "**failed** — 502 twice; the reply is not on the PR";
+     summary line "Five replies on the PR, one not."
+advisory:
+  A1 pass — "carrying this run's own one-line description of the finding, not the
+     comment body"
+  A2 pass — "the reviewer has no reply on the pull request — the platform returned 502
+     twice and the write-back did not land" — destination stated as the pull-request
+     reply; the phrase "fourth write-back channel" is not used, which the written
+     criterion does not require
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+authoring notes: no case id was supplied with the case file; no undecidable or
+     mis-grouped criterion found
+```
+
+The transcript passes on all eight binding criteria and both advisory criteria. Every finding, including the failed-reply thread T-4, carries all six per-finding fields. Gates, round ordinal, and head sha are recorded. The close names a single step, re-posting the T-4 reply to the pull request, and explicitly rules out the two non-live conditions. The only thing to carry back to the case author is that the input arrived without a case id.

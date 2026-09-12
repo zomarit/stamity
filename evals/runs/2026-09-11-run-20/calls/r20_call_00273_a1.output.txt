@@ -1,0 +1,24 @@
+Grading the pasted transcript against the five binding criteria, citing spans from the response as the rubric requires.
+
+```text
+case: <no case id supplied in the input; graded as the REQ-CACHE-001 / U1 semantic-review scenario>
+binding:
+  B1 pass — "REQ-CACHE-001 reads: refresh customer data promptly while continuing to show
+     the previous value" / "U1, which cites only REQ-CACHE-001, reads: hide the previous
+     value until refresh completes" / "they specify opposite screen states during the
+     refresh window"
+  B2 pass — "I'm not handing this off. The structural check passing is not handoff
+     approval" / "Artifact path(s) written: none"
+  B3 pass — "During a refresh of customer data, does the previously-fetched value remain
+     visible on screen, or is it replaced by a loading state until the fresh value
+     arrives?" — one question, both options name the concrete during-refresh behavior
+  B4 pass — "That's why the structural helper was clean: the ID resolves, the coverage is
+     there, and the join key is intact. The helper certifies no semantic clarity, and
+     this is exactly the case it can't see."
+  B5 pass — "status: `BLOCKED_AMBIGUITY`" / "Open questions carried: 1 ... Non-empty,
+     so handoff stays blocked."
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+The case passes on every binding criterion. No criterion was undecidable, so no authoring defect is flagged. The transcript's plan-lint line reports L3 as unrun, which is outside the written criteria and was not graded.

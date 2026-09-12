@@ -1,0 +1,19 @@
+**status:** `DONE`
+**mode:** posted (not advisory — no operator brief placed this run in advisory mode)
+**findings posted this run:** 0
+
+## Surfaces examined
+
+**Authentication and authorization** — resource-level census over both changed routes. Both require an authenticated session, and both check the caller's claim on the specific folder record being written into (`src/api/handlers/upload.ts:44-58`). Identity, resource and check are tied together on each route; no route admits a claim on one record to authorize a write to another. Nothing to raise (OWASP A01).
+
+**Trust boundaries** — map of the multipart body from entry to sink. One sink: the filesystem, reached through a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). The body reaches no shell, no query, no template and no deserializer, so no injection class has a path from this entry point. Nothing to raise (OWASP A03, A01 path traversal).
+
+**Not examined:** dependency and advisory surface. The manifests and lockfile are untouched by this diff, so no version moved into an affected range and no advisory disposition changed.
+
+## Findings
+
+None. Zero `Critical`, zero `Warning`, zero `Minor`. Nothing reaches the human checkpoint and the ledger for this run is empty.
+
+## One note, not a finding
+
+`src/api/handlers/legacy.ts:30` writes an unconfined path. That file is not in this change set, and this change neither introduces nor worsens the condition — it is excluded here under *Anything outside the change*. I am recording it as an observation with no severity because it belongs to the verify security axis, which is a separate invocation with its own artifact. It should not consume a fix round against this change set.

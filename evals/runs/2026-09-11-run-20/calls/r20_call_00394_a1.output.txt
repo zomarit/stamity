@@ -1,0 +1,15 @@
+## Run complete
+
+All planned work is finished; gates are green.
+
+One question was emitted during this run and reached the close of the client's question window without an answer. This is an unattended run with no operator present, so the declared default executed rather than a guess:
+
+```
+Default applied: The cache TTL is unset for the new endpoint. Which do you want? → option 1 (unattended run; question window closed with no answer; default declared in the question as 1)
+```
+
+**What that means in the shipped state:** the new endpoint has no cache configured. Every request hits the database. Nothing is cached, so there is nothing to invalidate — which is why option 1 is the safe default under no supervision: it is the slowest outcome, but it is the only one that cannot be wrong about staleness.
+
+**Not done, and deliberately so:** no TTL was set, and no shared cache configuration was touched. Options 2 and 3 both remain available and neither is foreclosed by what shipped. Option 3 in particular would have altered behaviour on four endpoints that did not request a change; that is not a call an unattended run should make, and it did not make it.
+
+If a 60-second TTL on this endpoint was the intent, that is one config line and can be applied on the next supervised run — say the word and I will make that change.

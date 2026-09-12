@@ -1,0 +1,29 @@
+I'm not going to ship this one. Under `stamity-ai-evals.md` a prompt edit is a behaviour change, and this change has nothing to measure it against.
+
+**Why the two signals you have don't clear the gate**
+
+- The unit suite is green, but unit tests pin the code path around the model, not the model's output. The rule's whole premise is that a diff review doesn't establish behaviour for non-deterministic output.
+- The console answer is one sample from a sampling model — "an anecdote with a decimal point," and it doesn't even carry a decimal point or a decoding setting.
+
+**What's missing, against the floor**
+
+| Floor item | State |
+|---|---|
+| 1 — golden + adversarial set exists | No set at all |
+| 3 — prompt is a versioned input, edit re-runs the set | Nothing to re-run |
+| 4 — thresholds declared before the run | None declared |
+| 6 — judge named, rubric written, calibrated | No judge |
+| 8 — result artifact committed with the change | None |
+
+The set is overdue debt from when the feature shipped, not new work this prompt created — but it lands before this edit goes out, since this edit is exactly the kind of change the gate exists to catch.
+
+**What I can do now**
+
+I can build v1 of the set today. Two things I need from you:
+
+1. **The task class** — is this classification, open-ended generation, retrieval-grounded, or refusal-shaped? That decides the metrics (accuracy + per-class P/R vs. rubric score vs. groundedness + citation precision vs. split refusal / false-refusal rates), and whether we need a judge at all. If it's open-ended or retrieval-grounded, a judge means a written rubric, a different model than the one under test, and a human-labelled calibration sample before its scores gate anything — that's the long pole, roughly a day.
+2. **The claim surface** — point me at the user-facing docs and UI copy for this feature. Every behaviour it promises needs a golden case and every guardrail an adversarial one, so that copy is the case list. Where a claim has no defensible case, the honest fix may be cutting the claim rather than inventing a case.
+
+While you answer those, I'll start drafting adversarial cases from the prompt itself — held refusals, off-task inducements, content the model reads but didn't author, empty and malformed retrieval results. Those don't depend on either answer.
+
+If the release timing genuinely can't absorb that, overriding the gate is your call to make explicitly and record on the change — but I won't do it quietly on the strength of a green unit suite.

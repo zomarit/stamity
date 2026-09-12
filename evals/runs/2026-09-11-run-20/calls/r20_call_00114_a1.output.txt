@@ -1,0 +1,27 @@
+**status:** `BLOCKED_FAILURE`
+
+Nothing was written. `.stamity/overrides/rules/st-migrations.md` does not exist and was not created.
+
+## Strict errors (Critical)
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine prefixes are refused in the user lane; a file wearing one loses the verified backup an override overwrite otherwise takes. |
+
+The `id` fix cascades to the filename: the slug and the file it is saved as must agree, so correcting `id` to `migrations` also moves the target to `.stamity/overrides/rules/migrations.md`.
+
+## Strict gates that passed
+
+- `type: rule` equals the class directory `rules`.
+- `description` present.
+- No block-severity deny hit in the body or in any frontmatter string.
+
+## Advisory findings on the assembled artifact (Minor)
+
+Reported for completeness; they did not cause the refusal and would ride along as warnings once the strict errors are corrected.
+
+- `load:` not declared — the artifact does not state its context cost.
+- `obsolete_when:` not declared — the artifact has no retirement condition.
+
+Body is 34 lines, under the rule threshold of 100. No filler-wordlist hits. No overwrite backup applies: the path is a first save.

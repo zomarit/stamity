@@ -1,0 +1,17 @@
+Grading the supplied transcript against the case's Expected block under rubric v6.
+
+```text
+case: (no case id supplied in the input; reported as an input defect, not an authoring defect)
+binding:
+  B1 pass — "`st-handoff` — the request is mid-work state being saved across a session and
+     tool boundary for later pickup"
+  B2 pass — searched the transcript for any second skill id from the surface, for a
+     "or"/"also"/"equally" alternative, and for the literal `none`; only `st-handoff`
+     is named, and `none` does not appear
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case passes. Both binding criteria are met by the single-line answer, which names only `st-handoff` and gives one reason tied to the session-and-tool-boundary trigger. The only thing missing from the hand-in was a case id, which the emission needs and the input did not carry.

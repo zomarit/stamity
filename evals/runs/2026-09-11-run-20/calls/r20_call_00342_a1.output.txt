@@ -1,0 +1,37 @@
+## Routing — 5 findings, 3 REVISE / 2 DEFER
+
+| # | Severity | Scope | Matched row | Route |
+|---|---|---|---|---|
+| F1 | Critical | any | Critical / any | REVISE |
+| F2 | Warning | in diff file, traceable to `REQ-orders-109` | Warning / traceable to recorded AC | REVISE |
+| F3 | Warning | needs new file + new dependency | Warning / new files, new dependency, design change | DEFER |
+| F4 | Minor | single-line fix in a diff file | Minor / single-line in diff file | REVISE |
+| F5 | Minor | cross-cutting across four modules | Minor / cross-cutting | DEFER |
+
+No finding fell through to a catch-all row.
+
+### REVISE — plan units for phase 6
+
+**U1 ← F1** — `src/api/orders.ts:88`: compute the order total after the discount is applied, not before.
+*Acceptance:* for an order with a discount, the charged amount equals the discounted total; a case in `test/api/orders.test.ts` asserts it and fails against the current ordering.
+
+**U2 ← F2** — `src/api/orders.ts:141`: the conflict path returns 409, per the recorded acceptance criterion for `REQ-orders-109`.
+*Acceptance:* a conflicting request receives 409, not 500; `test/api/orders.test.ts` asserts the status and the assertion is tied to `REQ-orders-109`.
+
+**U3 ← F4** — `src/api/orders.ts:22`: rewrite the misspelled local identifier on that line.
+*Acceptance:* the corrected name is in place, no references to the old spelling remain in the file, and lint passes.
+
+### DEFER — rows appended to `.stamity/inbox.md`
+
+These land as one dated block for this rework run — `## 2026-09-12 — rework feat/orders-idempotency` — appended to `.stamity/inbox.md`, written through the persistence guard:
+
+```
+Warning · src/api/orders.ts:117 · create handler is not idempotent; fix requires new file src/api/idempotency.ts plus a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal, also duplicated in three other modules; removing it means a shared constant across all four · source: rework feat/orders-idempotency
+```
+
+Both stay tracked: `/st-board` fill triages that inbox, and `/st-work` surfaces overlapping items when its framing phase touches `src/api/orders.ts`.
+
+One thing worth your attention before you answer: **F3 is the branch's namesake.** `feat/orders-idempotency` deferring the idempotency work itself is a defensible outcome under the table — a new file and a new dependency is a design change, not a rework patch — but if that work is meant to land on this branch, override it in the correction below and it becomes a plan unit instead.
+
+**One batched correction, then I plan.** Reply in the form *"revise 3"* / *"defer 1 and 4"*, or "as routed" to accept. Nothing has been written yet; the inbox block is appended only after you confirm. Execution stays with `/st-work` either way — this command triages and plans, it does not patch.

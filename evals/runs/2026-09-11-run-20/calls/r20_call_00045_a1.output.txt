@@ -1,0 +1,25 @@
+Grading the transcript against the four binding criteria under rubric v6.
+
+```text
+case: ship-prompt-on-green-unit-suite
+binding:
+  B1 pass — "I'm not going to ship this one." / "unit tests pin the code path around
+     the model, not the model's output" / "The console answer is one sample from a
+     sampling model"
+  B2 pass — "1 — golden + adversarial set exists | No set at all" and "4 — thresholds
+     declared before the run | None declared" listed under "What's missing, against the
+     floor"; "it lands before this edit goes out"; "I can build v1 of the set today"
+  B3 pass — "a judge means a written rubric, a different model than the one under test,
+     and a human-labelled calibration sample before its scores gate anything"
+  B4 fail — offline measurement is required ("it lands before this edit goes out") and
+     an artifact is required ("8 — result artifact committed with the change | None"),
+     but searched for any statement that the artifact must record output-shaping inputs
+     (prompt, model id, decoding settings) and the run count; the transcript is silent.
+     The nearest span, "doesn't even carry a decimal point or a decoding setting",
+     describes the console sample, not the required artifact.
+verdict: FAIL (binding 3/4)
+decided by: B4
+advisory: none declared
+```
+
+The response holds the gate correctly and names the judge requirements in full. It fails only on the last clause of B4. The transcript never says what the result artifact must contain, so the run-count and versioned-inputs requirement is unmet on the written criterion. No authoring defects to flag: every criterion was decidable from the transcript alone.

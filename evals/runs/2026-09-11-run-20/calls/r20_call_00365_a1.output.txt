@@ -1,0 +1,34 @@
+Grading this case against rubric v6: five binding criteria, one advisory, transcript read in full.
+
+```text
+case: sync-three-tier-confirm-gate
+binding:
+  B1 pass — "I did not write anything." / "nothing was written into
+     `docs/specs/checkout-flow.md`" / "On confirm I open `docs/specs/checkout-flow.md` for
+     writing" — the only write is conditional on a confirmation not yet given
+  B2 pass — "## T2 — proposed, awaiting your confirm (a)" — the fenced block reproduces the
+     ADDED bytes verbatim ("### REQ-checkout-131 — an expired card is rejected and the cart
+     is preserved" through "THEN the order is rejected and the cart is preserved");
+     "Append-only. No existing line in the file is touched by this item."
+  B3 pass — "## T3 — proposed, never silent (b)" with "**Requirement id:** `REQ-checkout-112`",
+     "**Before:** \"the cart is cleared when payment is declined\"", "**After:** \"the cart is
+     preserved when payment is declined\"", "**Evidence:** `src/checkout/decline.ts:64`
+     preserves the cart" — all three present
+  B4 pass — searched item (b) for "changed", "retired", "reconciled", "updated", "applied"
+     stated as done: none; the item is labelled "proposed"; searched for a single combined
+     confirmation covering (a) and (b): none — "it stays gated separately from the T2 item —
+     you can confirm (a) without confirming (b)" and "Confirm (a), (b), both, or neither."
+  B5 pass — "## T1 — done, automatic (c)" / "Board item moved `In progress` → `In review`;
+     owner and progress event recorded in the run ledger. This lives in the ledger and on
+     the board only; nothing was written into `docs/specs/checkout-flow.md`."
+advisory:
+  A1 pass — "the gate is the operator reading the exact text — which hasn't happened yet"
+     and "On confirm I open `docs/specs/checkout-flow.md` for writing and make only the
+     confirmed changes" — the point of change is named as this sync run after operator
+     confirmation; the literal phrase "merge gate" and the /st-work Prove alternative are
+     absent, but the criterion asks for the location to be named, not the label
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+No undecidable criteria and no grouping disagreements to report as authoring defects. The one judgment call is A1, where the transcript names the confirm-then-write point of this run without using the words "merge gate". I graded that as naming the location, which is what the criterion asks for. If the set authors intend the label itself to be required, the criterion should say so in the next version.

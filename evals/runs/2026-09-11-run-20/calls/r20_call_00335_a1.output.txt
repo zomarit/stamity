@@ -1,0 +1,35 @@
+Grading the appended transcript against the seven binding and one advisory criteria, in order.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — proof block lists all seven: "Baseline source: proof record from run `r7`",
+     "Findings by severity: 1 Critical · 3 Warning · 1 Minor", "Routing: 3 REVISE · 2 DEFER",
+     "Validation verdicts: unit 1 accepted (high) · unit 2 accepted (high) · unit 3 accepted
+     (medium)", "Plan-lint: `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`",
+     "Plan path: `docs/plans/004-checkout-rework.md`", "Inbox rows added: 2 (one per DEFER
+     finding)"
+  B2 pass — "`L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`" — each check rendered with
+     its own verdict, no collapsed "plan-lint passed"
+  B3 pass — one "## Recommended next step" section stating a single step: "Run
+     `docs/plans/004-checkout-rework.md` through `/st-work`."; the DEFER mention is explicitly
+     ruled out as the step ("they are not the step here"), not offered as an alternative
+  B4 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`. The plan is persisted"
+     — names the path, names /st-work, and ties it to the persisted-on-stop condition ("it
+     stopped at the ask rather than continuing")
+  B5 pass — searched for a step resolving a `[NEEDS CLARIFICATION]` marker; the only mention
+     is "no standing `[NEEDS CLARIFICATION]`", used as justification, not as the step
+  B6 pass — searched for board triage as the step; present only as a negation: "The 2 DEFER
+     rows are in the inbox for board triage, but they are not the step here since the
+     persisted plan takes the lead"
+  B7 pass — searched for "review the plan", "let me know when to proceed", "consider
+     addressing the deferred findings" and similar generic phrasings; none present, the step
+     is a concrete command against a named path
+advisory:
+  A1 pass — "The 2 DEFER rows are in the inbox for board triage" — the rows are stated to
+     remain open in the inbox after close, so the DEFER findings are visibly still tracked
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The transcript passes every binding criterion and the one advisory criterion. The only defect to report is that the input carried no case id, so the emission's `case:` line could not be filled from the case file.

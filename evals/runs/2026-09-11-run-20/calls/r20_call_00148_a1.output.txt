@@ -1,0 +1,54 @@
+## status: `DONE`
+
+Brief: reuse of the retry helper by the export endpoint. Two of three questions settled; Q3 returns as unanswerable, below.
+
+---
+
+## pattern-match-checklist
+
+**Confidence: high — basis: `direct`.**
+
+The one existing call site establishes the shape a new caller has to match.
+
+- **Strategy is fixed-interval, three attempts.** The backoff multiplier is `1.0` (`src/http/retry.ts:41`), so successive attempts fire at a constant delay rather than growing. *So what:* the implementer should not describe the export path as "exponential backoff" in code comments or docs; if export needs growth under load, that is a change to the helper, not a configuration of it.
+- **The multiplier is read once at construction** (`src/http/retry.ts:12-18`). *So what:* a per-call override is not available through the current surface. An export caller wanting different timing constructs its own instance rather than passing options at call time.
+- **The retry predicate is caller-supplied, with no default** (`src/http/retry.ts:29`). *So what:* the export call site must pass a predicate explicitly; omitting it is not a "safe default" path, and the implementer should treat the predicate as a required decision, not boilerplate.
+- **Exactly one endpoint uses the helper today:** `src/api/report.ts:77` constructs and calls it. `src/api/export.ts` contains no reference to it. *So what:* `src/api/report.ts:77` is the only in-repo template to copy, and it is a sample of one — see `impact-map`.
+
+## impact-map
+
+**Confidence: medium — basis: `inferred` (assembled from `src/api/report.ts:77` as the sole call site and the constructor surface at `src/http/retry.ts:12-18`, `:29`; the step between them is that a second caller has to satisfy the same constructor and predicate contract the first one does).**
+
+- **`src/api/export.ts`** — gains a helper construction plus a predicate argument. No existing usage to modify; this is additive. *Next step:* add the call site modelled on `src/api/report.ts:77`.
+- **`src/http/retry.ts`** — unchanged if export accepts fixed-interval/three-attempt behaviour. Changed if export needs different timing, because the multiplier is construction-time (`src/http/retry.ts:12-18`) and shared-instance reuse would alter `src/api/report.ts:77` behaviour as a side effect. *Next step:* confirm export's timing requirement before deciding construct-new vs. share.
+- **The predicate's source module** — pulled into export's import graph. Its path is outside this brief's scope, so its identity and behaviour are not established here. *Next step:* resolve it per `unknowns` below before the import is written.
+- **`docs/reference/http.md`** — in scope and consulted; nothing in it locates a claim about retry-on-connection-error, and nothing there is invalidated by adding a second caller. No doc change identified as required.
+
+**Finding — severity: `Minor`.** Fixed interval at three attempts is a thinner retry budget than "retry helper" implies. Flagged for the implementer's timing decision, not as a defect.
+
+## unknowns
+
+**Confidence: high that the question is unresolved; the connection-error behaviour itself is `unverified` — nothing read locates a claim either way, and no basis supports rounding it to `inferred`.**
+
+**Q3 — does the helper retry on 5xx responses only, or on connection errors as well? Not settled.**
+
+- **Probed:** read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`.
+- **Why the probe did not settle it:** the helper does not decide. The retry predicate is supplied by the caller (`src/http/retry.ts:29`) and the file declares no default, so the answer lives in whatever predicate a call site passes. The predicate used at `src/api/report.ts:77` is imported from a path outside this brief's scope (`src/http/`, `src/api/export.ts`, `docs/reference/http.md`), and was not resolved.
+- **Smallest input that would settle it:** the resolved path of the predicate imported at `src/api/report.ts:77`, added to scope — one file read settles both what the existing endpoint retries on and whether export can reuse that predicate.
+
+**Finding — severity: `Warning`.** The implementer cannot write the export call site without choosing a predicate, and that choice is exactly what is unresolved. Recommend re-spawn with the predicate module in scope before implementation, rather than having the implementer pick one blind.
+
+---
+
+## Unanswerable list
+
+1. Q3, as stated above — retry-on-connection-error behaviour. Unresolvable within the given scope boundary; resolvable with one added path.
+
+## Sources consulted
+
+- `src/http/retry.ts` — full read; cited at `:12-18`, `:29`, `:41`.
+- `src/api/report.ts` — cited at `:77`.
+- `src/api/export.ts` — read; no reference to the helper.
+- `docs/reference/http.md` — read; no locatable claim on connection-error retry.
+- Greps across `src/http/`: `ECONNRESET`, `ETIMEDOUT`, `catch`.
+- Out of bounds per brief and not consulted: `src/worker/`, the queue worker.

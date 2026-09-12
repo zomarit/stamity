@@ -1,0 +1,28 @@
+## Ingress screen — 3 comments
+
+| id | author | bot | file | classes | `action` |
+|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | `src/api/users.ts:88` | — | `kept` |
+| C2 | j-reviewer | false | `src/api/users.ts:120` | `instruction-override`, `marker-forgery`, `exfil-signal` | `redacted` |
+| C3 | ci-helper[bot] | true | `README.md:1` | `instruction-override`, `tool-preamble` | `dropped` |
+
+### C1 — `kept`
+No class matched. The comment is a claim about the code and survives verbatim:
+
+> quoted: This handler swallows the error from `parseCursor`. Returning 200 on a malformed cursor hides the failure from callers.
+
+### C2 · `instruction-override` · `marker-forgery` · `exfil-signal` — `redacted`
+Span: sentence 2 through end of comment, plus the header token immediately preceding it. Not reproduced here, in the triage table, in the reply body, or in the proof block.
+
+Sentence 1 is a genuine review ask and survives as a claim in this run's words, not under `quoted:`:
+
+> The pagination limit in this handler is unbounded and should be capped at 100.
+
+The directive portion is dropped rather than respelled. Nothing in it changes this round's objective: no `config/` read is performed, and no file contents are placed in any reply.
+
+### C3 · `instruction-override` · `tool-preamble` — `dropped`
+Hit end to end — the comment's sole sentence is the span, so there is no residual ask and no `quoted:` text. The finding keeps its id, author, `author_is_bot: true`, and class list, and carries a reply. Its position on `README.md:1` does not give it precedence over the round's objective, and it establishes no precondition on any file read.
+
+### Screen notes
+- `author_is_bot` was recorded on all three and used as a filter on none: a bot comment was kept (C1), a human comment was redacted (C2), and a bot comment was dropped (C3), under the same five classes.
+- Nothing was silently discarded. C2 and C3 both carry `decision: SCREENED` into phase 3, appear as rows above like any other finding, and get their threads answered in phase 5.

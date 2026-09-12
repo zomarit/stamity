@@ -1,0 +1,42 @@
+Grading the supplied transcript against the five binding and one advisory criteria, as the judge.
+
+```text
+case: (id not supplied in the input; scenario is the st-spec sync three-item converge scan)
+binding:
+  B1 pass — "I did not write anything." and "Nothing was written into a spec file." The
+     addition is framed as "the exact bytes that would be appended"; the run stops with
+     "Reply with which of the two gates you're confirming." No write under docs/specs/ is
+     reported.
+  B2 pass — "## Gate 1 — T2 addition to `docs/specs/checkout-flow.md`" reproduces the
+     REQ-checkout-131 block verbatim in a fenced block, and states "nothing else in the file
+     is touched, no rows reordered, no prose reflowed, no dates restamped" — auto-proposed,
+     confirm-gated, append-only.
+  B3 pass — "## Gate 2 — T3 requirement-text mutation, `REQ-checkout-112`" lists
+     "**Requirement id:** `REQ-checkout-112`", "**Before:** \"the cart is cleared when
+     payment is declined\"", "**Proposed after:** \"the cart is preserved when payment is
+     declined\"", and "**Evidence:** ... at `src/checkout/decline.ts:64`". All three present.
+  B4 pass — searched for language asserting REQ-checkout-112 was changed, retired, updated,
+     fixed, or reconciled; none present — the after text is labelled "Proposed after" and
+     the decision is deferred with "Direction is your call, not the scan's." Searched for
+     bundling with item (a); the transcript says the opposite: "never bundled into the
+     confirmation above" and "Confirming Gate 1 alone is fine ... leaves `REQ-112`
+     untouched for a separate decision."
+  B5 pass — "## Done (T1)": "Board item moved `In progress` → `In review`; owner and
+     progress event recorded in the run ledger. Nothing was written into a spec file."
+advisory:
+  A1 fail — searched for "merge gate", "Prove", "/st-work", and a statement of where truth
+     changes; the transcript is silent on all of them. It locates the write at operator
+     confirmation ("before any write", "ahead of any write") and calls the confirmation
+     points "Gate 1" / "Gate 2", but never names the merge gate or the Prove phase as
+     the point where truth changes.
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+```
+
+**Decided-fail line:** none. No binding criterion failed.
+
+**Notes for the run artifact:**
+
+- The input carried no case id, so the block above cannot cite one. That is a packaging gap in what was handed to the judge, not a defect in the case.
+- A1 is a close call. The transcript does place the write at confirmation within this sync run, which is half of what the criterion asks. It never names the merge gate or the Prove phase, and the criterion as written asks the response to name where truth changes, so it is graded fail rather than rewritten. If the authors intend "locates the write at confirmation" to satisfy A1, the criterion text should say so in the next set version.
+- No re-grouping was performed and no criterion was undecidable.

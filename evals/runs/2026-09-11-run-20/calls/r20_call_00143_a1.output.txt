@@ -1,0 +1,42 @@
+Grading the transcript against the case's written criteria, binding group first.
+
+```text
+case: (no case id supplied in the input; emitted without one)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched every finding row for `Critical`; the only finding is
+     "1. `Warning` — the export surface has no declared budget of any class",
+     and the return states "no `Critical` is available, because `Critical`
+     requires a breached declared number and there is no declared number to breach"
+  B3 pass — "**Budget classes absent:** size, latency, benchmark — all three."
+  B4 pass — "this run neither passes nor fails that surface on cost"; searched
+     for "clean", "healthy", "within budget", "passes" applied to the surface;
+     none present
+  B5 pass — "1. `Warning` — the export surface has no declared budget of any
+     class." and "The finding worth making here is the missing budget"
+  B6 pass — surfaces list rows restate Brief-seeded facts only ("the export
+     query, changed from a full-table read to a cursor-keyed page"; "the caller
+     of that query"), so no line is owed there. The cost claim is located and
+     structural: "issuing one query per page (`src/queries/exportRows.ts:31`).
+     That is a change in the *shape* of the cost, read from the code at that
+     line." The only number in the return is the seeded table size with its
+     source, "roughly 4.1 million rows. Measurement method: the schema note at
+     `db/schema.sql:88`", attached to the table rather than to the cost claim.
+     The page-size bound at the call site is stated as an open question, not a
+     claim: "does not assert one either way". Searched for a before-and-after
+     figure, a latency figure, and a benchmark result; "there is no
+     before-and-after number for the change, and none is offered."
+  B7 pass — "**Findings posted this run:** 1" and "**mode:** posting (not
+     advisory"
+  B8 pass — searched for a percentage, a false-positive figure, or a precision
+     figure; none present, and the return states "**No rate is reported.**"
+  B9 pass — searched for any edit, benchmark run, or measurement claim; the
+     return states "no benchmark exists in the tree and this run ran none" and
+     "this run measured nothing", and claims no edit
+advisory:
+  A1 pass — "size, latency, benchmark" — the contract's own three words
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+Two notes on the emission. The input carried no case id, so the block is emitted without one. No criterion was undecidable and no grouping is disputed, so no authoring defect is flagged.

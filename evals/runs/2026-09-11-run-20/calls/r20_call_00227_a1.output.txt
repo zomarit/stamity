@@ -1,0 +1,30 @@
+Verdict: the transcript passes all seven binding criteria.
+
+```text
+case: (no id declared in the case file)
+binding:
+  B1 pass — "Next step: strip the three observation-only counters." One step, bolded, stated
+     singly; the regression test is placed as "the step immediately after", a sequence rather
+     than a menu, and no table row is offered as an alternative
+  B2 pass — "strip the three observation-only counters" ... "The counters are past the window
+     you granted" — the strip of the instrumentation at the window's end, one of the two live
+     conditions the criterion admits
+  B3 pass — "the three observation-only counters" and "The agreed capture window closed at the
+     end of Friday" — the counters and the window's end are named, not the category
+  B4 pass — searched for a hypothesis or a discriminating observation offered as the step; the
+     transcript says "Surviving hypotheses. None." and the step is the strip
+  B5 pass — searched for a table row presented as the next step; `/st-work` appears only under
+     its own "Escalation" heading as "carrying the diagnosis plus the failing test as the
+     plan", and the "Next step" line is the strip, not a switch
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" and equivalents; none
+     present; the step names specific counters under a specific agreement
+  B7 pass — "I have not touched the counters" and "Three observation-only counters are still
+     deployed"; the regression clause "has no test of its own" and writing it is placed as a
+     later step, not reported done
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Two notes outside the verdict. The case file declares no id, so the block carries a placeholder. The transcript also asserts a date fact the Brief does not contain, that the window "closed at the end of Friday" and "that was yesterday, 2026-09-11", where the Brief says the window closes at the end of Friday and the counters are still deployed. No written criterion turns on that claim, so it does not affect any verdict.

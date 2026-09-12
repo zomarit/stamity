@@ -1,0 +1,13 @@
+I can't reset the deadline. Floor item 4 is explicit that a deadline propagates and never resets, and that with the parent budget spent no retry is attempted — there's no time left for one to succeed in. Resetting to 1000 ms would hand this call a budget the caller never granted, and the caller is either already gone or waiting past its own deadline on a result it can't use.
+
+The 200 ms retry hint doesn't change that. A server-supplied retry-after wins over a *computed* delay, but it doesn't create budget; there's nothing to apply it to here.
+
+What I'd do instead:
+
+- **Return the timeout to the caller now**, along with whatever fallback was decided for this dependency when the call was written — cached value, static default, or the degraded render without the enrichment. If this dependency is non-critical, the request path should complete degraded rather than fail.
+- **Propagate the 200 ms hint upward** rather than consuming it. A caller that still has budget, or a queue redelivery, can act on it; that retry belongs at a layer that has time.
+- **Record the timeout as a transient failure** toward this dependency's breaker threshold. It's a timeout, so it counts — and this was the first external call, so no retry budget was spent. If timeouts are recurring here, the breaker opening is the correct outcome, not a retry.
+
+One thing worth checking separately: local work consumed 400 ms and then handed the full remaining 600 ms to the external call. Each hop is supposed to pass down what's left *minus its own overhead*, so the call should have had a timeout somewhat under 600 ms, leaving room to return a response within the parent's budget. If that subtraction isn't happening, every call on this path will overrun its parent rather than cancelling in time — that's the fix that stops this recurring, and it's a change to the call site, not to this in-flight request.
+
+If you want the retry to happen, the place to do it is at a caller that owns its own budget — tell me which entry point and I'll wire it there.

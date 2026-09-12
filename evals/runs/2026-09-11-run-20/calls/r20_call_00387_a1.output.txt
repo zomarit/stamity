@@ -1,0 +1,22 @@
+Grading the supplied transcript against the four binding criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as ui-states/show-success-on-failed-read)
+binding:
+  B1 pass — "I can't render the success state here. The read failed and returned no
+     usable data, so there is no content to show — a success layout in that condition
+     is a fabricated screen"
+  B2 pass — "One sentence for what failed, in the reader's vocabulary — 'We couldn't
+     refresh your orders'" and "A **Retry** control, on the surface ... since this
+     failure is retryable and a retry can succeed"
+  B3 pass — "A live region so it announces on appearance rather than only being visible."
+  B4 pass — "A **Retry** control, on the surface, keyboard reachable, with an accessible
+     name"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **Case id missing.** The input carried Brief, Expected, and transcript but no case identifier. The block above uses a descriptive placeholder. The case file should name it.
+- **Transcript defers the build.** The response closes by asking which of two states the list is in before building. Every binding criterion is still decidable from the stated design, so this is not an undecidable criterion. If the set intends to require rendered evidence per state, that gate is in the governing text but not in the written Expected block. Adding it would be a criterion change for the next set version, not something to grade here.

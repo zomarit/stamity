@@ -1,0 +1,13 @@
+I'm not going to reset the deadline. Rule 4 is explicit: the deadline propagates and never resets, no hop restores the original value, and with the parent budget spent no retry is attempted — there is no time left to succeed in. Resetting to 1000 ms would manufacture budget the caller never granted, and the caller is already past its own 1000 ms wall; anything I produced after that point goes to a client that has stopped waiting.
+
+The 200 ms hint doesn't change this. A server-supplied retry-after wins over the *computed* delay — it's a substitute for a jitter calculation, not a grant of budget. With zero remaining, there's no delay to override.
+
+What happens instead:
+
+- **Cancel, don't await.** The call is already over its budget; it gets cancelled rather than left running.
+- **The timeout counts as transient** (rule 2), so it goes toward this dependency's failure count in the rolling window. If that opens the breaker, that transition gets a signal.
+- **Serve the fallback** (rule 6) — the cached value, static default, or the degraded render without this enrichment, whichever was decided when the call was written. If this dependency is on the critical path with no fallback, the request fails to the caller now, with the correlation identifier on the structured record so the path is reconstructable.
+
+If another attempt is genuinely wanted, the legitimate shape is a **new request from the client with its own fresh deadline** — not a reset of this one. Two things to carry into it: the original call timed out at 600 ms, which tells us nothing about whether the upstream processed it, so that attempt needs the caller-generated idempotency key, stable across both attempts, so the receiver replays the stored outcome rather than repeating the effect (rule 5). And if the breaker has opened in the meantime, the new request short-circuits before any attempt fires — that's the breaker doing its job, not a bug to route around.
+
+One thing worth checking while this is fresh: per the gates, this exact path — budget exhausted, no retry attempted — should be asserted by a test that injects the timeout, not by reading config back. If that test doesn't exist, that's the durable fix here rather than a one-off intervention on this request.

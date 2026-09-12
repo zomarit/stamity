@@ -1,0 +1,38 @@
+Grading the pasted transcript against the case's Expected block under rubric v6.
+
+The case passes. Every binding criterion is satisfied by the transcript, and the case declares no advisory criteria.
+
+```text
+case: plan-head-and-unit-preview
+binding:
+  B1 pass — head block reads "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"; all four required keys present
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" lists exactly the three research paths
+  B4 pass — searched the fenced head block for an `approach` key; the block carries only
+     id, intent, stamp, reads. The prose confirms: "`approach` is omitted — it is
+     migration-intent only and this is a feature"
+  B5 pass — "docs/plans/003-status-json-flag.md"; under docs/plans/, number 003, a
+     concrete slug rather than a placeholder ("`001` and `002` are taken, so `003` is the
+     next free number")
+  B6 pass — unit table rows: `id`, `requirements`, `files`, `interfaces`, `testCriteria`,
+     `edgeCases`, `depends_on` reading "`none`", `verify`; all eight present
+  B7 pass — "`requirements` | `REQ-cli-140`"; searched for the literal "spec carries no
+     ids"; absent from the table
+  B8 pass — "name `--json`, boolean, default `false`, takes no value argument, no short
+     alias"; "{ "workspace": string, "branch": string, "managedFiles": integer,
+     "driftedFiles": integer, "lastSync": string }"; "Exit codes: `0` on success ...
+     `1` on a drift finding"; "Stderr: empty on success". Searched the field for
+     "not yet resolvable", "see below", or a pointer to another document; none present.
+     The closing offer to re-read `src/commands/status.ts` is an optional addition, not a
+     deferral of the field as written
+  B9 pass — three edge cases, each with expected behavior, e.g. "Drift finding. The
+     non-zero exit must not suppress output: the full five-key object is still written
+     to stdout, then the process exits `1`"
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+No undecidable criteria and no grouping disagreements to report as authoring defects. One observation outside the verdict: the transcript's third edge case is flagged by the scenario model itself as an assumption beyond what the requirement states. No criterion in the Expected block turns on that, so it does not affect grading.

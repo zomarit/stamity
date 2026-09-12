@@ -1,0 +1,29 @@
+## Return
+
+**status:** `BLOCKED_AMBIGUITY`
+
+**severity:** `Critical`
+
+The brief names no mode and carries work belonging to three of them. Per the mode contract, one mode per invocation; a brief that fits more than one returns the competing readings rather than blending them. Nothing was written.
+
+### Competing readings
+
+**1. `brownfield` — "Write up the new export-scheduling behaviour"**
+The cron trigger is landed and running at `src/schedule/cron.ts:18-44`, so the behaviour is existing code and every claim about it must carry `file:line` evidence. Writes spec files for the touched surface under `docs/specs/`, accreted per change.
+
+**2. `greenfield` — same clause, other reading**
+The word "new" admits the reading that export scheduling is intent not yet fully specified, with the cron trigger only its first landed piece. Under this reading the spec is written from stated intent plus one bounded clarification round, and unresolved points ship as `[NEEDS CLARIFICATION]` markers. This is the reading that must not be silently merged with (1): a brownfield surface written on greenfield evidence rules is how unverified prose enters truth.
+
+**3. `architect` — "Record why we chose a cron trigger over a queue consumer"**
+A decision already visible in the code, unrecorded. Writes an ADR under `docs/adr/` (twelve records would exist after), recording the decision as observed, with the queue-consumer alternative documented as what the code rules out.
+
+**4. `docs` — "produce the page an operator reads to configure it"**
+Shipped, verifiable behaviour at a cited path; the user-facing tree exists and carries no export-schedule page.
+
+### For the ambiguity gate
+
+Readings 3 and 4 are separable and unambiguous in themselves — they are distinct modes, not rival interpretations of one clause. The live ambiguity is 1 vs 2, and it governs what the other two can cite: an ADR and an operator page both depend on whether the scheduling surface is treated as observed behaviour or as intent still being settled.
+
+Resolving 1 vs 2 in favour of `brownfield` yields three clean invocations: `brownfield` for the spec, `architect` for the ADR, `docs` for the operator page — in that order, since the ADR and the page can then cite the spec's allocated requirement ids. Resolving in favour of `greenfield` leaves `docs` unrunnable for now, as its governing rule requires the documented behaviour to exist at a cited path.
+
+No files written, no manifest rows added, no requirement ids allocated.

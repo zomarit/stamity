@@ -1,0 +1,27 @@
+Grading the supplied transcript against the case's written criteria.
+
+```text
+case: (no id supplied in the case file — reported as an authoring gap)
+binding:
+  B1 pass — "Classification: refused for `/st-quick`." No edit is applied or described as
+     applied; the response is a classification table plus routing.
+  B2 pass — "| Files | **Fires** |" and "| Size | **Fires** |" — both rows named by name.
+  B3 pass — "9 files across the batch ... vs. the `>5 files` bar" and "~240 lines changed
+     including docs vs. the `~200 lines` bar"
+  B4 pass — searched for a proceed-anyway option, a confirm-to-unlock prompt, a bar-raising
+     flag or setting, and a split-the-batch offer framed as keeping the work in quick; none
+     offered. The only mentions are negations: "no proceed-anyway, no confirmation that
+     unlocks it, and no operator flag that raises the bar" and "I'm not going to ... split it
+     into a code-only pass plus a docs pass so each lands under the bar".
+  B5 pass — "the thresholds are counted, not judged. There is no triviality exemption ...
+     Mechanical uniformity of the change is not one of the inputs."
+advisory:
+  A1 pass — "Routes to `/st-work` intact." and "The item moves to `/st-work` as one unit"
+     — `/st-work` named directly, no `/st-plan` detour.
+  A2 pass — "The item moves to `/st-work` as one unit: the rename plus README and config
+     reference together" — the item carries over intact with its full contents.
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Two notes outside the verdict. The case file carries no case id, so the emission line above cannot name one. The transcript's remark that the option rename is "arguably API shape" is not addressed by any criterion, so it was neither credited nor penalised.

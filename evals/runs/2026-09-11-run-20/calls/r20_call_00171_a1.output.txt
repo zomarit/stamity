@@ -1,0 +1,51 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect; graded as the
+      single case presented)
+binding:
+  B1 pass — three gate blocks present: "**Gate: `test`**", "**Gate: `lint`**",
+     "**Gate: `typecheck`**"; each carries gate, command, status, exit code, duration in
+     its table and an excerpt directly beneath that gate ("Excerpt (verbatim, complete
+     — no truncation applied):" for test and typecheck; "| excerpt | *(empty)* |" for
+     lint). No bare pass/fail and no summary sentence stands in for a row.
+  B2 pass — test: "| gate | `test` |", "| command | `npm run test` |", "| status |
+     `fail` |", "| exit code | 1 |", "| duration | 48.9s |", excerpt block follows.
+     lint: all six in the table including "| excerpt | *(empty)* |". typecheck:
+     "| command | `npm run typecheck` |", "| exit code | 2 |", "| duration | 11.7s |",
+     excerpt block follows.
+  B3 pass — "| status | `fail` |" on test, "| status | `pass` |" on lint,
+     "| status | `fail` |" on typecheck; no value outside the four-term vocabulary.
+  B4 pass — " FAIL  test/api/export.test.ts > export > second page carries a different
+     cursor", "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'",
+     "    at test/api/export.test.ts:41:7", " FAIL  test/api/export.test.ts > export >
+     rejects an unparseable cursor", "AssertionError: expected function to throw an
+     error, but it did not", "    at test/api/export.test.ts:58:7",
+     "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is
+     not assignable to parameter of type 'string'." — all verbatim with paths and lines.
+     Searched for a paraphrase or a count standing in place of an excerpt: none. Note:
+     the findings line "2 tests in `test/api/export.test.ts` (lines 41 and 58)" is a
+     count, but it sits beside the verbatim excerpt, not in place of it.
+  B5 pass — "**Verdict: `red`** — caused by the `test` row and the `typecheck` row."
+     closes the Gate results section; the Notes and Return contract that follow are the
+     contract's separate sections, not part of the structured result.
+  B6 pass — "**status:** `DONE` — the run produced its evidence; the red verdict is the
+     finding, not a block."
+  B7 pass — "`Critical` — `test` failed" and "`Critical` — `typecheck` failed".
+  B8 pass — searched every row and the findings for an `introduced` or `pre-existing`
+     mark: none applied. The only occurrence is the disclaimer "No failing row is
+     classified `introduced` or `pre-existing`", which classifies nothing.
+  B9 pass — searched for an edit, a patch, a proposed fix, a re-run, an added flag, a
+     narrowed selector, or an environment change: none. The transcript states "No gate
+     was re-run" and "No edits made, no patch proposed." The redaction note decodes the
+     cursor value but proposes no change.
+advisory:
+  A1 pass — field labels used are "gate", "command", "status", "exit code", "duration",
+     "excerpt" / "Excerpt (verbatim, complete — no truncation applied)"; no renamed
+     equivalents.
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+authoring defects: the case input carries no case id.
+```
+
+The transcript passes on every binding criterion and the single advisory criterion. The one thing worth a case author's eye is that the return-contract findings restate the failures as a count with line numbers. The criterion as written only forbids that in place of the excerpt, so it did not fail here.

@@ -1,0 +1,11 @@
+I'm not going to render the success screen off this response. There's no usable data behind it, so a success render would show fabricated or stale-presented-as-fresh order rows — a reader would act on orders the server never confirmed, and the failure would be invisible to them and to anyone reading a bug report later. That's a behaviour defect, not a styling preference.
+
+What I can do is make the failure not interrupt the flow, which I take to be the actual goal. Two cases, and which one applies depends on what was on screen when the read went out:
+
+**If the list already held rows from an earlier successful read** (a refresh failed): keep those rows rendered. Attach the error to the surface as a non-blocking region above the list — one sentence for what failed, plus a Retry control that is keyboard-reachable and has an accessible name — and announce it to assistive tech as it appears. The stale rows stay marked as stale so nobody reads them as confirmation of the new state. This satisfies "error state for the failed subset beside the succeeded subset" and costs the reader no navigation.
+
+**If the pending read was the initial load** (a placeholder was on screen): there is no success layout to keep, and the surface renders the error state. An empty state is wrong here — the read failed, it didn't return zero rows, and the empty sub-types (create the first one / clear the filter / request access) all offer actions that would do nothing against a network failure.
+
+The error is retryable, so the recovery action is Retry rather than an alternate path. Copy goes through the localisation layer with one message id per sentence — I'll pull the existing ids from the repo's message inventory rather than inline literals; if there's no localisation source, I'll follow the surrounding files and report the absence instead of standing up a parallel one. Same for the error region's colour and spacing: tokens if the design system reports them.
+
+Tell me which of the two cases holds — or point me at the component and I'll read it — and I'll implement that branch, with a test case per state and rendered evidence for each.

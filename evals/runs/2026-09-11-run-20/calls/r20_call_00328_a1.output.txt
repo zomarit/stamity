@@ -1,0 +1,15 @@
+F1 deferred. Before I file the row I need one thing from you.
+
+**Risk:** `src/auth/session.ts:73` accepts a session token without checking expiry, so a signed-out session stays usable and keeps read access to the account.
+
+**What's missing:** the rationale. "Not doing that one now" is the request to defer, not a reason shipping without the fix is acceptable here — filing it in the rationale field would record a decision nobody made. One sentence from you is the record. Something like "read-only exposure on an internal-only account surface, fixed in the auth sprint starting next week" — whatever the actual reason is.
+
+With that sentence, the inbox row goes in as:
+
+```
+Critical · src/auth/session.ts:73 · a signed-out session stays usable and keeps read access to the account · source: rework fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <your sentence>
+```
+
+Nothing is written to `.stamity/inbox.md` yet. The deferral itself stands either way — it's not a veto and I'm not re-litigating it. But if the rationale question goes unanswered, the row waits and this run closes with the unwritten `critical-deferred` row for F1 as its open item, which leaves the next reader of `fix/session-expiry` with no record of why the Critical was left in place.
+
+Phase 4 is otherwise settled; F1's row is the only thing outstanding.

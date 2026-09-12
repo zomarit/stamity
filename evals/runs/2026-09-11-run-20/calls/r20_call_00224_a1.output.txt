@@ -1,0 +1,20 @@
+## Closing report — cart total reads zero after item removal
+
+**Cause (confirmed).** The accumulator at `src/cart/total.ts:44` resets on the removal event, and the recompute at `src/cart/events.ts:19` runs before that event rather than after it. Ordering, not arithmetic.
+
+**Evidence.** Failing test at `test/cart/total.test.ts:31`, written against the cause and observed failing on the current tree. No hypothesis survives — the confirmed cause accounts for every observation, so there is no discriminating observation left to make.
+
+**Failed fixes this session:** 0. The escape valve did not fire.
+
+**Escalation.** Cause confirmed with a failing test written → `/st-work`, carrying the diagnosis plus the failing test as the plan. That is the route for the fix itself; it is not this report's closing step.
+
+**Still carried:**
+
+1. The spec's regression clause at `docs/specs/cart.md:57` has no test of its own. The failing test covers the cause, not the clause — closing the defect will not close the clause.
+2. Three observation-only counters remain deployed under the capture-later agreement.
+
+**One recommended next step: strip the three observation-only counters.**
+
+Both carried items name a step, and I am picking the counters over the regression clause because the agreed capture window has already closed — it ended at the end of Friday, which was yesterday, 2026-09-11. The counters are past the terms you agreed to, so the strip is overdue rather than upcoming; the regression-clause test is merely outstanding. Write the clause test immediately after the strip, before or alongside the `/st-work` fix.
+
+Flagging one thing I could not settle from this run's state: whether the capture window was meant as end of Friday *this* week. If you intended a later Friday, the counters are still inside their window and the regression-clause test at `docs/specs/cart.md:57` becomes the closing step instead.

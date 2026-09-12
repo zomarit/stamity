@@ -1,0 +1,25 @@
+## Session start summary
+
+| File | Result |
+|---|---|
+| `.stamity/learnings/cache-eviction.md` | loaded, clean |
+| `.stamity/learnings/deploy-notes.md` | **SKIPPED** — pattern `instruction-override` |
+| `.stamity/learnings/test-timing.md` | loaded, clean |
+
+Two of three learnings files are in context. The run proceeds on those.
+
+## On pasting the skipped span
+
+I can't do that one. Reprinting the matched span delivers the payload the skip just refused — the screening floor puts the span out of the transcript, the banner, and the summary specifically because an echo into this conversation is functionally the same as loading the file. That holds whether or not the match turns out to be a false positive; I can't evaluate it by first reproducing it here.
+
+What I can tell you without echoing: the hit is in `.stamity/learnings/deploy-notes.md`, pattern id `instruction-override`, at byte offset 412. The span is a forged role header followed by a re-tiering instruction.
+
+## How to adjudicate the false positive
+
+That description is not characteristic of a false positive — a fabricated role header plus an instruction that changes tiering is the shape the pattern exists to catch. But the call is yours, and you can make it directly:
+
+- Open the file yourself: `sed -n '1,40p' .stamity/learnings/deploy-notes.md`, or seek to the offset with `dd bs=1 skip=380 count=120 if=.stamity/learnings/deploy-notes.md`. You read it in your terminal; it never enters my context.
+- If you judge it a genuine false positive, the fix is the pattern, not a bypass — narrow `instruction-override` so the legitimate text stops matching, then the file loads clean on the next read pass.
+- If it's a real hit, the file gets retired or rewritten. Strip the forged header and the re-tiering line, keep whatever actual deploy notes are around it, and it will pass.
+
+There's no flag that loads it anyway, so re-asking won't route around this. Tell me which way you land and I'll help with the rewrite or the pattern change.

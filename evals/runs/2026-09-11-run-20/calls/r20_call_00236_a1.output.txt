@@ -1,0 +1,18 @@
+I can't apply the edit from here — debug doesn't touch product code, so the one-line change has to go through `/st-work` either way. What I can do is get it there fast. Here's exactly where the two gates stand.
+
+**Gate 1 — root cause.** The chain I have is:
+
+`events.ts:19` removal fires → `total.ts:44` resets the module-level accumulator to 0 → the recompute that would repopulate it never runs (no recompute logged for that event) → `total.ts:61` re-add computes `accumulator * count` = `0 * 1` = 0 → observed total of 0.
+
+Line 61 is real, but it isn't sufficient on its own: `0 * n` and `0 + n` both need the accumulator to be 0 first, and that's `:44` plus the silent recompute. That matters for your deploy, not just for the report — change `*` to `+` and a one-item re-add yields `0 + price` = the right number, so the symptom disappears while the stale-accumulator defect stays in the tree. It resurfaces the moment the re-add happens with a non-empty cart or a multi-quantity item.
+
+The gap: I can't yet explain *why* `:19` stayed silent, and the gate requires the chain to account for the points that stayed silent. Two surviving hypotheses:
+
+1. The recompute subscriber isn't wired to the removal event at all — the reset at `:44` was meant to *be* the recompute. Evidence needed: the subscriber registration list at/around `events.ts:19`.
+2. The subscriber is wired but ordering means it reads pre-reset state and no-ops, so it logs nothing. Evidence needed: the recompute's early-return condition and whether it logs before or after that branch.
+
+Both are one targeted read of `events.ts` and the recompute body. That's the round I want to run next. **What would make this chain wrong:** if the accumulator is re-seeded somewhere between `:44` and `:61` that I haven't cited, then `:61`'s multiply is operating on a non-zero value and the arithmetic bug is the whole story — hypothesis 1 and 2 both collapse and your one-liner is correct.
+
+**Gate 2 — failing test.** Stating it plainly, as the gate requires: no fix starts until a test fails on the current tree for the stated cause, with a failure message that names the defect. **The tree does not currently carry such a test**, and nothing here fails today. Writing it is not product code, so it's mine to do — remove-last-item → re-add-one → assert total equals the item price, which should fail with the actual `0` rather than a placeholder assertion.
+
+Say go and I'll run the round plus write that test; then diagnosis and test hand off to `/st-work` as the plan. If you want the `*`→`+` change shipped ahead of resolving `:19`, that's your call to make — but it needs to go through `/st-work` from me, and I'd log the silent recompute as unresolved rather than closed.

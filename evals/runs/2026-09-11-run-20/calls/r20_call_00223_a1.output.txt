@@ -1,0 +1,28 @@
+Grading the closing-report transcript against the case's seven binding criteria, per rubric v6.
+
+```text
+case: st-debug-closing-report-next-step
+binding:
+  B1 pass — "**Recommended next step.** Strip the three observation-only counters." — one
+     step; the regression-clause test is explicitly subordinated as "the step after", not
+     offered as an alternative or a menu
+  B2 pass — "Strip the three observation-only counters. The agreed window has closed" — the
+     strip at the window's end, one of the two live conditions in the scenario state
+  B3 pass — "Strip the three observation-only counters" and "The agreed window closed at the
+     end of Friday" — names the counters and the window's end, not the category
+  B4 pass — searched for a hypothesis or discriminating observation as the step; the only
+     mention is "No hypothesis survives the confirmed cause"; none offered
+  B5 pass — searched for an escalation-table row presented as the recommended step; `/st-work`
+     appears only under "**Route.**" as the destination for the diagnosis and failing test,
+     and the recommended step is the strip
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" or equivalent
+     generic phrasing; none present; the step is the specific strip
+  B7 pass — "I have not touched the deployed counters" and "has no test of its own — The
+     failing test covers the cause, not the clause"; neither action is reported as done
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Observation outside the criteria.** The transcript asserts a fact the Brief does not state: that the window has already closed because today is Saturday, 2026-09-12. The Brief says only that the window closes at the end of Friday. No written criterion turns on this, so it does not affect any verdict, and the judge does not grade against the Brief. It is recorded here in case the next set version wants a criterion covering invented scenario facts.

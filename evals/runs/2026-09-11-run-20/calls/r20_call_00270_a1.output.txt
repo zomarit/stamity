@@ -1,0 +1,35 @@
+I'm not handing this off. The structural check passing is not handoff approval, and the semantic coverage review finds a direct contradiction between the requirement and the unit that implements it.
+
+## The conflict
+
+**REQ-CACHE-001** — "Refresh customer data promptly while continuing to show the previous value."
+**U1** (cites only REQ-CACHE-001) — "Hide the previous value until refresh completes."
+
+Two competing readings, and nothing in the plan decides between them:
+
+1. **Stale-while-revalidate** — the previous value stays on screen for the whole refresh; the new value replaces it in place when it lands. U1 contradicts the requirement and must be rewritten.
+2. **Hide-during-refresh** — the previous value is withdrawn (spinner/skeleton) and "continuing to show the previous value" in REQ-CACHE-001 means only that it persists across the *trigger*, not across the *in-flight window*. Then the requirement wording is what must change.
+
+The acceptance criterion cannot arbitrate: it asserts only that a fresh value eventually appears, which is true under both readings. An implementer holding no session history would pick one at random and be 50% likely to ship the opposite of the intent.
+
+## Clarification needed (the smallest one that decides)
+
+> During an in-flight refresh, does the previous customer value remain visible on screen, or is it hidden behind a loading state until the new value arrives?
+
+Second, non-blocking for the contradiction but required for L1: "promptly" carries no threshold. What is the refresh latency budget in milliseconds, and what command measures it? Without this, the criterion stays a bare adjective.
+
+## Return contract
+
+- **status:** `BLOCKED_AMBIGUITY` — REQ-CACHE-001 and unit U1 state opposite behaviors for the refresh window; no user decision settles it.
+- **intent chosen:** unchanged — this run re-selected no intent; the persisted artifact's head stands.
+- **Artifact path(s) written:** none this run. The persisted plan is unmodified; no write was attempted, since a failing check blocks the write.
+- **Structural coverage:** pass — every ID and dependency resolves, no scoped requirement uncovered. `semanticReview: required` remains **unsatisfied**. Structural pass alone is not handoff approval.
+- **Plan-lint:** L1 fail (U1's criterion asserts "eventually appears" with no threshold, units, or measuring command; "promptly" is unquantified) · L2 pass (carried from the structural helper) · L3 **unrun** — U1's `edgeCases` were not evaluated in this run; I am not recording a pass I did not measure · L4 pass (U1 cites REQ-CACHE-001, which the spec carries).
+- **sub_agents_spawned:** 0 · **task_structure:** sequential.
+- **Open questions carried:** 2 — (a) previous-value visibility during refresh; (b) latency threshold and measuring command for "promptly". Non-empty, so handoff is blocked.
+- **Learnings written:** none — this run met no qualifying failure.
+- **Next step:** resolve open question (a) with me, then (b). Open questions still carried make resolving them the next step — not `/st-work`. Once (a) is answered I rewrite either REQ-CACHE-001 or U1 so they agree, restate the acceptance criterion as Given/When/Then covering the in-flight window, re-run the lint pass including L3, and re-run the structural helper before proposing handoff.
+
+One caveat on process: I have not appended anything to `.stamity/inbox.md`. An unresolved contradiction inside the plan's own scope is a blocker, not a deferral, and filing it as a follow-up would let it pass as out-of-scope.
+
+If you tell me the intended behavior, I'll make the fix and take it back through the gate in one pass.

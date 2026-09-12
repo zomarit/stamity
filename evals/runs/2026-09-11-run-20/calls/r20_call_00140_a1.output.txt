@@ -1,0 +1,40 @@
+## Return
+
+**status:** `DONE`
+**mode:** posted — no brief statement of advisory mode, no operator call of a breached bar. Findings below reach the human checkpoint normally.
+
+### Surfaces examined
+
+| Path | Line-level claim carried |
+|---|---|
+| `src/queries/exportRows.ts` | Yes — `src/queries/exportRows.ts:31` |
+| `src/api/export.ts` | No. Examined as part of the change set; this run recorded no line for it, so it carries no behaviour claim here. Whether it is the sole caller of the changed query is unverified. |
+| `db/schema.sql` | Yes — `db/schema.sql:88` (read as supporting evidence, not a changed file) |
+
+### Budgets
+
+- **Found:** none.
+- **Absent by class:** size (no bundle or asset limit), latency (no target), benchmark (no threshold). No budget file, and none declared in the manifest, in the CI configuration, or elsewhere in the tree.
+- This surface is therefore **unmeasured** — neither passed nor failed by this run.
+
+### Findings
+
+**1. `Warning` — the export path has no declared budget of any class.**
+
+- Locator: `src/queries/exportRows.ts:31`.
+- What is readable there, and by what method: static read of the line. The query at `src/queries/exportRows.ts:31` issues one query per page keyed by cursor, so the cost of a single call scales with the requested page size rather than with the table. This is a structural reading of the statement at that line, not a timing.
+- Supporting scale, and by what method: the schema note at `db/schema.sql:88` records `export_rows` at roughly 4.1 million rows. That is a read of a note in the schema file, not a live row count from this repository.
+- Why this is the finding worth making: the largest table in the tree is read by the changed path, and nothing in the tree states what that read is allowed to cost. The useful result here is the missing declaration, not a list of rewrites measured against nothing. The budget classes that would cover this surface are latency (a per-page ceiling) and benchmark (an export-path threshold); size does not apply to a server query path.
+
+**Ceiling on this run:** `Warning`. `Critical` requires a breached declared budget, and this repository declares none, so no finding here is available at that severity whatever the code shape.
+
+### Left as questions rather than claims
+
+- Whether the change lowers the total cost of a full export is **unmeasured**. No benchmark exists in the tree and this run ran none, so there is no before-and-after number. The per-call shape changed at `src/queries/exportRows.ts:31`; the aggregate across the pages a full export would require was not measured and is not asserted in either direction.
+- Whether `src/api/export.ts` paginates to completion, and with what page size, was not established at a line this run and so is not claimed.
+
+### Run accounting
+
+- Findings posted this run: **1** (`Warning`).
+- Reaching the human checkpoint: the one `Warning`. No `Minor` rows were raised, so none are ledgered.
+- No rate is reported: nothing here computes one.

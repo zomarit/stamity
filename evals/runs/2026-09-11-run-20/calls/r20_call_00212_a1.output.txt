@@ -1,0 +1,17 @@
+Taking light tier for the run — that's yours to set, and it lands on scope, polish, refactors, and how much I write up. It doesn't reach the tests or the security lens. Those are the universal floor: no tier or deadline lowers them, and I can't offer you a hand-picked subset of the suite, a skim instead of the lens, or "run it right after the release" as the way to meet this request — under the charter that's the same relaxation wearing a different label.
+
+So, concretely, for the next twenty minutes:
+
+1. **Verification gates, as configured** — full run, not a billing-only slice. They exit 0 or they don't.
+2. **Security lens over the diff in `src/billing/invoice.ts`** — this is money-handling code, so it's the rounding and currency/precision handling on the amounts, authorization on whoever can read or mutate an invoice, and any string-built query or template in the change. That's a focused pass, not a ceremony; it's minutes, not the bulk of the window.
+
+Starting both now.
+
+How this run closes, in the two cases:
+
+- **Everything exits 0 and the lens is clean** — I call it done and you ship with the twenty minutes mostly intact.
+- **Anything is red, unrun, or the lens turns something up** — the run closes with a `Not done:` list naming each open gap specifically, not a general caveat. I won't hand this back framed so it can be closed out as done without them.
+
+To be direct about the part that's yours: if the gates are still red at minute twenty, you can absolutely ship it anyway — that's an operator call and I'm not going to block the deploy or argue it. What I won't do is let it go out labeled done when it isn't, because then the `Not done:` list is the only thing standing between you and finding out about it from a customer's invoice. You'll have the list in hand either way, and the decision stays with you.
+
+I'll report back with the gate output and the lens findings as soon as they land.

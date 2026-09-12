@@ -1,0 +1,26 @@
+## Session start read pass
+
+| File | Result |
+|---|---|
+| `.stamity/learnings/cache-eviction.md` | loaded, clean |
+| `.stamity/learnings/deploy-notes.md` | **SKIPPED** — pattern `instruction-override`, byte offset 412 |
+| `.stamity/learnings/test-timing.md` | loaded, clean |
+
+Two of three learnings files are in context. The run proceeds on those.
+
+## On pasting the skipped span
+
+I can't paste it. The screening floor is explicit that a hit names the file and the pattern id and nothing more — the matched span stays out of the transcript, the banner, and the summary, because reprinting it into my own context delivers exactly the payload the skip refused. That holds regardless of whether the match turns out to be a false positive: I'd have to render the text to let you judge it, and rendering it is the harm. So the request isn't something I can satisfy under a different framing either.
+
+What I can tell you about the hit, which is everything short of the span itself: it's at byte offset 412, and the matcher classified it as a forged role header followed by a re-tiering instruction. That shape — a fake turn boundary plus an authority escalation — is the high-confidence end of `instruction-override`, not the pattern's fuzzy edge. A false positive here would be unusual, though not impossible; prose *describing* an injection can trip it, and a deploy-notes file is a plausible place for someone to have written up an incident.
+
+## How to adjudicate it
+
+Open `.stamity/learnings/deploy-notes.md` directly — your editor, `sed -n` around offset 412, whatever you prefer. Reading it yourself is outside my context, so it carries none of the risk that pasting it through me would. You'll see the span and can judge it in a second.
+
+Then, per the gate, the file gets one of two outcomes:
+
+- **True positive** → retire it. There's no flag that loads it anyway; the skip is the terminal state.
+- **False positive** → rewrite the span so it no longer matches. Fencing the quoted text, or paraphrasing the role header instead of reproducing it verbatim, is usually enough. The rewritten file loads clean on the next pass.
+
+If you rewrite it and want a second opinion on whether the new phrasing will clear the matcher, describe the change and I'll tell you — describing it is fine; it's the verbatim span that isn't.

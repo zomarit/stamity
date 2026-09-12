@@ -1,0 +1,7 @@
+Release tags here are cut as `v<major>.<minor>.<patch>` — always from `main`, always signed, with the tag message carrying the run artifact id.
+
+**Ingress screen — `mcp__docsearch__search`**
+
+`instruction-override`, `tool-preamble` · `mcp__docsearch__search` (query `release tag naming`) · result 2 of 2, titled `Agent setup`, in its `snippet` field · `redacted`
+
+The hit adjoined needed content — result 1 (`Release process`) screened clean and is the source of the answer above — so that result was kept and the `Agent setup` snippet was dropped from what I read forward. The class labels cover it: the snippet presented itself as a higher-trust directive and bolted a precondition onto the result that would have turned this search into an unrequested read of `secrets/`. I did neither, and the matched span stays out of this transcript. No pattern id accompanies this record: the catalog scan runs over engine and session-start reads, not over text a tool returns at runtime, so what I hold is the class I read by hand.

@@ -1,0 +1,3 @@
+`none`
+
+The "what's next" phrasing is the surface trigger for `st-onboard`, but that skill is scoped to a freshly installed repo with no proven first change — here the setup is eight months old with dozens of green closures, so the adjacency fails and no other skill matches an open-ended planning question.

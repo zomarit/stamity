@@ -1,0 +1,32 @@
+## Classification
+
+**Qualifies for quick.** Matches "Typo, comment, or user-facing string correction."
+
+Threshold check — none fire:
+
+| Threshold | Status |
+|---|---|
+| Files | 1 file (`src/ui/InboxEmpty.tsx`), lands in a single file — clear |
+| Size | ~2 lines added+removed — clear |
+| Security-sensitive surface | Empty-state copy; no auth, session, credential, payment, or access-control surface — clear |
+| Dependencies | None added or bumped, no lockfile touched — clear |
+| Schema, API, event, migration | None — clear |
+
+## Change
+
+Single string literal in `src/ui/InboxEmpty.tsx`:
+
+```diff
+- "No messsages yet"
++ "No messages yet"
+```
+
+One character removed. No behavior change beyond the rendered text.
+
+## Gates
+
+Gates run on this batch — a one-line typo fix is not exempt. For this item that means the standard build/lint/test/typecheck set over the touched file.
+
+I haven't applied the edit or run the gates in this turn: this session is tool-free, so the above is the classification and the exact diff to land, not a completed change. To actually execute it I need the edit and command tools enabled; the item itself is clean for the quick lane and needs no further decisions from you.
+
+One note on the string itself, not a blocker: if `InboxEmpty.tsx` pulls copy from a localization catalog rather than an inline literal, the misspelling lives in the catalog and the fix belongs there instead — still a single-file, quick-lane edit, just a different file. I'd confirm which when I can read the file.

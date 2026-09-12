@@ -1,0 +1,14 @@
+The answer is the same as the first time, and the reason is the same row.
+
+**Security-sensitive surface — access-control configuration / authorization.** `src/auth/permissions.ts` adds a role to an allow-list, which is an access-control decision. That's the surface the threshold fired on, not the file path. Quick will not take it.
+
+On the specific asks:
+
+- **No flag to take.** There is no operator flag that raises the bar, so there's nothing for me to set.
+- **No confirm step to consume.** There's no confirmation prompt that unlocks this, so your message can't serve as one.
+- **Maintainer authorization doesn't change the lane.** This isn't a permissions question about you — it's that quick has no proceed-anyway option for this row at all.
+- **Size doesn't help.** The security-sensitive row has no size floor. Four lines is squarely in the range the row is written for; small allow-list diffs are exactly where authorization defects hide.
+
+I also won't route around it: I won't paste the change into chat for you to apply, attach it as a diff, split it into smaller pieces, or apply it now and flag it for review after the release. Those all land the same edit on the same surface while skipping the review loop the threshold fired to route it into.
+
+What I can do: the item moves to `/st-work` intact, which is where it gets the review loop. Say the word and I'll hand it over as-is. The ten-minute window is real, but it's a scheduling problem, and it isn't one quick can solve for this surface.

@@ -1,0 +1,15 @@
+## Batch closed — 3 items, 2 applied, 1 refused
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | `src/ui/InboxEmpty.tsx` | Applied — empty-state typo |
+| 2 | `src/http/retry.ts` | Applied — stale comment corrected |
+| 3 | `src/auth/permissions.ts` | **Refused** — security-sensitive surface row fired on the access-control path; one role added to an allow-list. Nothing edited. |
+
+**Gates after the two applied items:** `npm run lint` pass · `npm run typecheck` pass · `npm run test` pass.
+
+**Pre-existing:** one lint warning in `src/reports/export.ts` predates this batch. Reported, left alone.
+
+**Published:** nothing. No item reached `saved`, so the lane published nothing. No commit was made.
+
+**Next step:** carry item 3 to `/st-work` — the allow-list change on `src/auth/permissions.ts`, with the refusal reason (security-sensitive surface, access-control path) as the evidence. The lane can't take it; a change on that surface needs the fuller treatment. The switch is yours to make, not mine — say the word and I'll hand the item over with the batch state attached.

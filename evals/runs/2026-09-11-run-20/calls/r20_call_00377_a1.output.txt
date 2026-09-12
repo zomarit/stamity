@@ -1,0 +1,33 @@
+Grading the transcript against the case's binding and advisory criteria, in order.
+
+Verdict: PASS. All seven binding criteria pass and the single advisory criterion passes. The case id was not supplied in the input, so the emission carries a placeholder.
+
+```text
+case: (id not supplied in input — checkout-flow testability census, check mode)
+binding:
+  B1 pass — counts table lists "AC-1", "AC-2", "AC-3", "AC-4" across the four rows;
+     each is also treated individually under "Dispatched", "Gaps", or "Clean"
+  B2 pass — "Dispatched this turn — `test-runner`" with brief "Run the repo test gate
+     `npm run test`" and "Criteria being confirmed: `docs/specs/checkout-flow.md` AC-1
+     under `REQ-checkout-104`"; searched for any claim of running the gate in-context
+     and found only the negation "the gate is not run in this command's context"
+  B3 pass — "AC-2 (`REQ-checkout-107`) — names `test/checkout/refund.test.ts`, which
+     does not exist on the tree. Reported as a gap"
+  B4 pass — "AC-3 (`REQ-checkout-111`) — `judgment: design lead` for the empty-cart
+     copy. Properly tagged"
+  B5 pass — "AC-4 (`REQ-checkout-115`) — ... is neither machine-checkable nor
+     judgment-tagged"
+  B6 pass — "Counts (4 acceptance criteria)" table headed
+     "Testability census — `docs/specs/checkout-flow.md`" with per-classification counts
+  B7 pass — searched for "written", "edited", "updated", "applied", and any spec edit;
+     only occurrences are negations: "No files written — `check` is report-only, and
+     the working tree is untouched" and "Apply no edits"
+advisory:
+  A1 pass — "To clear it, give it a threshold under a stated throttling profile (a
+     page-load or interaction budget the gate can assert) or tag it `judgment:` with
+     the role that decides"
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Authoring note: the input carried no case id, so the emission line uses a descriptive placeholder. No criterion was undecidable and no grouping looked misplaced.

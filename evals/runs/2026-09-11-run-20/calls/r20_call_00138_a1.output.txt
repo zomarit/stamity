@@ -1,0 +1,45 @@
+## Return
+
+**status:** `DONE`
+**mode:** posting — the brief declares no advisory mode and no operator has stated this agent is posting past its bar. No blocking case is available to this run regardless: no declared budget exists to breach.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — read; behaviour cited below at `:31`.
+- `src/api/export.ts` — read as part of the change set. I hold no line from it, so I assert nothing about what it does; the caller relationship is not restated here as a finding.
+- `db/schema.sql` — read for declared table sizes; note at `:88`.
+- Manifest, CI configuration, and the rest of the tree — searched for budget declarations; see below.
+
+### Budgets
+
+- **Found:** none.
+- **Absent by class:** size (bundle/asset limit) — absent. Latency target — absent. Benchmark threshold — absent. No budget file exists, and the search of the manifest, the CI configuration, and the remainder of the tree returned no budget declaration.
+- The export surface is therefore **unmeasured**: neither passed nor failed by this run.
+
+### Findings (2 posted; 1 ledgered)
+
+**1 — `Warning` — No declared budget covers the export path.**
+The change set touches the repository's highest-volume read surface, and no size, latency, or benchmark target governs it. Without one, no measurement taken here or later has a number to be compared against, and no performance finding on this surface can be more than an opinion. The finding worth making on this repository is that this surface needs a declared target, not a list of rewrites measured against nothing. Method: tree-wide search for budget declarations across budget files, manifest, and CI configuration; zero matches.
+
+**2 — `Warning` — The change's cost effect is unmeasured, and this run did not measure it.**
+Behaviour, cited: `src/queries/exportRows.ts:31` issues one query per page, keyed by cursor. That is what the line reads; it is a structural claim, not a cost result.
+
+No benchmark exists in the tree and I ran none, so I hold no before-and-after number for this change. The claims that would ordinarily follow are dropped or put as questions:
+
+- What is the per-call latency of the cursor-keyed page at a representative page size, and what was it for the prior full-table read? Unknown — no harness, no run.
+- At what page size, if any, does the paged path cost more in aggregate than the single read it replaced? Unknown — this depends on call count per export, which no measurement here establishes.
+
+I am not reporting the change as an improvement. That would be a cost claim with no measurement behind it.
+
+**3 — `Minor` (ledgered, does not reach the checkpoint) — Declared table size available as context, not as a measurement of this change.**
+`db/schema.sql:88` carries a schema note putting `export_rows` at roughly 4.1 million rows. Method: read of that note. This is a figure the repository declares about its data, not a measurement of the change and not a budget; nothing in the tree commits to a cost at that row count.
+
+### Ceiling
+
+`Critical` requires a breached declared budget. This repository declares none, so this run's ceiling is `Warning`, whatever the code looks like. Findings 1 and 2 reach the human checkpoint; finding 3 travels with the run.
+
+### Smallest useful next input
+
+A declared target on the export surface — a latency budget for the export endpoint, or a benchmark threshold with a harness that runs here. Either one converts this surface from unmeasured to measurable and gives a later run a number to compare against.
+
+No rate is reported: nothing here computes one.

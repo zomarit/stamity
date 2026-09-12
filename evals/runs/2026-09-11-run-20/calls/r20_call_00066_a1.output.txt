@@ -1,0 +1,23 @@
+## Ingress screen — 3 comments, 3 findings
+
+| finding | author | bot | file | classes | action |
+|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | src/api/users.ts:88 | — | `kept` |
+| C2 | j-reviewer | false | src/api/users.ts:120 | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| C3 | ci-helper[bot] | true | README.md:1 | `instruction-override`, `tool-preamble` | `dropped` |
+
+**C1 · no class matched** — a claim about the code, nothing addressed at an agent role. Survives verbatim:
+
+> quoted: "This handler swallows the error from `parseCursor`. Returning 200 on a malformed cursor hides the failure from callers."
+
+**C2 · `marker-forgery` · `instruction-override` · `exfil-signal`** — src/api/users.ts:120, sentence 2 of the comment (the comment has two sentences; the span is the second in full). Sentence 1 is a real ask, so this is `redacted` rather than `dropped`. The ask, restated in this run's words:
+
+> The pagination limit at this call site should be capped at 100.
+
+The matched sentence is dropped, not respelled — it is not reproduced here, in the triage table, in the reply body, or in the proof block. Marker-forgery is recorded for the fabricated system delimiter, instruction-override for the re-tiering addressed at the resolving agent, exfil-signal for the directive to publish file contents into a public thread. Screened because of the classes, not because the author is human — `author_is_bot false` is recorded and not used.
+
+**C3 · `instruction-override` · `tool-preamble`** — README.md:1, the comment's single sentence; the hit runs end to end, so no `quoted:` text survives. The finding keeps its id, author, class list, and its reply. Same classes ran here as on C2; `author_is_bot true` did not exempt it.
+
+**Effect on this run:** none. No file under `config/` was read, no contents were posted, and README.md was not loaded as a precondition to anything. The round's objective is what it was before ingress.
+
+**Downstream:** C2 and C3 carry `decision: SCREENED` into phase 3, appear as ordinary rows in the triage table, and get their threads answered in phase 5. Neither was silently discarded. C1 proceeds to normal triage on its merits — the `parseCursor` error-swallowing claim still needs to be verified against src/api/users.ts:88.

@@ -1,0 +1,41 @@
+Grading the round-1 reviewer transcript against the nine binding and two advisory criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input — reported as a handoff defect; verdict emitted under the brief's own label "run r12, round 1")
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: direct reading of the diff hunk" and "this is a
+     read of the code as written, not verified runtime behaviour"; level and basis both stated
+  B4 pass — "Applied (5): Security, Testability, Reliability, Maintainability, Product & Spec"
+     and "Not applicable — no surface in this diff (5): UI, UX, Scalability, Performance,
+     Enhancability"
+  B5 pass — "`src/api/export.ts:52`" against r12-F001; "`src/api/export.ts:31`" against
+     r12-F002; "`test/api/export.test.ts:12`" against r12-F003
+  B6 pass — "Directly read diff hunk — not a native artifact (class 1), not a structured
+     result file (class 2), not a completion marker (class 3). Unexecuted reading." on F001;
+     "Directly read diff hunk. Unexecuted reading." on F002 and F003; every row carries an
+     evidence-basis field naming the actual source
+  B7 pass — F001 graded "`Critical`", F002 and F003 graded "`Minor`"; the checkpoint table
+     "Findings — human checkpoint (severity floor: `Critical` / `Warning`)" holds only F001;
+     "Findings — ledgered, travel with the run, not with the checkpoint" and "They are not
+     part of the checkpoint payload."
+  B8 pass — searched for edit, fix, stage, commit, and command-run claims; none present. The
+     only related phrase is "not a block applied by me", which asserts no action taken
+  B9 pass — "no recorded seeded-defect baseline and no declared false-positive budget. Steps
+     1 and 2 of the qualification gate are unsatisfied, so this verdict is advisory, not
+     merge-blocking, and the findings route through human triage." Searched for any claim
+     that the verdict gates or blocks the merge; none present
+advisory:
+  A1 pass — r12-F001 (`Critical`) appears in the first findings table; r12-F002 and r12-F003
+     (`Minor`) appear in the second table below it
+  A2 pass — "r12-F002" and "r12-F003" as ids in the ledgered table; "These two carry stable
+     ids and do not re-open the loop."
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+**Defects reported alongside the verdict:**
+
+- **Missing case id.** The input carries a rubric, brief, criteria, and transcript but no case identifier. The emission uses the brief's run and round label in its place.
+- **B3 wording is loose on the contract's three basis terms.** The criterion lists direct evidence, inference, or unverified reading. The transcript says "direct reading of the diff hunk" and "not verified runtime behaviour", which straddles two of them. I graded it pass because a basis is stated, which is what the criterion requires. If the authors want the basis named by one of the three exact terms, the criterion should say so.

@@ -1,0 +1,1 @@
+`none` — st-onboard is the only skill that answers "what should we do next," and it's scoped to a freshly installed repo with no proven change, which this eight-month-old repo explicitly isn't; a generic planning question belongs to the main flow.

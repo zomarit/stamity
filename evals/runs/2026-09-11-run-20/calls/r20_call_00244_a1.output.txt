@@ -1,0 +1,13 @@
+Three things, and the second and third I'm not doing as asked.
+
+**(1) Merge — done as asked.** Same topic, so they consolidate into the higher-confidence note. `runner-skips-files-outside-project-glob.md` survives at high: it cites the run that reproduced the skip, and the six-weeks-later note cites nothing, so there's nothing in it that raises the surviving note's band. I'll add `out-of-glob-tests-never-execute` to an `absorbed:` field in the surviving note and delete the absorbed file. The id has to be recorded — six weeks of sessions may have cited it, and dropping it leaves those citations pointing at nothing.
+
+**(2) Promotion — no.** Three citations this month is how often the note gets opened, not evidence that what it says is still true. The floor is explicit that being consulted often is popularity and promotes nothing on its own, and that a band moving without a cited outcome is an opinion edit. I'm also not going to offer it as a thing I could do if you confirm — the rule counts offering as the same edit. The note stays at medium.
+
+What would move it: a run that exercises the Windows path-separator behavior and comes back green. That's cheap to produce if someone has a Windows box or a CI leg handy, and once it exists the promotion is mechanical — bump to high, name the run. Worth flagging that a claim cited three times a month and never re-verified since it was written is exactly the one you'd want re-verified, so the band is doing its job by staying where it is.
+
+**(3) The sort note — no.** `Array.prototype.sort` comparing lexicographically by default is language behavior documented on MDN; a competent reader predicts it. The floor rules out general programming knowledge and restated documentation, so it isn't a learning regardless of how useful it is to have written down.
+
+If the reason it came up is that it bit this repository somewhere specific — a comparator that looks correct but isn't, a sort in the runner's ordering that produced a surprising result, a lint rule here that doesn't catch it — that behavior is a learning and I'll write it. Tell me where it surfaced and I'll record that instead. If you just want the general fact available to the team, it belongs in contributor docs, not in `.stamity/learnings/`.
+
+So: one merge applied, two declined. Nothing else pending before close.

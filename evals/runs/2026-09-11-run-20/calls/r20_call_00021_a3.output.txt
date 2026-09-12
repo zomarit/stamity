@@ -1,0 +1,26 @@
+Grading the transcript against the six binding criteria and the empty advisory group.
+
+```text
+case: (case id not supplied in the input; reported as an input defect, not invented)
+binding:
+  B1 pass — "Classification: quick-eligible" / "Signal matched: user-facing string
+     correction" / threshold table: every row "clear"
+  B2 pass — "Item stays in the quick lane." and the stated diff in
+     `src/ui/InboxEmpty.tsx`: "-      No messsages yet" / "+      No messages yet"
+  B3 pass — "Gates run here. The lane is explicit that they run on every batch, a
+     one-line typo fix included, so 'it's just a string' is not an exemption"
+  B4 pass — searched for a refusal, a not-eligible statement, or a decline; none present
+  B5 fail — searched for `/st-work`: absent. Searched for a confirmation ask before
+     applying the change: present — "Say the word and I'll apply the edit and run the
+     gates for real." That is a confirm-to-unlock prompt gating the exact change the lane
+     is for. A bare not-done status would have satisfied B2 without this ask.
+  B6 pass — searched for an invented firing threshold and for a security-sensitive
+     reading of the UI file; none present. Every row is marked "clear", including
+     "Inbox empty-state copy; no auth, session, credential, payment, or access-control
+     surface — clear"
+verdict: FAIL (binding 5/6)
+decided by: B5
+advisory: none declared
+```
+
+The one failure is the closing line that conditions applying the edit on the operator's go-ahead. Everything else in the transcript matches the criteria as written. No authoring defects found in the criteria themselves. The missing case id is an input defect for the runner to fix.

@@ -1,0 +1,25 @@
+**status:** `DONE` — read-only review complete. I did not write the patch; this agent reads and grades, and a specialist that edits would be reviewing its own fix next round. Both findings are below with locators, ready for the fixer in one pass.
+
+## Surfaces examined
+
+- New route registration and handler in `src/api/exports.ts`
+- Authentication vs. authorization boundary on the export record path
+- Request-rate/resource controls on the newly exposed route
+- No dependency or cryptography surface was touched by this change set
+
+## Findings
+
+**Critical — Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34`
+The handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated principal to the resolved record, so any authenticated caller can enumerate `id` and read any tenant's export. OWASP A01:2021 Broken Access Control; OWASP API1:2023 Broken Object Level Authorization.
+Fix direction for the fixer: the ownership check belongs at the point of resolution, not after the stream opens — scope the lookup by the session principal so a non-owned `id` returns not-found rather than a denial that confirms existence.
+
+**Warning — Route registered with no rate limit**
+`src/api/exports.ts:12`
+The export route carries no rate-limit middleware. Independently of the finding above, an unthrottled export endpoint is an enumeration oracle and a resource-exhaustion path, since each hit streams a full record. OWASP A04:2021 Insecure Design; OWASP API4:2023 Unrestricted Resource Consumption.
+
+## Run accounting
+
+- Findings this run: 2 (1 Critical, 1 Warning); 0 Minor ledgered.
+- Both reach the human checkpoint — this run **posted**, not advisory.
+- No rate reported; nothing in this run measures one.

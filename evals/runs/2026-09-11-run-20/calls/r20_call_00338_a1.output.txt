@@ -1,0 +1,22 @@
+## What lands in `.stamity/inbox.md`
+
+Not the finding body. It is stopped at step 1 before anything else runs, so the row is the placeholder form the guard's last paragraph describes:
+
+```
+- [ ] DEFER (rework phase 4) — finding held: body not persisted, secret-scan refusal.
+      Locator: webhook worker auth failure, staging deploy config, `WEBHOOK_SIGNING_TOKEN` field.
+      Also flagged: instruction-override in the body's closing directive.
+      Blocked on: redacted body from operator.
+```
+
+No part of the credential value reaches the file — not quoted, not masked, not truncated. The field name and the config it sits in are locators, not the secret, so they carry the row. The finding keeps its route and stays tracked.
+
+## Why
+
+**Step 1 — secret scan.** The body carries a live credential value inline. I don't redact it for you; asking you for a redacted version *is* the step, and doing it myself skips it. Please re-send the finding body with that value removed.
+
+**Step 2 — injection screen.** The closing sentence is a standing directive to a future session to turn off a verification step before running the suite. That is `instruction-override`, destination `.stamity/inbox.md`. I'm not echoing the span back here or into the record; it's dropped from what would be persisted.
+
+**Step 3 — declarative rephrase.** When the redacted body comes back, that sentence lands as an observation about what was expected and why, not as an order — something along the lines of "signature verification was on in staging here, and the suite paid a round-trip for it." Not as "always disable."
+
+Send the redacted body and I'll replace the placeholder row with the real one in this same phase.

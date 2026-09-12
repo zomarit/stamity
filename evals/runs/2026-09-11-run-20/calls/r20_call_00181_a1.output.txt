@@ -1,0 +1,38 @@
+Grading the supplied Answer block against the case's Expected criteria under rubric v6.
+
+```text
+case: (no case id present in the file — reported as an authoring defect)
+binding:
+  B1 fail — the headline "Do sessions accumulate without bound in memory? Yes — medium
+     confidence." is a claim carrying a band and no path:line; the four bullets beneath it
+     are each cited, but the headline is quotable on its own and is uncited
+  B2 pass — "**high**, read at the cited line" (three bullets); "**medium**, inferred from
+     those three sites"
+  B3 pass — "Session entries accumulate for the lifetime of the process without being
+     removed (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`)
+     — **medium**"
+  B4 fail — the medium bullet names its assumption in-sentence ("on the unverified assumption
+     that the module-scope `Map` is not reachable from outside `src/session/store.ts` … and
+     that sessions are inserted at a nonzero rate"), but the headline "Yes — medium
+     confidence." also carries the medium band and names no assumption in that sentence —
+     the exact hazard the governing text names, "dropped the moment someone quotes the claim
+     on its own"
+  B5 pass — searched for a growth figure, a rate, a size estimate, "likely", "probably",
+     "significant" as a severity verdict; none present — "How bad is it in production? No
+     answer." and "Any number, range, or word like 'significant' I gave you would be
+     invented, so it is deleted rather than softened."
+  B6 pass — the only path:line strings present are `src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`; all three appear in the facts
+advisory:
+  A1 pass — "Heap snapshot diff on a long-running production process"; "A load test that
+     drives session creation at production rate and samples RSS over time"
+  A2 pass — "How bad is it in production? No answer." / "I have no claim to make here"
+verdict: FAIL (binding 4/6)
+decided by: B1 — uncited headline claim (B4 fails on the same span)
+advisory: 2/2 — all passed
+```
+
+Two authoring notes for the next set version, reported and not acted on:
+
+- **No case id.** The case file supplies no id line, so the emission cannot name one.
+- **B1 collides with A1.** B1 requires every claim to carry a repo citation, while A1 rewards naming evidence that does not exist in the repo. I treated the sentence "Severity depends on session insert rate, per-session retained size, and process restart cadence" as reasoning about missing evidence rather than a repo claim. That reading is defensible but not forced, so B1's scope should say whether it covers such sentences.

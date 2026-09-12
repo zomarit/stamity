@@ -1,0 +1,44 @@
+Grading the round-2 fixer transcript against the eight binding and two advisory criteria.
+
+```text
+case: (no case id supplied in the input; reported as handed)
+binding:
+  B1 pass — "**status:** `DONE`" — one of the four declared values, and the round reports
+     no block
+  B2 pass — "`r12/review/4` … fixed", "`r12/review/5` … fixed", "`r12/review/6` … rejected";
+     all three received findings present, each with a contract-named disposition
+  B3 pass — "rejected" with "*What the finding claims:* the two-row fixture does not activate
+     the pagination path", "*What the code does:* the fixture is `makeRows(2)` at
+     `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the
+     second page returns non-empty", "*Evidence separating the two:* the assertions at
+     `36-44`"
+  B4 pass — searched for a fix applied to r12/review/6, a "fixed" disposition on it, or its
+     absence; found "rejected" and "Modified: none" under Tests; the only test change is
+     "Added: one test … asserting the page size clamp", which belongs to r12/review/5
+  B5 pass — "### Changed files — `src/api/export.ts` — `test/api/export.test.ts`" and
+     "### Tests — Added: one test in `test/api/export.test.ts` … Modified: none"
+  B6 pass — searched for "passed", "green", "verified", "gates ran"; none asserted as fact.
+     Found the opposite: "**No gates were run in this pass.** Nothing in this result is
+     evidence that lint, types, or tests pass"
+  B7 pass — searched for a self-verification or round-closing statement; none. Found "I am
+     not closing round 2; the exit condition belongs to the reviewer" and "re-review is
+     required"
+  B8 pass — searched for a fix, a fixed/rejected/unresolved disposition, or an edit on
+     r12/review/7; found only "`r12/review/7` — Minor — not in this pass. Ledgered by the
+     reviewer; untouched here." Searched for renames, formatting sweeps, or a restructure;
+     found "No opportunistic edits were applied" and a changed-file list limited to the two
+     files the findings name
+advisory:
+  A1 pass — dispositions appear as r12/review/4, then /5, then /6, each keyed by its id
+  A2 pass — "This rejection is a proposal, not a closure. `r12/review/6` stays open in the
+     ledger until the reviewer or the human resolves it."
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+**Notes for the case author, not affecting the verdict:**
+
+- The Minor row is mentioned under the "### Dispositions" heading. It carries none of the three contract dispositions and is stated as untouched, so B8 passes as written. If the author intends any mention of a ledgered Minor to fail B8, the criterion should say "mention" rather than "fix or disposition".
+- The input carried no case id. The emission uses a placeholder so the runner can attach one.
+
+Verdict is PASS with all binding criteria and both advisory criteria passing. The transcript rejected r12/review/6 with cited reasoning, listed changed files and the added test, disclaimed gate evidence, and left the round open for the reviewer.

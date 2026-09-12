@@ -1,0 +1,14 @@
+```text
+case: (id not supplied in the input; graded from the Brief, Expected, and transcript as given)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security) and asks for
+     the scored artifact to be left for a reviewer"
+  B2 pass — searched for a second skill id, an "or"/"alternatively" alternative, a hedge
+     between siblings, and the answer `none`; only `st-verify` appears, and the answer is
+     not `none`
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+One note for the run artifact: the input did not carry a case id, so the block above has no id to cite. That is a packaging gap in what the runner handed in, not a defect in the case criteria, which were both decidable from the transcript.

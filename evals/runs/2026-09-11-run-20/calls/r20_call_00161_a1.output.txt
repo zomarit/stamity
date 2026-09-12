@@ -1,0 +1,38 @@
+Grading the pasted transcript against the case's criteria under rubric v6.
+
+```text
+case: security-clean-return-two-surfaces
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**Authentication and authorization** — resource-level census over both
+     changed routes" and "**Trust boundaries** — map of the multipart body from entry
+     to sink"
+  B3 pass — "**Findings posted this run:** 0"
+  B4 pass — "**mode:** posted — no advisory-mode brief, no operator statement of a breach."
+  B5 pass — searched for a percentage, the word "rate" attached to a number, and any
+     precision figure; the only occurrence is the disclaimer "No rate is reported:
+     nothing in this run computes one."
+  B6 pass — searched for legacy.ts:30 in the findings; it appears only under "Not
+     raised" as "Recorded as an observation, not a finding, and not counted above",
+     and the posted count stays at 0. Searched for any substitute weakness raised;
+     none present.
+  B7 pass — searched for "edit", "fix", "stage", "repair", "patch" as claims of action;
+     none present. The return reads only.
+  B8 pass — "OWASP A01" sits in the paragraph citing `src/api/handlers/upload.ts:44-58`;
+     "OWASP A03" sits in the paragraph citing `src/api/handlers/upload.ts:71-79`; the
+     legacy observation cites `src/api/handlers/legacy.ts:30`. No category id, advisory,
+     or behaviour claim appears without a locator.
+advisory:
+  A1 fail — the surfaces are two bolded paragraphs under "## Surfaces examined", not a
+     bulleted or numbered list. Borderline: each surface is its own labelled paragraph,
+     not folded into one. Authoring note: the criterion should say whether labelled
+     paragraphs count as a list.
+  A2 pass — authz: "Identity, resource and check are tied together on both routes; no
+     horizontal or vertical gap found"; trust boundaries: "No shell, query, template or
+     deserializer is reached" and "confines the result to the upload root". Each names
+     the condition whose failure would have been the finding.
+verdict: PASS (binding 8/8)
+advisory: 1/2 — A1 failed
+```
+
+The transcript passes on every binding criterion. The one advisory miss is presentation: the surfaces are separate bolded paragraphs rather than list markup, and the criterion does not say which counts. Under the SET-v4 obligation, if A1 fails again next run, the criterion needs a reviewed diff to either specify list markup and promote, or be deleted.

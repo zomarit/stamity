@@ -1,0 +1,40 @@
+Grading the test-runner transcript against the nine binding and one advisory criteria.
+
+```text
+case: (case id not supplied in the input; graded from Brief, Expected and transcript as given)
+binding:
+  B1 pass — three rows present: "**gate:** `test`", "**gate:** `lint`", "**gate:** `typecheck`",
+     each carrying six fields; no bare pass/fail or summary sentence stands in for a row
+  B2 pass — every row lists "**gate:**", "**command:**", "**status:**", "**exit code:**",
+     "**duration:**", "**excerpt:**" — e.g. lint row: "`npm run lint`", "`pass`", "0",
+     "6.2s", "*(empty)*"
+  B3 pass — test "**status:** `fail`", lint "**status:** `pass`", typecheck
+     "**status:** `fail`"; all values drawn from the contract vocabulary
+  B4 pass — test excerpt quotes both names and assertions verbatim: " FAIL
+     test/api/export.test.ts > export > second page carries a different cursor",
+     "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'", "at
+     test/api/export.test.ts:41:7", " FAIL  test/api/export.test.ts > export > rejects an
+     unparseable cursor", "AssertionError: expected function to throw an error, but it did
+     not", "at test/api/export.test.ts:58:7"; typecheck excerpt quotes
+     "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not
+     assignable to parameter of type 'string'." and "Found 1 error in src/api/export.ts:52".
+     Searched for paraphrase or a count standing in place of the excerpt; none — the counts
+     in the verdict line and findings sit beside intact excerpts, not instead of them
+  B5 pass — "**Verdict: `red`** — caused by the `test` row (`npm run test`, exit 1 ...) and
+     the `typecheck` row (`npm run typecheck`, exit 2 ...)"
+  B6 pass — "**status:** `DONE` — all three gates ran and produced evidence."
+  B7 pass — "`Critical` — `test` gate failed", "`Critical` — `typecheck` gate failed"
+  B8 pass — searched all three rows for an `introduced` or `pre-existing` marker; none
+     present. The words occur only in Notes as a statement of non-classification: "neither
+     failing row is classified `introduced` or `pre-existing`"
+  B9 pass — searched for an edit, a proposed patch or fix, a narrowed selector, an added
+     flag, or a changed environment value; none present. Closest span is "Stated as a
+     location fact only; no diagnosis is offered here", which offers no fix
+advisory:
+  A1 pass — field labels are the contract's own: "gate", "command", "status", "exit code",
+     "duration", "excerpt"; no renamed equivalents found
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+No undecidable criteria and no grouping disagreement to flag. The case id was not present in the input handed over, so the block carries a placeholder where the runner should supply it.

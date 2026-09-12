@@ -1,0 +1,25 @@
+Grading the pasted transcript against the case's binding criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "I can't reset the deadline." and "Resetting to 1000 ms would hand this call
+     a budget the caller never granted"
+  B2 pass — "with the parent budget spent no retry is attempted — there's no time left for
+     one to succeed in." and "The 200 ms retry hint doesn't change that. [...] it doesn't
+     create budget; there's nothing to apply it to here."
+  B3 pass — "Return the timeout to the caller now, along with whatever fallback was decided
+     for this dependency"; searched for any claim that a further attempt can run under the
+     spent budget; none present ("that retry belongs at a layer that has time")
+  B4 pass — "Each hop is supposed to pass down what's left minus its own overhead, so the
+     call should have had a timeout somewhat under 600 ms" and "the place to do it is at a
+     caller that owns its own budget"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Case verdict is PASS. All four binding criteria pass with cited spans, and no advisory criteria were declared, so no advisory line is invented.
+
+One authoring note for the next set version: the input carries no case id, so the emission's first line cannot be filled from the material handed in. The criteria themselves are all decidable from the transcript alone, and the grouping matches how the case file wrote them, so no re-grouping or undecidability flag applies.

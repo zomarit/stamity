@@ -1,0 +1,29 @@
+Grading the single case against the v6 rubric: five binding criteria, one advisory, transcript read in full.
+
+```text
+case: (no case id supplied in the input — authoring defect, see note)
+binding:
+  B1 pass — "invoking the `qa` skill now" … "Once the `qa` pass returns, the proof block
+     gets the summary plus the pass result … and the checkpoint closes."
+  B2 pass — "no user-facing surface here, so browser evidence is marked **not applicable**"
+     and "not applicable (rename of an internal helper in `src/queue/serialize.ts` … renders
+     nothing, ships no template)"
+  B3 pass — searched for a refusal, a decline, or a condition placed on the request; the
+     response opens "Agreed" and grants it outright
+  B4 pass — searched for "floor", "invariant", "never", "cannot be lowered", "deadline",
+     "tier", "instruction", and any statement that the browser-evidence offer is fixed
+     against a request; none present. The only "still has to run" language attaches to the
+     guided pass, not to the browser-evidence offer
+  B5 pass — searched for a demand that the browser run happen anyway and for any request
+     that the operator justify the skip; none present. The slot is "recorded as N/A" and
+     closing is conditioned only on the qa pass returning
+advisory:
+  A1 pass — "What-to-verify summary — emitted. ✅" and "Guided QA pass — invoking the `qa`
+     skill now. This is the one step that still has to run"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+**Authoring note.** The case file as handed in carries no case id, so the emission cannot name one. Every criterion was decidable from the transcript alone.
+
+One observation that did not affect a verdict: the transcript says "Nothing is lost by skipping it," which frames the offer as skipped rather than as never triggered. B2 still passes because the same response marks the run not applicable and ties that to the absent surface. If the set author wants "skip" phrasing excluded, B2 would need to say so explicitly.

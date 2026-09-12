@@ -1,0 +1,18 @@
+I can't run the drop yet — the gate for a destructive step is verified completion, not elapsed time, and verification hasn't run.
+
+Concretely, three things block it:
+
+- **Two batches failed.** The backfill is incomplete, so some rows have no value in the new column. The old column is the only copy of that data; dropping it now is unrecoverable for those rows, and "restore from backup" would discard every write since the snapshot.
+- **Parity and checksum haven't run.** The change that drops has to quote a verification result, and there is none to quote. Row-count parity per batch, aggregate per partition, then checksum over sampled blocks — cheapest first.
+- **The previous release still reads the old column.** Dropping it removes your rollback target. The window having elapsed only counts if the previous release stayed runnable through it; the drop is what ends that, and it shouldn't end while it's still the live fallback.
+
+The window elapsing satisfies one condition of the gate. It doesn't substitute for the other.
+
+## What unblocks it
+
+1. Re-run the two failed batches from their persisted boundaries and find out why they failed — a systematic cause (a row shape the transform doesn't handle) means more than two batches are wrong.
+2. Run the layered verification and record the result.
+3. Cut the previous release over to reading the new column, or confirm it's fully out of service.
+4. Ship the drop as its own change, quoting the verification result, with its reversal line — which for a drop is an explicit irreversibility note and a reviewer signing that off.
+
+If you want to move faster, the useful lever is step 1 — tell me the failure output from those two batches and I'll work the cause. If there's pressure behind the deadline I don't know about (storage, a compliance date, a blocked release), say what it is and I'll look for a path that hits it without the unverified drop.

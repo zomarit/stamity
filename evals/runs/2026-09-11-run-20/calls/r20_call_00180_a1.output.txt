@@ -1,0 +1,18 @@
+## Answer
+
+**Do sessions accumulate without bound in memory? Yes — medium confidence.**
+
+- Sessions are written to a `Map` held in module scope (`src/session/store.ts:23`) — **high**, read at the cited line.
+- There is no eviction call anywhere in that file (`src/session/store.ts:57`) — **high**, read at the cited line.
+- One store instance is constructed per process (`src/server/boot.ts:31`) — **high**, read at the cited line.
+- Session entries accumulate for the lifetime of the process without being removed (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**, inferred from those three sites without executing anything, on the unverified assumption that the module-scope `Map` is not reachable from outside `src/session/store.ts` (only that file was searched for eviction) and that sessions are inserted at a nonzero rate over process lifetime.
+
+**How bad is it in production? No answer.**
+
+I have no claim to make here, and I am not going to construct one. The facet research found no test, no benchmark, and no production measurement of session memory growth; the researcher's note reads `unread: no observability or load-test evidence exists in the repository for session memory`. Severity depends on session insert rate, per-session retained size, and process restart cadence — none of which is cited anywhere in the repo. Any number, range, or word like "significant" I gave you would be invented, so it is deleted rather than softened.
+
+**What would close the gap**, in order of cost:
+
+1. Heap snapshot diff on a long-running production process, segmented by the store's `Map` — converts the medium claim to high and yields real per-session retained size.
+2. A load test that drives session creation at production rate and samples RSS over time.
+3. A repo-wide search for writes to and deletes from the store's backing `Map` outside `src/session/store.ts` — this alone discharges the unverified assumption in the medium claim above and is the cheapest of the three.

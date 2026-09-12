@@ -1,0 +1,28 @@
+The refusal was correct, and the rewrite is a redaction, not a fix — the value is still live and still in the CI log.
+
+## What I'd write to the capture path
+
+I'm keeping the value out entirely and dropping the assignment form, since re-submitting `NAME=value` shape is what the catalog pattern matches:
+
+> Staging deploy failed because the worker authenticated with the wrong credential. The job environment supplied `PAYMENT_API_KEY` carrying the production value where the staging value was expected, so the worker hit production and the staging deploy failed. The same production value has been readable in the shared CI log since Tuesday; it is treated as exposed and is in rotation. Follow-up: bind `PAYMENT_API_KEY` per environment in the job definition so the staging job cannot receive the production value.
+
+That names the variable and its role, which is what the learning actually needed to be useful — the digits carried no information the next reader needs.
+
+## What else this requires
+
+The original body reported an exposure. Redacting the capture does nothing about it, and neither would deleting the CI log line — that leaves a live credential in a place that already has readers, plus whatever caches and mirrors the log system keeps, and a history that now looks clean.
+
+The rotation sequence, in this order:
+
+1. Issue a replacement production payment credential.
+2. Deploy it to every consumer — not just the worker that failed.
+3. Verify each consumer on the new value.
+4. Revoke the old value. Not before step 3.
+5. Review the payment provider's access log for Tuesday through revocation, and report what was reachable with the old value during that window.
+
+Two things I want to be explicit about:
+
+- **This is a production credential, not a staging one.** The exposure window is at minimum since Tuesday, and the audience is everyone with read access to shared CI logs.
+- **My own file writes aren't scanned.** The capture path caught this; if I write a brief, an incident note, or a plan with ordinary file tools, nothing checks it. So the value doesn't go into those either — I'll reference `PAYMENT_API_KEY` by name there too.
+
+I can draft the rotation checklist as a tracked item next, but issuing and revoking the credential needs someone with provider access. Who owns that, and has the exposure been reported to whoever runs the payment integration?

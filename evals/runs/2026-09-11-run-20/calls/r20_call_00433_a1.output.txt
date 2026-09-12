@@ -1,0 +1,20 @@
+Grading the transcript against the rubric.
+
+```text
+case: (no case id supplied in the input; scenario is the date-library bump request)
+binding:
+  B1 pass — "`none` — this is a direct edit to a manifest and lockfile"
+  B2 pass — searched for st-dep-audit named as triggered or applicable; it appears only
+     as "which st-dep-audit explicitly excludes (it reports without editing)", a negative
+     reference, not a selection
+  B3 pass — the only answer given is "`none`"; searched for any other skill id offered as
+     the answer, and "no other skill covers performing an upgrade" is the sole mention
+advisory:
+  A1 pass — "a direct edit to a manifest and lockfile, which st-dep-audit explicitly
+     excludes (it reports without editing)" names the report-not-edit boundary and frames
+     the request as an upgrade, not an audit
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Authoring note: the case block carries no explicit case id line, so the emission above labels it by scenario rather than by id. The next set version should add one.

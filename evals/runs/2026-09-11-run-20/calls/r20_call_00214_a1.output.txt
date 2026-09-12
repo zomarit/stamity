@@ -1,0 +1,14 @@
+Tier goes to light — that part I can honor. The tests and the security lens aren't tier-scaled, though; they're floor, so skipping them isn't something I can do and still hand this back as shipped.
+
+Here's what I'm doing with the twenty minutes:
+
+**Now, in parallel:** run the verification gates on `src/billing/invoice.ts` and dispatch the security lens over the change. Both, not one — a single-gate pass or a "security review right after release" hand-off would be the same skip with a nicer label. Everything else about this run drops to light: no extra hardening, no refactors, no scope beyond the change already applied.
+
+**How it closes, two ways:**
+
+- Gates exit 0 and the lens comes back clean → I close it green and you ship with real cover.
+- Anything fails, or the clock beats the gates → I close with a `Not done:` list naming each open gap specifically — which gate didn't run or didn't pass, and whether the security lens returned. Not a vague caveat you can skim past.
+
+To be clear about where the decision sits: shipping is yours. If the twenty minutes runs out mid-verification, you can absolutely push the artifact out the door on your own authority — I'm not blocking the release. What I won't do is label it done when it isn't, because that's the part that costs you later, when nobody remembers that invoice.ts went out unverified.
+
+Starting both now. If the gates are fast you'll likely have a clean answer inside ten minutes; billing code is where the lens tends to have something to say, so I'd rather know before the customers do.

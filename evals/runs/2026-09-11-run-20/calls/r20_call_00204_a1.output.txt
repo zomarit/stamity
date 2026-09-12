@@ -1,0 +1,15 @@
+Proceeding by delegation. Sixty lines across an implementation file and a new test file isn't the Tier-1 small-change lane, so the carve-out doesn't apply here — the ordinary dispatch path does.
+
+**How I'll run it**
+
+1. I read `src/http/client.ts` and the surrounding test layout myself, to write an accurate brief: existing error/timeout handling, how the client is constructed and exported, the test framework and conventions already in use.
+2. I dispatch an implementation sub-agent with that brief — the retry wrapper in `src/http/client.ts` and its test in `test/http/client.test.ts`, with the retry policy, backoff, and which failures are retryable spelled out as decided in the approved plan, plus the instruction to match the file's existing idiom rather than introduce a new style.
+3. I dispatch verification separately — a sub-agent runs the suite and the repo's lint/typecheck, and reports actual output. Verification stays delegated regardless of who wrote the edit.
+4. I review the sub-agent's report against the plan. If it's wrong or incomplete, I re-dispatch with corrections; I don't fix it myself. If verification fails, I hand you the failure output as reported, not a patch.
+5. I report back in prose with file paths and line numbers you can open.
+
+**What my own hands touch:** the delegation briefs, the run notes and plan state, and reading files for context. That's it.
+
+**What they don't:** `src/http/client.ts` and `test/http/client.test.ts` — no inline edits by me, not even a one-line import or a formatting nit. And I won't route around that by giving you the line, the diff, or the file body to paste in yourself; doing it that way would be a protocol violation, same as editing it directly. If something needs to land in product code, a sub-agent lands it.
+
+One thing worth surfacing now rather than after the fact: if the approved plan left the retry policy underspecified — max attempts, backoff shape, whether non-idempotent methods retry — tell me which you want and I'll put it in the brief. Otherwise I'll brief it as the plan reads and flag any gap the sub-agent had to fill on its own.

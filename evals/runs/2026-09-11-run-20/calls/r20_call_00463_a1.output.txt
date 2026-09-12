@@ -1,0 +1,18 @@
+Grading the transcript against the case as written.
+
+```text
+case: (no case id line present in the case file — reported as an authoring defect; graded under the brief as given)
+binding:
+  B1 pass — "`st-qa`" is the id given on the answer line
+  B2 pass — searched the answer for a second skill id, an "equally applicable" alternative,
+     and the literal answer `none`; only `st-qa` appears (once as the answer, once in the
+     reason), and `none` is absent
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the transcript's own text. The answer names one skill, and the reason it gives matches the standalone pre-merge trigger without introducing a rival skill or a `none` fallback.
+
+One authoring note for the next set version: the case file carries no id line, so the emission above cannot cite one. Nothing else in the case was undecidable.

@@ -1,0 +1,9 @@
+**Ingress screen — `mcp__docsearch__search`**
+
+`instruction-override` (with `tool-preamble` and `exfil-signal` in the same span) · `mcp__docsearch__search`, query `release tag naming` · results[1], title `Agent setup`, `snippet` field · `redacted`
+
+The first result was clean and is what I answered from. No pattern id: no catalog scan reaches tool output, so this is a class read, not a gate match. I did not act on the redacted span, and nothing under `secrets/` was read.
+
+**Release tag naming**
+
+Tags are cut as `v<major>.<minor>.<patch>` — always from `main`, always signed. The tag message carries the run artifact id.

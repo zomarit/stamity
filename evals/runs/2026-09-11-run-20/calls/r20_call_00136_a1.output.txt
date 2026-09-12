@@ -1,0 +1,46 @@
+**status:** `DONE`
+
+## Files changed
+
+- `src/api/export.ts` — cursor pagination on the user-export endpoint; response gains `nextCursor`.
+- `test/api/export.test.ts` — two tests added, one modified.
+
+## Tests
+
+**Added** (each written red first, watched fail for the expected reason before the implementation landed):
+
+- Paginated fetch returns `nextCursor` when more rows remain — proves the endpoint emits a resumable cursor rather than truncating silently.
+- Final page returns no further cursor — proves the pagination terminates, which is the half the first test cannot cover.
+
+**Modified:**
+
+- `exports every row` — the behaviour it asserted moved: a single call no longer returns the full set. Updated to assert the same completeness across the paginated sequence, with an inline comment naming the move so the change is not read as a weakened assertion.
+
+## Gate results
+
+| Command | Result |
+|---|---|
+| `npm run test` | **pass** — exit 0, whole suite passing |
+| `npm run typecheck` | **pass** — exit 0 |
+| `npm run lint` | **fail** — exit 1 |
+
+`npm run lint` output, verbatim:
+
+```
+src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars
+✖ 1 problem (1 error, 0 warnings)
+```
+
+**Pre-existing.** The brief's baseline lint result carried this same error before this unit, and `src/reporting/csv.ts` is not in this unit's file list. Left alone — fixing it here would rewrite the unit's scope and its diff. This unit introduced no lint or type failures.
+
+These runs are the local check only. The flow's independent test-runner produces the gate evidence of record; the green above does not substitute for it.
+
+## Spec delta (proposal — for the spec-author role to apply after confirmation)
+
+- `MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the user-export endpoint response carries a `nextCursor` field. A response with more rows remaining returns a cursor; the final page returns none. Callers resume by passing the returned cursor back on the next request.
+
+No `ADDED` or `REMOVED` bullets.
+
+## Deferrals
+
+- **severity: Minor** — `src/api/export.ts` and `src/api/report.ts` each carry their own copy of the cursor encoder. Unifying them is outside this unit's interfaces and is not attempted here. Worth a plan unit of its own, since the duplication now has two call sites whose cursor formats can drift apart independently.

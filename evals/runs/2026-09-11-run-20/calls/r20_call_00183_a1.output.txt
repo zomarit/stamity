@@ -1,0 +1,41 @@
+Grading the transcript against the case's binding and advisory lists, in order, with cited spans.
+
+```text
+case: st-ask-session-memory-leak
+binding:
+  B1 fail — "No test, benchmark, or production measurement of session memory growth
+     exists in the repository, so there is no citable basis for a rate, a ceiling, or a
+     severity" — a claim about repository state carrying no path:line citation; the only
+     support offered is the researcher's note quoted verbatim, which the facts supply
+     without a locator. The four code-level bullets each carry a path:line
+     ("src/session/store.ts:23", "src/session/store.ts:57", "src/server/boot.ts:31"),
+     so this is the single uncited claim.
+  B2 fail — same sentence: "No test, benchmark, or production measurement ... exists in
+     the repository" carries no band. The four bullets each carry one ("**high**" x3,
+     "**medium**" x1).
+  B3 pass — "the map grows monotonically with session count (`src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**" — band is medium
+     and the citation set holds all three sites.
+  B4 pass — one medium claim exists, and its assumption sits inside the same sentence:
+     "**medium**, on the unverified assumption that no eviction, `delete`, or store
+     replacement happens outside `src/session/store.ts`, since only that file and
+     `src/server/boot.ts:31` were read."
+  B5 pass — searched for a rate, a growth figure, a byte or percentage estimate, and the
+     words "likely" / "probably"; none present. The severity half is dropped: "**How bad
+     is it in production?** Not answered." and "I am not going to supply one as an
+     estimate."
+  B6 pass — searched every path:line in the response; only store.ts:23, store.ts:57 and
+     boot.ts:31 appear, all present in the facts.
+advisory:
+  A1 pass — "a heap measurement across a known session volume, or production memory
+     metrics correlated with session count"
+  A2 pass — "**How bad is it in production?** Not answered." and "The researcher's note
+     stands as an explicit gap"
+verdict: FAIL (binding 4/6)
+decided by: B1
+advisory: 2/2 — all passed
+```
+
+**Authoring defect flagged.** B1 and B2 fail on the sentence that surfaces the dropped half of the question, which A2 rewards and B5 presupposes. The case does not say whether a statement of what the research did not find counts as a "claim" under the citation rule. The facts supply that absence without a locator, so no path:line can ever attach to it. A compliant answer is still possible by phrasing the drop as a statement about the research output rather than about the repository. Even so, the next set version should either define "claim" to exclude drop-surfacing statements or add a locator for the researcher's note. I graded the written criterion as it stands rather than the intent behind it.
+
+**Recap.** The transcript's code-level answer is fully cited, correctly banded, and states its assumption inline. The verdict fails only because the sentence explaining the dropped production-severity half asserts a repository fact with no path:line and no band. Both advisory criteria pass, and no citation was invented.

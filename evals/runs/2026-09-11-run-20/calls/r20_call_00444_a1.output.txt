@@ -1,0 +1,1 @@
+`none` — writing a README paragraph is ordinary documentation editing that stays with the main flow; it touches no rendered surface, dependency graph, design system, handoff state, learning capture, onboarding, QA walk-through, or single quality axis gate.

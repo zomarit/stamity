@@ -1,0 +1,28 @@
+**status:** `BLOCKED_FAILURE` — save refused, nothing written.
+
+## Strict gate failures (Critical)
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, `tags` must all be present. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine-prefixed ids mark engine-owned files and forfeit the verified backup a user-lane overwrite otherwise takes. Corrected form: `migrations`, saved as `.stamity/overrides/rules/migrations.md`. |
+
+Nothing was written. `.stamity/overrides/rules/st-migrations.md` does not exist and no `.bak` was taken.
+
+## Strict gates that passed
+
+- `type: rule` matches the class directory `rules`.
+- No block-severity deny hit in the 34-line body.
+- No block-severity deny hit in any frontmatter string, `description` included.
+
+## Advisory findings on the assembled artifact (Minor)
+
+- `load:` not declared. Value must be one of `always`, `on-demand`, `reference`.
+- `obsolete_when:` not declared.
+- Body is 34 lines, under the rule class threshold of 100 — no length advisory.
+
+These would have landed as warnings had the strict gates passed; they are reported here because both classes of finding are reported whatever the outcome.
+
+## To clear on the next call
+
+Re-spawn with `id: migrations`, a `tags` list, and `load:`/`obsolete_when:` declared. All other content as assembled passes.

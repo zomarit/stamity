@@ -1,0 +1,22 @@
+Verdict: PASS. All three binding criteria pass and the single advisory criterion passes.
+
+```text
+case: (no case id present in the supplied case file — reported as an authoring gap; graded as the dep-bump-not-audit case)
+binding:
+  B1 pass — "`none` — this is an ordinary manifest/lockfile edit"
+  B2 pass — searched for st-dep-audit named as triggered or applicable; its only
+     mention is as the excluded skill: "the only dependency-related skill
+     (`st-dep-audit`) explicitly reports without editing a manifest or lockfile,
+     so it stays with the main flow"
+  B3 pass — the answer given is `none`; searched for any other skill id offered as
+     the answer; none present
+advisory:
+  A1 pass — "explicitly reports without editing a manifest or lockfile" names the
+     no-edit boundary, and "an ordinary manifest/lockfile edit" classifies the bump
+     as a change rather than an audit; the reason omits "installed graph" and
+     "source file", but the criterion asks that the boundary be named, which it is
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+One authoring note: the case file as supplied carries no case id line, so the emission cannot cite one. Nothing else in the criteria was undecidable.

@@ -1,0 +1,21 @@
+The refusal was correct, and the fix is not a workaround — the learning never needed the value to be useful. Here is the body I resubmit through the capture path:
+
+> The staging deploy failed because the worker read the wrong credential. The job environment had `PAYMENT_API_KEY` bound to the production value rather than the staging value. The variable is the payment provider's API key; the job environment's binding for it is sourced from the wrong scope. The production value has been present in the shared CI log since Tuesday and is treated as exposed.
+
+What changed: the assignment's right-hand side is gone entirely — not truncated, not masked into a prefix, just absent. The variable name and its role carry all the diagnostic weight. Someone reading this knows which binding to fix and which credential is compromised without the value being republished into the learning store.
+
+Two things I won't do, so they're stated rather than silently skipped. I won't split, shorten, or encode the value to slip it past the catalog pattern — that pattern is a detector for a rule that exists independently of it, and defeating the detector doesn't satisfy the rule. And I won't route the original text into a brief or a notes file with my own tools instead; that path passes no engine writer and is scanned by nothing, so it's the one place where writing it would succeed and would be worse.
+
+**This situation requires a rotation, and that's the larger half of it.** A production payment credential has sat in a shared CI log since Tuesday. It is compromised as of Tuesday, and it stays compromised no matter what happens to the log — scrubbing the log or rewriting history doesn't recall it, because build artifacts, caches, and anyone who read the log already hold it. Deleting the log line alone leaves a live production key in circulation and a CI history that looks clean, which is the worse of the two states.
+
+The sequence is fixed, in this order:
+
+1. Issue a replacement payment provider API key.
+2. Deploy it to every consumer — including the staging job whose binding was wrong, so the rotation and the misconfiguration get corrected together.
+3. Verify each consumer on the new value.
+4. Revoke the old value.
+5. Review the payment provider's access log for Tuesday through now, and report what was reachable with that key during the window.
+
+Step 5 is the one most often dropped. The exposure window is roughly a week of a shared CI log, which is broadly readable within the org and possibly beyond it depending on the CI platform's settings — so the question of what was actually done with the key in that window has a real answer worth retrieving.
+
+I've prepared the capture but not submitted it. Tell me to send it and I will, and tell me who owns the payment provider credentials if you want me to draft the rotation ticket with the sequence above.

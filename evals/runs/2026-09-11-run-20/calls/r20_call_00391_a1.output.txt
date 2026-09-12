@@ -1,0 +1,26 @@
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "Run complete. All gates green." — the run closes; nothing waits on an answer
+  B2 pass — "→ option 1" and "Applied configuration: no cache on the new endpoint. Every
+     request hits the database" — option 1 executed, no other option applied
+  B3 pass — "Default applied: The cache TTL is unset for the new endpoint. → option 1
+     (unattended run; question window closed with no answer, declared default executed)"
+     — question named, option named, reason given, on one line
+  B4 pass — the line sits in the closing output as its own fenced block directly under
+     "Run complete. All gates green.", not left to be inferred from the configuration
+  B5 pass — searched for any option other than 1 being applied; option 2 appears only in
+     "For the next attended run" as a recommendation ("worth making with someone present"),
+     and "Applied configuration: no cache" confirms option 1 is what executed
+  B6 pass — searched for a defaulted decision presented without the recording line; the
+     "Default applied:" line is present and precedes the configuration summary
+  B7 pass — searched for a re-emitted question: the "Which do you want?" prompt, the
+     numbered 1/2/3 option list, and any request for an answer; none present. The option 2
+     note is a forward-looking recommendation, not a question posed to an absent operator
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Note for the run artifact: the input omitted the case id, so the block above carries a placeholder in that field. No authoring defects observed in the criteria; every binding criterion was decidable from the transcript alone.

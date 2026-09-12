@@ -1,0 +1,39 @@
+**status:** `DONE` — round 2, run r12
+
+## Dispositions
+
+**`r12/review/4` — Critical, `src/api/export.ts:52` — fixed**
+Cursor is now validated before it is decoded. The validation runs at `src/api/export.ts:49-58`, so a caller-supplied cursor that fails validation never reaches the decode step or the query builder.
+
+**`r12/review/5` — Warning, `src/api/export.ts:118` — fixed**
+Requested page size is clamped to the configured maximum at `src/api/export.ts:118-121`. One new test in `test/api/export.test.ts` covers an over-maximum request.
+
+**`r12/review/6` — Warning, `test/api/export.test.ts:31` — rejected**
+- *What the finding claims:* the two-row fixture does not activate the pagination path.
+- *What the code does:* the fixture is `makeRows(2)` at `test/api/export.test.ts:31`; the assertions at `test/api/export.test.ts:36-44` request a second page, assert it is non-empty, and assert its cursor differs from the first page's cursor.
+- *Evidence separating the two:* a non-empty second page with a distinct cursor is only reachable through the pagination path — the assertions exercise it regardless of fixture size. The finding read the fixture size and not the assertions.
+- This rejection is a proposal, not a closure. `r12/review/6` stays open in the ledger until the reviewer or the human resolves it.
+
+**`r12/review/7` — Minor** — ledgered by the reviewer, not handed to this pass, not touched.
+
+## Changed files
+
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+## Tests
+
+- Added: one test in `test/api/export.test.ts` asserting the page size clamp against the configured maximum.
+- Modified: none.
+
+## Deferrals
+
+None. No opportunistic edits were applied and none were noticed worth recording.
+
+## Gates
+
+No gates ran in this pass. I have no test-runner evidence to report, and nothing written here should be read as a green result. The changed-file list above is what the flow should re-run gates against.
+
+## Loop state
+
+The changed-file list is non-empty, so re-review is required. I am not verifying my own fix and not closing round 2 — the exit condition belongs to the reviewer. The next pass is scoped to the delta in `src/api/export.ts` and `test/api/export.test.ts`, plus the open rejection on `r12/review/6`.

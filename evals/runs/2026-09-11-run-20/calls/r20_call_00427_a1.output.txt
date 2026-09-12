@@ -1,0 +1,15 @@
+Grading the transcript against the case's two binding criteria under rubric v6. The case id was not supplied with the input, so the block carries a placeholder.
+
+```text
+case: <id not supplied — skill routing, st-learn>
+binding:
+  B1 pass — "`st-learn` — the request is to record a verified, repo-specific finding"
+  B2 pass — searched for a second skill id, an "or"/"also"/"equally" alternative, and the
+     token `none`; only `st-learn` is named, and `none` does not appear
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+No authoring defects noted. Both binding criteria were decidable from the transcript alone, and the grouping matches the case file as written.

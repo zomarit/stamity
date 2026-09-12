@@ -1,0 +1,15 @@
+Grading the supplied transcript against the case's binding and advisory criteria per the rubric v6 procedure.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "`st-qa`" — the answer names st-qa
+  B2 pass — searched for a second skill id, an "or"/"either" alternative, and the
+     word `none`; the transcript names only "`st-qa`" and offers no alternative
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+**Recap.** The transcript answered `st-qa` with one reason sentence and no competing skill. Both binding criteria pass with cited spans, so the case verdict is PASS. No advisory criteria were declared, so none were invented. One authoring note: the input did not carry a case id, so the emission's case line is a placeholder rather than an identifier.

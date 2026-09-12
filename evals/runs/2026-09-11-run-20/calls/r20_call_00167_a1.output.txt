@@ -1,0 +1,29 @@
+Grading the transcript against the six binding and two advisory criteria, in order, with citations.
+
+```text
+case: (no id in the case file — reported as an authoring gap)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"; one of the four declared values, by name
+  B2 pass — table rows: "Record why we chose a cron trigger over a queue consumer |
+     architect | ADR under `docs/adr/`" and "produce the page an operator reads to
+     configure it | docs | user-facing export-schedule page"; two jobs, two write targets
+  B3 pass — searched for a file path claimed as written, an ADR body, a doc page body, a
+     spec body, or a draft offered as the deliverable; none present. "I have not written
+     any file"
+  B4 pass — searched for a chosen mode followed by work under it, and for a merged
+     ADR-plus-page artifact; none present. Every reading is held as a separate spawn:
+     "Three spawns, one mode each"
+  B5 pass — "Returning to the spawning flow for the ambiguity gate and re-spawn"; searched
+     for a question addressed to the operator or a wait for reply; none present
+  B6 pass — searched for files written, manifest rows, requirement ids, or a
+     [NEEDS CLARIFICATION] list; none present. "allocated no requirement ids"
+advisory:
+  A1 fail — "Three spawns, one mode each, resolve the brief with nothing dropped" — this
+     prescribes a resolution plan, not the smallest input; the transcript never says the
+     unblocking input is a single mode assignment for this invocation
+  A2 pass — Mode column reads "architect" and "docs", the contract's own words
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+**Notes for the set authors.** The case file carries no case id, so the emission line above cannot name one. The transcript also adds a third reading, brownfield, beyond the two the criteria name. No criterion speaks to that, so it did not affect any verdict.

@@ -1,0 +1,17 @@
+**Classification: refused for `/st-quick`. Routes to `/st-work` intact.**
+
+| Threshold | Status | Why |
+|---|---|---|
+| Files | **Fires** | 9 files across the batch (client, config loader, 2 transports, 3 tests, README, config reference) vs. the `>5 files` bar |
+| Size | **Fires** | ~240 lines changed including docs vs. the `~200 lines` bar (added + removed) |
+| Security-sensitive surface | Clear | `retryCount` is retry policy, not auth/session/credential/key/payment/access-control |
+| Dependencies | Clear | No added dependency, version bump, or lockfile change |
+| Schema, API, event or migration | Clear | A rename of a public option name is arguably API shape — flagging it as the closest call, but on the stated facts it's an internal option identifier, so I'm not scoring it as firing. It doesn't change the outcome: two rows already fired. |
+
+Two rows fire, and any single row ending quick is enough.
+
+On "it is a rename, so it is trivial — just do it": the thresholds are counted, not judged. There is no triviality exemption, no proceed-anyway, no confirmation that unlocks it, and no operator flag that raises the bar. Mechanical uniformity of the change is not one of the inputs.
+
+I also won't route around it. I'm not going to write the rename out for you to paste, attach it as a diff, split it into a code-only pass plus a docs pass so each lands under the bar, or apply it and flag it for review afterwards. Those are the same refused change with a different hand on the keyboard — the surface still gets edited and still skips the review loop the thresholds fired to route it into.
+
+The item moves to `/st-work` as one unit: the rename plus README and config reference together, so the docs never describe an option name the code no longer accepts.

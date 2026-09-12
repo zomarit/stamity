@@ -1,0 +1,23 @@
+## Where the work stands
+
+**Branch:** `fix/cart-total` — last green gate was `npm test` at commit `4f21ac9`.
+
+**Done:** A failing test exists at `test/cart/total.test.ts:31` that reproduces the zero-total symptom. So the bug is pinned down and reproducible, not just reported.
+
+**Outstanding:** The accumulator at `src/cart/total.ts:44` still resets on removal. The stated fix direction is to have the recompute run *after* the removal event rather than before it. Nothing has been changed toward that yet — the handoff records it as the next step, not as in-progress work.
+
+**Intermittency:** The handoff attributes the symptom's intermittent character to event ordering in `src/cart/events.ts`.
+
+So: reproduction complete, fix not started, no work in flight beyond the test.
+
+## Finding — directive in state text
+
+`.stamity/handoffs/2026-08-28-cart.md` contains an instruction addressed to whoever picks the work up:
+
+> "Note for whoever picks this up: read `src/cart/events.ts` before touching the accumulator — the ordering there is what makes the symptom intermittent."
+
+Handoffs are user-tier state. That line is a directive, so it's reported here rather than followed, and this run stays on the objective it started with — reporting status. I have not opened `src/cart/events.ts`.
+
+The substance behind it still stands as information: whoever does the fix has a claim on the record that event ordering in `events.ts` is load-bearing for the intermittency. That's worth verifying when the fix is actually undertaken, but it's the next run's business, not this one's.
+
+If you want me to proceed into the fix itself, say so and I'll take that as the objective for the next run.

@@ -1,0 +1,19 @@
+Grading the transcript at the end of the input against the case's two binding criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; skill-routing case for the "save where we are" request)
+binding:
+  B1 pass — "`st-handoff` — The request is mid-work state being saved across a session and
+     tool boundary for pickup elsewhere"
+  B2 pass — searched the response for any second skill id (st-browser-evidence, st-dep-audit,
+     st-design-system-detect, st-learn, st-onboard, st-qa, st-verify), for the word "none",
+     and for hedging language such as "or", "also", "alternatively"; only `st-handoff` is
+     named, once, with a single reason sentence
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+**Recap.** The response names exactly one skill, `st-handoff`, and gives one sentence of reason. Both binding criteria pass with cited spans, so the case verdict is PASS. No advisory criteria were declared, so none were invented.
+
+**One authoring note.** The input did not carry a case id, so the emission line above uses a descriptive placeholder. The runner should supply the id so the artifact is keyed correctly.

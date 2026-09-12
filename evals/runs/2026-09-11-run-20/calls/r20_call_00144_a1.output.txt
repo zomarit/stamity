@@ -1,0 +1,67 @@
+**status:** `DONE`
+**brief:** reuse of `src/http/retry.ts` by the export endpoint
+**handoff_to:** implementer
+
+---
+
+## pattern-match-checklist
+
+| # | Check | Finding | Basis |
+|---|---|---|---|
+| 1 | What strategy does the helper implement? | Fixed-interval retry, three attempts. Backoff multiplier is `1.0` (`src/http/retry.ts:41`), so the delay does not grow between attempts. | `direct` |
+| 2 | Is the strategy configurable per call site? | No — the multiplier is read once at construction (`src/http/retry.ts:12-18`), so a reusing call site inherits whatever it passes at construction and cannot vary it per attempt. | `direct` |
+| 3 | Does a working precedent exist? | Yes. `src/api/report.ts:77` constructs the helper and calls it. This is the one call site located inside scope. | `direct` |
+| 4 | Does the export endpoint already use it? | No. `src/api/export.ts` contains no reference to the helper. Reuse is a net-new wiring, not a refactor. | `direct` |
+| 5 | Does the helper retry on 5xx only, or on connection errors too? | Not settled. The retry predicate is caller-supplied (`src/http/retry.ts:29`) and the file declares no default, so the helper itself has no retry policy to characterise — the policy lives in whatever predicate the caller passes. | `unverified` on the behaviour; `direct` on the predicate being caller-supplied at `src/http/retry.ts:29` |
+
+**So what:** items 3 and 4 make the reuse shape concrete — the implementer copies the construction-and-call pattern at `src/api/report.ts:77` into `src/api/export.ts`. Item 5 means that pattern is incomplete on its own: the predicate travels with it, and the predicate is what decides 5xx-vs-connection-error behaviour.
+
+**Confidence: medium — basis `direct` for rows 1-4 (each read at the cited line), `unverified` for row 5.** The band is held down by row 5, which is the row the decision turns on.
+
+---
+
+## impact-map
+
+- **`src/api/export.ts`** — receives new construction + call of the helper, modelled on `src/api/report.ts:77`. No existing helper reference to reconcile. Basis: `direct` (`src/api/export.ts` grep returned nothing; `src/api/report.ts:77` read).
+- **The predicate argument** — the implementer must supply one, because `src/http/retry.ts:29` takes it from the caller and `src/http/retry.ts` declares no default. Reusing `report.ts`'s predicate imports a symbol from a path outside this brief's scope, which I did not resolve; writing a fresh predicate for export avoids that dependency but duplicates policy. Basis: `inferred` — from `src/http/retry.ts:29` (predicate is a caller parameter) plus `src/api/report.ts:77` (the sole located caller supplies one from an out-of-scope import); the step between them is that any second caller faces the same required argument.
+- **Retry timing on export** — export inherits fixed-interval, three-attempt behaviour (`src/http/retry.ts:41`, `:12-18`). If export calls a dependency where a fixed interval is the wrong shape, the helper offers no per-call-site escape, since the multiplier is construction-time (`src/http/retry.ts:12-18`). **severity: Minor** — a constraint to accept knowingly, not a defect. Basis: `direct`.
+- **`src/http/retry.ts` itself** — unchanged by reuse. Nothing in what I read requires modifying the helper to add a second caller. Basis: `direct`.
+- **Out of bounds, not assessed:** the queue worker and `src/worker/`. If either constructs the helper, this map is incomplete by construction of the brief. Basis: `unverified`.
+
+**Confidence: medium — basis `inferred`.** The call-site shape is `direct`, but the predicate consequence is assembled across `src/http/retry.ts:29` and `src/api/report.ts:77` rather than read in one place.
+
+---
+
+## unknowns
+
+1. **Connection-error behaviour (brief Q3).** Unresolved; carried in full in the unanswerable list below. This is the one unknown that gates the objective: if export must survive `ECONNRESET`/`ETIMEDOUT`, the answer determines whether reuse is sufficient or whether a new predicate is required.
+2. **What predicate `src/api/report.ts:77` passes.** The symbol is imported from a path outside this brief's scope; I did not follow it. Basis: `direct` that it is out-of-scope-imported at `src/api/report.ts:77`; `unverified` as to its contents.
+3. **`docs/reference/http.md` is in scope but carries no probe result in my record.** I am not reporting it as read. It is the cheapest in-scope input remaining and may state the retry contract in prose. Basis: `unverified`.
+4. **Whether any out-of-bounds caller (`src/worker/`) constrains the helper's shape.** Excluded by the brief. Basis: `unverified`.
+
+**Confidence: high — basis `direct`.** Each item above is a gap I can locate precisely in what was and was not probed, which is a statement about my own probe record rather than about the code.
+
+---
+
+## Unanswerable questions
+
+**Q3 — does the helper retry on 5xx responses only, or on connection errors as well?**
+
+- **Probed:** full read of `src/http/retry.ts`; grep of `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`; read of `src/api/report.ts:77`.
+- **Why it did not settle:** the retry predicate is supplied by the caller (`src/http/retry.ts:29`) and the file declares no default, so the helper has no intrinsic answer. The predicate that would answer it for the one located caller is imported from a path outside this brief's scope. Nothing I read locates a claim in either direction.
+- **Smallest unblocking input:** the resolved path of the predicate imported at `src/api/report.ts:77`, added to scope — one file read settles it. Failing that, `docs/reference/http.md` (in scope, unprobed) may state the contract in prose.
+- **severity: Warning** — the implementer cannot write a correct predicate for export without it, and a predicate that silently omits connection errors fails open on exactly the transport faults a retry helper exists for.
+
+**Confidence: high — basis `direct`.** The probes and their results are recorded above; the claim here is that they did not settle the question, not a claim about the answer.
+
+---
+
+## Sources consulted
+
+- `src/http/retry.ts` — read end to end; cited at `:12-18`, `:29`, `:41`.
+- `src/api/report.ts` — cited at `:77`.
+- `src/api/export.ts` — searched for helper references; none found.
+- `src/http/` — grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`.
+- `docs/reference/http.md` — in scope, **no probe result in this spawn's record**; not read, not cited.
+
+No files created, no code changed.

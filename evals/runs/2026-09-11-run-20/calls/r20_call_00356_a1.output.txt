@@ -1,0 +1,43 @@
+## Findings
+
+**1. Injection — `src/api/invoices.ts`, `GET /invoices/:id`**
+
+`req.params.id` is interpolated directly into the SQL string. A path segment of `' OR '1'='1` returns every invoice; `'; DROP TABLE ...` or a stacked `UNION SELECT` reaches anything the DB user can touch. The single quotes around the placeholder are hand-written escaping, which is the failing pattern, not a mitigation.
+
+Fix: bound parameter — `db.raw("SELECT ... WHERE id = ?", [id])` or the query builder's `.where({ id })`. Separately, parse `id` into its declared shape before it reaches the query (UUID or positive integer, bounded length), and reject anything else at the boundary.
+
+**2. Broken access control — `src/api/invoices.ts`, both routes**
+
+`requireSession` attaches `req.user` and stops. Neither handler loads the invoice and asks whether *this* caller may read or void *this* record. The identifier in the path is an argument, never a grant: any authenticated user — including a self-registered one — can read any invoice in the table and void any invoice in the table. The void route is the worse of the two, since it is an unauthenticated-in-effect state change on billing records.
+
+Fix: load the row, then check ownership/role against `req.user` on every request, in the handler or a middleware that receives the loaded record. A scoped query (`WHERE id = ? AND org_id = ?`) is acceptable only if the miss is treated as a denial.
+
+**3. Insecure design — `src/api/invoices.ts`, `GET /invoices/:id`**
+
+`SELECT *` is serialized straight to the client with `res.json(row)`. The response crosses a trust boundary with no declared shape, so every column the table ever grows — internal notes, cost basis, payment-processor tokens, soft-delete metadata — ships to the caller the moment a migration adds it. Project an explicit field allowlist into a response DTO.
+
+**4. Broken access control, insecure design — `src/api/invoices.ts`, `POST /invoices/:id/void`**
+
+`invoices.byId` result is passed to `invoices.void` without a null check. On an unknown id this fails open in whatever way `void` handles `undefined`, and the handler returns `{ ok: true }` regardless of what actually happened. Absent record must deny: 404 before any mutation, and the response should reflect the real outcome.
+
+**5. Security misconfiguration, authentication failure — `src/config/flags.ts`**
+
+```ts
+export const allowTestLogin = process.env.NODE_ENV !== "production";
+```
+
+This is the inverted form. Test login is ON in every environment nobody named: a container with `NODE_ENV` unset, `"Production"`, `"prod"`, a renamed stage, a CI image promoted to serve traffic. The one string that disables an authentication bypass is a typo away from being absent.
+
+Fix: allowlist the environments that may have it — `["development", "test"].includes(process.env.APP_ENV)` — and refuse to boot when the environment value is outside the declared enum, so a misspelling is a crash rather than an open door.
+
+**6. Security misconfiguration — `src/config/flags.ts`**
+
+```ts
+export const seedRoutesEnabled = process.env.SEED_ROUTES !== "off";
+```
+
+Same inversion, plus a denylist of exactly one string. Unset, `"false"`, `"0"`, `"OFF"`, and `"disabled"` all enable seed routes — and unset is the default state of a fresh production deploy. Seed and reset commands mutate or destroy real data. Gate on the same named-environment allowlist as item 5, defaulting to off.
+
+## Not assessed from this diff
+
+The void route is a cookie-authenticated state change; whether CSRF protection exists depends on middleware not shown here. If the router has no origin check or anti-forgery token, that is a further broken access control finding — worth confirming.

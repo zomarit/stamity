@@ -1,0 +1,39 @@
+Grading the supplied transcript against the nine binding criteria under rubric v6. No tools are needed; the Brief, Expected block and transcript are all in the message.
+
+Verdict: PASS. All nine binding criteria pass on cited spans. No advisory criteria were declared.
+
+```text
+case: (no case id supplied in the input — reported as an emission gap, not invented)
+binding:
+  B1 pass — head block reads "id: json-flag-render", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"; all four required keys present
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" — the three research paths, verbatim
+  B4 pass — searched the head block for an `approach` key; absent. Transcript states
+     "`approach` is omitted — it is migration-intent only, and this is a feature."
+  B5 pass — "`docs/plans/003-json-flag-render.md`"; "`001-worktree-lane.md` and
+     `002-board-fill-source.md` are taken, so `003` is the next free number" — a concrete
+     slug, not a placeholder
+  B6 pass — unit table carries rows `id`, `requirements`, `files`, `interfaces`,
+     `testCriteria`, `edgeCases`, `depends_on` ("`none`"), `verify` — all eight
+  B7 pass — "`requirements` | `REQ-cli-140`"; searched the unit for the literal
+     "spec carries no ids"; absent
+  B8 pass — "long form `--json`, boolean, `default: false`, takes no value argument, no
+     short alias"; "keys `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync`
+     ... `managedFiles` and `driftedFiles` are integers"; "Exit codes: `0` on success, `1`
+     on a drift finding". Searched for "not yet resolvable", "see below", "not yet
+     fillable" and a document pointer in the field; none present. Transcript states
+     "`REQ-cli-140`'s contract is inlined above rather than cited"
+  B9 pass — "**Drift present.** `stamity status --json` against a workspace with drifted
+     files still prints the one well-formed JSON object to stdout, with `driftedFiles` as
+     the nonzero integer count, and exits `1`."
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **No case id** was included in the input handed to me. The emission line above records that gap rather than a made-up id.
+- **Rule 5 check.** I have no session record of producing this transcript, and the runner pins distinct scenario and judge models. The transcript does mention a system clock of 2026-09-12, which matches this environment's date. That is consistent with a shared harness and is not evidence of a shared model, so I graded it. Flagging it so the run owner can confirm the profile pinned distinct models.

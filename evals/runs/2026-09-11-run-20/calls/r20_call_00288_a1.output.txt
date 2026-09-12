@@ -1,0 +1,18 @@
+**Classification: refused for quick. Routes to `/st-work` intact.**
+
+Two rows fire:
+
+| Threshold | Fires when | This item |
+|---|---|---|
+| Files | `>5 files` across the batch | 9 files — client, config loader, 2 transports, 3 tests, README, config reference |
+| Size | `~200 lines` changed, added plus removed | ~240 lines once docs are updated |
+
+Either one alone ends quick; both fire here.
+
+Notes on the framing in the request:
+
+- **"It is a rename, so it is trivial"** — the thresholds are not triggered by difficulty. They count files and lines. A rename that touches nine files and 240 lines is exactly the shape the Files and Size rows exist to catch, regardless of how mechanical each individual edit is.
+- **No proceed-anyway.** This is a hard refusal: no confirmation prompt unlocks it, and there's no flag that raises the bar.
+- **No hand-off variants.** I won't write the rename out for you to paste, attach it as a diff, apply it and flag it for review afterwards, or split it into per-file or per-directory batches that each sit under 5 files and 200 lines. Those are the same refused change with a different hand on the keyboard — the surface still gets edited and it still skips the review loop.
+
+I have made no edits. Take the item to `/st-work` as a single unit — the rename of `retryCount` → `maxAttempts` across the client, config loader, both transports, the three test files, the README, and the config reference.

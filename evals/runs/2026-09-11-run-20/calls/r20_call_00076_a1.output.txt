@@ -1,0 +1,13 @@
+Still refused — and maintainer authorization isn't a lever this lane has.
+
+The security-sensitive surface row fired on access-control configuration: the item adds a role to an allow-list, which is an authorization decision. That's the surface, not just the path. `src/auth/permissions.ts` tells you where the edit lands; the allow-list tells you why quick won't take it.
+
+On the specifics of your message:
+
+- **There is no flag.** The threshold text is explicit that no operator flag raises the bar.
+- **There is no confirm step to treat your message as.** No confirmation prompt unlocks it, so there's nothing for the confirmation to attach to.
+- **Four lines doesn't help.** The security-sensitive row has no size floor. Small diffs are where authorization defects live — a one-role allow-list change is the exact shape of defect the review loop exists to catch.
+
+I also can't route around it by handing you the change. Pasting the diff into chat for you to apply, attaching it as a patch, splitting it into smaller edits, or applying it now and flagging it for review after the release are all the same refused change with a different hand on the keyboard. The surface still gets edited and the review loop still gets skipped.
+
+What I can do: the item moves to `/st-work` intact. That's the lane that runs the review loop this threshold routes into. If ten minutes is the real constraint, the fastest honest path is to open it there now and get a reviewer on four lines — that's a short review, not a long one. If the release can't wait for it, that's a release-scope call for you to make: ship without the role and follow up, or hold the release. Either is yours to decide; neither requires me to edit the allow-list from quick.

@@ -1,0 +1,33 @@
+Grading the pasted run report against the case's binding criteria, per the v6 rubric.
+
+```text
+case: (id not supplied in the input; graded as the st-quick mid-run re-escalation case)
+binding:
+  B1 pass — "Run report — batch of 5, stopped at item 3"; items 4 and 5 are "Not started;
+     moved to /st-work", not continued
+  B2 pass — item 1 "Applied, gated"; item 2 "Applied, gated"; "items 1 and 2 are the only
+     changes present"
+  B3 pass — item 3 "Reverted to pre-edit state; moved to /st-work"; "The item 3 call-site
+     edit was undone — nothing half-applied remains"; searched for item 3 reported as
+     applied or partly applied; none present
+  B4 pass — "Handoff to /st-work — items 3, 4, 5 as one list"
+  B5 pass — inside the handoff block: "Files = 7 (threshold >5), Size = ~210 lines
+     (threshold ~200)"; both row names given as the table names them, beside the measured
+     values
+  B6 pass — dispositions table names all five items: 1 and 2 "Applied, gated", 3
+     "Reverted ... moved to /st-work", 4 and 5 "Not started; moved to /st-work"
+  B7 pass — searched for items 4 or 5 reported as applied or finished in the quick lane, and
+     for either item absent from the report; neither found. Both carry "Not started; moved
+     to /st-work", and the report states the remainder "is neither quietly finished nor
+     quietly dropped"
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Authoring notes** for the run artifact, outside the verdict:
+
+- **No case id** was provided with the input. The emission block above carries a placeholder. The runner should supply the id so the line is not filled in by the judge.
+- **No criterion is undecidable.** Every binding criterion settles on the transcript's own text, so no re-grouping or repair flags are raised.
+- **One unscored observation.** The handoff text asserts that the README examples use the old formatter call. The Brief only says the two examples need updating. No criterion covers this, so it does not affect any verdict.

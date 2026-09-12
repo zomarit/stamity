@@ -1,0 +1,83 @@
+I can't emit the proof block yet — `r7/review/2` reads `open`, and the close refuses to write the record while any row does. That's a gate failure, not a note. So the first thing this run does is close that row.
+
+## Close of `r7/review/2`
+
+It's a Minor row, so it never reached the QA checkpoint — but not reaching the checkpoint isn't not closing. Its disposition isn't itself ambiguous (no choice here differs materially in cost or blast radius), so the ambiguity floor doesn't fire and the run closes it rather than asking you. Closed **deferred**, with the rationale that put it below the floor:
+
+```
+r7/review/2 | Minor | stamity-reviewer | src/api/users.ts:120 | deferred |
+  rationale: below the severity floor — non-blocking reviewer nit on a file
+  already touched this run; no gate or acceptance criterion depends on it.
+  | retired: —
+```
+
+Because it closed `deferred`, it is appended to `.stamity/inbox.md` in the same dated block as the other deferral — the run now has **two** inbox rows, not one:
+
+```
+## 2026-09-12 — /st-work r7
+
+- Warning | src/api/users.ts:41 | rate limiting absent on the users endpoint;
+  tracked separately | source: /st-work | Ref: <r7 ledger>#r7/security/1
+- Minor | src/api/users.ts:120 | reviewer nit deferred below the severity floor
+  | source: /st-work | Ref: <r7 ledger>#r7/review/2
+```
+
+One flag: the ledger path for the `Ref:` field isn't restated in the run state I hold, so the new row reuses the exact path already written in the existing `r7/security/1` inbox row rather than minting a second spelling of it.
+
+---
+
+# Proof block — `/st-work` run `r7`
+
+**Gates**
+
+| gate | command | result | failing excerpt |
+|---|---|---|---|
+| lint | `npm run lint` | pass | — |
+| typecheck | `npm run typecheck` | pass | — |
+| test | `npm test` | pass | — |
+
+**Review verdicts**
+
+| round | agent | verdict | confidence |
+|---|---|---|---|
+| 1 | `stamity-reviewer` | changes requested | high |
+| 2 | `stamity-reviewer` | approved | high |
+
+**Decisions trace**
+
+1. Gates lint/typecheck/test — all pass, no decision required, run proceeds.
+2. `r7/review/1` (Warning, `src/api/users.ts:88`) — reached the QA checkpoint, acted on, closed `fixed`; round 2 re-review confirmed.
+3. `r7/security/1` (Warning, `src/api/users.ts:41`) — reached the checkpoint, closed `deferred`; rationale: rate limiting is tracked separately in the inbox. Appended to `.stamity/inbox.md`.
+4. `r7/review/2` (Minor, `src/api/users.ts:120`) — held below the severity floor, so it did not reach the checkpoint. Disposition unambiguous, so the ambiguity floor did not fire and no ASK was raised. Closed `deferred` by the run against the exit invariant; rationale recorded above. Appended to `.stamity/inbox.md`.
+5. ASK outcomes: none. No row presented dispositions differing materially in cost or blast radius.
+6. Close re-read the ledger before writing this record: 0 rows `open`, 1 `fixed`, 2 `deferred` with rationale, 0 `rejected`. Exit invariant satisfied.
+
+**Artifacts touched**
+
+| path | owning sub-agent |
+|---|---|
+| `src/api/users.ts` | `stamity-implementer` |
+| `test/api/users.test.ts` | `stamity-implementer` |
+| `.stamity/inbox.md` | `/st-work` (close) |
+| run ledger (`r7`) | `/st-work` (close) |
+
+**Per-action attribution**
+
+| agent | tool | outcome |
+|---|---|---|
+| `/st-work` | Bash — `npm run lint` | pass |
+| `/st-work` | Bash — `npm run typecheck` | pass |
+| `/st-work` | Bash — `npm test` | pass |
+| `stamity-implementer` | Edit — `src/api/users.ts` | applied |
+| `stamity-implementer` | Edit — `test/api/users.test.ts` | applied |
+| `stamity-reviewer` | review round 1 | changes requested, high |
+| `stamity-reviewer` | review round 2 | approved, high |
+| `stamity-security` | review | raised `r7/security/1` |
+| `/st-work` | Edit — ledger rewrite of `r7/review/2` | `open` → `deferred` |
+| `/st-work` | Edit — `.stamity/inbox.md` | 2 rows appended under a dated block |
+
+**Recommended next step**
+
+Pick up the two inbox rows this run appended: `r7/security/1` — rate limiting on `src/api/users.ts:41`, the only Warning-severity deferral outstanding — and then `r7/review/2` at `src/api/users.ts:120`. No acceptance criterion was left uncovered by this run, and no finding ended it pending.
+
+**Not done:** `r7/security/1` → inbox row, `2026-09-12` block. `r7/review/2` → inbox row, same block. Neither carries a lane, trigger or owner yet, so neither ledger row has gained its `retired` field.

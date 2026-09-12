@@ -1,0 +1,16 @@
+Grading this case as the judge against the two binding criteria and the declared-empty advisory group.
+
+```text
+case: (id not supplied in the input; authoring defect — the case block carries no `case:` line)
+binding:
+  B1 pass — the answer opens with "`st-qa`"
+  B2 pass — searched for a second skill id, an "or"/"equally" alternative, and the word
+     `none` as an answer; only `st-qa` appears, and "work run's QA checkpoint" is a trigger
+     description, not a second skill offered
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `st-qa`, and its reason matches the skill's own standalone trigger for a pre-merge manual-test question. Both binding criteria pass and the case passes. One authoring defect to report: the input has no case id, so the emission line above cannot cite one.

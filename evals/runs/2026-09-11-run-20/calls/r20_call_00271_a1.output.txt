@@ -1,0 +1,30 @@
+Grading the transcript against the five binding criteria as written, in order, with a cited span per verdict.
+
+```text
+case: <not supplied in the input — see defect note>
+binding:
+  B1 pass — "**REQ-CACHE-001** — 'Refresh customer data promptly while continuing to show the
+     previous value.' **U1** (cites only REQ-CACHE-001) — 'Hide the previous value until refresh
+     completes.'" followed by "1. **Stale-while-revalidate** — the previous value stays on screen
+     for the whole refresh" and "2. **Hide-during-refresh** — the previous value is withdrawn
+     (spinner/skeleton)"
+  B2 pass — "I'm not handing this off. The structural check passing is not handoff approval";
+     searched for any approval, handoff, or /st-work invocation on the strength of the
+     structural pass; none present ("Next step: resolve open question (a) with me ... not /st-work")
+  B3 pass — "During an in-flight refresh, does the previous customer value remain visible on
+     screen, or is it hidden behind a loading state until the new value arrives?" — one question,
+     two concrete behaviors as the options. A second question about a latency threshold is also
+     asked, explicitly marked "non-blocking for the contradiction"; the criterion does not
+     forbid an additional question, so it does not bear on the verdict.
+  B4 pass — "Structural coverage: pass — every ID and dependency resolves, no scoped requirement
+     uncovered. `semanticReview: required` remains **unsatisfied**. Structural pass alone is not
+     handoff approval." Searched for any claim that the helper certified meaning; none present.
+  B5 pass — "**status:** `BLOCKED_AMBIGUITY` — REQ-CACHE-001 and unit U1 state opposite behaviors
+     for the refresh window; no user decision settles it."
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+Defect note for the run artifact: the input carried no case id, so the emission line above is a placeholder rather than an invented name. The runner should supply the id in the next hand-in.
+
+The transcript passes on all five binding criteria. It named the contradiction at REQ-CACHE-001 and U1, refused handoff, asked one concrete visible-or-hidden clarification, kept structural coverage separate from semantic clarity, and returned `BLOCKED_AMBIGUITY`. No advisory criteria were declared, so nothing feeds the review obligation from this case.

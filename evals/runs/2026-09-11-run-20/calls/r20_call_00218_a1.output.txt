@@ -1,0 +1,32 @@
+## Not dispatching in parallel — reporting a protocol failure
+
+File-disjoint is not contract-disjoint. `customerKey` is a **persisted-name** contract: producer `src/writer.ts`, consumer `src/reader.ts`. Splitting the file set protects nothing here. Under the gates, parallel dispatch over a brownfield batch with no census is a protocol failure and gets reported as such; guessing that the file lists imply independence is not the fallback.
+
+The failure mode is the silent one. If A lands the rename while B still reads `customerKey`, nothing breaks loudly — no import disappears, no build fails. The reader gets an absent key and misreads the shape with no signal. That outranks a loud break.
+
+### What runs first
+
+Census the contract before either unit starts. The searches that make a row closable:
+
+- `customerKey` **and** `accountKey`, both spellings, in quoted form as well as bare — it's string-typed at the persistence seam.
+- Fixtures and recorded payloads still asserting the old key.
+- Non-code files: migrations, deployment manifests, environment files, pipeline definitions.
+- Already-written records. A persisted-name rename implicates stored rows, not just code; that's a migration decision I'm flagging, not assuming.
+
+`clean` on any row requires the captured search output. I haven't run the search, so I'm not claiming the consumer set is just `src/reader.ts` — that's the one consumer already known, not the census result.
+
+### Then: facade-hold, A owns
+
+Unit A's acceptance criteria require the rename, so A owns it and lands the producer change plus every consumer reconciliation in one diff. The hold:
+
+- Writer emits `accountKey` **and** keeps `customerKey`. The key set stays what it was.
+- `src/reader.ts` moves to a guarded read.
+- `customerKey` is removed in a later change, once the census shows zero unguarded readers.
+
+Unit B codes against the held facade.
+
+One consequence worth naming: A's reconciliation diff touches `src/reader.ts`, which B also edits. So these two aren't disjoint at the file level either, once A's diff is actually complete. B sequences after A lands, or B's reader change is scoped to the guarded read and nothing else.
+
+### What I need from you
+
+Confirm A owns the rename by its acceptance criteria, and say whether you want the facade-hold or a straight serialise — A fully landed, then B against the shape A left. Either is fine; concurrent-as-specified is not. If you want them concurrent anyway after seeing this, say so and I'll proceed and record it as dispatched against an unevidenced census.

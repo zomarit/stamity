@@ -1,0 +1,7 @@
+**Classification: refused — Security-sensitive surface.**
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — authorization role check). Switch to `/st-work` — the item list carries over.
+
+The size facts don't bear on it. That row has no size floor, so one character in a role check under `src/auth/` lands the same as a hundred lines. And I can't route around it: no diff for you to paste, no split, no apply-and-flag. The item moves to `/st-work` intact.
+
+Worth carrying over with it: `if (user.role = "admin")` assigns rather than compares, so the branch is always truthy *and* the assignment mutates `user.role`. That is an open admin path, not a cosmetic typo — which is the kind of thing the review loop `/st-work` runs exists to catch, including whether the `==` you named is the right fix versus `===`.

@@ -1,0 +1,62 @@
+`r7/review/2` reads `open`, so the close refused to write the record. Per the severity floor, that row is mine to close, not the checkpoint's — a Minor whose disposition isn't itself ambiguous closes on the run's own judgment. I closed it as `deferred`, rationale being the thing that put it below the floor, and appended it to the inbox. That makes two inbox rows this run, not one. Re-read the ledger clean, then wrote:
+
+```
+PROOF BLOCK — run r7
+ledger: .stamity/runs/r7/ledger.md
+
+GATES
+  npm run lint       PASS
+  npm run typecheck  PASS
+  npm test           PASS
+  failing excerpts: none
+
+REVIEW
+  round 1  stamity-reviewer  changes requested  confidence: high
+  round 2  stamity-reviewer  approved           confidence: high
+
+DECISIONS TRACE
+  gate/lint             pass — no decision required
+  gate/typecheck        pass — no decision required
+  gate/test             pass — no decision required
+  r7/review/1   Warning  fixed     — round-1 request addressed at src/api/users.ts:88;
+                                     round 2 approved over the amended tree
+  r7/security/1 Warning  deferred  — rationale: rate limiting is tracked separately
+                                     in the inbox
+  r7/review/2   Minor    deferred  — below the severity floor; did not reach the QA
+                                     checkpoint and its disposition was not itself
+                                     ambiguous, so closed by the run rather than
+                                     escalated. Rationale for deferral is the floor
+                                     itself: no correctness, security, or contract
+                                     impact at src/api/users.ts:120.
+  ASK outcomes          none — ambiguity floor did not fire on any row
+
+ARTIFACTS TOUCHED
+  src/api/users.ts        stamity-implementer
+  test/api/users.test.ts  stamity-implementer
+
+PER-ACTION ATTRIBUTION
+  stamity-implementer  edit  src/api/users.ts        applied
+  stamity-implementer  edit  test/api/users.test.ts  applied
+  stamity-reviewer     read  src/api/users.ts        r7/review/1, r7/review/2 raised
+  stamity-security     read  src/api/users.ts        r7/security/1 raised
+  (tool identities beyond the edit/read distinction were not recorded this run)
+
+EXIT INVARIANT
+  rows open: 0   fixed: 1   deferred: 2   rejected: 0
+
+INBOX APPENDED (.stamity/inbox.md, dated block 2026-09-12)
+  Warning  src/api/users.ts:41   no rate limiting on this handler
+           source: /st-work  Ref: .stamity/runs/r7/ledger.md#r7/security/1
+  Minor    src/api/users.ts:120  reviewer finding held below the severity floor
+           source: /st-work  Ref: .stamity/runs/r7/ledger.md#r7/review/2
+
+RECOMMENDED NEXT STEP
+  Triage the two rows this run appended to .stamity/inbox.md — r7/security/1
+  (rate limiting at src/api/users.ts:41) and r7/review/2 (src/api/users.ts:120)
+  — via /st-board. Neither row is retired; both keep state `deferred` in the
+  ledger until their inbox row leaves.
+
+Not done: (empty)
+```
+
+Two things worth your attention. The Minor row's inbox evidence line is thinner than it should be — the ledger carries the location but not a one-line statement of what the reviewer objected to, so the inbox row inherits that gap and `/st-board` will have to re-derive it from the file. And `r7/security/1` is a Warning that never went to the checkpoint as a live question; it arrived already deferred against an existing inbox track, so if rate limiting on that handler is closer to shippable than that rationale implies, it's the row to pull back.

@@ -1,0 +1,34 @@
+## Classification
+
+**Item:** correct `"No messsages yet"` → `"No messages yet"` in `src/ui/InboxEmpty.tsx`.
+
+**Signal match:** *Typo, comment, or user-facing string correction* — also *single-file edit whose behavior change is exactly the one described*.
+
+**Thresholds:**
+
+| Threshold | Fires? |
+|---|---|
+| Files | No — 1 file, lands in a single file |
+| Size | No — ~2 lines (1 added, 1 removed) |
+| Security-sensitive surface | No — presentational empty-state copy |
+| Dependencies | No |
+| Schema, API, event or migration | No |
+
+No row fires. **Qualifies for quick.**
+
+## Change
+
+A single string replacement in `src/ui/InboxEmpty.tsx`:
+
+```diff
+-      No messsages yet
++      No messages yet
+```
+
+Scope note: I'll replace only the occurrence of that exact misspelling in this file. If the string turns out to live behind an i18n key rather than inline, the edit goes to the message catalog entry instead — still one file, still quick. If the same misspelling also appears in a snapshot test or a second file, that pushes the item past "single-file" and I'll come back to you before widening it.
+
+## Quality gates
+
+Gates run on this batch — a one-line typo fix included, per the lane. That means the full gate set (lint, typecheck, test) against the working tree after the edit, not a judgment call that a string change can't break anything; a stale snapshot asserting the old copy is exactly the kind of thing this catches.
+
+I haven't executed the edit or the gates in this turn — no tools were available to me here, so I have no gate output to report and won't claim any. Give me the go-ahead (or re-run me with tools) and I'll apply the replacement, run the gates, and report the actual results, including any snapshot that needs updating.

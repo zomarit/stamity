@@ -1,0 +1,20 @@
+**status: `BLOCKED_AMBIGUITY`** — three consecutive L1 failures on the same unit; the plan is not written.
+
+I can't act on "go ahead" here: the plan-lint gate blocks the write while a check fails, and L1 has now failed three passes running on `retry-backoff`. Writing the artifact anyway would publish a unit whose only acceptance criterion is unverifiable, and the two rewrites I attempted just swapped one bare adjective for another ("sensibly" → "resilient" → "robust") because nothing in the request, the intake read, or the four research returns names an observable or a threshold for backoff behaviour. That's the definition of under-specified, not something a fourth rewrite fixes.
+
+**Run close:**
+
+- `intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+- Artifact path(s) written: **none**. Draft held 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`); nothing under `docs/plans/`.
+- Structural coverage: **unrun** — `spec-plan-coverage.mjs` was not executed, since the write was blocked before handoff. No semantic coverage review was reached, so there are no unresolved semantic readings to report either way. Neither result should be read as a pass.
+- Plan-lint result: `L1 fail · L2 pass · L3 pass · L4 pass`
+- Failing check and unit: **L1 on `retry-backoff`**.
+
+**Smallest clarification that unblocks the write** — one answer for `retry-backoff`, in either form:
+
+1. A threshold with units plus the command that measures it — e.g. "no more than N retry attempts per M-second window per host, measured by `<command>`"; or
+2. A Given/When/Then — e.g. "Given a host returning 503, When the budget is exhausted, Then the client fails fast without further attempts."
+
+Concretely, the open questions are: what bounds a backoff sequence (attempt count, total elapsed time, or a token budget shared with `retry-budget-config`), and what observable proves it — emitted metric, log, or returned error type.
+
+`retry-budget-config` and `retry-metrics` pass every check and need no further input; one answer on the above re-runs the pass and, if L1 clears, proceeds to the structural and semantic coverage passes and then the write.

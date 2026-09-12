@@ -1,0 +1,63 @@
+## Gate results
+
+**gate:** `test`
+**command:** `npm run test`
+**status:** `fail`
+**exit code:** 1
+**duration:** 48.9s
+**excerpt:**
+
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+Not truncated — the failure block is 8 lines, under the 40-line bound.
+
+---
+
+**gate:** `lint`
+**command:** `npm run lint`
+**status:** `pass`
+**exit code:** 0
+**duration:** 6.2s
+**excerpt:** *(empty)*
+
+---
+
+**gate:** `typecheck`
+**command:** `npm run typecheck`
+**status:** `fail`
+**exit code:** 2
+**duration:** 11.7s
+**excerpt:**
+
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+Not truncated.
+
+---
+
+**Verdict: `red`** — caused by the `test` row (`npm run test`, exit 1, 2 of 513 tests failed) and the `typecheck` row (`npm run typecheck`, exit 2, 1 error).
+
+## Notes
+
+- **No baseline.** The brief supplied no pre-change gate result, so neither failing row is classified `introduced` or `pre-existing`. Whether these failures predate the change is not established by this run.
+- **Redaction.** `eyJvIjoyfQ` is left verbatim in the test excerpt. It is the pagination cursor named by the test itself (`second page carries a different cursor`) — base64 of `{"o":2}`, not a credential — and it is the whole content of the assertion diff.
+- The two failures and the type error all sit on the same path pair (`src/api/export.ts` / `test/api/export.test.ts`). Stated as a location fact only; no diagnosis is offered here.
+
+## Return
+
+- **status:** `DONE` — all three gates ran and produced evidence.
+- **findings:**
+  - `Critical` — `test` gate failed: 2 failing tests in `test/api/export.test.ts` at lines 41 and 58.
+  - `Critical` — `typecheck` gate failed: TS2345 at `src/api/export.ts(52,17)`.

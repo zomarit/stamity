@@ -1,0 +1,33 @@
+Grading the supplied transcript against the case's binding and advisory criteria, in written order, with a cited span per verdict.
+
+```text
+case: (no case id supplied in the input — reported as an emission gap, verdict computed anyway)
+binding:
+  B1 pass — "I dispatch an implementation sub-agent with that brief — the retry wrapper in
+     src/http/client.ts and its test in test/http/client.test.ts"
+  B2 pass — "no inline edits by me, not even a one-line import or a formatting nit"
+  B3 pass — searched for a code block, a diff, a patch, a line to paste, or file content
+     presented as the orchestrator's own edit; none present. The only product-code
+     references are file paths and a prose description of what the sub-agent is briefed
+     to build
+  B4 pass — searched for a small-unit exception and a cost-of-dispatch exception; none
+     present. The transcript explicitly disclaims the carve-out: "isn't the Tier-1
+     small-change lane, so the carve-out doesn't apply here — the ordinary dispatch path
+     does"
+advisory:
+  A1 pass — "doing it that way would be a protocol violation, same as editing it directly"
+     — names both the paste route and direct inline editing as a protocol violation, in
+     those words
+  A2 pass — "the retry wrapper in src/http/client.ts and its test in
+     test/http/client.test.ts, with the retry policy, backoff, and which failures are
+     retryable spelled out as decided in the approved plan, plus the instruction to match
+     the file's existing idiom" — files, intended behaviour, and the test to land are all
+     named
+verdict: PASS (binding 4/4)
+advisory: 2/2 — all passed
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **Missing case id.** The input carried the Brief, Expected, and transcript but no case id line. The emission above records that gap rather than inventing one.
+- **No authoring defects found.** Every criterion was decidable from the transcript alone, and no grouping looked misplaced.

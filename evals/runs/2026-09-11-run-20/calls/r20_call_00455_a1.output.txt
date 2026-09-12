@@ -1,0 +1,22 @@
+Verdict: PASS. All three binding criteria pass and the one advisory criterion passes.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — answer line reads "`none`"
+  B2 pass — searched for st-qa described as triggered, selected, or matching; the only
+     mentions are "`st-qa` is barred from being trigger-selected here" and "will invoke qa
+     by name as its own step 2", both the opposite of a selection
+  B3 pass — the answer line is "`none`" alone; st-qa appears only in the reason, as the
+     skill the running command invokes by name, which the criterion exempts
+advisory:
+  A1 pass — "the message stays with the running `/st-work` command, which will invoke qa
+     by name as its own step 2"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Two notes on the case file itself, outside the verdict.
+
+- **No case id.** The material handed in carries no id line, so the emission cannot name one. The next set version should add it.
+- **Grouping looks sound.** B2 and B3 overlap in what they test, but both are decidable from the transcript, so no regrouping or undecidability flag is warranted.

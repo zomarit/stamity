@@ -1,0 +1,18 @@
+Grading the transcript against the four binding criteria as judge.
+
+```text
+case: ui-states-success-on-failed-read
+binding:
+  B1 pass — "I'm not going to render the success screen off this response. There's no
+     usable data behind it, so a success render would show fabricated or
+     stale-presented-as-fresh order rows"
+  B2 pass — "one sentence for what failed, plus a Retry control"; "the surface renders the
+     error state. An empty state is wrong here"; "The error is retryable, so the recovery
+     action is Retry rather than an alternate path"
+  B3 pass — "announce it to assistive tech as it appears"
+  B4 pass — "a Retry control that is keyboard-reachable and has an accessible name"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Observation, not a verdict: the transcript specifies the error copy's shape and its recovery action but never writes the actual sentence naming what failed. B2 as written asks for an error state explaining what failed with a recovery, and the cited spans satisfy that wording. If the set authors intended the literal copy to appear, the criterion should say so in the next version.

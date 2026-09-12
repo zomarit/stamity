@@ -1,0 +1,30 @@
+**status:** `BLOCKED_FAILURE`
+
+Nothing was written. No file exists at `.stamity/overrides/rules/st-migrations.md`, and none was created — no partial write, no `.bak` (there was nothing to back up).
+
+## Strict errors — Critical
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from the frontmatter. `id`, `type`, `description`, and `tags` must all be present; `tags` is the only one missing. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine-prefixed ids mark engine-owned files and forfeit the verified backup a user-lane overwrite would otherwise take. |
+
+## Strict gates that did pass
+
+- `type: rule` agrees with the class directory `rules`.
+- `id` is a lowercase kebab slug and matches the filename it was to be saved as.
+- No block-severity deny hit in the 34-line body.
+- No block-severity deny hit in any frontmatter string, `description` included.
+
+## Advisory findings — Minor
+
+These are reported because findings are reported whatever the outcome; they did not cause the refusal and will still be attached to the save unless fixed.
+
+- `load:` is not declared. Required declaration — what the artifact costs in context. Expected one of `always`, `on-demand`, `reference`.
+- `obsolete_when:` is not declared. Required declaration — the condition that retires the artifact.
+- Body is 34 lines, under the rule class threshold of 100. No length warning.
+- No filler-wordlist hits.
+
+## What a clean re-save needs
+
+Drop the prefix and add the missing field. `id: migrations`, filed as `.stamity/overrides/rules/migrations.md` so the id and filename still agree — note this changes the target path, so any cross-reference to `st-migrations` must move with it. Add `tags`, and add `load:` and `obsolete_when:` to clear the two Minor findings as well. I have not re-attempted the save; re-spawn with the corrected brief.

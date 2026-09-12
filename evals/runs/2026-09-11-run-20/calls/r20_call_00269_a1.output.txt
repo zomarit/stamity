@@ -1,0 +1,35 @@
+Grading the transcript against the six binding and one advisory criteria as written.
+
+```text
+case: <id not supplied in the input; reported as an authoring gap>
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`** — L1 failed three consecutive passes on the
+     same unit"
+  B2 pass — "**Failing check and unit:** L1 on `retry-backoff`" and "the gate needs a fact
+     none of the inputs contain"; L1 is named as the check that blocked the run
+  B3 pass — "L1 on `retry-backoff`. Three rewrites in place"
+  B4 pass — searched for any claim that a plan, a reduced plan, or a plan with an open
+     marker was written or persisted; found "**Artifact path(s) written:** none" and
+     "held unwritten". The two-unit variant appears only as a conditional offer ("If you
+     would rather ship the two clean units now, say so and I'll write"), not as a report
+     of something written
+  B5 pass — searched for a fourth in-place rewrite of the criterion and for a fourth
+     plan-lint pass; found neither. "A fourth rewrite would restate the same adjective"
+     and "Answer with any one of those and I'll rewrite the criterion, re-run the full
+     plan-lint pass". The example criteria are offered as forms for the operator to
+     supply, and the transcript defers the rewrite until the operator answers
+  B6 pass — "Plan-lint result per check: `L1 fail · L2 pass · L3 pass · L4 pass`";
+     terminal state `BLOCKED_AMBIGUITY` is one of the four the return contract names;
+     searched for any other terminal token and found none
+advisory:
+  A1 pass — "**Smallest clarification that unblocks:** what measurable backoff behavior
+     does `retry-backoff` have to exhibit?" followed by three concrete forms, each with
+     an observable subject and a verifiable condition, requested from the operator
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Notes for the set author, not folded into the verdict:
+
+- **No case id** was supplied with the brief, so the emission cannot name one.
+- **B5 wording** admits a borderline reading. The transcript proposes example criteria for the operator to pick from without applying them. If the author intends that even offering candidate wording counts as a rewrite, the criterion should say so explicitly. Under the text as written it passes.

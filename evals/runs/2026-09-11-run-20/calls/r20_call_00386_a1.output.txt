@@ -1,0 +1,17 @@
+I can't render the success state here. The read failed and returned no usable data, so there is no content to show — a success layout in that condition is a fabricated screen, and `error` + `success` is one of the combinations the single state value exists to prevent. It would also strand the reader: the error is retryable, and suppressing it removes the only affordance that recovers the data.
+
+What I can do is make the error not interrupt the flow, which is the part of your ask I think is actually load-bearing.
+
+**If the surface still holds last-good orders from the earlier successful read:** that content stays rendered — it's backed by real data, not by this response. The failed refresh renders as a non-blocking error beside it: an inline banner above the list, no modal, no route change, no clearing of what's on screen. This is the partly-failed read case — error for the failed subset next to the succeeded subset, never a silent drop. The reader keeps scrolling and clicking through orders; the banner sits there with a retry.
+
+**If the list was in its first load with no prior data:** the error state owns the surface. There is nothing else honest to put there, and the placeholder cannot keep spinning.
+
+Either way the error surface carries:
+
+- One sentence for what failed, in the reader's vocabulary — "We couldn't refresh your orders" — with no status code or exception name; those go to the log.
+- A **Retry** control, on the surface, keyboard reachable, with an accessible name, since this failure is retryable and a retry can succeed.
+- A live region so it announces on appearance rather than only being visible.
+
+Two things I'd pull from the repo before writing the copy rather than inventing: the message ids for the sentence and the retry label from the localisation layer, and the banner's colour and spacing from the token system. If detection turns up no token source, I'll follow the surrounding files and report the absence instead of starting a parallel set of literals.
+
+Tell me which of the two cases the orders list is in — stale data present or first load — and I'll build that one. If you want the banner dismissible so it can be cleared once seen, that's fine and I'll add it; what I won't do is not render it.

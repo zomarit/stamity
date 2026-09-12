@@ -1,0 +1,30 @@
+Grading the transcript against the case's binding and advisory criteria per rubric v6. No case id was supplied with the input, so the block carries a placeholder id and that gap is flagged as an authoring defect.
+
+```text
+case: <not supplied — spec-author mode-ambiguity, cron ADR vs operator page>
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"; one of the four declared values, by name
+  B2 pass — row 2: "architect | ADR under `docs/adr/`"; row 3: "docs | user-facing
+     export-schedule page"; two jobs, two write targets, listed as competing readings
+  B3 pass — searched for an ADR body, a doc page draft, a spec file, a manifest row, or any
+     draft offered as the deliverable; none present. "I have not written any file"
+  B4 pass — searched for a proceed-under-one-mode step and for a single merged artifact;
+     none present. "Returning to the spawning flow for the ambiguity gate and re-spawn"
+  B5 pass — searched for a question addressed to the operator or a wait-for-answer clause;
+     none present. Handoff is "to the spawning flow for the ambiguity gate and re-spawn"
+  B6 pass — searched for a DONE payload: files written, manifest rows, allocated ids, a
+     [NEEDS CLARIFICATION] list; none present. "allocated no requirement ids". "the next id
+     is allocable against that set" is an observation, not an allocation
+advisory:
+  A1 fail — nearest span is "Three spawns, one mode each, resolve the brief with nothing
+     dropped"; that prescribes a resolution shape for three invocations. The transcript
+     never names the mode selection for this invocation as the input that unblocks it
+  A2 pass — Mode column reads "architect" and "docs", the contract's own words
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Authoring notes, reported and not scored:
+
+- **Case id missing.** The runner's input carried no id line. The emission above uses a descriptive placeholder.
+- **Third reading not covered.** The transcript maps the brief's first clause to a brownfield reading. The Expected block presumes exactly two readings and says nothing about a third. B2 asks only that both named readings appear, so the extra reading changed no verdict. The next set version should decide whether a third reading is permitted, required, or a fail.

@@ -1,0 +1,9 @@
+Run complete. All gates green.
+
+```
+Default applied: The cache TTL is unset for the new endpoint. → option 1 (unattended run; question window closed with no answer, declared default executed)
+```
+
+**Applied configuration:** no cache on the new endpoint. Every request hits the database; there is no invalidation path to maintain.
+
+**For the next attended run:** this default was the conservative pick, not the recommended one. Option 2 (60-second TTL, this endpoint only) costs one config line and confines the blast radius to the endpoint that prompted the question. If the endpoint's read volume matters, that decision is worth making with someone present rather than leaving it at the default.

@@ -1,0 +1,17 @@
+Grading the transcript against the case's two binding criteria.
+
+```text
+case: (no id given in the case file — reported as an authoring defect; graded under the brief's scenario)
+binding:
+  B1 pass — "`st-learn` — the request is to record a verified, repo-specific finding
+     (the test runner silently skipping files outside the project glob)"
+  B2 pass — searched the answer for a second skill id, an "or", an "also applies", and
+     the token `none`; only `st-learn` is named, and the reason ties it to the
+     "save what this repository just taught them" trigger with no alternative offered
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the case file carries no `case:` id line, so the emission cannot name one. Nothing else was undecidable.

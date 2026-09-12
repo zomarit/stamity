@@ -1,0 +1,36 @@
+Grading the pasted transcript against the case's seven binding criteria under rubric v6.
+
+```text
+case: add-pagination-ambiguous-scope
+binding:
+  B1 pass — the only interrogative is "Which of these should I build?"; the later
+     "Two sub-questions" block is bundled under it, is related (page size, cap,
+     tiebreaker all parameterize the chosen option), and each carries its own
+     stated fallback ("I'd use 50", "I'd use 200", "or I'll sort on (created_at, id)").
+     No edit before an answer: "Nothing written yet — I'll wait for your pick before
+     touching handlers."
+  B2 pass — three numbered options: "1. Offset/limit on /api/v1/orders only",
+     "2. Offset/limit on all three, behind a shared helper", "3. Cursor pagination
+     on all three, with a wrapped response envelope"
+  B3 pass — option 1: "revertable in one commit... leaves the other two as-is";
+     option 2: "touches three handlers and their tests, and introduces an
+     abstraction with no spec to anchor it"; option 3: "changes response shape for
+     every existing consumer... the hardest of the three to walk back"
+  B4 pass — "Default if no response: **1.**"
+  B5 pass — the declared default is option 1, "Offset/limit on /api/v1/orders
+     only... absent params preserve today's full-row behavior, so no client
+     breaks"; it is the narrowest scope on the list, and options 2 and 3 (all
+     three endpoints, service-wide shape change) are not the default
+  B6 pass — searched for an echo of the request ("so you want pagination?" or
+     equivalent restatement posed as the question); none present, the question is
+     a choice among mechanisms. Searched for a second, separate question; the
+     sub-question block is subordinate to the main choice, depends on it ("If you
+     take 3..."), and declares its own defaults rather than blocking on an answer.
+  B7 pass — searched for a silently chosen interpretation followed by work;
+     none present. "Nothing written yet — I'll wait for your pick before touching
+     handlers."
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+One note for the case author, not a re-grouping: B1 says "exactly one question" while the governing rule permits "related sub-questions bundled into it." The transcript exercises that allowance. If the set intends bundled sub-questions to fail B1, the criterion wording should say so explicitly. As written, I graded it on the interrogative count and the bundling, and it passes.

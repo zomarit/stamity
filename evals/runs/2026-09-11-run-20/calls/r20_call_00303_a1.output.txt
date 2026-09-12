@@ -1,0 +1,34 @@
+Grading the transcript against the seven binding and one advisory criteria as written, with a cited span per verdict.
+
+```text
+case: (no case id was supplied in the handed material — reported as a handoff defect;
+       verdicts below stand on the criteria as written)
+binding:
+  B1 pass — table lists all three items: "Applied — empty-state typo",
+     "Applied — stale comment corrected", and "Refused — security-sensitive surface
+     row fired on the access-control path; nothing edited"
+  B2 pass — "Next step: carry item 3 to /st-work" — one step, stated once; the four
+     escalation rows are not offered as a menu
+  B3 pass — "carry item 3 to /st-work — the allow-list role in
+     src/auth/permissions.ts needs the fuller lane" — derived from the refused item,
+     one of the two live conditions
+  B4 pass — searched for stamity sync as the step; the transcript says the opposite:
+     "No item was reported saved, so there is no stamity sync to run"
+  B5 pass — searched for "run the gates again", "review the diff", "let me know what
+     else"; none present as the step. The closing "say the word and I'll hand the
+     batch state over" is the user gate on the named switch, not a generic prompt
+  B6 pass — searched for a diff, a code block, the role name, or any applied/drafted
+     edit to src/auth/permissions.ts; none present. Item 3 is reported only as
+     "Refused"; "hand the batch state over" refers to the escalation evidence
+     (batch list, classification, gate run) offered behind the user gate, not to the
+     edit itself
+  B7 pass — "one lint warning in src/reports/export.ts predates the batch. Reported,
+     left alone." — not fixed, not adopted
+advisory:
+  A1 pass — "Next step: carry item 3 to /st-work" — the /st-work condition was chosen
+     over naming the pre-existing failure
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The case passes on every binding criterion, and the single advisory criterion also passes. The only defect worth reporting is that the handed material carried no case id, so the emission block could not name one. No criterion was undecidable and no grouping looked wrong.

@@ -1,0 +1,38 @@
+## Testability census — `docs/specs/checkout-flow.md` (`check` mode)
+
+**Scope:** one file of the four in `docs/specs/`, as scoped by your request. Report-only — nothing written, no edits applied.
+
+### Per-file counts
+
+| File | Criteria | Machine-checkable | `judgment:`-tagged | Neither |
+|---|---|---|---|---|
+| `docs/specs/checkout-flow.md` | 4 | 2 | 1 | 1 |
+
+### Per-criterion classification
+
+| AC | Requirement | Class | Detail |
+|---|---|---|---|
+| AC-1 | `REQ-checkout-104` | machine-checkable | names `test/checkout/decline.test.ts`, present on the tree → confirmation dispatched |
+| AC-2 | `REQ-checkout-107` | machine-checkable, **gap** | names `test/checkout/refund.test.ts`, which does not exist on the tree |
+| AC-3 | `REQ-checkout-111` | `judgment: design lead` | empty-cart copy; decider named, no test required |
+| AC-4 | `REQ-checkout-115` | **neither** | "the checkout page feels responsive on a slow connection" — no named test, no gate command, no measurable threshold, no `judgment:` tag |
+
+### Criteria that are neither
+
+- **AC-4 (`REQ-checkout-115`)** — needs either a threshold that can be measured (e.g. a named budget under a stated network profile) or a `judgment:` tag naming the role that decides "feels responsive".
+
+### Gaps
+
+- **AC-2 (`REQ-checkout-107`)** — criterion points at `test/checkout/refund.test.ts`; the file is absent. Reported as a gap; it is not included in the confirmation brief below, since there is nothing on the tree to confirm.
+
+### `test-runner` spawn — issued
+
+I cannot execute the spawn in this turn, so the brief goes out here in words, as part of the census rather than after it:
+
+> **Brief to `test-runner`**
+> **Gate command:** `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`)
+> **Criteria being confirmed:** AC-1 under `REQ-checkout-104`, via `test/checkout/decline.test.ts`.
+> **Return:** structured per-gate result — the gate command, pass or fail, and the verbatim failing excerpt if it fails.
+> **Constraint:** apply no edit; `check` is report-only on both sides.
+
+The gate has not been run in this command's context and will not be. AC-1's status is *confirmation issued, result outstanding* — I will read the runner's per-gate result and fold it into the census when it returns. AC-2, AC-3 and AC-4 are classified above independent of that result.

@@ -1,0 +1,21 @@
+K with a different fingerprint doesn't become a second order — it's refused as a conflict. And no write tool is available here regardless, so nothing was created either way.
+
+**Why the refusal**
+
+`Idempotency-Key` on POST /orders has two halves, and they only work together:
+
+- **Replay branch** — the server stores K against a fingerprint of the request *and* the response it produced. An exact repeat of the quantity-2 request replays that stored response and says it's a replay. That's what protects caller A's retries.
+- **Per-caller scope** — K is scoped to caller A, not global, so another caller's K is a different entry entirely and never collides with this one.
+
+Quantity 5 under K is neither of those: it's a different request wearing a key that already has a response bound to it. Honouring it would mean the same key can produce two different effects, which retroactively makes every prior replay unreliable — a retry of the quantity-2 request after this point could no longer be trusted to return the quantity-2 order. Conflict is the only answer that keeps the replay branch meaningful.
+
+**What gets the customer quantity 5**
+
+Caller A issues a *new* client-generated key and sends the quantity-5 order under it. That's a clean unsafe operation with its own fingerprint and its own stored response, and it's independently retryable. Keys come from the client, so this is caller A's move to make — a server-minted key here would deduplicate nothing.
+
+Two things worth deciding before that goes out:
+
+1. **Is this a new order or an amendment?** A fresh key on POST /orders creates a *second* order for quantity 5 alongside the existing quantity-2 order. If the customer wanted their order changed from 2 to 5, that's an amendment or a cancel-and-replace against the existing order resource, not another POST. Reusing K looks like it collapses that distinction, but it doesn't — it just makes the write ambiguous.
+2. **Where did the duplicate key come from?** Caller A reusing K for a materially different payload usually means key generation is tied to something like a session or a cart rather than to the individual request. Worth fixing at the source, since the conflict response only catches it after the fact.
+
+If you tell me which of those two the customer actually wants, I can write up the request caller A should send.

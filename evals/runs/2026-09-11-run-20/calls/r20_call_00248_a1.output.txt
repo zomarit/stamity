@@ -1,0 +1,16 @@
+The window elapsing isn't the gate. Rule 6 gates a destructive step on verified completion, and three things block it right now:
+
+1. **Two batches failed.** The backfill hasn't completed, so some rows have no value in the new column. Dropping the old one destroys the only copy of that data — irreversibly, and for an unknown row set until the failures are triaged.
+2. **Parity and checksum haven't run.** The change that drops must quote a verification result. There is nothing to quote.
+3. **The previous release still reads the old column.** The compatibility window's clock ran out, but its condition never held — the window exists so the prior release stays runnable against the current shape. Drop now and rollback stops being a revert deploy and becomes a restore from backup, which rule 2 names as the absence of a plan.
+
+I'm not going to run the drop. Here's the path to running it:
+
+- Triage the two failed batches — which key ranges, which error. The backfill is idempotent and resumable, so re-run those ranges from the persisted boundary rather than restarting.
+- Run verification layered: row-count parity per batch, aggregate per partition, checksum over sampled blocks.
+- Confirm the switch phase actually shipped and reads are on the new column, then restart the compatibility window from that point — minimum one release cycle plus one on-call rotation, with the previous release verified runnable against the new shape.
+- Then the drop ships as its own change, quoting the verification result, separate from the backfill.
+
+If there's pressure behind this — storage, a blocked schema change, an audit date — tell me what it is and I'll look for something that relieves it without the drop. Stopping writes to the old column, or dropping an index on it, buys most of the benefit and stays reversible.
+
+If you want the drop anyway, that's your call to make, but it needs an explicit irreversibility note naming why and a reviewer signing it off as its own decision. I won't execute it on this message alone.

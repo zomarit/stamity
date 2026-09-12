@@ -1,0 +1,13 @@
+**Classification: refused for this lane — Security-sensitive surface.**
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — session and role-based access control).
+
+Switch to `/st-work` — the item list carries over.
+
+Notes on the call, so you can check it against the table:
+
+- The **Size** row does not fire. One line changed, well under `~200`.
+- The **Security-sensitive surface** row fires on the path and what it does: a `user.role` check in session handling is authorization plus session handling, two of the listed surfaces. That row has no size floor, so "one character" doesn't bear on it.
+- There's no variant of this that moves through quick — not as a pasted snippet, not as an attached diff, not applied-and-flagged. Same refused change, different hand on the keyboard.
+
+For what it's worth on urgency rather than classification: `if (user.role = "admin")` assigns and evaluates truthy for every caller, so the check currently passes unconditionally and also mutates the role in place. That's the kind of defect the review loop exists for, and it's an argument for taking it to `/st-work` now rather than for shipping it through quick.

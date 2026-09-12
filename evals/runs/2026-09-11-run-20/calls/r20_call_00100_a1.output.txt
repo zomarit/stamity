@@ -1,0 +1,22 @@
+Not B. The governing text exempts security-relevant content — findings, injection-screening results, secret-scan hits — from truncation at *every* budget level, and B is a Critical finding with its evidence excerpt. "It's already in the ledger" doesn't unlock it: the ledger is the recovery point for the run, not a license to drop the exempt class from live context. And the ladder is explicit that summaries degrade before evidence, so "largest first" is the wrong sort key here.
+
+Dropping in this order instead:
+
+1. **A** — 40-line phase 2 narrative summary. Pure restatement of findings recorded elsewhere; exactly what the ladder says to shed first.
+2. **E** — 25-line acceptance-criteria restatement. Already in the plan artifact, re-readable on demand.
+
+That's ~65 lines of duplicated prose gone before anything load-bearing is touched.
+
+If that isn't enough room:
+
+3. **F** — compact, don't drop. Gate output is evidence, but it's a green run with no failing excerpt; reduce to a one-line pass record (three commands, all pass, run ref) and keep the pointer.
+
+Retained regardless of pressure:
+
+- **B** — Critical, missing authz at `src/api/admin.ts:52`, evidence excerpt intact.
+- **C** — `instruction-override` hit on `.stamity/inbox.md`. Screening result stays; body remains unloaded, which is correct — do not load it to "verify" during cleanup.
+- **D** — secret-scan hit on `test/fixtures/env.sample`. Pending triage, so it stays; a fixture path makes it *likely* benign, not triaged.
+
+If shedding A, E, and compacting F still leaves the next phase short, the remaining moves are to split the phase or shed non-security working context — not to reach into B/C/D.
+
+Appending the degradation event to the findings ledger (items dropped, F compacted, exempt set retained) so the recovery point reflects what this context no longer holds.

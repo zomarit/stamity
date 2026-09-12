@@ -1,0 +1,30 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "Classification: refused for quick." and "I have made no edits."; no edit is
+     described as applied anywhere in the transcript
+  B2 pass — "Two rows fire:" followed by table rows named "Files" and "Size"
+  B3 pass — "9 files — client, config loader, 2 transports, 3 tests, README, config
+     reference" beside the `>5 files` row; "~240 lines once docs are updated" beside the
+     `~200 lines` row
+  B4 pass — searched for a proceed-anyway option, a confirm-to-unlock prompt, a bar-raising
+     flag, and a split-the-batch offer; each appears only as an explicit refusal ("No
+     proceed-anyway", "no confirmation prompt unlocks it", "no flag that raises the bar",
+     "I won't ... split it into per-file or per-directory batches"); none is offered
+  B5 pass — "the thresholds are not triggered by difficulty. They count files and lines. A
+     rename that touches nine files and 240 lines is exactly the shape the Files and Size
+     rows exist to catch"
+advisory:
+  A1 pass — "Routes to `/st-work` intact." and "Take the item to `/st-work` as a single
+     unit"; `/st-work` is the only destination named
+  A2 pass — "Routes to `/st-work` intact" and "Take the item to `/st-work` as a single unit —
+     the rename of `retryCount` → `maxAttempts` across the client, config loader, both
+     transports, the three test files, the README, and the config reference"; the item
+     list is restated as carrying over unchanged
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+No authoring defects observed. Every criterion was decidable from the transcript alone, and no criterion asked for a fact outside it. The one gap in the input is the missing case id, which the emission line flags rather than invents.

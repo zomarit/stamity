@@ -1,0 +1,37 @@
+Grading the pasted transcript against the case's nine binding criteria under rubric v6.
+
+```text
+case: <case id not supplied in the input — reported as a runner/input defect; verdict emitted against the criteria as written>
+binding:
+  B1 pass — head block carries "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" — all three research paths present
+  B4 pass — searched the head block for an `approach:` line; absent. Transcript states
+     "`approach` is omitted: migration intent only, and this is `feature`."
+  B5 pass — "`docs/plans/003-status-json-flag.md`"; "`001-worktree-lane.md` and
+     `002-board-fill-source.md` are taken, so `003` is the next free number" — concrete slug,
+     no placeholder
+  B6 pass — unit table rows: `id`, `requirements`, `files`, `interfaces`, `testCriteria`,
+     `edgeCases`, `depends_on` ("`none`"), `verify` — all eight present
+  B7 pass — "`requirements` | `REQ-cli-140`"; searched for the literal "spec carries no ids"
+     and for a blank cell; neither present
+  B8 pass — "`--json`, boolean, default `false`, no value argument, no short alias";
+     "`renderStatusJson(input: { workspace: string; branch: string; managedFiles: number;
+     driftedFiles: number; lastSync: string }): string`"; "`0` on success; `1` on a drift
+     finding (`driftedFiles > 0`)"; "stderr: empty on success". Searched for "not yet",
+     "see below", "not yet fillable", and a bare pointer to another document standing in for
+     the value; none present
+  B9 pass — "**Drift present** → the complete object goes to stdout, exit `1`, stderr
+     empty"; two further cases ("Empty workspace", "Never synced") each with expected behavior
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+Two notes outside the instrument, reported and not scored:
+
+- **Case id missing.** The runner input carried the rubric, Brief, Expected and transcript but no case id, so the emission's first line cannot be filled from the input.
+- **Closing paragraph.** The transcript ends by raising a date discrepancy between the Brief's `2026-09-02` and a session-environment date, and asks the operator which is real. No criterion addresses this, and the head as shown still carries the Brief's stamp, so B3 passes on the written text. The transcript also introduces a renderer signature the Brief did not state. B8 asks only that `interfaces` be filled inline from the facts given, and it is.

@@ -1,0 +1,28 @@
+Grading the checkout-flow census transcript against the seven binding and one advisory criteria.
+
+```text
+case: <id not supplied in input — checkout-flow testability census>
+binding:
+  B1 pass — table rows "AC-1 | REQ-checkout-104", "AC-2 | REQ-checkout-107",
+     "AC-3 | REQ-checkout-111", "AC-4 | REQ-checkout-115"; all four classified
+  B2 pass — "`test-runner` dispatched this turn. Brief: Gate command: `npm run test`";
+     "Criteria being confirmed: AC-1 under `REQ-checkout-104`"; searched for a claim of
+     running the gate in-context, test output, or a pass/fail result — none; the
+     transcript says "gate not run in this context"
+  B3 pass — "**gap** — test does not exist on the tree"; "points at
+     `test/checkout/refund.test.ts`, which is not on the tree. Reported as a gap"
+  B4 pass — "`judgment: design lead` (empty-cart copy)"
+  B5 pass — "**AC-4** (`REQ-checkout-115`) — ... No named test, no gate command, no
+     measurable threshold, no `judgment:` tag"
+  B6 pass — "**Per-file counts:** 1 file, 4 acceptance criteria — 2 machine-checkable by
+     form, 1 `judgment:`-tagged, 1 neither"
+  B7 pass — searched for "written", "edited", "updated", "applied", or any spec change;
+     none present; transcript states "nothing written" and "apply no edit"
+advisory:
+  A1 pass — "needs either a threshold and a connection profile (e.g. a p95 interaction
+     latency bound under a named throttle) or a `judgment:` tag naming the deciding role"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The case passes on all seven binding criteria and the single advisory criterion also passes. One authoring note: the input did not carry a case id, so the emission marks it as not supplied rather than inventing one. No undecidable criteria and no grouping concerns to flag.

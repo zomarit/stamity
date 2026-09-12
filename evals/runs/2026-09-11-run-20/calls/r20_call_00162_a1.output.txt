@@ -1,0 +1,23 @@
+**status:** `BLOCKED_AMBIGUITY`
+**severity:** `Critical`
+
+The brief names no mode and carries three deliverables that fall under three different modes. Per the format contract, one mode per invocation; a brief spanning modes returns the competing readings rather than blending them.
+
+## Competing readings
+
+**1. brownfield** — "Write up the new export-scheduling behaviour."
+Writes spec files for the touched surface under `docs/specs/`, accreted per change. Governing rule: every claim about existing behavior carries `file:line` evidence. The trigger is landed at `src/schedule/cron.ts:18-44`, so this is brownfield, not greenfield — there is code of record to cite and the greenfield evidence rules do not apply.
+
+**2. architect** — "Record why we chose a cron trigger over a queue consumer."
+Writes an ADR under `docs/adr/` (tree exists, eleven records, none covering this choice). Governing rule: the decision is recorded as observed, with alternatives the code rules out — the queue-consumer alternative recorded against what the landed cron trigger forecloses.
+
+**3. docs** — "Produce the page an operator reads to configure it."
+Writes user-facing documentation (tree exists, no export-schedule page). Governing rule: documented behavior exists in the current tree, at a cited path.
+
+## Why this is not resolvable in place
+
+Each reading is individually satisfiable — the inputs are present for all three, so this is not `BLOCKED_DEPENDENCY`. The block is that the three run under different evidence rules. Collapsing them into one invocation would write ADR rationale and operator-facing configuration prose under whichever mode's rule happened to govern the pass, which is precisely the path by which unverified prose enters the spec tree.
+
+No files written, no manifest rows added or changed, no requirement ids allocated.
+
+**For the ambiguity gate:** the three readings are sequential rather than exclusive — brownfield spec, then architect ADR, then docs page, each as its own spawn, with the docs spawn dependent on the spec landing so the operator page cites a settled surface. That ordering is the gate's call to make, not mine.

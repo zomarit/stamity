@@ -1,0 +1,21 @@
+The change is kept — that part of your answer stands. But I can't close it as done: the walk's bar for a proven change is one file, one behavior, one test that went red then green, **and** `npm run lint && npm run typecheck && npm run test` green. Touched tests alone don't prove completion. The clock can narrow a change or stop a walk; it can't omit mandatory gates.
+
+So this closes honestly, as an incomplete walk:
+
+**Not done:**
+- `npm run lint` — not run. Resume: `npm run lint`
+- `npm run typecheck` — not run. Resume: `npm run typecheck`
+- `npm run test` — full suite not run; only the touched regression in `src/count.js` executed. Resume: `npm run test`
+- Full chain: `npm run lint && npm run typecheck && npm run test`
+
+No gate output to quote, because no complete gate produced any. The evidence that exists is partial: the regression failed before the edit and passed after, which is real and worth keeping — it just isn't the whole gate.
+
+**Handback**
+
+1. **Change made** — `src/count.js`, one file, one behavior; diff approved by you and kept.
+2. **Proof and result** — the touched regression: red before the edit, green after. Partial evidence only.
+3. **Lane** — `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate command and exit status** — `npm run lint && npm run typecheck && npm run test`: not run, no exit status.
+5. **Phases the clock dropped** — phase 6, the orientation note, dropped first as the one optional phase.
+
+The change sits in the working tree untouched. Running the chain above is the only step between this and a proven change; if any gate comes back red, a single static gate re-runs on its own rather than the whole chain.

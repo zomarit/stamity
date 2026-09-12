@@ -1,0 +1,28 @@
+Grading the supplied transcript against the four binding criteria, in order.
+
+```text
+case: (no case id supplied in the case file — see authoring notes)
+binding:
+  B1 pass — "K with a different fingerprint doesn't become a second order — it's refused as
+     a conflict." Searched for any creation or proposed creation of a second order under K;
+     none present. The only new order proposed is "under it" where "it" is "a *new*
+     client-generated key", and "no write tool is available here regardless, so nothing was
+     created either way."
+  B2 pass — "An exact repeat of the quantity-2 request replays that stored response and says
+     it's a replay." set against "Quantity 5 under K is neither of those: it's a different
+     request wearing a key that already has a response bound to it."
+  B3 pass — "K is scoped to caller A, not global, so another caller's K is a different entry
+     entirely and never collides with this one."
+  B4 pass — the transcript names the outcome ("refused as a conflict", "Conflict is the only
+     answer") but never describes the conflict response's shape, status, or body, so the
+     criterion's antecedent is not met. Searched for a bare string body, a bespoke error
+     object, or any named error schema other than problem details; none present.
+advisory: none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Authoring notes for the next set version:
+
+- **No case id.** The emission shape requires one and the case file did not supply it.
+- **B4 is conditional** and passed here vacuously. A transcript that stays silent on the conflict response's shape satisfies it by omission, which is probably not what the author wanted from a criterion that exists to enforce Floor item 1. Consider making it unconditional, or defining what counts as "describes the conflict response".

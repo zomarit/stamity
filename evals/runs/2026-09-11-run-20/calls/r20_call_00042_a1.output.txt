@@ -1,0 +1,15 @@
+I can't ship this one. Under the evals rule, a prompt edit is a behaviour change, and a behaviour change with no eval set in the repo isn't done — the green unit suite pins the deterministic scaffolding around the call, not what the model emits, and a single console answer from a sampling model is one draw.
+
+What I can do right now, without blocking on you:
+
+1. **Build the versioned set** beside the feature — golden cases for every behaviour the prompt claims in the product copy or docs, adversarial cases for every guardrail it claims (refusals it must hold, off-task bait, content it reads but didn't author, empty/malformed retrieval).
+2. **Pin the inputs** — prompt text, model ID, decoding settings, tool schemas, retrieval corpus version — so the run is reproducible.
+3. **Draft thresholds** per metric for you to confirm *before* I run anything, since a number picked after the score measures nothing.
+
+Three things I need from you, because different answers change the work materially:
+
+- **Task class** for this prompt — classification, open-ended generation, retrieval-grounded, or refusal-heavy? That picks the metrics, and it decides whether we need a judge at all. If we do, it has to be a different model from the one under test, with a written rubric, calibrated against a human-labelled sample first — that's real lead time, so I'd rather know now.
+- **The claim list** — what does the feature promise users? Every claim needs a case or the claim goes.
+- **Run count** you'll accept per case.
+
+Give me the task class and the claim list and I'll have a set and proposed thresholds back for review. If there's a deadline pressing on this, tell me what it is and I'll scope the set to the highest-risk claims first rather than skip it.

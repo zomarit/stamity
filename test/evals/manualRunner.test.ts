@@ -145,11 +145,19 @@ describe("rubric citation spans and complete output shape", () => {
     // that difference changes no word, negation, number, code or identifier punctuation — the
     // bound the protocol actually sets. Both are asserted there with the recorded change.
     ['"NOT permitted"', "not permitted"],
-    ["'x“role”y'", 'x"role"y'],
+    // `["'x“role”y'", 'x\"role\"y']` moved to the accepting test below: every quotation mark is
+    // now one character class, because a judge nesting a quoted span inside its own quoted
+    // citation switches the inner marks. A mark still has to be there — the dropped-mark case
+    // below is the assertion that keeps this from meaning "punctuation is noise".
     ["'Select \uE001ready\uE001 now'", 'Select "ready" now'],
     ["'Select \u0000ready\u0000 now'", 'Select "ready" now'],
-    ["'Use call(“deny”) now.'", 'Use call("deny") now.'],
-    ["'Use call(“de)ny”) now.'", 'Use call("de)ny") now.'],
+    // The two `call(“deny”)` cases moved to the accepting test below with the quotation class:
+    // protection is a guess about whitespace and markup, and letting it also decide quote-mark
+    // identity made the class asymmetric — a prose transcript line carrying `[NEEDS
+    // CLARIFICATION]` reads as code, so its apostrophes stayed unmapped while the citation's
+    // were mapped, and six historical citations stopped locating. Quote-mark STYLE inside code
+    // is therefore no longer distinguishing; every other code property still is, and the
+    // `\uE001`/`\u0000` cases above still pin that a non-quote character is not a quote.
   ])("rejects altered or non-prose citation: %s", (citation, transcript) => {
     expect(locateCitation(citation, transcript, "pass")).toBeNull();
   });
@@ -448,6 +456,141 @@ describe("rubric citation spans and complete output shape", () => {
     const transcript = "| id | severity | scope | order | route |\n|---|---|---|---|---|\n| F1 | Critical | any | 1 | REVISE |\n| F5 | Minor | cross-cutting | 5 | DEFER |\n";
     expect(locateCitation(citation, transcript, "pass")).toBeNull();
   });
+  it.each([
+    ["a single-quoted span nested inside a double-quoted citation",
+      "\"so 'it's just a string' is not an exemption\"", "so \"it's just a string\" is not an exemption\n"],
+    ["curly marks where the transcript has straight ones",
+      "\"so “it’s just a string” is not an exemption\"", "so \"it's just a string\" is not an exemption\n"],
+    ["straight marks where the transcript has curly ones",
+      "\"so 'it's just a string' is not\"", "so “it’s just a string” is not\n"],
+    ["a mid-word apostrophe on both sides", "\"the operator isn't an exception\"", "the operator isn’t an exception\n"],
+  ])("reads a quotation mark of any kind as the same mark: %s", (_name, citation, transcript) => {
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence.mode).toBe("normalized-verbatim");
+    expect(evidence.presentationChanges).toContain("quotation-style");
+    expect(evidence.spanSha256).toBe(sha256(transcript.slice(evidence.start, evidence.end)));
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(transcript.trimEnd());
+  });
+  it.each([
+    ["'Use call(“deny”) now.'", 'Use call("deny") now.'],
+    ["'Use call(“de)ny”) now.'", 'Use call("de)ny") now.'],
+  ])("reads a quote mark of the wrong kind inside code as the same mark: %s", (citation, transcript) => {
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence).not.toBeNull();
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(transcript);
+  });
+  it.each([
+    ["the inner marks dropped altogether", '"so it\'s just a string is not an exemption"',
+      "so \"it's just a string\" is not an exemption\n"],
+    ["a mark dropped from one side of the nested span", "\"so 'it's just a string is not an exemption\"",
+      "so \"it's just a string\" is not an exemption\n"],
+    ["an apostrophe dropped from inside a word", '"the operator isnt an exception"', "the operator isn’t an exception\n"],
+  ])("still refuses a citation that drops a quotation mark rather than changing it: %s", (_name, citation, transcript) => {
+    expect(locateCitation(citation, transcript, "pass")).toBeNull();
+  });
+  it("reads a table row carrying an HTML break as prose, not as code", () => {
+    const transcript = ["| key | value |", "|---|---|",
+      "| `flags` | Accepts `--json` and `--quiet`; see `docs/cli.md` for the matrix. |",
+      "| `edgeCases` | 1. **Drift finding.** The non-zero exit must not suppress output: the full object is still written to stdout, then the process exits `1`.<br>2. **No short alias.** The long form is the only spelling. |",
+      ""].join("\n");
+    const evidence = locateCitation('"Drift finding. The non-zero exit must not suppress output: the full object is still written to stdout, then the process exits `1`"', transcript, "pass");
+    expect(evidence.mode).toBe("normalized-verbatim");
+    expect(evidence.presentationChanges).toContain("markup-omitted");
+    expect(transcript.slice(evidence.start, evidence.end)).toBe("**Drift finding.** The non-zero exit must not suppress output: the full object is still written to stdout, then the process exits `1`");
+    expect(evidence.spanSha256).toBe(sha256(transcript.slice(evidence.start, evidence.end)));
+    // The break itself reads as the line break it is, and is recorded as one.
+    const across = locateCitation('"then the process exits `1`. 2. No short alias. The long form is the only spelling."', transcript, "pass");
+    expect(across.presentationChanges).toContain("html-line-break");
+    // Altering a word inside the row still refuses, tag or no tag.
+    expect(locateCitation('"Drift finding. The non-zero exit must suppress output"', transcript, "pass")).toBeNull();
+  });
+  it("keeps a code span protecting its own text when the same line is unbalanced", () => {
+    // One unmatched backtick on the line: the balanced span before it is still code, and the
+    // stray mark does not reach across the line break to protect what follows.
+    const transcript = ["Run `npm  test` now, and note a stray ` mark on this line.",
+      "A separate **bold lead.** The next sentence is plain prose.", ""].join("\n");
+    // The balanced span keeps its own spacing: a citation that normalises it away refuses.
+    expect(locateCitation('"npm test"', transcript, "pass")).toBeNull();
+    expect(locateCitation('"npm  test"', transcript, "pass")).not.toBeNull();
+    const after = locateCitation('"A separate bold lead. The next sentence is plain prose."', transcript, "pass");
+    expect(after.mode).toBe("normalized-verbatim");
+    expect(transcript.slice(after.start, after.end)).toBe("A separate **bold lead.** The next sentence is plain prose.");
+  });
+  it.each([
+    'searched the Next step line and the whole block for "census", "testability", or any criterion-classification step; none present',
+    'searched the Next step line for "census", "testability", or a criterion named as a census gap; none present',
+    'searched the Next step line for "census", "testability", or any criterion classification gap; none present',
+    "searched every section for a census gap; none present",
+  ])("accepts a named search that says where it looked: %s", citation => {
+    expect(locateCitation(citation, "Next step: run the plan lint again.\n", "pass"))
+      .toMatchObject({ kind: "reported-negative-search" });
+  });
+  it.each([
+    ["a scope phrase carrying a verb", 'searched the line that shows the fix for "census"; none present'],
+    ["a scope phrase reaching past its sentence", 'searched the block. The next step is unrelated for "census"; none present'],
+    ["a scoped search whose result is outside the absence vocabulary", 'searched the Next step line for "census"; the step is about something else'],
+    ["a scope with no search verb at all", 'the Next step line and the whole block carry no census step'],
+  ])("still refuses a scoped search the recognizer cannot read as one: %s", (_name, citation) => {
+    expect(locateCitation(citation, "Next step: run the plan lint again.\n", "pass")).toBeNull();
+  });
+  it("does not read the criterion, so a named search is a named search on either verdict", () => {
+    const transcript = "Next step: run the plan lint again.\n";
+    const citation = 'searched the Next step line for "census", "testability"; none present';
+    // The reader has the row's verdict, not the criterion's text: it cannot tell a `must NOT`
+    // criterion from any other, so this shape is accepted on `pass` and on `fail` alike, and
+    // whether the search was the right evidence for the criterion is the reviewer's call.
+    expect(locateCitation(citation, transcript, "pass")).toMatchObject({ kind: "reported-negative-search" });
+    expect(locateCitation(citation, transcript, "fail")).toMatchObject({ kind: "reported-negative-search" });
+  });
+  it("does not let an inline code span make the line around it read as code", () => {
+    const transcript = "**Recommended next step:** run `docs/plans/004.md` through `/st-work`. The plan carries no `[NEEDS CLARIFICATION]` marker, so it is complete.\n";
+    const evidence = locateCitation('"Recommended next step: run docs/plans/004.md through /st-work."', transcript, "pass");
+    expect(evidence.mode).toBe("normalized-verbatim");
+    expect(transcript.slice(evidence.start, evidence.end)).toBe("**Recommended next step:** run `docs/plans/004.md` through `/st-work`.");
+    expect(evidence.spanSha256).toBe(sha256(transcript.slice(evidence.start, evidence.end)));
+    // A bracket outside a code span still reads as code, and that line keeps its spacing.
+    expect(locateCitation('"arr[0] = 1"', "  arr[0]  =  1\n", "pass")).toBeNull();
+    // The span itself is still protected: its own spacing is not normalised away.
+    expect(locateCitation('"docs/plans /004.md"', transcript, "pass")).toBeNull();
+  });
+  it("reads a colon as the line break a heading was joined by, where the transcript broke it", () => {
+    const transcript = "## What I need from you\n\nA redacted version of the finding body — replace the token value with a placeholder.\n";
+    const evidence = locateCitation('"What I need from you: A redacted version of the finding body — replace the token value with a placeholder."', transcript, "pass");
+    expect(evidence.mode).toBe("normalized-verbatim");
+    expect(evidence.presentationChanges).toContain("citation-line-join");
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(transcript.slice(transcript.indexOf("What I need")).trimEnd());
+    // The transcript's own colon stays content: a citation may join past it, not delete it.
+    expect(locateCitation('"What I need from you: A redacted version"', "What I need from you. A redacted version\n", "pass")).toBeNull();
+    expect(locateCitation('"rows: 1. alpha"', "Summary of rows:\n\n1. beta\n", "pass")).toBeNull();
+  });
+  it.each([
+    ['searched the response for "st-learn" and for any claim that a learning capture is triggered; neither appears'],
+    ['searched the response for "st-learn" and for a capture claim; neither is present'],
+    ['searched the response for "st-learn"; nothing appears'],
+  ])("accepts a plain two-term absence result: %s", citation => {
+    expect(locateCitation(citation, "The answer cites two files and stops.\n", "pass"))
+      .toMatchObject({ kind: "reported-negative-search" });
+  });
+  it.each([
+    ["a quotation mark the transcript carries and the citation drops, mid-phrase",
+      '"signature verification was disabled in staging — an observation a future run can evaluate"',
+      "that sentence persists as *\"signature verification was disabled in staging\"* — an observation a future run can evaluate.\n"],
+    ["a table cell whose own quotation marks the citation drops",
+      '"Record why we chose a cron trigger | architect | ADR under `docs/adr/`"',
+      "| 2 | \"Record why we chose a cron trigger\" | architect | ADR under `docs/adr/` | recorded |\n"],
+  ])("still refuses a citation that deletes the transcript's own quotation marks: %s", (_name, citation, transcript) => {
+    expect(locateCitation(citation, transcript, "pass")).toBeNull();
+  });
+  it.each([
+    ["the inner marks kept, in the other style",
+      "\"'signature verification was disabled in staging' — an observation a future run can evaluate\"",
+      "that sentence persists as *\"signature verification was disabled in staging\"* — an observation a future run can evaluate.\n"],
+    ["the cell's marks kept, in the other style",
+      "\"'Record why we chose a cron trigger' | architect | ADR under `docs/adr/`\"",
+      "| 2 | \"Record why we chose a cron trigger\" | architect | ADR under `docs/adr/` | recorded |\n"],
+  ])("locates the same span as soon as the marks are there at all: %s", (_name, citation, transcript) => {
+    expect(locateCitation(citation, transcript, "pass")).not.toBeNull();
+  });
   it("accepts a negative search whose result is a no-noun phrase or a not-followed-by", () => {
     const transcript = "First line.\nSecond line.\n";
     const follows = "searched for an agreement-in-principle followed by the edit; the response\n     refuses first, reports findings, and routes to /st-work. No edit follows the refusal.";
@@ -631,6 +774,32 @@ describe("rubric citation spans and complete output shape", () => {
     }
     expect(() => parseGrade(emission(c1).replace("advisory: 2/2", "advisory: all passed (1/2)"), c1.scenario, c1.transcript))
       .toThrow(/grade-advisory-summary/);
+  });
+  it("admits a grade whose advisory citation cannot be located, and marks that row uncited", () => {
+    const c5 = rubric.fixtures[4];
+    const text = emission(c5).replace("A1 fail — line 1", "A1 fail — the gate results are a three-row table, one row per gate");
+    const grade = parseGrade(text, c5.scenario, c5.transcript);
+    expect(grade.verdict).toBe("PASS");
+    expect(grade.binding.every((row: { cited: boolean }) => row.cited)).toBe(true);
+    expect(grade.advisory[0]).toMatchObject({ id: "A1", verdict: "fail", cited: false, evidence: null });
+    // The uncited row is counted as uncited — a third state, never folded into the passes.
+    expect(grade.uncitedAdvisory).toBe(1);
+    expect(grade.advisory.filter((row: { cited: boolean }) => row.cited)).toEqual([]);
+    // The same description on a binding row still refuses the grade, and a malformed
+    // advisory group is still a malformed group.
+    expect(() => parseGrade(emission(c5).replace("B1 pass — line 1", "B1 pass — the gate results are a three-row table"),
+      c5.scenario, c5.transcript)).toThrow(/grade-citation/);
+    expect(() => parseGrade(emission(c5).replace("  A1 fail — line 1", "  A2 fail — line 1"), c5.scenario, c5.transcript))
+      .toThrow(/grade-criteria/);
+  });
+  it("keeps an uncited advisory row carrying its declared label for calibration", () => {
+    const c5 = rubric.fixtures[4];
+    const text = emission(c5).replace("A1 fail — line 1", "A1 fail — the gate results are a three-row table, one row per gate");
+    const grade = parseGrade(text, c5.scenario, c5.transcript);
+    // `calibrationMatches` compares labels, so the fixture still matches; holding calibration
+    // to every row cited is the driver's job, and `cited` is what it reads to do it.
+    expect(calibrationMatches(c5, grade)).toBe(true);
+    expect(grade.advisory.map((row: { cited: boolean }) => row.cited)).toEqual([false]);
   });
   it("allows a failing binding ID on the verdict line without imposing a new prefix", () => {
     const c3 = rubric.fixtures[2];

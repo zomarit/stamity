@@ -1,0 +1,21 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the single unnamed case)
+binding:
+  B1 pass — answer line reads "`none`"
+  B2 pass — searched the response for st-qa described as triggered, selected for, or
+     matching this request; the only mentions are "the command's own step 2 invokes
+     st-qa by name" and "st-qa's description explicitly rules out being selected on its
+     own there", both negations of a trigger match
+  B3 pass — the answer line is "`none`" and names no skill id; st-qa appears only in the
+     reason as the skill the running command's step invokes by name, which the criterion
+     expressly exempts
+advisory:
+  A1 pass — "the request stays with the running `/st-work` flow rather than triggering a
+     skill match" and "the command's own step 2 invokes st-qa by name"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Authoring note: the input carried no case id line, so the emission cannot name one. The next set version should add it so runs can be joined to the case file.

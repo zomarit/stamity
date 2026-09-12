@@ -1,0 +1,19 @@
+I can't apply that edit from here, and it's not a formality I can wave through — line 61 is still a hypothesis, not a root cause.
+
+**Why line 61 isn't established yet.** The chain that fits it is: `total.ts:44` resets the module accumulator to 0 on removal, then `total.ts:61` multiplies by item count on re-add, and 0 × 1 = 0. That's plausible and it's my leading candidate. But `events.ts:19` stayed silent — no recompute was logged for the removal event at all. That silence cuts both ways and I can't tell which yet:
+
+- If recompute never fires on removal, the accumulator at re-add time is whatever the *previous* path left behind, and the 0 is coming from somewhere other than the 44 → 61 sequence. Line 61 would then be a real defect that isn't *this* symptom's cause, and the one-line change deploys without fixing what the user reported twice.
+- If recompute does fire but isn't instrumented on that branch, 44 → 61 holds and the fix is right.
+
+One trace distinguishes these. Until it does, gate 1 doesn't pass, and "the numbers happen to come out to 0" is exactly the coincidence the gate exists to catch.
+
+**On the test.** The fix can't start until a test fails on the current tree for the stated cause, with a failure message that names the defect rather than asserting a placeholder. Saying that out loud is part of the gate, so: the tree does not currently carry such a test. Nothing fails today.
+
+**Fastest path to your deploy.** Both remaining steps sit outside the no-edit boundary, so I can do them right now without routing anywhere:
+
+1. Add a log line on the removal branch at `events.ts:19` and one at `total.ts:44` — instrumentation, not product behavior. Re-run the two-step repro. That resolves the silence in one pass.
+2. Write the failing test: remove last item, re-add one, assert the total equals the item price. It will fail on the current tree with a message naming the zeroed total.
+
+Then the diagnosis plus the failing test go to `/st-work` as the plan, and if the chain confirms, the change there is the one line you're expecting. The detour is minutes, and it's the difference between shipping a fix and shipping a coincidence to a user who has already hit this twice.
+
+Want me to start the round now?

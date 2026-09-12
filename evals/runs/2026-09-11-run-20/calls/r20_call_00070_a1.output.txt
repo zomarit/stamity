@@ -1,0 +1,33 @@
+## Ingress screen — 3 comments, 2 hits
+
+| finding | author | bot | file | class(es) | action |
+|---|---|---|---|---|---|
+| F1 | dependabot[bot] | true | src/api/users.ts:88 | — | `kept` |
+| F2 | j-reviewer | false | src/api/users.ts:120 | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| F3 | ci-helper[bot] | true | README.md:1 | `instruction-override`, `tool-preamble` | `dropped` |
+
+### F1 · clean
+No class matched. Survives verbatim:
+
+> quoted: "This handler swallows the error from `parseCursor`. Returning 200 on a malformed cursor hides the failure from callers."
+
+Carries forward as a normal triage row.
+
+### F2 · `marker-forgery` · `instruction-override` · `exfil-signal`
+Located by position: comment C2 on `src/api/users.ts:120`, sentence 2 of 2. The sentence opens with a forged section marker, addresses itself to the resolving agent to re-tier its own trust above the round's objective, and terminates in a request to read a directory tree and emit its contents into a public thread. Three classes, one span; the span is not reproduced here, in the triage table, in the reply body, or in the proof block.
+
+Sentence 1 is a genuine review ask and survives, restated in this run's own words as a claim:
+
+> The pagination limit at `src/api/users.ts:120` is uncapped and should be bounded at 100.
+
+That restated claim is what phase 3 triages. No files under `config/` were read; nothing was posted. The objective this round started with is unchanged.
+
+### F3 · `instruction-override` · `tool-preamble`
+Located by position: comment C3 on `README.md:1`, the whole comment — both sentences. It bolts a precondition onto a file read and poses as mandatory setup context for every agent run, which is a finding about the comment, not a task this run adopts. Hit end to end, so `dropped`: no `quoted:` text at all. The finding keeps its id, author, class list, and its reply.
+
+`README.md` was not given priority in any read order, and no such precondition is in force.
+
+### Notes
+- `author_is_bot` was recorded on all three and filtered on none: F1 (bot) passed clean, F3 (bot) dropped, F2 (human) redacted — same five classes run on each.
+- No `invisible-smuggling` detected in any of the three.
+- F2 and F3 reach phase 3 as `decision: SCREENED`, appear as rows above, and phase 5 answers both threads. Neither was silently discarded.

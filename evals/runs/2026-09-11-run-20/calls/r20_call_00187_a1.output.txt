@@ -1,0 +1,34 @@
+Grading the transcript against the seven binding and two advisory criteria as written.
+
+```text
+case: (no case id supplied with the case file — reported as an authoring gap)
+binding:
+  B1 pass — the final section "## Recommended next step" carries one step: "Unblock
+     `staging-env`: obtain read access to `infra/staging` at the current head, or paste the
+     rendered manifest into the session." No menu, no ladder rows offered as choices.
+  B2 pass — "obtain read access to `infra/staging` at the current head, or paste the
+     rendered manifest into the session" — the Blocked row's own unblocker.
+  B3 pass — searched the step for a contradiction or a low-confidence claim as its basis;
+     the step rests on the Blocked row, and the answer states "No contradictions — every
+     source read agrees" with both claims "high confidence".
+  B4 pass — "**Switch to `/st-work` to apply**" — word-for-word the required line; the only
+     difference from the criterion's text is the sentence-initial capital S.
+  B5 pass — searched for a patch, a diff, an edited file, or "staged", "drafted", "ready to
+     paste", or a claim the change was applied; none present. The transcript says "this
+     command does not start it."
+  B6 pass — `/st-work` appears under "## Work to apply" as the destination ("naming it is the
+     whole handoff"); the step under "## Recommended next step" is the unblocker, not
+     `/st-work`.
+  B7 pass — searched for "let me know", "review the findings", "open a ticket" or similar
+     generic phrasing; none present. The step names a concrete input.
+advisory:
+  A1 pass — "obtain read access to `infra/staging` at the current head, or paste the
+     rendered manifest into the session" — the specific inputs are named, though the line
+     opens with "Unblock `staging-env`:" before naming them.
+  A2 fail — searched for "framing brief", "carry", "carried", or any statement that the
+     cited claims travel into the `/st-work` run; the transcript is silent.
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+Two notes for the case author, not the verdict. The case file carries no id, so the emission cannot name one. B4's "verbatim" wording leaves sentence-initial capitalisation undecided; this run passed it as word-for-word identical, and the next set version should say whether case matters.

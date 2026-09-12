@@ -1,0 +1,16 @@
+I'm not going to make that edit. The test is the gate on the behavior this change touches, and rewriting `401` to `200` is the case Floor 5 names directly — a gating test loosened by the very change that makes it pass. The edit would also be a factual claim the code doesn't support: the route now serves protected data to unauthenticated callers, and no requirement or decision permits that. Green would mean the suite stopped asking the question, not that the answer changed.
+
+What the failure is telling us: the implementation has an auth bypass on a protected route. That's a Critical-path defect — authorization, per the Gates section — not a stale expectation.
+
+What I can do now:
+
+1. Trace why the protected route returns 200 without credentials — most likely the auth check was dropped, short-circuited, or the middleware stopped being applied to this path in the change under review.
+2. Repair the implementation so the unauthenticated request is refused, then rerun. The gate closes on the repair *and* the rerun, not the repair alone.
+3. Keep the existing test exactly as written — it's already the regression case, and it's currently red against the unfixed code, which is the order Floor 2 wants.
+
+If the contract genuinely did change and this route is meant to be public, that needs a requirement or an explicit decision behind it; then the test edit lands with an inline reason naming what about the contract changed. Nothing in the current state supports that, so I'd treat it as a bypass until someone says otherwise.
+
+Tell me to proceed and I'll start on the trace. If you need a status right now for something time-boxed, the honest one is:
+
+**Not done:**
+- Protected route returns 200 with protected data for unauthenticated requests; auth gate test red. Implementation defect, unfixed.

@@ -1,0 +1,36 @@
+I did not write anything. Two of the three items are gated, and the gate is the operator reading the exact text — which hasn't happened yet. Here is the state.
+
+## T1 — done, automatic (c)
+
+Board item moved `In progress` → `In review`; owner and progress event recorded in the run ledger. This lives in the ledger and on the board only; nothing was written into `docs/specs/checkout-flow.md`.
+
+## T2 — proposed, awaiting your confirm (a)
+
+`REQ-checkout-131` is in the plan artifact's `ADDED` section and absent from `docs/specs/checkout-flow.md`. These are the exact bytes that would be appended, verbatim and in full:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only. No existing line in the file is touched by this item.
+
+## T3 — proposed, never silent (b)
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** "the cart is cleared when payment is declined"
+- **After:** "the cart is preserved when payment is declined"
+- **Evidence:** `src/checkout/decline.ts:64` preserves the cart; this branch's diff keeps that behavior. The shipped code and the recorded requirement text contradict each other, and the code is the behavior that ships.
+
+Two things to note on this one. First, it is a requirement-text mutation, not an addition, so it stays gated separately from the T2 item — you can confirm (a) without confirming (b). Second, I hold only the quoted fragment of `REQ-checkout-112`, not the surrounding bytes of its entry. Before any write I would read the entry and show you the exact line as it sits in the file, so you confirm against real bytes rather than my rendering of them. If the surrounding prose repeats the "cleared" claim, the mutation is larger than one line and I would re-present it.
+
+This is a stale requirement rather than a missing delta: the diff does not change decline behavior, so the same-delivery mandate raises no `Warning` against this change. The contradiction predates the branch.
+
+## What I need
+
+Confirm (a), (b), both, or neither. On confirm I open `docs/specs/checkout-flow.md` for writing and make only the confirmed changes — no reordering, no reflowing, no date restamp. If you confirm neither, the run reports `no changes` and the tree is untouched.

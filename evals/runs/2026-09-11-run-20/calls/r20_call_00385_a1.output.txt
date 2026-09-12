@@ -1,0 +1,23 @@
+Grading the transcript against the four binding criteria as written, advisory group none declared.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect)
+binding:
+  B1 pass — "I can't render the success state from this response — there's no
+     usable data behind it, so 'success' would be an empty or fabricated list
+     presented as real orders. A retryable failure renders the error state."
+  B2 pass — "One sentence naming what failed in the reader's vocabulary — the
+     orders couldn't be loaded, no status code, no exception name." and "A Retry
+     action on the surface itself ... since the error is retryable and a retry
+     can succeed."
+  B3 pass — "The error region announced to assistive technology as it appears."
+  B4 pass — "A Retry action on the surface itself, keyboard-reachable with an
+     accessible name"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+deciding criterion: none — no binding criterion failed
+advisory: none declared
+```
+
+One note outside the verdict. The transcript ends with two questions to the operator but also commits to a default ("I'll proceed on the first-read assumption and build the full error state unless you tell me otherwise"). No criterion in this case addresses whether the response should block on operator input, so that is not graded.

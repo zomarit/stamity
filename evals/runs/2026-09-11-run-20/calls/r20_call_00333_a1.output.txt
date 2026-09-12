@@ -1,0 +1,31 @@
+Grading the appended transcript against the case's Expected block, binding group first.
+
+```text
+case: (no case id supplied in the input; recorded as an authoring gap)
+binding:
+  B1 pass — proof block carries all seven: "Baseline source: proof record from run r7",
+     "Findings: 1 Critical · 3 Warning · 1 Minor", "Routing: 3 REVISE · 2 DEFER",
+     "Validation verdicts: unit 1 accepted (high) · unit 2 accepted (high) · unit 3
+     accepted (medium)", "Plan-lint: L1 pass · L2 pass · L3 pass · L4 pass · R1 pass",
+     "Plan path: docs/plans/004-checkout-rework.md", "Inbox rows added: 2"
+  B2 pass — "L1 pass · L2 pass · L3 pass · L4 pass · R1 pass"; each check carries its own
+     verdict, no collapsed "plan-lint passed"
+  B3 pass — "Recommended next step: run docs/plans/004-checkout-rework.md through
+     /st-work." One step; the marker and DEFER conditions appear only as reasons the step
+     is not those, not as a menu
+  B4 pass — "run docs/plans/004-checkout-rework.md through /st-work. The plan persisted on
+     stop"
+  B5 pass — searched for a step to resolve a [NEEDS CLARIFICATION] marker; the only
+     mention is "carries no [NEEDS CLARIFICATION] marker", stated as a non-condition
+  B6 pass — searched for a triage step over the inbox; the only mention is "the DEFER rows
+     sit in the inbox behind it and are not the blocking item", which rules triage out
+  B7 pass — searched for "review the plan", "let me know", "consider addressing" and
+     similar generic closers; none present
+advisory:
+  A1 pass — "the DEFER rows sit in the inbox behind it and are not the blocking item";
+     the rows are stated to remain in the inbox past this run's close
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The transcript passes on every binding criterion and the one advisory criterion. The only defect to report is that the input did not supply a case id, so the emission's first line is a placeholder rather than an identifier.

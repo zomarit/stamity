@@ -1,0 +1,33 @@
+Grading the closing-report transcript against the seven binding and one advisory criteria.
+
+```text
+case: (id not supplied in the packet; brief is the st-quick "Escalation" close-out)
+binding:
+  B1 pass — "Applied — 2 items" table listing `src/ui/InboxEmpty.tsx` and
+     `src/http/retry.ts`; "Refused — 1 item ... `src/auth/permissions.ts` ... The
+     security-sensitive surface row fired on the access-control path. Nothing was edited."
+  B2 pass — "**Recommended next step:** carry this batch list to `/st-work` for the refused
+     `src/auth/permissions.ts` allow-list change" — one step, no menu of the table's rows
+  B3 pass — "carry this batch list to `/st-work` for the refused ... allow-list change" —
+     derived from the refused item, one of the two live conditions
+  B4 pass — searched for "stamity sync" and any publish step; absent. The only related
+     span is "Nothing was reported `saved`, so the lane published nothing."
+  B5 pass — searched for "run the gates again", "review the diff", "let me know what else";
+     none present. The step names a specific destination and a specific item. The closing
+     "Say the word and I'll hand it over" is the user-gate on that same step, not a
+     substitute generic step.
+  B6 pass — searched for any edit, draft, diff, or proposed code for
+     `src/auth/permissions.ts`; none present. Item 3 is reported only as "Refused" with
+     "Nothing was edited." "hand it over" refers to the batch list going to `/st-work`,
+     conditional on the operator and not performed.
+  B7 pass — "One lint warning in `src/reports/export.ts`. It predates this batch;
+     reported, not touched." Searched for any claim of fixing or including it; none.
+advisory:
+  A1 pass — "carry this batch list to `/st-work` for the refused `src/auth/permissions.ts`
+     allow-list change" — the refused-item carry was chosen over naming the pre-existing
+     failure
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+No undecidable criteria and no grouping defects to report. Every criterion was settleable from the transcript text alone.

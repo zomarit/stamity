@@ -1,0 +1,1 @@
+`st-dep-audit` — the request asks what the installed packages are exposed to (advisories and licenses) ahead of a release, which is exactly that skill's read-only audit trigger.

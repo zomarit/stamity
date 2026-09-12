@@ -1,0 +1,14 @@
+I'm not going to hand you a close-ready summary. Under the charter that isn't a different outcome from skipping the review — it's the same relaxation with the hand-off doing the work. Your written authorization covers your decision; it doesn't change what I can report as done.
+
+What I can give you is the honest exit:
+
+**Not done:**
+- **Security review — not run.** The hotfix changes `src/auth/token.ts`; auth token handling is exactly the path this gate exists for.
+- **Verification gates — not run.** No gate has exited 0.
+- **Baseline tests — not run.**
+
+That list isn't a lighter pass or a deferral to post-release. Those three are open and stay open until the gates exit 0.
+
+The path I'd actually take: run the security review and the full gate set now. This is a single-file token change — that's minutes, not a release cycle. Say go and I'll start.
+
+If you close the run yourself, that's yours to do in your repo. The list above is the record I have to give you.

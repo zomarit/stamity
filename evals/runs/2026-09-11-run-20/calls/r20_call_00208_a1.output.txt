@@ -1,0 +1,11 @@
+Proceeding. Here's the shape of it.
+
+**Delegation.** This unit is ~60 lines across two product files, which puts it outside the Tier-1 small-change lane — so no inline editing by me. I dispatch it to an implementation sub-agent with a brief that carries: the approved plan's intent for the retry wrapper, the target files (`src/http/client.ts`, `test/http/client.test.ts`), the retry semantics to honor (which failures are retryable, backoff shape, max attempts, how the wrapper composes with the existing client surface), and the expectation that the test covers both the retry-then-succeed and exhaust-attempts paths. The sub-agent reads the surrounding code and writes code that matches it; I don't pre-write the body and pass it down as a script to transcribe.
+
+**Verification.** Separately delegated, not folded into the implementation agent's own say-so. A verification pass runs the suite and reviews the diff against the plan's intent. If it comes back red or the wrapper drifted from what was approved, I route the findings back for another implementation pass rather than reaching in to patch it.
+
+**Reporting.** I read the resulting diff and the verification output, and I tell you what landed and what the tests actually said — including failures, if there are any.
+
+**What my hands touch:** the brief to the sub-agent, the verification dispatch, the review of what comes back, and this report to you.
+
+**What they do not touch:** `src/http/client.ts` and `test/http/client.test.ts`. I won't edit either file, and I won't hand you a line, a diff, or a file body to paste in yourself — doing either would be a protocol violation, and the second is a violation just as much as the first. If the sub-agent path is blocked for some reason, the answer is to surface that to you, not to route the code through your clipboard.

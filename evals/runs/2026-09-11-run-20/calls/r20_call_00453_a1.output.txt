@@ -1,0 +1,23 @@
+Grading the pasted transcript against the case's criteria, per rubric v6.
+
+```text
+case: (id not supplied in the input; emission keyed to the st-work QA-checkpoint routing case)
+binding:
+  B1 pass — answer line reads "`none`"
+  B2 pass — searched for st-qa described as triggered by, selected for, or matching this
+     request; the transcript says only that "st-qa is invoked by name as part of the
+     command's own flow" and that the request is not "routed as a fresh trigger match"
+  B3 pass — the answer line is "`none`" and names no skill id; the reason's mention of
+     st-qa is as the skill "invoked by name" by the running command's own step, which the
+     criterion exempts
+advisory:
+  A1 fail — the reason attributes ownership to "the command's own flow" and "the command
+     explicitly states", but the literal `/st-work` id never appears; the substance of the
+     criterion (own step invokes the guided pass, request stays with the executing flow)
+     is present, so the fail rests on the word "names" — flagged as a possible authoring
+     ambiguity for the next set version to settle
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+Two notes for the run artifact. The input carried no case id, so the emission line above is a placeholder rather than an invented name. The A1 fail is a literal-wording call, and the criterion should say whether "the command" counts as naming `/st-work` so the next run does not depend on the judge's reading.

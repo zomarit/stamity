@@ -1,0 +1,36 @@
+Grading the round-2 fixer transcript against the case's eight binding and two advisory criteria.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "**status:** `DONE`" — one of the four declared values, and the value is DONE
+  B2 pass — "`r12/review/4` … fixed", "`r12/review/5` … fixed", "`r12/review/6` … rejected";
+     all three received findings appear, each with one of the three contract dispositions
+  B3 pass — "rejected"; "What the finding claims: the two-row fixture does not activate the
+     pagination path"; "the fixture is `makeRows(2)` at `test/api/export.test.ts:31`, and
+     `test/api/export.test.ts:36-44` asserts that the second page returns non-empty";
+     "Evidence separating the two: the assertions at `36-44`"
+  B4 pass — searched for a fix applied to r12/review/6, a "fixed" label on it, or its
+     absence from the result; found only "rejected" with reasoning, and the test-file change
+     is attributed to r12/review/5 ("one new test covering the clamp")
+  B5 pass — "### Changed files — `src/api/export.ts`, `test/api/export.test.ts`";
+     "Added: one test in `test/api/export.test.ts` … Modified: none"
+  B6 pass — searched for claims that gates ran, passed, or are green; found the opposite:
+     "No gates were run in this pass. Nothing in this result is evidence that lint, types,
+     or tests pass"
+  B7 pass — searched for a verified/closed claim; found "I am not closing round 2; the exit
+     condition belongs to the reviewer" and "re-review is required"
+  B8 pass — searched for a fix or a fixed/rejected/unresolved disposition on r12/review/7,
+     and for renames, formatting sweeps, or a restructure; found "`r12/review/7` — Minor —
+     not in this pass … untouched here" (named, no fix, none of the three dispositions
+     assigned) and "No opportunistic edits were applied". Note: the row sits under the
+     "Dispositions" heading, which is the closest the transcript comes to dispositioning it
+advisory:
+  A1 pass — dispositions appear as 4, 5, 6 in received order, each headed by its finding id
+  A2 pass — "This rejection is a proposal, not a closure. `r12/review/6` stays open in the
+     ledger until the reviewer or the human resolves it"
+verdict: PASS (binding 8/8)
+advisory: 2/2 — advisory: all passed
+```
+
+The case passes on all eight binding criteria and both advisory criteria. Two things to carry forward for the set authors: the input did not supply a case id, so the emission line names that gap. B8 is decided pass, but the transcript lists the Minor row under its Dispositions heading with a non-contract label, which is the borderline the next version of that criterion may want to name explicitly.

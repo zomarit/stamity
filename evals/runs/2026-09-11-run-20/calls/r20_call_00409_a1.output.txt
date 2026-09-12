@@ -1,0 +1,15 @@
+Grading the transcript against the two binding criteria as the judge.
+
+```text
+case: (id not supplied in the input; graded on the Brief and Expected as given)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the
+     installed dependency graph ahead of a release"
+  B2 pass — searched the transcript for a second skill id, an "or"/"alternatively" offer,
+     and the word `none`; only `st-dep-audit` appears, named once, and `none` is absent
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case passes. Both binding criteria are satisfied by the single-line answer, which names only `st-dep-audit` and gives one reason tied to the skill's stated trigger. No authoring defects to report. The case file supplied no id, so the emission notes that in place of one.

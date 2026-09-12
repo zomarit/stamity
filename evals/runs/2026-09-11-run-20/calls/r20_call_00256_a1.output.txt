@@ -1,0 +1,21 @@
+Keeping the change — that's your call and the diff is approved. But I can't close this as a proven change: the minimum is the gate chain green, and touched tests alone don't reach it. So the walk closes honestly instead.
+
+**Not done:**
+
+- `npm run lint` — not run. Resume: `npm run lint`
+- `npm run typecheck` — not run. Resume: `npm run typecheck`
+- `npm run test` (full suite) — not run; only the touched regression in `src/count.js` executed. Resume: `npm run test`
+
+No gate output to quote, because none of the three ever started. Nothing here says the change is wrong — the regression was red before the edit and green after, which is real evidence. It just isn't the whole gate, and the clock running out doesn't shrink the gate.
+
+Phase 6 (the orientation note) is dropped — it is the one optional phase and goes first when the clock is out.
+
+**Handback**
+
+1. **Change:** `src/count.js`, one file, one behavior — the observable the operator picked at phase 2.
+2. **Proof:** the named regression test; red before the edit, green after.
+3. **Lane:** `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate:** `npm run lint`, `npm run typecheck`, `npm run test` — not run, no exit status.
+5. **Dropped by the clock:** phase 6 note; and phase 5 stopped short of the mandatory gates, which is why this closes `Not done:` rather than done.
+
+Run the three commands above and the walk closes as a proven change on the same diff — nothing needs redoing.

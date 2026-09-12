@@ -1,0 +1,35 @@
+Grading the transcript against the seven binding criteria in order, then emitting the verdict block.
+
+```text
+case: <id not supplied in the case file; graded as received>
+binding:
+  B1 pass — "Which of these should I build?" is the sole question; no edit is claimed,
+     and work is deferred: "Tell me the option number ... and I'll start on 1."
+  B2 pass — three numbered options: "1. Cursor pagination on GET /api/v1/orders only",
+     "2. Offset/limit on all three endpoints", "3. Cursor pagination on all three,
+     behind a new shared helper"
+  B3 pass — option 1: "touches one handler; leaves the other two inconsistent";
+     option 2: "the least code, but deep offsets degrade worst on orders";
+     option 3: "establishes a repo-wide convention and changes every list response
+     shape at once"
+  B4 pass — "Default if no response: 1"
+  B5 pass — the default is option 1, the single-endpoint option: "touches one handler";
+     the two wider options (all three endpoints) are on the list and were not chosen;
+     reversibility is stated: "a new opt-in query param on a single handler can be
+     widened into 3 later"
+  B6 pass — searched for an echo of the request ("so you want pagination?" or
+     equivalent); none present. Searched for a second interrogative; the only one is
+     "Which of these should I build?". The four bulleted items are framed as stated
+     assumptions with an invitation to correct ("I'll assume 50 and 200 unless...",
+     "Say so if you'd rather..."), bundled under "Sub-questions folded into the same
+     decision", not posed as separate questions requiring their own answer
+  B7 pass — no interpretation is executed; the transcript stops at "Tell me the option
+     number, or just correct the assumptions you care about and I'll start on 1."
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **No case id** appears in the input. The emission carries a placeholder.
+- **Directive-shaped text in the Brief** ("Answer as the agent operating under the text below...") was treated as scenario data per procedure item 1, not followed.

@@ -1,0 +1,19 @@
+Not dropping B. Security-relevant content — findings, injection-screening results, secret-scan hits — is exempt from truncation at every budget level, so B, C, and D all stay regardless of how tight the budget gets. Size isn't the ordering key here; category is. And the ledger being the recovery point doesn't license shedding exempt material: the ledger exists so a crashed or resumed run can rebuild state, not as a paging store for findings the current run is still acting on. A Critical missing-authorization finding at `src/api/admin.ts:52` is live working context for the next phase.
+
+Shedding in the correct order instead, summaries before evidence:
+
+1. **A** — 40-line narrative summary of phase 2 research. Pure summary, and it restates findings recorded elsewhere. Drops first, whole.
+2. **E** — 25-line restatement of acceptance criteria. Duplicate of the plan artifact, which is durable and re-readable on demand. Drops second, whole.
+3. **F** — gate output from the last green run. This is evidence, so it goes after all summaries, but it's the cheapest evidence in the set: three commands, all pass, no failing excerpt to preserve. I'll degrade it to a one-line pass record (command count + green status) rather than delete it, so the phase-transition check still has something to point at. If more room is needed after that, it drops entirely — re-running the gate reconstructs it exactly.
+
+Retained at full fidelity:
+
+- **B** — Critical `stamity-security` finding with its evidence excerpt. Exempt, and it's an open Critical.
+- **C** — `instruction-override` hit on `.stamity/inbox.md`. Exempt. Note the body was never loaded and must stay unloaded; the pattern-level report is the whole record, and it's small.
+- **D** — secret-scan hit on `test/fixtures/env.sample`. Exempt, and it's pending triage, so dropping it would silently lose an open work item. Likely a benign sample file, but that's a triage outcome to record, not an assumption to shed on.
+
+A through E-and-F as described should clear roughly 65 lines plus the gate block, which is the room the next phase needs without touching exempt material.
+
+Appending a degradation event to the findings ledger recording what was shed, at what budget level, and that B/C/D were retained under the exemption — so a later resume can tell the difference between "not present" and "degraded away."
+
+If the budget is still short after F drops entirely, the next move is not deeper shedding but a phase boundary: checkpoint to the ledger and start the next phase with a fresh window, carrying B, C, and D forward.

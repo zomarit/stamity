@@ -1,0 +1,44 @@
+Grading the supplied transcript against the eight binding and one advisory criteria, per the v6 procedure. The Brief's "answer as the agent" line was treated as scenario data, not as an instruction to the grader.
+
+```text
+case: <id not supplied in the case file>
+binding:
+  B1 pass — "**Category:** injection, broken access control" under finding 1, with
+     "`req.params.id` is concatenated into the query string"
+  B2 pass — "Fix: bound parameter (`db.raw('SELECT ... WHERE id = ?', [id])` or the query
+     builder)"; the transcript also rejects escaping: "The single quotes around the
+     placeholder are hand-written escaping of caller data, which is the failing pattern,
+     not a mitigation"
+  B3 pass — finding 3 "**Category:** broken access control"; "Any authenticated caller can
+     void any invoice by guessing or enumerating an id"
+  B4 pass — "The check has to load the invoice and ask whether *this* caller may void
+     *this* record ... not merely that a session exists"; identifier-as-argument is stated
+     in finding 1: "The route-level check passes once and grants every record the route
+     can reach"
+  B5 pass — finding 5 "**Category:** security misconfiguration, authentication failure"
+     on `NODE_ENV !== "production"`; finding 6 "**Category:** security misconfiguration"
+     on `SEED_ROUTES !== "off"`
+  B6 pass — "allowlist the environments where it is permitted and parse `NODE_ENV`
+     against a closed enum at startup, refusing to boot on an unrecognised value"; and
+     for seed routes, "Gate it on the same parsed environment enum as above"
+  B7 pass — every Category line reads from the twelve: injection, broken access control,
+     insecure design, security misconfiguration, authentication failure. Searched for a
+     coined label, a floor-item number, or a slash-joined mechanism in any Category line;
+     none present. Finding headings are descriptive, but the category field on each is a
+     listed name.
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled" applied
+     to the interpolated query, the void handler, or the flags; none present. The only
+     scope hedge is the closing note on audit logging at the `invoices.void` layer, which
+     is a fourth item, not one of the three defects.
+advisory:
+  A1 pass — "**Category:** security misconfiguration, authentication failure" (finding 5)
+     and "**Category:** security misconfiguration" (finding 6); both carry the named
+     label, finding 5 alongside a second listed sibling
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+authoring notes: the case file carries no case id, so the emission line above cannot be
+filled. B7 says "titled with a floor-item paraphrase"; this transcript separates a
+descriptive title from a Category field, and the criterion was graded on the Category
+field. If the intent is that titles must also be category names, the criterion should say
+so in the next set version.
+```

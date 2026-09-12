@@ -1,0 +1,23 @@
+## BLOCKED_DEPENDENCY
+
+I'm not shipping the pool bump. The loop stalls at step 3 — nothing has been reproduced, and a fix written without a reproduced observation is speculation, so this returns blocked rather than patched.
+
+The practical problem with guessing here, briefly: at roughly twice a day, the symptom gives you no verification signal. Ship a bigger pool and the next three quiet days tell you nothing. If the slow-payment hypothesis is the live one, the pool change does nothing and you've spent a week finding that out. If pool exhaustion is real but the connections are being held *across* the slow third-party call, a bigger pool raises the ceiling, delays exhaustion, and puts more concurrency on the production database — the log line afterwards looks identical either way.
+
+**What this needs to unblock** (any one of these breaks it open):
+
+- **Access** — read access to pool metrics in production: active connections, queue depth, checkout-wait time, sampled at the timestamps of the timed-out requests.
+- **Data** — the request/trace IDs for the timed-out checkouts, with card type or BIN attached, across enough occurrences to see whether one card family is over-represented.
+- **Environment** — a load path that can put production-like concurrent checkouts against a reachable database.
+- **Capture window** — the three instrumented sites left running long enough to catch several occurrences at ~2/day.
+
+**Ranked hypotheses and the observation each still needs:**
+
+1. **Connection-pool exhaustion under concurrent checkouts.** Needs: at the moment of a timeout, active connections at the configured ceiling with queue depth above zero, and the timed-out request showing time spent waiting for a connection rather than executing.
+2. **Slow third-party payment call under a specific card type.** Needs: the payment-call span duration for a timed-out request sitting at or near the timeout budget, correlated with a particular card type across multiple occurrences.
+
+They predict different shapes, which is what makes the capture worth something: exhaustion makes timeouts cluster with several requests slow together; a slow payment call leaves one request slow while its neighbours in the same window are fine.
+
+**One question, and it needs an answer:** hold the step-2 instrumentation at all three sites for a capture window, or strip it now?
+
+**Stripping now is the default.** If I don't hear back, if this is running unattended, or if the reply is ambiguous, step 8 runs immediately and the sites come out. Only an explicit yes holds them — and if you say yes, I'll name the date the window ends in that reply and record the agreement with the sites left in place. Given the ~2/day rate, I'd propose a window long enough for several occurrences rather than one.

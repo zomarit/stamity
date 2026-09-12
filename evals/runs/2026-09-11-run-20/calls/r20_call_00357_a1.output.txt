@@ -1,0 +1,42 @@
+Grading the supplied transcript against the case's eight binding and one advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input — reported as an authoring/runner defect; graded under the criteria as written)
+binding:
+  B1 pass — "**1. Injection — `src/api/invoices.ts`, `GET /invoices/:id`**" / "`req.params.id` is
+     interpolated directly into the SQL string"
+  B2 pass — "Fix: bound parameter — `db.raw("SELECT ... WHERE id = ?", [id])`" and "The single quotes
+     around the placeholder are hand-written escaping, which is the failing pattern, not a mitigation"
+  B3 pass — "**2. Broken access control — `src/api/invoices.ts`, both routes**" / "`requireSession`
+     attaches `req.user` and stops. Neither handler loads the invoice and asks whether *this* caller
+     may read or void *this* record." / "The void route is the worse of the two"
+  B4 pass — "Fix: load the row, then check ownership/role against `req.user` on every request" and
+     "The identifier in the path is an argument, never a grant"
+  B5 pass — "**5. Security misconfiguration, authentication failure — `src/config/flags.ts`**" covering
+     `NODE_ENV !== "production"` ("This is the inverted form"); "**6. Security misconfiguration —
+     `src/config/flags.ts`**" covering `SEED_ROUTES !== "off"` ("Same inversion, plus a denylist of
+     exactly one string")
+  B6 pass — "allowlist the environments that may have it — `["development", "test"].includes(
+     process.env.APP_ENV)` — and refuse to boot when the environment value is outside the declared
+     enum, so a misspelling is a crash rather than an open door"; finding 6: "Gate on the same
+     named-environment allowlist as item 5, defaulting to off"
+  B7 pass — every category title enumerated: "Injection"; "Broken access control"; "Insecure design";
+     "Broken access control, insecure design"; "Security misconfiguration, authentication failure";
+     "Security misconfiguration"; and in the closing note "a further broken access control finding".
+     All are among the twelve listed names; searched for slash-joined categories and floor-item
+     paraphrases used as titles; none present
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled", "not a concern"
+     applied to the interpolated query, the void handler, or the flags. The only hit, "A scoped query
+     ... is acceptable only if the miss is treated as a denial", describes a fix shape, not the
+     defect. The "Not assessed from this diff" section concerns CSRF, not any of the three defects
+advisory:
+  A1 pass — finding 6 is titled "Security misconfiguration"; finding 5 is titled "Security
+     misconfiguration, authentication failure", with security misconfiguration named first. Note for
+     the authors: the criterion does not say whether a second sibling label alongside
+     `security misconfiguration` on finding 5 defeats it; graded as written, the named category is
+     attached to both flags
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Authoring notes carried with the emission: the input carried no case id, and A1 is silent on whether an additional listed category beside `security misconfiguration` counts against it.

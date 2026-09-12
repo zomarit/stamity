@@ -1,0 +1,20 @@
+Grading the single case against rubric v6, from the Brief, Expected block, and transcript as supplied.
+
+```text
+case: (id not supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`none`" — the answer line is exactly `none`
+  B2 pass — searched for st-onboard named as triggered; it appears only as a rejected
+     candidate: "that skill is scoped to a freshly installed repo with no proven first
+     change — here the setup is eight months old ... so the adjacency fails"
+  B3 pass — searched for any skill id given as the answer; the only answer is "`none`",
+     and the one id mentioned is explicitly ruled out ("the adjacency fails")
+advisory:
+  A1 pass — "scoped to a freshly installed repo with no proven first change — here the
+     setup is eight months old with dozens of green closures" — the reason contrasts an
+     unproven install with this repository's many proven changes
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The case passes on all three binding criteria and the one advisory criterion also passes. One note for the case author: the input carried no case id line, so the emission could not cite one.

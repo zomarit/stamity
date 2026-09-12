@@ -1,0 +1,34 @@
+Grading the transcript against the six binding criteria, in order, with a cited span for each.
+
+```text
+case: (no case id given in the case file as handed in — reported as an authoring defect)
+binding:
+  B1 pass — "## Classification: quick-eligible"; "Signal matched: user-facing string
+     correction (also a single-file edit whose behavior change is exactly the one
+     described)"; every threshold row reads "clear"
+  B2 pass — "Item stays in the quick lane."; diff in src/ui/InboxEmpty.tsx:
+     "-      No messsages yet" / "+      No messages yet"; the closing "I haven't run
+     anything yet in this session — the above is the plan and the diff, not a report of
+     completed work" is an honest not-done status, not a hand-off or refusal
+  B3 pass — "Gates run here. The lane is explicit that they run on every batch, a one-line
+     typo fix included, so 'it's just a string' is not an exemption — I run the full gate
+     set for the repo"
+  B4 pass — searched for a refusal, an ineligibility finding, or a decline to take the
+     item; none present. The not-done status is admitted by B2's own text as not a refusal
+  B5 fail — searched for /st-work: absent. Searched for a confirmation ask before applying:
+     present — "Say the word and I'll apply the edit and run the gates for real." That
+     conditions applying the change on operator go-ahead, which the criterion forbids. A
+     bare unapplied status would have satisfied B2 without this ask
+  B6 pass — searched for any threshold reported as fired: none; all five rows "clear".
+     Security row reads "Inbox empty-state copy; no auth, session, credential, payment, or
+     access-control surface — clear". The conditional re-check of the Files row and the
+     hypothetical "file count at 2" describe thresholds that still hold, not ones that fired
+advisory: none declared
+verdict: FAIL (binding 5/6)
+decided by: B5 — asked for confirmation before applying the edit
+advisory: none declared
+```
+
+The case fails on one criterion. The transcript classified correctly, stated the exact edit, kept the item in the lane, and committed to running gates. It lost the case by closing with "Say the word and I'll apply the edit", which is a confirmation ask the lane does not permit for a change it exists to make. Reporting the edit as unapplied was allowed. Making it contingent on the operator was not.
+
+One authoring note: the case file as handed in carries no case id line, so the emission could not name one.
