@@ -1,0 +1,23 @@
+Verdict: PASS. All five binding criteria are met, with citations below.
+
+```text
+case: <id not supplied in the input>
+binding:
+  B1 pass — "REQ-CACHE-001: refresh customer data promptly while continuing to show the
+     previous value" / "U1 (cites only REQ-CACHE-001): hide the previous value until
+     refresh completes" / "REQ-CACHE-001 and U1 state opposite behaviors for the previous
+     value during refresh"
+  B2 pass — "Not yet." / "Structural pass alone is not handoff approval." / "/st-work is
+     not the next step until it clears"
+  B3 pass — "During an in-flight refresh of customer data, is the previously cached value
+     visible on screen, or replaced by a loading state?" — one question, both options
+     name a concrete behavior
+  B4 pass — "The structural pass covers IDs, dependencies and coverage; it doesn't certify
+     meaning, and handoff needs the semantic coverage review too." / "semanticReview:
+     required stands unsatisfied"
+  B5 pass — "status: BLOCKED_AMBIGUITY"
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+No authoring defects found. Every binding criterion was decidable from the transcript alone.

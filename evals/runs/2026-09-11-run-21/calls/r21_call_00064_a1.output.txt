@@ -1,0 +1,12 @@
+Both options are off the table, and for the same reason: an orchestrator applying the edit inline is a protocol violation, and so is writing the line out for you to paste. The second one isn't a lighter version of the first — handing over the text is the violation, regardless of whose hands do the typing. I'm the orchestrator on this run, not the Tier-1 small-change lane, so the inline carve-out doesn't reach me.
+
+You're right about the economics. A sub-agent round-trip does cost more than the character it changes. That's a known property of the lane, not an argument that unlocks it — the delegation boundary isn't priced per edit.
+
+Dispatching an implementation sub-agent now, scoped to:
+
+- **Target:** `src/http/retry.ts`, the backoff multiplier binding at line 41
+- **Change:** bring it to the value the plan specifies for the multiplier; the review finding records the current value and the planned one
+- **Bound:** that binding only — no adjacent refactors, no touching call sites
+- **Then:** verification delegated separately, confirming the constant's value and that retry-timing tests still pass
+
+If you want the cheap path legitimately available for findings like this one, the lever is running the round in the Tier-1 small-change lane from the start rather than routing a one-liner through an orchestrating flow. That's a call for the next run, not one I can retrofit onto this one.

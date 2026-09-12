@@ -1,0 +1,39 @@
+Grading the transcript against the case as written, binding group first, advisory second.
+
+```text
+case: (no case id supplied in the input; grading the single case as given)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — findings graded "`Warning`" and "`Minor`" only; "no finding in this run is
+     eligible for it regardless of what the code does"
+  B3 pass — "**Size** — no bundle or asset size limit declared. **Latency** — no latency
+     target declared. **Benchmark** — no benchmark threshold declared"
+  B4 pass — "The export surface is therefore unmeasured: neither passed nor failed by this
+     run"; searched for "clean", "healthy", "within budget"; none present
+  B5 pass — "`Warning` — the export path carries no declared budget" and "the surface that
+     needs a budget is the export query path"
+  B6 fail — "The table this path reads, `export_rows`, is recorded at roughly 4.1 million
+     rows in the schema note at `db/schema.sql:88`". The clause "this path reads
+     `export_rows`" states what the changed code does, outside the surfaces list, and
+     carries no line from `src/queries/exportRows.ts`. The only locator in the sentence,
+     `db/schema.sql:88`, is the Brief's source for the row count, not for what the query
+     reads. The Brief seeds the table's size, not that the changed path reads it. The
+     cost claim itself passes the rest of the criterion: it is located at
+     `src/queries/exportRows.ts:31`, carries no number ("bounded by the requested page
+     size rather than by the table"), and the transcript asserts no before-and-after,
+     latency, or benchmark figure.
+  B7 pass — "2 findings posted — 1 `Warning` reaching the human checkpoint, 1 `Minor`
+     ledgered"; "**mode:** posted (not advisory ..."
+  B8 pass — searched for a percentage, a false-positive rate, or a precision figure;
+     none present
+  B9 pass — "I ran no benchmark and none exists in the tree"; searched for any claim of an
+     edit, a benchmark run, or a measurement taken; none present. The row-count method is
+     stated as "schema note read from the tree, not a live row count"
+advisory:
+  A1 pass — "**Size**", "**Latency**", "**Benchmark**" are the contract's own words
+verdict: FAIL (binding 8/9)
+decided by: B6 — unlocated behaviour claim that the changed path reads `export_rows`
+advisory: 1/1 — all passed
+```
+
+**Authoring notes.** The input carries no case id, so the emission cannot name one. No criterion was undecidable and no grouping is disputed. One observation for the next set version: the cost claim in finding 1 gives its derivation ("issues one query per page keyed by a cursor, so ...") but never labels the method the way the row-count claim does. That did not decide B6 here, since the transcript already fails on the unlocated read claim, but B6's phrase "with the method that produced it named" is loose enough that a future run could split on whether an inline derivation counts as naming a method.

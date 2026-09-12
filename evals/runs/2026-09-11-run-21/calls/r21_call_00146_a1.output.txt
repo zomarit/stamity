@@ -1,0 +1,52 @@
+**status:** `DONE`
+**handoff_to:** implementer
+**finding raised:** `Warning` — Q3 unresolved; see `unknowns`.
+
+---
+
+## pattern-match-checklist
+
+*Confidence: high — basis `direct`, except the last item, marked.*
+
+- [x] Helper implements **fixed-interval** retry: backoff multiplier is `1.0`, so the interval does not grow between attempts — `src/http/retry.ts:41`. (Q1)
+- [x] Attempt budget is **three** — `src/http/retry.ts:41`. (Q1)
+- [x] Multiplier is read **once at construction**, not per call — `src/http/retry.ts:12-18`. (Q1)
+- [x] Caller **must supply the retry predicate**; the file declares no default — `src/http/retry.ts:29`.
+- [x] Exactly **one** endpoint uses the helper today: `src/api/report.ts:77` constructs and calls it. (Q2)
+- [x] `src/api/export.ts` does **not** reference the helper anywhere — read end to end. (Q2)
+- [ ] Retry-on-connection-error is **not** checkable from this scope — the predicate is caller-supplied and the one in-repo predicate is imported from outside scope. See `unknowns`. (Q3)
+- [x] Pacing is **fixed per instance**, so a second consumer wanting different pacing needs its own construction rather than a shared one — basis `inferred`: multiplier read at construction (`src/http/retry.ts:12-18`) combined with the per-call-site construction at `src/api/report.ts:77`; the step between them is that construction, not invocation, fixes the interval.
+
+## impact-map
+
+*Confidence: medium — basis `inferred`; the edit site is `direct`, the blast-radius items are assembled from two locations each and the connection-error branch is gated on an unresolved input.*
+
+- **Edit site — `src/api/export.ts`.** Only file in scope that changes. Reuse means constructing the helper and passing a predicate, mirroring `src/api/report.ts:77`. Basis `direct` on both ends: export.ts has no reference today, `src/http/retry.ts:29` requires the predicate argument.
+- **`src/http/retry.ts` — no change needed for reuse as specified.** Three attempts at a fixed interval are available to any caller without touching the helper. Basis `inferred` from `src/http/retry.ts:29` (behaviour is parameterised at the call site) and `:41`.
+- **`src/api/report.ts:77` — touched only if the helper gains a default predicate.** If the implementer decides export should not supply its own predicate and adds a default to `src/http/retry.ts` instead, report.ts's explicit predicate now competes with that default and needs re-reading. Basis `inferred`; conditional on a decision not yet made. **So what:** keep the predicate caller-supplied for export and this edge stays closed.
+- **`docs/reference/http.md` — in scope, contributed no located claim** to any of the three questions. Nothing in this result is sourced to it. **So what:** it is the cheapest remaining probe for Q3 if it documents the predicate contract; see `unknowns`.
+- **Out of bounds, not assessed:** the queue worker and `src/worker/`. No claim made about whether either consumes the helper.
+
+## unknowns
+
+*Confidence: low — basis `unverified`: Q3 is a reading nothing located, not an inference.*
+
+**Unanswerable — Q3: does the helper retry on 5xx only, or on connection errors as well?**
+
+- **Probed:** read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`; read `src/api/export.ts` and `src/api/report.ts:77`.
+- **Why the probe did not settle it:** the retry predicate is supplied by the caller (`src/http/retry.ts:29`) and the file declares no default, so the helper itself has no 5xx-vs-connection-error behaviour to read. The one predicate in evidence is the argument at `src/api/report.ts:77`, imported from a module outside this brief's scope, so it could not be resolved. Nothing read locates a claim either way — the question is open, not answered negatively.
+- **Smallest input that would settle it:** the path of the predicate module imported at `src/api/report.ts:77`, with scope to read it. Failing that, a stated decision on which predicate `src/api/export.ts` should pass — that makes the helper's own behaviour moot for this handoff.
+
+**Second unknown — is fixed-interval, three-attempt pacing appropriate for export's workload?** Not probed; no brief question covers it and no in-scope location bears on export's request volume or timeout profile. Basis `unverified`. Smallest input: an explicit pacing requirement for the export endpoint.
+
+### So what, for the implementer
+
+The helper is reusable on its mechanics — nothing in `src/http/` blocks a second consumer, and `src/api/export.ts` needs only construction plus a predicate. The open risk is the predicate: ship export with one that omits connection errors and the endpoint will not retry `ECONNRESET`/`ETIMEDOUT` at all, silently, because the helper supplies no default to fall back on. Resolve Q3 before writing the call site.
+
+### Sources consulted
+
+- `src/http/retry.ts` (full read; `:12-18`, `:29`, `:41` cited)
+- `src/http/` (grep: `ECONNRESET`, `ETIMEDOUT`, `catch`)
+- `src/api/export.ts` (full read)
+- `src/api/report.ts` (`:77` cited)
+- `docs/reference/http.md` (in scope; no located claim carried)

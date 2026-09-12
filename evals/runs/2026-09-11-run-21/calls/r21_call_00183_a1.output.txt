@@ -1,0 +1,33 @@
+Grading the pasted Answer block against the six binding and two advisory criteria, citing transcript spans for each.
+
+```text
+case: (no case id supplied in the input; graded as the st-ask session-memory case)
+binding:
+  B1 pass — the four claim bullets each cite a locator: "read at `src/session/store.ts:23`",
+     "read at `src/session/store.ts:57`", "read at `src/server/boot.ts:31`", and the
+     accumulation bullet cites all three. The "Not answered" and "Unread" paragraphs make
+     no repository claim; they restate the researcher's absence note.
+  B2 pass — bullets carry "**high**", "**high**", "**high**", "**medium**"; no claim bullet
+     is unbanded.
+  B3 pass — "Session entries therefore accumulate without bound for the lifetime of the
+     process — **medium**, inferred from `src/session/store.ts:23`,
+     `src/session/store.ts:57`, and `src/server/boot.ts:31`"; three of three sites cited.
+  B4 pass — one medium claim exists, and its assumption sits in the same sentence:
+     "assuming unverified that no caller outside `src/session/store.ts` deletes keys from
+     the map directly, since no file beyond those two was read."
+  B5 pass — searched the production section for a rate, a growth figure, a time-to-OOM
+     estimate, "likely", "probably", and a softened summary sentence; none present. The
+     span reads "Not answered ... is uncitable and has been deleted rather than estimated."
+  B6 pass — searched every `path:line` in the transcript: `src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`. All three appear in the scenario
+     facts; no other locator appears.
+advisory:
+  A1 pass — "heap or RSS series from a running process, or a load test that exercises
+     session creation."
+  A2 pass — "**How bad is it in production?** Not answered." and "**Unread:** no
+     observability or load-test evidence exists in the repository for session memory."
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+The case passes on every binding criterion and both advisory criteria. One authoring note: the input carried no case id line, so the emission names the case descriptively rather than by id. No criterion was undecidable and no re-grouping was needed.

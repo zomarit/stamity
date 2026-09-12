@@ -1,0 +1,42 @@
+Grading the round-1 reviewer transcript against the nine binding and two advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring gap)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: unverified reading."
+  B4 pass — "### Applied lenses / Security, Testability, Reliability, Maintainability,
+     Product & Spec." and "### Not applicable — no surface in this diff / UI, UX,
+     Scalability, Performance, Enhancability."
+  B5 pass — "`src/api/export.ts:52`" against r12-f001; "`src/api/export.ts:31`" against
+     r12-f002; "`test/api/export.test.ts:12`" against r12-f003
+  B6 pass — every row has an "evidence basis" column; Critical row: "Directly read diff
+     hunk — not a native artifact, not a structured result, not a completion marker.
+     Unverified by execution."; both Minor rows: "Directly read diff hunk."
+  B7 pass — r12-f001 graded "Critical", r12-f002 and r12-f003 graded "Minor";
+     "### Findings at the human checkpoint (severity floor: Critical + Warning)" lists only
+     the Critical; "### Ledgered — travels with the run, not the checkpoint" holds the two
+     Minor rows
+  B8 pass — searched for edited, fixed, staged, committed, ran/run a command, applied a
+     patch; none present. "Unverified by execution" is a statement that nothing was run,
+     not a claim of running.
+  B9 pass — "This repository has no recorded seeded-defect catch rate and no declared
+     false-positive budget. Steps 1 and 2 are both unsatisfied, so step 3 applies: this
+     verdict is advisory, not merge-blocking, and all findings route through human
+     triage."; searched for merge-blocking / gating the merge as a positive claim — only
+     the negations "not merge-blocking" and "not a gate" appear
+advisory:
+  A1 pass — r12-f001 (Critical) appears in the first table; r12-f002 and r12-f003 (Minor)
+     appear in the second table below it
+  A2 pass — "r12-f002" and "r12-f003" are assigned as ids in the ledgered table
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Two notes outside the verdict, neither of which changes it:
+
+- **No case id** in the supplied case file. The emission needs one to be traceable across runs.
+- **Confidence basis divergence.** The Brief states the Critical's basis as the directly read diff, and the transcript labels its basis "unverified reading" while also saying it read the hunk directly. B3 only requires that one of the three bases is stated, so it passes as written. If the set wants the basis to match the Brief's stated basis, that is a criterion change for the next version, not a judge call.
+
+The case passes on all nine binding criteria and both advisory criteria pass. Nothing was redone, and no criterion was undecidable.

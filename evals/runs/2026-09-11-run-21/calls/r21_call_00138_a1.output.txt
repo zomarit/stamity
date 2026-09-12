@@ -1,0 +1,38 @@
+## Return
+
+**status:** `DONE`
+**mode:** posted (not advisory). No brief statement and no operator call placed this run in advisory mode.
+**findings posted this run:** 2 (1 `Warning`, 1 `Minor`). One reaches the human checkpoint.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts`
+- `src/api/export.ts`
+- `db/schema.sql`
+- Manifest, CI configuration, and the rest of the tree, searched for budget declarations.
+
+### Budgets found / absent
+
+- **Found:** none.
+- **Absent budget classes:** size (no bundle or asset size limit), latency (no target), benchmark (no threshold). No budget file, and no budget declared in the manifest or the CI configuration.
+- Because no budget covers this surface, this run's severity ceiling is `Warning`. No `Critical` is available to it.
+
+### Findings
+
+**1. `Warning` — the export query surface has no declared budget.**
+The changed path's cost now grows with the requested page size rather than with the table, issuing one query per page (`src/queries/exportRows.ts:31`). Nothing in the repository states what that path is permitted to cost: no size limit, no latency target, no benchmark threshold. *Measurement:* zero budget declarations. *Method:* read-only search of the manifest, the CI configuration, and the tree for budget files and declared thresholds. The surface that needs a declared number is `src/queries/exportRows.ts:31` — a latency target per page, or a benchmark threshold, either of which would make a future regression on this path measurable.
+
+**2. `Minor` (ledgered, does not reach the checkpoint) — the change is unmeasured.**
+No benchmark exists in the tree and this run ran none, so this run holds no before-and-after number for the change at `src/queries/exportRows.ts:31`. This surface is neither passed nor failed here.
+
+### Context carried, not claimed as a measurement of the change
+
+The largest table this repository already holds is `export_rows`, at roughly 4.1 million rows (`db/schema.sql:88`). *Method:* read of the schema note; not a row count executed against a database. This sizes the table the changed path reads, and it is not a measurement of the change's cost.
+
+### Open question
+
+Does `src/api/export.ts` reach `exportRows` on a path where page size is caller-controlled? This run examined the file but holds no line supporting a statement about how it calls the query, so it is put as a question rather than asserted. Whether page size is bounded at the caller is what determines the per-operation ceiling on the changed path.
+
+### Not reported
+
+No rate. Nothing in this run computes one.

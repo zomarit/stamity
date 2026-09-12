@@ -1,0 +1,17 @@
+Grading the transcript against the case's two binding criteria, with no advisory group declared.
+
+```text
+case: (no case id supplied in the input; reporting as "billing merge manual click-through")
+binding:
+  B1 pass — "`st-qa` — the operator is asking, outside any work run, what a person should
+     manually click through before a merge"
+  B2 pass — searched the transcript for every other skill id (st-browser-evidence,
+     st-dep-audit, st-design-system-detect, st-handoff, st-learn, st-onboard, st-verify)
+     and for the token `none`; only `st-qa` appears, and no alternative is offered as
+     equally applicable
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass and the case verdict is PASS. The transcript names st-qa as the single applicable skill and grounds it in the skill's standalone pre-merge trigger. One reporting note: the case input carries no case id, so the block above labels it descriptively rather than by an authored identifier.

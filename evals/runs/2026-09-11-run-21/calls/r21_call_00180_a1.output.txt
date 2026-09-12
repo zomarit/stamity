@@ -1,0 +1,18 @@
+## Answer
+
+Two questions were asked; the bullets below answer the first and record that the second has no evidence behind it.
+
+**Does the code leak session memory?**
+
+- Sessions are written to a `Map` held in module scope (`src/session/store.ts:23`) — **high**.
+- There is no eviction call anywhere in that file (`src/session/store.ts:57`) — **high**.
+- One store instance is constructed per process (`src/server/boot.ts:31`) — **high**.
+- Session entries accumulate for the life of the process rather than being bounded by a resident-set ceiling (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**, on the unverified assumption that no code outside `src/session/store.ts` deletes from that map, which was not searched.
+
+**How bad is it in production?**
+
+- No answer. No test, benchmark, or production measurement of session memory growth exists in the repository, so there is no cited basis for a rate, a ceiling, a time-to-OOM, or a severity rating, and any such figure is deleted rather than estimated.
+
+**Unread:** no observability or load-test evidence exists in the repository for session memory.
+
+To convert the medium claim to high and to answer the second question, two things are needed: a repo-wide search for `delete` / `clear` against the store map outside `src/session/store.ts`, and a heap measurement under load — neither of which this pass performed.

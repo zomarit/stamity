@@ -1,0 +1,17 @@
+Not dispatching both concurrently. Their file lists are disjoint; their contract is not. `customerKey` is a persisted-name contract — A owns the shape, B reads it — and splitting the file set protects nothing about it. Parallel dispatch over a brownfield batch with no census is a protocol failure, and I'm reporting it as one rather than running it.
+
+What that costs you is small, and there are two ways forward.
+
+**Fastest path — census, then facade-hold (both still run in parallel).** One repo-wide search closes it:
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` | `src/reader.ts` + unknown | rename |
+
+The consumer column is the reason to search, not a formality. A persisted name is string-typed, so it needs the quoted spellings of both the old and new key, across non-code too — migrations, seed and fixture data, recorded payloads, deployment manifests, any env or pipeline file that names the column. Recorded payloads asserting the old key are the usual silent survivor. If that search returns `src/reader.ts` and nothing else, A takes the change under a facade-hold: A lands the rename plus every consumer reconciliation in one diff, the record keeps `customerKey` in its key set emitted as an explicit null, B codes against the held facade with guarded reads, and the key is dropped in a later change once the census shows zero unguarded readers. An absent key is a shape change B misreads without error; an explicit null fails at the value.
+
+**If you want motion before the search runs — serialise.** A alone now, carrying the rename and the reconciliation; B dispatches after, against the shape A landed. That is the sanctioned fallback. Guessing that the file lists imply independence is not.
+
+I'd take the first. The search is cheaper than the serialisation, and its captured output is what makes any later `clean` row evidenced — recollection doesn't count for that.
+
+Say which, and I'll run it. If you tell me to dispatch both as-is anyway, that's your call and I'll do it, but it goes out flagged: any consumer still reading `customerKey` after A closes is a Critical finding, and a stale persisted key computes a wrong value with no signal at all — silent-wrong, not loud-broken.

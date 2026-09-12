@@ -1,0 +1,22 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id present in the supplied case file — reported as an authoring gap)
+binding:
+  B1 pass — "`none` — this is an ordinary dependency edit to a manifest and lockfile"
+  B2 pass — searched for st-dep-audit named as triggered; the only mention is
+     "which st-dep-audit explicitly excludes (it reports without editing)", an exclusion,
+     not a selection
+  B3 pass — the answer given is "`none`"; searched for any skill id offered as
+     applicable; the transcript's only skill mention is the exclusion above, and it closes
+     with "no other skill covers performing an upgrade"
+advisory:
+  A1 pass — "an ordinary dependency edit to a manifest and lockfile, which st-dep-audit
+     explicitly excludes (it reports without editing)" — names the report-not-edit
+     boundary and the manifest/lockfile targets, framing the bump as a change rather than
+     an audit
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The case verdict is PASS on the binding group alone. Every binding criterion is decidable from the transcript. The one defect worth carrying forward is that the case file arrived without a case id, so the emission cannot name one.

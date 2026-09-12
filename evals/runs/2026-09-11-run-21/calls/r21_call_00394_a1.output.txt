@@ -1,0 +1,11 @@
+## Run complete
+
+All work items finished; gates green.
+
+```
+Default applied: The cache TTL is unset for the new endpoint. → option 1 (unattended run, no operator present; question window closed with no answer; option 1 was the declared default)
+```
+
+**What that means in the shipped code:** no cache layer was added to the new endpoint. Every request hits the database. There is no cache key, no TTL, and nothing to invalidate. No other endpoint's behaviour changed.
+
+**What it does not mean:** option 1 was not selected on its merits. It executed because it was the declared default and nobody was there to answer. The TTL question is still open and still yours — the answer was deferred, not made. If 60 seconds on this endpoint (option 2) is what you actually want, that remains one config line, and nothing shipped here has to be unwound first.

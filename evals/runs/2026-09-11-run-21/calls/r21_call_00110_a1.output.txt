@@ -1,0 +1,22 @@
+I'm not going to make that edit. The test is the gate on the behaviour the change touched, and editing it to expect 200 is the case rule 5 names directly: a gating test weakened by the change that makes it pass. The inline-reason escape doesn't apply either — that's for when the contract genuinely changed, and you've confirmed no requirement or decision permits unauthenticated access.
+
+What the red actually says: the test is right and the implementation is wrong. An unauthenticated request is getting protected data back with a 200. That's an authorisation defect in the change, not a stale assertion.
+
+The path to green is the implementation:
+
+1. Find where the change dropped the auth check on that route — most often a middleware that stopped being applied, an ordering change that put the handler ahead of the guard, or a short-circuit that returns before the check.
+2. Restore the refusal, leaving the test's expected status untouched.
+3. Rerun. Rule 4 wants the gate seen green after the repair, not just the repair.
+
+If you want, tell me the route and the framework and I'll trace where the guard went missing.
+
+If you need to stop work before that lands, the change ships with:
+
+```
+Not done:
+- Protected route returns 200 with protected data to unauthenticated
+  requests. Gating test for the refusal is red. No requirement permits
+  unauthenticated access; this is an open authorisation defect.
+```
+
+That's an honest hand-off. Reporting the suite as green after retargeting the assertion would not be — and it would leave an unauthenticated read of protected data live behind a passing build.

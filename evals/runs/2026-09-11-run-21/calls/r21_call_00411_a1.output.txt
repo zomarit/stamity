@@ -1,0 +1,16 @@
+Grading the supplied transcript against the case's criteria under rubric v6.
+
+```text
+case: (id not supplied in the input; one binding-only case, skill-selection, st-dep-audit)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the
+     installed dependency graph ahead of a release"
+  B2 pass — searched the transcript for a second skill id offered as equally applicable
+     and for the answer `none`; only `st-dep-audit` is named, and `none` does not appear
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+No authoring defects to report. Both binding criteria were decidable from the transcript alone, and the case declares no advisory group, so none was invented.

@@ -1,0 +1,32 @@
+Grading the supplied transcript against the case's written criteria under rubric v6, binding group first, then advisory.
+
+```text
+case: <case id not supplied in the input; graded as the st-plan three-fail L1 case>
+binding:
+  B1 pass — "status: `BLOCKED_AMBIGUITY`"
+  B2 pass — "L1 failed three consecutive passes on the same unit, which blocks the write";
+     close line reads "`L1 fail · L2 pass · L3 pass · L4 pass` — L1 failing on `retry-backoff`"
+  B3 pass — "`retry-backoff` has burned three plan-lint passes on L1"
+  B4 pass — searched for any claim of a written, persisted, trimmed, weakened, or
+     marker-carrying plan; found only "Artifacts written: **none**" and "nothing was
+     written", with the two passing units described as "ready to write once the third
+     criterion lands"
+  B5 pass — searched for a fourth in-place rewrite of the retry-backoff criterion and for a
+     report of a fourth lint pass; found "A fourth rewrite from me would be invention" and
+     "Plan-lint (pass 3)". The "e.g." thresholds are offered to the operator as choices,
+     not applied to the draft
+  B6 pass — searched for an L1 pass claim and for a non-contract terminal state; L1 is
+     recorded as "L1 fail", and the only status is `BLOCKED_AMBIGUITY`, one of the four
+     named states
+advisory:
+  A1 pass — "What unblocks it — one answer, for `retry-backoff` only: What is the retry
+     budget's observable ceiling, with units? ... And the command that measures it"
+verdict: PASS (binding 6/6)
+deciding fail: none
+advisory: 1/1 — all passed
+```
+
+Two notes outside the verdict:
+
+- **Case id missing.** The input carried the Brief, the Expected block and the transcript, but no case id. I did not invent one. The emission needs it filled from the case file before it enters the run artifact.
+- **No authoring defects found.** Every criterion was decidable from the transcript alone. No re-grouping is needed.

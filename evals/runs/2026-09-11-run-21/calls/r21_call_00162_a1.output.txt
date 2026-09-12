@@ -1,0 +1,22 @@
+**status:** `BLOCKED_AMBIGUITY`
+
+The brief names no mode and its three clauses map to three different modes. Per the mode contract, one mode per invocation; blending them would write a brownfield spec, an ADR, and a docs page under a single evidence rule, which is exactly the failure the contract names.
+
+## Competing readings
+
+| Clause (verbatim) | Mode | Why it reads that way |
+|---|---|---|
+| "Write up the new export-scheduling behaviour" | `brownfield` | The behaviour is landed and running at `src/schedule/cron.ts:18-44`, so it is existing code, not stated intent — spec files for the touched surface, every claim carrying `file:line`. |
+| "Record why we chose a cron trigger over a queue consumer" | `architect` | A decision already visible in the code with no ADR recording it; `docs/adr/` exists and holds eleven records — this is an ADR written as observed, with the alternative (queue consumer) the code rules out. |
+| "produce the page an operator reads to configure it" | `docs` | Shipped, verifiable behaviour; the user-facing tree exists and carries no export-schedule page. |
+
+`greenfield` is ruled out for all three: the trigger is landed, so nothing here is unresolved intent.
+
+## Findings
+
+- **Critical** — Three-way mode ambiguity as above. No files written, no manifest rows touched, no requirement ids allocated.
+- **Warning** — Forward-looking, for the re-spawn: the brownfield invocation carries no researcher findings, only the code pointer from this brief. Brownfield requires `file:line` evidence across the whole touched surface, not one range. Spawned as-is it will return `BLOCKED_DEPENDENCY` naming the missing research. The `architect` and `docs` invocations are unblocked — the ADR reads the decision off the code, and the docs page reads shipped behaviour off the current tree.
+
+## Suggested resolution
+
+Three invocations, in order: `architect` (ADR, no dependency), `brownfield` (spec, after a researcher pass over the export-schedule surface), `docs` (operator page, citable once the behaviour is specified). The ambiguity gate is the spawning flow's to run; I am not putting the question to the operator.

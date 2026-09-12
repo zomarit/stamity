@@ -1,0 +1,9 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted:** Matched the change set against the roster's pull-in conditions. `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` match no path pattern in either surface row, and the change produces no rendered output. Looked for a surface to review independent of the change — a component root (`components/`, `pages/`, `views/`), any `.tsx`/`.jsx`/`.vue`/`.svelte` markup, any `.css`/`.scss` style layer, any design-token source.
+
+**Blocks it:** None of those exist in this tree. There is no rendered surface for the components-and-views criteria to apply to and no token source for the style-layer criteria to compare against. Per the trigger section, a repository with no component root and no markup returns this agent unrun; reporting a clean pass here would be reporting on a surface never found.
+
+**Smallest unblocking input:** A path to a rendered surface this change affects — a component root, a markup file, or a style/token source — or, if the intended surface is the CLI's terminal output, a roster entry that admits it, since the current roster covers neither terminal rendering nor argument-interface flow.
+
+The brief's request for the pass does not substitute for the surface; the request was received and is the reason this ran at all, but it cannot supply what the criteria measure against.

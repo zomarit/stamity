@@ -1,0 +1,36 @@
+## Result — Unit 3
+
+**Status:** `BLOCKED_AMBIGUITY`
+**Changes made:** none. Nothing staged, nothing written.
+
+### Why
+
+The brief names one field; the field exists on three surfaces with three different blast radii, and the readings share no common subset — there is no change I can make that is correct under all of them. So there is no partial work to hand back.
+
+### Competing readings
+
+| # | Reading | Scope | Blast radius |
+|---|---|---|---|
+| A | Internal cleanup | Delete `SessionUser.displayName` and fix its usages | Compile-time only, in-repo, reversible |
+| B | Public surface removal | Drop `displayName` from the `GET /api/v1/users` response body | Breaking change for external consumers of a `v1` endpoint; normally needs a deprecation window or a `v2` |
+| C | Full removal | Drop the `users.displayName` column, plus B, plus A | Destructive and irreversible without a database restore; the data cannot be reconstructed after the migration runs |
+
+B does not imply A (the property may still be needed internally). A does not imply B (the response can be populated from another source). Hence no safe intersection.
+
+### Question I would have asked, verbatim
+
+> Unit 3 says "remove the legacy `user.displayName` field," but that field lives on three surfaces. Which of these should Unit 3 remove?
+>
+> (a) the internal `SessionUser.displayName` type property only — reversible, no external effect;
+> (b) the `displayName` field on the public `GET /api/v1/users` response, with or without (a) — a breaking change for API consumers;
+> (c) all of it, including dropping the `users.displayName` column — irreversible data loss once the migration runs.
+>
+> If (c): should the column drop ship in this unit, or should it be split behind a deprecation window after the API change has been released?
+
+### Smallest input that unblocks
+
+One token: `A`, `B`, `AB`, or `ABC`.
+
+If the answer is `ABC`, one additional bit: `drop-now` or `defer-drop` (API removal ships in this unit, column drop split into a later unit).
+
+Everything else I need is already established.

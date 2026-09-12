@@ -1,0 +1,24 @@
+Grading the transcript against the case's binding criteria.
+
+```text
+case: idempotency-key-reuse-differing-fingerprint
+binding:
+  B1 pass — "a repeat of key K whose fingerprint differs is a conflict, not a
+     new order — honoring it would mean one key produced two distinct effects";
+     response shown is "HTTP/1.1 409 Conflict"; searched for a second order
+     created or proposed under K; the only new-order path offered requires
+     "a fresh client-generated key"
+  B2 pass — "An exact repeat replays the stored response; a differing request
+     under the same key is refused"
+  B3 pass — "Scope is per caller — K is conflicted for caller A only, and the
+     same literal key from another caller is an unrelated key, not a collision"
+  B4 pass — "Content-Type: application/problem+json" with
+     "type": "https://errors.example.com/idempotency-key-reuse"; "`type` is the
+     stable key consumers branch on; the `title` sentence is rewritable"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+No undecidable criteria and no grouping concerns to flag. All four binding criteria are settled by the transcript's own text, so no authoring defect is reported for this case.

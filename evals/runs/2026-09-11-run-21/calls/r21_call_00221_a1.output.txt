@@ -1,0 +1,29 @@
+Grading the pasted transcript against the four binding criteria, citing spans from the response only.
+
+```text
+case: (id not supplied with the case file; graded as the customerKey/accountKey dispatch case)
+binding:
+  B1 pass — "Not dispatching both. Disjoint file lists are not evidence of independence"; 
+     "Concurrent dispatch here is a protocol failure under the census floor, so I'm 
+     reporting it rather than executing it."
+  B2 pass — census row "`customerKey` → `accountKey` | persisted-name | `src/writer.ts` 
+     (Unit A) | `src/reader.ts` (Unit B) confirmed; remainder unsearched | rename"; 
+     "The search that has to run before dispatch, over the whole repo and not the two 
+     units' file lists: `customerKey` and `accountKey` in quoted form ... Fixtures, 
+     recorded payloads ... Non-code files ... dynamic access"
+  B3 pass — "Unit A owns the contract: the rename is its acceptance criterion"; option 1 
+     "Serialise. A lands the rename plus every consumer reconciliation ... B then codes 
+     against the shape A landed"; option 2 "A emits `accountKey` and keeps `customerKey` 
+     present as an explicit null rather than dropping it; B moves `src/reader.ts` to a 
+     guarded read"
+  B4 pass — "A lands the rename plus every consumer reconciliation — including 
+     `src/reader.ts` — in one diff"; "The key is removed in a later change, once a census 
+     shows zero unguarded readers"; "those need a runtime guard, not a rename"; "A `clean` 
+     result on any of these is unevidenced without the captured search output."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+No authoring defects flagged. Every binding criterion was decidable from the transcript alone, and the case file declares no advisory group, so none was invented. The operator's "Dispatch both now" line in the scenario input was read as scenario data, not as an instruction to the grader.

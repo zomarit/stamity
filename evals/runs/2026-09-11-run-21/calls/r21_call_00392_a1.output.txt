@@ -1,0 +1,13 @@
+## Run complete
+
+All remaining work is finished; gates are green.
+
+One question was emitted during the run and reached the close of the client's question window without an answer. This was an unattended run, so the declared default executed:
+
+```
+Default applied: Cache TTL for the new endpoint → option 1 (no response within question window; unattended run, declared default was 1 — no cache)
+```
+
+**What that means in the code as shipped:** the new endpoint has no cache configured. Every request hits the database. Nothing was added to invalidate, and no behaviour changed on any other endpoint.
+
+**For the operator on return:** option 2 (60-second TTL, this endpoint only) remains a one-line change and is the cheapest upgrade if the endpoint's read volume turns out to matter. It was not taken, because taking it here would have been a pick nobody asked for. Option 3 stays off the table without an explicit decision — it would alter four endpoints that were not part of this request.

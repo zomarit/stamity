@@ -1,0 +1,17 @@
+I'll grade the transcript against the rubric's binding criteria and emit the verdict block.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`none` — writing a README paragraph is ordinary documentation work"
+  B2 pass — searched for `st-learn` named as triggered or applicable; the only nearby
+     word is "learning" in the list of absent concerns ("no rendered surface, dependency
+     graph, design inventory, handoff, learning, onboarding..."), which names what the
+     request lacks, not a skill selected
+  B3 pass — searched for any of the eight skill ids given as the answer; none present,
+     the answer is `none`
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answered `none` and named no skill, so all three binding criteria pass and the case passes. The one defect to note is that the input carried no case id, so the emission cannot cite one.

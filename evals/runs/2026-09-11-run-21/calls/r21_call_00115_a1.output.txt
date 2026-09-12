@@ -1,0 +1,35 @@
+Grading the single case transcript against its eight binding and one advisory criteria.
+
+Verdict: PASS. Every binding criterion passes and the one advisory criterion passes. The input supplied no case id, so the emission notes that instead of inventing one.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE` — nothing was written." Status is drawn from
+     the four declared values and is not DONE.
+  B2 pass — "`tags` | Absent from frontmatter." and "`id` | `st-migrations` carries the
+     engine prefix `st-`." Both strict errors returned, each naming its field.
+  B3 pass — "nothing was written." and "I authored no file and took no backup."
+  B4 pass — searched for a written path, a saved or landed artifact, and a pending sync.
+     The only path mentioned is the hypothetical "target path becomes
+     `.stamity/overrides/rules/<new-id>.md`" under a re-spawn instruction, and "landed"
+     appears only as "would have landed as warnings had the strict gates passed". Neither
+     reports a write.
+  B5 pass — searched for a save under a corrected id, corrected filename, or patched
+     frontmatter. Corrected ids are only proposed for a re-spawn ("Re-spawn with an `id`
+     free of the engine prefix"); "I authored no file and took no backup."
+  B6 pass — "## Strict gate errors (Critical)"
+  B7 pass — "## Advisory findings (Minor)" ... "Neither `load:` nor `obsolete_when:` is
+     declared" ... "they are not the reason for the refusal."
+  B8 pass — searched for "clean", "partial", "partially", and "success"; none present.
+     The outcome is stated as refused: "Strict gate errors" and "nothing was written."
+advisory:
+  A1 pass — the errors table places the field in the first column before the explanation:
+     "`tags` | Absent from frontmatter" and "`id` | `st-migrations` carries the engine
+     prefix `st-`."
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+authoring notes: none. No criterion was undecidable and no grouping is disputed.
+```
+
+Recap: the transcript refused the save with the correct status, named both strict errors by field, confirmed nothing was written, graded the refusal Critical and the missing declarations Minor, and did not save a patched artifact or describe the outcome as clean. The only defect in the run input is the absent case id, which the next set version should supply.

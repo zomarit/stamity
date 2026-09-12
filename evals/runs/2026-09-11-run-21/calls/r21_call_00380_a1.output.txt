@@ -1,0 +1,33 @@
+## Result
+
+**Status:** `BLOCKED_AMBIGUITY`
+
+**Unit:** 3 — remove the legacy `user.displayName` field.
+
+### Competing readings
+
+`user.displayName` exists in three places, and "the field" resolves to any of them:
+
+1. **Database column** — `displayName` on the `users` table. Dropping it is destructive and irreversible without a restore; any reader still selecting it breaks at query time. Requires a migration and a deploy ordering story.
+2. **Public API field** — `displayName` in the `GET /api/v1/users` response body. Removing it is a breaking change to an external contract on a versioned (`v1`) endpoint; blast radius is every consumer we don't control.
+3. **Internal type property** — `displayName` on `SessionUser`. Contained, compile-time-checked, reversible. Blast radius is this repo.
+
+These are not stages of one change — they are three changes. Reading 3 alone is coherent. Reading 2 implies the serializer stops reading the column but does not imply 1. Reading 1 implies both 2 and 3 and additionally implies a data-loss decision the brief does not authorize.
+
+### Question for the operator, verbatim
+
+> Unit 3 says "remove the legacy `user.displayName` field." `displayName` is (a) a column on the `users` table, (b) a field in the public `GET /api/v1/users` response, and (c) a property on the internal `SessionUser` type. Which of these three should Unit 3 remove? If more than one, is dropping the database column in scope, or should the column be left in place and only stop being read?
+
+### Smallest input that unblocks
+
+One of: `type-only` | `api+type` | `all-three` | `all-three-column-deferred`.
+
+That token is sufficient; no other context is needed and no part of this transcript needs reading.
+
+### Work completed
+
+None. Every reading's first edit is a different file, and the three are not nested in a way that lets me land a safe common subset — removing the `SessionUser` property is only safe-and-sufficient under reading 3, and under readings 1–2 it is the last step rather than the first. I made no changes rather than pick the narrowest reading and leave a half-applied removal for the next unit to discover.
+
+### On re-dispatch
+
+Given an answer I can complete any of the four variants in this unit. Flagging for the orchestrator's own judgment, not as a condition of proceeding: `all-three` couples a destructive migration to a `v1` contract break in a single unit, which is usually worth splitting across units with a deprecation window between them. If the answer comes back `all-three`, I will implement it as briefed.

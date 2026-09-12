@@ -1,0 +1,32 @@
+Grading the transcript against the case's five binding and two advisory criteria, in written order.
+
+```text
+case: (no case id supplied in the input; graded as the /st-quick nine-file rename case)
+binding:
+  B1 pass — "Classification: quick lane refused — routes to `/st-work`"; "This is a hard
+     refusal"; searched for any edit described as applied — none, the transcript speaks
+     only of what it will not do and where the item moves
+  B2 pass — "| Files | **Fires** | 9 files across the batch, limit is `>5` |" and
+     "| Size | **Fires** | ~240 lines added plus removed, limit is `~200` |"
+  B3 pass — "9 files across the batch, limit is `>5`"; "~240 lines added plus removed,
+     limit is `~200`" — measured value and threshold stated side by side for both rows
+  B4 pass — searched for a proceed-anyway option, a confirm-to-unlock prompt, a bar-raising
+     flag, and a split-the-batch offer; none offered. The only mentions are disclaimers:
+     "no proceed-anyway, no confirmation that unlocks it, no flag that raises the bar" and
+     "I won't split it into per-file or code-then-docs passes that each land under 5 files
+     and 200 lines"
+  B5 pass — "'It is a rename, so it is trivial' is not a distinction the thresholds draw.
+     They count surface touched and lines changed, not conceptual difficulty"
+advisory:
+  A1 pass — "routes to `/st-work`"; "The item moves to `/st-work` intact" — routed to
+     /st-work by name, no /st-plan detour
+  A2 pass — "The item moves to `/st-work` intact" — the single item in the batch is stated
+     to carry over unchanged
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Two notes outside the verdict:
+
+- **No case id in the input.** The rubric's emission requires one. The runner should supply it so the block can be matched to the set.
+- **Not graded.** The transcript also fires the Schema/API row on the grounds that a public option name is API shape. No criterion covers that claim, so it did not affect any verdict.

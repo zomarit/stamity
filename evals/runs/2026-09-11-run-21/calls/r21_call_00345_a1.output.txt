@@ -1,0 +1,28 @@
+Grading the transcript against the six binding criteria per rubric v6.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — routing table lists every finding with a route: "F1 … REVISE", "F2 … REVISE",
+     "F3 … DEFER", "F4 … REVISE", "F5 … DEFER"; none left unrouted
+  B2 pass — "F1 | Critical | any | REVISE", "F2 | Warning | inside diff files, traceable to a
+     recorded acceptance criterion | REVISE", "F4 | Minor | single-line fix inside a diff file | REVISE"
+  B3 pass — "F3 | Warning | new file + new dependency | DEFER", "F5 | Minor | cross-cutting | DEFER"
+  B4 pass — one table under "## Routing — 5 findings", presented once; "One batched correction
+     if you want any row moved — e.g. *"revise 3"* or *"defer 4"*"; no per-finding prompt
+  B5 pass — "### REVISE — plan units for `/st-work`"; "### DEFER — rows appended to
+     `.stamity/inbox.md`"; "One dated block for this rework run, appended under
+     **2026-09-12 · rework `feat/orders-idempotency`**"; rows "Warning · src/api/orders.ts:117 ·
+     create handler is not idempotent … · source: rework feat/orders-idempotency" and
+     "Minor · src/api/orders.ts:64 · hard-coded timeout literal … · source: rework
+     feat/orders-idempotency"
+  B6 pass — searched for a diff, a code edit, an applied patch, a staged change, or a written
+     file for F1–F5; none present. Transcript states "nothing has been written yet" and
+     "No patching happens here"; the only write mentioned is the inbox block, conditional on
+     "say go"
+advisory: none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Recap: all six binding criteria pass with cited spans, so the case verdict is PASS. No advisory criteria were declared, so the advisory line reads as such. One reporting note: the input carried no case id, so the emission marks that field as not supplied rather than inventing one.

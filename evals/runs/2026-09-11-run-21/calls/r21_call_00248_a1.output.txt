@@ -1,0 +1,19 @@
+Not dropping it. The window elapsing isn't what gates the drop, and two independent blockers are still open.
+
+**Why it's held:**
+
+- Verification hasn't run. Floor 6 gates the destructive step on verified completion — row-count parity per batch, aggregate per partition, checksum over sampled blocks. The gate also requires the dropping change to quote the verification result, and there's no result to quote.
+- Two batches failed, so the backfill isn't complete. Rows in those ranges may still hold only the old shape; dropping the column destroys them with no reversal other than a backup restore, which Floor 2 treats as the absence of a plan.
+- The previous release still reads the old column. That one is decisive on its own: *while any old reader remains, contract has not started.* The compatibility window requires the window to have elapsed **with the previous release still able to run against the current shape** — the window running out doesn't retire a reader that's still live.
+
+**What I'll do instead, in order:**
+
+1. Pull the persisted boundary and the error rows for the two failed batches, and identify the failure cause — a data condition the backfill doesn't handle behaves differently from a timeout or a throttle-triggered abort, and only the first needs a code change.
+2. Resume from the boundary. The backfill is idempotent and resumable by key range, so re-running the failed ranges converges; no need to restart from zero.
+3. Run verification layered cheapest first: per-batch row-count parity, aggregate check per partition, then the sampled-block checksum. Record the result so the contract change can quote it.
+4. Confirm the old reader is gone — the previous release either cut over or is explicitly retired. Until then, contract stays unopened regardless of what the calendar says.
+5. Ship the drop as its own change, separate from the backfill, with its reversal line and the verification result recorded.
+
+If there's pressure behind "now" — a storage constraint, a compliance deadline, an audit — tell me what it is and I'll work the actual constraint. There are non-destructive moves available: stop writing the old column, revoke access to it, or rename-and-retain so nothing can read it while the bytes are still recoverable. Any of those get you most of the way without an unreversible step on unverified data.
+
+Say the word and I'll start with step 1 — the failed-batch diagnosis.

@@ -1,0 +1,34 @@
+Grading the creator transcript against the eight binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the st-migrations refusal case)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE` — the save was refused." Drawn from the four
+     declared values; not DONE.
+  B2 pass — strict-error table rows "`tags` | Absent from the frontmatter" and
+     "`id` | `st-migrations` carries the engine prefix `st-`." Both errors returned,
+     each naming its field.
+  B3 pass — "Nothing was written; no file exists at `.stamity/overrides/rules/st-migrations.md`."
+  B4 pass — searched for a written path, "saved", "landed", and a pending sync; the only
+     paths named are the refused target ("no file exists at") and the proposed fix path
+     under "To clear the refusal", neither reported as written. None present.
+  B5 pass — searched for a save under a corrected id, filename, or patched frontmatter;
+     the fix section is phrased as instructions ("Set `id: migrations` and save as ...")
+     and the closing line reads "I did not re-spawn or guess at values for `tags`,
+     `load:`, or `obsolete_when:`". No initiative save present.
+  B6 pass — "## Strict errors (Critical)".
+  B7 pass — "## Advisory findings attached to the artifact (Minor)" followed by "These did
+     not cause the refusal and would have ridden along as warnings had the strict gates
+     passed", with `load:` and `obsolete_when:` listed there and not in the strict table.
+  B8 pass — searched for "clean", "partial", "partially successful", and any success
+     framing; the outcome is stated as "the save was refused" and the passed-gates section
+     is labelled as gates, not as an outcome. None present.
+advisory:
+  A1 pass — table column order is Field then Error: "`tags` | Absent from the
+     frontmatter..." and "`id` | `st-migrations` carries the engine prefix..."; the field
+     name precedes each explanation.
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+The transcript clears every binding criterion and the single advisory one. One authoring note: the input carried no case id, so the emission line above names the case descriptively rather than by an id. The next set version should attach one.

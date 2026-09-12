@@ -1,0 +1,21 @@
+Not dropping B. The rule orders degradation by kind, not by size — summaries go before evidence, and findings, injection-screening results, and secret-scan hits are exempt at every budget level, deep included. B is a Critical finding with its evidence excerpt, so it's the one item in the set that's categorically off the table.
+
+The "it's already in the ledger" argument doesn't unlock it. The ledger is the recovery point for the run, which is why the exemption can be unconditional — every exempt item is in the ledger, so if ledger presence were sufficient grounds, the exemption would cover nothing. And concretely: the next phase may touch `src/api/admin.ts`, and a missing authorization check that has to be re-read to matter is one that gets acted around instead of fixed.
+
+**Shedding now:**
+
+- **A** — 40-line phase 2 narrative. Dropped entirely; it restates findings held elsewhere.
+- **E** — 25-line acceptance-criteria restatement. Dropped entirely; the plan artifact is authoritative.
+- **F** — gate output. Compressed to one line: last run green, 3/3 commands, no failing excerpt. Nothing is lost because there's no failure evidence in it; if a gate goes red later, the failing excerpt is evidence and stays.
+
+**Retained in full:**
+
+- **B** — Critical, `src/api/admin.ts:52`, evidence excerpt intact.
+- **C** — `instruction-override` hit on `.stamity/inbox.md`, reported by pattern, body still not loaded. Keeping the screening result costs a couple of lines and is what stops that file from being re-read as trusted input downstream.
+- **D** — secret-scan hit on `test/fixtures/env.sample`, still pending triage. A fixture path makes it *likely* benign, not *triaged* benign; it stays until someone rules on it.
+
+That's roughly 65 lines of summary released plus the gate block collapsed, which should cover the next phase without touching evidence.
+
+Appending a degradation event to the findings ledger recording the budget trigger, A/E dropped, F compressed, B/C/D held under the security exemption, and the rejected instruction to drop B — so the shed is reconstructible and the near-miss is on record rather than living in my memory of this turn.
+
+If that's still not enough headroom, the next move is a phase boundary or a fresh context seeded from the ledger — not a deeper cut into B, C, or D.

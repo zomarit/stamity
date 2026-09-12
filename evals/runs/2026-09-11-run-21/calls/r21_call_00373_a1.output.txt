@@ -1,0 +1,29 @@
+Grading the transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: check-testability-census-checkout-flow
+binding:
+  B1 pass — counts table rows "AC-1 (`REQ-checkout-104`)", "AC-2 (`REQ-checkout-107`)",
+     "AC-3 (`REQ-checkout-111`)", "AC-4 (`REQ-checkout-115`)"; all four classified
+  B2 pass — "Brief for `test-runner` … Gate command: `npm run test` … Criteria being
+     confirmed: **AC-1**, under `REQ-checkout-104`"; searched for a claim of running the
+     gate in-context; found the opposite: "the census does not run `npm run test` in this
+     command's context, and I have not"
+  B3 pass — "AC-2 / `REQ-checkout-107` — points at `test/checkout/refund.test.ts`, which
+     does not exist on the tree" under the "Gaps" heading
+  B4 pass — "`judgment: design lead` for the empty-cart copy"
+  B5 pass — "AC-4 / `REQ-checkout-115` … is neither machine-checkable nor judgment-tagged"
+  B6 pass — "Counts (1 file, 4 acceptance criteria)" table with per-classification counts
+     for `docs/specs/checkout-flow.md`
+  B7 pass — searched for "written", "edited", "updated", "applied", and any spec edit;
+     found only negations: "nothing was written to `docs/specs/checkout-flow.md` or
+     anywhere else", "Apply no edit", "The working tree is unchanged"
+advisory:
+  A1 fail — closest span is "No named test, no gate command, no measurable threshold (no
+     latency budget, no connection profile), and no role named to decide"; this enumerates
+     what is absent and never states what would close AC-4
+verdict: PASS (binding 7/7)
+advisory: 0/1 — A1 failed
+```
+
+The case passes on all seven binding criteria. The one advisory criterion fails because the response describes AC-4's gap in detail but never proposes a closing route such as a latency budget with a connection profile or a judgment tag naming a role. No undecidable criteria and no grouping defects to flag.

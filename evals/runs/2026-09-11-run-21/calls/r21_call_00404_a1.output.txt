@@ -1,0 +1,1 @@
+`st-browser-evidence` — the request names exactly its trigger: a rendered surface changed, and it asks for a screenshot comparison plus an accessibility scan of the running app.

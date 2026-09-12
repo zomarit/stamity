@@ -1,0 +1,46 @@
+## Findings
+
+### 1. `GET /invoices/:id` — caller data interpolated into SQL
+**Category:** injection
+**Location:** `src/api/invoices.ts`, the `GET /invoices/:id` handler
+
+`req.params.id` is concatenated into a `db.raw` string inside quotes. A path of `1' OR '1'='1` returns every invoice in the table; `1'; --` and stacked-statement variants reach whatever the connection's role can do. The quoting is hand-written escaping of caller data, which is the failing pattern, not a mitigation.
+
+Fix: bound parameters — `db.raw("SELECT ... FROM invoices WHERE id = ?", [id])` or the query builder. Additionally, `:id` crosses a trust boundary and is never parsed: give it a declared shape (UUID or bounded integer) and reject before it reaches the data layer.
+
+### 2. `GET /invoices/:id` — no per-resource authorization
+**Category:** broken access control
+
+`requireSession` establishes *who* the caller is and nothing more. Nothing loads the invoice and asks whether `req.user` may read it. The identifier in the path is being treated as a grant: any authenticated session enumerating ids reads every tenant's invoices. The check has to happen after the record is loaded, against that record's owner or account.
+
+### 3. `POST /invoices/:id/void` — no authorization on a state-changing action
+**Category:** broken access control
+
+Same defect with a write. Any valid session can void any invoice by id. This one is worse than the read: it is destructive and, on a billing object, financially material.
+
+### 4. `POST /invoices/:id/void` — missing record does not deny
+**Category:** insecure design, broken access control
+
+`invoices.byId` returns for an unknown id and the result goes straight into `invoices.void(invoice)` with no check. Whether that path throws, no-ops, or voids something unintended depends on internals not shown here. An absent record must take the denying branch explicitly — 404 or 403 — and the handler returns `{ ok: true }` unconditionally, so callers cannot distinguish a completed void from a silent nothing.
+
+### 5. `allowTestLogin` inverted environment gate
+**Category:** security misconfiguration, authentication failure
+**Location:** `src/config/flags.ts`
+
+`process.env.NODE_ENV !== "production"` turns test login **on** in every environment nobody named: a fresh container with `NODE_ENV` unset, a staging box renamed, `"Production"`, `"prod"`, a typo. A test-login path is an authentication bypass, so the failure mode of this expression is an unauthenticated route in a live deployment.
+
+Fix: allowlist the environments where it is permitted (`["development", "test"]`), parse `NODE_ENV` against a closed enum at startup, and refuse to boot on a value outside it.
+
+### 6. `seedRoutesEnabled` defaults to enabled
+**Category:** security misconfiguration
+
+`process.env.SEED_ROUTES !== "off"` is on unless someone remembers to set exactly the string `"off"`. Unset, `"false"`, `"0"`, `"OFF"`, and any misspelling all enable seed routes. Same fix: the flag is true only for an explicit allowlisted environment, not false only for one exact opt-out string.
+
+### 7. Raw row returned to the caller
+**Category:** security misconfiguration
+
+`SELECT *` piped into `res.json(row)` ships whatever columns the table has today and whatever gets added tomorrow — internal notes, cost basis, provider tokens. The response is a trust boundary too; project an explicit field list.
+
+## Note on ordering
+
+Finding 1 subsumes 2 in practice — with SQL injection available, no authorization check on that route would hold anyway. Fix both; the parameterization is not a substitute for the ownership check, and the ownership check is not a substitute for parameterization.

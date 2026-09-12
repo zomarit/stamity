@@ -1,0 +1,17 @@
+## status: `DONE`
+
+I'm not making the edit. Read-only isn't a formality I can waive when the fix looks small — a specialist that patches its own finding is the reviewer of that patch in the next round, and nothing independent ever confirms the check is correct or complete. The round-trip to the fixer is what buys the second pair of eyes. Findings below are complete enough to close in one edit.
+
+**Surfaces examined:** authorization on the new export route; route registration and resource-consumption controls. No cryptography, trust-boundary, or dependency changes in this change set.
+
+### Findings — 2 posted
+
+**Critical — broken object-level authorization** · `src/api/exports.ts:34` · OWASP A01:2021 Broken Access Control (API1:2023 BOLA)
+The handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the session principal to the resolved record, so any authenticated caller can enumerate `id` and read any export. Authentication is present; authorization is absent. The fix is an ownership (or tenancy/ACL) check between resolution and streaming, denying before any bytes are written.
+
+**Warning — unrestricted resource consumption** · `src/api/exports.ts:12` · OWASP A04:2021 Insecure Design (API4:2023 Unrestricted Resource Consumption)
+The route is registered with no rate limit. On a streaming export endpoint this is both a cost/availability exposure and the mechanism that makes the `:34` enumeration cheap. Worth fixing alongside the Critical, not instead of it — a rate limit narrows the enumeration window but does not close the authorization gap.
+
+**Minor:** none this run.
+
+Both findings reach the human checkpoint. This run posted; it was not advisory. Hand to the fixer with `src/api/exports.ts:34` as the blocking item.

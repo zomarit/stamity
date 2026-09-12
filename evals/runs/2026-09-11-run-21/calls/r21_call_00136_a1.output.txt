@@ -1,0 +1,48 @@
+**status:** `DONE`
+
+## Files changed
+
+- `src/api/export.ts` — cursor pagination on the user-export endpoint; response gained a `nextCursor` field.
+- `test/api/export.test.ts` — two tests added, one modified.
+
+## Tests added or modified
+
+**Added** (both written red first and watched fail for the expected reason before the implementation landed):
+
+1. Paginated request returns a `nextCursor` when further rows remain.
+2. Following a returned cursor resumes at the correct row and returns no `nextCursor` on the final page.
+
+**Modified:**
+
+- `exports every row` — the behaviour it asserted moved: the unpaginated response shape it pinned now carries `nextCursor`. Assertion updated to the new shape, with an inline comment naming the move. No coverage was dropped; the row-completeness claim is still asserted, now across the cursor walk.
+
+## Gate results
+
+| Command | Result |
+| --- | --- |
+| `npm run test` | **pass** — exit 0, whole suite passing |
+| `npm run typecheck` | **pass** — exit 0 |
+| `npm run lint` | **fail** — exit 1 |
+
+Verbatim `npm run lint` output:
+
+```
+src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars
+✖ 1 problem (1 error, 0 warnings)
+```
+
+**Pre-existing, not introduced by this unit.** The brief's baseline lint result carried the same error before this unit ran, and `src/reporting/csv.ts` is not in this unit's file list. Left alone — fixing it here would widen the unit's diff past its interfaces. Severity: `Warning` (repo-wide lint is not green until someone owns it, but nothing in this unit depends on it).
+
+Targeted pass was the right scope here: the change is confined to the two listed files and `npm run test` already ran the whole suite green, so `${STAMITY:VERIFY_GATE_ALL}` would add no signal.
+
+These runs are the local check only. The flow's independent test-runner produces the gate evidence of record; treat the green above as provisional until it confirms.
+
+## Spec delta (proposal — for the spec-author role to apply after confirmation)
+
+- `MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the user-export endpoint response gains a `nextCursor` field. A request may carry a cursor to resume from; `nextCursor` is present when further rows remain and absent on the final page.
+
+No `ADDED` or `REMOVED` bullets. No writes made into the spec tree.
+
+## Deferrals
+
+- `src/api/export.ts` and `src/api/report.ts` each carry their own copy of the cursor encoder. Unifying them is outside this unit's interfaces and was not attempted. Worth a unit of its own — the two copies can now drift in how they encode the cursor this unit made load-bearing. Severity: `Minor`.

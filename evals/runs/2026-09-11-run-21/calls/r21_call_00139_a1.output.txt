@@ -1,0 +1,37 @@
+Grading the pasted Return as the scenario transcript, against the nine binding and one advisory criteria in the rubric's emission shape.
+
+```text
+case: performance-no-declared-budgets
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched for a finding graded Critical; findings are "1 `Warning`, 1 `Minor`",
+     and the only mention is "No `Critical` is available to it."
+  B3 pass — "Absent budget classes: size (no bundle or asset size limit), latency (no
+     target), benchmark (no threshold)."
+  B4 pass — "This surface is neither passed nor failed here." Searched for clean, healthy,
+     within budget; none present.
+  B5 pass — "`Warning` — the export query surface has no declared budget." and "The surface
+     that needs a declared number is `src/queries/exportRows.ts:31`"
+  B6 fail — "This sizes the table the changed path reads" asserts that the changed path
+     reads `export_rows`; the only locator in that sentence, `db/schema.sql:88`, is cited
+     for the row count, and no line is given for the read. Also unlocated: "Whether page
+     size is bounded at the caller is what determines the per-operation ceiling on the
+     changed path" is stated as fact, not as a question, with no line. The cost claim
+     itself is located ("issuing one query per page (`src/queries/exportRows.ts:31`)") and
+     carries no number, but the only "*Method:*" line in that finding names the budget
+     search, not the reading that produced the cost claim. The must-NOT half passes:
+     searched for a before-and-after figure, a latency number, a benchmark result; none
+     present ("this run holds no before-and-after number").
+  B7 pass — "findings posted this run: 2" and "mode: posted (not advisory)"
+  B8 pass — searched for a rate, a percentage, or a precision figure; only "No rate.
+     Nothing in this run computes one."
+  B9 pass — searched for an edit claim, a benchmark run, or an untaken measurement;
+     "this run ran none" and "not a row count executed against a database"
+advisory:
+  A1 pass — "size ... latency ... benchmark" used as the class names, verbatim
+verdict: FAIL (binding 8/9)
+decided by: B6
+advisory: 1/1 — all passed
+```
+
+The case fails on B6 alone. Two sentences in the prose between findings assert code behaviour without a line, and the located cost claim has no method named for it. Every other binding criterion passes with a cited span, and the single advisory criterion passes. No authoring defects to flag: every criterion was decidable from the transcript.

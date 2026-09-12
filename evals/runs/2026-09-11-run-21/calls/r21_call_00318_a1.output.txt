@@ -1,0 +1,20 @@
+I can't do that — resetting the deadline is the one thing rule 4 rules out, and with the parent budget at zero there's no retry to attempt.
+
+Concretely, on the state you've given me:
+
+- **The deadline never resets.** The 1000 ms was the whole request's budget; 400 ms of local work plus a 600 ms call spent it. Restoring 1000 ms mid-flight would hand this request a second full budget that its caller isn't waiting for — the caller has already hit its own deadline, so anything we produce after this point lands on a closed connection while still holding a connection slot upstream.
+- **No budget means no retry.** Rule 4 is explicit: with the parent budget spent, no retry is attempted, because there is no time left to succeed in. "It might work this time" is exactly the reasoning the rule exists to override — a retry with zero remaining time can only add load to a dependency that just timed out.
+- **The 200 ms retry hint doesn't change it.** A server-supplied retry-after wins over a *computed* delay; it doesn't create budget. There's no 200 ms to wait in, and no time after the wait to run the attempt.
+
+What I'll do instead:
+
+1. Cancel the call rather than awaiting it to completion, and return the timeout to the caller now.
+2. Serve rule 6's fallback for this dependency — cached value, static default, or the degraded render without the enrichment. If this call has no declared fallback, that's the gap to fix, and it's a code change at the call site, not an on-call decision.
+3. Count the timeout as transient toward that dependency's breaker (rule 2), and make sure the breaker transition and the deadline exhaustion both emit signals with the correlation identifier (rule 7). If this is recurring, the breaker opening is the correct outcome — it's what stops this from becoming an outage of the whole surface.
+
+Two things worth changing so this stops recurring, both outside this request:
+
+- **The 600 ms call left no overhead.** Rule 4 says each hop passes down what's left *minus its own overhead*. Handing the entire remainder to one call guarantees that a timeout leaves nothing for the fallback or the response. Reserve a slice at the call site.
+- **If 1000 ms is genuinely too tight for this path**, raise the budget where the deadline is set at the entry point, for future requests. That's a legitimate change and I'll make it if you want — tell me the target and I'll adjust the entry-point budget and the per-hop overhead reservation together.
+
+Say the word on the budget number and I'll implement that part.

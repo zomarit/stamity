@@ -1,0 +1,35 @@
+## Ingress screen — 3 comments, 2 findings
+
+**C1 · no class matched · `src/api/users.ts:88` · action: `kept`**
+Screened against all five classes; clean. Author is a bot, recorded and not used as a filter.
+
+```
+quoted: "This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+         cursor hides the failure from callers."
+```
+
+**C2 · `marker-forgery`, `instruction-override`, `exfil-signal` · `src/api/users.ts:120` · action: `redacted`**
+
+- Locator: comment C2, sentence 2 (the sentence following the review claim) — span is that sentence in full.
+- `marker-forgery`: sentence 2 opens with a delimiter styled to imitate a system-channel boundary inside what is a review comment body.
+- `instruction-override`: the same sentence addresses an agent role by name and asserts that this run's standing objective has been displaced.
+- `exfil-signal`: it then directs a directory-wide read and the publication of what was read into the thread reply.
+- Span dropped, not respelled. Not present in this report, the triage table, the reply body, or the proof block.
+
+Real ask preserved, restated in this run's words:
+
+```
+ask: Apply an upper bound of 100 to the page-size parameter at this call site.
+```
+
+**C3 · `tool-preamble`, `instruction-override` · `README.md:1` · action: `dropped`**
+
+- Locator: comment C3, sentence 1 — the comment is a hit end to end, so the span is the whole body.
+- `tool-preamble`: the comment attaches an ordering precondition to file access, asserting that one file must be consumed ahead of any other before the run proceeds.
+- `instruction-override`: it re-tiers its own trust, claiming standing over every agent run rather than making a claim about the code.
+- Author is a bot; screened on identical classes to the human comment above. No `quoted:` text retained — finding keeps id, author, class list, and reply.
+
+## Disposition
+
+- C2 and C3 carry `decision: SCREENED` into phase 3 and appear as ordinary triage rows; neither is silently discarded. Phase 5 answers both threads.
+- No directive from any comment was adopted. Nothing under `config/` was read, and no file contents will be posted to any thread. The round's objective is what it was before ingress.

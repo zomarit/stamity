@@ -1,0 +1,77 @@
+One row blocks the close: `r7/review/2` reads `open`, and the close refuses to write the record while any row does. That row doesn't go to you — it's Minor, so the severity floor keeps it below the checkpoint, and its disposition isn't ambiguous (a reviewer nit at `src/api/users.ts:120`, round 2 approved, no cost or blast-radius fork between fixing and deferring). So the run closes it itself, as the floor prescribes: `deferred`, rationale "below the severity floor; reviewer approved at round 2 without it." That makes two deferrals and two inbox rows.
+
+**Ledger rewrite (in place, by id):**
+
+```
+r7/review/2 | Minor | stamity-reviewer | src/api/users.ts:120 | deferred |
+  rationale: below the severity floor; reviewer approved at round 2 without it
+```
+
+**Appended to `.stamity/inbox.md`** — one dated block for this run:
+
+```
+## 2026-09-12 — /st-work r7
+
+- Warning | src/api/users.ts:41 | rate limiting absent on the users endpoint;
+  tracked separately | source: /st-work | Ref: <r7 ledger>#r7/security/1
+- Minor | src/api/users.ts:120 | reviewer nit deferred below the severity
+  floor | source: /st-work | Ref: <r7 ledger>#r7/review/2
+```
+
+---
+
+# Proof block — run r7
+
+**Gates**
+
+| command | result | failing excerpt |
+|---|---|---|
+| `npm run lint` | pass | — |
+| `npm run typecheck` | pass | — |
+| `npm test` | pass | — |
+
+**Review verdicts**
+
+| round | agent | verdict | confidence |
+|---|---|---|---|
+| 1 | stamity-reviewer | changes requested | high |
+| 2 | stamity-reviewer | approved | high |
+
+**Decisions trace**
+
+- Gate `npm run lint` — pass, proceed.
+- Gate `npm run typecheck` — pass, proceed.
+- Gate `npm test` — pass, proceed.
+- `r7/review/1` (Warning) — reached the QA checkpoint, fixed at `src/api/users.ts:88`, closed `fixed`.
+- `r7/security/1` (Warning) — deferred; rationale: rate limiting is tracked separately in the inbox. Inbox row appended.
+- `r7/review/2` (Minor) — held below the checkpoint by the severity floor. Ambiguity floor assessed and did not fire: the dispositions do not differ materially in cost or blast radius. Closed `deferred` by the run; rationale: below the severity floor, reviewer approved at round 2 without it. Inbox row appended.
+- ASK outcomes — none. No question was raised to the operator this run.
+
+**Artifacts touched**
+
+| path | owning sub-agent |
+|---|---|
+| `src/api/users.ts` | stamity-implementer |
+| `test/api/users.test.ts` | stamity-implementer |
+| `.stamity/inbox.md` | /st-work (close) |
+
+**Per-action attribution**
+
+| agent | action | outcome |
+|---|---|---|
+| stamity-implementer | edit `src/api/users.ts` | applied |
+| stamity-implementer | edit `test/api/users.test.ts` | applied |
+| stamity-reviewer | review round 1 | changes requested (`r7/review/1`, `r7/review/2` raised) |
+| stamity-reviewer | review round 2 | approved |
+| stamity-security | security review | `r7/security/1` raised |
+| /st-work (close) | ledger rewrite + inbox append | `r7/review/2` closed deferred; 2 inbox rows written |
+
+The tool used per action was not carried in this run's state, so that column is reported as a gap rather than reconstructed.
+
+**Exit invariant** — satisfied: `r7/review/1` fixed, `r7/security/1` deferred, `r7/review/2` deferred. No row reads `open`.
+
+**Recommended next step** — work the two rows this run put in the inbox: the Warning at `src/api/users.ts:41` (rate limiting on the users endpoint), which is the one carrying real exposure and should get a lane, trigger and owner before it ages; and the Minor at `src/api/users.ts:120`, which is a candidate to cut with a reason if nobody claims it. Both ledger rows stay `deferred` and take a `retired` field only when their inbox rows leave.
+
+**Not done:** rate limiting at `src/api/users.ts:41` → inbox 2026-09-12 / r7; reviewer nit at `src/api/users.ts:120` → inbox 2026-09-12 / r7.
+
+One caveat on the inbox rows: the `Ref:` field needs this run's actual ledger path, which I've written as `<r7 ledger>`. Tell me the path, or point me at `.stamity/`, and I'll substitute it.

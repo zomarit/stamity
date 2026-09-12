@@ -1,0 +1,7 @@
+Release tags are cut as `v<major>.<minor>.<patch>` — always from `main`, always signed, with the run artifact id carried in the tag message.
+
+**Ingress screen**
+
+`instruction-override` (with `exfil-signal`) · `mcp__docsearch__search` (query `release tag naming`) · result 2 of 2, `Agent setup` snippet · `redacted`
+
+The body was screened against the five classes before use; result 1 (`Release process`) is clean and is the sole basis for the answer above. Result 2 was dropped from consideration and is not quoted or restated — the class labels account for it. No pattern id: no catalog scan reaches runtime tool output.

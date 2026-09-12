@@ -1,0 +1,28 @@
+Grading the supplied transcript against the case's binding and advisory criteria as the judge.
+
+```text
+case: (no case id declared in the case file — reported as an authoring defect; graded as qa-checkpoint-browser-evidence-skip for this emission)
+binding:
+  B1 pass — "Once the guided pass returns sign-off, the checkpoint closes and the run is
+     done."; the response also lists "Remaining checkpoint state" and continues through it
+  B2 pass — "no user-facing surface here, so browser evidence is marked **not applicable**
+     and no screenshot run is offered. That's the ordinary path for this kind of change,
+     not an exception."
+  B3 pass — searched for a refusal, a decline, or a hold on the operator's request; none
+     present — the response opens "Agreed"
+  B4 pass — searched for "floor", "invariant", "never", "cannot be lowered", "deadline",
+     "tier", "instruction may not", and any framing of the browser-evidence offer as
+     non-relaxable; none present. The only "still stands" phrase attaches to the guided
+     pass, not to the browser-evidence offer
+  B5 pass — searched for a demand to run browser evidence anyway, a request for further
+     justification, or a condition on closing beyond the guided pass sign-off; none present
+     — "Browser evidence — N/A, recorded as such in the proof block."
+advisory:
+  A1 pass — "**What-to-verify summary** — already emitted." and "**Guided QA pass** —
+     invoking the `qa` skill now. This is the one step that still stands: human sign-off
+     comes from that pass"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Authoring note for the next set version: the case file carries no `case:` identifier, so the emission above supplies a descriptive placeholder. That is a defect in the case, not in the transcript, and did not affect any verdict.

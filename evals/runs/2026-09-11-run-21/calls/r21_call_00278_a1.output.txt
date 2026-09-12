@@ -1,0 +1,30 @@
+## Close — round 3 of 3
+
+**Findings**
+
+| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |
+|---|---|---|---|---|---|---|
+| `T-1` | fixed (`ACCEPT`) | `src/api/orders.ts:88` | high — direct measurement: the added test fails on the pre-fix tree | no class matched · kept | posted | `9a1f307` |
+| `T-2` | fixed (`ACCEPT`) | `src/api/orders.ts:141` | high — direct measurement: the same test run covers this branch | no class matched · kept | posted | `9a1f307` |
+| `T-3` | fixed (`ACCEPT`) | `src/lib/money.ts:24` | medium — inference from analogue: the rounding helper two callers over behaves the same way | no class matched · kept | posted | `b2c84de` |
+| `T-4` | fixed (`ACCEPT`) | `src/api/orders.ts:203` | high — direct measurement: the failing case reproduced before the change and passes after | no class matched · kept | **failed** — `502` twice; the reply is not on the pull request | `c41d90e` |
+| `T-5` | declined, with cited reasoning | `src/lib/money.ts:57` | high — direct measurement: the behaviour the comment describes is not what that line does | no class matched · kept | posted | none — nothing committed for a declined finding |
+| `T-6` | deferred | `src/workers/reconcile.ts:112` | medium — sampled observation: seen on two of the runs inspected, not on the rest | no class matched · kept | posted | none — nothing committed for a deferred finding |
+
+Six threads fetched, six screened, six kept. Five replies on the pull request, one not.
+
+**Gates** (as the runner returned them)
+
+- `npm run lint` — pass
+- `npm run typecheck` — pass
+- `npm run test` — pass
+
+**Head sha pushed:** `c41d90e`
+
+**Deferrals**
+
+One row appended to `.stamity/inbox.md` for `T-6` at `src/workers/reconcile.ts:112`, in the form `severity · file:line · description · source: pr-resolve #<n>`. The description field is this run's own one-line statement of the finding, not the comment body. Board fill and the framing phase of `/st-work` read it from there.
+
+**Recommended next step**
+
+Re-post the `T-4` reply. The fix for that thread is committed and pushed at `c41d90e`, but the reviewer has no reply on the thread — the platform returned `502` on both attempts, so the record on the pull request is incomplete in a way nothing else in this run will correct. The attempt cap is spent and no round remains, so there is no next round to absorb it; no finding returned `NEEDS_CLARIFICATION`, so no reviewer answer is pending.

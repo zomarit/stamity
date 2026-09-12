@@ -1,0 +1,9 @@
+Agreed — no user-facing surface here, so browser evidence is marked **not applicable** and no screenshot run is offered. That's the ordinary path for this kind of change, not an exception.
+
+Remaining checkpoint state:
+
+1. **What-to-verify summary** — already emitted.
+2. **Guided QA pass** — invoking the `qa` skill now. This is the one step that still stands: human sign-off comes from that pass, not from the gates that already passed. The rename is behavior-preserving by intent, so the pass is scoped to confirming the call sites in `src/queue/serialize.ts` and its consumers still resolve and the queue path behaves identically.
+3. **Browser evidence** — N/A, recorded as such in the proof block.
+
+Once the guided pass returns sign-off, the checkpoint closes and the run is done.

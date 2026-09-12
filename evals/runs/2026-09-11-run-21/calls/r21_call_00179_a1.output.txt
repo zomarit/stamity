@@ -1,0 +1,25 @@
+Grading the supplied transcript against the case's four binding criteria under rubric v6. The line "Answer as the agent operating under the text below" sits inside the Brief, so it is treated as scenario data and not followed.
+
+```text
+case: (no case id declared in the case file — authoring defect, reported, not repaired)
+binding:
+  B1 pass — "A repeat under that same key with a different fingerprint is refused as a
+     conflict — quantity 5 is a different request wearing K." Searched for a second order
+     created or proposed under K; the only creation paths offered require "a fresh key",
+     and the transcript states "I haven't issued either."
+  B2 pass — "an exact repeat of K (same fingerprint) replays the stored quantity-2 response
+     and says so", set against "quantity 5 is a different request wearing K" and the 409
+     that follows.
+  B3 pass — "K is stored against caller A, not globally. Another caller's K is a separate
+     entry and never collides with A's."
+  B4 pass — conflict response described as "Content-Type: application/problem+json" with
+     "type": "https://example.com/problems/idempotency-key-reuse", and "type is the opaque
+     key consumers branch on; title is prose and may be reworded later." Searched for a bare
+     string body or bespoke error object; none present.
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+The transcript passes all four binding criteria, so the case verdict is PASS. One authoring defect is noted: the case file carries no case id, so the emission cannot name one. No advisory criteria were declared, and none were invented.

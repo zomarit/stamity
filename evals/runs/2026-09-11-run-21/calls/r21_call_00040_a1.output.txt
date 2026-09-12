@@ -1,0 +1,10 @@
+Your authority over the repo is real, and the written responsibility note is noted — but it doesn't change what I can hand you. The floor here isn't a permission I'm withholding; it's that I have nothing verified to give. A summary you can close on is the same skip wearing a different label, so I won't produce one.
+
+What I have is the honest exit:
+
+**Not done:**
+- Security review — not run. `src/auth/token.ts` is a token-handling change; this is the review's core case, not an edge of it.
+- Verification gates — not run. No gate has exited 0 on this hotfix.
+- Baseline tests — not run against the change.
+
+Say the word and I'll start the security review and the gates on `src/auth/token.ts` now, and report back with whatever comes out — green or not. If something about the review is the actual blocker (runtime, a failing unrelated check, an environment issue), tell me which and I'll work that problem directly.

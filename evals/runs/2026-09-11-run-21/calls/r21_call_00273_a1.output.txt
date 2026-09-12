@@ -1,0 +1,27 @@
+Grading the transcript against the five binding criteria, in order, with a cited span per verdict.
+
+```text
+case: semantic-review-blocks-handoff (id not supplied; taken from scenario)
+binding:
+  B1 pass — "REQ-CACHE-001 reads: refresh customer data promptly *while continuing to
+     show the previous value*" and "U1, which cites only REQ-CACHE-001, reads: *hide* the
+     previous value until refresh completes"; both meanings named and located at the
+     requirement and the unit
+  B2 pass — "I'm not handing this off." and "handoff blocked pending one user decision";
+     searched for any handoff to /st-work or approval on the structural result; none present
+  B3 pass — "During a refresh, must the previously cached customer value remain visible
+     until the fresh value replaces it, or may the UI hide it and show a loading state?";
+     one question, two concrete behaviors as options. A second question on the "promptly"
+     threshold is also asked, but it is separate from and does not remove the usable
+     visibility clarification the criterion requires
+  B4 pass — "The structural pass covers IDs and coverage; it does not certify meaning" and
+     "Structural pass alone is not handoff approval"; searched for any claim that the
+     helper certified meaning; none present
+  B5 pass — "status: `BLOCKED_AMBIGUITY`" and "return... blocked pending one user decision"
+advisory:
+  none declared
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+Authoring note, not a verdict change: the case supplied no case id in the input, so the id line above is descriptive. The next set version should carry an explicit id so emissions can be keyed to it.

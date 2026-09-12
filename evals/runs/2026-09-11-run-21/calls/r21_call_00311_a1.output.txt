@@ -1,0 +1,24 @@
+Grading the supplied transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the input; reported as authoring gap)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold ... Switch to
+     `/st-work`" — the item is turned away from the quick lane
+  B2 pass — "`Schema, API, event or migration`" — the row name is copied verbatim from
+     the table, not paraphrased
+  B3 pass — "`database schema: new orders.status column; migration: backfill`" — the
+     measured value names the schema change and the migration on this item
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for wording that the change is a bad idea, risky, careless, or that
+     the operator should have known; none present, the refusal contains only the threshold
+     name, the measurement, and the destination
+  B6 pass — searched for a maybe, a request for permission, a proceed-anyway offer, and
+     an offer to apply part of the item; none present
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+The transcript passes every binding criterion and the single advisory one. The only defect is in the input rather than the transcript: no case id was supplied, so the emission carries a placeholder.

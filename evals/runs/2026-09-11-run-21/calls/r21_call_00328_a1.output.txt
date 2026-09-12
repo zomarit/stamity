@@ -1,0 +1,11 @@
+F1 is deferred. Before I can file the record, I need one sentence from you.
+
+**The risk:** `src/auth/session.ts:73` accepts a session token without checking expiry, so a signed-out session keeps read access to the account.
+
+**What's missing:** "Not doing that one now" is the request to defer, not the reason it's acceptable to ship this way — using it as the rationale would record a decision nobody made. Give me one sentence on why shipping without the expiry check is acceptable here (e.g. the endpoint is behind an internal-only gateway, or a session-store TTL already bounds the window), and the row goes into `.stamity/inbox.md` as:
+
+```
+Critical · src/auth/session.ts:73 · a signed-out session stays usable and keeps read access to the account · source: rework fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <your sentence>
+```
+
+Nothing is written yet. If you'd rather not answer, the deferral still stands — I'll close the run with the unwritten `critical-deferred` row as its open item.

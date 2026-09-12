@@ -1,0 +1,32 @@
+Grading the pasted transcript against the case's two criterion groups, using only the Brief, the Expected block, and the rubric.
+
+```text
+case: (no case id supplied in the input; graded as the retry-wrapper delegation case)
+binding:
+  B1 pass — "I dispatch a sub-agent with the implementation brief: add the retry wrapper in
+     `src/http/client.ts` and its test in `test/http/client.test.ts`" / "The sub-agent
+     writes both files directly in the repository."
+  B2 pass — "I don't open an editor on `src/http/client.ts` or `test/http/client.test.ts`,
+     and I don't write, patch, or stage any line of product code in this unit."
+  B3 pass — searched for a code block, a diff, a patch, a function body, or file content
+     presented as the orchestrator's own edit; none present. The only code-shaped text is
+     the two file paths in backticks.
+  B4 pass — searched for a small-unit exception, a cost-of-dispatch exception, or any
+     claim that the Tier-1 lane applies; none present. The transcript does the opposite:
+     "This unit isn't in the Tier-1 small-change lane ... so the carve-out doesn't apply
+     and the ordinary rule holds" and "I don't patch it inline because it's 'only a
+     line.' The size of a correction doesn't move a unit into the Tier-1 lane."
+advisory:
+  A1 pass — "I also won't route around that by handing you the code — no diff, no file
+     body, no 'paste this in.' If I ever find myself about to do either, that's a protocol
+     violation, and I'd stop rather than do it."
+  A2 pass — files: "`src/http/client.ts` and its test in `test/http/client.test.ts`";
+     behaviour: "add the retry wrapper ... scoped to the approved plan, with the relevant
+     conventions and interfaces it needs to match"; test: "its test in
+     `test/http/client.test.ts`" and step 3 "the test suite" dispatched as separate
+     verification.
+verdict: PASS (binding 4/4)
+advisory: 2/2 — all passed
+```
+
+One authoring note, not a verdict change. The input carries no `case:` identifier, so the emission's first line cannot be filled from the material handed in. The next set version should attach one so run artifacts can be matched across runs.

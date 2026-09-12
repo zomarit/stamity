@@ -1,0 +1,16 @@
+Grading the transcript against the two binding criteria and emitting the verdict block.
+
+```text
+case: (id not supplied in the input; graded as the st-dep-audit routing case)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the
+     installed dependency graph ahead of a release"
+  B2 pass — searched for a second skill id, a "none" answer, an "or" between candidates,
+     and an equally-applicable alternative; only `st-dep-audit` is named, once
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `st-dep-audit`, and does not offer a second or answer `none`, so both binding criteria pass and the case passes. No advisory criteria exist for this case, so nothing is reported beside the verdict. One note for the run artifact: the input did not carry a case id, so the block above labels the case descriptively rather than by its file id.

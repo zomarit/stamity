@@ -1,0 +1,17 @@
+Grading the transcript against the case's three binding criteria.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — "`none` — writing a README paragraph is ordinary editing work"
+  B2 pass — searched for `st-learn` named as triggered or applicable; the transcript's only
+     related word is "learning" inside a list of things it says are not involved, and no
+     skill id appears at all
+  B3 pass — searched for any `st-*` id offered as the answer; the sole label given is
+     `none`, and no skill is named as applicable
+advisory: none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The response selects `none`, names no skill, and does not name st-learn as triggered. All three binding criteria pass, so the case passes. No advisory criteria were declared, and no authoring defects were found.

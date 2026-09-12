@@ -1,0 +1,19 @@
+## Closing report — cart total reads zero after removal
+
+**Symptom.** The cart total reads zero once an item is removed.
+
+**Cause, confirmed.** The accumulator at `src/cart/total.ts:44` resets on the removal event, and the recompute at `src/cart/events.ts:19` runs *before* that event rather than after it. The total is therefore computed against an accumulator that has already been zeroed.
+
+**Evidence.** `test/cart/total.test.ts:31` was written against that cause and fails on the current tree. It covers the cause, not the spec clause.
+
+**Hypotheses.** None survive — the confirmed cause accounts for every observation. Failed fixes this session: 0; the escape valve did not fire.
+
+**Handoff.** Cause confirmed with a failing test in hand routes to `/st-work`, carrying the diagnosis and `test/cart/total.test.ts:31` as the plan.
+
+**Still carried out of this run.**
+1. The regression clause at `docs/specs/cart.md:57` has no test of its own.
+2. Three observation-only counters are deployed under the capture-later agreement.
+
+**Fact to settle before the step below.** Which Friday the capture window named. Today is Saturday 2026-09-12. If the agreed close was yesterday, 2026-09-11, the counters are already past their window and sitting in the tree unagreed; if it was 2026-09-18, they have six days left and the untested regression clause is the live debt instead. I am reading it as yesterday, and the step follows that reading — correct me and the step changes.
+
+**Next step.** Strip the three observation-only counters from the tree.

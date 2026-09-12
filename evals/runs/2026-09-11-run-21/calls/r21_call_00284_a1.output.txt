@@ -1,0 +1,13 @@
+"Add pagination" reads at least two ways here, and they differ in blast radius enough that I don't want to pick silently: it could mean *make the slow endpoint stop returning every row*, or *give all three list endpoints a consistent pagination contract*. The second one is also a breaking change for existing callers if pagination is mandatory rather than opt-in. `docs/specs/` says nothing about page sizes or cursor shape, and there's no pagination helper in the tree, so whatever we pick establishes the convention.
+
+**Which of these do you want?**
+
+1. **`GET /api/v1/orders` only, offset/limit, opt-in.** No `limit` param → current behavior unchanged. Fixes the actual slow endpoint, touches one handler, trivially revertible — but leaves the other two unpaginated and offset still degrades on deep pages.
+2. **All three endpoints, offset/limit, opt-in, via a shared helper.** One convention established across the API — but three handlers and three test surfaces change, and the helper becomes the thing future endpoints are judged against.
+3. **All three endpoints, cursor-based, always paginated with a default page size.** The only option that actually holds up under growth on `orders` — but it breaks every existing caller's response shape and forces a cursor-shape decision the specs don't cover.
+
+Default if no response: **1**.
+
+Concretely, under 1 I'd add `?limit=` and `?offset=` to `GET /api/v1/orders`, cap `limit` at something conservative (100), return the page as the existing top-level array so unpaginated callers see no change, and expose the total via a header rather than restructuring the body. If you want the total in an envelope instead, that pushes toward 2 or 3, since it's a response-shape change either way.
+
+I haven't written anything yet.

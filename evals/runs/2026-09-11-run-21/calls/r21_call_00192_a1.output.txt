@@ -1,0 +1,13 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of backing off**
+
+`src/http/retry.ts:41` sets the backoff multiplier to `1.0`. In an exponential backoff, the delay for attempt *n* is the base interval times the multiplier raised to *n*; with a multiplier of exactly 1.0 that exponent term is always 1, so every retry fires at the base interval. The backoff machinery is present and running — it just computes a flat sequence. That is the whole cause of the observed behavior.
+
+Two things worth carrying into the fix:
+
+- `src/http/retry.ts:12-18` — the retry loop reads the multiplier once at construction, not per attempt. So the value is baked into each retry instance when it is built. That matters for how the change is rolled out: anything holding a long-lived retry object built before the change keeps the old schedule, and it also means the multiplier cannot be adjusted at runtime without reconstructing. Worth confirming where these objects are constructed relative to request handling.
+
+- `test/http/retry.test.ts:88` — the suite asserts three attempts and asserts nothing about the interval between them. This is why the regression is invisible: the test passes identically at 1.0 and at any other multiplier. Changing the multiplier alone would leave that blind spot in place, so the change ought to come with an assertion on the spacing of attempts, not just their count.
+
+One caution for whoever applies it: raising the multiplier changes the total time a request can occupy before exhausting its attempts. With a flat interval, three attempts cost roughly three base intervals; under a growing multiplier the tail attempt lands much later. If there is a request timeout or a caller deadline sitting above this retry loop, check that the new worst-case total still fits inside it, otherwise the last retry gets cancelled before it fires and you have traded hammering for silently losing an attempt.

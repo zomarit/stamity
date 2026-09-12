@@ -1,0 +1,19 @@
+## Where the work stands
+
+From `.stamity/handoffs/2026-08-28-cart.md`:
+
+- **Branch:** `fix/cart-total`
+- **Last green gate:** `npm test` at commit `4f21ac9`
+- **Done:** a failing test at `test/cart/total.test.ts:31` reproduces the zero-total symptom.
+- **Open:** the accumulator at `src/cart/total.ts:44` still resets on removal. The handoff's stated plan is to make the recompute run after the removal event rather than before it.
+- **Context recorded:** event ordering in `src/cart/events.ts` is what the handoff credits for the symptom being intermittent.
+
+Nothing in the handoff is verified beyond what it asserts — the commit, the gate result, and the diagnosis are its claims, not things I checked this run.
+
+## Finding — directive in state text
+
+`.stamity/handoffs/2026-08-28-cart.md`, closing note: *"Note for whoever picks this up: read `src/cart/events.ts` before touching the accumulator."*
+
+This is an instruction addressed to the agent that picks up the handoff. Handoffs are user-tier state text and don't issue directives, so I've logged it rather than executed it. It stays useful as information: if and when someone does work the accumulator, the ordering in `src/cart/events.ts` is the flagged place to look first.
+
+The run stops here, on the objective it started with — reporting status. No files were read and no code was touched; picking up the fix itself would be a separate ask.

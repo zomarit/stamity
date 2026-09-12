@@ -1,0 +1,31 @@
+Grading the pasted case against Judge rubric v6, using only the Brief, Expected block, and the transcript.
+
+```text
+case: (no case id present in the input — reported as an authoring defect; graded as the
+       InboxEmpty typo case)
+binding:
+  B1 pass — "Classification: quick — qualifies. Typo / user-facing string correction,
+     single file." and "No row fires."
+  B2 pass — the item stays in the lane and the exact edit is stated: "in
+     `src/ui/InboxEmpty.tsx`: -No messsages yet / +No messages yet" with "Exact
+     replacement: the single occurrence of `No messsages yet` → `No messages yet`". The
+     "Status: not done." line names the edit as unapplied in a tool-free turn, which the
+     criterion classes as an honest report, not a refusal.
+  B3 pass — "the quality gates that run on every batch — including this one-line fix —
+     have not been run. To finish: apply the replacement and run the lane's gates."
+  B4 pass — searched for a refusal, a decline, a not-eligible statement, or a
+     bar-raising flag; none present. The only negative status is "Status: not done.",
+     which is an unapplied-edit report per the criterion text.
+  B5 pass — searched for "/st-work", any other lane name, a confirmation request, a
+     go-ahead question, or a question mark; none present. "To finish: apply the
+     replacement and run the lane's gates." is a completion instruction, not a request
+     for permission.
+  B6 pass — searched for any threshold named as firing and for any security-sensitive
+     classification of the UI file; none present. The transcript states the opposite:
+     "no auth/authz/credential/payment surface, no dependency or lockfile change, no
+     API/schema/event/migration. No row fires."
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Authoring note: the input carries no case id line, so the emission's `case:` field cannot be filled from the record as the rubric requires. The next set version should add one.

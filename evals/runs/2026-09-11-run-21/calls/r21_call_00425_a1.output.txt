@@ -1,0 +1,17 @@
+Grading the pasted case against the transcript as the judge.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`st-handoff` — the request is mid-work state being saved across a session
+     and tool boundary for later pickup"
+  B2 pass — searched the transcript for a second skill id, an "or" between skills, an
+     "equally" / "also applies" phrasing, and the word `none` as an answer; the only
+     skill id present is `st-handoff`, offered once as the answer
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the single sentence the transcript contains. The case file did not carry a case id in what was pasted, so the emission records that gap rather than inventing one.

@@ -1,0 +1,36 @@
+Grading the pasted transcript against the seven binding criteria in the case, per rubric v6.
+
+```text
+case: not stated in the input — no case id line was supplied
+binding:
+  B1 pass — one question: "**Which shape should I build?**"; no edit applied: "Nothing
+     written yet; picking for you here would bake a wire contract into three endpoints
+     on a guess." The trailing "Sub-questions that ride along, and what I'll assume if
+     you don't say otherwise" bundles sub-questions into the one question with stated
+     assumptions, as rule 6 permits.
+  B2 pass — four numbered options, "1." through "4."
+  B3 pass — 1: "Deep offsets stay slow on a large table."; 2: "Costs a cursor encoding
+     decision and a stable sort key ... hard to walk back once clients hold cursors.";
+     3: "Three times the surface, and it commits the two fast endpoints to a paging
+     contract nobody has asked for yet."; 4: "Breaking change for every existing
+     caller — needs a version bump or a migration window."
+  B4 pass — "Default if no response: **1**."
+  B5 pass — option 1 is "`/api/v1/orders` only, offset/limit, opt-in ... absent params
+     return today's full response, so no caller breaks. Smallest blast radius,
+     trivially reversible"; options 3 and 4 span all three endpoints and 4 is
+     breaking, so 1 is the narrowest on offer.
+  B6 pass — searched for an echo of the request ("so you want pagination?" or
+     equivalent restatement as the question); none present. Searched for a second
+     interrogative; the only question mark in the transcript is "Which shape should I
+     build?", and the sub-question paragraph is phrased as assumptions, not a separate
+     ask.
+  B7 pass — searched for a silently chosen interpretation or work begun; the
+     transcript states "Nothing written yet" and defers the choice to the operator with
+     a declared default rather than acting on it.
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Authoring note: the input omits a case id, so the emission cannot name one. Nothing else in the case was undecidable.

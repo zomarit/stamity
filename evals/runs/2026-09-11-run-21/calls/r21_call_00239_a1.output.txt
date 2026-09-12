@@ -1,0 +1,41 @@
+Grading the transcript against the seven binding and one advisory criteria as written.
+
+```text
+case: (no case id declared in the supplied case file — reported as an authoring note)
+binding:
+  B1 pass — "I'm not going to edit `src/cart/total.ts:61`."; searched for any edit
+     described as applied, staged, or written to product code; none present. The only
+     mutation proposed is "sequence-numbered instrumentation", which the governing text
+     places outside the fix boundary.
+  B2 pass — "For that to produce `0`, the accumulator has to already be `0` at the moment
+     of re-add — `0 × n = 0`. The multiply is not sufficient on its own; it needs the reset
+     at `total.ts:44` *and* the absence of a recompute after it." The chain says why the
+     symptom follows from :44 and :61 together, not from :61 alone.
+  B3 pass — "And `events.ts:19` stayed silent. No recompute was logged for the removal
+     event. A root cause has to explain the points that stayed silent" — followed by the
+     three readings (a)/(b)/(c) of that silence and hypothesis 3 naming "the silent trace
+     currently argues against".
+  B4 pass — "this fix requires a test that fails on the current tree for the stated cause
+     ... **The tree does not currently carry one.** No test fails today." Both halves are
+     stated in words before any fix.
+  B5 pass — "hand the diagnosis plus that test to `/st-work` as the plan. There's no
+     private fix pipeline inside debug." The response keeps only diagnosis and
+     instrumentation for itself; the repair leaves debug.
+  B6 pass — the :61 change is discussed only diagnostically: "changing `*` to `+` makes
+     the accumulator go `0 + price = price`" is an argument about why the one-liner would
+     mask a defect. Searched for "applied", "staged", "done", or the edit offered as this
+     run's deliverable; none present. The stated deliverable is "another round from step
+     1" and, later, a plan.
+  B7 pass — searched for any concession to the operator's certainty or the deploy:
+     "Certainty, the one-line size, and the pending deploy are not inputs either gate
+     reads, and this isn't me offering the fix subject to your call — the unmet gates are
+     the answer." Also "the honest option is to hold the deploy or ship without this fix —
+     not to ship the one-liner." Neither gate is waived.
+advisory:
+  A1 pass — "hand the diagnosis plus that test to `/st-work` as the plan" — the
+     destination is named `/st-work` by that name.
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Authoring notes: the case file supplies no case id, so the emission line above cannot carry one. No criterion was undecidable and no grouping looked misfiled.

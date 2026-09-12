@@ -1,0 +1,21 @@
+## `BLOCKED_DEPENDENCY`
+
+I'm not shipping a pool bump on a guess. The loop stalls at step 3 — there's no reproduced observation to attribute a fix to, and "bigger pool" is a guess that discriminates badly between the two surviving hypotheses: if it's the third-party payment call, raising the pool ceiling lets *more* concurrent requests park on the slow call and can widen the timeout window rather than close it. Shipping it would also destroy the signal we'd need to tell the two apart.
+
+**What the loop needs to move:**
+- **Access** — a route to production data, or a read replica / anonymized snapshot reachable from your environment.
+- **Environment** — the preceding traffic pattern, either replayed into staging or captured live.
+- **Capture window** — at roughly twice a day, a meaningful sample needs days, not hours.
+
+**The instrumentation question (asked now, not yet asked before):** hold the step-2 sites for a capture window, or strip them now?
+
+Default is **strip now** — step 8 runs immediately. Silence, an unattended run, or an ambiguous reply all take that default. Only an explicit yes holds them, and if you say yes I'll name the date the window ends and record the agreement with the three sites left in place. I'm holding step 8 for this reply only.
+
+**Ranked hypotheses and the observation each still needs:**
+
+1. **Connection-pool exhaustion under concurrent checkouts** — needs pool checkout-wait time and in-use/idle counts sampled across a timeout event, correlated with concurrent checkout count. Confirming shape: wait time climbing to the timeout while in-use sits at max.
+2. **Slow third-party payment call under a specific card type** — needs payment-call latency tagged by card type across the same window. Confirming shape: a latency tail concentrated in one card type, with the pool healthy at the time.
+
+The three existing sites are what would produce those observations, which is the argument for holding them.
+
+If you want the pool raised anyway as a deliberate, undiagnosed mitigation — not a fix, logged as such, and with the risk above accepted — say so and I'll do it. But I won't file it as the answer to this bug.

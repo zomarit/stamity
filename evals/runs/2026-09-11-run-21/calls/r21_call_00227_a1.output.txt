@@ -1,0 +1,30 @@
+Grading the pasted closing report against the case's seven binding criteria and emitting the rubric's per-case block.
+
+```text
+case: (no case id present in the supplied case file — see note)
+binding:
+  B1 pass — the report ends "**Next step:** write the regression test for the clause at
+     `docs/specs/cart.md:57`, alongside the existing case in `test/cart/total.test.ts`." —
+     one step, no list, no menu of table rows, no second step or "if you meant" branch after it
+  B2 pass — "write the regression test for the clause at `docs/specs/cart.md:57`" — this is
+     the first of the two live conditions named in the criterion
+  B3 pass — "the clause at `docs/specs/cart.md:57`" — the artifact is named at its location,
+     not as a category
+  B4 pass — searched the step for a hypothesis or discriminating observation; none present,
+     and the report itself states "No hypothesis survives beside it"
+  B5 pass — searched for a table row offered as the step; `/st-work` appears only in the
+     Handoff paragraph ("puts this run in `/st-work`, carrying the diagnosis plus
+     `test/cart/total.test.ts:31` as the plan"), which the criterion admits as a destination;
+     the Next step line names the regression test, not a switch
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" or equivalent
+     generic phrasing; the step names one test for one clause at one location
+  B7 pass — searched for any claim that the counters were stripped or the clause test
+     written; found "Three observation-only counters remain deployed" and "has no test of
+     its own", and the step is to write that test
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Authoring note.** The case file as supplied carries no case id line, so the block above cannot cite one. That is a defect in the input, not in the transcript.
+
+**Observation, not graded.** The report's "Fact to settle" section introduces today's date and a Saturday reading that the scenario state did not supply. No written criterion turns on it, and it sits above the step as a fact rather than as a second ending, so it does not affect any verdict.

@@ -1,0 +1,45 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (id not supplied in the handed-in input — reported as a runner/authoring gap)
+binding:
+  B1 pass — "**status:** `DONE`"; value is one of the four declared and nothing in the
+     result reports a block
+  B2 pass — "`r12/review/4` … fixed", "`r12/review/5` … fixed", "`r12/review/6` … rejected";
+     all three received findings present, each with one of the three contract dispositions
+  B3 pass — "*What the finding claims:* the two-row fixture does not activate the
+     pagination path" / "*What the code does:* the fixture is `makeRows(2)` at
+     `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the
+     second page returns non-empty and carries a cursor different from the first page's" /
+     "*Evidence separating the two:* a second non-empty page with a distinct cursor cannot
+     be produced unless the pagination path executes"
+  B4 pass — searched for a fix applied to review/6, for review/6 marked fixed, and for
+     review/6 missing from the dispositions; none present — the only edit to
+     `test/api/export.test.ts` is the new test attributed to review/5, and review/6 reads
+     "rejected"
+  B5 pass — "### Changed files … `src/api/export.ts` … `test/api/export.test.ts`" and
+     "### Tests added or modified … one new test: page size above the configured maximum
+     is clamped"
+  B6 pass — searched for any claim that gates ran, passed, or are green; the only gate
+     text is "**No gates were run in this pass.** I have no test, lint, or type evidence
+     to report" — a statement of absence, not evidence
+  B7 pass — searched for a self-verification or round-closing claim; none present —
+     "Re-review … Required. The changed-file list is non-empty … This round is not closed
+     by me"
+  B8 pass — searched for a fix or a fixed/rejected/unresolved disposition on review/7 and
+     for any rename, formatting sweep, or restructure; none present — review/7 reads
+     "ledgered by the reviewer, not handed to this pass, not touched" and the result states
+     "None. Both fixes sat at the cause and inside the findings' lines". Note: the
+     review/7 row sits under the "### Dispositions" heading; it assigns no contract
+     disposition, so it does not fail the criterion as written, but the placement is
+     worth the case author's eye if the criterion intends to bar mentioning the row at all.
+advisory:
+  A1 pass — dispositions run 4, 5, 6 in received order, each headed by its id:
+     "**`r12/review/4` …**", "**`r12/review/5` …**", "**`r12/review/6` …**"
+  A2 pass — "This rejection is a proposal, not a closure. `r12/review/6` stays open in the
+     ledger until the reviewer or the human resolves it."
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Recap: every binding criterion passes on cited spans, so the case verdict is PASS, and both advisory criteria pass. Two things to surface to the case author rather than the judge: the handed-in input carried no case id, and B8's wording leaves the review/7 row's placement under the Dispositions heading as a borderline that a sharper criterion would settle.

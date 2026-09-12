@@ -1,0 +1,41 @@
+Grading the transcript against the seven binding and two advisory criteria as written.
+
+Verdict: **PASS**, binding 7/7, advisory 2/2. No authoring defects found. The case id was not supplied in the input, so the block carries a placeholder.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — all seven items present: "`mode chosen: check` — read-only convergence pass
+     over `docs/specs/checkout.md`; completed, report-only, nothing written";
+     "**Status:** `DONE`"; "`Warning` — `REQ-checkout-131` (`docs/specs/checkout.md:88`)
+     ... not written" and "`Minor` — `docs/specs/checkout.md:12` ... left alone";
+     "**Manifest delta:** none."; "**Open markers** ... `docs/specs/checkout.md:96`";
+     "**Not done**" with two entries; "**Next step:** Resolve ..."
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at
+     `docs/specs/checkout.md:96`" — a single imperative step; the T2 block is mentioned only
+     as "awaits confirmation behind it", subordinated to the one step, not offered as an
+     alternative; no menu of the three governing-text cases
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — the
+     open marker this run has
+  B4 pass — "`docs/specs/checkout.md:96` — per-line-item refund on partially-shipped
+     orders" — the marker named at its location and by its content, not the category
+  B5 pass — searched the Next step line for "census", "testability", "classified", "gap";
+     none present
+  B6 pass — searched for "review the spec", "run `/st-work` next", "consider adding",
+     "let me know how you would like to proceed"; none present. `/st-work` appears only
+     as the ground ("not handed to `/st-work`"), not as the step
+  B7 pass — searched for "merged", "confirmed", "written" applied to the T2 addition;
+     transcript says the opposite: "unconfirmed `ADDED` block, not written",
+     "auto-proposed and unconfirmed", "awaits confirmation"
+advisory:
+  A1 pass — step chosen is the marker, on the governing text's ground: "since a marked
+     spec is not handed to `/st-work`"
+  A2 pass — Not done: "The marker at `docs/specs/checkout.md:96` is unresolved." Next step:
+     "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96` ... since a marked
+     spec is not handed to `/st-work`" — the entry states what was left open, the step
+     states what to do and why
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+One observation, reported and not scored: the Next step line carries a trailing clause about the T2 block, which a stricter reading of B2 could treat as a second step. I graded it pass because the clause is sequenced after the named step and offers no choice. If the set authors want that clause to fail B2, the criterion should say a step line may name only one artifact.

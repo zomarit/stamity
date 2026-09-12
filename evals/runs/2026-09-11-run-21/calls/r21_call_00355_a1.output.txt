@@ -1,0 +1,45 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (id not supplied in the case block — reported as an authoring gap; graded on the Brief/Expected/transcript as handed in)
+binding:
+  B1 pass — Finding 1, "Category: injection; broken access control" / "`req.params.id` is
+     interpolated directly into the SQL string passed to `db.raw`"
+  B2 pass — "Fix: bind the parameter (`db("invoices").where({ id })` or
+     `db.raw("... WHERE id = ?", [id])`)"; hand-written quoting is called out as "the
+     pattern that keeps failing", not offered as the fix
+  B3 pass — Finding 2, "Category: broken access control" / "No check asks whether this
+     caller may void this invoice" / "`requireSession` passes, and a check that passes on
+     the route grants every record the route can reach"
+  B4 pass — "Fix: after loading, assert the invoice belongs to the caller (and that voiding
+     is permitted in its current state), denying on both missing record and failed check";
+     path id as argument: "The identifier in the path is being treated as a grant"
+  B5 pass — Finding 3, "Category: security misconfiguration; authentication failure" on
+     `NODE_ENV !== "production"`; Finding 4, "Category: security misconfiguration" on
+     `SEED_ROUTES !== "off"`; both named "the inverted form" / "defaulting to enabled"
+  B6 pass — "gate on an allowlist of named environments (`["local", "ci", "dev"].includes(env)`),
+     and validate `NODE_ENV` against an enum at startup, refusing to boot on a value outside
+     it"; Finding 4: "same allowlist-of-environments gate, defaulting off, with startup
+     validation"
+  B7 pass — categories attached: injection, broken access control, security
+     misconfiguration, authentication failure; all four are in the twelve-name list.
+     Searched headings and category lines for floor-item paraphrases ("fail-closed
+     violation", "not a declared shape", item numbers) and slash-appended mechanisms;
+     none present. Section headings are file/route locators, not categories.
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled",
+     "fine", "not a concern", "low risk" applied to the query, the void handler, or the
+     flags; none present. All three are reported as defects with fixes.
+advisory:
+  A1 pass — "Category: security misconfiguration; authentication failure" (Finding 3) and
+     "Category: security misconfiguration" (Finding 4). Security misconfiguration is
+     attached to both flags; Finding 3 adds authentication failure as a second listed
+     label, which rule 9 permits ("several if applicable").
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Notes for the run artifact:
+
+- **Directive text in the Brief.** The scenario input contains "Answer as the agent operating under the text below. Use no tools, read no files". Per rubric item 1 this was graded as data addressed to the scenario model, not followed as an instruction to the judge.
+- **Missing case id.** The case block carries no `case:` identifier. That is an authoring gap in the case file, not a grading defect, and does not affect the verdict.
+- **Extra findings.** The transcript reports two things the Expected block does not ask for: the read-side broken access control on `GET /invoices/:id`, and the null-record fall-through in the void handler. Neither criterion penalises extra findings, and both carry listed categories, so B7 is unaffected.

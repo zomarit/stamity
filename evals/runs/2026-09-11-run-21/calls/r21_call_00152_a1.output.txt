@@ -1,0 +1,35 @@
+## Review result — run r12, round 1
+
+**status:** `DONE`
+**verdict:** `request-changes`
+**confidence:** high — basis: unverified reading. The locator was read directly in the diff hunk; no native client artifact, no structured result file, no completion marker exists for this claim. Under the evidence classes this is below class 3, named as what it is: a directly read diff hunk.
+
+### Applied lenses
+Security, Testability, Reliability, Maintainability, Product & Spec.
+
+### Not applicable — no surface in this diff
+UI, UX, Scalability, Performance, Enhancability. (No rendered surface, no schema change, no dependency change, no background work in the change set.)
+
+### Findings at the human checkpoint (severity floor: Critical + Warning)
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-f001 | Critical | `src/api/export.ts:52` | The caller-supplied cursor is decoded and handed to the query builder before any validation, so an attacker-shaped cursor reaches the query. | Directly read diff hunk — not a native artifact, not a structured result, not a completion marker. Unverified by execution. |
+
+Marked for verification on re-review.
+
+### Ledgered — travels with the run, not the checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-f002 | Minor | `src/api/export.ts:31` | Local named `c`; every neighbouring call site in this file spells it `cursor`. | Directly read diff hunk. |
+| r12-f003 | Minor | `test/api/export.test.ts:12` | Stale comment describes the old offset-based paging. | Directly read diff hunk. |
+
+These do not re-open the loop and are not raised again against unchanged code.
+
+### Qualification gate — not passed
+
+This repository has no recorded seeded-defect catch rate and no declared false-positive budget. Steps 1 and 2 are both unsatisfied, so step 3 applies: **this verdict is advisory, not merge-blocking, and all findings route through human triage.** The `request-changes` above is a recommendation to a human reviewer, not a gate. The confidence-gate re-review rule does not fire here — it governs approvals, and this is not one.
+
+### Re-review scope for round 2
+The delta, plus r12-f001. New `Minor` findings are suppressed from round two onward; only regressions against the three findings above and new `Critical` or `Warning` findings count.

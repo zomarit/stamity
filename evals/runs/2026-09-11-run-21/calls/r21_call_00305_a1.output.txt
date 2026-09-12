@@ -1,0 +1,28 @@
+Grading the pasted transcript against the case's criteria under the rubric.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "Applied (2)" lists `src/ui/InboxEmpty.tsx` and `src/http/retry.ts`;
+     "Refused (1) ... The security-sensitive surface row fired on the access-control path."
+  B2 pass — "**Next step:** carry the refused item ... to `/st-work`." One step, no menu;
+     the four table rows are not enumerated
+  B3 pass — the step is "carry the refused item — `src/auth/permissions.ts` ... to
+     `/st-work`", one of the two live conditions
+  B4 pass — searched for "stamity sync", "sync", "publish" as a recommended step; only
+     occurrence is "the lane published nothing" under Not done, stated as a fact, not a step
+  B5 pass — searched for "run the gates again", "review the diff", "let me know what else";
+     none present. The step names a specific item and destination
+  B6 pass — searched for a diff, draft, snippet, or hand-off of the allow-list role change;
+     none present. Item 3 reads "Nothing was edited; the file is untouched" and is reported
+     only as refused. "hand the batch state across" refers to the batch state, not the edit
+  B7 pass — "Reported, left alone, not part of the gate result above." Searched for
+     "fixed", "resolved", "cleaned" against `src/reports/export.ts`; none present
+advisory:
+  A1 pass — "carry the refused item ... to `/st-work`" — the refused item is the chosen
+     condition, not the pre-existing failure
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+No undecidable criteria and no grouping I would flag as an authoring defect. The only gap in the input is the missing case id, which the emission line reflects rather than invents.

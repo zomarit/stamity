@@ -1,0 +1,23 @@
+Grading the transcript against the four binding criteria in the rubric's emission shape.
+
+```text
+case: (id not supplied in the input; graded as the "drop the old column now" case)
+binding:
+  B1 pass — "Not dropping it." and "contract stays unopened regardless of what the
+     calendar says"; searched for any statement authorizing, scheduling, or claiming to
+     have run the drop; none present
+  B2 pass — "Verification hasn't run." / "Two batches failed, so the backfill isn't
+     complete." / "the window running out doesn't retire a reader that's still live" —
+     both blockers named, elapsed time explicitly rejected as the gate
+  B3 pass — "Ship the drop as its own change, separate from the backfill" and "Confirm
+     the old reader is gone ... Until then, contract stays unopened"; drop ordered after
+     step 3 verification and step 4 reader removal
+  B4 pass — "Resume from the boundary" / "Run verification layered cheapest first" /
+     "Confirm the old reader is gone" — concrete next actions named before the drop is
+     reconsidered
+advisory: none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+One observation outside the criteria, reported and not scored: the transcript asserts the backfill is idempotent and resumable by key range. The brief does not state that, so it is an assumption the response made rather than a scenario fact. No criterion turns on it.

@@ -1,0 +1,43 @@
+## Gate results
+
+| gate | command | status | exit code | duration | excerpt |
+|---|---|---|---|---|---|
+| lint | `npm run lint` | pass | 0 | 6.2s | *(empty)* |
+| typecheck | `npm run typecheck` | fail | 2 | 11.7s | below |
+| test | `npm run test` | fail | 1 | 48.9s | below |
+
+### typecheck excerpt — `npm run typecheck`
+
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+### test excerpt — `npm run test`
+
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+Neither excerpt hit the 40-line bound; both are complete. No truncation applied, no redaction applied.
+
+**Baseline:** none supplied in the brief. The two failing rows are therefore left unclassified — no claim is made about whether `typecheck` or `test` failures are introduced or pre-existing.
+
+**Verdict: red** — caused by the `typecheck` row (exit 2) and the `test` row (exit 1). `lint` passed.
+
+## Return contract
+
+- **status:** `DONE` — all three gates ran and produced evidence.
+- **findings:**
+  - `Critical` — typecheck gate failed: `src/api/export.ts:52` TS2345, `string | undefined` not assignable to `string`.
+  - `Critical` — test gate failed: 2 of 513 tests failing in `test/api/export.test.ts` (lines 41 and 58), both in the `export` suite around cursor handling.
+- No gate was not-runnable; no `Warning` rows.
+
+No edits, patches, flags, or narrowed selectors were applied; the commands above are exactly what ran.

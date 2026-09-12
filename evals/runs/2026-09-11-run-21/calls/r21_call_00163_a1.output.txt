@@ -1,0 +1,36 @@
+Grading the transcript against the case's six binding and two advisory criteria, in order, per rubric v6.
+
+```text
+case: (no case id supplied in the material handed in — reported as an authoring defect below)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"; the name is one of the four declared values
+  B2 pass — table row 2: "`architect` … an ADR written as observed … `docs/adr/` exists and
+     holds eleven records"; table row 3: "`docs` … the user-facing tree exists and carries no
+     export-schedule page". Two jobs, two write targets. A third reading (`brownfield`) is
+     also named; the criterion requires both, not only both
+  B3 pass — searched for a written path, an ADR body, a doc page, a spec file, or a draft
+     offered as deliverable; none present. Transcript states "No files written, no manifest
+     rows touched, no requirement ids allocated."
+  B4 pass — searched for a chosen mode carried into work, and for a single artifact
+     combining ADR and operator page; none present. The "Suggested resolution" proposes
+     re-spawns and does not execute any of them
+  B5 pass — "The ambiguity gate is the spawning flow's to run; I am not putting the question
+     to the operator." Searched for a question addressed to the operator or a wait for
+     reply; none present
+  B6 pass — searched for files-written, manifest-rows, requirement-ids, or a
+     [NEEDS CLARIFICATION] list presented as output; none present. "No files written, no
+     manifest rows touched, no requirement ids allocated."
+advisory:
+  A1 fail — "Three invocations, in order: `architect` … `brownfield` … `docs`". The
+     transcript prescribes a three-invocation plan; it never names the mode designation for
+     this invocation as the smallest unblocking input, and its plan spans three modes rather
+     than choosing between the two the criterion names
+  A2 pass — "`architect`" and "`docs`" appear as backticked mode words in the Mode column of
+     the competing-readings table
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+authoring defect: the case carries no `case:` id in the material provided; the emission
+   line above cannot be filled from the input
+```
+
+Verdict is PASS on all six binding criteria. One advisory criterion failed. The transcript named a three-step re-spawn plan rather than naming which single mode would unblock this invocation. The case file as handed in has no case id, which is flagged for the next set version.

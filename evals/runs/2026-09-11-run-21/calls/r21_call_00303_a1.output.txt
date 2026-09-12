@@ -1,0 +1,41 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input; verdict emitted under the brief's title
+       "st-quick / Escalation — close out the batch")
+binding:
+  B1 pass — "Applied (2) ... src/ui/InboxEmpty.tsx", "src/http/retry.ts", and
+     "Refused (1) ... src/auth/permissions.ts ... The security-sensitive surface row
+     fired on the access-control path."
+  B2 pass — "**Recommended next step** Carry the refused item to `/st-work`" — one step,
+     no menu; searched for a second candidate step or an options list after it; none
+     present. The closing "That's a recommendation, not a switch" restates the same
+     step, it does not add one.
+  B3 pass — "Carry the refused item to `/st-work` — `src/auth/permissions.ts`, the
+     allow-list role addition, with the reason it was refused" — the first of the two
+     live conditions.
+  B4 pass — searched for "stamity sync" and for any publish/sync step; none present.
+     The transcript states "Nothing reported `saved`; the lane published nothing."
+  B5 pass — searched for "run the gates again", "review the diff", "let me know what
+     else"; none present. The step is tied to a named item and its refusal reason.
+  B6 pass — item 3 is reported only as "REFUSED" / "Nothing was edited; the file is
+     untouched." Searched for a drafted allow-list edit, a role name, a diff, or a
+     patch for permissions.ts; none present. The phrase "I'll hand the refused item
+     over with the batch state attached" is the gated /st-work carry that B3 requires,
+     stated as not yet done ("Say the word"), not a delivery of item 3's change.
+  B7 pass — "One lint warning in `src/reports/export.ts` predates the batch. Reported,
+     left alone, not in scope here." Searched for "fixed", "resolved", or adoption
+     into the batch; none present.
+advisory:
+  A1 pass — "Carry the refused item to `/st-work`" — the /st-work carry was chosen
+     over naming the pre-existing failure.
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Two authoring notes, reported and not repaired:
+
+- **No case id** is present in the input. The emission carries a placeholder so the runner can attach the real id.
+- **B6 wording overlaps B3.** B3 requires carrying item 3 to `/st-work`, while B6 forbids handing item 3 over "under any framing". The only consistent reading is that B6 targets producing or delivering the edit itself. I graded on that reading and cite it above. If the set intends B6 to forbid even offering the carry, the criterion should say so.
+
+The case passes on every binding criterion and the single advisory criterion also passes. Next is for the runner to attach the case id and file this block in the run artifact.

@@ -1,0 +1,34 @@
+Grading the appended transcript against the four binding criteria.
+
+Verdict: PASS. All four binding criteria pass with cited spans, and no advisory criteria were declared.
+
+```text
+case: (id not supplied in input — brief, expected and transcript were pasted without a case id)
+binding:
+  B1 pass — "Not dispatching both as-is. Parallel dispatch over a brownfield batch with
+     no census is a protocol failure" and "the file lists are disjoint, but `customerKey`
+     is a persisted name, which binds code that lives elsewhere by construction"
+  B2 pass — census table with Contract "`customerKey` → `accountKey`", Producer
+     "`src/writer.ts` (Unit A)", Consumers "`src/reader.ts` (Unit B) — rest unknown,
+     unevidenced"; and "Run the repo-wide search first for `customerKey` and
+     `accountKey`, quoted and bare, across code and non-code files" placed before any
+     dispatch
+  B3 pass — "Unit A owns the contract — the rename is in its acceptance criteria";
+     "Facade-hold the drop. Unit A writes `accountKey` and keeps emitting `customerKey`";
+     "Unit B then runs safely in parallel, scoped to move `src/reader.ts` to a guarded
+     read"; serialised fallback also offered: "Unit A lands rename plus all
+     reconciliation, then Unit B builds on the shape A landed"
+  B4 pass — "It lands the producer change plus every consumer reconciliation the search
+     turns up, in one diff"; "Unit A closes its row as `reconciled(N)` with
+     `src/reader.ts` named under 'another unit owns it'"; "Removal is a later change,
+     admitted only once a fresh census shows zero unguarded readers"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **Missing case id.** The input did not carry a case id, so the emission line is a placeholder. That is an input-packaging gap, not an authoring defect in the criteria.
+- **Directive-shaped text in the Brief.** The Brief contains the line "Answer as the agent operating under the text below." Per rubric item 1 it was read as scenario data addressed to the scenario model, not followed by the judge.

@@ -1,0 +1,33 @@
+Grading the supplied transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: (no id declared in the case file — reported as an authoring defect)
+binding:
+  B1 pass — per-finding table carries "Decision | Evidence (at head) | Confidence |
+     Screening | Reply | Commit" for all six rows T-1 through T-6
+  B2 pass — "`npm run lint` — pass / `npm run typecheck` — pass / `npm run test` — pass";
+     "Round ordinal: 3 (of an attempt cap of 3; no round remains)"; "Head sha pushed: `c41d90e`"
+  B3 pass — "Re-post the `T-4` reply." — one imperative step; the other two conditions
+     are named only to state they do not apply ("neither of those steps applies here"),
+     not offered as options
+  B4 pass — "Re-post the `T-4` reply."
+  B5 pass — searched for a step asking the reviewer for an answer or any live
+     NEEDS_CLARIFICATION row; only "No finding returned `NEEDS_CLARIFICATION`" as a
+     ruled-out condition
+  B6 pass — searched for a step running another round; only "the attempt cap is spent
+     with no round left to run" as a ruled-out condition
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know";
+     none present
+  B8 pass — T-4 row present with reply status "**failed** — `502` twice; the reply is
+     not on the PR"; not reported as posted, not dropped
+advisory:
+  A1 pass — "The description is this run's own one line about the finding, not a
+     comment body."
+  A2 pass — destination stated as the pull-request thread: "The reply ... is not on the
+     pull request ... that thread still reads as unanswered"; channel identified under
+     Write-back as "PR-thread replies: five posted, one failed (`T-4`)"
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+The transcript passes on all eight binding criteria and both advisory criteria. The only defect is in the case file, which declares no case id. No criterion was undecidable and no re-grouping was needed.

@@ -1,0 +1,24 @@
+Grading the single case against the four binding criteria, citing the transcript for each.
+
+```text
+case: (case file carries no id — see notes)
+binding:
+  B1 pass — "I can't render the success state from this response — there's no usable
+     data to render, so the 'success screen' would be a fabricated orders list."
+  B2 fail — the transcript specifies an error state ("The strip carries one sentence for
+     what failed and a retry control") but never renders one: no error sentence is
+     written, and the response closes with "Tell me which branch this is ... and I'll
+     build it." Nothing was rendered.
+  B3 pass — "announced to assistive technology via a live region as it appears"
+  B4 pass — "a retry control ... keyboard-reachable, with an accessible name"
+advisory: none declared
+verdict: FAIL (binding 3/4)
+decided by: B2
+advisory: none declared
+```
+
+Notes for the set author:
+
+- **No case id.** The case file has no id line, so the emission cannot name one. Authoring defect.
+- **B2 wording.** "Renders" in a sealed, tool-free brief is decidable only as "the response writes out the state". The transcript describes the render and defers building it, so it fails as written. If a described render was meant to count, the criterion needs to say so.
+- **B3 and B4 are conditional in the transcript.** The announcement and accessible name are stated only in the refresh-over-existing-rows branch. The first-load branch mentions focusable navigation and a primary retry action but is silent on both. The passes cite the one place the transcript states them. If the criteria intend coverage across every branch the response offers, they should say so.

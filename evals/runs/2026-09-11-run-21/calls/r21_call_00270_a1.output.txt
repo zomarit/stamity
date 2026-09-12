@@ -1,0 +1,34 @@
+Not yet. The structural pass covers IDs, dependencies and coverage; it doesn't certify meaning, and handoff needs the semantic coverage review too. That review fails here.
+
+**The conflict**
+
+- **REQ-CACHE-001**: refresh customer data promptly *while continuing to show the previous value*.
+- **U1** (cites only REQ-CACHE-001): *hide* the previous value until refresh completes.
+
+Two live readings, and nothing in the plan or in any user decision settles which one is intended:
+
+1. **Stale-while-revalidate** — the previous value stays on screen for the whole refresh; the new value replaces it in place when it lands. U1 contradicts the requirement and must be rewritten.
+2. **Blocking refresh** — the previous value is withheld during refresh (spinner/placeholder), and "continuing to show the previous value" in the requirement means only that it is shown until refresh *begins*. Then the requirement's wording must be corrected, not the unit.
+
+The acceptance criterion can't break the tie: it asserts only that a fresh value eventually appears, which is true under both readings.
+
+**Smallest clarification that decides it**
+
+> During an in-flight refresh of customer data, is the previously cached value visible on screen, or replaced by a loading state?
+
+A yes fixes U1 to reading 1; a no fixes REQ-CACHE-001's wording to reading 2. Answer it in the clarification step, then the plan can be re-linted and handed off.
+
+One further gap the same answer should close: L1 needs a bound for "promptly" — a staleness or latency threshold with units, plus the command that measures it. "A fresh value eventually appears" is unbounded and fails L1 as written.
+
+---
+
+- **status**: `BLOCKED_AMBIGUITY` — REQ-CACHE-001 and U1 state opposite behaviors for the previous value during refresh; the criterion distinguishes neither.
+- **intent chosen**: unchanged from the persisted plan's head; this run made no intent determination.
+- **artifact path(s)**: none written by this run; the plan under review is already persisted, blocked before handoff. No re-write attempted.
+- **structural coverage**: pass — every ID and dependency resolves, no scoped requirement uncovered. `semanticReview: required` stands unsatisfied. Structural pass alone is not handoff approval.
+- **plan-lint**: L1 fail · L2 pass · L3 unrun (unit `edgeCases` not in what this run holds — reporting unrun rather than a claimed pass) · L4 pass
+- **sub_agents_spawned**: 0 · **task_structure**: sequential
+- **open questions carried**: 1 — previous-value visibility during refresh (above). Non-empty, so handoff to `/st-work` stays blocked.
+- **learnings written**: none — no qualifying failure met in this run.
+- **inbox appends**: none — nothing written, nothing deliberately deferred.
+- **next step**: answer the clarification question above, then re-run the plan-lint and semantic review on the corrected unit and criterion. Chosen because an unresolved `[NEEDS CLARIFICATION]` blocks handoff; `/st-work` is not the next step until it clears.

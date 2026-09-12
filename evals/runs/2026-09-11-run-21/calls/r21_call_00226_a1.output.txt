@@ -1,0 +1,17 @@
+## Closing report — cart total reads zero after item removal
+
+**Cause (confirmed).** The accumulator at `src/cart/total.ts:44` resets on the removal event, and the recompute is ordered before that event rather than after it (`src/cart/events.ts:19`). The zero is the accumulator being read in the window between reset and recompute.
+
+**Evidence.** A failing test written against that cause fails on the current tree: `test/cart/total.test.ts:31`. No hypothesis survives beside it — the confirmed cause accounts for every observation recorded this run.
+
+**Fix attempts.** Zero. The escape valve did not fire; nothing here was reached by elimination.
+
+**Handoff.** Cause confirmed with a failing test written puts this run in `/st-work`, carrying the diagnosis plus `test/cart/total.test.ts:31` as the plan. No structural options need raising — the ordering at `src/cart/events.ts:19` is the whole surface.
+
+**Still carried.**
+1. The spec's regression clause at `docs/specs/cart.md:57` has no test of its own. The failing test covers the cause, not the clause — the clause could regress without that test going red.
+2. Three observation-only counters remain deployed under the capture-later agreement.
+
+**Fact to settle before the step.** The capture window is recorded as closing at the end of Friday. Today is Saturday 2026-09-12, so either that Friday was yesterday and the three counters are already outside their agreed window, or the Friday meant is 2026-09-18 and the capture is still running. That determines whether the strip is overdue right now or still ahead of you; it is not answerable from anything this run recorded.
+
+**Next step:** write the regression test for the clause at `docs/specs/cart.md:57`, alongside the existing case in `test/cart/total.test.ts`.

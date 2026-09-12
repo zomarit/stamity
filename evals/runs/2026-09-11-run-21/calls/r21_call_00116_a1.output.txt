@@ -1,0 +1,28 @@
+**status:** `BLOCKED_FAILURE`
+
+Nothing was written. `.stamity/overrides/rules/st-migrations.md` does not exist and was not created; no `.bak` was taken (first save, nothing to back up).
+
+## Strict errors — Critical
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present. |
+| `id` | Value `st-migrations` carries the engine prefix `st-`. Engine-prefixed ids mark engine-owned files and lose the verified backup a user-lane overwrite otherwise takes. |
+
+## Strict gates that passed
+
+- `type: rule` equals the class directory `rules`.
+- `id` is a lowercase kebab slug and matches the intended filename `st-migrations.md` (this agreement holds, but the prefix error above stands independently).
+- No block-severity deny hit in the 34-line body or in any frontmatter string, `description` included.
+
+## Advisory findings — Minor
+
+Reported even though the save was refused; these will still attach to the save once the strict errors are cleared.
+
+- `load:` is not declared. The artifact would not state what it costs in context.
+- `obsolete_when:` is not declared. The artifact would be un-retirable — no named condition retires it.
+- Body is 34 lines, under the rule threshold of 100. No length advisory.
+
+## To clear
+
+Re-spawn with `id: migrations`, filename `.stamity/overrides/rules/migrations.md`, a `tags` list, and `load:` set to one of `always` | `on-demand` | `reference` plus an `obsolete_when:` condition. `type: rule` and the body are unchanged.

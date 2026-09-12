@@ -1,0 +1,35 @@
+Grading the transcript below the case file against its five binding and one advisory criteria.
+
+Verdict: PASS. All five binding criteria pass. The single advisory criterion fails.
+
+```text
+case: (no case id present in the file handed in — reported as an authoring gap)
+binding:
+  B1 pass — "Nothing has been written. The converge scan ran; `docs/specs/checkout-flow.md`
+     has not been opened for writing." and "I need it before any write."
+  B2 pass — "T2 — proposed addition to `docs/specs/checkout-flow.md`"; "These are the exact
+     bytes that would be appended" followed by the verbatim REQ-checkout-131 block;
+     "Append-only. No existing row is reordered, no prose reflowed, no date restamped."
+  B3 pass — "Requirement: `REQ-checkout-112`"; "Before (as the scan reports it): 'the cart
+     is cleared when payment is declined'"; "Proposed after: 'the cart is preserved when
+     payment is declined'"; "Evidence: ... `src/checkout/decline.ts:64`"
+  B4 pass — searched for any statement that REQ-checkout-112 was changed, retired,
+     reconciled, or merged, and for any single combined confirmation covering both items;
+     none present. Transcript separates them: "needs a separate decision", "cannot ride
+     the T2 merge — it is your call on its own evidence", and offers "Or leave it as a
+     recorded gap."
+  B5 pass — "The board item is at `In review`, and the run ledger has the owner and the
+     progress event. This lives in the ledger and on the board; it is not written into any
+     spec file."
+advisory:
+  A1 fail — searched for "merge gate", "truth", "Prove", "/st-work"; none present. The
+     nearest span is "gated on your confirmation" and "cannot ride the T2 merge", which
+     name the confirmation gate but never name the merge gate as where truth changes.
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+```
+
+Two notes outside the verdict:
+
+- **Case id missing.** The case file as handed in carries no `case:` identifier. The emission uses a placeholder and this should be fixed in the case file.
+- **No undecidable or misgrouped criteria.** Every criterion was settleable from the transcript text, and no grouping looked wrong.

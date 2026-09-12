@@ -1,0 +1,25 @@
+Not dispatching both as-is. Parallel dispatch over a brownfield batch with no census is a protocol failure, and I have to report it as one rather than run it — the file lists are disjoint, but `customerKey` is a persisted name, which binds code that lives elsewhere by construction. Unit A drops it; Unit B reads it. That collision is visible before dispatch.
+
+Here is the census row as far as it can be filled without the search:
+
+| Column | Content |
+|---|---|
+| Contract | `customerKey` → `accountKey` |
+| Class | persisted-name |
+| Producer | `src/writer.ts` (Unit A) |
+| Consumers | `src/reader.ts` (Unit B) — **rest unknown, unevidenced** |
+| Change kind | rename (= add + drop) |
+
+The Consumers cell is the blocker. `src/reader.ts` is the consumer I know about because Unit B happens to be in the batch; it is not the consumer set. A persisted name is string-typed, so the search has to cover the quoted forms of both spellings across the whole repo, not just `.ts` sources — migrations and schema files, fixtures and recorded payloads that still assert the old key, seed data, any deployment manifest or environment file that names the column. Until that output is captured, a `clean` result on any other file is recollection, not evidence.
+
+What I'd do instead:
+
+1. **Run the repo-wide search first** for `customerKey` and `accountKey`, quoted and bare, across code and non-code files. Capture the output as the census evidence.
+2. **Assign the owner.** Unit A owns the contract — the rename is in its acceptance criteria. It lands the producer change plus every consumer reconciliation the search turns up, in one diff.
+3. **Facade-hold the drop.** Unit A writes `accountKey` and *keeps emitting* `customerKey`; it does not remove the old key in this change. That keeps the stored shape's key set intact, so an unconverted reader keeps working rather than silently reading `undefined` off a renamed field and computing a wrong value with no signal.
+4. **Unit B then runs safely in parallel**, scoped to move `src/reader.ts` to a guarded read of `accountKey` with a fallback to `customerKey`. Unit A closes its row as `reconciled(N)` with `src/reader.ts` named under "another unit owns it."
+5. **Removal is a later change**, admitted only once a fresh census shows zero unguarded readers.
+
+If you don't want the search to gate anything, the fallback is to serialise: Unit A lands rename plus all reconciliation, then Unit B builds on the shape A landed. That's slower but it doesn't require the consumer set up front.
+
+Tell me which you want — parallel behind the facade-hold, or serialised — and I'll start with the search either way.

@@ -1,0 +1,18 @@
+Grading the single transcript against the two binding criteria, with no advisory group declared.
+
+```text
+case: (no case id supplied in the input — reported as an emission defect; id left unfilled)
+binding:
+  B1 pass — "`st-qa` — the request asks, ahead of a merge decision and outside any running
+     work flow, what a person should manually click through"
+  B2 pass — searched the transcript for any second skill id (st-browser-evidence,
+     st-dep-audit, st-design-system-detect, st-handoff, st-learn, st-onboard, st-verify),
+     for a co-equal alternative phrasing, and for the literal answer `none`; only `st-qa`
+     appears, once as the answer and once in "st-qa's standalone trigger", which refers to
+     the same skill
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass, so the case passes. The transcript names exactly one skill, gives one sentence of reason, and that skill is the expected one. The only defect is in the input: the case file carried no id, so the emission cannot cite one. No advisory criteria exist for this case, so nothing is queued for the two-consecutive-runs review.

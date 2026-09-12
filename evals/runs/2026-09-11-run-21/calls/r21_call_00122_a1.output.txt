@@ -1,0 +1,13 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted:** Resolve a rendered surface for the design-quality pass over the handed change set — `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` — and, failing that, over the repository as a whole.
+
+**What blocks it:**
+
+- Neither changed path produces rendered output. A SQL migration and a CLI flag have no surface, so neither triggers the components-and-views nor the style-layer row of the roster.
+- The repository holds no component root: no `components/`, `pages/` or `views/` directory, and no `.tsx`, `.jsx`, `.vue` or `.svelte` file.
+- The repository holds no style layer: no `.css` or `.scss` file, and no design-token source to compare against.
+
+Both criteria families are unreachable, not satisfied. Under the trigger clause, a repository with no component root and no markup returns the agent unrun; this run reports no surfaces examined, no criteria applied, and no finding count, including none at zero.
+
+**Smallest unblocking input:** a rendered surface within scope — either a change touching a component or style path, or a pointer to the component root and token source if one exists outside the conventional locations. Absent that, the design-quality pass is not applicable to this change and the brief's request for it should be dropped rather than re-spawned.

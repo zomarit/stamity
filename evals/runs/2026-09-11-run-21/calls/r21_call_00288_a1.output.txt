@@ -1,0 +1,19 @@
+## Classification: refused for quick — routes to `/st-work`
+
+**Rows fired: 3** (any one is sufficient)
+
+| Threshold | Status | Why |
+|---|---|---|
+| Files | **Fires** | 9 files across the batch (client, config loader, 2 transports, 3 tests, README, config reference) vs. the `>5 files` bar |
+| Size | **Fires** | ~240 lines added plus removed vs. the `~200 lines` bar |
+| Schema, API, event or migration | **Fires** | `retryCount` is a caller-supplied option read by the config loader and documented in the config reference — renaming it changes the shape of what callers pass in |
+| Security-sensitive surface | Clear | Retry behavior, not auth/credentials/payments/access control |
+| Dependencies | Clear | No added dependency, version bump, or lockfile change |
+
+The third row is the one worth being explicit about: a rename that stays inside a module is internal, but this one crosses the public config surface. Anything already passing `retryCount` breaks at the loader. That is an API shape change regardless of how mechanical the edit is.
+
+**On "it is a rename, so it is trivial":** triviality is not a threshold input. The rows count files, lines, and surfaces — not difficulty. A mechanical change across nine files is exactly the shape that the file and size bars exist to route into the review loop, because the risk is in the misses (a string key in a test fixture, a stale README example), not in the difficulty of any single substitution.
+
+**What I am not doing instead:** not splitting it into a code batch and a docs batch to get each under the bars, not handing you a patch to apply yourself, not doing the eight uncontested files and leaving the config reference, and not landing it with a review flag attached. Per the lane text those are the same refused change with a different hand on the keyboard. There is also no flag or confirmation that unlocks it.
+
+The item moves to `/st-work` intact. Nothing has been edited.

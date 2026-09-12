@@ -1,0 +1,34 @@
+I'm not handing this off. The structural pass is clean, but the governing text is explicit that a structural pass alone is not handoff approval, and the semantic coverage review finds a direct contradiction.
+
+**The conflict**
+
+- `REQ-CACHE-001` reads: refresh promptly **while continuing to show the previous value** — stale-while-revalidate.
+- `U1`, which cites only `REQ-CACHE-001`, reads: **hide the previous value** until refresh completes — a loading state that blanks the old data.
+- The acceptance criterion asserts only that a fresh value eventually appears. It is satisfied by either behavior, so it does not decide between them, and no user decision on record does either.
+
+These are two incompatible products, not a wording nit. Implementing `U1` as written ships a plan that violates the only requirement it claims to carry. I'm returning the ambiguity rather than picking for you.
+
+**The clarification I need** (one decision, smallest that settles it):
+
+> During a refresh of customer data, does the previously fetched value stay visible until the new value arrives (stale-while-revalidate), or is it hidden/blanked while the refresh is in flight?
+
+Answer that and I rewrite `U1`'s behavior statement and its acceptance criterion in the same pass, then re-run the gate.
+
+Secondary, carried but not blocking on its own: `promptly` in `REQ-CACHE-001` has no threshold, units, or measuring command, so the criterion as written also fails L1 independently of the visibility question. I'd like a bound (e.g. refreshed value rendered within N ms of the stale render) and the command that measures it. I can propose a default once the first question is answered.
+
+---
+
+**Return contract**
+
+- `status: BLOCKED_AMBIGUITY` — semantic coverage review found `REQ-CACHE-001` and `U1` carrying competing meanings; handoff to `/st-work` is blocked.
+- `intent chosen: feature because the plan adds refresh behavior against an ADDED/MODIFIED cache requirement` — unchanged by this run.
+- Artifact path(s): none written by this run. The plan persisted by the prior pass is untouched; unit count unchanged.
+- Structural coverage: **pass** — every ID and dependency resolves, no scoped requirement uncovered. `semanticReview: required` stands unresolved. Structural pass alone is not handoff approval.
+- Plan-lint: `L1 fail` (criterion for `U1` names no verifiable condition distinguishing the two readings, and `promptly` carries no threshold/units/command) · `L2 pass` · `L3 unrun — no edge-case field content available to this run; not claiming a pass I did not measure` · `L4 pass` (`U1` cites `REQ-CACHE-001`, which resolves in `docs/specs/`).
+- L1's fail action is rewrite-in-place, but the rewrite has two valid targets and no basis to choose; that is the ambiguity, not a lint loop to retry. Passes on this check: 1 of 3.
+- `sub_agents_spawned: 0 · task_structure: sequential` — the lint gate is inline by design; no plan-review sub-agent runs at this seam.
+- Open questions carried: 1 blocking — `[NEEDS CLARIFICATION] REQ-CACHE-001 / U1: previous value visible or hidden during refresh?` Plus 1 non-blocking: threshold and measuring command for `promptly`. A non-empty list blocks handoff.
+- Risks: `Critical` — `U1` as written contradicts the sole requirement it cites; blocks handoff until the clarification lands.
+- Learnings written: `none` — this run met no qualifying failure under the learn skill's bar.
+- Follow-ups appended to `.stamity/inbox.md`: none. The visibility question is in scope for this plan, not a deferral, so it stays as an open question rather than being filed away.
+- Next step, user-gated: answer the visibility question above. The carried open question is what chose it — not `/st-work`.

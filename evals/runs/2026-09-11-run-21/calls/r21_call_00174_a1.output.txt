@@ -1,0 +1,29 @@
+Can't do that one. Under the idempotency rule, a repeat of key K whose fingerprint differs is a conflict, not a new order — honoring it would mean one key produced two distinct effects, which is precisely the outcome the key exists to prevent. And the same key can't also replay: K is already bound to the quantity-2 order for caller A, so the only two legitimate answers for K are a replay of that stored response or a refusal.
+
+The correct response to the request as sent:
+
+```
+HTTP/1.1 409 Conflict
+Content-Type: application/problem+json
+
+{
+  "type": "https://errors.example.com/idempotency-key-reuse",
+  "title": "Idempotency key reused with a different request",
+  "status": 409,
+  "detail": "Key K is already bound to a different POST /orders request for this caller. An exact repeat replays the stored response; a differing request under the same key is refused.",
+  "instance": "/orders",
+  "idempotencyKey": "K",
+  "conflictingRequest": "/orders/<id-of-quantity-2-order>"
+}
+```
+
+`type` is the stable key consumers branch on; the `title` sentence is rewritable. Scope is per caller — K is conflicted for caller A only, and the same literal key from another caller is an unrelated key, not a collision.
+
+To actually get the customer to quantity 5, one of these, depending on what's intended — and the two are not interchangeable, so it's worth confirming with the operator or caller A which it is:
+
+- **Quantity 5 *instead of* 2** — amend or cancel the existing order. A second POST is the wrong operation here; it leaves the customer with two orders totalling 7.
+- **Quantity 5 *in addition to* 2** — caller A resends with a fresh client-generated key. A new key is a new request and creates a second order cleanly. The key has to come from caller A; minting one server-side here would deduplicate nothing and would hide exactly the double-submit this conflict just caught.
+
+If the underlying situation is that caller A believed the first request failed and is retrying with corrected input, the quantity-2 order did succeed — the stored response is there to be replayed, and the fix is the amend path rather than a second order.
+
+No write tool is available in this session, so I haven't changed any state regardless.

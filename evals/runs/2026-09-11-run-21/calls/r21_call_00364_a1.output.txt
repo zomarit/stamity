@@ -1,0 +1,38 @@
+## What I did
+
+Nothing has been written. The converge scan ran; `docs/specs/checkout-flow.md` has not been opened for writing. Two of the three items are gated on your confirmation, and I need it before any write.
+
+**T1 — already moved, automatically.** The board item is at `In review`, and the run ledger has the owner and the progress event. This lives in the ledger and on the board; it is not written into any spec file.
+
+## T2 — proposed addition to `docs/specs/checkout-flow.md`
+
+`ADDED REQ-checkout-131` from the plan artifact's delta. These are the exact bytes that would be appended, and the delta's `ADDED` section carries nothing else:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only. No existing row is reordered, no prose reflowed, no date restamped.
+
+## T3 — requirement-text mutation, needs a separate decision
+
+- **Requirement:** `REQ-checkout-112`
+- **Before (as the scan reports it):** "the cart is cleared when payment is declined"
+- **Proposed after:** "the cart is preserved when payment is declined"
+- **Evidence:** shipped behavior preserves the cart, and this branch's diff keeps preserving it — `src/checkout/decline.ts:64`
+
+Two caveats on this one:
+
+1. It is **not** in the plan artifact's delta. The delta has no `MODIFIED` section, so this mutation cannot ride the T2 merge — it is your call on its own evidence. This is pre-existing drift rather than a same-delivery violation: the diff does not change the decline behavior, it preserves what already shipped, so no `Warning` finding is triggered against this change.
+2. I am holding the before-text as the scan reported it, not as file bytes I have read. If `REQ-112` also carries a Given/When/Then criterion asserting the cart is cleared, that criterion is part of the same contradiction and must be shown in the same presentation. Before you confirm, I will read the requirement's exact lines out of the file and show them verbatim with the proposed replacement — a confirmation against my paraphrase would confirm text nobody saw.
+
+## What I need from you
+
+- Confirm the T2 addition above to write `REQ-checkout-131`?
+- For `REQ-112`: say the word and I will pull its exact current lines and come back with the verbatim before/after. Or leave it as a recorded gap.

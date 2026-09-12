@@ -1,0 +1,37 @@
+Grading the pasted Answer block against the six binding and two advisory criteria, citing transcript spans for each verdict.
+
+```text
+case: (no case id supplied in the input; graded as the single st-ask citation-rule case)
+binding:
+  B1 pass — every answering claim carries a path:line from the facts: "(`src/session/store.ts:23`)",
+     "(`src/session/store.ts:57`)", "(`src/server/boot.ts:31`)", and the accumulation bullet cites
+     all three. The headline ("the bullets below answer the first") and the "No answer" bullet were
+     treated as scaffolding and the recorded drop, not as answering claims; see authoring note.
+  B2 pass — "— **high**." on bullets 1–3, "— **medium**, on the unverified assumption" on bullet 4.
+  B3 pass — "Session entries accumulate for the life of the process ... (`src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**" — banded medium, three of
+     three sites cited.
+  B4 pass — one medium claim exists, and its assumption sits in the same sentence: "— **medium**, on
+     the unverified assumption that no code outside `src/session/store.ts` deletes from that map,
+     which was not searched."
+  B5 pass — searched the production-severity section and headline for "likely", "probably", "fine",
+     a rate, a growth figure, a time-to-OOM, or a severity word used as an answer; none present.
+     The section reads "No answer. ... any such figure is deleted rather than estimated."
+  B6 pass — enumerated every path:line in the transcript: store.ts:23, store.ts:57, boot.ts:31.
+     All three appear in the facts; no other locator appears.
+advisory:
+  A1 pass — "a heap measurement under load" and "no observability or load-test evidence exists in
+     the repository for session memory" name the settling evidence.
+  A2 pass — "**How bad is it in production?** — No answer. No test, benchmark, or production
+     measurement of session memory growth exists in the repository" surfaces the drop explicitly.
+verdict: PASS (binding 6/6)
+advisory: all passed
+authoring note: B1 and B2 say "every claim", and A2 expects the dropped half to be surfaced as
+  unanswerable. The surfacing sentence ("No test, benchmark, or production measurement ... exists
+  in the repository") is a factual assertion with no path:line available in the facts and no band.
+  Read literally, B1/B2 and A2 cannot both be satisfied. This run graded the drop record as not an
+  answering claim. The next set version should scope B1/B2 to claims that answer the question, or
+  give the researcher's "not found" note a citable form.
+```
+
+The case passes on all six binding criteria and both advisory criteria pass. One authoring defect is flagged: B1 and B2 collide with A2 unless the unanswerability record is excluded from "every claim", and the next set version should resolve that scoping.

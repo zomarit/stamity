@@ -1,0 +1,3 @@
+`none`
+
+The QA checkpoint's step 2 explicitly covers this: the operator's "what should I check by hand?" is the question this checkpoint already answers, so it stays with the running `/st-work` command — st-qa gets invoked by name as a command step, not selected as a trigger match.

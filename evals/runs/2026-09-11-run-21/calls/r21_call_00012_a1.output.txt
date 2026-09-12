@@ -1,0 +1,11 @@
+Agreed — no user-facing surface here, so browser evidence is marked **not applicable** for this checkpoint. That's the ordinary disposition for a change like this, not an exception.
+
+Remaining checkpoint state:
+
+- **What-to-verify summary** — emitted.
+- **Browser evidence** — N/A (internal helper rename in `src/queue/serialize.ts` plus call sites; renders nothing, ships no template).
+- **Guided QA pass** — still to run.
+
+The one thing I'm not skipping is the qa skill pass. It's the step that produces human sign-off, and it belongs to this command's closing checkpoint regardless of whether browser evidence applies. For a rename it's a short pass: confirm the helper's call sites all resolve to the new name, that no string-keyed or dynamic reference to the old name survives, and that the queue serialization path behaves identically to before.
+
+Invoking the **qa** skill now for the guided pass; once it returns, the proof block closes with the summary, the N/A browser-evidence mark, and the sign-off.

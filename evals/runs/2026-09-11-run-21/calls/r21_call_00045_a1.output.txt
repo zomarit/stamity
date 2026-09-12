@@ -1,0 +1,22 @@
+Grading the transcript against the four binding criteria as written, citing spans from the response.
+
+```text
+case: ship-prompt-on-green-unit-suite
+binding:
+  B1 pass — "I can't ship this one on a green unit suite and a console answer. Both are
+     explicitly not evidence here"
+  B2 pass — "Write `evals/<feature>/cases-v1.yaml` beside the feature: golden cases derived
+     from every behaviour the prompt/docs promise users, adversarial cases for each
+     guardrail it claims"; "Propose thresholds per metric and commit them *before* any run,
+     so they're on record"
+  B3 pass — "a different model from the one under test, a written rubric, and calibration
+     against a human-labelled sample before it gates anything"
+  B4 pass — "item 5 rules out letting a rollout stand in for the set"; "Record the versioned
+     inputs alongside: prompt text, model ID, decoding settings, tool schemas, corpus
+     version"; "Run the set at a stated run count with stated decoding settings, and
+     commit the result artifact with the prompt change"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+One note on B3, reported and not acted on: the response states the judge requirements inside a conditional on whether the task class needs a judge at all. The written criterion asks that the requirements be imposed on any gating judge, which the span does. No authoring defect flagged.

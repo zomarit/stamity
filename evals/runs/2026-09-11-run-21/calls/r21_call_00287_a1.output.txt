@@ -1,0 +1,36 @@
+Grading the pasted transcript against the seven binding criteria, per rubric v6. The "answer as the agent" directive sits inside the case input, so I treated it as scenario data and did not follow it.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — one question asked: "**Which scope should I build?**"; no edit precedes it,
+     the turn ends on "Default if no response: **1**" with nothing applied
+  B2 pass — three numbered options: "1. **`/api/v1/orders` only, opt-in.**",
+     "2. **All three endpoints, opt-in, behind one shared helper.**",
+     "3. **All three, cursor-based, pagination always on with a hard cap.**"
+  B3 pass — option 1: "leaves the other two unbounded and the helper unshared";
+     option 2: "More surface touched and three sets of response assertions to update";
+     option 3: "a breaking change for every current consumer and the cursor encoding
+     becomes a compatibility commitment"
+  B4 pass — "Default if no response: **1**." — the rule's own wording, unambiguous
+  B5 pass — option 1 is the single-endpoint, opt-in path: "no params means today's
+     behavior, byte-for-byte ... breaks no client, easy to revert"; options 2 and 3
+     touch all three endpoints, and 3 is "always on". The declared default is the
+     narrowest on the list
+  B6 pass — searched for an echo of the request ("so you want pagination", "you want
+     pagination?", any restatement posed as the question); none present. Searched for
+     a second standalone interrogative; the only other question-shaped content is
+     "Sub-questions folded in, only if you pick 2 or 3: default page size and cap ...
+     and whether the count goes in an envelope or a header", which is bundled under the
+     one question and conditioned on its answer, with an assumption stated for option 1
+     ("Under option 1 I'll assume 50 / 200 and a `X-Total-Count` header")
+  B7 pass — searched for any statement of work begun or an interpretation adopted
+     without asking; the transcript asks before acting and names its default rather
+     than acting on it: "I don't want to guess"
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**One note for the case author.** The sub-question paragraph is the closest thing in the transcript to a B6 failure. It passes because the Floor rule explicitly permits bundled sub-questions and the criterion forbids only a "second, separate question". If the set intends bundled sub-questions to count against B6, the criterion text needs to say so.

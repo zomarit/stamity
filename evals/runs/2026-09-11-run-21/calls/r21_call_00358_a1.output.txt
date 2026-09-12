@@ -1,0 +1,45 @@
+## Findings
+
+### 1. `SELECT * FROM invoices WHERE id = '${req.params.id}'` — `src/api/invoices.ts`, `GET /invoices/:id`
+
+**Category:** injection
+
+`req.params.id` is interpolated directly into a `db.raw` string. A path segment of `' OR '1'='1` returns every invoice; `'; --` and a UNION tail reach any table the connection's role can read, and on a driver with multi-statement support, write to it. Path parameters cross a trust boundary and arrive as strings regardless of what the route's type signature claims.
+
+Bind the value (`db.raw("SELECT ... WHERE id = ?", [id])` or the query builder's parameterized form), and parse `req.params.id` into its declared shape first — if invoice ids are UUIDs or integers, validate that before the value reaches the query at all.
+
+### 2. Both routes load a record by caller-supplied id and never ask whether the caller may have it — `src/api/invoices.ts`
+
+**Category:** broken access control
+
+`requireSession` establishes *who* the caller is and nothing more. Neither handler compares the loaded invoice against `req.user`. Any authenticated user — any signed-up customer — can read any invoice by iterating ids, and `POST /invoices/:id/void` lets them void any invoice in the system, including other tenants' unpaid ones. The id in the path is an argument, not a grant; passing `requireSession` on the route grants every record the route can reach.
+
+The check belongs after the load and before the action: fetch the invoice, then assert this caller may read or void *that* record (ownership, org membership, role), and deny otherwise. Applies to the void route independently of the SQL fix — parameterizing the query in finding 1 does not address this.
+
+### 3. `invoices.void(invoice)` runs on a lookup that may have returned nothing — `src/api/invoices.ts`, `POST /invoices/:id/void`
+
+**Category:** insecure design
+
+`invoices.byId` has no guard on its result. For an unknown id, `invoice` is `undefined` (or null) and is passed straight into `void`, whose behavior on a missing record is unstated — it may throw after partial work, or match loosely and void something unintended. The route then returns `{ ok: true }` either way, so the caller is told the void succeeded with no evidence it did. Absent record should deny: 404 before any mutation, and the response should reflect what actually happened.
+
+### 4. `allowTestLogin = process.env.NODE_ENV !== "production"` — `src/config/flags.ts`
+
+**Category:** security misconfiguration, authentication failure
+
+This is the inverted form. It turns the test-login path **on** in every environment nobody thought to name: a fresh container with `NODE_ENV` unset, a staging box renamed to `prod`, a deploy script that writes `Production`, a CI runner, a developer's laptop pointed at the live database. One typo in one environment variable is the difference between the flag being off and an authentication bypass being routable in production.
+
+Gate on an allowlist instead — `["development", "test"].includes(env)` — and have startup refuse to boot when `NODE_ENV` holds a value outside the known enum, rather than silently falling into the permissive branch.
+
+### 5. `seedRoutesEnabled = process.env.SEED_ROUTES !== "off"` — `src/config/flags.ts`
+
+**Category:** security misconfiguration
+
+Same inversion, and worse: this one defaults to **enabled** when the variable is absent entirely. Seed and reset routes are on unless someone remembers to set exactly the lowercase string `"off"` — `"OFF"`, `"false"`, `"0"`, `"disabled"`, and unset all leave them live. Seed and reset commands typically truncate and repopulate tables, so an unauthenticated hit is data destruction.
+
+Gate on the same named-environment allowlist as the test-login path, so both capabilities are off by default and can only be switched on by an environment the enum explicitly recognizes.
+
+---
+
+**Note on scope:** Findings 1 and 2 are distinct defects on the same handler. Parameterizing the query closes the injection but leaves any authenticated user able to read every invoice through the route's intended behavior; adding the ownership check without binding the parameter leaves the injection reachable. Both need fixing.
+
+I'd also flag, below the floor items: `GET /invoices/:id` returns `row` — the raw `SELECT *` result — straight to the client. The response crosses a trust boundary too, so every column the table ever grows (internal notes, cost basis, processor tokens, soft-delete flags) ships to the caller the day it's added. Project the record onto a declared response shape rather than serializing whatever the driver handed back.

@@ -1,0 +1,45 @@
+Grading the draft transcript against the case's binding criteria, per rubric v6.
+
+The case passes. Every binding criterion is satisfied by the transcript text, and the case declares no advisory criteria.
+
+```text
+case: (no case id declared in the case file — reported as an authoring gap; verdict emitted without one)
+binding:
+  B1 pass — head block reads "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"; all four required keys present
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" — the three research paths, and the stamp as written carries
+     the head commit and the run-state UTC date (the transcript's later date query does
+     not alter the stamp shown)
+  B4 pass — searched the fenced head block for an `approach` key; absent. Transcript
+     states "`approach` is absent — it is migration-intent only, and this is a feature."
+  B5 pass — "`docs/plans/003-status-json-flag.md`"; under docs/plans/, number 003, a
+     concrete slug rather than a placeholder; "so `003` is the next free number"
+  B6 pass — unit section carries "**id**", "**requirements**", "**files**",
+     "**interfaces**", "**testCriteria**", "**edgeCases**", "**depends_on** — `none`",
+     "**verify** — `npm run test`"; all eight fields present
+  B7 pass — "**requirements** — `REQ-cli-140`"; searched for the literal "spec carries no
+     ids"; absent
+  B8 pass — interfaces carries inline "name `--json`, boolean, default `false`", "takes no
+     value argument", "no short alias", the five-key JSON payload, "`workspace`, `branch`,
+     `lastSync` are strings; `managedFiles` and `driftedFiles` are integers", and "Exit
+     codes: `0` on success, `1` on a drift finding". Searched for "not yet fillable",
+     "not yet resolvable", "see below", and a pointer standing in for these values; none
+     present. The "One gap to close" paragraph concerns TypeScript signatures, which are
+     not among the facts the criterion names, and the transcript states "No placeholder
+     goes into the file."
+  B9 pass — "*Drift present* — `driftedFiles > 0`: the object is still printed in full to
+     stdout and the process exits `1`"; two further edge cases also carry expected
+     behavior
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+Observations outside the verdict:
+
+- **Case id missing.** The case file supplies a Brief and Expected but no id line. Not an undecidable criterion, so it does not affect the verdict, but the emission cannot name the case.
+- **Date note in the Brief.** The Brief pins today as 2026-09-02 while the session clock says 2026-09-12. The transcript stamped the Brief's date and flagged the discrepancy. B3 as written tests for the Brief's date, so this is a pass, but the next set version may want to state which date governs when the two disagree.

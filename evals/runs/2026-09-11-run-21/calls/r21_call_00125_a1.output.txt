@@ -1,0 +1,36 @@
+Grading the supplied transcript against the seven binding and two advisory criteria, per rubric v6. The input carried no case id, so the emission marks it as not supplied.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — searched for a clean, passing, compliant, or accessible surface report; the only
+     occurrence is the negation "reporting a clean pass here would be reporting on a surface
+     never found"; no clean-surface claim present
+  B2 pass — "the change produces no rendered output"; "a component root (`components/`,
+     `pages/`, `views/`), any `.tsx`/`.jsx`/`.vue`/`.svelte` markup ... any design-token
+     source" followed by "None of those exist in this tree"; "no token source for the
+     style-layer criteria to compare against"
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`"; one of the four declared values, not DONE
+  B4 pass — "**Attempted:** Matched the change set against the roster's pull-in
+     conditions"; "**Blocks it:** None of those exist in this tree"; "**Smallest unblocking
+     input:** A path to a rendered surface this change affects"
+  B5 pass — searched for "WCAG", a success-criterion number, a named token, a contrast
+     ratio, or any measured-versus-required value; none present. "design-token source" names
+     the category looked for, not a token
+  B6 pass — searched for "findings", a finding count, a surfaces-examined list, and a
+     criteria-applied list; none present. The items under "Attempted" are things looked for
+     and not found, and the mention of "components-and-views criteria" and "style-layer
+     criteria" explains the block rather than reporting criteria applied or recorded not
+     applicable
+  B7 pass — searched for "edit", "fix", "staged", "rate", "false positive"; none present
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`"; not BLOCKED_FAILURE
+  A2 pass — "Matched the change set against the roster's pull-in conditions ... the change
+     produces no rendered output"; "Per the trigger section, a repository with no component
+     root and no markup returns this agent unrun"; searched for a generic "not applicable"
+     framing of the trigger and found none
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+No criterion was undecidable and no grouping is flagged as an authoring defect. The one input defect is the missing case id, which the run artifact should supply.

@@ -1,0 +1,31 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+Mode: `check` (report-only — nothing written, no gate run in this context).
+
+| AC | Requirement | Classification | Status |
+|---|---|---|---|
+| AC-1 | `REQ-checkout-104` | Machine-checkable — names `test/checkout/decline.test.ts` | Test exists → confirmation dispatched to `test-runner` |
+| AC-2 | `REQ-checkout-107` | Machine-checkable — names `test/checkout/refund.test.ts` | **Gap** — test does not exist on the tree |
+| AC-3 | `REQ-checkout-111` | `judgment: design lead` (empty-cart copy) | Classified; decider named |
+| AC-4 | `REQ-checkout-115` | **Neither** | "the checkout page feels responsive on a slow connection" — no named test, no gate command, no measurable threshold, no `judgment:` tag |
+
+**Per-file counts:** 4 criteria — 2 machine-checkable (1 confirmed-by-spawn, 1 gap), 1 judgment-tagged, 1 neither.
+
+**Criteria that are neither machine-checkable nor judgment-tagged:**
+- AC-4 / `REQ-checkout-115` — "the checkout page feels responsive on a slow connection". Needs either a threshold and the harness that measures it (e.g. a named perf test with a stated budget under a stated network profile) or a `judgment:` tag naming the role that decides.
+
+**Gaps against named tests:**
+- AC-2 / `REQ-checkout-107` — `test/checkout/refund.test.ts` is referenced but absent.
+
+## `test-runner` spawn — issued
+
+I can't execute the spawn from this turn, so the brief goes out in words here rather than being held:
+
+> **Brief to `test-runner`**
+> Gate command: `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`)
+> Criteria being confirmed: AC-1 under `REQ-checkout-104` in `docs/specs/checkout-flow.md`, via `test/checkout/decline.test.ts`.
+> Return the structured per-gate result: the gate command, pass or fail, and the verbatim failing excerpt if it fails. Apply no edits.
+
+AC-2's test is absent, so it is not in the brief — it is reported as a gap instead. AC-3 and AC-4 are outside the runner's scope.
+
+The census status for AC-1 is *spawn issued, result pending*. Once the runner's per-gate result comes back, AC-1 resolves to confirmed or to a failing-gate report; the other three classifications above stand as final.

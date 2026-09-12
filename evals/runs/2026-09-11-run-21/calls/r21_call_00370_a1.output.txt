@@ -1,0 +1,20 @@
+`mode chosen: check` — read-only convergence pass over `docs/specs/checkout.md`; completed, nothing written.
+
+**Status:** `DONE`
+
+**Findings**
+- `Warning` — `docs/specs/checkout.md:88` (`REQ-checkout-131`): no acceptance criterion under the requirement; criterion drafted below, not written.
+- `Minor` — `docs/specs/checkout.md:12`: stale owner line; left alone.
+
+**Manifest delta:** none
+
+**Open markers**
+- `docs/specs/checkout.md:96` — `[NEEDS CLARIFICATION]`: may a partially-shipped order be refunded per line item?
+
+**Not done**
+- The T2 converge addition (the `ADDED` block carrying `REQ-checkout-131`'s drafted criterion) is proposed and unconfirmed.
+- The marker at `docs/specs/checkout.md:96` is open.
+
+**Next step:** Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96` — a marked spec is not handed to `/st-work` — then confirm the pending T2 addition for `REQ-checkout-131`.
+
+Two notes on what this block does not cover. The testability census found no gap: every acceptance criterion in the file is classified, so no criterion drives the next step. And the drafted criterion for `REQ-checkout-131` exists only as an unconfirmed proposal from this run — check is report-only, so nothing reached the file.

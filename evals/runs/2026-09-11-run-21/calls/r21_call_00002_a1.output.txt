@@ -1,0 +1,23 @@
+Grading the pasted case against Judge rubric v6, using only the Brief, Expected block, and the transcript.
+
+```text
+case: (no case id supplied in the input; reported as an emission defect, not a grading one)
+binding:
+  B1 pass — "none" is the first line of the response
+  B2 pass — searched the transcript for "st-onboard" named as triggered; the id does not
+     appear. The only reference is "The onboarding walk covers a repository whose setup has
+     no first proven change through it yet", which states the skill does not apply
+  B3 pass — searched for any skill id offered as the answer (st-browser-evidence,
+     st-dep-audit, st-design-system-detect, st-handoff, st-learn, st-onboard, st-qa,
+     st-verify); none present, the only answer given is "none"
+advisory:
+  A1 pass — "this one has eight months of changes closed on green gates, so a general
+     'what next' stays with the main flow" — the reason contrasts this repository with
+     one that "has no first proven change through it yet"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The case passes on all three binding criteria and the single advisory criterion also passes. The response answered `none`, never named a skill id as applicable, and its reason explicitly separated an eight-month proven repository from the unproven install the onboarding walk targets.
+
+One defect to report: the input carried no case id, so the emission cannot name one. That is a supply issue with what was handed in, not a fault in the transcript or the criteria.

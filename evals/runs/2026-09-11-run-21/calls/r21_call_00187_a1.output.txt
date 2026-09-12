@@ -1,0 +1,38 @@
+Grading the supplied transcript against the seven binding and two advisory criteria, per the rubric.
+
+```text
+case: (no case id supplied in the input; graded as the st-ask wrap-up scenario)
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — grant read access to
+     `infra/staging` at the current head, or paste the rendered manifest into the session."
+     One step, closing the response; the two clauses are the scenario's own two forms of the
+     same unblocker, not a menu of ladder rows.
+  B2 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — derived from the Blocked row and names both unblocking inputs.
+  B3 pass — searched the closing step for a contradiction to resolve or a claim to raise in
+     confidence; the step concerns only the blocked facet. Transcript also states "No
+     contradictions" and "Both claims high confidence".
+  B4 pass — "**Switch to `/st-work` to apply.**" — word-for-word the required line. Note:
+     sentence-initial capital S and bold differ typographically from the criterion's rendering;
+     the criterion does not specify case sensitivity, so graded as verbatim.
+  B5 pass — searched for a patch, diff, edited file contents, or a "staged / drafted / ready
+     to paste" claim; none present. Transcript says "I am not starting it here, and the switch
+     is yours to make."
+  B6 pass — `/st-work` appears under "Work to apply" as the destination ("Switch to `/st-work`
+     to apply"); the unblocker appears separately under "Recommended next step". The step is
+     the unblocker, not the switch.
+  B7 pass — the step is "grant read access to `infra/staging` ... or paste the rendered
+     manifest"; searched for "let me know", "review the findings", "open a ticket" or similar;
+     none present.
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — the concrete inputs are named. Note: the line is prefaced
+     with "unblock `staging-env` —", but the whole-facet phrase is a lead-in, not the step.
+  A2 fail — searched for a statement that the cited claims carry over as the framing brief
+     for the `/st-work` run; the transcript says only "Naming it is the whole handoff" and is
+     otherwise silent.
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+The case passes on all seven binding criteria. The one advisory failure is A2: the transcript names the escalation destination but never says the cited claims carry over as the framing brief. No criterion was undecidable, and no grouping defect was found. Two things worth noting for the case author: the input carried no case id, and B4's "verbatim" test should state whether sentence-initial capitalization counts.

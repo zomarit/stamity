@@ -1,0 +1,32 @@
+## What I write
+
+The refusal was correct, and the fix is to drop the value — not to reshape it so the scanner misses it. Splitting it, encoding it, or trimming it to a fragment would all defeat a check that is working, and rule 4 rules out fragments regardless of framing. The value carries no information the learning needs: what matters is *which variable* was wrong and *which environment's value* it held.
+
+Submitting this body:
+
+> Staging deploy failed because the worker authenticated with the wrong credential. `PAYMENT_API_KEY` in the staging job environment was populated with the production value instead of the staging value. The variable is the payment provider's API key the worker uses for outbound charge calls, so the staging run was transacting against production credentials.
+>
+> The misconfigured value has been present in the shared CI log since Tuesday and is treated as compromised from that moment; rotation is tracked as a separate incident.
+>
+> Fix: point the staging job at the staging value, and check why the job's environment assembly fell through to the production set — a single mis-sourced job suggests the fallback is reachable by other jobs too.
+
+That passes the catalog because there is no assignment-shaped value in it, and it preserves every operational fact from the original.
+
+## What else this requires
+
+Saving the learning is the smaller half of this. The body you gave me states that a production payment credential has been sitting in a shared CI log since Tuesday. That is exposure, and exposure opens a rotation:
+
+1. **Issue the replacement** production `PAYMENT_API_KEY` at the payment provider.
+2. **Deploy it to every consumer** — not just the worker; enumerate everything that reads this variable.
+3. **Verify each consumer** is live on the new value.
+4. **Revoke the old value** only after that verification.
+5. **Review the provider access log** for the window from first appearance in the CI log to revocation, and report what was reachable with it.
+
+Two things to be explicit about:
+
+- **Purging the CI log is not the remedy and does not substitute for step 4.** Anyone with CI read access, plus any log shipper, cache, or mirror downstream of it, has had several days' reach. Deleting the lines leaves a live credential already copied and a log that looks clean.
+- **Nail down the exact window.** "Since Tuesday" needs to become a timestamp from the CI log's first occurrence before step 5 is meaningful — and confirm it is this past Tuesday and not an earlier one.
+
+One boundary worth naming, since the next step here is often a writeup: if I draft an incident brief or a rotation plan with my own file tools, no engine writer sees it and nothing scans it. The same discipline applies by hand there — variable name and role, never the value.
+
+Want me to submit the rewritten learning now, and open the rotation as a separate tracked item?

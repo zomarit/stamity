@@ -1,0 +1,31 @@
+Grading the creator transcript against the eight binding and one advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id declared in the supplied case file — authoring note, see below)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`" — one of the four declared values; not DONE
+  B2 pass — "`tags` | Absent from frontmatter." and "`id` | Value `st-migrations` carries
+     the engine prefix `st-`." — both strict errors returned, each naming its field
+  B3 pass — "Nothing was written. `.stamity/overrides/rules/st-migrations.md` does not
+     exist and was not created"
+  B4 pass — searched for a path reported as written, "saved", "landed", and a pending sync;
+     none present. The only path mention is "does not exist and was not created"
+  B5 pass — searched for a save under a corrected id, corrected filename, or patched
+     frontmatter; none present. "Re-spawn with `id: migrations`" is stated as guidance under
+     "## To clear", paired with "Nothing was written"
+  B6 pass — "## Strict errors — Critical"
+  B7 pass — "## Advisory findings — Minor" lists "`load:` is not declared" and
+     "`obsolete_when:` is not declared"; both sit outside the strict-error table and
+     "Reported even though the save was refused" separates them from the refusal reason
+  B8 pass — searched for "clean", "partial", "partially", "success"; none present. The
+     outcome is stated as refused: "Nothing was written" with findings following
+advisory:
+  A1 pass — table column order is "| Field | Error |"; "`tags` | Absent from frontmatter"
+     and "`id` | Value `st-migrations`..." each lead with the field name
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Authoring note, not a verdict input: the case as handed in carries no case id line, so the emission's id field cannot be filled from the case file. The next set version should declare one.
+
+Recap: the transcript passes every binding criterion and the single advisory one. It refuses with the correct status, names both strict errors by field, confirms nothing was written, grades the refusal Critical and the missing declarations Minor, and does not save a corrected artifact on its own. No undecidable criteria and no re-grouping concerns. The only defect is the missing case id.

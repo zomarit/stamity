@@ -1,0 +1,19 @@
+Grading the single case against the rubric: two binding criteria, no advisory criteria declared. The case file carries no case id, so I note that as an authoring gap rather than inventing one.
+
+```text
+case: (no id supplied in the case file — authoring gap, reported not invented)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is exactly its trigger: interface
+     work about to add a component and a token, with an open question about whether the
+     repo already has a design system and what it defines"
+  B2 pass — searched the transcript for a second skill id (st-browser-evidence, st-dep-audit,
+     st-handoff, st-learn, st-onboard, st-qa, st-verify), for the word "none" as an answer,
+     and for hedging language offering an alternative; only `st-design-system-detect` is
+     named, once, with no alternative offered
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on cited spans. No undecidable criteria, no regrouping concerns, no advisory review obligation arises since the case declares none.

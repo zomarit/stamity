@@ -1,0 +1,40 @@
+## Routing — 5 findings
+
+First match in the routing table wins; nothing has been written yet.
+
+| # | Severity | Scope matched | Route |
+|---|---|---|---|
+| F1 | Critical | any | **REVISE** |
+| F2 | Warning | inside diff files, traceable to a recorded acceptance criterion | **REVISE** |
+| F3 | Warning | new file + new dependency | **DEFER** |
+| F4 | Minor | single-line fix inside a diff file | **REVISE** |
+| F5 | Minor | cross-cutting | **DEFER** |
+
+### REVISE — plan units for `/st-work`
+
+**U1 (from F1) — correct discount ordering in the total calculation**
+`src/api/orders.ts:88`. The total is computed before the discount is applied, so the charged amount is wrong. Forward change: move the discount application ahead of the total computation.
+*Acceptance:* an order with a discount charges the post-discount amount; a test in `test/api/orders.test.ts` asserts the charged total for a discounted order.
+
+**U2 (from F2) — return 409 on the conflict path**
+`src/api/orders.ts:141`. The path returns 500 where `REQ-orders-109` records 409. Forward change: return 409 with the conflict body on that path.
+*Acceptance:* the conflict case responds 409, matching `REQ-orders-109`; covered by a test in `test/api/orders.test.ts`.
+
+**U3 (from F4) — fix misspelled local name**
+`src/api/orders.ts:22`. Single-line identifier rewrite.
+*Acceptance:* the identifier is spelled correctly at its declaration and every reference; build and lint pass with no unresolved-name errors.
+
+### DEFER — rows appended to `.stamity/inbox.md`
+
+One dated block for this rework run, appended under **2026-09-12 · rework `feat/orders-idempotency`**:
+
+```
+Warning · src/api/orders.ts:117 · create handler is not idempotent; fix needs new file src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal shared with three other modules; fix needs a cross-module shared constant · source: rework feat/orders-idempotency
+```
+
+Those two are tracked, not dropped: `/st-board` fill triages the inbox, and `/st-work` surfaces overlapping items when its framing phase touches `src/api/orders.ts`.
+
+---
+
+One batched correction if you want any row moved — e.g. *"revise 3"* or *"defer 4"*. Otherwise say go and I'll write the inbox block and hand U1–U3 to `/st-work`. No patching happens here.

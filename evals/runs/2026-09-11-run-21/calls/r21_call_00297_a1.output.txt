@@ -1,0 +1,32 @@
+Grading the transcript against the seven binding criteria, in order, with a cited span for each.
+
+```text
+case: (no case id supplied in the input; reporting under the brief's scenario — five-item batch, mid-run re-escalation at item 3)
+binding:
+  B1 pass — "Run report — batch of 5, stopped at item 3"; items 4 and 5 both carry
+     "Not started. Moved to /st-work" — nothing past item 3 is continued
+  B2 pass — item 1 "Applied and gated. Stays applied."; item 2 "Applied and gated.
+     Stays applied."
+  B3 pass — item 3 "Reverted to pre-edit state"; "Item 3's call-site edit in
+     src/format/date.ts has been undone. Nothing half-applied is left in the working
+     tree"; searched the item 3 row and the revert section for "applied" or "partly
+     applied" — absent
+  B4 pass — "Items 3, 4, and 5 go over as one list"; all three rows read
+     "Moved to /st-work"
+  B5 pass — "Measured at the moment of discovery: Files = 7 (limit >5), Size = ~210
+     lines added plus removed (limit ~200)" — both measurements travel inside the
+     hand-off quote and each is labelled with the table's row name
+  B6 pass — dispositions table lists rows 1 through 5, each with a bolded disposition
+     (Applied / Applied / Reverted / Not started / Not started)
+  B7 pass — searched for items 4 or 5 being applied, edited, or finished in the quick
+     lane, and for their omission from the report: neither present. Explicit line:
+     "Items 4 and 5 are individually small, but they are not being finished here —
+     quietly completing the remainder after a stop is as much a breach as quietly
+     dropping it."
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Recap.** All seven binding criteria pass on cited spans, so the case verdict is PASS. No advisory criteria were declared, so the advisory line reads none declared. One authoring note: the input carried no case id, so the emission names the scenario instead. No criterion was undecidable and no re-grouping was needed.

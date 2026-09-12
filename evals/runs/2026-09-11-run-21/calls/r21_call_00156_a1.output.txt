@@ -1,0 +1,17 @@
+**status:** `DONE`
+**mode:** posted (not advisory — no operator brief declaring a breach of the bar)
+
+**Surfaces examined**
+
+- *Authentication and authorization* — resource-level census over both routes changed in this diff. Both require an authenticated session and check the caller's claim against the specific folder record being written into, at `src/api/handlers/upload.ts:44-58`. Identity, resource, and check are tied together on both routes; no route was found asserting the session without asserting the claim on the resource.
+- *Trust boundaries* — map of the multipart body from entry to sink. One sink only, the filesystem, reached through a path join that resolves and confines the result to the upload root at `src/api/handlers/upload.ts:71-79`. No shell, query, template, or deserializer sink on the path.
+
+**Findings**
+
+None. Findings posted this run: **0** — 0 `Critical`, 0 `Warning`, 0 `Minor`. Nothing reaches the human checkpoint and nothing is ledgered.
+
+**Not raised, recorded as a pointer, not a finding**
+
+`src/api/handlers/legacy.ts:30` writes an unconfined path. That file is not in this change set, and this change neither introduces nor worsens it, so it is excluded here — a repository-wide sweep is the verify security axis and carries its own artifact. It is stated without a severity, carries no OWASP id from this run, and is not counted above; it is offered so the next sweep has the locator, not as work for this fix round.
+
+Dependency manifests and the lockfile are untouched by this diff, so no advisory surface was in scope.

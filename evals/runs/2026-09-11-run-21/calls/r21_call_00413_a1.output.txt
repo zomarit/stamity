@@ -1,0 +1,17 @@
+Grading the transcript against the case's two binding criteria.
+
+```text
+case: (id not supplied in the input; graded as the st-dep-audit routing case)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the
+     installed dependency graph ahead of a release"
+  B2 pass — searched the answer for a second skill id, an "equally applicable" or "either"
+     hedge, and the word `none` as the verdict; only `st-dep-audit` is named, and `none`
+     does not appear
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case passes. The transcript names exactly one skill, `st-dep-audit`, and gives one reason that stays within the answer format. No authoring defects noted, except that the case id was not included in the input and should be attached in the run artifact.

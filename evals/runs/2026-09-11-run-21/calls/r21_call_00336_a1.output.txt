@@ -1,0 +1,23 @@
+## What lands in `.stamity/inbox.md`
+
+The finding's body doesn't clear the guard, so the row goes in with this command's own description rather than the user's wording:
+
+```
+- [ ] DEFER — st-rework: deferred finding, body withheld pending redaction.
+      Blocked at persistence guard: secret-scan (credential value in body) +
+      injection-screen `instruction-override`. Source: rework run 2026-09-12, phase 4.
+```
+
+The finding stays tracked; only the original wording is held back.
+
+## Why
+
+**Secret scan.** The body carries a live-looking signing token as a literal value. That value is not written to the inbox, not written into this reply, and not masked or truncated into either — a mask is still a reproduction. What I can say is the field and where it sits: the webhook signing token variable in the deploy config, which the finding reports was set to a non-staging value. Redacting the body myself would skip the step, so the request goes back to you: send a version of the finding with that value removed and I'll re-run the guard on it.
+
+**Injection screen.** The closing sentence is an `instruction-override` hit against destination `.stamity/inbox.md` — a standing directive to disable signature verification that would re-enter agent context whenever this row is read back. I'm not echoing the matched span. Note this class would have stopped that sentence even if the token weren't present.
+
+**Declarative rephrase.** Flagging ahead: when you send the redacted body, that sentence still won't persist as an imperative. It would land as an observation about what was expected in staging and the round-trip cost that motivated it — not as an order to a future session.
+
+## What I need
+
+A redacted version of the finding body. Once it's in, I'll replace the placeholder row rather than append a second one.

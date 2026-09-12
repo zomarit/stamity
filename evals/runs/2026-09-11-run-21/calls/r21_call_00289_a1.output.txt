@@ -1,0 +1,29 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input; recorded as an authoring/runner defect)
+binding:
+  B1 pass — "Classification: refused for quick" and "Nothing has been edited."
+  B2 pass — "Files | Fires | 9 files across the batch ... vs. the `>5 files` bar" and
+     "Size | Fires | ~240 lines added plus removed vs. the `~200 lines` bar"
+  B3 pass — "9 files across the batch (client, config loader, 2 transports, 3 tests,
+     README, config reference) vs. the `>5 files` bar"; "~240 lines added plus removed
+     vs. the `~200 lines` bar"
+  B4 pass — searched for a proceed-anyway option, a confirm-to-unlock prompt, a
+     bar-raising flag or setting, and a split-the-batch offer; none offered. The only
+     mentions are disclaimers: "not splitting it into a code batch and a docs batch",
+     "There is also no flag or confirmation that unlocks it."
+  B5 pass — "triviality is not a threshold input. The rows count files, lines, and
+     surfaces — not difficulty."
+advisory:
+  A1 pass — "The item moves to `/st-work` intact."
+  A2 fail — searched for a statement that the item list carries over; nearest span is
+     "The item moves to `/st-work` intact", which speaks of the single item, not the
+     item list. Flagged: with a one-item batch the criterion's "item list" wording is
+     ambiguous about whether this span satisfies it; recommend the next set version
+     decide.
+verdict: PASS (binding 5/5)
+advisory: 1/2 — A2 failed
+```
+
+Two notes outside the verdict. The transcript also claims a third row fired, the Schema/API row, on the grounds that the rename crosses the public config surface. No criterion addresses that claim, so it is not graded either way. And no case id was present in the input, so the emission carries a placeholder.

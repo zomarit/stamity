@@ -1,0 +1,16 @@
+Grading the transcript against the case's binding criteria now.
+
+```text
+case: (no case id supplied in the input; see note below)
+binding:
+  B1 pass — "`st-handoff` — the request is mid-work state being saved for pickup in
+     another session and tool tomorrow"
+  B2 pass — searched the answer for a second skill id, an "or" / "equally" alternative,
+     and the literal `none`; the only skill named is `st-handoff` and `none` is absent
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Note for the run artifact: the case file's id was not included in the material handed to the judge, so the `case:` line cannot be filled from the input. This is an input-packaging defect, not a grading defect, and it does not affect the verdict.

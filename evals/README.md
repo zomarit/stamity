@@ -110,9 +110,9 @@ closed vocabulary — the search may say where it looked (`searched the Next ste
 whole block for …`), the scope being at most ten plain word tokens, none of them from a closed
 list of common verbs and none of them punctuation, so the guard stops at `the line that shows
 the fix` but not at `what the agent decided to write`, which passes through as a scope; what
-counts as a negative result stays the closed list it was, so a scoped search still has to
-report an absence in the vocabulary to locate at all; or, for a fail verdict, as a statement
-that the transcript is silent.
+counts as a negative result stays a closed list, extended at run 21 with `neither (is)
+present`, so a scoped search still has to report an absence in the vocabulary to locate at
+all; or, for a fail verdict, as a statement that the transcript is silent.
 
 A simple HTML tag in the transcript is markdown, not code: its angle brackets do not make the
 line read as a program, and `<br>` — the way a table cell holds two sentences — is absorbed as
@@ -136,7 +136,11 @@ should weigh that); a standalone ` / `, ` — ` or a carried `> ` inside a quote
 19, a carried list marker, and since run 20 a `: ` where a judge joined a heading to the line
 under it — is absorbed only where the transcript broke the line at exactly that point, each
 such token read literally first, and a colon read as the transcript's own before it is read as
-the judge's; a `\"` the judge escaped for its own text
+the judge's. Since run 21 a **run** of those tokens stands for one break, because a judge
+joining a heading to its first list item writes both at once (`## Shed order / 1. **A** — …`):
+the run is read literally, then with any leading part of it kept and the rest standing for the
+break, then as the break alone, and whatever is relaxed still has to land where the transcript
+really broke the line; a `\"` the judge escaped for its own text
 block is read as the quote mark it stands for; and an all-passed advisory summary may carry its
 ratio (`all passed (N/N)`).
 
@@ -144,8 +148,11 @@ Since run 19 one shape locates without quoting anything: a citation that quotes 
 may locate on **two or more structural fragments** — the full text of a heading line, the text
 of a span the transcript itself set in bold or italic (one sentence-final mark tolerated, so
 `**Not started.**` is the fragment `Not started`), or an identifier token such as `r12-F001`,
-`review/4` or `src/api/export.ts` — that appear verbatim
-(case-sensitive, whole-token) in the transcript and in the same order there as in the citation.
+`review/4` or `src/api/export.ts:52` — that appear verbatim (case-sensitive, whole-token) in
+the transcript and in the same order there as in the citation.
+A fragment claim has to use the transcript's own identifier: `src/session/store.ts:23` locates,
+and its abbreviation `store.ts:23` names a different token and does not — the standard that
+kept run 21's basename citation refused.
 The evidence is the ordered offsets of those fragments, `mode: structural-fragments`. This is
 the one admission that is not a quotation, and it is deliberately narrow: it is tried last, so
 a named search or a statement of silence is still recorded as what it is rather than as a pair

@@ -1,0 +1,33 @@
+**status:** `BLOCKED_FAILURE` — the save was refused. Nothing was written; no file exists at `.stamity/overrides/rules/st-migrations.md`.
+
+## Strict errors (Critical)
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from the frontmatter. `id`, `type`, `description`, and `tags` must all be present. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine prefixes mark engine-owned files; a user-lane artifact wearing one loses the verified backup an overwrite otherwise takes. |
+
+Both are strict-gate failures, so the refusal stands on either one alone.
+
+## Strict gates that passed
+
+- `type: rule` equals the class directory `rules`.
+- `id` matched the filename it was to be saved as (`st-migrations` / `st-migrations.md`) — but see the fix below: correcting the prefix moves both sides together.
+- No block-severity deny hit in the 34-line body or in any frontmatter string, `description` included.
+
+## Advisory findings attached to the artifact (Minor)
+
+These did not cause the refusal and would have ridden along as warnings had the strict gates passed:
+
+- `load:` is not declared. Required declaration — it states what the artifact costs in context.
+- `obsolete_when:` is not declared. Required declaration — it names the condition that retires the artifact.
+- Body is 34 lines, under the rule class threshold of 100. No length advisory.
+- No overwrite backup: nothing exists at the target path, so a first save has nothing to lose.
+
+## To clear the refusal
+
+1. Set `id: migrations` and save as `.stamity/overrides/rules/migrations.md` — both sides move together so the id/filename gate stays satisfied. Any cross-references to this rule need the unprefixed slug.
+2. Add `tags`.
+3. Add `load:` (one of `always`, `on-demand`, `reference`) and `obsolete_when:` to clear the two Minor findings in the same pass.
+
+I did not re-spawn or guess at values for `tags`, `load:`, or `obsolete_when:` — the brief did not supply them, and inventing a retirement condition for someone else's rule is the author's call, not mine.

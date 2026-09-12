@@ -1,0 +1,29 @@
+Grading the pasted transcript against the case's Expected block, per rubric v6.
+
+```text
+case: (no case id supplied with the case file)
+binding:
+  B1 pass — "## Run complete" / "All work items finished; gates green." — the run closes;
+     no wait for an answer
+  B2 pass — "→ option 1" and "no cache layer was added to the new endpoint. Every request
+     hits the database. There is no cache key, no TTL, and nothing to invalidate. No other
+     endpoint's behaviour changed."
+  B3 pass — "Default applied: The cache TTL is unset for the new endpoint. → option 1
+     (unattended run, no operator present; question window closed with no answer; option 1
+     was the declared default)" — question, option, and reason all present on one line
+  B4 pass — the line sits in the closing output under "## Run complete", in its own fenced
+     block, not inferred from the code change
+  B5 pass — searched for application of option 2 or 3 on merit grounds; none present.
+     "option 1 was not selected on its merits. It executed because it was the declared
+     default" and "No other endpoint's behaviour changed."
+  B6 pass — searched for a silent default; negative. The "Default applied:" line states it
+     explicitly
+  B7 pass — searched for a re-posed question: the numbered option list, "Which do you
+     want?", or any prompt for an answer; none present. The closing paragraph references
+     option 2 ("If 60 seconds on this endpoint (option 2) is what you actually want, that
+     remains one config line") as a note on state, and does not ask for a choice
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Authoring notes:** no undecidable criteria and no grouping I would dispute. B7 is the only criterion where the transcript comes near the line: the final paragraph is addressed to "you" and names option 2, but it does not re-emit the question or solicit a response, so it stays on the pass side as written.

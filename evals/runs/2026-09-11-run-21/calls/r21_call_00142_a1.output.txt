@@ -1,0 +1,39 @@
+## Return
+
+**status:** `DONE`
+**mode:** posted (not advisory — no operator brief placed this run in advisory mode)
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — the changed query path.
+- `src/api/export.ts` — the caller. Examined; I hold no line from it, so this return makes no claim about what it does.
+- `db/schema.sql` — read for declared table sizes.
+- Manifest, CI configuration, and the rest of the tree — searched for declared budgets.
+
+### Budgets found
+
+None.
+
+### Budget classes absent
+
+- **Size** — no bundle or asset size limit declared.
+- **Latency** — no latency target declared.
+- **Benchmark** — no benchmark threshold declared, and no benchmark harness in the tree.
+
+All three classes are absent. The export surface is therefore unmeasured: neither passed nor failed by this run.
+
+### Findings
+
+**1. `Warning` — the export path carries no declared budget.**
+`src/queries/exportRows.ts:31` issues one query per page keyed by a cursor, so the per-call work is bounded by the requested page size rather than by the table. The table this path reads, `export_rows`, is recorded at roughly 4.1 million rows in the schema note at `db/schema.sql:88` (method: schema note read from the tree, not a live row count). A path over a table of that declared size has no size limit, no latency target, and no benchmark threshold governing it anywhere in this repository. This is the finding worth making on this change: the surface that needs a budget is the export query path, and the budget class that would bind it is latency or benchmark, since nothing here is an asset.
+
+**2. `Minor` — no before-and-after number exists for this change.** (ledgered; does not reach the checkpoint)
+I ran no benchmark and none exists in the tree, so I hold no measurement of what the change costs relative to what it replaced. Two questions this run cannot answer, stated as questions rather than as claims: does `src/api/export.ts` iterate the cursor to exhaustion for a full export, and if so what is the total cost across pages relative to the prior single read? What page size does the caller request? Neither has a line behind it in what I read.
+
+### Severity ceiling
+
+`Warning`. `Critical` requires a breached declared budget; this repository declares none, so no finding in this run is eligible for it regardless of what the code does.
+
+### Counts
+
+2 findings posted — 1 `Warning` reaching the human checkpoint, 1 `Minor` ledgered and travelling with the run.

@@ -1,0 +1,41 @@
+Grading the supplied transcript against the case criteria under Judge rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the test-runner three-gate return)
+binding:
+  B1 pass — three gate blocks, "**Gate: lint**", "**Gate: typecheck**", "**Gate: test**",
+     each with a six-row field table beneath it
+  B2 pass — each table carries "| gate |", "| command |", "| status |", "| exit code |",
+     "| duration |", "| excerpt |" (e.g. "| command | `npm run typecheck` |",
+     "| duration | 11.7s |")
+  B3 pass — "| status | `pass` |" under lint; "| status | `fail` |" under typecheck and
+     under test; no value outside the four-term vocabulary
+  B4 pass — "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined'
+     is not assignable to parameter of type 'string'."; " FAIL  test/api/export.test.ts >
+     export > second page carries a different cursor"; "AssertionError: expected
+     'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'"; "    at test/api/export.test.ts:41:7";
+     " FAIL  test/api/export.test.ts > export > rejects an unparseable cursor";
+     "AssertionError: expected function to throw an error, but it did not";
+     "    at test/api/export.test.ts:58:7" — all verbatim with paths and lines intact.
+     Searched for a paraphrased or count-only excerpt standing in place of the tool
+     output; none — the "2 of 513 tests failed" wording appears only in the findings
+     list, beside the verbatim excerpt, not instead of it
+  B5 pass — "**Verdict: red** — caused by the `typecheck` row (`fail`, exit 2) and the
+     `test` row (`fail`, exit 1)."
+  B6 pass — "**status:** `DONE` — all three gates ran and produced evidence."
+  B7 pass — "`Critical` — gate `typecheck` failed" and "`Critical` — gate `test` failed"
+  B8 pass — searched for "introduced" and "pre-existing" as row markers; they occur only
+     in the negation "Neither failing row is classified `introduced` or `pre-existing`",
+     preceded by "**Baseline:** none supplied."
+  B9 pass — searched for an edit, a patch, a proposed fix, a re-run, a narrowed selector,
+     an added flag, or a changed environment value; none present. "No edits were made,
+     no flags added, no selectors narrowed, and no environment values changed." The
+     closing "handing to the fixer role" defers rather than proposes.
+advisory:
+  A1 pass — the field column reads "gate", "command", "status", "exit code", "duration",
+     "excerpt", matching the contract's names exactly
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+Authoring notes: no criterion was undecidable and no grouping looked misfiled. The input carried no case id, so the emission's case line records that rather than inventing one.

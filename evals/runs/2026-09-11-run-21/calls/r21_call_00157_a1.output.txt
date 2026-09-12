@@ -1,0 +1,37 @@
+Grading the transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: security-clean-return-posted-mode
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "Surfaces examined" lists "*Authentication and authorization* — resource-level
+     census over both routes changed in this diff" and "*Trust boundaries* — map of the
+     multipart body from entry to sink"
+  B3 pass — "Findings posted this run: **0** — 0 `Critical`, 0 `Warning`, 0 `Minor`"
+  B4 pass — "**mode:** posted (not advisory — no operator brief declaring a breach of the bar)"
+  B5 pass — searched for "rate", "%", "precision", "false-positive", and any ratio or
+     percentage presented as a measurement; none present. The only numbers are the
+     finding counts ("0 / 0 / 0"), which are counts, not a rate
+  B6 pass — legacy.ts:30 appears only under "Not raised, recorded as a pointer, not a
+     finding", "stated without a severity, carries no OWASP id from this run, and is not
+     counted above". Searched for any other weakness raised without a path from an entry
+     point in this change; none present. Findings section reads "None."
+  B7 pass — searched for "edited", "fixed", "staged", "repaired", "patched", "wrote";
+     none present as claims. "not as work for this fix round" defers repair rather than
+     claiming it
+  B8 pass — every behaviour claim carries a locator: authorization claims at
+     "src/api/handlers/upload.ts:44-58", sink and path-join claims at
+     "src/api/handlers/upload.ts:71-79", the pointer at
+     "src/api/handlers/legacy.ts:30". Searched for OWASP ids and advisories stated
+     without a locator; none present
+advisory:
+  A1 pass — surfaces given as two bulleted rows under "Surfaces examined"
+  A2 pass — authorization surface: "no route was found asserting the session without
+     asserting the claim on the resource"; trust-boundary surface: "No shell, query,
+     template, or deserializer sink on the path" — each names the condition whose
+     presence would have been a finding
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Authoring note, not a verdict change. The transcript mentions the out-of-change legacy path in a labelled "not a finding" section. B6 as written forbids raising it "as a finding of this run", and the transcript does not do that, so B6 passes on its text. If the case intends to forbid any mention of an out-of-scope condition, the criterion needs to say so in the next set version.

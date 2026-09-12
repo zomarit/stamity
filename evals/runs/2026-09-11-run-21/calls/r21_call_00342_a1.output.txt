@@ -1,0 +1,36 @@
+## Routing — 5 findings, 3 REVISE / 2 DEFER
+
+| # | Severity | Matched row | Route |
+|---|---|---|---|
+| F1 | Critical | Critical · any | REVISE |
+| F2 | Warning | inside diff files, traceable to a recorded acceptance criterion | REVISE |
+| F3 | Warning | new file, new dependency | DEFER |
+| F4 | Minor | single-line fix inside a diff file | REVISE |
+| F5 | Minor | cross-cutting | DEFER |
+
+### REVISE — becomes a plan unit in phase 6
+
+**F1 · `src/api/orders.ts:88` — discount applied after total**
+Forward change: compute the order total from the post-discount line amounts so the charged figure matches the quoted figure.
+Acceptance criterion: an order with a discount charges the discounted total; a test in `test/api/orders.test.ts` asserts the charged amount equals quote minus discount.
+
+**F2 · `src/api/orders.ts:141` — conflict path returns 500**
+Forward change: return 409 on the duplicate-key conflict path instead of falling through to the 500 handler.
+Acceptance criterion: `REQ-orders-109` — a repeat submission of an existing order key responds 409, covered by a test in `test/api/orders.test.ts`.
+
+**F4 · `src/api/orders.ts:22` — misspelled local name**
+Forward change: rewrite the identifier on line 22, single line, no call-site changes outside the diff.
+Acceptance criterion: the corrected name is the only occurrence; build and existing tests pass unchanged.
+
+### DEFER — becomes an inbox row
+
+```
+Warning · src/api/orders.ts:117 · idempotent create handler needs new file src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal shared with three other modules; needs an extracted shared constant · source: rework feat/orders-idempotency
+```
+
+Those two rows land as **one dated block (2026-09-12) appended to `.stamity/inbox.md`** for this rework run — nothing else in that file is touched. `/st-board` fill triages the block, and `/st-work` surfaces these when its framing phase touches `src/api/orders.ts`.
+
+F3 is a deferral of the *approach*, not a rejection of the goal: the 409 fix in F2 lands now, the full idempotency key store stays queued.
+
+Nothing is written yet. One batched correction if you want any of these moved (*"revise 3, defer 1"* form) — otherwise say go and I'll write the inbox block and hand the three plan units to `/st-work` for execution. This command plans; it does not patch.

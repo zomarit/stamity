@@ -566,6 +566,7 @@ describe("rubric citation spans and complete output shape", () => {
   it.each([
     ['searched the response for "st-learn" and for any claim that a learning capture is triggered; neither appears'],
     ['searched the response for "st-learn" and for a capture claim; neither is present'],
+    ['searched for a confirmation request and for a second source; neither present'],
     ['searched the response for "st-learn"; nothing appears'],
   ])("accepts a plain two-term absence result: %s", citation => {
     expect(locateCitation(citation, "The answer cites two files and stops.\n", "pass"))
@@ -590,6 +591,35 @@ describe("rubric citation spans and complete output shape", () => {
       "| 2 | \"Record why we chose a cron trigger\" | architect | ADR under `docs/adr/` | recorded |\n"],
   ])("locates the same span as soon as the marks are there at all: %s", (_name, citation, transcript) => {
     expect(locateCitation(citation, transcript, "pass")).not.toBeNull();
+  });
+  it.each([
+    ['"## Shed order / 1. **A** — first item. / 2. **E** — second item."',
+      "## Shed order\n\n1. **A** — first item.\n2. **E** — second item.\n"],
+    ['"Shed order / 1. A — first item. / 2. E — second item."',
+      "## Shed order\n\n1. **A** — first item.\n2. **E** — second item.\n"],
+    ['"Shed order — - first item."', "## Shed order\n\n- first item.\n"],
+  ])("reads a run of join tokens as the one line break it stands for: %s", (citation, transcript) => {
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence.presentationChanges).toContain("citation-line-join");
+    expect(transcript.slice(evidence.start, evidence.end)).toBe(transcript.slice(transcript.indexOf("Shed order")).trimEnd());
+  });
+  it.each([
+    ["the same tokens sitting mid-line, where the transcript never broke",
+      '"order / 1. summary"', "order, 1. summary on one line.\n"],
+    ["a run of tokens across a break that changes a word",
+      '"## Shed order / 1. **A** — second item."', "## Shed order\n\n1. **A** — first item.\n"],
+    ["a run of tokens where the transcript has no line break at that point",
+      '"first item. / 2. second item."', "1. first item. 2. second item.\n"],
+  ])("still refuses a join run the transcript does not carry: %s", (_name, citation, transcript) => {
+    expect(locateCitation(citation, transcript, "pass")).toBeNull();
+  });
+  it("keeps a fragment claim on the transcript's own identifiers, not on shortened ones", () => {
+    const transcript = "- Sessions are held in module scope (`src/session/store.ts:23`) — high.\n- No eviction call exists (`src/session/store.ts:57`) — high.\n- One instance per process (`src/server/boot.ts:31`) — high.\n";
+    // Written with the paths the transcript uses, the claim is checkable and locates.
+    expect(locateCitation("every locator: src/session/store.ts:23, src/session/store.ts:57, src/server/boot.ts:31; all three appear in the facts", transcript, "pass"))
+      .toMatchObject({ mode: "structural-fragments" });
+    // Abbreviated to basenames it is a different token, and a partial identifier is not one.
+    expect(locateCitation("every locator: store.ts:23, store.ts:57, boot.ts:31; all three appear in the facts", transcript, "pass")).toBeNull();
   });
   it("accepts a negative search whose result is a no-noun phrase or a not-followed-by", () => {
     const transcript = "First line.\nSecond line.\n";

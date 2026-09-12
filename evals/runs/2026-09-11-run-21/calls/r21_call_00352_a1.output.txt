@@ -1,0 +1,25 @@
+## What I submit
+
+The rewrite drops the value and names the variable and its role instead — that is the only change needed to clear the catalog pattern. New body:
+
+> Staging deploy failed because the worker authenticated with the wrong credential. `PAYMENT_API_KEY` — the payment provider's API authentication credential — resolved in the staging job environment to the production value rather than the staging one, so staging jobs were calling the provider as production. Fix the environment binding in the staging job definition; do not treat this as a worker bug.
+>
+> The production value of `PAYMENT_API_KEY` has also been present in the shared CI log since Tuesday. That is an exposure, tracked under a separate rotation (see below) — it is not closed by editing this learning or the log.
+
+That goes through, and nothing is lost from it: the deploy diagnosis, the misbinding, and the exposure fact all survive. The value was never the content — it was the variable and its role, and those are stated.
+
+## What the rewrite does not do
+
+It does not make the exposure go away, and I want to be direct that the refusal is not what made this urgent. A production payment credential has been readable in a shared CI log since Tuesday. From that moment it is compromised. Everyone with CI log access has had it for days, and log shipping, retention copies, and anyone's scrollback already hold it — scrubbing the log line leaves a live credential in the hands of everyone who already read it and a CI history that looks clean.
+
+So this situation requires a rotation, in this order:
+
+1. Issue a replacement `PAYMENT_API_KEY` with the provider.
+2. Deploy it to every consumer — staging and production job environments, any secret store, any service reading it independently. Enumerate consumers first; a missed one breaks at step 4.
+3. Verify each consumer is live on the new value.
+4. Only then revoke the old value.
+5. Review the provider's access log for Tuesday through revocation and report what was reachable and whether anything was actually used from outside expected callers.
+
+Step 4 is irreversible and will hard-fail any consumer missed at step 2, so I won't trigger a revoke until step 3 comes back clean and whoever owns the payment credential signs off. Tell me who that is and I'll start the consumer enumeration for step 2 now.
+
+Two further notes. The original text with the value is still in my context and still in that CI log; I'm not going to copy it into a brief, an incident note, or a plan file to preserve it "for reference" — those are written with my own tools, pass no scanner, and would just republish it somewhere new. And the misbinding itself is worth a second look independent of the exposure: staging holding a production payment credential at all is the condition that made a log line into an incident.

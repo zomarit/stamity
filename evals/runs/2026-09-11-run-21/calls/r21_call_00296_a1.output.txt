@@ -1,0 +1,25 @@
+## Run report — batch of 5, stopped at item 3
+
+**Stop reason:** `Files` — 7 files (threshold `>5 files`), and `Size` — ~210 lines added plus removed (threshold `~200 lines`). Both rows fired on item 3 when the re-export surface became visible mid-edit.
+
+### Dispositions
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied** and gated. Stays applied. |
+| 2 | `src/config/defaults.ts` — timeout default 30s → 60s | **Applied** and gated. Stays applied. |
+| 3 | `src/format/date.ts` — swap deprecated formatter call | **Reverted** to pre-edit state. Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |
+| 5 | `README.md` — update two examples | **Not started.** Moved to `/st-work`. |
+
+### Detail on the revert
+
+Item 3's call-site edit in `src/format/date.ts` has been undone. Nothing half-applied is left in the working tree: the formatter swap is either everywhere or nowhere, and it is nowhere.
+
+### Handoff to `/st-work`
+
+Items 3, 4, and 5 go over as one list, carrying this reason:
+
+> Deprecated formatter swap fans out through six re-exporting modules. Measured at the moment of discovery: `Files` = 7 (limit `>5`), `Size` = ~210 lines added plus removed (limit `~200`). Item 3 is the crossing item; items 4 and 5 were never started and travel with it because they share the same formatter surface and the same swap.
+
+Items 4 and 5 are individually small, but they are not being finished here — quietly completing the remainder after a stop is as much a breach as quietly dropping it. They are the follow-on work's to schedule.

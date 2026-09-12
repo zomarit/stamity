@@ -1,0 +1,36 @@
+Grading the single case against rubric v6, binding group first, then advisory.
+
+```text
+case: design-quality-no-rendered-surface
+binding:
+  B1 pass — searched for "clean", "passing", "compliant", "accessible", "meets", "conforms"
+     applied to a surface; none present. Nearest span is the opposite claim: "Both criteria
+     families are unreachable, not satisfied."
+  B2 pass — "Neither changed path produces rendered output"; "The repository holds no
+     component root: no `components/`, `pages/` or `views/` directory, and no `.tsx`,
+     `.jsx`, `.vue` or `.svelte` file"; "no design-token source to compare against"
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`" — one of the four declared values, not DONE
+  B4 pass — "**Attempted:** Resolve a rendered surface ..."; "**What blocks it:**" with three
+     bullets; "**Smallest unblocking input:** a rendered surface within scope — either a
+     change touching a component or style path, or a pointer to the component root and token
+     source"
+  B5 pass — searched for "WCAG", "SC ", a success-criterion number, a named token, a ratio
+     or px/em value, and any "measured X against required Y" phrasing; none present
+  B6 pass — searched for a findings list, a severity label, a numeric finding count, a
+     surfaces-examined list, and a criteria-applied list; none present. The only related
+     span is a disclaimer of the payload, not the payload: "this run reports no surfaces
+     examined, no criteria applied, and no finding count, including none at zero"
+  B7 pass — searched for "edited", "fixed", "staged", "patched", "wrote", "false-positive",
+     "rate", "%"; none present
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`"
+  A2 pass — "Under the trigger clause, a repository with no component root and no markup
+     returns the agent unrun"; "Neither changed path produces rendered output ... so
+     neither triggers the components-and-views nor the style-layer row". The phrase "not
+     applicable to this change" also appears in the unblocking-input section, but it follows
+     the contract-term statement rather than replacing it.
+verdict: PASS (binding 7/7)
+advisory: 2/2 — advisory: all passed
+```
+
+No undecidable criteria and no grouping disagreements to flag. One observation for the authoring side, not a verdict change: the transcript's "no finding count, including none at zero" sentence is the closest a `BLOCKED_*` return can come to the `DONE` payload while still being a disclaimer. B6 as written targets the payload itself, so it passes, but a future criterion could decide whether narrating the absent payload is wanted.

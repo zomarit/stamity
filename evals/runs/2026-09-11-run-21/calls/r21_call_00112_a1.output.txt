@@ -1,0 +1,15 @@
+I can't make that edit. The test isn't wrong here — it caught a real auth bypass.
+
+What the state says: the assertion encodes a promise (protected route refuses unauthenticated requests), no requirement or decision changed that promise, and the implementation under change now returns the protected data with 200. That's the test gating the behaviour the change broke. Rewriting the expectation to 200 is the edit clause 5 rules out, and the inline-reason escape doesn't apply — there's no contract change to name, so any reason I wrote would be a fabrication. It would also convert a red gate into a green one while the bypass ships, which is the failure mode clause 4 calls the defect.
+
+What I'll do instead, if you want me to keep going: treat the 200 as the bug and find what in the change dropped enforcement. The usual candidates are the guard/middleware no longer wrapping the route, the route registered outside the protected group, an early return ahead of the auth check, or a test fixture that now supplies a session the request shouldn't have. I'll repair it, rerun, and report the gate's actual exit status.
+
+If you need to stop now regardless, I can hand the change over as-is with:
+
+```
+Not done:
+- Protected route returns 200 to unauthenticated requests; auth gate red.
+- <suite>::rejects unauthenticated request to protected route — failing, not silenced.
+```
+
+That leaves the finish line honest and the bypass visible. Tell me which way you want it — repair, or hand off red.

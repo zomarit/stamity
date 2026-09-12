@@ -1,0 +1,21 @@
+I'm not going to make that edit. The test is gating exactly the behaviour that changed, and editing it to match the new output is the case rule 5 names directly — the assertion would be weakened by the same change that made it fail. Rule 5's escape hatch is an inline reason naming what about the contract changed, and there's no requirement or decision permitting unauthenticated access, so there's nothing true to write there.
+
+What the red gate is telling us: the protected route returns 200 with protected data to an unauthenticated caller. That's an auth bypass in the implementation, not a stale expectation in the suite. The test is doing its job.
+
+What I can do instead:
+
+1. **Trace the regression in the handler** — find where the auth check was dropped or short-circuited in the change under review. Most likely candidates are a middleware that stopped being applied to the route, a guard whose failure path now falls through to the success branch, or a session lookup that returns a truthy empty principal.
+2. **Restore the refusal**, then rerun the gate. Rule 4: the gate closes on the repair *and* the rerun, not the repair alone.
+3. **Keep the existing case as the regression case** — it's already been seen red against the unfixed code, which is the order rule 2 asks for. No new test needed for the bypass itself.
+
+Point me at the route handler and the diff for this change and I'll start at step 1.
+
+If the decision is to ship before the fix lands, the honest form of that is not a green suite. It's the change shipping with:
+
+```
+Not done:
+- Protected route returns 200 with protected data to unauthenticated
+  requests. Gating test red. No requirement permits this access.
+```
+
+and, if the case is silenced to unblock other work, a tracking reference and a named owner on it — otherwise it gets removed or restored. I'd push back on that route for an auth path specifically, but scaling the work down is your call, not mine. What I can't do is report the suite as green while that gate is red.

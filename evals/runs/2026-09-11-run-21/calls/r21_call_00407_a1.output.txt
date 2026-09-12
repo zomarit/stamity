@@ -1,0 +1,17 @@
+Grading this case against the rubric: two binding criteria, no advisory criteria, transcript is the single-line answer at the end.
+
+```text
+case: (id not supplied in input — routing, checkout page screenshots + accessibility scan)
+binding:
+  B1 pass — "`st-browser-evidence` — the request asks explicitly for a real-browser run of
+     the built app"
+  B2 pass — searched the transcript for a second skill id, an "or", an "equally", a
+     "could also", and the word "none"; only `st-browser-evidence` is named, and no
+     alternative or `none` appears
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the cited spans. The transcript names exactly one skill, it is the expected one, and the reason it gives quotes the skill's own trigger conditions without offering a sibling. No authoring defects observed: both criteria were decidable from the response text alone. The only gap in the input is that no case id was supplied, so the block carries a descriptive placeholder rather than an invented id.

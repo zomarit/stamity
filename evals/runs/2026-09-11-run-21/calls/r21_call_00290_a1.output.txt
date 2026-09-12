@@ -1,0 +1,23 @@
+## Classification: quick lane refused — routes to `/st-work`
+
+Two thresholds fire outright, and a third almost certainly does:
+
+| Threshold | Status | Why |
+|---|---|---|
+| Files | **Fires** | 9 files across the batch, limit is `>5` |
+| Size | **Fires** | ~240 lines added plus removed, limit is `~200` |
+| Schema, API, event or migration | **Fires** | `retryCount` is a public option name — it appears in the config loader, the README and the config reference, so the rename changes the caller-facing API shape |
+| Security-sensitive surface | Clear | No auth, credential, key, payment or access-control surface |
+| Dependencies | Clear | No added dependency, bump or lockfile change |
+
+Any single row firing ends quick for the item, so this is over the bar three times.
+
+"It is a rename, so it is trivial" is not a distinction the thresholds draw. They count surface touched and lines changed, not conceptual difficulty — and a rename of a public option is exactly the class of mechanically-simple change that breaks callers silently when it skips review. This is a hard refusal: no proceed-anyway, no confirmation that unlocks it, no flag that raises the bar.
+
+It also can't be routed around. I won't split it into per-file or code-then-docs passes that each land under 5 files and 200 lines, won't hand you the edits to paste or attach them as a diff, and won't apply them and flag for review afterwards. Those are the same refused change with a different hand on the keyboard — the nine files still get edited and it still skips the review loop the thresholds fired to route it into.
+
+The item moves to `/st-work` intact. Worth carrying over when you open it there:
+
+- Whether `retryCount` stays accepted as a deprecated alias, or the rename is a clean break with a version note.
+- The two transports may read the option independently of the client — worth confirming there's no third read path the nine-file count missed.
+- The README and config reference examples need to match whichever alias decision you make.

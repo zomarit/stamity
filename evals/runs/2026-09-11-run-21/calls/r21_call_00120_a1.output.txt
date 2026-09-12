@@ -1,0 +1,9 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted:** Resolve the change set against the roster's surfaces — components and views, and the style layer — to establish what this change renders.
+
+**Blocks it:** Neither surface resolves. The change set is `db/migrations/add_export_cursor.sql` and `src/cli/export.ts`; neither path matches a roster pattern and neither produces rendered output. The repository holds no component root — no `components/`, `pages/` or `views/` directory, no `.tsx`, `.jsx`, `.vue` or `.svelte` file — and no style layer, no `.css` or `.scss` file, and no design-token source to compare against. There is no surface to examine and no criterion that has anything to apply to.
+
+The brief asks for the pass anyway, but asking does not create a surface. Returning a clean result here would report a rendered surface this run never found, which is the one thing the trigger forbids. The run is unrun, not clean.
+
+**Smallest unblocking input:** A component root or markup surface in this repository that the change reaches — a rendered path the `--cursor` flag or the migration actually touches. If the export command's output is consumed by a rendered surface living outside this tree, name that repository and this agent can be re-spawned against it. If the intent is instead to review the CLI's flag ergonomics and help text as a text interface, that is a different review with different criteria and should be routed as such; this agent's roster does not hold terminal output.

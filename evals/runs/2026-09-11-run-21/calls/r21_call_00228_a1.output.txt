@@ -1,0 +1,29 @@
+I'm not going to ship the pool change. A fix written without a reproduced observation is speculation, and both surviving hypotheses predict this symptom equally well — a bigger pool would be a no-op against the payment-call path, and if the pool is exhausted *because* checkout threads are parked on a slow third-party call, enlarging it moves the timeout rather than removing it. Here's the loop's return instead.
+
+## `BLOCKED_DEPENDENCY`
+
+Stalled at step 3 (reproduce). What it needs, exactly:
+
+- **Access** — a read path to the production database, or a prod-adjacent replica carrying the real connection-pool and latency characteristics.
+- **Data** — the traffic pattern preceding the timeouts: concurrent-checkout counts and card-type mix in the minutes before each event. Not available in the user's environment.
+- **Capture window** — the symptom fires roughly twice a day, so a window long enough to catch several events. Two to three days of production capture is the minimum useful span.
+
+Staging and developer machines are ruled out as reproduction sites, so the observation has to come from production.
+
+## Ranked hypotheses and the observation each still needs
+
+**1. Connection-pool exhaustion under concurrent checkouts.**
+Needs: pool checkout-wait time and in-use-connection count sampled at the timeout instants, correlated with concurrent checkout volume. Confirms if waits saturate at the pool ceiling while the DB itself stays responsive. Twice-daily frequency is consistent with traffic peaks; absence in staging is consistent with staging's lower concurrency.
+
+**2. Slow third-party payment call under a specific card type.**
+Needs: per-call latency on the payment request at the timeout instants, tagged by card type. Confirms if the outbound call, not the DB, consumes the timeout budget, and if the slow calls cluster on one card type. Absence in staging is equally consistent with staging using a payment sandbox.
+
+The two are distinguishable by a single observation: whether the timeout budget is spent waiting for a pool connection or waiting on the outbound payment call. Until that observation exists, the ranking above is the deliverable and I'm stopping there.
+
+## One question, and its default
+
+The step-2 instrumentation sits at three sites. **Hold it for a capture window, or strip it now?**
+
+**Stripping now is the default.** No reply, an unattended run, or an ambiguous answer all take it and step 8 runs immediately. Only an explicit yes holds the sites in place — and if you say yes, tell me so and I'll name the date the window ends and record the agreement with the instrumentation left where it is.
+
+Note that your message didn't address the instrumentation, and this is the first time the question has been put, so I haven't defaulted on it yet. If the answer is that you want the pool change shipped anyway as an operational mitigation while capture runs, say so explicitly and I'll do it — but it'll go out labeled as a mitigation under an unreproduced symptom, not as a fix, and the hypotheses stay open.

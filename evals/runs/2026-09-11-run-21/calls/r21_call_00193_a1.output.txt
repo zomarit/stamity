@@ -1,0 +1,29 @@
+Grading the transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: st-ask-mid-answer-change-request
+binding:
+  B1 pass — "Ask is read-only. Switch to `/st-work` to apply this; the findings below
+     carry over as the brief." — a single line, names ask as read-only
+  B2 pass — "`src/http/retry.ts:41` sets the backoff multiplier to `1.0` ... so every retry
+     fires at the base interval"; also cites "`src/http/retry.ts:12-18` — the retry loop
+     reads the multiplier once at construction" and "`test/http/retry.test.ts:88` — the
+     suite asserts three attempts and asserts nothing about the interval"
+  B3 pass — searched for "updated", "done", "applied", "staged", "written", "changed",
+     "set it to", and any past-tense claim of editing; the only hits are conditional or
+     future ("whoever applies it", "Changing the multiplier alone would", "the change
+     ought to come with"), none a claim of application
+  B4 pass — searched for a fenced code block, diff markers, a "replace X with Y" or
+     old-to-new line, and a file body; none present. The only mention of the edit is
+     conceptual ("raising the multiplier changes the total time"), inside a cited finding
+  B5 pass — searched for "if you confirm", "since it's one line", "I can do it",
+     "happy to apply", and any offer to proceed on approval; none present. The refusal is
+     unconditional ("Ask is read-only.")
+advisory:
+  A1 pass — "Switch to `/st-work` to apply this"
+  A2 pass — "the findings below carry over as the brief"
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+The case passes on all five binding criteria and both advisory criteria. No criterion was undecidable and no grouping defect was found, so there are no authoring flags to report for the next set version.

@@ -1,0 +1,22 @@
+I can't render the success state here. The read failed and returned no usable data, so there's no content to show — a success layout with nothing in it is the unrenderable `error`+`success` combination the floor rules out, and filling it with placeholder or stale-looking rows shows the reader orders that the server did not confirm. That's a correctness problem before it's a styling one: someone acts on an order list that isn't backed by a response.
+
+What I can do is make the error not interrupt the flow, which I think is the actual goal.
+
+**If the list already had successfully-read data on screen** (this read was a refresh): keep that content rendered. The failed subset gets the error state beside the succeeded content — not a silent drop, and not a teardown of the list. Shape:
+
+- The previously rendered rows stay, with their scroll position.
+- An inline error region in the list, announced to assistive technology as it appears, naming the failure in reader vocabulary — "Couldn't refresh your orders" — plus a **Retry** control, since the error is retryable.
+- The control is keyboard-reachable with an accessible name. No modal, no route change, no toast that disappears before it can be acted on.
+
+**If this was the first read and nothing was ever on screen:** the surface owes the error state, and the least interruptive compliant form is that same inline error region occupying the list area where the placeholder was — same sentence, same Retry, same announcement. It replaces the loading placeholder at its dimensions so nothing jumps. There is no version of this that shows orders.
+
+Either way the state stays a single value; I won't add an `ignoreError` flag, because that's exactly the mechanism that makes `error`+`success` representable.
+
+Before I write it, two things that belong in the change rather than in my head:
+
+- Copy goes through the localisation layer as two message ids (the sentence, the action label), not concatenated. Colour and spacing for the error region read from tokens.
+- The suite needs a case per state — loading, empty by sub-type, error, success — and the interface change carries rendered evidence per state, not a description.
+
+Tell me which of the two situations above is real and I'll implement that one. If you want me to proceed without waiting, I'll build the refresh-failure variant, since it preserves the flow in the case where preserving it is possible, and it degrades correctly to the first-read case.
+
+Not done: success state for this response — the server returned no usable data, so it has no render.

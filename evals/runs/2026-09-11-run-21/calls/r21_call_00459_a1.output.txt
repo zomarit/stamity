@@ -1,0 +1,17 @@
+Grading the transcript against the case's two binding criteria.
+
+```text
+case: (id not supplied in input; brief = post-`stamity init` "what now?" routing)
+binding:
+  B1 pass — "`st-onboard` — its trigger is verbatim \"right after `stamity init` finishes\""
+     — the answer names st-onboard
+  B2 pass — searched the transcript for any second skill id (st-browser-evidence, st-dep-audit,
+     st-design-system-detect, st-handoff, st-learn, st-qa, st-verify), for the word "none",
+     and for hedging toward an alternative; only st-onboard appears, in a single sentence
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript passes. It names one skill, st-onboard, and no alternative or `none` answer is present. No authoring defects to report. The case id was not included in the input, so the block carries a descriptive placeholder instead.

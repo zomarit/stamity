@@ -1,0 +1,53 @@
+## status: `DONE`
+
+## Verdict
+
+**`request-changes`** — advisory, not merge-blocking (see qualification gate below).
+
+**Confidence:** high.
+**Basis:** direct reading of the diff hunk. Not a native client artifact, not a structured result file, not a completion marker — no test was executed against the cursor path, so the ordering defect is read from the code as written rather than demonstrated at runtime.
+
+## Applied lenses
+
+| Lens | Applied | Fired |
+|---|---|---|
+| Security | yes | yes — F-r12-001 |
+| Testability | yes | no finding |
+| Reliability | yes | no finding |
+| Maintainability | yes | yes — F-r12-002, F-r12-003 |
+| Product & Spec | yes | no finding |
+| UI | not applicable — no rendered surface in diff | — |
+| UX | not applicable — no rendered surface in diff | — |
+| Scalability | not applicable — no surface in diff | — |
+| Performance | not applicable — no surface in diff | — |
+| Enhancability | not applicable — no surface in diff | — |
+
+## Findings at the human checkpoint
+
+Severity floor applied: `Critical` and `Warning` only.
+
+**F-r12-001 — `Critical` — `src/api/export.ts:52`**
+The caller-supplied cursor is decoded and handed to the query builder before any validation runs, so an attacker-shaped cursor reaches the query. Validation must sit between decode and the builder call, and a cursor that fails validation must be rejected rather than passed through.
+*Evidence basis:* directly read diff hunk at `src/api/export.ts:52` — outside the three evidence classes; no sub-agent transcript, result file, or executed test backs it. Ordering is visible in the hunk itself, hence high confidence in the code shape; exploitability is inferred, not demonstrated.
+
+No `Warning` findings.
+
+## Ledgered `Minor` findings
+
+Travel with run r12; do not reach the checkpoint and do not re-open the loop.
+
+**F-r12-002 — `Minor` — `src/api/export.ts:31`**
+Local named `c`, where every neighbouring call site in this file spells it `cursor`.
+*Evidence basis:* directly read diff hunk at `src/api/export.ts:31` — outside the three evidence classes.
+
+**F-r12-003 — `Minor` — `test/api/export.test.ts:12`**
+Stale comment describes the superseded offset-based paging.
+*Evidence basis:* directly read diff hunk at `test/api/export.test.ts:12` — outside the three evidence classes.
+
+## Qualification gate
+
+**Unqualified.** This repository has no recorded seeded-defect baseline (step 1 fails: no baseline means no gate) and no declared false-positive budget (step 2 fails). Step 3 therefore applies: findings route through human triage and this verdict is **advisory, not merge-blocking**. Were this verdict an `approve`, it would carry no evidence; it is a `request-changes`, so the Critical stands as a triage input on the strength of its locator, not on the strength of a measured gate.
+
+## Re-review scope, if a fix round follows
+
+Delta plus F-r12-001 marked for verification. F-r12-002 and F-r12-003 are dispositioned as ledgered and are not re-raised against unchanged code. From round 2 onward only regressions against these three findings and new `Critical` or `Warning` findings count; new `Minor` findings are suppressed.

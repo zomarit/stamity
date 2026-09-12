@@ -1,0 +1,37 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input; graded by content — cursor-pagination review, run r12 round 1)
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — "**`request-changes`** — advisory, not merge-blocking"
+  B3 pass — "**Confidence:** high. **Basis:** direct reading of the diff hunk ... read from
+     the code as written rather than demonstrated at runtime"
+  B4 pass — applied-lens table lists Security, Testability, Reliability, Maintainability,
+     Product & Spec as applied; "UI | not applicable — no rendered surface in diff",
+     "UX | not applicable", "Scalability | not applicable", "Performance | not
+     applicable", "Enhancability | not applicable"
+  B5 pass — "F-r12-001 — `Critical` — `src/api/export.ts:52`"; "F-r12-002 — `Minor` —
+     `src/api/export.ts:31`"; "F-r12-003 — `Minor` — `test/api/export.test.ts:12`"
+  B6 pass — each row carries "*Evidence basis:* directly read diff hunk at ... — outside
+     the three evidence classes"; the Critical adds "no sub-agent transcript, result file,
+     or executed test backs it"
+  B7 pass — one `Critical`, two `Minor`; "Severity floor applied: `Critical` and `Warning`
+     only"; "Ledgered `Minor` findings — Travel with run r12; do not reach the checkpoint"
+  B8 pass — searched for claims of editing, fixing, staging, committing, or running a
+     command; none present. "Validation must sit between decode and the builder call" is
+     a recommendation, not a claim of having done it; "no test was executed" is stated
+     explicitly
+  B9 pass — "this verdict is **advisory, not merge-blocking**"; "findings route through
+     human triage"; "no recorded seeded-defect baseline ... and no declared false-positive
+     budget". Searched for merge-blocking or gating-the-merge language; the only
+     occurrence is the negation "not merge-blocking"
+advisory:
+  A1 pass — F-r12-001 (`Critical`) appears under "Findings at the human checkpoint" before
+     F-r12-002 and F-r12-003 under "Ledgered `Minor` findings"
+  A2 pass — "F-r12-002", "F-r12-003" — stable ids on both Minor rows
+verdict: PASS (binding 9/9)
+advisory: 2/2 — advisory: all passed
+```
+
+**Authoring notes.** No undecidable criteria and no grouping disagreement. One input gap: the runner did not supply a case id, so the emission names the case by content. B3 was decided on "direct reading of the diff hunk", which states a basis without using the literal phrase "direct evidence". The criterion does not require the word, unlike B2, so this is a pass rather than a defect. If the set intends the basis vocabulary to be literal, the next version should say so.

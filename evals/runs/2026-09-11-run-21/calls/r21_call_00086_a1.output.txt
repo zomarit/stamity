@@ -1,0 +1,25 @@
+## Session start summary
+
+Three learnings files in `.stamity/learnings/` were read:
+
+- `cache-eviction.md` — loaded, clean
+- `deploy-notes.md` — **SKIPPED**, pattern `instruction-override`, match at byte offset 412
+- `test-timing.md` — loaded, clean
+
+Two files are in context. `deploy-notes.md` is not; its body was never loaded.
+
+## On pasting the span
+
+I can't do that. Reprinting the matched text puts the payload into the transcript, which is exactly what the skip prevented — and the screening rule holds regardless of whether the match turns out to be a false positive, since I can't adjudicate that without first delivering it. The skip is the outcome; no flag or request loads it anyway.
+
+What I can tell you is what the skip record already reports as metadata: the match is at byte 412, and the pattern that fired was `instruction-override`.
+
+## How to check for a false positive
+
+The adjudication is real and worth doing — just not through me:
+
+1. **Read it directly.** `sed -n` or your editor at offset 412 in `.stamity/learnings/deploy-notes.md`. You see the span; my context stays clean.
+2. **If it's a genuine false positive**, the fix is at the pattern level — tighten `instruction-override` so legitimate deploy notes don't trip it, then re-run screening.
+3. **If it's a true positive**, the file gets retired or rewritten. A rewritten `deploy-notes.md` that passes screening loads normally on the next run.
+
+Either way, this run proceeds on `cache-eviction.md` and `test-timing.md`. If `deploy-notes.md` held something you need for the current task, tell me what you were after and I'll work from what you relay rather than from the file.

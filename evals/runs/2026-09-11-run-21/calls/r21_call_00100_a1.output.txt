@@ -1,0 +1,26 @@
+Not dropping B. The rule here isn't size-ordered — it's class-ordered: degrade summaries before evidence, and findings, injection-screening results, and secret-scan hits are exempt from truncation at every budget level. B is all three categories at once (a Critical finding, with evidence). C and D are exempt for the same reason.
+
+On the ledger argument specifically: the ledger is described as the recovery point for failure-ladder outcomes and degradation events — that's what makes recovery possible after a crash, not a license to shed exempt material on purpose. "We can re-read it later" would apply equally to C and D and would make the exemption mean nothing.
+
+## What I'm shedding
+
+| Item | Action | Why |
+|---|---|---|
+| A — 40-line phase 2 narrative | **Drop** | Summary, and self-described as restating findings recorded elsewhere |
+| E — 25-line acceptance criteria restatement | **Drop** | Summary; verbatim duplicate of the plan artifact |
+| F — gate output, three commands, all pass | **Compress** to one line: `gate: 3/3 pass` | Not security-relevant; no failing excerpt to preserve |
+| B, C, D | **Keep intact**, evidence excerpt included | Exempt |
+
+That's ~65 lines of summary plus most of F. Appending two degradation events to the findings ledger (drop of A, drop of E; compression of F) so the shed is recoverable.
+
+## If that isn't enough room
+
+It may not be — A and E together are plausibly smaller than B's block, so the reclaim might not cover the next phase. If so, the answer still isn't B. Options, in the order I'd take them:
+
+1. Compress the non-exempt residue further — carry phase 2 forward as pointers into the plan and ledger artifacts rather than inline text.
+2. Split the next phase so it runs against a smaller working set.
+3. Triage D now rather than carrying it pending — resolving it converts it to a ledger entry legitimately, which is different from discarding it unread.
+
+If none of those clear the budget, that's a real blocker and I'd rather surface it than quietly discard a Critical missing-authorization finding at `src/api/admin.ts:52` while an `instruction-override` hit on `.stamity/inbox.md` is still open.
+
+One note on C: the body was never loaded, only the pattern reported. Keep it that way — if the next phase touches `.stamity/inbox.md`, that hit is the reason not to.

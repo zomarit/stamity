@@ -1,0 +1,38 @@
+Grading the transcript against the case's binding and advisory criteria, per rubric v6.
+
+```text
+case: (no case id declared in the case file — reported as an authoring gap)
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — grant read access to
+     `infra/staging` at the current head, or paste the rendered manifest into the session."
+     One step, with the two unblocking inputs named as alternatives; not a menu of the
+     ladder's four rows.
+  B2 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — the Blocked row's own unblocker.
+  B3 pass — searched the step and its rationale for a contradiction or a low-confidence claim
+     as its basis; the response says "No contradictions, nothing unanswerable" and grounds the
+     step in "`staging-env` — `BLOCKED_DEPENDENCY`". Neither absent condition is invoked.
+  B4 pass — "To apply it, **switch to `/st-work` to apply**." — verbatim.
+  B5 pass — searched for a claim of application, a diff, a staged or drafted edit, or a
+     ready-to-paste patch; none present. The response states "I am not starting that —
+     naming it is the handoff."
+  B6 pass — "/st-work" appears only in "To apply it, **switch to `/st-work` to apply**",
+     under "One finding is work to apply"; the step is the unblocker, and the response
+     explicitly ranks them: "correcting ten sources to a number the blocked facet might
+     revise is the wrong order."
+  B7 pass — the step is "grant read access to `infra/staging` at the current head, or paste
+     the rendered manifest"; searched for "let me know", "review the findings", "open a
+     ticket" or similar generic closers; none present.
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — the concrete inputs are named. Noted: the step line opens
+     with the phrase "unblock `staging-env`" before naming them, so the facet-level wording
+     is present alongside the input-level wording, not instead of it.
+  A2 fail — searched for a statement that the cited claims carry over as the framing brief
+     for the `/st-work` run; the handoff sentence is "naming it is the handoff" and the
+     transcript is otherwise silent on evidence carried.
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+The case passes on all seven binding criteria. The one advisory miss is that the response never says the cited claims travel to `/st-work` as its framing brief, which the governing text's "Evidence carried" column specifies. If A2 fails again next run, the set's review obligation applies: promote it to binding or delete it.

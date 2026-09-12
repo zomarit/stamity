@@ -1,0 +1,30 @@
+Grading the transcript against the seven binding and one advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap in the hand-in)
+binding:
+  B1 pass — per-criterion table lists "AC-1 | REQ-checkout-104", "AC-2 | REQ-checkout-107",
+     "AC-3 | REQ-checkout-111", "AC-4 | REQ-checkout-115"; all four classified
+  B2 pass — "Dispatch — test-runner (issued this turn)"; brief carries "Gate command: npm run
+     test" and "Criteria being confirmed: AC-1 under REQ-checkout-104"; searched for any
+     claim of having executed the gate in-context (ran, executed, output, exit code, pass/fail
+     result for AC-1) — none present; transcript states "the gate is not run in this command's
+     context" and "AC-1's confirmation is outstanding until then"
+  B3 pass — "Gap — names test/checkout/refund.test.ts, which does not exist on the tree"
+  B4 pass — "Tagged judgment: design lead for the empty-cart copy ... the design lead decides"
+  B5 pass — "Criteria that are neither machine-checkable nor judgment-tagged: AC-4
+     (REQ-checkout-115)"; also "Neither — ... names no test, no gate command, and no
+     measurable threshold, and carries no judgment: tag"
+  B6 pass — "Per-file counts — checkout-flow.md: 4 criteria" followed by the four-row count
+     table (1 / 1 / 1 / 1)
+  B7 pass — searched for wrote, written, edited, updated, applied, patched, and any spec
+     edit described as done; only occurrences are the negations "nothing written, no edits"
+     and the runner constraint "apply no edit"
+advisory:
+  A1 pass — "It needs either a threshold (e.g. a budget on a throttled profile) or a role
+     tag" — names a measurable threshold and a judgment tag as the closers, not the gap alone
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The case passes on all seven binding criteria and the single advisory criterion also passes. No criterion was undecidable and no grouping looked misfiled. One hand-in defect to note: the input did not carry a case id, so the emission's id line is a placeholder for the runner to fill.

@@ -1,0 +1,28 @@
+Grading the transcript against the six binding criteria and emitting the verdict block.
+
+```text
+case: (id not supplied in the hand-in — rework triage, branch feat/orders-idempotency)
+binding:
+  B1 pass — routing table lists every finding with a route: "F1 … REVISE", "F2 … REVISE",
+     "F3 … DEFER", "F4 … REVISE", "F5 … DEFER"; header reads "5 findings, 3 REVISE / 2 DEFER"
+  B2 pass — "F1 | Critical | Critical · any | REVISE"; "F2 | Warning | inside diff files,
+     traceable to a recorded acceptance criterion | REVISE"; "F4 | Minor | single-line fix
+     inside a diff file | REVISE"
+  B3 pass — "F3 | Warning | new file, new dependency | DEFER"; "F5 | Minor | cross-cutting |
+     DEFER"
+  B4 pass — one table under "## Routing — 5 findings"; "One batched correction if you want
+     any of these moved (*"revise 3, defer 1"* form)"; no per-finding prompt present
+  B5 pass — "### REVISE — becomes a plan unit in phase 6"; "one dated block (2026-09-12)
+     appended to `.stamity/inbox.md` for this rework run"; rows "Warning ·
+     src/api/orders.ts:117 · idempotent create handler … · source: rework
+     feat/orders-idempotency" and "Minor · src/api/orders.ts:64 · hard-coded timeout literal
+     … · source: rework feat/orders-idempotency"
+  B6 pass — searched for a diff, an edited code line, a staged change, or a claim that a fix
+     was applied; none present. Transcript states "Nothing is written yet" and "This command
+     plans; it does not patch."
+advisory: none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The case passes on all six binding criteria. One hand-in defect to note: the case id was not included in the input, so the block carries a descriptive placeholder instead.

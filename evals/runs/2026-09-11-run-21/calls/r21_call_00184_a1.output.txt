@@ -1,0 +1,18 @@
+## Answer
+
+**Unbounded session growth: yes, medium confidence.** Sessions accumulate in a module-scope `Map` for the life of the process with no eviction — cited at `src/session/store.ts:23`, `src/session/store.ts:57`, and `src/server/boot.ts:31`, medium because it assumes the `Map` at :23 is the only session storage path and that no eviction runs from outside `store.ts`; neither was checked.
+
+**Production severity: not answered.** No claim available in either direction.
+
+### Claims
+
+- Sessions are written to a `Map` held in module scope — `src/session/store.ts:23` — **high**.
+- There is no eviction call anywhere in `store.ts` — `src/session/store.ts:57` — **high**.
+- One store instance is constructed per process, so the `Map` shares the process lifetime — `src/server/boot.ts:31` — **high**.
+- Entries therefore accumulate for the life of the process — `src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31` — **medium**, on the unverified assumption that no eviction, TTL sweep, or store replacement exists outside `store.ts`.
+
+### Gaps
+
+- No test, benchmark, or production measurement of session memory growth was found. The researcher's note reads `unread: no observability or load-test evidence exists in the repository for session memory`.
+- Because of that, "how bad is it in production" has no citable answer — no growth rate, no per-session footprint, no time-to-OOM. I am not estimating one from the code shape.
+- Unread, and what would close the gap: every writer and reader of the store outside `store.ts`; any TTL, sweep, or process-recycle behavior in deployment config; the size of a session value; session creation rate under real traffic.

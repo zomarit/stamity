@@ -1,0 +1,21 @@
+**Classification: qualifies for quick.**
+
+- Trivial signal matched: user-facing string correction (also a single-file edit whose behavior change is exactly the one described).
+- Thresholds checked, none fire: 1 file; ~2 lines added+removed; no auth/session/credential/payment/access-control surface; no dependency, version, or lockfile change; no API, schema, event, or migration change.
+
+Because it qualifies, no go-ahead is requested — the request was the go-ahead. The exact edit:
+
+**`src/ui/InboxEmpty.tsx`** — replace the sole occurrence of the empty-state literal:
+
+```diff
+-No messsages yet
++No messages yet
+```
+
+Whitespace, quoting style, and surrounding JSX unchanged; only the three-`s` misspelling is corrected to two.
+
+**Status: not done.** This turn is tool-free, so I could not write to `src/ui/InboxEmpty.tsx` — the edit above is specified but unapplied. I also have not opened the file, so I have not confirmed the literal's line number or that it occurs exactly once; if `No messsages yet` appears more than once in that file, the edit is every occurrence.
+
+**Quality gates: not run.** Gates run on every batch including a one-line typo fix, and running them requires tool access. For this item they would be the repo's lint/typecheck/test pass over the touched file.
+
+To finish it, re-run `/st-quick` on the same item in a turn with tool access and I'll apply the edit and the gates, then report the result.

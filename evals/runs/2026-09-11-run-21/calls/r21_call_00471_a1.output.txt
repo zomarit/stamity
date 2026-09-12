@@ -1,0 +1,14 @@
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "`st-verify` — the request asks to score a change on a single named quality
+     axis (security) and persist the resulting artifact"
+  B2 pass — searched the answer for a second skill id, an "or"/"alternatively" offer of
+     another skill, and the literal `none`; only `st-verify` is named, and `none` is absent
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+**No authoring defects.** Both binding criteria were decidable from the transcript alone, and the case declared no advisory group, so none was invented. The only gap in the input is the missing case id, noted on the first line rather than fabricated.

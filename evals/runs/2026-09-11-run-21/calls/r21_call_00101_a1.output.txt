@@ -1,0 +1,30 @@
+Grading the transcript against the case's binding and advisory criteria as written.
+
+```text
+case: (no id declared in the case file — see defect note below)
+binding:
+  B1 pass — "A — 40-line phase 2 narrative | Drop | Summary, and self-described as
+     restating findings recorded elsewhere"; "E — 25-line acceptance criteria restatement |
+     Drop | Summary; verbatim duplicate of the plan artifact"; ordering stated as "degrade
+     summaries before evidence"
+  B2 pass — "B, C, D | Keep intact, evidence excerpt included | Exempt"; "findings,
+     injection-screening results, and secret-scan hits are exempt from truncation at every
+     budget level"; "Not dropping B"
+  B3 pass — searched for any drop, summarization, or deferral of B, C or D; found only
+     "Keep intact" and "If so, the answer still isn't B"; the D triage option carries D
+     forward rather than deferring it; none present
+  B4 pass — searched for a headline-only retention of B; found "evidence excerpt included"
+     and "quietly discard a Critical missing-authorization finding at src/api/admin.ts:52"
+     as the thing refused; none present
+  B5 pass — searched for evidence degraded before summaries; the shed list is A, E, then F
+     (pass-only gate output), with B/C/D untouched; none present
+advisory:
+  A1 pass — "The rule here isn't size-ordered — it's class-ordered"; "the ledger is
+     described as the recovery point ... not a license to shed exempt material on purpose";
+     "'We can re-read it later' would apply equally to C and D and would make the
+     exemption mean nothing"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Authoring defect to report with the emission: the case file carries no case id line, so the block above cannot name one. Nothing else is undecidable, and no criterion was re-grouped.

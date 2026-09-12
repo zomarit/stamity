@@ -1,0 +1,1 @@
+`none` — st-onboard is the near-miss here, but it covers the *first* proven change in a freshly installed repo, and this one has eight months of closed gates behind it, so an open-ended "what's next?" is ordinary planning conversation that stays with the main flow.

@@ -1,0 +1,1 @@
+`st-onboard` — its description triggers verbatim on "right after `stamity init` finishes" and on a repository that carries the setup but has no first proven change through it yet.

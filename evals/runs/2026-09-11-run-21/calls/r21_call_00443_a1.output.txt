@@ -1,0 +1,19 @@
+Grading the scenario response against the rubric's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the material; graded by content — "what should we work on next" on a long-proven repo)
+binding:
+  B1 pass — the answer opens with "`none`"
+  B2 pass — searched for st-onboard named as triggered or applicable; it appears only as
+     "st-onboard is the near-miss here, but it covers the *first* proven change in a
+     freshly installed repo", i.e. named as rejected, not as triggered
+  B3 pass — searched for any skill id given as the answer; the only id in the response
+     is st-onboard, stated as not applying, and the answer given is "`none`"
+advisory:
+  A1 pass — "it covers the *first* proven change in a freshly installed repo, and this
+     one has eight months of closed gates behind it"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+One authoring note: the case as handed in carries no case id line, so the emission above labels it by content rather than by id.

@@ -1,0 +1,46 @@
+Nothing written yet — here is the preview.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`003` is the next free number after `001-worktree-lane.md` and `002-board-fill-source.md`. The plan slug `status-json-flag` is my call; the unit slug is `json-flag-render` and the two are deliberately not the same word, since one names the artifact and one is a `depends_on` target. Say the word if you want the artifact slug to match the unit.
+
+## Head
+
+```
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is absent — it is migration-intent only and this is `feature`. `depends_on` is absent — this run has no predecessor plan and is not a split. Both are valid absences and the freshness guard reads them as satisfied, not stale.
+
+One conflict to settle before the write: the run state fixes today as `2026-09-02` UTC, but this session's environment reports `2026-09-12`. I stamped the run's date. If the run state is the stale value, the stamp is ten days old on arrival and the guard will not catch it — tell me which date is real.
+
+## Unit `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag declaration:** `--json`, boolean, default `false`, takes no value argument, no short alias.<br>**stdout on success:** exactly one JSON object, keys `workspace` (string), `branch` (string), `managedFiles` (integer), `driftedFiles` (integer), `lastSync` (string). `managedFiles` and `driftedFiles` serialize as JSON numbers with no fractional part.<br>**Exit codes:** `0` on success; `1` on a drift finding.<br>**stderr:** nothing written on success.<br>**Command handler signature and `src/cli.ts` flag registration:** transcribed verbatim from the two files this run already read — see the note below. |
+| `testCriteria` | 1. `stamity status --json` on a clean workspace writes one parseable JSON object to stdout and exits `0`.<br>2. The parsed object has exactly the five keys `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync` — no extras, none missing.<br>3. `workspace`, `branch`, `lastSync` are strings; `managedFiles`, `driftedFiles` are integers.<br>4. On the success path stderr is empty.<br>5. `stamity status --json` with a drift finding exits `1`.<br>6. `--json` is accepted with no value argument; the short alias `-j` is not accepted. |
+| `edgeCases` | **Drift finding with `--json`:** exit code is `1`, and stdout still carries one complete JSON object with all five keys — the non-zero exit does not truncate or suppress the payload.<br>**`--json` omitted:** the existing human-readable status output is byte-identical to its current form; the flag adds a path, it does not alter the default one. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+## The one gap
+
+I will not invent the handler signature in `src/commands/status.ts` or the registration call in `src/cli.ts`. Those paths are in this plan's `reads` and this run has them, so the written artifact carries the real signatures inline — not a pointer, not a placeholder. I am flagging it here only because a preview that quoted signatures I had not actually put in front of you would be worse than one that says which line is still to be filled.
+
+Two points `REQ-cli-140` does not pin, which I would resolve from the source before writing rather than guess at:
+
+- `lastSync` is typed string, but the spec is silent on its value when the workspace has never synced. Empty string, a sentinel, or `null` in violation of the type?
+- The spec says nothing is printed to stderr *on success*; it does not say what goes to stderr on the drift exit.
+
+Tell me to proceed and I will fill the signatures and write `docs/plans/003-status-json-flag.md`.

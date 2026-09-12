@@ -1,0 +1,27 @@
+Grading the transcript against the case's Expected block. Every binding criterion passes and the one advisory criterion also passes.
+
+```text
+case: (no case id supplied in the input; graded as the st-work context-degradation case)
+binding:
+  B1 pass — "## Shed order / 1. **A** — 40-line narrative summary ... Drop entirely. /
+     2. **E** — 25-line restatement of acceptance criteria ... Drop entirely."
+  B2 pass — "exempts security-relevant content — findings, injection-screening results,
+     secret-scan hits — from truncation at *every* budget level, deep included. B ... so
+     it and its excerpt stay, and so do C and D for the same reason"; "## Retained
+     (exempt)" lists B, C and D
+  B3 pass — searched for any drop, summarization, or deferral of B, C or D; found only
+     "B, C, and D aren't available" and the full Retained list; none present
+  B4 pass — searched for the excerpt being separated from the headline; found "it and its
+     excerpt stay" and "with evidence excerpt" under Retained; no split present
+  B5 pass — searched for any evidence item ordered before A or E; the shed order is A, E,
+     then F compressed only "if 1 and 2 are insufficient"; no evidence degraded ahead of
+     summaries
+advisory:
+  A1 pass — "'Largest first' isn't the ordering rule; summaries before evidence is" and
+     "the ledger is the recovery point ... not a license to evict exempt material and
+     re-read it later. The exemption is unconditional"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+One authoring note for the case file. The input carries no `case:` identifier line, so the emission cannot name it as the rubric's emission shape requires. Add an id to the case header so the run artifact can key on it.

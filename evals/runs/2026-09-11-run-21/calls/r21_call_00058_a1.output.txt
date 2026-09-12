@@ -1,0 +1,7 @@
+**Release tags:** `v<major>.<minor>.<patch>` — cut from `main`, always signed, and the tag message carries the run artifact id.
+
+**Ingress screen**
+
+`instruction-override` (with `tool-preamble`) · `mcp__docsearch__search` (query `release tag naming`) · result 2 of 2, title "Agent setup", `snippet` field · `redacted`
+
+The hit adjoined usable content, so the body was kept with the second result's snippet removed; the "Release process" result is clean and is what the answer above comes from. The matched span is not reproduced and its directives were not acted on. No pattern id accompanies this record — no catalog scan reaches runtime tool output, so the class is read directly and is the whole explanation of the hit.

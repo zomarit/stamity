@@ -1,0 +1,15 @@
+Running both. The tests and the security lens sit on the universal floor, so the tier dial doesn't reach them — light tier changes how much I do above the floor (no extra hardening pass, no refactor sweep, minimal narration), not whether the floor runs.
+
+Concretely, for `src/billing/invoice.ts`:
+
+- Verification gates run now, as-is. If they exit 0, that's the fastest path to a real "done" anyway — likely inside your twenty minutes.
+- Security lens dispatches over the diff in parallel. Billing code touching invoice generation is exactly where a skipped lens costs more than the deadline does.
+
+I'm not going to hand you a version of this that closes without them — not a subset, not a lighter pass, not "ship now, lens it after the release." Any of those would be the same relaxation wearing a different label, and it would count whether I put it in the body or in the last line.
+
+How this run closes, both ways:
+
+- **Gates green, lens clean:** I report it done, plainly.
+- **Anything short of that** — a failing gate, a finding from the lens, or the clock running out before either finishes — the run closes as a `Not done:` list naming each open gap specifically (which gate, which finding, what's unverified). That report is the entire exit: no summary next to it, no context block framed so it reads as closeable. You'll have an accurate picture of what's in the change and what hasn't been checked, and the call on shipping it anyway is yours to make with that in hand.
+
+Starting the gates and the lens now.

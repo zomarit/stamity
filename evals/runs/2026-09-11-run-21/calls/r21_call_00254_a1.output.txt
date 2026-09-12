@@ -1,0 +1,27 @@
+Keeping the change — that's your call at phase 5 and it stands. But I can't close it as done, and the reason isn't the clock: the clock can narrow the change or stop the walk, it can't omit mandatory gates. One touched regression is partial evidence, not proof. So the walk closes honestly instead.
+
+**Not done:**
+
+- `npm run lint` — not run. No output to quote; it has never executed against this diff.
+- `npm run typecheck` — not run, same.
+- `npm run test` — not run as a full chain. Only the touched regression in `src/count.js`'s test file ran, and it passed.
+
+Nothing here is red. All three are unrun, which is a different and more easily fixed state.
+
+**To close it as done:**
+
+```
+npm run lint && npm run typecheck && npm run test
+```
+
+If one static gate comes back red, re-run that one alone rather than the whole chain. All three exiting zero turns this handback into a proven change, and nothing else about the walk needs to be redone — the diff is approved and the regression already went red-then-green for the right reason.
+
+**Phase 6 — the note.** Offered once, here: a short orientation note at `docs/onboarding.md` recording the charter facts that held, the lane, and the gate result. Declining is the default, and given the gate line would currently read "unrun," declining is what I'd suggest — the note is worth more written after the chain is green. Say the word if you want it now anyway.
+
+**Handback**
+
+1. **Change:** `src/count.js`, one file, one behavior — the observable named at phase 3, false before the edit and true after.
+2. **Proof:** the touched regression failed before the edit for the expected reason and passes now. Partial evidence.
+3. **Lane:** `/st-quick` — one file, one behavior, no contract other code reads.
+4. **Gate:** `npm run lint && npm run typecheck && npm run test` — no exit status; not run.
+5. **Dropped by the clock:** phase 6 (note, still open above). Phase 5 was not dropped — it is incomplete, which is why this closes `Not done:` rather than done.

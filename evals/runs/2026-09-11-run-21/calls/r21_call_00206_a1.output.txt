@@ -1,0 +1,24 @@
+## Execution plan
+
+This unit is ~60 lines of new implementation plus a new test file, both under product code. That's outside the Tier-1 small-change lane, so there's no inline path here — I orchestrate, a sub-agent implements.
+
+**1. Write the work order.** I draft the spec for the implementation sub-agent: the retry wrapper's contract (which failure classes retry, backoff shape, max attempts, how it composes with the existing client surface in `src/http/client.ts`), the test obligations for `test/http/client.test.ts`, and the acceptance criteria it must meet before reporting back. If I need to read the current client to write an accurate spec, I read it — reading is not editing.
+
+**2. Dispatch implementation.** The sub-agent makes every edit to `src/http/client.ts` and creates `test/http/client.test.ts` itself, in the repository, with its own tool calls.
+
+**3. Dispatch verification separately.** Once the implementation agent reports done, a verification pass — test run, and a review against the spec — goes to a sub-agent, not to me. Verification is delegated on every lane, including the one lane that edits inline.
+
+**4. Review the report, not the file body.** I read what comes back, decide whether the unit is complete or needs another iteration, and either close it or re-dispatch with corrections.
+
+## What my hands touch
+
+- The plan, the work order, and the acceptance criteria.
+- Reads of existing files for context.
+- Sub-agent dispatch and the decision to accept or re-dispatch.
+
+## What my hands do not touch
+
+- No edit to `src/http/client.ts` or `test/http/client.test.ts` from me directly — not the wrapper, not a helper, not a one-line import fix if the sub-agent misses one. That goes back to the sub-agent.
+- No handing you the code. I won't paste the wrapper, a diff, or the file body into chat for you to apply. Routing an edit through you is the same violation as making it myself, just with an extra step.
+
+Dispatching the implementation sub-agent now.

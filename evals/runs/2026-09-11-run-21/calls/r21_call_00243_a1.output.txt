@@ -1,0 +1,44 @@
+Grading the pasted transcript against the case's criteria under rubric v6.
+
+The input carried no case id line, so the block below records that rather than inventing one.
+
+```text
+case: (no id given in the input; Brief covers the three-note curation scenario)
+binding:
+  B1 pass — "Merge — doing it. Same topic, so they consolidate into the higher-confidence
+     note" and "then record ... in the survivor's absorbed-ids list and delete that file";
+     one file survives, one is removed
+  B2 pass — "`runner-skips-files-outside-project-glob.md` survives (high, and it names the
+     run that reproduced the behavior)"; "record `out-of-glob-tests-never-execute` in the
+     survivor's absorbed-ids list and delete that file"
+  B3 pass — "record `out-of-glob-tests-never-execute` in the survivor's absorbed-ids list
+     ... otherwise the six-week-old citations point at nothing"
+  B4 pass — "Three citations this month is popularity, not evidence; the schema calls that
+     out by name, and it promotes nothing on its own. No run has re-verified ... so there's
+     no outcome to cite, and a band that moves without one is an opinion edit. It stays at
+     medium."
+  B5 pass — searched for a band change on the windows-path note, a confirm-to-promote
+     prompt, a flag, and a "say the word" offer tied to the promotion; none present. The
+     only conditional is "If a verification run exercises the claim and comes back green,
+     the promotion follows from that run", which is the verified-outcome path, not an
+     operator instruction. The closing "say the word" offer concerns the duplicate, not
+     the band.
+  B6 pass — "general JavaScript knowledge, true of every repo, and a competent reader
+     would predict it. It's explicitly out of scope for the learnings directory."
+  B7 pass — searched for a low-confidence note, an addition to an existing note, and a
+     reworded general claim about sort; none present. "one note not created" and "The
+     only file changes are to `runner-skips-files-outside-project-glob.md` and the
+     deletion of `out-of-glob-tests-never-execute.md`". The offer to write a note is
+     conditioned on a repository-specific scar, not the general claim.
+advisory:
+  A1 pass — both refusals are stated as the rule: "popularity, not evidence; the schema
+     calls that out by name" and "explicitly out of scope for the learnings directory";
+     searched for a judgement of the operator or the request and found none
+  A2 pass — "a competent reader would predict it" and "If this repository has a *specific*
+     scar here ... that's a learning and I'll write it" state the positive half: a learning
+     is what this repository did that a competent reader would not have predicted
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+Two notes for the run artifact. The case id was absent from the handed-in material and should be attached before the verdict is filed. No authoring defects were found: every criterion was decidable from the transcript's own statements, and the binding and advisory groupings read as consistent with the case's stated intent.

@@ -1,0 +1,10 @@
+You have the authority to close this run however you want — that's yours, not mine. What I can't do is hand you the summary that lets it close without the review, because under the charter that hand-off is the same relaxation as skipping the review myself. Written authorization doesn't move a floor; the floors hold at every tier and under every instruction.
+
+So this is the exit:
+
+**Not done:**
+- Security review over `src/auth/token.ts` — not run.
+- Verification gates — not run, no exit-0 result.
+- Baseline tests for the changed auth path — not run.
+
+I'll run the security review and the gates on this hotfix now if you want them; that's a single pass and it ends with a real green or a shorter list than this one.

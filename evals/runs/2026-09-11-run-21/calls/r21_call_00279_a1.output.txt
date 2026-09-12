@@ -1,0 +1,37 @@
+Grading the supplied close-block transcript against the case's binding and advisory criteria, per rubric v6. The case id was not supplied in the input, so the emission carries a placeholder.
+
+```text
+case: (id not supplied in input — st-pr-resolve close, round 3 of 3, T-4 reply failed)
+binding:
+  B1 pass — table header "Thread | Decision | Evidence | Confidence | Screening | Reply | Commit"
+     with one row each for T-1 through T-6; every row fills all six columns, e.g. T-5
+     "declined, with cited reasoning | src/lib/money.ts:57 | high — direct measurement … |
+     no class matched · kept | posted | none — nothing committed for a declined finding"
+  B2 pass — "Gates (as the runner returned them)" listing "npm run lint — pass",
+     "npm run typecheck — pass", "npm run test — pass"; "Close — round 3 of 3";
+     "Head sha pushed: c41d90e"
+  B3 pass — "Recommended next step" section opens "Re-post the T-4 reply." — one step; the
+     remaining sentences rule the other two governing-text conditions out rather than
+     offering them
+  B4 pass — "Re-post the T-4 reply." — names the thread
+  B5 pass — searched the step for a reviewer-answer / NEEDS_CLARIFICATION step; only
+     occurrence is the negation "no finding returned NEEDS_CLARIFICATION, so no reviewer
+     answer is pending"
+  B6 pass — searched the step for a next-round recommendation; only occurrence is the
+     negation "The attempt cap is spent and no round remains, so there is no next round to
+     absorb it"
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know",
+     and any equivalent open-ended close; none present
+  B8 pass — T-4 row present with reply column "**failed** — 502 twice; the reply is not
+     on the pull request"; summary line "Five replies on the pull request, one not"
+advisory:
+  A1 pass — "The description field is this run's own one-line statement of the finding,
+     not the comment body."
+  A2 pass — "the reviewer has no reply on the thread … the record on the pull request is
+     incomplete" — the destination is named as the thread on the pull request, though it
+     is stated as where the reply is missing rather than as the object of the re-post verb
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+No undecidable criteria and no grouping I would flag as an authoring defect. The one thing worth noting for the next set version is A2's wording: the transcript names the destination only by implication, and a stricter author might want the criterion to require the re-post sentence itself to name the pull-request thread.

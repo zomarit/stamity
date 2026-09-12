@@ -1,0 +1,20 @@
+**status:** `BLOCKED_AMBIGUITY`
+**severity:** `Critical`
+
+**Files written:** none. **Manifest rows:** none. **Requirement ids allocated:** none.
+
+## Competing readings
+
+The brief names no mode and carries work for three, each with a different evidence rule. One mode per invocation, so it cannot be served as spawned.
+
+1. **brownfield** — "write up the new export-scheduling behaviour." The behaviour is landed at `src/schedule/cron.ts:18-44`, so the touched surface is specifiable, but under brownfield rules every claim about it needs `file:line` evidence, and the brief carried no researcher findings over that surface. Served alone, this would additionally return `BLOCKED_DEPENDENCY` for the missing findings.
+2. **architect** — "record why we chose a cron trigger over a queue consumer." The decision is visible in the code and unrecorded; `docs/adr/` exists with eleven records, so this writes ADR 0012, with the alternatives the code rules out.
+3. **docs** — "produce the page an operator reads to configure it." The behaviour is shipped and citable, and the user-facing tree carries no export-schedule page, so this is writable under docs rules.
+
+## Why this is not blendable
+
+The three readings do not differ in output only, they differ in what counts as evidence. Blending them would let a brownfield spec's behavioural claims stand on docs-mode or architect-mode evidence — unverified prose entering truth, which is the failure the one-mode rule exists to prevent. In particular, the ADR's rationale for cron over a queue consumer is a decision record, not a verified behavioural claim, and must not be laundered into the spec as one.
+
+## Resolution shape
+
+All three readings are independently viable against the established tree, so the ambiguity is a decomposition, not a contradiction: three spawns, one mode each. Ordering that works with the evidence rules is **architect** first (self-sufficient: the decision is in the code), then **brownfield** once research findings over `src/schedule/` are carried in the brief, then **docs** against the spec'd surface. The ambiguity gate and re-spawn are the spawning flow's to run.

@@ -1,0 +1,40 @@
+**status:** `DONE`
+
+## Files changed
+
+- `src/api/export.ts` — cursor pagination on the user-export endpoint; response gained a `nextCursor` field.
+- `test/api/export.test.ts` — two tests added, one modified.
+
+## Tests
+
+- **Added** (2, both written red first and watched fail for the expected reason):
+  - cursor pagination returns a `nextCursor` when more rows remain.
+  - a supplied cursor resumes the export at the correct offset.
+- **Modified** (1): `exports every row` — the behaviour it asserted moved under pagination, so the assertion was retargeted to the paginated shape. An inline comment in the test names the move. Justification: the old assertion described pre-pagination behaviour that no longer exists; leaving it would have made it a false green rather than a regression guard.
+
+## Gate results
+
+| Gate | Command | Result |
+|---|---|---|
+| test | `npm run test` | **pass** — exit 0, whole suite passing |
+| typecheck | `npm run typecheck` | **pass** — exit 0 |
+| lint | `npm run lint` | **fail** — exit 1 |
+
+Verbatim lint output:
+
+```
+src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars
+✖ 1 problem (1 error, 0 warnings)
+```
+
+**Pre-existing, not adopted.** The brief's baseline lint result carried this same error before this unit, and `src/reporting/csv.ts` is not in this unit's file list. Fixing it here would widen the unit's diff past its interfaces. Left alone and reported. Severity: `Minor`.
+
+These were the targeted local runs over the unit's surface. The flow's independent test-runner produces the gate evidence of record; this green claim does not substitute for it.
+
+## Spec delta (proposal — for spec-author to apply after confirmation)
+
+- `MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the user-export endpoint response gains a `nextCursor` field; the endpoint accepts a cursor parameter and resumes from it. Exports are no longer guaranteed to return every row in a single response.
+
+## Deferrals
+
+- `src/api/export.ts` and `src/api/report.ts` each carry their own copy of the cursor encoder. Unifying them is outside this unit's interfaces and was not attempted. Severity: `Minor` — the duplicate is a divergence risk once either encoder changes. Suggest it be planned as its own unit.
