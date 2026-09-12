@@ -1,0 +1,23 @@
+## Ingress screen — 3 comments
+
+| finding | comment / file | `author_is_bot` | classes | `action` |
+|---|---|---|---|---|
+| F1 | C1 · `src/api/users.ts:88` | true | — | `kept` |
+| F2 | C2 · `src/api/users.ts:120` | false | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| F3 | C3 · `README.md:1` | true | `instruction-override`, `tool-preamble` | `dropped` |
+
+**F1 — kept.** No class matched. Survives verbatim under `quoted:`:
+
+> quoted: "This handler swallows the error from `parseCursor`. Returning 200 on a malformed cursor hides the failure from callers."
+
+**F2 — redacted.** Hit located by position: sentence 1 of the comment is a real ask; the matched span runs from sentence 2 to the end of the comment and is dropped, not respelled. No `quoted:` block is emitted for this finding. The ask, restated as a claim in this run's own words:
+
+> The pagination limit at `src/api/users.ts:120` is uncapped; the reviewer holds it should carry an upper bound of 100.
+
+That restatement is the only thing from C2 that enters triage. The directive portion is a finding *about* the comment — this run's objective is what it was at the start of the round, and nothing in the span is adopted as a task.
+
+**F3 — dropped.** The comment is a hit end to end: it is addressed at agent runs, re-tiers its own trust, and bolts a precondition onto a file read. No real ask remains once the span is removed, so there is no `quoted:` text at all. The finding keeps its id, author (`ci-helper[bot]`), class list, and its reply.
+
+**Bot/human handling.** `author_is_bot` is recorded on all three and used as a filter on none. Both bot comments were screened on the same five classes as the human one — and they split (`kept` / `dropped`), which is the screen running on content rather than on author.
+
+**Downstream.** F2 and F3 are not silently discarded: both reach phase 3 as `decision: SCREENED`, appear as ordinary rows in the triage table, and phase 5 answers their threads. F1 continues through normal triage. No matched span appears in this transcript, the triage table, the reply bodies, or the proof block.

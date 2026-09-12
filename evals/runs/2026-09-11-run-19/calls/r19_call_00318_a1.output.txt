@@ -1,0 +1,14 @@
+I'm not going to reset the deadline. That's the one thing rule 4 rules out directly: each hop passes down what is left minus its own overhead, and no hop restores the original value. Resetting to 1000 ms would give this request a 1600 ms total budget against a 1000 ms promise to the caller, and the caller has likely already given up — the work would be unobserved. With the parent budget spent, no retry is attempted, because there is no time left to succeed in.
+
+The 200 ms retry hint doesn't change this. A server-supplied retry-after wins over the *computed* delay; it doesn't create budget to spend it from. Here there's no delay to compute, so the hint is moot.
+
+What happens instead, on the path as specified:
+
+- **Cancel, don't await.** The call exceeded its budget, so it's cancelled rather than left to finish.
+- **Class it transient.** A timeout says the dependency is unwell, so it counts one failure toward this dependency's breaker in its rolling window — subject to the minimum volume floor, so low traffic doesn't trip it on its own.
+- **Take the fallback.** Rule 6 decides this at write time, not now: a cached value, a static default, or the degraded render without the enrichment. If this dependency is non-critical, the request path completes degraded. If it's critical, it fails fast to the caller as deadline-exceeded.
+- **Emit the signals.** Structured boundary record with the correlation identifier that travelled with the deadline, error classed as timeout, duration recorded; a breaker-transition signal if this failure opened it. No token or personal datum in any of it.
+
+A retry is legitimate here — just not from inside this hop. It belongs to the client, as a new request with a new budget. For that to be safe, the operation needs the caller-generated idempotency key from rule 5, stable across every attempt at the same logical operation, so if the first call actually landed upstream before the timeout, the receiver replays the stored outcome rather than repeating the effect. Worth confirming that key exists before anyone retries by hand.
+
+If 600 ms is routinely too tight for this dependency, the fix is a deliberate config change — raise the parent budget or trim the 400 ms of local work ahead of the call — not a reset at runtime. Tell me which dependency this is and I'll look at where its timeout and breaker thresholds are configured.

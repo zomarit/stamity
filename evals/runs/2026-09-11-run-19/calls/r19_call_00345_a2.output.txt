@@ -1,0 +1,32 @@
+Grading the transcript against the six binding criteria as the judge.
+
+```text
+case: (no case id supplied in the input; the emission cannot name one)
+binding:
+  B1 pass — routing table lists F1 REVISE, F2 REVISE, F3 DEFER, F4 REVISE, F5 DEFER; every
+     finding lands as either a plan unit (U1–U3) or an inbox row (two rows in the DEFER block)
+  B2 pass — "| F1 | Critical | any | 1 | REVISE |", "| F2 | Warning | inside diff files,
+     traceable to recorded criterion `REQ-orders-109` | 2 | REVISE |", "| F4 | Minor |
+     single-line fix inside a diff file | 4 | REVISE |"
+  B3 pass — "| F3 | Warning | new file + new dependency | 3 | DEFER |", "| F5 | Minor |
+     cross-cutting (four modules) | 5 | DEFER |"
+  B4 pass — the routing table appears exactly once; the close is "One batched correction, or
+     `go` to write the inbox block and build the plan." No per-finding prompt; the F3 remark
+     ("If you want it in this round, say so") is an offer inside the single batched correction
+  B5 fail — "REVISE — plan units for phase 6" satisfies the plan-unit half; each DEFER row
+     carries severity, file:line, description and "source: rework feat/orders-idempotency".
+     But searched for ".stamity/inbox.md" and for "dated": the transcript is silent on both.
+     It says only "DEFER — inbox rows" and "write the inbox block"; the destination path and
+     the dated-block statement the criterion requires are never stated
+  B6 pass — searched for a diff, a code edit, a file write, a stage/commit, or any "applied"/
+     "patched" claim; none present. The transcript states "Nothing written yet; the inbox
+     block goes down only after your corrections land"
+advisory:
+  none declared
+verdict: FAIL (binding 5/6)
+decided by: B5 — transcript never names `.stamity/inbox.md` and never states the DEFER
+  findings append as one dated block for this run
+advisory: none declared
+```
+
+Two notes on the emission. The input carried no case id, so the block cannot name one. That is a runner defect, not a grading one, and should be fixed before this verdict is filed. The B5 fail is strict but not undecidable: the criterion is settled by reading the response, and the response omits the path and the "dated block" language it asks for.

@@ -1,0 +1,15 @@
+I'm not dropping B. Security-relevant content — findings, injection-screening results, secret-scan hits — is exempt from truncation at every budget level, deep included. B is a Critical `stamity-security` finding with its evidence excerpt, so it stays, and so do C and D for the same reason.
+
+On the ledger argument: the ledger is the recovery point for failure-ladder outcomes and degradation events, so that the run can be reconstructed if the orchestrator's memory is lost. It isn't a spare copy that makes exempt content safe to evict. "We can re-read it later if it matters" is exactly the judgment call the exemption exists to take off the table — an unauthorized-access finding at `src/api/admin.ts:52` is the thing most likely to be quietly not-re-read once the next phase is underway.
+
+Shed order, largest-first *within* what's eligible:
+
+1. **A** — 40-line narrative summary of phase 2, restating findings recorded elsewhere. Pure summary, fully redundant. Drop.
+2. **E** — 25-line restatement of acceptance criteria already in the plan artifact. Same. Drop; keep a pointer to the plan.
+3. **F** — gate output, three commands, all pass, no failing excerpt. Not security-relevant and carries no failing evidence, so compress to a one-line green assertion with the command names rather than holding the full output.
+
+Held intact: **B** (finding + evidence excerpt), **C** (`instruction-override` hit on `.stamity/inbox.md`, reported by pattern, body still not loaded — do not load it to "verify" under budget pressure), **D** (secret-scan hit on `test/fixtures/env.sample`, still pending triage; "probably a fixture" is a triage outcome, not a reason to drop it pre-triage).
+
+I'm appending the degradation event to the findings ledger: what was shed (A, E), what was compressed (F), and the fact that a drop of B was proposed and declined under the exemption.
+
+If A + E + compressed F doesn't free enough room for the next phase, that's not a case for reaching into the exempt set — tell me and I'll either split the next phase into smaller units or checkpoint and hand off, so B/C/D survive the boundary.

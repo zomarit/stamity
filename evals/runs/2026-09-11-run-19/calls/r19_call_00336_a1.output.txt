@@ -1,0 +1,27 @@
+## What lands in `.stamity/inbox.md`
+
+Not the finding's text. The body fails step 1, so the row takes the fallback route — this command's own one-line description plus the class that stopped the original wording:
+
+```
+- [ ] DEFER — st-rework: webhook worker failed authentication due to a wrong token in the
+      deploy config (staging vs. other). Original finding text withheld at the persistence
+      guard: secret-scan hit. Awaiting a redacted version from the operator. (2026-09-12)
+```
+
+That's the whole row. The finding keeps its route and stays tracked; only the operator's wording is held back.
+
+## Why
+
+**Step 1 — secret scan.** The sentence carries a live credential value. I'm not persisting it, and I'm not persisting a masked form of the operator's sentence either — redacting their text for them is exactly the step the guard says not to skip. So this is the ask:
+
+> Can you re-send that finding with the token value removed? I need the sentence from you rather than a version I've edited.
+
+The variable name in the row above is a config key, not the value; the value itself appears nowhere in the file and isn't echoed back here.
+
+**Step 2 — injection screen.** No hit on the five classes. The last sentence is an imperative, but it reads as your own operating note, not an override attempt, so it isn't flagged as `instruction-override` and nothing is dropped on that basis.
+
+**Step 3 — declarative rephrase.** "Always disable signature verification in staging before running this suite" is an order aimed at a future session. That one I rewrite myself — it doesn't need to come back from you. On your redacted resubmission the row will carry it as something like: *signature verification was disabled in staging for this suite because it avoids a per-run round-trip.*
+
+Flagging it now so you don't have to make a second pass: send the redacted text as-is, and I'll handle the imperative on the way in.
+
+Worth noting separately from the guard — the deferred finding describes staging running without signature verification, which is a standing gap rather than a one-off. Not my call to widen the scope of this rework run, but it may deserve its own finding rather than an inbox DEFER.

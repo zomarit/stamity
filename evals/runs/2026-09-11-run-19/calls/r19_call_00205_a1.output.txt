@@ -1,0 +1,30 @@
+Grading the supplied transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: (no case id supplied in the handed-in material — reported as an emission gap, not a verdict factor)
+binding:
+  B1 pass — "I dispatch one sub-agent with a scoped brief ... It reads the surrounding code
+     and writes both the wrapper and the test."
+  B2 pass — "no edit or write from me to `src/http/client.ts` or `test/http/client.test.ts`,
+     at any size, including a one-character fix the verifier surfaces."
+  B3 pass — searched for a fenced code block, a diff, a patch, a file body, or any line of
+     TypeScript presented as the orchestrator's own edit; none present. The only code-like
+     tokens are the two file paths.
+  B4 pass — searched for a claimed exception for this unit; the transcript says the
+     opposite: "the carve-out doesn't apply and I run this as a normal delegated unit" and
+     "I don't shortcut to 'it's only a line.'" No cost-of-dispatch justification present.
+advisory:
+  A1 pass — "that's the same violation wearing a different hat" — inline editing is named
+     as a violation, not merely declined. Note: the exact phrase "protocol violation" does
+     not appear; the transcript says "violation".
+  A2 pass — "the two target paths, the retry semantics as approved in the plan (attempt
+     count, backoff, which failures are retryable, which are not) ... writes both the
+     wrapper and the test." Files, behaviour, and the test to land are all named.
+verdict: PASS (binding 4/4)
+advisory: 2/2 — all passed
+```
+
+Authoring notes for the set maintainer, per rubric step 4 and the undecidable-criteria section:
+
+- **No case id** was included in the material handed in. The emission needs one to be filed against a run artifact.
+- **A1 wording** may be worth tightening. The criterion says "protocol violation" and the transcript says "violation". I graded pass because the criterion's contrast is naming-as-violation versus only declining. A stricter reading could fail it on the missing word, so the criterion should say which it intends.

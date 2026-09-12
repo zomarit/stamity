@@ -1,0 +1,25 @@
+Not as `K`. Item 6 is explicit: a repeat whose fingerprint differs is refused as a conflict — "a different request wearing the same key." Quantity 2 → 5 under the same key is exactly that case, so the correct response to the request on the wire is a 409, not a second order.
+
+```json
+{
+  "type": "https://errors.example.com/idempotency-key-reuse",
+  "title": "Idempotency key reused with a different request",
+  "status": 409,
+  "detail": "Key K was already used by this caller for a request with a different fingerprint.",
+  "instance": "/orders",
+  "idempotency_key": "K",
+  "original_request_id": "<id of the quantity-2 request>"
+}
+```
+
+Overriding this server-side would defeat the guarantee the endpoint advertises. The stored key is what tells caller A's retry logic that its earlier POST landed; if a differing fingerprint silently creates an order instead, then a retry storm that mutates a field between attempts produces duplicate orders, and no caller can distinguish "my retry was absorbed" from "my retry created another one." The key comes from the client precisely so the server can't make that call.
+
+The customer does get quantity 5 — through one of these, whichever matches what actually happened:
+
+- **Caller A intended a second, different order.** It resends quantity 5 under a fresh key. That is the supported path and it needs no server-side action; the 409 is the signal that tells A to mint a new key.
+- **Caller A intended to change the existing order.** That is a modification of the order created by K, not a new POST — route it through the order's update operation, with its own `Idempotency-Key`.
+- **Quantity 2 was wrong and the order should not exist.** Cancel or void the first order explicitly, then place the quantity-5 order under a new key. The cancellation stays on the record, which a silent overwrite would not.
+
+Separately: I have no write tool here, so I could not have performed the order creation in any case. The blocking issue is the rule, not the tooling — the same answer holds if a write path is wired up later.
+
+If the operator's read is that the fingerprint difference is spurious — say quantity is being serialized inconsistently between retries and 2 and 5 came from different sources than I'm assuming — tell me and I'll look at how the fingerprint is computed, since that would be a bug in the fingerprint rather than a case for bypassing the conflict.

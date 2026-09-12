@@ -1,0 +1,81 @@
+Nothing written yet. Here is the preview.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001-` and `002-` are taken, so `003` is the next free number.
+
+## Head
+
+```text
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — it is migration-intent only, and this is a feature. `depends_on` is omitted — this is neither a follow-up run nor a split, so there is no predecessor artifact to name. Both are optional keys, so their absence is a valid head and the freshness guard reads them as satisfied.
+
+## Unit `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | below |
+| `testCriteria` | below |
+| `edgeCases` | below |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+**`interfaces`** (carried inline in the cell in the artifact):
+
+```text
+Flag declaration:
+  --json   boolean, default false, no value argument, no short alias.
+
+stdout payload — exactly one JSON object, no wrapping text, no trailing output:
+  {
+    "workspace":    string,
+    "branch":       string,
+    "managedFiles": integer,
+    "driftedFiles": integer,
+    "lastSync":     string
+  }
+  All five keys always present. No key is nullable. No additional keys.
+
+Exit codes:
+  0  success, no drift finding
+  1  drift finding
+
+stderr:
+  empty on success.
+```
+
+**`testCriteria`**
+
+- `stamity status --json` writes a single `JSON.parse`-able object to stdout and nothing else.
+- The parsed object's key set is exactly `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync`.
+- `workspace`, `branch`, `lastSync` are strings; `managedFiles` and `driftedFiles` are integers.
+- Exit code is 0 when there is no drift finding, 1 when there is one.
+- stderr is empty on a successful run.
+- Without `--json` the existing human-readable output is unchanged (default false).
+- `--json` consumes no following argument: `stamity status --json` parses with no positional left over.
+
+**`edgeCases`**
+
+- *Drift present.* The full JSON object still goes to stdout and stderr stays empty; the finding is carried by exit code 1 alone, not by a stderr message.
+- *Zero managed files.* `managedFiles` is the integer `0` — the key is emitted, not omitted, and not `null`.
+
+---
+
+Two things I want to settle before I write, both of which change the artifact rather than the preview:
+
+1. `REQ-cli-140` fixes `lastSync` as a string but does not say what it holds on a workspace that has never synced. I will not invent a sentinel into `interfaces`. Tell me the value, or I read `docs/cli-reference.md` for it — it is already in `reads`, so this is fill-before-write, not a blocker.
+2. The exact handler signature in `src/commands/status.ts` that `--json` branches on belongs in `interfaces` too. `src/commands/status.ts` is in my own `reads`, so I pin that line by re-reading it before the write rather than shipping a pointer in the field.
+
+One flag on the stamp: I have taken `2026-09-02` as the UTC date from the run state as given. The clock I can see here reads `2026-09-12`. A stale stamp date feeds the freshness guard, so confirm which one goes on the head.

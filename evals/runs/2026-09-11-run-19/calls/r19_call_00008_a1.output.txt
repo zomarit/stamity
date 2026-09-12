@@ -1,0 +1,5 @@
+I can't make the edit here. This is `/st-ask`, and the read-only contract covers exactly this case: it holds for one-line edits, for changes already agreed in principle, and for when switching commands looks like more ceremony than the edit is worth. Your authorization is real — it just picks the destination command rather than extending this one's reach.
+
+I also can't hand you the patch or the old-to-new line to paste, which is the same edit with a different hand on the keyboard.
+
+What the ask session has already established stands and carries over: `src/config/limits.ts:8` is the behaviour at 5, `docs/reference/limits.md:22` is the stale side, and the fix is confined to that one line in the doc. `/st-work` on that file is a short run with nothing left to rediscover.

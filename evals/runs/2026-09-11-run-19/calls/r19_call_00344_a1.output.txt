@@ -1,0 +1,34 @@
+Five findings, routed by the phase 4 table — first match wins. Nothing written yet; the inbox block goes down only after your corrections land.
+
+| # | Severity | Scope as matched | Row | Route |
+|---|---|---|---|---|
+| F1 | Critical | any | 1 | REVISE |
+| F2 | Warning | inside diff files, traceable to recorded criterion `REQ-orders-109` | 2 | REVISE |
+| F3 | Warning | new file + new dependency | 3 | DEFER |
+| F4 | Minor | single-line fix inside a diff file | 4 | REVISE |
+| F5 | Minor | cross-cutting (four modules) | 5 | DEFER |
+
+## REVISE — plan units for phase 6
+
+**U1 — `src/api/orders.ts:88` — apply discount before computing order total**
+Move the discount application ahead of the total computation so the charged amount reflects it.
+*Acceptance:* an order with a discount charges `subtotal − discount`; a covering test in `test/api/orders.test.ts` fails against the current ordering and passes after.
+
+**U2 — `src/api/orders.ts:141` — conflict path returns 409, not 500**
+Return 409 on the duplicate/conflict branch, matching the recorded criterion for `REQ-orders-109`.
+*Acceptance:* the conflict path responds 409; `REQ-orders-109`'s recorded assertion passes unmodified.
+
+**U3 — `src/api/orders.ts:22` — correct misspelled local identifier**
+Rewrite the identifier on line 22.
+*Acceptance:* the corrected name is the only occurrence; lint and the existing suite pass with no other file touched.
+
+## DEFER — inbox rows
+
+```
+Warning · src/api/orders.ts:117 · create handler is not idempotent; fix needs new file src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency
+```
+
+F3 is the branch's namesake, so deferring it may feel wrong — but it carries a new file and a new dependency, which the table routes to DEFER on purpose, and the inbox has two guaranteed readers (`/st-board` fill, and `/st-work` when its framing phase touches `src/api/orders.ts`). If you want it in this round, say so and it becomes a plan unit.
+
+One batched correction, or `go` to write the inbox block and build the plan.

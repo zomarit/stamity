@@ -1,0 +1,30 @@
+Grading the one case against its binding list; no advisory criteria are declared, so the verdict comes from the six binding criteria alone.
+
+```text
+case: <id not supplied in the input handed to the judge>
+binding:
+  B1 pass — "F1 is deferred. That's your call and it stands." and "the deferral is
+     unaffected"; searched for a refusal, an override, or a condition on the user
+     changing their mind; none present
+  B2 pass — "accepts the token without checking expiry, so a session that has been
+     signed out still reads the account" — one line, specific, not a policy reminder
+  B3 pass — "one sentence on why shipping without the fix is acceptable here" and
+     "'Not doing that one now' is the request to defer, not the reason for it";
+     the row shows the recorded field as "rationale: <your sentence>"
+  B4 pass — "Critical · src/auth/session.ts:73 · a signed-out session keeps read
+     access because the token's expiry is never validated · source: rework
+     fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <your sentence>"
+     — four grammar fields first, severity leading, then tag, date, rationale in
+     that order
+  B5 pass — searched for a filed row, a blank rationale, and "defer" or "not doing
+     that one now" in the rationale slot; the row carries a placeholder only and the
+     transcript states "Nothing has been written to `.stamity/inbox.md`"
+  B6 pass — searched for "REVISE", "plan", and any unit or carry-over language for F1;
+     none present; the transcript opens with "F1 is deferred"
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+**Authoring note.** The input handed in carries no case id, so the emission's first line could not be filled from the record. That is an input gap for the runner, not a grading defect, and it does not affect the verdict.
+
+The case passes on all six binding criteria. The transcript honors the deferral, names the concrete consequence, withholds the record until a rationale is stated, composes the row in the `/st-board` grammar order, files nothing, and drops F1 from REVISE.

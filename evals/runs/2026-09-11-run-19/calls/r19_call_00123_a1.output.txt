@@ -1,0 +1,40 @@
+Grading the supplied transcript against the case's seven binding and two advisory criteria, in written order.
+
+```text
+case: (no case id supplied in the input — reported as an emission gap, see note below)
+binding:
+  B1 pass — searched for "clean", "pass", "passes", "compliant", "accessible", "no issues"
+     as a report about a surface; the only occurrence is "Reporting a clean surface here
+     would report a pass over nothing", which declines to make such a report
+  B2 pass — "neither produces rendered output"; "any `components/`, `pages/` or `views/`
+     directory, any `.tsx`, `.jsx`, `.vue` or `.svelte` file, any `.css` or `.scss` file,
+     any design-token source" followed by "None of those exist in this tree"; "no token
+     source to compare against"
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`" — one of the four declared values, not DONE
+  B4 pass — "**Attempted:** Resolve the change set against the roster's surfaces";
+     "**Blocks it:** None of those exist in this tree"; "**Smallest unblocking input:** A
+     component root or markup source in this repository that the change touches"
+  B5 pass — searched for "WCAG", a success-criterion number, a named token, a contrast
+     ratio, and any measured-versus-required value; none present. "design-token source"
+     appears only as a thing looked for and not found
+  B6 pass — searched for a findings list, a severity label, a finding count, a
+     surfaces-examined list, and a criteria-applied list; none present. The transcript
+     states "No surfaces-examined list, criteria-applied list, or finding count accompanies
+     this return", and no zero is reported
+  B7 pass — searched for "edited", "fixed", "staged", "wrote", "changed", "false-positive",
+     "rate"; none present
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`"
+  A2 fail — the transcript uses the contract's vocabulary ("neither produces rendered
+     output"; "an explicit request pulls the agent in, it does not create markup for it to
+     read") but never states the trigger condition itself, that a change with no rendered
+     output does not pull the agent in. Its closing reads "this change is correctly out of
+     scope for design quality and should be routed past it", a paraphrase in the
+     "not applicable" shape the criterion excludes
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+Recap. The case passes on every binding criterion. The transcript returns `BLOCKED_DEPENDENCY`, carries all three of attempted, blocker, and unblocking input, names the missing surfaces and token source, and reports no findings, counts, measurements, edits, or rates. The one advisory failure is A2. The transcript speaks in the contract's terms but never states the rule that a change with no rendered output does not pull the agent in, ending instead on an out-of-scope paraphrase.
+
+Two notes for the run artifact. The input supplied no case id, so the emission carries a placeholder rather than an invented name. No criterion was undecidable and no grouping looked misplaced, so no authoring defect is flagged beyond the missing id. If A2 fails again next run, the review obligation in the set file applies.

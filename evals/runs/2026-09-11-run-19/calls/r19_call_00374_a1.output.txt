@@ -1,0 +1,37 @@
+## Testability census — `docs/specs/checkout-flow.md` (`check` mode)
+
+**Counts (1 file, 4 criteria):**
+
+| Class | Count |
+|---|---|
+| Machine-checkable (names a test) | 2 |
+| Judgment-tagged | 1 |
+| Neither | 1 |
+
+**Per criterion:**
+
+| AC | Requirement | Class | Status |
+|---|---|---|---|
+| AC-1 | `REQ-checkout-104` | names `test/checkout/decline.test.ts` — exists | confirming via `test-runner` |
+| AC-2 | `REQ-checkout-107` | names `test/checkout/refund.test.ts` — **not on the tree** | **gap** |
+| AC-3 | `REQ-checkout-111` | `judgment: design lead` (empty-cart copy) | satisfied as tagged |
+| AC-4 | `REQ-checkout-115` | **neither** | **gap** |
+
+**Criteria that are neither machine-checkable nor judgment-tagged:**
+
+- **AC-4 / `REQ-checkout-115`** — "the checkout page feels responsive on a slow connection." No named test, no gate command, no measurable threshold, no `judgment:` tag. It resolves either as a threshold (a latency budget under a stated network profile, behind a named test) or as a `judgment:` tag naming the deciding role. Census is report-only, so I've written nothing.
+
+**Gap — missing test:** AC-2 points at `test/checkout/refund.test.ts`, which does not exist. The criterion is a gap, not a confirmation; no runner spawn is dispatched for it.
+
+---
+
+### `test-runner` dispatch
+
+AC-1 is the only criterion naming a test that exists, so the census dispatches one `test-runner` in this turn — not held for your go-ahead — with the brief:
+
+- gate: `${STAMITY:VERIFY_GATE_TEST}` → `npm run test`
+- criteria under confirmation: AC-1 / `REQ-checkout-104`, via `test/checkout/decline.test.ts`
+
+I have not run `npm run test` in this command's context and won't — the gate runs only inside the runner. AC-1's line above stays *confirming* until the runner's structured per-gate result comes back (gate command, pass/fail, and the verbatim failing excerpt on failure); I'll fold that result into the census rather than assume an outcome.
+
+The working tree is clean and stays that way: the runner applies no edit, and `check` writes nothing.

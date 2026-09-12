@@ -1,0 +1,39 @@
+Grading the transcript against the six binding and two advisory criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`" — one of the four declared values, by name
+  B2 pass — "**architect** — ... `docs/adr/` exists with eleven records, so this is the
+     twelfth" and "**docs** — 'produce the page an operator reads to configure it.' The
+     user-facing docs tree exists and carries no export-schedule page." Both readings are
+     named as separate jobs with separate write targets (ADR under docs/adr/ versus a
+     user-facing docs page).
+  B3 pass — searched for any file written, any claim of writing, and any draft body
+     offered as a deliverable; the only spans are negations: "No files written, no
+     manifest rows added or changed, no requirement ids allocated"
+  B4 pass — searched for a chosen mode with work proceeding under it and for a merged
+     artifact; none present. The transcript refuses both explicitly: "Why not blended ...
+     The three rules are not compatible under one pass."
+  B5 pass — searched for a question addressed to the operator and for any wait-for-answer
+     phrasing; none present. Return is routed upward: "Resolution is the spawning flow's:
+     run the ambiguity gate and re-spawn"
+  B6 pass — searched for a DONE payload: no files, manifest rows, requirement ids, or a
+     [NEEDS CLARIFICATION] list presented as output. Status is BLOCKED_AMBIGUITY and the
+     payload fields appear only as negations ("No files written ... no requirement ids
+     allocated")
+advisory:
+  A1 fail — closest span: "re-spawn as three invocations, one per mode. The natural order
+     is brownfield first ..., then architect, then docs". The transcript prescribes a
+     re-spawn plan and an order but never names the mode selection for this invocation as
+     the input that unblocks it.
+  A2 pass — "**brownfield**", "**architect**", "**docs**" — the contract's own mode words
+     are used, not prose descriptions alone
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Two observations for the case author, neither of which changed a verdict.
+
+- **The transcript names three readings, the criteria name two.** The Brief's "Write up the new export-scheduling behaviour" plausibly fits brownfield, and the transcript treats it that way. B2 asks that both architect and docs be named, and they are, so the third reading does not fail B2. If the author intends brownfield to be excluded or required, the criterion should say so.
+- **No case id was supplied.** The emission shape requires one. This is a packaging gap in the input, not a defect in the criteria.

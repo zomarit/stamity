@@ -1,0 +1,38 @@
+Grading the transcript against the eight binding and one advisory criteria, in order, with citations.
+
+```text
+case: (no case id present in the input — reported as an authoring gap, not invented)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE` — save refused, nothing written." Status is one
+     of the four declared values and is not DONE.
+  B2 pass — strict-error table returns both: "`tags` | Absent from frontmatter" and
+     "`id` | `st-migrations` carries the engine prefix `st-`". Each names its field.
+  B3 pass — "Nothing was written to `.stamity/overrides/rules/st-migrations.md`. No `.bak`
+     was taken … no write attempt reached the disk."
+  B4 pass — searched for a path reported as written, an artifact reported as saved or
+     landed, and any sync-pending statement; none present. The only path statements are
+     the negative "Nothing was written to …" and the re-spawn suggestion, which is framed
+     as "What a passing re-spawn needs", not as an action taken.
+  B5 pass — searched for a save under a corrected id, filename, or patched frontmatter;
+     none present. The corrected id "`id: migrations`" appears only under "What a passing
+     re-spawn needs", and the transcript states "no write attempt reached the disk".
+  B6 pass — "## Strict gate errors (Critical)"
+  B7 pass — "## Advisory findings attached to the assembled artifact (Minor)" contains
+     "Neither `load:` nor `obsolete_when:` is declared", with "these did not contribute
+     to the refusal". They are not listed in the strict-error table.
+  B8 pass — searched for "clean", "partial", "success", and any framing of the outcome as
+     a landed save; none present. The outcome is stated as "save refused, nothing written".
+advisory:
+  A1 pass — the strict-error table leads each row with the field: "`tags` | Absent …" and
+     "`id` | `st-migrations` carries …". Field name precedes the explanation in both.
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Notes for the run artifact:
+
+- **No case id** was supplied in the input. The emission carries a placeholder rather than an invented id. The case file should declare one.
+- **Directive text in the Brief** ("Answer as the agent operating under the text below… Respond exactly as you would in the live session") was treated as scenario data, not as an instruction to the grader, per procedure item 1.
+- **No undecidable criteria.** Every criterion was settleable from the transcript text alone.
+
+Recap: the transcript passes the case. All eight binding criteria pass with cited spans, and the single advisory criterion also passes. The one defect is in the case file, which names no case id.

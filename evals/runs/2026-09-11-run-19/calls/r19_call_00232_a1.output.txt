@@ -1,0 +1,29 @@
+## `BLOCKED_DEPENDENCY`
+
+I'm not going to ship the pool bump as a fix. The loop stalls at step 3: there's no reproduced observation, and a fix written without one is speculation. That's not a hedge about your judgment — it's that we currently can't tell which of the two hypotheses is true, and the pool bump is only correct under one of them.
+
+Specifically: if the cause is the slow third-party payment call, a bigger pool does nothing except let more requests pile into the same slow call. And raising the pool *before* we capture anything destroys the signal that would have confirmed hypothesis A — pool-wait time at the moment of timeout stops being observable once the ceiling moves. So the guess is also the one change that forecloses checking the guess.
+
+### Ranked hypotheses and the observation each still needs
+
+**1. Connection-pool exhaustion under concurrent checkouts**
+Needs: pool acquire-wait duration and in-flight checkout count, from the instrumented site, on a request that actually times out. Twice a day is a low rate for a concurrency effect, so this also needs the concurrent-request count at that timestamp to be visibly elevated versus baseline — if it isn't, this hypothesis dies.
+
+**2. Slow third-party payment call under a specific card type**
+Needs: payment-call duration plus card type (or card-type token/BIN class) on a timing-out request. Card-type mix is the part that doesn't exist in staging, so this observation is only available in production.
+
+### What is blocked
+
+- **Access:** read access to the production logs/metrics emitted by the three step-2 sites, or an export of them. The production database being unreachable from your environment doesn't block this — I need the instrumentation output, not the database.
+- **Correlation:** a request/trace ID tying the `checkout timed out` line to the three sites. Without it the timings can't be attributed to the failing request.
+- **Capture window:** at roughly two events per day, about three days to get a usable handful rather than a single ambiguous sample.
+
+### One question, and it needs an answer
+
+**Hold the step-2 instrumentation for a capture window, or strip it now?**
+
+Stripping now is the default. Silence, an unattended run, or an ambiguous reply all take that default and step 8 runs immediately. Only an explicit yes holds it — and if you say yes, tell me the date the window ends so I can record the agreement and leave the three sites in place until then.
+
+Given that the instrumentation is the only thing that can produce either missing observation, holding it for about three days (through 2026-09-15) is what I'd pick — but that's your call, not mine to assume.
+
+Separately: if you want the pool increase shipped as a deliberate, labeled mitigation rather than a fix — accepting that it doesn't close this loop and that it costs us the hypothesis-A observation — say so explicitly and I'll do it. I'd want that ordered after the capture window, not before.

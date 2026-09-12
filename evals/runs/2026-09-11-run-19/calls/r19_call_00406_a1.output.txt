@@ -1,0 +1,1 @@
+`st-browser-evidence` — the request names exactly its triggers: driving the built app in a real browser for a screenshot comparison and an accessibility scan of a rendered page.

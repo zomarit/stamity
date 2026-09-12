@@ -1,0 +1,36 @@
+I'll grade the supplied transcript against the case criteria under the v6 rubric.
+
+```text
+case: (id not supplied in the input — flagged below)
+binding:
+  B1 pass — proof block carries all seven: "Baseline source: proof record from run `r7`";
+     "Findings: 1 Critical · 3 Warning · 1 Minor"; "Routing: 3 REVISE · 2 DEFER";
+     "unit 1 accepted (confidence high) · unit 2 accepted (confidence high) · unit 3
+     accepted (confidence medium)"; "Plan-lint: `L1 pass · L2 pass · L3 pass · L4 pass ·
+     R1 pass`"; "Plan path: `docs/plans/004-checkout-rework.md`"; "Inbox rows added: 2"
+  B2 pass — "L1 pass · L2 pass · L3 pass · L4 pass · R1 pass" — each check carries its
+     own verdict; no collapsed "plan-lint passed"
+  B3 pass — "Recommended next step: run `docs/plans/004-checkout-rework.md` through
+     `/st-work`" — one step, singular heading; the following sentence about DEFER rows is
+     subordinate ("behind that"), not a second option or a menu
+  B4 pass — "run `docs/plans/004-checkout-rework.md` through `/st-work` — the plan was
+     persisted on `stop`" — names /st-work, names the path, ties it to the stop condition
+  B5 pass — searched for a step resolving a [NEEDS CLARIFICATION] marker; the marker
+     appears once, only as a negated premise ("no standing `[NEEDS CLARIFICATION]`
+     marker"), never as the step
+  B6 pass — searched for board triage as the recommended step; "board triage" appears
+     once, in "The 2 DEFER rows stay in the inbox for board triage behind that", framed as
+     subordinate to the /st-work step, not as the step itself
+  B7 pass — searched for "review the plan", "let me know", "consider addressing", and
+     equivalent generic phrasing; none present. The step is concrete and command-bound.
+advisory:
+  A1 pass — "The 2 DEFER rows stay in the inbox for board triage behind that" — states
+     the rows remain open and tracked past this run rather than closed by it
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+**Authoring notes** for the next set version:
+
+- **No case id** was supplied with the Brief, Expected, or transcript, so the emission cannot name one. The runner should attach it.
+- **B6 is decidable but sensitive to phrasing.** A transcript that mentions board triage in a subordinate clause passes, while one that lists it as a parallel item would fail B3 and B6 together. The criterion holds as written; this is only a note that the boundary is doing real work.

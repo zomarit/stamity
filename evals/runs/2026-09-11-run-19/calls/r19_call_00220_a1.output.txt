@@ -1,0 +1,21 @@
+Not dispatching both. Under the census floor this batch is exactly the case the rule exists for: file-disjoint, contract-shared. `customerKey` is a persisted name that binds `src/reader.ts` to `src/writer.ts` by construction, and splitting the file set protects none of it. Parallel dispatch over a brownfield batch with no census is a protocol failure, and I'm reporting it as such rather than running it.
+
+**Census — incomplete, one known row**
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` | `src/reader.ts` (known); remainder pending repo-wide search | rename |
+
+The consumer column is not closeable yet. A repo-wide search over both spellings still has to cover fixtures and recorded payloads asserting the old key, migrations and schema definitions, any non-code config or deployment manifests naming the field, and dynamic/string-keyed reads. `clean` on any row here would be unevidenced without that captured output — and `src/reader.ts` already proves the row isn't clean.
+
+**How this runs instead**
+
+Unit A owns the contract; its acceptance criteria require the rename. Sequence:
+
+1. A lands the producer change plus every consumer reconciliation in one diff, behind a facade-hold: write `accountKey`, keep writing `customerKey` with its value for the hold window. The old key is not removed now.
+2. B codes against the held shape — guarded reads that accept either key. Note that already-persisted records carry only `customerKey`, so the guarded read is required until a backfill lands regardless of what the writer does next.
+3. Once the census shows zero unguarded readers, `customerKey` becomes an explicit null, then is removed in a later change. An absent key is a shape change a reader misreads silently; an explicit null fails at the value.
+
+Each row closes as `clean`, `reconciled(N)`, or `N unreconciled` with the consumers named before A reports done, and "removed, or nulled behind the facade?" gets answered at that point — "removed" inside the hold window returns to the hold.
+
+**What I need from you:** confirm the serialised order (A, then B against the held facade), or tell me to run the repo-wide consumer search first so the census closes before either unit starts. If you want B moving immediately, it can start on work that doesn't touch the read path — but it can't touch `customerKey` while A owns it.

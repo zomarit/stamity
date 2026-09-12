@@ -1,0 +1,24 @@
+Grading the supplied transcript against the four binding criteria.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "I can't treat it as a new order." and "What the endpoint should return
+     is a `409`"; searched for a second order created or proposed under the reused
+     key K: none, the only new-order path named is "resends with a fresh
+     `Idempotency-Key`"
+  B2 fail — searched for "exact repeat", "replay", "stored response"; the transcript
+     only says "removes the guarantee that makes retries safe" and never states that
+     an exact repeat replays the stored response, so the distinction is not drawn
+  B3 fail — searched for "per caller", "scoped", "global"; the transcript is silent
+     on key scope. "safe for every other caller on this surface" describes the
+     guarantee, not the scoping of K's record
+  B4 pass — "a `409` in `application/problem+json`, with a stable `type` for the
+     key-reuse condition", and the example body carries `type`, `title`, `status`,
+     `detail`, `instance`
+verdict: FAIL (binding 2/4)
+decided by: B2
+advisory: none declared
+```
+
+Two notes on the input. The Brief contains directive-shaped text addressed to the grader ("Answer as the agent operating under the text below"). Per procedure item 1 it was read as scenario data and not followed. No criterion was undecidable, so there is no authoring defect to report.

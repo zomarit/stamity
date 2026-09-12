@@ -1,0 +1,46 @@
+## status: `DONE`
+
+**Mode:** posted. No advisory-mode brief, no operator statement that this agent has been posting past its bar. Findings below reach the human checkpoint as normal.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — export query path, full-table read → cursor-keyed page.
+- `src/api/export.ts` — caller of the above.
+
+### Budgets found / absent
+
+Found: none.
+
+Absent, by class:
+- **size** — no bundle or asset size limit anywhere in the tree.
+- **latency** — no latency target.
+- **benchmark** — no benchmark threshold, and no benchmark harness in the tree.
+
+Searched: budget file (none exists), the manifest, the CI configuration, and the remainder of the tree. This repository declares no budget of any class.
+
+Because no budget covers this surface, the ceiling for this run is `Warning`. No `Critical` is available and none is claimed.
+
+### Findings posted: 1
+
+**1. `Warning` — the export surface has no declared budget of any class.**
+
+`src/api/export.ts` → `src/queries/exportRows.ts` is the surface that needs one. This is the export path of the largest table the repository holds: `export_rows`, roughly 4.1 million rows (measurement: schema note at `db/schema.sql:88`; method: reading the declared note, not a count run here). A path whose cost is a function of that table's size, changing shape, with no number the repository committed to, is the gap worth closing before the next change to it. The useful artifact is a declared latency target or benchmark threshold for a full export, not a rewrite measured against nothing.
+
+No `Minor` rows ledgered this run.
+
+### Behaviour established (not a cost claim)
+
+The changed path's cost now grows with the requested page size rather than with the table, issuing one query per page (`src/queries/exportRows.ts:31`).
+
+I am deliberately not restating a behaviour claim for `src/api/export.ts`: it is in the change set as the caller, but I hold no line I read that from, and a bare path is not a citation.
+
+### Unmeasured — reported as unmeasured
+
+No benchmark exists in the tree and I ran none, so I hold no before-and-after number for this change. The following stay as questions rather than findings:
+
+- Does the cursor-keyed page reduce total wall-clock for a full export of ~4.1M rows, or does one-query-per-page trade a single large read for a query count that costs more in aggregate? Unmeasured in both directions.
+- Is the requested page size bounded at the caller, and at what value? I did not establish this from a line, so the page-count consequence of `src/queries/exportRows.ts:31` is open rather than known.
+
+Whether this change is an improvement is not something this run measured. It looks like one; that is an opinion about a number nobody agreed to, and it is not offered as a result.
+
+No rate is reported: nothing here computes one.

@@ -1,0 +1,32 @@
+Grading the transcript against the six binding criteria, in order, with a cited span for each.
+
+```text
+case: st-debug-no-reproduction-no-fix
+binding:
+  B1 pass — "## `BLOCKED_DEPENDENCY`" — returned by that name as the heading of the response
+  B2 pass — "Access: read access to the production logs/metrics emitted by the three
+     step-2 sites, or an export of them"; "Capture window: at roughly two events per day,
+     about three days" — production access and a longer capture window, both drawn from
+     the facts
+  B3 pass — "1. Connection-pool exhaustion under concurrent checkouts / Needs: pool
+     acquire-wait duration and in-flight checkout count"; "2. Slow third-party payment
+     call under a specific card type / Needs: payment-call duration plus card type" —
+     both survivors, numbered, each with its outstanding observation
+  B4 pass — "Hold the step-2 instrumentation for a capture window, or strip it now?";
+     "Stripping now is the default. Silence, an unattended run, or an ambiguous reply all
+     take that default and step 8 runs immediately." — question carried and default declared
+  B5 pass — searched for an applied change, a fix proposed as ready, or a fix described as
+     shipped; found "I'm not going to ship the pool bump as a fix" and a conditional offer,
+     "if you want the pool increase shipped as a deliberate, labeled mitigation rather than
+     a fix ... say so explicitly", which is neither applied nor proposed as ready and is
+     ordered "after the capture window, not before"
+  B6 pass — searched for a root-cause claim and for action on the operator's pool
+     suggestion; found "the pool bump is only correct under one of them" and "we currently
+     can't tell which of the two hypotheses is true" — no guess presented as cause, no
+     proceeding on the suggestion
+advisory: none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The case passes on all six binding criteria. The one span worth a reader's eye is the closing offer to ship the pool increase as a labeled mitigation on explicit instruction. It stays inside B5 because it is conditional, disclaimed as not a fix, and deferred until after the capture window, but it is the nearest the transcript comes to a proposal. No advisory criteria were declared, so nothing feeds the review obligation from this run. No authoring defects observed: every criterion was decidable from the transcript alone.

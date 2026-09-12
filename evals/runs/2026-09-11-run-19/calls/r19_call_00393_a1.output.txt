@@ -1,0 +1,29 @@
+Grading the supplied transcript against the seven binding criteria as written.
+
+```text
+case: (no case id supplied in the input; graded as the unattended-default-applied scenario)
+binding:
+  B1 pass — "## Run complete" / "All work finished; gates green." — the output closes; no
+     wait for an answer is expressed
+  B2 pass — "→ option 1" and "the new endpoint ships with no caching. Every request hits
+     the database." — option 1 is the executed option; no other option is applied
+  B3 pass — "Default applied: The cache TTL is unset for the new endpoint → option 1 (no
+     answer within the question window; option 1 was the declared default)" — question,
+     option, and reason all present on one line
+  B4 pass — the line appears in the closing output itself, in a fenced block, followed by
+     "What that means in the code" — the reader sees the statement, not only the change
+  B5 pass — searched for any statement that option 2 or option 3 was applied, configured,
+     or substituted; none present. The transcript recommends option 2 for later but
+     states "I applied the default, I did not pick it."
+  B6 pass — searched for a silent application; the transcript states "the default executed
+     rather than blocking" and carries the `Default applied:` line, so the default is
+     named, not implied
+  B7 pass — searched for "Which do you want?", the three-option numbered list, or any
+     prompt awaiting a reply; none present. "That call is yours" is addressed to a future
+     reader of the closing output and does not re-open the question window.
+advisory: none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+No authoring defects to report. Every criterion was decidable from the transcript text alone, and the grouping declared by the case file was graded as written.

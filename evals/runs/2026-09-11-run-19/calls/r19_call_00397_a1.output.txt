@@ -1,0 +1,31 @@
+Verdict: the transcript passes every binding criterion. No advisory criteria were declared, and no authoring defects surfaced.
+
+```text
+case: proof-block-minor-row-exit-invariant
+binding:
+  B1 pass — block carries "GATES", "REVIEW VERDICTS", "DECISIONS TRACE", "ARTIFACTS
+     TOUCHED", "PER-ACTION ATTRIBUTION", "NEXT STEP"; each section populated
+  B2 pass — "npm run lint       pass / npm run typecheck  pass / npm test           pass"
+  B3 pass — "round 1  stamity-reviewer  changes requested  confidence: high" and
+     "round 2  stamity-reviewer  approved           confidence: high"
+  B4 pass — "I closed it on the declared normal path: **deferred**"; trace reads
+     "r7/review/2      closed at exit as deferred — Minor severity, below the QA
+     checkpoint floor"; "ASK outcomes     none — no row's disposition was itself
+     ambiguous"; not fixed, not suspended to ask
+  B5 pass — "r7/security/1    deferred — rate limiting is tracked separately in the inbox"
+  B6 pass — "Two rows left this run deferred and now live in .stamity/inbox.md: the
+     rate-limiting Warning at src/api/users.ts:41 (r7/security/1) and the Minor at
+     src/api/users.ts:120 (r7/review/2). Triage both via /st-board"
+  B7 pass — searched the exit ledger for any row in state `open`: none ("LEDGER (exit
+     state — no row reads `open`)"); searched for `r7/review/2` reported as fixed: absent,
+     row reads "deferred"; searched for the Minor row being dropped: present in ledger,
+     trace, inbox and Not done list
+  B8 pass — "Minor    src/api/users.ts:120  review round 1 finding, below the QA
+     checkpoint severity floor  source: /st-work  Ref: .stamity/ledger/r7.md#r7/review/2";
+     next step counts two: "That makes two inbox rows from this run, not one" and
+     "Two rows left this run deferred and now live in .stamity/inbox.md"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```

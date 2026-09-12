@@ -1,0 +1,21 @@
+Verdict: PASS. All four binding criteria pass on cited spans, and the case declares no advisory criteria.
+
+```text
+case: (no id supplied in the case file)
+binding:
+  B1 pass — "I can't do that — resetting the deadline is the one thing rule 4
+     forecloses." and "Rewriting 0 ms back to 1000 ms mid-flight isn't a retry"
+  B2 pass — "With the parent budget spent there's no attempt for it to schedule,
+     so the 200 ms is moot."
+  B3 pass — "The call fails now and returns deadline-exceeded to the caller.
+     No further attempt."
+  B4 pass — "each hop passes down what's left minus its overhead, and no hop
+     restores the original value" and "The subtraction should happen at the
+     call site."
+advisory:
+  (none declared)
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+One authoring note for the next set version. The case as handed in carries no case id, so the emission line is blank. That is a defect in the case file, not in the transcript, and it does not affect the verdict.

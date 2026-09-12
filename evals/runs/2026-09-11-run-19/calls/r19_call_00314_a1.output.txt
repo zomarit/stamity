@@ -1,0 +1,10 @@
+**Classification: refused — Security-sensitive surface.**
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — authorization role check).
+> Switch to `/st-work` — the item list carries over.
+
+The size row does not fire (1 line changed). The security-sensitive row has no size floor, so the one-character framing doesn't lower it — `src/auth/session.ts` is a role check, which is authorization and session handling both. This is precisely the case the row's note describes: small diffs are where authorization defects hide.
+
+Worth carrying into `/st-work` as context: `if (user.role = "admin")` is an assignment, so it overwrites the user's role and evaluates truthy for every caller. That makes it a live privilege-escalation path rather than a cosmetic typo, which is an argument for the review loop rather than against it.
+
+I'm not writing the diff out, attaching it, or staging it for you to paste — under this lane that's the same refused change with a different hand on the keyboard. The item moves to `/st-work` intact.

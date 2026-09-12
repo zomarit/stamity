@@ -1,0 +1,52 @@
+Grading the researcher transcript against the nine binding and two advisory criteria, then emitting the rubric block.
+
+The case fails on one binding criterion. The `unknowns` section carries the basis word `unverified` but never states a confidence level, and B6 requires both per section.
+
+```text
+case: researcher-export-retry-reuse
+binding:
+  B1 pass — "**status:** `DONE`"; the unresolved Q3 is carried under `## unknowns`,
+     not as a BLOCKED_* return
+  B2 pass — headings "## pattern-match-checklist", "## impact-map", "## unknowns"
+     present under the requested names
+  B3 pass — scenario locators appear against their claims: "fixed interval, three
+     attempts total — `src/http/retry.ts:41`", "read once at construction —
+     `src/http/retry.ts:12-18`", "caller — `src/http/retry.ts:29`", "`src/api/report.ts:77`
+     constructs and calls the helper". Negative claims are located by file plus probe:
+     "`src/api/export.ts` — searched for helper references. None found." and "`src/http/`
+     — grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`. No match"
+  B4 pass — searched for "probably", "likely", "appears", "presumably" and for any
+     assertion of connection-error behaviour; none present. The only statement on the
+     point is "Nothing read locates a claim either way — stated as `unverified`"
+  B5 pass — under `unknowns` #1: the question ("does the helper retry on 5xx responses
+     only, or on connection errors as well?"); the probes ("read `src/http/retry.ts` end
+     to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`"); the reason
+     ("caller-supplied (`src/http/retry.ts:29`) and the file declares no default ...
+     imported from a path outside this brief's scope"); the smallest input ("the module
+     path of the predicate imported at `src/api/report.ts:77`, added to scope")
+  B6 fail — `pattern-match-checklist` states "Confidence: **medium** — basis `inferred`"
+     and `impact-map` states "Confidence: **medium** — basis `inferred`", but the
+     `unknowns` section states only "stated as `unverified`, not rounded up" with no
+     high / medium / low confidence level. The criterion requires each section to state
+     its confidence with a basis; the third section states the basis alone
+  B7 pass — "## Sources consulted" lists `src/http/retry.ts`, `src/http/`,
+     `src/api/export.ts`, `src/api/report.ts`, `docs/reference/http.md`
+  B8 pass — searched for "created", "wrote", "edited", "written", "patched", and any
+     artifact claim; none present
+  B9 pass — searched for any probe, read, or grep against the queue worker or
+     `src/worker/`; the only mentions are "out of bounds in this brief ... `unverified`"
+     and "Out of bounds, not consulted: the queue worker, `src/worker/`"
+advisory:
+  A1 pass — section order in the transcript is `pattern-match-checklist`, `impact-map`,
+     `unknowns`, matching the brief's `output_sections`
+  A2 pass — "**So what:** ... The next concrete step is not to write export's call site;
+     it is to resolve `unknowns` #1"; "Recommend export construct its own instance rather
+     than parameterise the shared one"; "Resolve `unknowns` #1 before handoff"
+verdict: FAIL (binding 8/9)
+decided by: B6
+advisory: 2/2 — all passed
+```
+
+No authoring defects to report. Every criterion was decidable from the transcript alone, and the grouping was applied as written.
+
+The fail is narrow. The transcript otherwise meets the output and return contracts, and adding one confidence line to the `unknowns` section would have passed the case.

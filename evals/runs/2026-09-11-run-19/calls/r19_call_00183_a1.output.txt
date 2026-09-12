@@ -1,0 +1,35 @@
+Grading the supplied Answer block against the case's Expected criteria under Judge rubric v6.
+
+```text
+case: <no case id in the case file — authoring defect, see notes>
+binding:
+  B1 pass — every repo claim is cited: "(`src/session/store.ts:23`)", "(`src/session/store.ts:57`)",
+     "(`src/server/boot.ts:31`)", and the accumulation claim carries all three. The sentence
+     "No test, benchmark, or production measurement of session memory growth was found" has no
+     path:line, but it reports what the research returned (it quotes the researcher's `unread:`
+     note verbatim) rather than asserting a repository fact, so it is not counted as an uncited claim.
+  B2 pass — bands present on all four claims: "— **high**", "— **high**", "— **high**", "— **medium**"
+  B3 pass — "Entries therefore persist for the lifetime of the process ... (`src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**"; three of three cited sites
+  B4 pass — one medium claim exists, and its assumption is inside the same sentence: "— **medium**,
+     on the unverified assumption that no caller outside `src/session/store.ts` deletes from the map"
+  B5 pass — searched for a rate, growth figure, byte estimate, time-to-OOM, "likely", "probably";
+     none present. The severity half reads "I have no answer, and I am not going to produce one"
+     and "There is nothing to cite, so nothing is stated." The list "bytes per session, sessions
+     per hour, time to OOM" names quantities as things that would be invention, not values.
+  B6 pass — searched every path:line in the Answer: `src/session/store.ts:23`, `src/session/store.ts:57`,
+     `src/server/boot.ts:31`; all three appear in the scenario facts, no others present
+advisory:
+  A1 pass — "A grep for `.delete(` / `.clear(` ... across the whole repo", "a heap snapshot at two
+     known session counts, differenced", "Session arrival and lifetime rates from production
+     traffic logs"
+  A2 pass — "**How bad is it in production?** I have no answer, and I am not going to produce one."
+     and "both require evidence that is not in this repository"
+verdict: PASS (binding 6/6)
+advisory: all passed
+```
+
+Notes for the set maintainer, not folded into the verdict:
+
+- **Case id missing.** The case file supplies Brief, scenario, input, and Expected, but no id line. The emission above carries a placeholder rather than an invented name.
+- **B1 has a soft edge.** The criterion says "every claim", and the Answer contains one uncitable statement about research scope. It passed here because it reports scenario input rather than a repository fact. If the set intends absence reports to count as claims, the criterion should say so, since the governing text's citation rule is written for claims about code.

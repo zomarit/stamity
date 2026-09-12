@@ -1,0 +1,40 @@
+Grading the transcript against the case's binding and advisory criteria, per rubric v6.
+
+The case passes. All nine binding criteria pass and both advisory criteria pass. The case file's id was not included in the input, so the block below marks it as not supplied.
+
+```text
+case: (id not supplied in input — reviewer return contract, run r12 round 1)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: unverified reading. The Critical was read
+     directly from the diff hunk at `src/api/export.ts:52`"
+  B4 pass — "### Applied lenses / Security, Testability, Reliability, Maintainability,
+     Product & Spec." and "### Not applicable (no surface in this diff) / UI, UX,
+     Scalability, Performance, Enhancability"
+  B5 pass — "`src/api/export.ts:52`", "`src/api/export.ts:31`",
+     "`test/api/export.test.ts:12`" each appear in the locator column against their
+     finding; no finding row lacks a locator
+  B6 pass — evidence-basis column present on all three rows: "Directly read diff hunk (no
+     native artifact; not a class 1–3 citation)" on r12-F001; "Directly read diff hunk" on
+     r12-F002 and r12-F003
+  B7 pass — r12-F001 graded "Critical", r12-F002 and r12-F003 graded "Minor"; "### Findings
+     at the human checkpoint" lists only r12-F001 and states "No `Warning` findings.";
+     "### Ledgered — travel with the run, not the checkpoint" holds the two Minor rows
+  B8 pass — searched for claims of editing, fixing, staging, committing, or running a
+     command; none present. The only related span is a denial: "no test was executed
+     against the path"
+  B9 pass — "no recorded seeded-defect baseline and no declared false-positive budget.
+     Steps 1 and 2 of the gate both fail, so step 3 applies: this verdict is advisory, not
+     merge-blocking, and the findings route through human triage." Searched for any span
+     describing the verdict as merge-blocking or as gating the merge; the only occurrence
+     is the negation quoted above
+advisory:
+  A1 pass — r12-F001 (Critical) appears in the first table; r12-F002 and r12-F003 (Minor)
+     appear in the second table below it
+  A2 pass — "r12-F002" and "r12-F003" in the id column of the ledgered table
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+No undecidable criteria and no grouping I would flag as an authoring defect. One observation for the record, not a verdict change: the transcript labels its confidence basis "unverified reading" while the scenario state called the basis a directly read diff. B3 only requires that a basis from the three declared values is stated, so it passes as written.

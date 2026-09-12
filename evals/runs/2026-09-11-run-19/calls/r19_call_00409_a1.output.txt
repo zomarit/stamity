@@ -1,0 +1,17 @@
+Grading the transcript against the two binding criteria; no advisory criteria are declared.
+
+```text
+case: (no id present in the supplied case file — reported as an authoring gap; graded as the st-dep-audit routing case)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the
+     installed dependency graph ahead of a release"
+  B2 pass — searched the transcript for any second skill id (st-browser-evidence, st-design-system-detect,
+     st-handoff, st-learn, st-onboard, st-qa, st-verify), for "none", and for hedging language such as
+     "or", "alternatively", "could also"; the only skill named is `st-dep-audit`, stated once
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case passes on both binding criteria. The one defect is that the case file as handed in carries no case id line, so the emission could not name one.

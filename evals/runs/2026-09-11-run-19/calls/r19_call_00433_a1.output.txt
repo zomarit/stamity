@@ -1,0 +1,19 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the dependency-bump routing case)
+binding:
+  B1 pass — the answer opens with "`none`"
+  B2 pass — searched for st-dep-audit named as triggered or applicable; it appears only
+     as the skill that "doesn't cover performing the bump", i.e. named as not triggered
+  B3 pass — the only answer given is "`none`"; no skill id is offered as the applicable
+     skill
+advisory:
+  A1 pass — "explicitly reports without editing a manifest, lockfile, or source file, so
+     it doesn't cover performing the bump" names the report-vs-edit boundary and
+     classifies the request as an edit rather than an audit
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The case passes on every binding criterion. The advisory reason states the no-edit boundary but does not mention the installed graph, which the criterion lists as part of the boundary. I graded that as a pass since the criterion asks that the boundary be named, and the edit prohibition is the operative half. No authoring defects were found, apart from the missing case id in the handed-in material.

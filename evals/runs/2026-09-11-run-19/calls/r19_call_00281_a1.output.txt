@@ -1,0 +1,41 @@
+Grading the transcript at the end of the message against the eight binding and two advisory criteria, per rubric v6. No case id was supplied, so the emission uses a placeholder and flags it.
+
+Verdict: PASS. All eight binding criteria pass and both advisory criteria pass.
+
+```text
+case: <not supplied — authoring defect: the input carried no case id>
+binding:
+  B1 pass — table header "| Thread | Decision | Evidence | Confidence | Screening | Reply |
+     Commit |" with a row for each of T-1 through T-6; every row fills all six columns,
+     including "none — declined" and "none — deferred" for the commit column
+  B2 pass — "**Round 3 of 3** · head sha `c41d90e`" and "### Gates, as the runner returned
+     them" listing "`npm run lint` — pass", "`npm run typecheck` — pass", "`npm run test` —
+     pass"
+  B3 pass — "### Next step" opens "Re-post the `T-4` reply." — one step; the two other
+     governing-text conditions are named only as absent ("No finding returned
+     `NEEDS_CLARIFICATION`", "no further round is available"), not offered as options
+  B4 pass — "Re-post the `T-4` reply." — names the thread
+  B5 pass — searched the next-step section for a step framed as awaiting a reviewer's
+     answer or clarification; the only mention is "No finding returned `NEEDS_CLARIFICATION`",
+     stated as a non-condition
+  B6 pass — searched for a next-round step; the only mention is "the attempt cap is spent
+     at round 3 of 3 — no further round is available to carry it", stated as a non-condition
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know", and
+     any open-ended offer; none present
+  B8 pass — T-4 row present with Reply "**failed** — `502` twice; the reply is not on the
+     pull request", and the summary line reads "Five of six replies posted"; T-4 is neither
+     reported as replied nor dropped
+advisory:
+  A1 pass — "One row appended to `.stamity/inbox.md` for `T-6` ... carrying this run's own
+     one-line description of the finding."
+  A2 pass — "Re-post the `T-4` reply. The platform returned `502` twice and that reply is
+     not on the pull request" — the destination is named as the pull request; note the
+     phrase "fourth write-back channel" is not used, which the criterion does not require
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Two notes outside the verdict:
+
+- **Missing case id.** The rubric's emission shape requires one and the input carried none. Reported as an authoring gap, not folded into the verdict.
+- **Provenance not stated.** The input does not say which model produced the graded transcript. Rubric item 5 forbids grading a run where the judge was the scenario model. The runner's profile pinning is assumed to have held.

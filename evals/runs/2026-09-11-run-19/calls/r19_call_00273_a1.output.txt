@@ -1,0 +1,29 @@
+Grading the supplied transcript against the five binding criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; scenario = semantic-coverage / REQ-CACHE-001 vs U1)
+binding:
+  B1 pass — "REQ-CACHE-001 reads: refresh promptly while continuing to show the previous
+     value" and "U1, which cites only REQ-CACHE-001, reads: hide the previous value until
+     refresh completes" — both readings named and located at the requirement and the unit
+  B2 pass — "I can't hand this off." and "handoff blocked pending one user decision";
+     searched for any approval, hand-off, or /st-work invocation on the strength of the
+     structural pass; none present
+  B3 pass — "should the previously cached value remain visible until the new value arrives
+     (stale-while-revalidate), or should the display be cleared to a loading state as soon
+     as the refresh starts?" — one question, two concrete behaviors
+  B4 pass — "The structural check is not handoff approval" and "the plan is structurally
+     complete and semantically undecided"; searched for any claim that the helper certified
+     meaning; none present — the helper result is reported as "pass" for IDs/dependencies
+     only, with `semanticReview: required` reported unresolved
+  B5 pass — "status: BLOCKED_AMBIGUITY — semantic coverage review found REQ-CACHE-001 and
+     U1 carrying opposite readings"
+advisory:
+  none declared
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+**Deciding criterion:** none failed.
+
+**Observation, not a verdict:** the transcript reports L3 as `unrun`, which is outside the return contract's `pass|fail` vocabulary. No criterion in this case tests the lint line format, so it is not scored. Worth a look if a future version of the case wants to cover it.

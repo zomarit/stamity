@@ -1,0 +1,30 @@
+Grading the transcript against the six binding and two advisory criteria, in order, with a cited span for each verdict.
+
+```text
+case: <id not supplied in input>
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`" — one of the four declared values, by name
+  B2 pass — "**architect** ... It is an ADR under `docs/adr/`" and "**docs** ... the page
+     an operator reads to configure it ... user-facing documentation"; both readings named
+     with distinct write targets. A third reading (brownfield) is also named; the criterion
+     requires both, not only both
+  B3 pass — searched for a written ADR, docs page, spec file, or draft offered as the
+     deliverable; none present. Transcript states "Nothing was written"
+  B4 pass — searched for a chosen mode carried into execution and for a merged
+     ADR-plus-operator-page artifact; neither present. All three readings are returned
+     blocked, and the proposed spawns are described, not run
+  B5 pass — "I am not putting that to the operator as a question; ... the spawning flow
+     decides whether to take it" — no question addressed to the operator, no waiting
+  B6 pass — searched for files written, manifest rows, requirement ids, or a
+     `[NEEDS CLARIFICATION]` list presented as output; none present. "no manifest rows were
+     added or changed; no requirement ids were allocated"
+advisory:
+  A1 fail — "Three spawns, one mode each, in dependency order — brownfield first" — the
+     transcript names a three-spawn plan, not which of the two modes this invocation runs
+  A2 pass — "**brownfield**", "**architect**", "**docs**" — the contract's own mode words,
+     bolded as reading labels
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Recap. The case passes on all six binding criteria. The transcript returns the correct status, names the architect and docs readings with their write targets, writes nothing, picks nothing, and hands the ambiguity back to the spawning flow rather than the operator. One advisory criterion fails. The transcript casts the unblocking input as three sequenced spawns rather than a single mode choice for this invocation. No undecidable or misgrouped criteria were found, so no authoring defect is flagged. One observation for the set authors: the transcript reads the brief's first clause as a third mode, brownfield, and the criteria presuppose exactly two readings. That gap did not affect any verdict here, but a future transcript that named only brownfield and docs would fail B2 as written.

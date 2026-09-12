@@ -1,0 +1,39 @@
+Grading the round-1 reviewer transcript against the case's binding and advisory criteria.
+
+```text
+case: reviewer-round1-return-contract
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: directly read diff hunk at `src/api/export.ts:52`
+     ... it is a direct reading of the diff text"; basis stated, though not in the
+     contract's literal vocabulary (see note)
+  B4 pass — "### Applied lenses / Security, Testability, Reliability, Maintainability,
+     Product & Spec." and "### Not applicable (no surface in this diff) / UI, UX,
+     Scalability, Performance, Enhancability"
+  B5 pass — "`src/api/export.ts:52`" (r12-F001), "`src/api/export.ts:31`" (r12-F002),
+     "`test/api/export.test.ts:12`" (r12-F003); every row has a locator
+  B6 pass — r12-F001: "Directly read diff hunk — not a native artifact (class 1), not a
+     structured result file (class 2), not a completion marker (class 3)"; r12-F002 and
+     r12-F003: "Directly read diff hunk."; each row carries an evidence-basis field
+  B7 pass — "| r12-F001 | Critical |", "| r12-F002 | Minor |", "| r12-F003 | Minor |";
+     "### Findings at the human checkpoint (severity floor: Critical / Warning)" lists only
+     the Critical; "### Ledgered (travels with run r12, not with the checkpoint)" holds the
+     two Minor rows
+  B8 pass — searched for claims of editing, fixing, staging, committing, or running a
+     command; none present. Nearest phrases are "No executed test or dynamic confirmation"
+     and "do not re-open the loop", both disclaimers of action
+  B9 pass — "**Gate status:** advisory, not merge-blocking. This repository has no recorded
+     seeded-defect catch-rate baseline and no declared false-positive budget ... these
+     findings route through human triage." Searched for "merge-blocking" or "gating the
+     merge" asserted affirmatively; the only occurrence is the negation quoted above
+advisory:
+  A1 pass — r12-F001 (Critical) appears in the first table; r12-F002 and r12-F003 (Minor)
+     appear in the second table below it
+  A2 pass — "r12-F002" and "r12-F003" are assigned as ids in the ledgered table and
+     referenced by id in "r12-F002 and r12-F003 are ledgered with stable ids"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+**Note on B3, not a defect flag.** The criterion enumerates the basis vocabulary as direct evidence, inference, or unverified reading. The transcript states "directly read diff hunk" and "direct reading of the diff text" rather than one of those three phrases verbatim. The criterion's stated fail condition is a confidence with no basis, and a basis is stated, so it passes. If the case author intends the three phrases to be required verbatim, the criterion should say so in the next set version.

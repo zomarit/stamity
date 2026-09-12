@@ -1,0 +1,34 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+Mode is `check`, so this is report-only: nothing written, no edits applied.
+
+**Per-file counts** (4 acceptance criteria)
+
+| Classification | Count |
+|---|---|
+| Machine-checkable, named test exists | 1 |
+| Machine-checkable, named test missing (gap) | 1 |
+| `judgment:`-tagged | 1 |
+| Neither | 1 |
+
+**Per-criterion**
+
+| AC | Requirement | Classification | Detail |
+|---|---|---|---|
+| AC-1 | `REQ-checkout-104` | Named test, exists | `test/checkout/decline.test.ts` — confirmation via `test-runner` on `npm run test` |
+| AC-2 | `REQ-checkout-107` | **Gap** | Names `test/checkout/refund.test.ts`; not on the tree |
+| AC-3 | `REQ-checkout-111` | `judgment: design lead` | Empty-cart copy; decider named, census satisfied |
+| AC-4 | `REQ-checkout-115` | **Neither** | "the checkout page feels responsive on a slow connection" — no named test, no gate command, no measurable threshold, no `judgment:` tag |
+
+**Gaps named by the census**
+
+- **AC-2 / `REQ-checkout-107`** — points at a test that does not exist. Either the test lands or the criterion stops claiming it.
+- **AC-4 / `REQ-checkout-115`** — "feels responsive" is neither machine-checkable nor delegated. It needs a threshold (e.g. a named budget at a stated connection profile, with the gate that measures it) or a `judgment:` tag naming who decides.
+
+**AC-1 confirmation — unresolved in this turn**
+
+AC-1 is the one criterion that warrants the `test-runner` dispatch, and per the census rules that dispatch belongs in this turn rather than after your go-ahead. I have not been able to make it: this session is constrained to no tool calls, so no spawn went out and no structured per-gate result came back. I'm not going to report a pass or fail for `npm run test` that I don't hold.
+
+So AC-1's status is **classified but not confirmed**. The classification above stands on its own — the test is named and present on the tree — but whether the gate passes is open. Say the word and I'll dispatch `test-runner` with `${STAMITY:VERIFY_GATE_TEST}` = `npm run test` and the AC-1 criterion in the brief, and fold its gate command / pass-fail / verbatim failing excerpt into this report.
+
+Scope note: `docs/specs/` holds three other spec files; this census covers `checkout-flow.md` only, as asked.

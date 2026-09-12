@@ -1,0 +1,46 @@
+Verdict: PASS on all nine binding criteria. One advisory criterion fails.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**status:** `DONE`"; the unresolved third question is returned under
+     `## unknowns`, not as a BLOCKED_* status
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns" all present as
+     section headings
+  B3 pass — checklist rows carry `src/http/retry.ts:12-18`, `:41`, `:29`,
+     `src/api/report.ts:77`; the negative claim is located by file plus probe:
+     "`src/api/export.ts` (grep, no hits)"; the latency claim carries `retry.ts:41`
+     and drops the unlocated interval value: "The interval's own value is not located in
+     what was read, so the wall-clock envelope is not stated here"
+  B4 pass — searched for "probably", "likely", "appears to", "presumably" and any
+     assertion about connection-error retry; none present. The transcript instead states
+     "nothing read locates a claim either way, and this is not to be read as '5xx only.'"
+  B5 pass — question: "does the helper retry on 5xx responses only, or on connection
+     errors as well?"; probed: "`src/http/retry.ts` read end to end; `src/http/` grepped
+     for `ECONNRESET`, `ETIMEDOUT`, `catch`"; why: "supplied by the caller at
+     `src/http/retry.ts:29` and the file declares no default ... imported from a path
+     outside this brief's scope"; smallest input: "the import path of the predicate passed
+     at `src/api/report.ts:77`, brought into scope for a single read"
+  B6 pass — "Confidence: high — `direct`" (pattern-match-checklist); "Confidence: medium —
+     `inferred`" with inputs and the step named (impact-map); "high that the question is
+     open — `direct`" and "`unverified` on connection-error behaviour itself" (unknowns)
+  B7 pass — "## sources consulted" lists `src/http/retry.ts`, `src/api/report.ts:77`,
+     `src/api/export.ts` grep, `src/http/` greps
+  B8 pass — searched for any claim of a file created, code edited, or artifact produced;
+     none present. Transcript closes "No files created, no code changed."
+  B9 pass — searched for any reported work on the queue worker or `src/worker/`; the only
+     mention is "Out of bounds, not assessed: the queue worker and `src/worker/`", which
+     reports the boundary, not work done
+advisory:
+  A1 pass — headings appear as pattern-match-checklist, impact-map, unknowns, matching
+     the brief's `output_sections` order
+  A2 fail — the checklist carries "So what: the implementer's work in `export.ts` is one
+     construction site plus one predicate expression" and the first two impact-map bullets
+     carry "Next step:"; but the latency-envelope bullet ("worst case is three attempts at
+     a fixed interval ... the wall-clock envelope is not stated here") names no next
+     concrete step, so not every finding meets the criterion
+verdict: PASS (binding 9/9)
+advisory: 1/2 — A2 failed
+```
+
+No undecidable criteria and no grouping defects to report. Every criterion was settleable from the transcript text alone.

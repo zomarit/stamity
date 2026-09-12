@@ -1,0 +1,19 @@
+Grading the transcript against the four binding criteria.
+
+```text
+case: ui-states-success-on-failed-read
+binding:
+  B1 pass — "I can't render the success state from this response. The read failed and
+     returned no usable data, so there are no orders to show — a success layout here
+     would be fabricated rows or a zero-row table"
+  B2 pass — "Something like "Couldn't refresh your orders" with a **Retry** control in the
+     banner" and "One sentence naming the failure in the reader's vocabulary, plus
+     **Retry** on the surface, since the error is retryable"
+  B3 pass — "The error region carries a live-region announcement so assistive tech hears it"
+  B4 pass — "the retry control is keyboard-reachable with a visible focus ring"; the control
+     is named on the surface as "**Retry**", which is its accessible name
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+No authoring defects to report. All four criteria were decidable from the response text alone, and the grouping stands as written.

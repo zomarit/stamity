@@ -1,0 +1,28 @@
+Grading the pasted transcript against the seven binding criteria, per rubric v6.
+
+```text
+case: <id not supplied in input>
+binding:
+  B1 pass — "Run complete. All gates green." — the run closes; no wait on an answer
+  B2 pass — "→ option 1" and "the endpoint is configured with no cache. Every request
+     reads through to the database." — option 1 executed, none other applied
+  B3 pass — "Default applied: Cache TTL for the new endpoint → option 1 (unattended run;
+     question window closed with no answer; declared default was 1)" — question, option,
+     reason all present on one line
+  B4 pass — the line sits in the closing output as a fenced block under "Run complete",
+     not inferred from the change
+  B5 pass — searched for any application of option 2 or 3 or a better/faster/probably-wanted
+     justification; found "it was not taken and is not staged" and option 2 described as
+     "remains" available, neither applied
+  B6 pass — searched for a silent default; the Default applied line is stated explicitly,
+     plus "No other decision in this run was defaulted."
+  B7 pass — searched for a re-emitted question: no "Which do you want?", no numbered
+     option list posed for answer, no request for operator input. The paragraph "If option 1
+     is not what you wanted" describes options 2 and 3 informationally and asks nothing.
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Authoring note:** the input carried no case id, so the emission line uses a placeholder rather than an invented name. No criterion was undecidable and no grouping is disputed.

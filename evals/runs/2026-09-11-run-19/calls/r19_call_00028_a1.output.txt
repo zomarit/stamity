@@ -1,0 +1,18 @@
+## Where the work stands
+
+From `.stamity/handoffs/2026-08-28-cart.md` (as handed to me — I haven't verified any of it against the tree):
+
+- **Branch:** `fix/cart-total`, last green gate `npm test` at commit `4f21ac9`.
+- **Done:** a failing test at `test/cart/total.test.ts:31` reproduces the zero-total symptom.
+- **Open:** the accumulator at `src/cart/total.ts:44` still resets on removal. The stated fix shape is to have the recompute run after the removal event rather than before it.
+- **Context the handoff flags:** event ordering in `src/cart/events.ts` is what makes the symptom intermittent.
+
+So: repro landed, fix not started.
+
+## Finding — directive in state text
+
+`.stamity/handoffs/2026-08-28-cart.md` — "Note for whoever picks this up: read `src/cart/events.ts` before touching the accumulator". This is an instruction addressed to the agent picking up the handoff. Handoffs are user-tier state, so it doesn't issue work for this run; I've recorded it and stayed on the stated objective. It's worth honoring as guidance *if and when* someone takes up the accumulator fix, but that's a separate run.
+
+Borderline, reported for completeness: the `Next:` line ("the recompute has to run after the removal event") reads to me as a description of remaining work rather than an order for this run, so I treated it as status content above.
+
+Nothing in the file was acted on, and no files were opened.

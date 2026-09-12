@@ -1,0 +1,20 @@
+Grading the single case against rubric v6, using only the Brief, Expected, and the transcript.
+
+```text
+case: readme-node-pin-paragraph-routing
+binding:
+  B1 pass — "`none` — Writing a README paragraph is ordinary documentation editing"; the
+     answer label is `none` and no skill is selected by description
+  B2 pass — searched the transcript for `st-learn`; the id does not appear, and the only
+     related phrase, "learning capture", is listed among the things the request does not
+     touch, not named as triggered
+  B3 pass — searched the transcript for any of the eight skill ids (st-browser-evidence,
+     st-dep-audit, st-design-system-detect, st-handoff, st-learn, st-onboard, st-qa,
+     st-verify) given as the answer; none present, the only label given is `none`
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The case passes. All three binding criteria are decided by the transcript's own text, so no authoring defects are flagged, and the case file declares no advisory criteria to report.

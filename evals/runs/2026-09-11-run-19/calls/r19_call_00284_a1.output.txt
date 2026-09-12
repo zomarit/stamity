@@ -1,0 +1,12 @@
+"Add pagination" reads at least two ways here, and the two axes interact: **which endpoints** and **what page mechanism**. All three list endpoints return every row, but only `GET /api/v1/orders` is a performance problem, and there's no existing helper or spec text to copy — so whatever I pick becomes the convention.
+
+**Which of these should I build?**
+
+1. **Offset/limit on `/api/v1/orders` only.** Smallest diff, one endpoint's response shape changes, trivially revertible. Offset degrades on deep pages and leaves the other two unpaginated.
+2. **Offset/limit on all three, behind a shared helper.** One convention established in one pass; blast radius is three endpoints' response contracts changing simultaneously, and any consumer of the other two breaks for no current performance benefit.
+3. **Cursor-based on `/api/v1/orders` only.** Actually fixes the slow endpoint at depth; costs a decision on a stable sort key and cursor encoding, and diverges from the other two until they're migrated.
+4. **Cursor-based on all three, behind a shared helper.** Most complete and the most work — new helper, new cursor format, three contracts changed, hardest to unwind if the cursor shape is wrong.
+
+Unless you say otherwise, I'll take these defaults rather than block on them: page size 50, max 200, `?limit=`/`?offset=`, and results wrapped in an envelope (`{"data": [...], "pagination": {...}}`) rather than bare-array-plus-headers — say the word if the envelope is a breaking change you'd rather avoid, and I'll put the metadata in response headers instead.
+
+Default if no response: **1**. It's the reversible one that addresses the endpoint that's actually hurting, and it doesn't lock the repo into a cursor format that `docs/specs/` hasn't ruled on. If you pick 2 or 4, I'd want to know whether the other two endpoints have external consumers before I change their shape.

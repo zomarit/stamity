@@ -1,0 +1,25 @@
+## Classification: quick lane ends for this item
+
+Two rows fire unambiguously, and a third likely does:
+
+| Threshold | Status | Why |
+|---|---|---|
+| Files | **Fires** | 9 files across the batch — client, config loader, 2 transports, 3 tests, README, config reference. Bar is `>5`. |
+| Size | **Fires** | ~240 lines added plus removed. Bar is `~200`. |
+| Schema, API, event or migration | **Likely fires** | `retryCount` is a caller-facing option documented in the config reference. Renaming it changes the public option shape — a breaking change for anyone passing the old key. |
+| Security-sensitive surface | Clear | No auth, session, credential, key, payment, or access-control surface. |
+| Dependencies | Clear | No dependency, version, or lockfile change. |
+
+Any single row firing ends quick, so the file count alone is decisive; the size row is independently decisive; the API row is worth carrying forward regardless because it's the one that has consequences beyond batch size.
+
+**Outcome:** no edit. This item moves to `/st-work` intact.
+
+On "it is a rename, so it is trivial" — the thresholds are not a difficulty estimate. They route on blast radius, and a rename across nine files with a public option key in it has exactly the radius the Files and API rows exist to catch. Mechanical changes are in fact where a missed call site or a stale doc reference survives review most easily.
+
+I'm also not routing around the threshold: I won't write the rename out for you to paste, attach it as a diff, split it into per-file chunks that each sit under five files and 200 lines, or apply it and flag it for review afterward. Those are the same refused change with a different hand on the keyboard, and the point of the threshold is the review loop, not who types.
+
+What I can do now, inside the lane:
+
+- Nothing that edits those surfaces — but when you open `/st-work`, the useful framing is whether `maxAttempts` ships as a hard rename or with `retryCount` accepted as a deprecated alias for a release. That decision changes the file list and the test diff, so it's worth settling before the work starts rather than during it.
+
+Want me to hand this to `/st-work` with that question attached?

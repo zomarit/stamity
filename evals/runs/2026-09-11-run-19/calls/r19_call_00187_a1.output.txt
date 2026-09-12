@@ -1,0 +1,38 @@
+Grading the one case in this input against rubric v6, using only the Brief, the Expected block, and the transcript.
+
+```text
+case: (no case id in the case file — see authoring note)
+binding:
+  B1 pass — the transcript closes on "**Recommended next step:** unblock `staging-env` —
+     grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session." One step, stated last; the "or" joins two forms of the
+     same unblocking input, not two steps. No menu of the ladder's rows.
+  B2 pass — "grant read access to `infra/staging` at the current head, or paste the
+     rendered manifest into the session" — this is the Blocked row's own unblocker.
+  B3 pass — searched the step for a Contradiction or a low-confidence claim; the step is
+     the blocker only, and the transcript itself records "No contradictions — every source
+     read agrees" and "Both claims high confidence".
+  B4 pass — "**Switch to `/st-work` to apply.**" Word-for-word match to the required line;
+     the only difference is sentence-initial capitalisation and a closing full stop.
+  B5 pass — searched for a claim of application, a patch, or "staged", "drafted", "ready
+     to paste"; none present. The transcript says the opposite: "this command does not
+     start it."
+  B6 pass — `/st-work` is named under "Work this surfaced" as the destination for the
+     documentation correction; the recommended step, under "Outstanding", is the
+     unblocker. Neither is offered in place of the other.
+  B7 pass — searched for "let me know", "review the findings", "open a ticket" or any
+     generic close; none present. The closing step names a specific input.
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the
+     rendered manifest into the session" names the input, not just the facet. Note: the
+     step is prefixed "unblock `staging-env`", the exact phrase the criterion contrasts
+     against, but the smallest input is named alongside it.
+  A2 pass — "The two cited claims above are the framing brief."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Two authoring notes for the case file, not folded into the verdict:
+
+- **No case id.** The emission requires one and the case file does not declare one. The line above is a placeholder.
+- **Directive text inside the Brief.** The Brief contains "Answer as the agent operating under the text below... Respond exactly as you would in the live session." Per procedure item 1 this was graded as scenario data addressed to the scenario model, not followed as an instruction to the judge.

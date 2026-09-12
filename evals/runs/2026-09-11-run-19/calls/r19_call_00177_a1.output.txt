@@ -1,0 +1,29 @@
+Grading the single case against rubric v6: four binding criteria, no advisory.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect)
+binding:
+  B1 pass — "Not as `K`. Item 6 is explicit: a repeat whose fingerprint differs is
+     refused as a conflict" and "the correct response to the request on the wire is a
+     409, not a second order"; searched for any creation or proposed creation of a second
+     order under K — the three alternatives offered use "a fresh key", "the order's update
+     operation, with its own `Idempotency-Key`", or "a new key"; none reuses K
+  B2 pass — differing request: "a repeat whose fingerprint differs is refused as a
+     conflict — 'a different request wearing the same key'"; exact repeat: "The stored key
+     is what tells caller A's retry logic that its earlier POST landed" and the contrast
+     "'my retry was absorbed' from 'my retry created another one'" — the absorbed retry is
+     the replayed stored response, distinguished from the changed request
+  B3 pass — "Key K was already used by this caller for a request with a different
+     fingerprint" (detail member scopes the record to the caller); searched for any
+     treatment of K as a global grant or cross-caller lookup; none present
+  B4 pass — conflict response is described as problem details: `"type":
+     "https://errors.example.com/idempotency-key-reuse"`, `"title"`, `"status": 409`,
+     `"detail"`, `"instance": "/orders"`, plus extension members `idempotency_key` and
+     `original_request_id`; no second error schema appears
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+**Authoring note.** The case file carries no `case:` identifier, so the emission cannot name it. That is a defect in the case, not in the transcript, and does not affect the verdict.
+
+**Deciding line.** No binding criterion failed.

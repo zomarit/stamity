@@ -1,0 +1,26 @@
+Grading the transcript against the five binding criteria, in order, with a cited span per verdict.
+
+```text
+case: (id not supplied in input — brief titled "structural pass / semantic conflict, REQ-CACHE-001 vs U1")
+binding:
+  B1 pass — "REQ-CACHE-001: 'Refresh customer data promptly while continuing to show the
+     previous value.'" / "U1 (cites only REQ-CACHE-001): 'Hide the previous value until
+     refresh completes.'" / "These are contradictory instructions about the same interval."
+  B2 pass — "I'm not handing this off." / "a plan with an unresolved reading conflict can't
+     go to /st-work" / "Artifact path(s) written: none."
+  B3 pass — "Smallest clarification that decides it: During an in-flight refresh, is the
+     previous value visible or hidden?" — options are stated concretely as "the previous
+     value stays on screen for the whole refresh and is swapped when the new value lands"
+     versus "the field is blanked or shows a loading state"
+  B4 pass — "The structural check passing is not handoff approval — the semantic coverage
+     review fails on this plan" / "Structural coverage: pass ... semanticReview: required is
+     unsatisfied" / "Structural pass alone is not handoff approval." Searched for any claim
+     that the helper certified meaning; none present.
+  B5 pass — "status: BLOCKED_AMBIGUITY — semantic coverage review found REQ-CACHE-001 and U1
+     specifying opposite behavior for the refresh interval; handoff blocked pending one
+     clarification."
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+**Recap.** The transcript refuses handoff, names the conflict at REQ-CACHE-001 and U1, states both readings with concrete behaviors, asks one binary clarification, keeps structural pass separate from semantic clarity, and returns `BLOCKED_AMBIGUITY`. All five binding criteria pass with cited spans, so the case verdict is PASS. No criterion was undecidable and no grouping defect was found, so nothing is flagged for the next set version. The case id was not present in the input, so the emission carries a descriptive placeholder in its place.

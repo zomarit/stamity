@@ -1,0 +1,15 @@
+The transcript names one skill and the case declares two binding criteria and no advisory ones. Graded below.
+
+```text
+case: (id not supplied in the input; the case is the st-handoff routing scenario)
+binding:
+  B1 pass — "`st-handoff`" is the answer given, on its own line as the routing decision
+  B2 pass — searched for a second skill id, an "equally", "or", "also applies" alternative,
+     and a `none` answer; only `st-handoff` appears, and the reason sentence names only
+     that skill's `prepare` mode
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case file did not carry an id in the material handed in, so the block names the scenario instead. That is reported as an input gap, not an authoring defect in the criteria, which were both decidable from the transcript alone.

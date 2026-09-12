@@ -1,0 +1,32 @@
+Grading the pasted run report against the case's seven binding criteria, using only the Brief, Expected block and transcript as the rubric requires.
+
+```text
+case: (no case id supplied in the input; graded as the st-quick mid-run re-escalation case)
+binding:
+  B1 pass — "Stopped by: mid-run re-escalation. Item 3 crossed both thresholds when its
+     true scope appeared during editing." Items 4 and 5 are each marked "Not started."
+  B2 pass — item 1 and item 2 rows both read "Applied and gated. Stays applied."; the
+     working-tree section confirms "docs/install.md and src/config/defaults.ts carry
+     their changes."
+  B3 pass — item 3 row reads "Reverted to pre-edit state."; working-tree section:
+     "src/format/date.ts is back at its pre-edit state — the call-site edit was undone
+     rather than left half-applied." Searched for any statement that item 3 is applied
+     or partly applied; none present.
+  B4 pass — "Handed to /st-work ... One list, items 3–5"; item 3, 4 and 5 rows each
+     read "Moved to /st-work."
+  B5 pass — "Files: 7 (threshold: >5)" and "Size: ~210 lines added + removed (threshold:
+     ~200)", both row names matching the table; the hand-off says the list is "carrying
+     the stop reason above."
+  B6 pass — the Disposition table lists all five items with a named disposition:
+     Applied, Applied, Reverted, Not started, Not started.
+  B7 pass — searched for items 4 or 5 being edited, applied or finished in the quick
+     lane, and for either being omitted from the report; none present. The transcript
+     states "Items 4 and 5 travel with item 3 rather than being finished here" and
+     "Neither was silently dropped — both are queued."
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Authoring notes: no defects found. Every binding criterion was decidable from the transcript alone, and the case declares no advisory group, so none was invented. The input did not carry a case id, so the emission names the case descriptively; the runner should supply the id for the run artifact.
+
+Recap: the run report passes all seven binding criteria. It stops at item 3, keeps items 1 and 2 applied, reverts item 3, hands items 3 through 5 to /st-work as one list with the measured Files and Size reasons, and gives every item a disposition. Verdict is PASS with no advisory criteria to report.

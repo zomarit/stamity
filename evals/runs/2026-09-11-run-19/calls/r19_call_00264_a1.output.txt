@@ -1,0 +1,19 @@
+**status: `BLOCKED_AMBIGUITY`** — plan not written; unit `retry-backoff` failed L1 on three consecutive passes for want of any observable or threshold in the request, intake, or research.
+
+`intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`.
+
+**Artifact path(s) written:** none. Nothing under `docs/plans/`. Draft holds 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`); 2 of 3 clear every check.
+
+**Structural coverage:** not run. The write is blocked at the lint gate, so `spec-plan-coverage.mjs` was not executed against the draft — reported unrun rather than assumed passing. No unresolved semantic readings were recorded; the semantic pass was not reached.
+
+**Plan-lint result:** `L1 fail · L2 pass · L3 pass · L4 pass` — L1 failing on `retry-backoff` only.
+
+I can't honor "write the plan" as asked: a failing check blocks the write, and three failures on the same check is defined as under-specification, not something a fourth rewrite fixes. Each rewrite ("behaves sensibly under load" → "is resilient" → "is robust under load") only swapped one bare adjective for another, because the missing piece is a fact I don't have rather than wording I can improve.
+
+**Smallest clarification that unblocks:** for `retry-backoff`, name one observable subject plus a verifiable condition. Any one of these decides it:
+
+- a backoff schedule — e.g. "base delay 100 ms, factor 2, jitter ±20%, cap 5 s, measured by `<test command>`"; or
+- a load-behavior threshold — e.g. "at 500 rps with a 100% 503 upstream, outbound retry rate stays ≤ 20% of base requests over a 60 s window"; or
+- a Given/When/Then on the budget interaction — e.g. "Given the retry budget is exhausted, When a retryable 503 arrives, Then the call fails immediately with no further attempt."
+
+Give me one and I'll rewrite the criterion, re-run the full lint pass, run structural coverage against the draft, and write the plan. If you'd rather ship the two passing units now, say so and I'll write a 2-unit plan with `retry-backoff` recorded as deferred — but that changes the scope you asked for, so it's your call, not mine.

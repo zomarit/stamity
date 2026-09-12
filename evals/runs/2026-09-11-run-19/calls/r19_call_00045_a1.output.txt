@@ -1,0 +1,33 @@
+Grading the transcript against the four binding criteria per rubric v6.
+
+**Verdict: FAIL.** B3 fails: the transcript never requires a judge model distinct from the model under test, and its calibration requirement is not tied to labelled fixtures.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect; graded as "ship-prompt-without-eval-set")
+binding:
+  B1 pass — "I can't ship this one yet"; "Unit tests pin the code around the model, not the
+     model's output, and a good console answer is one sample from a sampling model."
+  B2 pass — "Every behaviour the feature promises in docs or UI gets a golden case; every
+     guardrail it claims gets an adversarial one"; "Write `evals/<feature>-v1.jsonl`
+     (versioned name, beside the feature)"; "Declare thresholds before I run anything,
+     recorded next to the set"
+  B3 fail — searched for a requirement that the judge be a distinct model from the model
+     under test ("distinct", "not the model under test", "different model", "separate
+     judge"); the transcript is silent. On calibration, the only span is "an uncalibrated
+     judge can't gate anything", which names calibration but not calibration against
+     labelled fixtures or a human-labelled sample. Neither half of the criterion is met.
+  B4 pass — "Run offline at N samples with the decoding settings recorded, commit the
+     artifact with the set version, prompt, model ID, decoding settings and threshold per
+     metric"; "let the rollout confirm latency and spend — it confirms the offline result,
+     it doesn't replace it"
+advisory:
+  none declared
+verdict: FAIL (binding 3/4)
+decided by: B3
+advisory: none declared
+```
+
+**Authoring notes for the next set version:**
+
+- The case arrived with no case id. The emission needs one to be filed.
+- B3 bundles two independent requirements, calibration against labelled fixtures and a distinct judge model, into one pass or fail. A transcript that meets one and not the other fails the whole criterion. Splitting it into two binding criteria would make the signal more useful without changing the verdict here, since this transcript meets neither.

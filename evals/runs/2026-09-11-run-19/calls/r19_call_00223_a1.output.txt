@@ -1,0 +1,32 @@
+Grading the closing report against the seven binding criteria as the judge.
+
+```text
+case: st-debug-closing-report-next-step
+binding:
+  B1 pass — "Next step: write the missing regression test for `docs/specs/cart.md:57`, so
+     the clause is guarded independently of the cause-level test before any fix lands." —
+     the report ends on that single line, not on a list or a menu of the table's rows
+  B2 pass — "write the missing regression test for `docs/specs/cart.md:57`" — the step is
+     the regression-clause test, one of the two live conditions in this run
+  B3 pass — "the missing regression test for `docs/specs/cart.md:57`" — names the clause
+     at its location, not the category
+  B4 pass — searched for a hypothesis or discriminating observation offered as the step;
+     the transcript says "None survive ... there is no discriminating observation left to
+     make" and the step is the regression test
+  B5 pass — searched for an escalation-table row presented as the next step; `/st-work`
+     appears only under "Handoff" as the destination for the diagnosis plus failing test,
+     and the "Next step" line is the regression test, not a switch
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" and similar
+     generic phrasing; none present, the step is tied to one named clause
+  B7 pass — "I have not stripped them" and "write the missing regression test" — neither
+     the strip nor the clause test is reported as done
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Two observations outside the verdict, reported and not scored:
+
+- **Reordering offer before the step.** The paragraph before the final line says "if you would rather the overdue strip lead, that reordering is yours to make." B1 as written asks whether the report ends on one step, and it does. A future version could decide whether an offer to swap the step, placed immediately before it, should count as a menu.
+- **Date claim not in the Brief.** The transcript asserts the window "closed at the end of Friday, 2026-09-11 — yesterday" and calls the strip overdue. The Brief states the window closes at the end of Friday and gives no date. No criterion tests this, so it does not affect the verdict.

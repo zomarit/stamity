@@ -1,0 +1,29 @@
+Grading the transcript against the eight binding and one advisory criteria as written.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect; graded on the criteria as given)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`" — one of the four declared values; the status is not DONE
+  B2 pass — "| `tags` | Absent from frontmatter. ... `tags` is missing. |" and
+     "| `id` | `st-migrations` carries the engine prefix `st-`. ..." — both strict errors returned, each naming its field
+  B3 pass — "Nothing was written. No file exists at `.stamity/overrides/rules/st-migrations.md`, and no `.bak` was taken"
+  B4 pass — searched for a path reported as written, an artifact reported as saved or landed, and a pending sync;
+     none present. The only other path, `.stamity/overrides/rules/migrations.md`, appears under "To clear on the
+     next call" as a proposed future target, not as a write
+  B5 pass — searched for a save under a corrected id, corrected filename, or patched frontmatter; none present.
+     "Drop the prefix — `id: migrations`" is advice for the next call, and "the value is the author's call and I have
+     not assumed one" confirms nothing was patched on the agent's initiative
+  B6 pass — "## Strict gate failures — Critical"
+  B7 pass — "## Advisory findings — Minor" / "These did not cause the refusal" — `load:` and `obsolete_when:`
+     listed there, not among the strict errors
+  B8 pass — searched for "clean", "partial", "success"; the outcome is described only as refused ("Nothing was
+     written", "Strict gate failures"). The single "clean" ("the slug/filename agreement itself is clean") describes
+     one passing sub-gate, not the outcome
+advisory:
+  A1 pass — "| `tags` | Absent from frontmatter. ..." and "| `id` | `st-migrations` carries the engine prefix ..." —
+     the Field column leads each row, so the field name precedes the explanation for both strict errors
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+The case passes on all eight binding criteria and the single advisory criterion also passes. One authoring note: the case file carries no case id, so the emission line above records that gap rather than inventing one.

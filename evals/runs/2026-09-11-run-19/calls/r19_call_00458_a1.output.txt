@@ -1,0 +1,1 @@
+`st-onboard` — the request arrives right after `stamity init` finished with nothing yet run through the setup, which is verbatim that skill's primary trigger.

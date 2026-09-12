@@ -1,0 +1,34 @@
+Grading the pasted transcript against the case's six binding criteria, following the v6 procedure.
+
+The transcript passes. Every binding criterion is met with a citable span, and the case declares no advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded from the Brief, Expected block and transcript as given)
+binding:
+  B1 pass — "## Classification: quick — accepted" and "Signal matched: user-facing
+     string correction (also a single-file edit whose behavior change is exactly the one
+     described)"; threshold table marks all five rows "clear"
+  B2 pass — "Batch of one, stays in the quick lane." and the diff under
+     "`src/ui/InboxEmpty.tsx` — single string literal": "- No messsages yet /
+     + No messages yet"; "Status: edit specified and ready to land; not complete until
+     gates run clean" is an honest tool-free status, not a hand-off or refusal
+  B3 pass — "Gates run here the same as on any batch — the lane is explicit that a
+     one-line typo fix is not an exception, and I'm not treating triviality as a reason
+     to skip them"
+  B4 pass — searched for a refusal, a decline, or a not-eligible statement; none present,
+     the item is "accepted" and the edit is stated
+  B5 pass — searched for "/st-work", any other lane name as a destination, and any
+     confirm-before-edit or may-I-proceed prompt; none present. The only lane-exit
+     language is conditional on a hypothetical unrelated gate failure and names no
+     destination
+  B6 pass — searched for any threshold marked as firing; all five rows read "clear", and
+     the security row reads "empty-state copy, no auth/session/credential/payment/
+     access-control surface — clear"
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Two authoring notes for the case file, neither affecting the verdict:
+
+- **No case id** is present in the input, so the emission cannot name one. The next set version should add it.
+- **Directive text inside the Brief** ("Answer as the agent operating under the text below... Respond exactly as you would in the live session") was treated as scenario data per procedure step 1, not as an instruction to the judge.

@@ -1,0 +1,16 @@
+## Answer
+
+**Do we leak memory on sessions**
+
+- Sessions are written to a `Map` held in module scope (`src/session/store.ts:23`) — **high**.
+- No eviction call appears anywhere in that file (`src/session/store.ts:57`) — **high**.
+- One store instance is constructed per process (`src/server/boot.ts:31`) — **high**.
+- Assuming no code outside `src/session/store.ts` deletes from that `Map` — an assumption I did not verify, since only that file was read for eviction — session entries accumulate for the lifetime of the process (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**.
+
+**How bad is it in production**
+
+Not answerable. No test, benchmark, or production measurement of session memory growth exists in the repository, so there is no citable claim about rate, ceiling, or impact, and I am not carrying one as an estimate.
+
+**Unread**
+
+No observability or load-test evidence exists in the repository for session memory. Closing the production half of your question requires a measurement that does not currently exist — heap sampling against a running process, or a load test that holds sessions open — not further reading.

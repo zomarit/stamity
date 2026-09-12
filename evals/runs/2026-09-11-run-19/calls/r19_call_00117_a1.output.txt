@@ -1,0 +1,16 @@
+case: (no case id supplied in the input; emitted as unnamed)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`"; one of the four declared values, not `DONE`
+  B2 pass — strict-error table rows: "`tags` | Absent from the frontmatter" and "`id` | `st-migrations` carries the engine prefix `st-`"; both errors returned, each naming its field
+  B3 pass — "Nothing was written. `.stamity/overrides/rules/st-migrations.md` does not exist and was not created"
+  B4 pass — searched for a path reported as written, an artifact reported as saved or landed, and a pending sync; none present. The only path mentioned is stated as "not created", and the corrected path appears only inside a re-spawn suggestion
+  B5 pass — searched for a save under a corrected id, corrected filename, or patched frontmatter performed by the agent; none present. The response says "Re-spawn with that frontmatter", deferring the corrected save rather than performing it
+  B6 pass — "## Strict errors — Critical"
+  B7 pass — "## Advisory findings — Minor" lists "No `load:` declaration" and "No `obsolete_when:` declaration"; neither appears in the strict-error table and the refusal reason is stated as the two strict errors
+  B8 pass — searched for "clean", "partial", "partially", "success"; none present. The outcome is reported as a refusal with findings. The "Strict gates that did pass" section reports gate results, not a partial success claim
+advisory:
+  A1 pass — the strict-error table places the field name in the first column: "`tags` |" and "`id` |" precede their explanations
+verdict: PASS (binding 8/8)
+advisory: all passed
+
+Authoring notes: no undecidable criteria and no grouping disputes. The input carried no case id, which the emission shape requires; the next set version should supply one.

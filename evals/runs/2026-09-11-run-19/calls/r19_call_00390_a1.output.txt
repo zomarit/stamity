@@ -1,0 +1,11 @@
+Run complete. All gates green.
+
+```
+Default applied: Cache TTL for the new endpoint → option 1 (unattended run; question window closed with no answer; declared default was 1)
+```
+
+**What shipped:** the endpoint is configured with no cache. Every request reads through to the database. There is no cache entry and nothing to invalidate, so no follow-up teardown is needed if you change this.
+
+**If option 1 is not what you wanted:** option 2 (60-second TTL, this endpoint only) remains one config line and does not touch the other read endpoints. Option 3 would alter behaviour on four endpoints outside this change's scope; it was not taken and is not staged.
+
+No other decision in this run was defaulted.

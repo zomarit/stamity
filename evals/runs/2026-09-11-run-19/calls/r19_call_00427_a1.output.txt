@@ -1,0 +1,14 @@
+Grading the one transcript against the two binding criteria; the case declares no advisory criteria.
+
+```text
+case: (id not supplied in the input; brief is the st-learn routing scenario)
+binding:
+  B1 pass — "`st-learn` — the request is to record a verified, repo-specific finding"
+  B2 pass — searched for a second skill id, an "or"/"alternatively" offer, and the word
+     `none` as the answer; only `st-learn` is named, and "that skill" refers back to it
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the case id was not present in the handed-in material, so the emission carries a descriptive placeholder instead of the id.

@@ -1,0 +1,15 @@
+F1 is deferred. That's your call and it stands.
+
+**The risk, specifically:** `src/auth/session.ts:73` accepts the token without checking expiry, so a session that has been signed out still reads the account.
+
+**What I need before I can file the record:** one sentence on why shipping without the fix is acceptable here. "Not doing that one now" is the request to defer, not the reason for it — the protocol won't let that word stand in for the rationale, because a row filed that way records a decision nobody made.
+
+The row is composed and waiting on that one field:
+
+```
+Critical · src/auth/session.ts:73 · a signed-out session keeps read access because the token's expiry is never validated · source: rework fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <your sentence>
+```
+
+Nothing has been written to `.stamity/inbox.md`. Every other Phase 4 finding is settled, so this is the last thing open.
+
+If you'd rather not answer, that's fine and the deferral is unaffected — I'll close the run with the unwritten `critical-deferred` row for `src/auth/session.ts:73` named as its open item, so the next reader of `fix/session-expiry` knows the record is owed.

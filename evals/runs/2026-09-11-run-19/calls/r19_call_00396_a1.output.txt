@@ -1,0 +1,72 @@
+The close read the ledger before writing the record and refused: `r7/review/2` still read `open`. A row open at record-write time is a gate failure, not a note, so the proof block could not be emitted in the state you handed me.
+
+`r7/review/2` is Minor. The severity floor keeps it off the QA checkpoint, but not off the exit invariant — the run closes its own Minor rows. Its disposition isn't ambiguous (no dispositions here differ materially in cost or blast radius), so the ambiguity floor doesn't fire and I didn't stop to ask. I closed it on the declared normal path: **deferred**, with the rationale that put it below the floor, and appended its inbox row. That makes two inbox rows from this run, not one.
+
+```
+PROOF BLOCK — run r7
+=====================
+
+GATES
+  npm run lint       pass
+  npm run typecheck  pass
+  npm test           pass
+  failing excerpts:  none
+
+REVIEW VERDICTS
+  round 1  stamity-reviewer  changes requested  confidence: high
+  round 2  stamity-reviewer  approved           confidence: high
+
+LEDGER (exit state — no row reads `open`)
+  r7/review/1    Warning  stamity-reviewer  src/api/users.ts:88   fixed
+  r7/review/2    Minor    stamity-reviewer  src/api/users.ts:120  deferred
+  r7/security/1  Warning  stamity-security  src/api/users.ts:41   deferred
+
+DECISIONS TRACE
+  gate/lint        pass, no decision required
+  gate/typecheck   pass, no decision required
+  gate/test        pass, no decision required
+  r7/review/1      fixed in src/api/users.ts; round 2 approved the fix
+  r7/security/1    deferred — rate limiting is tracked separately in the inbox
+  r7/review/2      closed at exit as deferred — Minor severity, below the QA
+                   checkpoint floor; non-blocking against the round-2 approval,
+                   so it travels to the inbox rather than holding the run
+  ASK outcomes     none — no row's disposition was itself ambiguous, so the
+                   ambiguity floor did not fire and no question was raised
+  close/gate       first close attempt refused: r7/review/2 read `open`.
+                   Row closed, inbox row appended, close re-run.
+
+ARTIFACTS TOUCHED
+  src/api/users.ts        stamity-implementer
+  test/api/users.test.ts  stamity-implementer
+
+PER-ACTION ATTRIBUTION
+  stamity-implementer  tool: —  src/api/users.ts        edited, gates green
+  stamity-implementer  tool: —  test/api/users.test.ts  edited, gates green
+  stamity-reviewer     tool: —  round 1  changes requested
+  stamity-reviewer     tool: —  round 2  approved
+  stamity-security     tool: —  raised r7/security/1, deferred
+  (tool field not recorded in this run's trace; left `—` rather than inferred)
+
+INBOX ROWS APPENDED (.stamity/inbox.md, dated block 2026-09-12)
+  Warning  src/api/users.ts:41   rate limiting absent on the users endpoint;
+                                 tracked separately  source: /st-work
+                                 Ref: .stamity/ledger/r7.md#r7/security/1
+  Minor    src/api/users.ts:120  review round 1 finding, below the QA
+                                 checkpoint severity floor  source: /st-work
+                                 Ref: .stamity/ledger/r7.md#r7/review/2
+
+NEXT STEP
+  Two rows left this run deferred and now live in .stamity/inbox.md: the
+  rate-limiting Warning at src/api/users.ts:41 (r7/security/1) and the Minor at
+  src/api/users.ts:120 (r7/review/2). Triage both via /st-board; the Warning is
+  the one that carries real exposure. Neither ledger row carries a `retired`
+  field yet — that is written when its inbox row leaves.
+
+Not done:
+  - src/api/users.ts:41   scheduled as inbox row (r7/security/1)
+  - src/api/users.ts:120  scheduled as inbox row (r7/review/2)
+```
+
+Two things worth your attention. The inbox evidence line for `r7/security/1` reuses the rationale you recorded; if the original security finding says something sharper, that line should be rewritten before triage. And the per-action tool field is `—` on every row because this run's trace didn't carry it — the attribution section is weaker than the format intends, and that's a gap in the trace, not something I could fill in.
+
+If you'd rather `r7/review/2` had been fixed in-run or rejected outright instead of deferred, say so and I'll rewrite the row in place — the id makes that converge — and pull its inbox row back out.

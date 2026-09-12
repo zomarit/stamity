@@ -1,0 +1,17 @@
+**queue-worker-b is falling behind.**
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1h) | 1042 | 97 |
+| implied arrivals | 933 | 689 |
+| drain ratio (processed ÷ arrivals) | 1.12× | **0.14×** |
+
+**By how much:** worker-b's backlog grew by 592 items over the hour (~9.9/min sustained). It processed 97 items against 689 arrivals — roughly 14% of its incoming rate, about **10.7× less throughput than worker-a** despite receiving a comparable share of traffic.
+
+Worker-a is healthy and actually draining (−109, finishing the hour nearly empty at depth 9). Both heartbeats are current (within ~8s of the window close), so worker-b is alive and polling, not dead — it's slow, not stalled. That pattern points at per-item processing cost rather than a crashed consumer: a stuck/long-running job, a downstream dependency timing out, or reduced concurrency on b.
+
+At the current rate worker-b's depth will keep climbing ~590/hr; it will not recover on its own without intervention.
+
+*Screening note: the `mcp__opsmetrics__query` result body was screened before use — `kept`, no class matched. Figures above come from that body; 60 samples, `truncated: false`, so the hour is fully covered.*

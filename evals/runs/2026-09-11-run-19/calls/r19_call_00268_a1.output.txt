@@ -1,0 +1,16 @@
+I can't write it — plan-lint blocks the write, and this is the third consecutive failure on the same check and same unit, which the gate defines as an under-specified request rather than something a fourth rewrite fixes. I've now tried three phrasings of that criterion ("sensibly under load" → "resilient" → "robust under load") and each is a bare adjective, because no observable and no threshold for `retry-backoff` exists anywhere in the inputs: not in the request, not in the intake read, not in the four returned research findings. A fourth rewrite would either repeat the failure or invent a number the plan would then carry as if it came from you.
+
+**status: `BLOCKED_AMBIGUITY`** — `retry-backoff` has no testable acceptance criterion and no source supplies one; nothing written.
+
+- `intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+- **Artifact path(s):** none written. Draft holds 3 units — `retry-budget-config`, `retry-backoff`, `retry-metrics` — held unwritten under `docs/plans/`.
+- **Structural coverage:** unrun. The `spec-plan-coverage.mjs` pass runs before handoff, and the run stopped at the lint gate; I am not recording a pass I did not measure. Semantic coverage review: unrun, same reason — no unresolved readings identified or ruled out.
+- **Plan-lint result:** `L1 fail · L2 pass · L3 pass · L4 pass` (pass 3; L1 fails on `retry-backoff`, passes on `retry-budget-config` and `retry-metrics`).
+
+**Smallest clarification that unblocks it** — one of these, for `retry-backoff` only:
+
+1. A threshold with units plus the command that measures it, e.g. "p99 added latency under a 50 rps burst with 30% 503s stays under 400 ms, measured by `<load-test command>`"; or
+2. A Given/When/Then over observable backoff state, e.g. "Given a budget of N retries in a 10 s window, When the budget is exhausted, Then the client returns the upstream error without a further attempt and emits `retry_budget_exhausted`"; or
+3. Confirmation that the backoff schedule itself is the observable — concrete delays and jitter bounds — and I write the criterion against those values.
+
+Answer any one and I re-run the pass, run structural coverage and the semantic review, and write all three units in the same run. If you'd rather not decide the threshold now, say so and I'll write the plan with `retry-backoff` scoped down to what is specified and the load behavior split into a separate unit marked as requiring your input — but that's a narrower plan than you asked for, so it's your call, not mine.

@@ -1,0 +1,18 @@
+Grading the transcript against the three binding criteria and emitting the verdict block.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`none` — writing a README paragraph is ordinary documentation editing"
+  B2 pass — searched for "st-learn" named as triggered; absent. The only nearby token is
+     "learning" inside a list of things the response says are not involved, which is a
+     negation, not a selection
+  B3 pass — searched for any skill id offered as the answer (st-browser-evidence,
+     st-dep-audit, st-design-system-detect, st-handoff, st-learn, st-onboard, st-qa,
+     st-verify); none named. The sole label given is `none`
+advisory: none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The case passes on all three binding criteria. One note for the run artifact: the input did not carry a case id, so the block above records that gap rather than inventing one.

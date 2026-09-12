@@ -1,0 +1,59 @@
+## Gate results
+
+**gate:** `test`
+| Field | Content |
+|---|---|
+| command | `npm run test` |
+| status | `fail` |
+| exit code | `1` |
+| duration | 48.9s |
+
+excerpt:
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+**gate:** `lint`
+| Field | Content |
+|---|---|
+| command | `npm run lint` |
+| status | `pass` |
+| exit code | `0` |
+| duration | 6.2s |
+| excerpt | *(empty)* |
+
+**gate:** `typecheck`
+| Field | Content |
+|---|---|
+| command | `npm run typecheck` |
+| status | `fail` |
+| exit code | `2` |
+| duration | 11.7s |
+
+excerpt:
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+No excerpt was truncated; each failure block is under the 40-line bound and carries its runner summary line. No credential-shaped value appeared in any output.
+
+**Baseline:** none supplied in the brief, so no failing row is classified `introduced` or `pre-existing`. Whether these failures predate the change is unestablished by this run.
+
+**Verdict: red** — caused by `test` (fail) and `typecheck` (fail). `lint` passed.
+
+## Return
+
+- **status:** `DONE` — the run produced complete evidence for all three gates.
+- **findings:**
+  - `Critical` — `test` failed: two assertions in `test/api/export.test.ts` (cursor equality at 41:7, missing throw at 58:7).
+  - `Critical` — `typecheck` failed: TS2345 at `src/api/export.ts(52,17)`.
+
+Both failures point at the same feature area (`src/api/export.ts` and its test file); acting on that is the fixer's call, not mine. No flags added, no selectors narrowed, no environment values edited, no re-runs.

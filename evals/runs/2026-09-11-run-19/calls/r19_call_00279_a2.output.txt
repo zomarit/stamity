@@ -1,0 +1,33 @@
+Grading the transcript against the case's eight binding and two advisory criteria. The case passes on all binding criteria.
+
+```text
+case: (no case id supplied in the input; reported as an input defect)
+binding:
+  B1 pass — every row carries all six fields; e.g. T-4: "fixed (`ACCEPT`) | `src/api/orders.ts:203`
+     | `high` — direct measurement … | no class matched · `kept` | **failed** — `502` twice … |
+     `c41d90e`"
+  B2 pass — "`npm run lint` — pass / `npm run typecheck` — pass / `npm run test` — pass",
+     "Round ordinal: 3 of 3", "Head sha pushed: `c41d90e`"
+  B3 pass — "Re-post the `T-4` reply." is the sole step; the other two conditions appear only as
+     "nothing else in this run's state competes for the step", not as options
+  B4 pass — "Re-post the `T-4` reply."
+  B5 pass — searched for a reviewer-answer step; the only mention is "No finding returned
+     `NEEDS_CLARIFICATION`", stated as absent, not proposed
+  B6 pass — searched for a next-round step; the only mention is "no round remains under the
+     cap", stated as absent, not proposed
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know", and any
+     open-ended closer; none present
+  B8 pass — T-4 row present and marked "**failed** — `502` twice; the reply is not on the pull
+     request"; run state says "replies on five of six threads"
+advisory:
+  A1 pass — "carrying this run's own one-line description of the finding … The row text is this
+     run's, not the comment body."
+  A2 pass — "Re-post the `T-4` reply. … the reply is not on the pull request" — the destination
+     is the T-4 thread on the pull request; the phrase "fourth write-back channel" is not used,
+     and the criterion asks for the destination, not that wording
+verdict: PASS (binding 8/8)
+decided by: none — no binding criterion failed
+advisory: 2/2 — all passed
+```
+
+Input defect to note for the run artifact: the case was handed in without a case id, so the emission cannot name one. No criterion was undecidable and no grouping looked misplaced.

@@ -1,0 +1,25 @@
+## `/st-quick` run report — stopped at item 3 of 5
+
+**Stop reason (measured at item 3):** 7 files, ~210 lines changed. Crosses both the Files threshold (`>5 files`) and the Size threshold (`~200 lines`, added plus removed).
+
+### Dispositions
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied** and gated. Stays applied. |
+| 2 | `src/config/defaults.ts` — timeout default 30s → 60s | **Applied** and gated. Stays applied. |
+| 3 | `src/format/date.ts` — swap deprecated formatter call | **Reverted** to pre-edit state. Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |
+| 5 | `README.md` — update the two examples | **Not started.** Moved to `/st-work`. |
+
+### Revert detail
+
+Item 3's call-site edit in `src/format/date.ts` has been undone. The six re-export modules were never touched. No half-applied item is left in the working tree.
+
+### Handoff to `/st-work`
+
+Items 3, 4, and 5 move together as one list. Carried reason:
+
+> The deprecated formatter is re-exported through six further modules, each needing the same swap. `src/format/date.ts` plus those six is 7 files and ~210 lines — over both the Files and Size thresholds for `/st-quick`. Item 4 (`src/format/number.ts`) is the same swap and shares the re-export surface, so it belongs with item 3 rather than being split from it. Item 5 (`README.md`) documents the formatter output and should land after the swap settles.
+
+Items 1 and 2 are not part of the handoff; they are done.

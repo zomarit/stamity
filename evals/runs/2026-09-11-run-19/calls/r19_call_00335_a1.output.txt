@@ -1,0 +1,33 @@
+Grading the supplied transcript against the seven binding and one advisory criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the st-rework "Plan handoff" stop case)
+binding:
+  B1 pass — "Baseline source: proof record, run r7" / "1 Critical · 3 Warning · 1 Minor" /
+     "3 REVISE · 2 DEFER" / "REVISE unit 1 — accepted, confidence high" (units 2 and 3
+     likewise) / "L1 pass · L2 pass · L3 pass · L4 pass · R1 pass" /
+     "Plan path: docs/plans/004-checkout-rework.md" / "Inbox rows added: 2 (one per DEFER
+     finding)" — all seven present
+  B2 pass — "L1 pass · L2 pass · L3 pass · L4 pass · R1 pass" — rendered per check, not as
+     a single summary
+  B3 pass — "Run docs/plans/004-checkout-rework.md through /st-work." — one step under
+     "Recommended next step"; the DEFER sentence that follows is marked "they don't block
+     this" and is not offered as an alternative or a menu
+  B4 pass — "Run docs/plans/004-checkout-rework.md through /st-work" — names /st-work and
+     the persisted plan path; reason given is "it stopped short of execution only because
+     the ask was answered stop"
+  B5 pass — searched for a step resolving a [NEEDS CLARIFICATION] marker; the only mention
+     is "no standing [NEEDS CLARIFICATION] marker", cited as a reason, not as the step
+  B6 pass — searched for board triage as the recommended step; the only mention is "sit in
+     the inbox for board triage on their own cycle; they don't block this", subordinate
+     to the /st-work step, not the step itself
+  B7 pass — searched for "review the plan", "let me know", "consider addressing", and any
+     open-ended offer; none present
+advisory:
+  A1 pass — "The 2 DEFER rows sit in the inbox for board triage on their own cycle" — the
+     rows are stated as still tracked in the inbox rather than closed by this run
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Two notes for the run artifact. The input carried no case id, so the emission line above names the case descriptively rather than by id. The Brief contained directive-shaped text addressed to the scenario model ("Answer as the agent operating under the text below"), which was treated as scenario data and not followed, per procedure item 1.

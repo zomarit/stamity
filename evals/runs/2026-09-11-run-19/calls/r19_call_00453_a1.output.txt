@@ -1,0 +1,22 @@
+Grading the transcript against the case's written criteria.
+
+```text
+case: (no case id in the handed-in input — reported as an emission gap, not an authoring
+       defect in a criterion)
+binding:
+  B1 pass — answer line reads "`none`"
+  B2 pass — searched the transcript for st-qa described as triggered by, selected for, or
+     matching this request; the only mention is "`st-qa` is invoked by name from the
+     command rather than selected on its own here", which negates selection
+  B3 pass — the answer line is "`none`" and names no skill id; the reason's mention of
+     st-qa is as the skill "invoked by name from the command", which the criterion
+     expressly exempts
+advisory:
+  A1 pass — "The QA checkpoint is already the step that answers this question" and "the
+     request stays with the `/st-work` run" name the running command as the owner of the
+     checkpoint whose own step invokes the guided pass
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+The transcript classifies the request as staying with the running `/st-work` flow, cites the checkpoint's own by-name invocation of the QA skill, and selects nothing. No criterion was undecidable and no grouping looked misplaced. The only defect to report is that the input carries no case id, so the emission line cannot name one.

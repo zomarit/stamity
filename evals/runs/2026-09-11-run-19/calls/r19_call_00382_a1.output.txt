@@ -1,0 +1,33 @@
+## Result — Unit 3
+
+**Status: `BLOCKED_AMBIGUITY`**
+
+### Competing readings
+
+The brief says "remove the legacy `user.displayName` field." `displayName` exists in three places, and "the field" resolves to any of them:
+
+1. **COLUMN** — drop the `display_name` column from the `users` table. Irreversible migration; touches anything reading the table directly, including jobs and analytics outside this repo's control.
+2. **API** — remove `displayName` from the `GET /api/v1/users` response body. Breaking change to a public, versioned endpoint; blast radius is every external consumer, and it is not something this unit can unship once released.
+3. **TYPE** — delete the `displayName` property from the internal `SessionUser` type. Contained; compile-time failures only, all inside this codebase.
+
+These are not stages of one change. Each can be done without the others, and picking wrong is expensive in two of the three cases.
+
+### Question for the operator (verbatim, self-contained)
+
+> Unit 3 says "remove the legacy `user.displayName` field." `displayName` is (a) a column on the `users` table, (b) a field on the public `GET /api/v1/users` response, and (c) a property on the internal `SessionUser` type. Which of these three should Unit 3 remove? If more than one, which — and is the public API removal cleared as a breaking change on `v1`, or should it be deprecated rather than removed?
+
+### Smallest unblocking input
+
+One line: any non-empty subset of `COLUMN`, `API`, `TYPE`.
+
+Example sufficient answers: `TYPE` — or — `API, TYPE` — or — `API deprecate-only, TYPE`.
+
+One follow-on constraint the operator should know when choosing: selecting `COLUMN` forces `API` and `TYPE` as well, unless a replacement source for the value is named, since the response field and the type property are populated from that column. `TYPE` alone, and `API` alone, are each self-consistent.
+
+### Work performed
+
+None. No subset of the three changes is common to all readings, so there is no portion I could complete that is safe under every interpretation. No files modified, no migration drafted.
+
+### On re-dispatch
+
+With the answer supplied, this unit is straightforward and needs no further clarification. If the answer includes `API`, I will also need to know whether a deprecation window/header is expected before removal; `TYPE` and `COLUMN` carry no further open questions.

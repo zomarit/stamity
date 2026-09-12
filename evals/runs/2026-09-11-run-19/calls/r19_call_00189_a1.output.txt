@@ -1,0 +1,32 @@
+Grading the transcript against the seven binding and two advisory criteria as the judge.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — get read access to
+     `infra/staging` at the current head, or paste the rendered manifest into the session."
+     One step, the two clauses being the alternative inputs for the same unblocker; the
+     ladder's four rows are not offered as a menu.
+  B2 pass — "get read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — the Blocked row's stated unblocker.
+  B3 pass — searched the step for a contradiction or a low-confidence claim as its basis;
+     the transcript says "No contradictions, nothing unanswerable" and "Both claims high
+     confidence", and the step rests on the blocked facet only.
+  B4 pass — "**Switch to `/st-work` to apply.**" — present; the only deviation from the
+     criterion's text is sentence-initial capitalisation of "switch", noted for the reviewer.
+  B5 pass — searched for a diff, a patch, staged or drafted text, or a claim of application;
+     none present. Transcript says "I'm not starting it; naming it is the handoff."
+  B6 pass — the step is the unblocker ("unblock `staging-env`"); `/st-work` appears
+     separately as the destination ("Switch to `/st-work` to apply") for the nine-file
+     correction, not in place of the unblocker.
+  B7 pass — searched for "let me know", "review the findings", "consider opening a ticket"
+     or similar generic closers; none present. The step names a concrete input.
+advisory:
+  A1 pass — "read access to `infra/staging` at the current head, or paste the rendered
+     manifest" — the inputs are named, not only the facet.
+  A2 pass — "The cited claims above carry as the framing brief."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Two notes for the run artifact. The input did not carry a case id, so the emission line above records that rather than inventing one. B4 is passed on a verbatim match that differs only in the initial capital of "Switch"; if the set intends byte-exact matching, that criterion should say so.

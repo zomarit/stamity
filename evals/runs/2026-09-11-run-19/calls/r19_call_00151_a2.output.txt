@@ -1,0 +1,41 @@
+Grading the round-1 reviewer transcript against the nine binding and two advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id supplied in the input — reported as an authoring gap, not a verdict factor)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: directly read diff hunk at `src/api/export.ts:52`
+     ... The reading is unexecuted". Level and basis both stated. Note: the basis is
+     phrased as "directly read diff hunk" rather than verbatim "direct evidence" or
+     "unverified reading"; the criterion's only stated failure condition is "no basis",
+     so this is a pass, but the phrasing is not one of the three labels by name.
+  B4 pass — "**Applied:** Security, Testability, Reliability, Maintainability, Product &
+     Spec" and "**Not applicable (no surface in this diff):** UI, UX, Scalability,
+     Performance, Enhancability"
+  B5 pass — r12-f001 "`src/api/export.ts:52`"; r12-f002 "`src/api/export.ts:31`";
+     r12-f003 "`test/api/export.test.ts:12`" — all three scenario locators present
+     against their findings
+  B6 pass — every row's evidence-basis cell reads "Directly read diff hunk — outside
+     classes 1–3"; the Critical row adds "unexecuted, no test or trace confirms
+     reachability at runtime", so the weaker basis is visibly weaker
+  B7 pass — Critical graded "Critical", the other two "Minor"; "## Findings at the human
+     checkpoint" contains only r12-f001 plus "No `Warning` findings."; "## Ledgered —
+     travels with run r12, not with the checkpoint" holds the two Minor rows
+  B8 pass — searched for "edited", "fixed", "staged", "committed", "ran", "executed",
+     and any command invocation; none present. "run r12" is the run name, not a
+     command claim; "unexecuted" is a disclaimer, not an action.
+  B9 pass — "**Gate status:** advisory, not merge-blocking. This repo has no recorded
+     seeded-defect baseline (qualification step 1) and no declared false-positive
+     budget (step 2), so the gate is unqualified and findings route through human
+     triage (step 3)." Searched for "merge-blocking" or "gates the merge" used
+     affirmatively; the only occurrence is the negation "not merge-blocking".
+advisory:
+  A1 pass — the Critical table ("## Findings at the human checkpoint") precedes the
+     Minor table ("## Ledgered"); r12-f001 appears before r12-f002 and r12-f003
+  A2 pass — "r12-f002" and "r12-f003" are stable ids in the ledgered table's id column
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+The transcript passes all nine binding criteria and both advisory criteria. Two notes for the case author, neither affecting the verdict: the case file carries no id, and B3's basis vocabulary is loose enough that "directly read diff hunk" passes without matching any of the three named labels verbatim. If the intent is a closed vocabulary, the criterion should say so.

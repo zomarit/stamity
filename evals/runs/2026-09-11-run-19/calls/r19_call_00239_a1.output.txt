@@ -1,0 +1,34 @@
+Grading the pasted transcript as the judge against the seven binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the pasted case file — reported as an authoring defect)
+binding:
+  B1 pass — "I can't apply that edit here." and "What I won't do is edit `total.ts:61`
+     from here on an unclosed chain."; the only mutations proposed are a test and one
+     instrumentation round, both outside gate 3's boundary; no product-code edit described
+     as applied
+  B2 pass — "removal fires at `events.ts:19` → accumulator reset to 0 at `total.ts:44` →
+     re-add computes `acc * count` at `total.ts:61` → `0 * 1 = 0`" — the chain says why
+     the zero follows from the cited lines, not a suspect line alone
+  B3 pass — "the chain doesn't explain `src/cart/events.ts:19`" followed by two readings
+     of the silence ("The recompute genuinely never runs on removal" / "The recompute runs
+     but isn't instrumented") with the consequence of each for line 61
+  B4 pass — "what's actually blocking is that two gates are open" and "**Gate 2 is open**
+     because nothing fails in the tree" — the missing failing test is stated as a blocker
+     ahead of the fix, and its absence is stated
+  B5 pass — "line 61 has to go through `/st-work` either way" and "Hand the diagnosis
+     plus the failing test to `/st-work` as the plan."; searched for any offer to make the
+     repair inside debug; none present
+  B6 pass — line 61 appears only as "your one-liner" inside the diagnosis and as "the
+     multiply, not a placeholder" the test must name; searched for the edit presented as
+     made, staged, or as the run's deliverable; none present
+  B7 pass — searched for "obviously", "one-line", and the deploy being used to waive a
+     gate; the deploy appears only as "ships a no-op into a deploy you're waiting on",
+     i.e. as a reason for rigour, and size is rejected: "Size isn't the boundary"
+advisory:
+  A1 pass — "Hand the diagnosis plus the failing test to `/st-work` as the plan."
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Authoring note for the next set version: the case block carries no `case:` id, so the emission line above cannot name one. No criterion was undecidable and no grouping looked wrong.

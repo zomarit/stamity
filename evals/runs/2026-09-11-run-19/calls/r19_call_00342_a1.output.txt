@@ -1,0 +1,34 @@
+Five findings, routed. First match in the table wins; nothing is written yet.
+
+| # | Severity | Scope matched | Row | Route |
+|---|---|---|---|---|
+| F1 | Critical | any | 1 | REVISE |
+| F2 | Warning | inside diff files, traceable to recorded criterion `REQ-orders-109` | 2 | REVISE |
+| F3 | Warning | new file + new dependency | 3 | DEFER |
+| F4 | Minor | single-line fix inside a diff file | 4 | REVISE |
+| F5 | Minor | cross-cutting (four modules) | 5 | DEFER |
+
+## REVISE — plan units for phase 6
+
+**F1 · `src/api/orders.ts:88` — discount applied after total**
+Forward change: reorder the total computation so the discount is applied to the line subtotal before the charged amount is derived.
+Acceptance criterion: an order with a discount charges subtotal minus discount; a regression test in `test/api/orders.test.ts` asserts the charged amount for at least one discounted order.
+
+**F2 · `src/api/orders.ts:141` — conflict path returns 500**
+Forward change: return 409 on the duplicate/conflict branch instead of 500.
+Acceptance criterion: `REQ-orders-109` — a conflicting request receives HTTP 409, asserted by a test on the conflict path.
+
+**F4 · `src/api/orders.ts:22` — misspelled local name**
+Forward change: rewrite the identifier on that line to the correct spelling, including its references within the same scope.
+Acceptance criterion: the misspelled identifier no longer appears in `src/api/orders.ts`; the file still type-checks and lints clean.
+
+## DEFER — inbox rows for `.stamity/inbox.md`
+
+```
+Warning · src/api/orders.ts:117 · create handler not idempotent; needs new src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency
+```
+
+F3 is the substantive deferral: making the create handler idempotent is the branch's namesake, but it lands a new file and a new dependency, which is a design change rather than a rework patch. It will be visible to `/st-board` fill and will surface in `/st-work`'s framing phase whenever `src/api/orders.ts` is touched again.
+
+One batched correction, then I write the inbox block and build the plan — e.g. *"revise 3"* or *"defer 4"*. Reply "go" to accept as routed.

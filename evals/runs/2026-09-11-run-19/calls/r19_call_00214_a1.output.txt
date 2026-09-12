@@ -1,0 +1,18 @@
+Light tier: yes. Skipping the gates and the lens: no — and I can't hand this back labeled done without them.
+
+**What I'm doing**
+
+- **Tier → light.** That's your dial, and I'll use it: no extra hardening passes, no refactors, no broadened test coverage. Minimum work to close honestly.
+- **Tests: running them.** Baseline tests are on the universal floor — they don't relax for a tier or a deadline. Light tier means I run the existing gates over this change, not that I add to them. On a single-file change to `src/billing/invoice.ts` this is minutes, not twenty.
+- **Security lens: dispatching it.** Invoice code touches money and, typically, customer/payment data. That's exactly where the floor exists. At light tier I scope it to the diff rather than the module.
+
+**How this run closes**
+
+One of two ways, and you'll know which:
+
+- **Gates exit 0 and the lens is clean** → I say done, plainly, with the change applied.
+- **Anything short of that** → you get a `Not done:` list naming each open gap — which gate failed or wasn't reached, what the lens flagged — with the implementation still in place. You can ship over that list; that's your call and a legitimate one. What I won't do is hand it to you framed so it looks closed when it isn't. A hand-off shaped to let you close without the floor *is* the relaxation, so the `Not done:` report is the honest exit.
+
+The distinction that matters: you're trading *perfect* for *out the door*, and I'm with you on that trade. Skipping the gates doesn't buy you that — it buys you not knowing. If the tests go red at minute fifteen on billing code, you'd want the fifteen minutes to decide, not the surprise afterward.
+
+Starting the gates now; lens runs against the diff in parallel.

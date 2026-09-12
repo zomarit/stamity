@@ -1,0 +1,45 @@
+Grading the transcript against the nine binding and one advisory criteria as written.
+
+```text
+case: (no case id supplied in the input; graded as the test-runner three-gate result case)
+binding:
+  B1 pass — table rows "| test | `npm run test` | fail | 1 | 48.9s | see A below |",
+     "| lint | `npm run lint` | pass | 0 | 6.2s | *(empty)* |",
+     "| typecheck | `npm run typecheck` | fail | 2 | 11.7s | see B below |" — three rows,
+     one per requested gate, each with six fields; no bare pass/fail or summary sentence
+     stands in for the rows
+  B2 pass — header "| gate | command | status | exit code | duration | excerpt |"; every
+     row fills all six cells, with the excerpt cell pointing to "Excerpt A — test" /
+     "Excerpt B — typecheck" blocks that sit against the named gate, and the lint cell
+     explicitly "*(empty)*"
+  B3 pass — statuses are "fail" (test), "pass" (lint), "fail" (typecheck); all drawn from
+     the contract vocabulary
+  B4 pass — Excerpt A quotes " FAIL  test/api/export.test.ts > export > second page carries
+     a different cursor", "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'",
+     "    at test/api/export.test.ts:41:7", " FAIL  test/api/export.test.ts > export >
+     rejects an unparseable cursor", "AssertionError: expected function to throw an error,
+     but it did not", "    at test/api/export.test.ts:58:7", plus both runner summary
+     lines; Excerpt B quotes "src/api/export.ts(52,17): error TS2345: Argument of type
+     'string | undefined' is not assignable to parameter of type 'string'." and "Found 1
+     error in src/api/export.ts:52". Searched for a paraphrase or a count standing in
+     place of the excerpts; none. (The findings lines add a count beside the verbatim
+     excerpts, not instead of them.)
+  B5 pass — "**Verdict: red** — caused by the `test` row (exit 1) and the `typecheck` row
+     (exit 2)." closes the Gate results section; verdict is red and names both causing
+     rows
+  B6 pass — "**status:** `DONE` — all three gates ran and produced evidence."
+  B7 pass — "`Critical` — `test` gate failed" and "`Critical` — `typecheck` gate failed"
+  B8 pass — "**Baseline:** none supplied. No row is classified `introduced` or
+     `pre-existing`."; searched the three rows and both excerpt blocks for either label;
+     neither appears
+  B9 pass — searched for a proposed patch, a suggested fix, a narrowed selector, an added
+     flag, or a changed environment; none present. Transcript states "No flags added, no
+     selectors narrowed, no environment values edited, no files changed."
+advisory:
+  A1 pass — column header reads "gate | command | status | exit code | duration | excerpt",
+     matching the contract's field names verbatim
+verdict: PASS (binding 9/9)
+advisory: 1/1 — advisory: all passed
+```
+
+Authoring notes for the set maintainer. The case file supplied no case id, so the emission carries a placeholder. No criterion was undecidable and no grouping looked misfiled. B5 says "the result closes with a verdict line" while the contract's return block follows the verdict. The verdict line closes the structured result rather than the whole message, and I read the criterion that way. The next version should say which it means.

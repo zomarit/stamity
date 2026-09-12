@@ -1,0 +1,16 @@
+Grading the single transcript against the case's binding criteria; no tools needed.
+
+```text
+case: (id not supplied in the input; scenario is the post-`stamity init` "What now?" routing case)
+binding:
+  B1 pass — "`st-onboard` — the request arrives right after `stamity init` finished with
+     nothing yet run through the setup"
+  B2 pass — searched the transcript for a second skill id, for `none`, and for hedging
+     language offering an alternative ("or", "also", "either"); only `st-onboard` appears,
+     once, as the sole answer
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the one-line transcript, so the case passes. No authoring defects were observed. The case id was absent from the material handed in, which the runner should supply so the emission can be keyed.

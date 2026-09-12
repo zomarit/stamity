@@ -1,0 +1,35 @@
+Grading the transcript against the six binding criteria in order, then emitting the block.
+
+```text
+case: (id not supplied in the input; brief is the st-rework phase-4 routing scenario on feat/orders-idempotency)
+binding:
+  B1 pass — the routing table lists F1, F2, F3, F4, F5 each with a Route cell
+     ("F1 … REVISE", "F2 … REVISE", "F3 … DEFER", "F4 … REVISE", "F5 … DEFER");
+     "Five findings, routed."
+  B2 pass — "F1 | Critical | any | 1 | REVISE", "F2 | Warning | … `REQ-orders-109` | 2 |
+     REVISE", "F4 | Minor | single-line fix inside a diff file | 4 | REVISE"
+  B3 pass — "F3 | Warning | new file + new dependency | 3 | DEFER",
+     "F5 | Minor | cross-cutting (four modules) | 5 | DEFER"
+  B4 pass — one table under "Five findings, routed."; "One batched correction, then I write
+     the inbox block and build the plan — e.g. *"revise 3"* or *"defer 4"*." Searched for a
+     per-finding prompt; none present.
+  B5 fail — plan-unit half is stated ("## REVISE — plan units for phase 6"); inbox target
+     and row shape are stated ("## DEFER — inbox rows for `.stamity/inbox.md`", rows
+     "Warning · src/api/orders.ts:117 · … · source: rework feat/orders-idempotency",
+     "Minor · src/api/orders.ts:64 · … · source: rework feat/orders-idempotency").
+     Searched for the block being dated and for "append"; the transcript is silent. The
+     nearest span is "then I write the inbox block", which names one block but not a dated
+     one and not an append. The criterion is a conjunction and one conjunct is unmet.
+  B6 pass — "nothing is written yet"; "Forward change:" entries describe intended edits
+     without a diff or code; inbox rows are shown as what they "become", and the write is
+     future and gated ("One batched correction, then I write the inbox block"). Searched
+     for an applied patch, a diff, a staged change, or a claim that a file was modified;
+     none present.
+advisory:
+  none declared
+verdict: FAIL (binding 5/6)
+decided by: B5 — the response never states the DEFER rows land as a dated block
+advisory: none declared
+```
+
+One authoring note, reported not repaired: B5 bundles five conjuncts into one criterion, and the failure here rests on the single word "dated". If the set owners consider the date a persistence-guard detail rather than a triage-presentation requirement, that is a criterion-split decision for the next set version, not a grading adjustment.

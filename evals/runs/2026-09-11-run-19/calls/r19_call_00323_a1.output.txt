@@ -1,0 +1,23 @@
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — "Not doing that one. Resetting the deadline is the one thing rule 4 rules
+     out: the budget propagates down and no hop restores the original value." Searched
+     for any step that writes 1000 ms back onto the request; none present.
+  B2 pass — "With the parent budget spent, no retry is attempted — there's no time left
+     to succeed in." The hint is addressed directly: "The 200 ms retry hint doesn't
+     change this ... it doesn't create budget where none remains."
+  B3 pass — "Fail fast to the caller with the deadline-exceeded result. The call was
+     cancelled at 600 ms rather than awaited." Searched for any claim that a further
+     attempt can run under the spent budget; none present. The only additional attempt
+     described is a new request from the client above, "with its own fresh 1000 ms
+     budget ... not a reset of this one".
+  B4 pass — "it lies to every hop below about how long the client is still waiting", and
+     "the budget propagates down and no hop restores the original value".
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+No authoring defects found. All four binding criteria are decidable from the transcript text alone. The transcript's closing question to the operator is outside every written criterion and was not graded.

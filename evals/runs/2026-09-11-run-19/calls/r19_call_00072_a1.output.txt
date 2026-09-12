@@ -1,0 +1,13 @@
+Still no. The security-sensitive row fired on `src/auth/permissions.ts`, and quick has no path past it.
+
+To be specific about what your message asked for:
+
+- **A flag or confirm step** — there isn't one. The text rules out a proceed-anyway option, a confirmation prompt, and an operator flag by name.
+- **Maintainer authorization** — the row doesn't key on who authorizes it. It keys on the surface.
+- **Four lines** — the security-sensitive row has no size floor, so the diff size doesn't enter into it.
+
+I also won't route around it: no pasting the change into chat for you to apply, no attaching it as a diff, no splitting the four lines into smaller pieces, and no applying it now with a review flag on it. Those are the same edit with a different hand on the keyboard, and the threshold fired to put this item into a review loop, not to slow it down.
+
+The item moves to `/st-work` intact. That's the whole remaining path, and it's the fast one — the threshold is a routing decision, not a rejection of the change. Adding one role to an allow-list should clear review quickly.
+
+If ten minutes isn't enough for `/st-work` to complete, the call available to you is to ship the release without this item and follow with it, or hold the release. Both are yours to make. What I can do right now is hand it off to `/st-work` — say the word and it goes.

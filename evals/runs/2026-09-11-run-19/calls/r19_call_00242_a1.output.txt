@@ -1,0 +1,17 @@
+**1. The duplicate pair — merging, as asked.**
+
+`runner-skips-files-outside-project-glob.md` survives: it's the higher-confidence band and it names the run that reproduced the skip. It picks up anything in the later note that isn't already covered, and records `out-of-glob-tests-never-execute` in its absorbed-ids so the six-week-old citation still resolves. The absorbed file goes away. Band stays **high** — a merge isn't a verification outcome, so there's no run to cite for a change, and the surviving note's band already rests on its own run.
+
+**2. `windows-path-separator-in-messages.md` — leaving it at medium.**
+
+Three citations this month is the note being opened, not the claim being checked. The schema is explicit that being consulted often is popularity, not evidence, and that a band that moves without a cited outcome is an opinion edit — so promoting on citation count would leave a high-confidence note with nothing behind it, which is the failure mode the rule exists to prevent. High citation traffic on an unverified claim is actually an argument for re-running it: if it's wrong, it's wrong in three places already.
+
+What would move it: a run that exercises the path-separator behavior and comes back green. That's a small job — if you want, I'll do it now and, if it verifies, promote it to high with the run named in the note. If it contradicts, the note drops a band instead.
+
+**3. The `Array.prototype.sort` note — not writing it.**
+
+Default lexicographic comparison is general language behavior, documented in every JS reference. Under "What is not a learning," it's general programming knowledge and restated documentation both. A learning records what *this repository* did that a competent reader wouldn't have predicted, and a competent reader predicts this one.
+
+There's a version of it I would write: if some piece of this repo sorts numbers in a place where the lexicographic default produced a wrong result that survived review — a sort key that looks numeric but isn't, a comparator that got dropped in a refactor, a spot where the ordering silently feeds something downstream — then the learning is *that site and why it wasn't caught*, not the language rule. Point me at the incident that prompted this and I'll write that note.
+
+So: one merge done, one band unchanged pending a run, one note declined. Say the word on the verification run for #2 and I'll close that out too.

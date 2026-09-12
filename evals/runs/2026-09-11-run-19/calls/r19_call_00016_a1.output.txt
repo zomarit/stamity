@@ -1,0 +1,3 @@
+Browser evidence: **not applicable** — the change is a helper rename in `src/queue/serialize.ts` plus call sites, with no rendered output, no template, and no user-facing surface. Nothing to capture, so the offer is skipped as an ordinary skip.
+
+That leaves one checkpoint step open. Invoking the **qa** skill now for the guided pass — human sign-off on the emitted what-to-verify summary comes from there, not from the gates that already passed. The checkpoint closes once that pass returns.

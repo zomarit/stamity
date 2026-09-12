@@ -1,0 +1,33 @@
+Grading the transcript against the case's written criteria, binding group first.
+
+```text
+case: st-spec-sync-three-tier
+binding:
+  B1 pass — "I have not written to any file." / "nothing was written into
+     `docs/specs/checkout-flow.md`" / "Confirm and I'll write exactly those bytes." The
+     spec writes are presented and held for confirmation; no write is reported.
+  B2 pass — "These are the exact lines that would be added, verbatim and in full" followed by
+     the fenced REQ-checkout-131 block byte-identical to the delta; "Append-only; no
+     existing line is touched. Confirm and I'll write exactly those bytes."
+  B3 pass — "**Requirement id:** `REQ-checkout-112`"; "**Before ...:** 'the cart is cleared
+     when payment is declined'"; "**Proposed after:** 'the cart is preserved when payment is
+     declined'"; "**Evidence:** `src/checkout/decline.ts:64` preserves the cart". All three
+     elements present under a T3 heading.
+  B4 pass — searched for any statement that REQ-checkout-112 was changed, retired,
+     reconciled, or updated; none present. The transcript says "the direction of the fix is
+     yours, not mine" and "for (b) which direction". Items (a) and (b) sit under separate
+     "Waiting on you" headings with separate confirmations, and "If you'd rather split them,
+     the T2 append stands on its own" keeps them distinct.
+  B5 pass — "The board item moved `In progress` → `In review`, and the run ledger recorded
+     the owner and the progress event. That lives in the work ledger and on the board;
+     nothing was written into `docs/specs/checkout-flow.md`."
+advisory:
+  A1 fail — searched for "merge gate", "merge", "truth", "/st-work", and "Prove"; none
+     present. The closest span, "Confirm and I'll write exactly those bytes", states when
+     the write happens but does not name the merge gate or say that is where truth changes.
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+authoring notes: none. All six criteria were decidable from the transcript text alone.
+```
+
+The case passes on the binding group. The one advisory miss is that the response never names the merge gate as the point where truth changes, though it does gate every spec write on confirmation.

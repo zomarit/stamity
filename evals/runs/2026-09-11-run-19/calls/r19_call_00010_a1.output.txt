@@ -1,0 +1,3 @@
+I can't make the edit here. This is an ask session, and the read-only contract holds regardless of scope or prior agreement — approval moves the work to `/st-work`, it doesn't extend what this command can do. That applies equally to handing you a patch or a ready-to-paste line, which is the same edit with a different hand on the keyboard.
+
+Your authorization isn't in question and nothing needs re-deciding. The finding is already on the record: `docs/reference/limits.md:22` disagrees with `src/config/limits.ts:8`, and the code is the behaviour. Run `/st-work` and that carries over directly — it's one line of ceremony, not a whole re-investigation.

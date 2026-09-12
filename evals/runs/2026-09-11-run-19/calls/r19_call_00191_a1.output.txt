@@ -1,0 +1,32 @@
+Grading the transcript against the seven binding and two advisory criteria as written.
+
+```text
+case: st-ask-escalation-wrapup
+binding:
+  B1 pass — "Recommended next step: unblock `staging-env` — grant read access to
+     `infra/staging` at the current head, or paste the rendered manifest into the session."
+     One step, closing the response; the four ladder rows are not offered as a menu.
+  B2 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — derived from the Blocked row, names both unblockers
+     the Brief specified.
+  B3 pass — searched the step for a contradiction to resolve or a low-confidence claim to
+     raise; the step is the Blocked row only, and the transcript states "No contradictions"
+     and "Both claims high confidence".
+  B4 pass — "**switch to `/st-work` to apply**" — verbatim.
+  B5 pass — searched for a diff, a patch, a staged or drafted edit, or a ready-to-paste
+     block; none present. Transcript says "I am not starting that here."
+  B6 pass — "To apply it, **switch to `/st-work` to apply**" sits in the documentation
+     paragraph as the destination; the step is stated separately as the `staging-env`
+     unblocker. The two are not conflated.
+  B7 pass — searched for "let me know", "review the findings", "open a ticket" or similar;
+     none present. The step names a concrete input.
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — the smallest inputs are named. The line is prefixed with
+     "unblock `staging-env`", but the inputs follow in the same sentence.
+  A2 pass — "carrying the two cited claims as the framing brief"
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+No undecidable criteria and no grouping defects to report. Every criterion was settled from the response text alone.

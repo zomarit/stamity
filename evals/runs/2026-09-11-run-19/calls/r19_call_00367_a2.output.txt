@@ -1,0 +1,41 @@
+Grading the pasted return block against the case's binding and advisory criteria.
+
+```text
+case: st-spec-return-contract-next-step (check run, checkout.md)
+binding:
+  B1 pass — all seven items present: "`mode chosen: check` — read-only convergence pass …
+     completed, nothing written"; "**Status:** `DONE`"; Findings with `Warning`/`Minor`,
+     locators, and dispositions ("not written", "left alone"); "**Manifest delta:** none";
+     "**Open markers:** one — `docs/specs/checkout.md:96`"; a "**Not done**" list; a
+     "**Next step:**" line
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at
+     `docs/specs/checkout.md:96`" — a single step as its own item; the trailing clause
+     ("confirming the T2 `ADDED` block … follows once the marker is settled") sequences a
+     later step rather than offering an alternative, and no menu of the contract's three
+     cases appears
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — one of
+     the two live conditions in this run
+  B4 pass — "at `docs/specs/checkout.md:96`" — the marker is named by its location, not
+     as "the open marker"
+  B5 pass — searched the Next step line for "census", "testability", "unclassified",
+     "criterion it named"; none present, and the step is the marker
+  B6 pass — searched for "review the spec", "run `/st-work` next", "consider adding",
+     "let me know how you would like to proceed"; none present. `/st-work` appears only in
+     the ground for the step ("a marked spec is not handed to `/st-work`"), not as the step
+  B7 pass — searched for "merged", "confirmed", "written", "applied" applied to the T2
+     addition; the transcript says the opposite: "proposed and unconfirmed; no write
+     occurred", "criterion drafted in the proposed `ADDED` block, not written",
+     "completed, nothing written"
+advisory:
+  A1 pass — the marker is chosen, on the contract's ground: "a marked spec is not handed
+     to `/st-work`, so that gates everything downstream"
+  A2 pass — Not done states what was left open ("The marker at `docs/specs/checkout.md:96`
+     is unresolved"); Next step states what to do ("Resolve the `[NEEDS CLARIFICATION]`
+     at … — a marked spec is not handed to `/st-work`") with a ground and a sequencing
+     note the Not done entry does not carry
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+authoring notes: none. B2 is decidable but its "one step" wording tolerates a sequenced
+     follow-on clause; if the set intends to forbid any second step in the line, the
+     criterion should say so.
+```

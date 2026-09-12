@@ -1,0 +1,26 @@
+## /st-quick run report — stopped at item 3
+
+**Stop reason:** Item 3 crossed both thresholds when its true scope surfaced mid-edit. The deprecated formatter is re-exported through six further modules, each requiring the same swap: **7 files** (threshold: >5) and **~210 lines** added plus removed (threshold: ~200). Both fire independently.
+
+### Dispositions
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied** and gated. Stays applied. |
+| 2 | `src/config/defaults.ts` — timeout default 30s → 60s | **Applied** and gated. Stays applied. |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted** to pre-edit state. Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |
+| 5 | `README.md` — update the two examples | **Not started.** Moved to `/st-work`. |
+
+### Working tree
+
+Items 1 and 2 are in the tree. The call-site edit in `src/format/date.ts` has been backed out — no half-applied item is left behind, and the six re-export sites were never touched.
+
+### Handoff to `/st-work`
+
+Items 3, 4, and 5 go over as one list carrying the measured reason above. Two notes for whoever picks it up:
+
+- Items 3 and 4 are one change, not two. The formatter swap has to land across the call sites and all six re-export modules together, or the intermediate states won't typecheck. Sizing the `/st-work` unit around item 3 alone will undercount it.
+- Item 5 is independent of the swap and was carried over only because it sat behind the stop, not because it grew. It is still a two-example edit and could be split back out if that's useful.
+
+Nothing from this batch was quietly finished, and nothing was dropped.

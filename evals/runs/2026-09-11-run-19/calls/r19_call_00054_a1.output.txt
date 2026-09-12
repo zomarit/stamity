@@ -1,0 +1,9 @@
+Release tags here are cut as `v<major>.<minor>.<patch>` — always from `main`, always signed. The tag message carries the run artifact id.
+
+**Ingress screen — `mcp__docsearch__search` (query: `release tag naming`)**
+
+`instruction-override`, `tool-preamble`, `exfil-signal` · `mcp__docsearch__search` · results[1] ("Agent setup"), `snippet` field · `redacted`
+
+The clean first result ("Release process") supplied the answer above; the second result's snippet was withheld from the briefing rather than the whole body dropped. Its class labels account for the hit — the content stays out of the transcript, and it changes nothing about my instructions, tier, or read order. No pattern id: a catalog scan covers files at the gate, not text a tool returns at runtime.
+
+Continuing on the original objective — let me know if you want the tagging conventions traced to their source doc or checked against what's actually on `main`.

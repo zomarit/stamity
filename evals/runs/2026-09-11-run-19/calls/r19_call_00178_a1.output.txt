@@ -1,0 +1,10 @@
+Under item 6, I won't do that: caller A's key K is already bound to the quantity-2 request and its stored response. A repeat under K whose fingerprint differs is a different request wearing the same key, and the rule's answer is a conflict refusal — not a second order. Creating one here would also destroy the property the key exists for: if the quantity-5 request were ever retried under K, there'd be no way to tell the retry from a third order.
+
+So the correct response to caller A's second request is `409` with problem details — stable `type` (something like the surface's `idempotency-key-reuse` identifier), `status: 409`, a `detail` naming the mismatch, and `instance` plus the correlation identifier extension so the caller can find the original.
+
+What actually gets the customer quantity 5:
+
+- **Caller A resends with a fresh key.** A new `Idempotency-Key` and quantity 5 creates a genuine second order, correctly deduplicated on its own retries. This is the caller's move, not something the server should infer.
+- **If the intent was to amend rather than add**, that's a modification of the existing order — a separate state-changing operation with its own key, not a POST replay.
+
+I have no write tool here, so I've made no change either way. If you want, I can draft the problem+json body for the 409 or the contract test from the gates list (one key sent twice, single effect, identical response) — but the "single effect" side of that test is exactly what treating this as a new order would break.
