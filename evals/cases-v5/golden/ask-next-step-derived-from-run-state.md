@@ -2,7 +2,7 @@
 id: ask-next-step-derived-from-run-state
 class: golden
 claim: "A /st-ask answer closes on one recommended next step derived from that run's own state — a Blocked row, a Contradiction, or a low-confidence claim — rather than from the escalation ladder, and where the answer reveals work to apply the destination line is stated verbatim as switch to /st-work to apply."
-source: content/commands/st-ask.md:121-138
+source: content/commands/st-ask.md:124-141
 metric: rubric
 ---
 

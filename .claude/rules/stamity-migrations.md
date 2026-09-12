@@ -50,7 +50,8 @@ the code and the data moved at different moments.
    aggregate check per partition, then a checksum over sampled blocks. The drop
    runs after that check passes and after the compatibility window has elapsed
    with the previous release still able to run against the current shape — at
-   minimum one full release cycle plus one on-call rotation.
+   minimum one full release cycle plus one on-call rotation. No accepted trade
+   opens the drop: while any old reader remains, contract has not started.
 7. **Reversible by default, one reviewed file per change.** A step that cannot
    be reversed carries an explicit irreversibility note naming why, and a
    reviewer signs that off as its own decision. Where the tool emits no
@@ -69,6 +70,5 @@ the code and the data moved at different moments.
   asserts the final state matches an uninterrupted run.
 - Shape-changing statements carry a lock timeout and a statement timeout; one
   without them is a finding regardless of how small the table is today.
-- The compatibility window is stated in the change that opens it, and the
-  previous release is verified runnable against the new shape before the switch
-  phase ships.
+- The compatibility window is stated in the change that opens it, and the previous
+  release is verified runnable against the new shape before the switch phase ships.

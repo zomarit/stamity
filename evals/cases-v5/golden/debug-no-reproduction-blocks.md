@@ -2,7 +2,7 @@
 id: debug-no-reproduction-blocks
 class: golden
 claim: "When the user cannot reproduce, the loop stalls and returns BLOCKED_DEPENDENCY naming exactly what it needs — environment, data, access, or a longer capture window — and that return records the ranked hypotheses with the observation each still needs and carries the hold-or-strip question with stripping now as the declared default."
-source: content/commands/st-debug.md:100-112
+source: content/commands/st-debug.md:104-116
 metric: rubric
 ---
 

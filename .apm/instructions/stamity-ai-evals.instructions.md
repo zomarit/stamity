@@ -31,29 +31,30 @@ that survives a prompt edit.
 5. **Offline before online.** A change clears the set before traffic reaches it.
    A staged rollout then measures what offline cannot — real inputs, latency,
    spend — and confirms the result; it never stands in for the set.
-6. **The judge is an instrument, not a participant.** When a model grades
-   output, it is not the model under test, its rubric is written down, and it is
-   calibrated against a human-labelled sample before its scores gate anything.
-   An answer proposing a judge names all three. Pairwise comparisons score both
-   orders and average, because position preference alone can flip a verdict.
-7. **Match the metric to the task class.** Classification: accuracy plus
-   per-class precision and recall. Open-ended generation: rubric score against
-   the written rubric. Retrieval-grounded answers: groundedness plus citation
-   precision, each claim traced to the span that supports it. Refusal behaviour:
-   refusal rate on prohibited inputs tracked separately from false refusals on
-   benign ones.
+6. **The judge is an instrument, not a participant.** When a model grades output,
+   it is not the model under test, its rubric is written down, and it is
+   calibrated against a human-labelled sample before its scores gate anything. An
+   answer proposing a judge names all three: that it is not the model under test,
+   that its rubric is written down, and that it is calibrated against a
+   human-labelled sample — two of them is not three. Pairwise comparisons score
+   both orders and average, because position preference alone can flip a verdict.
+7. **Match the metric to the task class.** Classification: accuracy plus per-class
+   precision and recall. Open-ended generation: rubric score against the written
+   rubric. Retrieval-grounded answers: groundedness plus citation precision, each
+   claim traced to the span that supports it. Refusal behaviour: refusal rate on
+   prohibited inputs tracked separately from false refusals on benign ones.
 8. **Results are artifacts, not chat.** A run records the set version, item 3's
    versioned inputs, the run count, the per-metric scores, and the threshold
-   each was measured against, committed with the change that caused the run.
+   each was measured against, committed with the change that caused the run. An
+   answer that requires the run names the artifact and what it records.
 
 ## Gates
 
 - A feature whose output comes from a model, with no eval set in the repository,
   is not done. The set ships in the same change as the feature.
-- Every behaviour the feature claims to users or docs maps to at least one
-  golden case, and every guardrail it claims maps to at least one adversarial
-  case. A claim with no case is unmeasured, so either a case lands or the claim
-  goes.
+- Every behaviour the feature claims to users or docs maps to at least one golden
+  case, and every guardrail it claims maps to at least one adversarial case. A
+  claim with no case is unmeasured, so either a case lands or the claim goes.
 - A change touching prompts, model selection, decoding settings, tool schemas,
   or retrieval re-runs the set and carries the result artifact.
 - A metric under its declared threshold fails the change the way a red test

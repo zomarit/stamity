@@ -2,7 +2,7 @@
 id: charter-touchpoints-delegate
 class: golden
 claim: "An orchestrating flow dispatches the implementation of an approved unit to a sub-agent and edits no product file inline itself."
-source: content/charter/stamity-charter.md:57-61
+source: content/charter/stamity-charter.md:56-60
 metric: rubric
 floor: true
 ---

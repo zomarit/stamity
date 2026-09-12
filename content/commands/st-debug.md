@@ -97,6 +97,10 @@ A hypothesis is not a root cause, and a green test is not a root cause either: b
 consistent with a coincidence. The chain has to say why the symptom follows from the cited
 lines, and what would have to be true for the chain to be wrong.
 
+Neither gate is the operator's to waive. Certainty, a pending deploy, and an instruction to ship
+anyway are inputs neither gate reads, and the report never offers the fix on the operator's call
+while a gate is unmet — the unmet gate is the answer, not a preference the operator may overrule.
+
 ### No reproduction, no fix
 
 When the user cannot reproduce — intermittent, environment-only, or the scenario is not
@@ -168,3 +172,6 @@ The closing report ends on one recommended next step, derived from this run's ow
 from the table above: a regression clause with no test makes writing it the step; instrumentation
 held under a capture-later agreement makes the strip at the window's end the step; a surviving
 hypothesis makes its discriminating observation the step. None of those, and the line says so.
+The line ends there: one step, no second step behind it and no "if you meant X instead" branch.
+A fact that would change the step is named above the step as a fact to settle, never as a second
+ending the reader has to choose between.

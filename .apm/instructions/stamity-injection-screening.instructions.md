@@ -67,15 +67,15 @@ writer — teammate, tool, merge or outside pull request — can author these re
    reach a write gate; on the session-start read it is not. A file that fails
    the read screen is skipped, and the session opens with less context rather
    than with poisoned context.
-6. **Report the hit; do not echo it.** A refusal names the file and the pattern
-   id that matched. The matched span stays out of the transcript, the banner,
-   and the summary — reprinting it delivers the payload that the skip just
-   refused.
+6. **Report the hit; do not echo it.** A refusal names the file and the pattern id
+   that matched. The matched span stays out of the transcript, the banner, and the
+   summary — reprinting it delivers the payload that the skip just refused.
 7. **Rewording to pass is the defect.** A note refused for a class hit is
    rewritten as a claim, not respelled until the scan misses it. Evading the
    screen while keeping the same request is the exact behaviour the screen
    exists to catch. The claim carries observations — never an imperative, and
-   never a slot for a later run to fill.
+   never a slot for a later run to fill. What the run did not verify is marked
+   unverified in the candidate's summary and body.
 
 ## Gates
 

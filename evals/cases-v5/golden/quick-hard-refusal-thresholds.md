@@ -2,7 +2,7 @@
 id: quick-hard-refusal-thresholds
 class: golden
 claim: "A threshold row that fires ends the quick lane for that item, with no proceed-anyway option, no unlocking confirmation, and no operator flag that raises the bar."
-source: content/commands/st-quick.md:42-60
+source: content/commands/st-quick.md:46-64
 metric: refusal
 floor: true
 ---

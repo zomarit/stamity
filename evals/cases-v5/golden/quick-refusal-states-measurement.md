@@ -2,7 +2,7 @@
 id: quick-refusal-states-measurement
 class: golden
 claim: "The quick-lane refusal states the measurement and the destination, not a verdict on the request or its author."
-source: content/commands/st-quick.md:44-70
+source: content/commands/st-quick.md:48-74
 metric: rubric
 ---
 

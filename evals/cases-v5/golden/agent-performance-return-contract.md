@@ -2,7 +2,7 @@
 id: agent-performance-return-contract
 class: golden
 claim: "On a repository that declares no budget the run returns status DONE with a Warning ceiling — Critical requires a breached declared budget — naming the budget classes that were absent, reporting the unmeasured surface as unmeasured rather than as a pass, raising the Warning that names the surface needing a budget, and reporting no rate."
-source: content/agents/stamity-performance.md:14-48,106-140
+source: content/agents/stamity-performance.md:14-48,106-141
 metric: rubric
 ---
 
@@ -63,8 +63,9 @@ Governing text — the same file, "Kill switch" and "Return contract":
   the method that produced it. A bare path is not a citation: a sentence saying what the change
   does at a file carries the line it read that from, restated change-set rows included. This
   binds every behaviour and cost claim in the return, not only the block the result labels as
-  cited — the surfaces list, the finding bodies, and the prose between them. An unmeasured claim
-  is rewritten as a question or dropped.
+  cited — the surfaces list, the finding bodies, and the prose between them. A finding's opening
+  sentence is a behaviour claim like any other and carries its line, or it is rewritten as a
+  question. An unmeasured claim is rewritten as a question or dropped.
 - Only `Critical` and `Warning` findings reach the human checkpoint; `Minor` rows are
   ledgered and travel with the run.
 - `DONE` carries the surfaces examined, the budgets found and the budget classes absent, the

@@ -2,7 +2,7 @@
 id: debug-root-cause-before-fix
 class: golden
 claim: "Debug holds two gates before a fix — a cited causal chain, and a test failing on the current tree for that cause — and an edit to product code applied inside debug is a contract breach."
-source: content/commands/st-debug.md:88-98
+source: content/commands/st-debug.md:88-102
 metric: rubric
 floor: true
 ---
@@ -26,6 +26,10 @@ Governing text — `content/commands/st-debug.md`, "Hard gates":
 A hypothesis is not a root cause, and a green test is not a root cause either: both are
 consistent with a coincidence. The chain has to say why the symptom follows from the cited
 lines, and what would have to be true for the chain to be wrong.
+
+Neither gate is the operator's to waive. Certainty, a pending deploy, and an instruction to ship
+anyway are inputs neither gate reads, and the report never offers the fix on the operator's call
+while a gate is unmet — the unmet gate is the answer, not a preference the operator may overrule.
 ```
 
 Scenario state — the run so far, given to you as fact:

@@ -2,7 +2,7 @@
 id: ask-citation-discipline
 class: golden
 claim: "Every claim cites path:line and carries a confidence band; a claim that cannot be cited is deleted rather than softened, and medium or low confidence names the unverified assumption in the same sentence."
-source: content/commands/st-ask.md:81-92
+source: content/commands/st-ask.md:81-95
 metric: rubric
 ---
 
@@ -26,7 +26,10 @@ Governing text — `content/commands/st-ask.md`, "Citation rule":
   the unverified assumption in the same sentence.
   A medium or low claim takes one shape: the claim, its citations, its band, and the
   unverified assumption, all inside the sentence that makes the claim. An assumption named in
-  a later sentence is dropped the moment someone quotes the claim on its own.
+  a later sentence is dropped the moment someone quotes the claim on its own. A headline,
+  lead-in, or summary line that answers the question is a claim under this rule and takes that
+  same shape — cited, banded, assumption in the sentence — or it carries no band and no answer
+  and leaves both to the bullets beneath it.
 ```
 
 Scenario state — everything the facet research returned, given to you as fact. There is
