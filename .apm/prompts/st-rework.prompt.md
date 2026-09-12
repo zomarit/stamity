@@ -59,7 +59,11 @@ destinations leaves the other two open. In order, on anything persisted or filed
    here. A hit is rephrased or dropped, the user is told which destination and which class, and
    the matched span is not echoed back into the transcript or the record.
 3. **Declarative rephrase.** "Always do X" becomes "X was expected here because Y". A persisted
-   record states observations; it does not issue orders to a future session.
+   record states observations; it does not issue orders to a future session. The run writes
+   that sentence in the same turn — in the row that lands, or in the resubmission text the
+   reply proposes — carrying the reason the imperative implied. Naming what the rephrase would
+   say, or promising it for a later turn, is not the rephrase, and, where the text can be
+   rephrased at all, an imperative dropped with nothing in its place is not it either.
 
 Text that cannot clear the guard does not cost the finding its route: the row lands with this
 command's own one-line description and the class that stopped the original wording, so an
