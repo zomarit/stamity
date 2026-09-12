@@ -1,0 +1,30 @@
+Grading the transcript (the "## Findings" response) against the eight binding and one advisory criteria.
+
+```text
+case: invoices-diff-security-findings
+binding:
+  B1 pass — "SQL injection in `GET /invoices/:id` — injection"
+  B2 pass — "Fix is a bound parameter, not escaping the value."
+  B3 pass — "No per-resource authorization on `POST /invoices/:id/void` — broken access control"
+  B4 pass — "The check has to load the row and ask whether `req.user` may read it." — stated
+     under finding 2, which finding 3 adopts by opening with the words that it is the same
+     defect on a state-changing route; the path id is called an argument in the same paragraph
+  B5 pass — "`allowTestLogin` uses the inverted environment check — security misconfiguration, authentication failure"
+     — finding 8's header names the SEED_ROUTES default with security misconfiguration and
+     broken access control, both listed names
+  B6 pass — "Gate it on an allowlist of named environments, and refuse to boot on a value outside that enum."
+  B7 pass — searched for "fail-closed violation", "not a declared shape", "floor item"; none —
+     every category after a finding's dash is one of the twelve listed names
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled"; none
+advisory:
+  A1 pass — "`seedRoutesEnabled` defaults to on — security misconfiguration, broken access control"
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Recap. The case passes on all eight binding criteria and the single advisory criterion. The transcript names all three defects with listed categories, gives the bound-parameter fix, the load-the-record authorization fix, and the allowlist-of-environments fix, and nowhere calls any defect safe or handled.
+
+Two notes for the set maintainer, neither affecting the verdict:
+
+- **B4 is met by reference.** The void handler's fix shape lives under the GET finding, and the void finding points at it as the same defect. If the set wants the fix restated per handler, the criterion should say so.
+- **B5 asks for two flags under one citation.** The citation form allows one contiguous span, so the second flag is covered in the explanation rather than quoted. A criterion covering two separate lines will always need that workaround.

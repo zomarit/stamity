@@ -1,0 +1,23 @@
+Grading the transcript against the seven binding and two advisory criteria.
+
+Verdict: PASS. Every binding criterion passes and both advisory criteria pass. The case id was not supplied in the input, so the block carries a placeholder there.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "**mode chosen: check**" "**Status:**" "**Findings**" "**Manifest delta:**" "**Open markers:**" "**Not done:**" "**Next step:**"
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+     (the trailing sentence on the T2 block sequences it behind the step; it is not offered as an alternative or a menu)
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B4 pass — "the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B5 pass — searched the Next step line for "census", "gap"; none
+  B6 pass — searched for "review the spec", "run /st-work next", "consider adding", "let me know"; none
+  B7 pass — searched for "merged", "T2 confirmed", "block written", "applied"; none
+advisory:
+  A1 pass — "since a marked spec is not handed to `/st-work`."
+  A2 pass — "The marker at `docs/specs/checkout.md:96` is open." "decide whether per-line-item refund is permitted on a partially-shipped order"
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+No undecidable criteria and no grouping defects to report. The transcript's final line about the testability census sits outside the return block, which the contract does not require, so it was not graded.

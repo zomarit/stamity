@@ -1,0 +1,18 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`none` — this is a direct edit to a manifest and lockfile"
+  B2 pass — searched for "st-dep-audit applies", "st-dep-audit triggers", "use st-dep-audit", "select st-dep-audit"; none
+     — the id appears once, inside a clause that denies its applicability, not as a selection
+  B3 pass — "`none` — this is a direct edit to a manifest and lockfile"
+     — the only id mentioned is st-dep-audit, and it is named as not applying
+advisory:
+  A1 pass — "st-dep-audit is explicitly a read-only reporting skill that stops short of touching either file"
+     — the boundary is named as reporting versus editing the manifest and lockfile; "installed graph" and "source file" are not mentioned, but the criterion asks for the boundary, not each element
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Recap: the transcript answered `none` and gave a reason that draws the reporting-versus-editing line, so all three binding criteria pass and the case passes. The one advisory criterion also passes. The input carried no case id, which the next set version should add so the emission can name it.

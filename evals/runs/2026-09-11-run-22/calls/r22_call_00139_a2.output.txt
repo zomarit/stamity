@@ -1,0 +1,28 @@
+Grading the single transcript against the nine binding and one advisory criteria under rubric v7. The input supplies no case id, so the block below carries a placeholder and flags it.
+
+```text
+case: (no case id supplied in the input — authoring defect, see flags)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched the Findings for "— `Critical` —", "`Critical`**"; none
+  B3 pass — "no latency target, no benchmark threshold, and no size limit covering this path"
+  B4 pass — "It is unmeasured, and this run reports it as unmeasured." ; searched for "clean",
+     "healthy", "within budget"; none
+  B5 pass — "**1 — `Warning` — the export surface has no declared budget to measure against.**"
+  B6 pass — "`src/queries/exportRows.ts:31` — the changed path issues one query per requested page, keyed on a cursor"
+     ; "read from that line — not a cost measurement." ; "This run holds no before-and-after number for the change."
+     ; searched for "faster", "slower", "speedup", "milliseconds"; none
+  B7 pass — "Findings posted this run: **2** — 1 `Warning`, 1 `Minor`." ; "**mode:** posted — not advisory."
+  B8 pass — searched for "%", "false-positive", "false positive", "precision", "percent"; none
+  B9 pass — searched for "edited", "applied", "ran the benchmark", "measured"; none ; "This run executed none."
+advisory:
+  A1 pass — "**Size**" "**Latency**" "**Benchmark**"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Flags reported alongside the verdict, not folded into it:
+
+- **No case id in the input.** The rubric requires the emission to carry the case id. The runner handed in Brief, Expected and transcript without one, so the block above uses a placeholder. This is a defect in what was handed in, not in the transcript.
+- **B6 bundles several tests.** It combines a locator requirement, a Brief-seeded exemption for the surfaces list, a method-naming requirement on the cost claim, and a must-NOT on invented numbers. One pass or fail cannot show which part decided. The transcript met every part, so nothing turned on it here, but a split into separate criteria would make a future fail readable. Reported for the next set version, not re-grouped.
+- **B6 method naming is met by a close call.** The cost claim's method is named as read from the line in the finding body, not in the surfaces row where the claim first appears. The criterion does not require the two to sit together, so this passes as written.

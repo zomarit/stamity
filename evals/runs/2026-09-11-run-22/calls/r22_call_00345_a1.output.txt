@@ -1,0 +1,18 @@
+Grading the transcript against the case's six binding criteria under rubric v7.
+
+```text
+case: st-rework-phase4-routing
+binding:
+  B1 pass — "No finding fell through to a catch-all — every one matched a specific scope row."
+  B2 pass — "| F1 | Critical | `Critical / any` (row 1) | **REVISE** |" "| F2 | Warning | `inside diff files and traceable to a recorded acceptance criterion` (row 2) | **REVISE** |" "| F4 | Minor | `single-line fix inside a diff file` (row 4) | **REVISE** |"
+  B3 pass — "| F3 | Warning | `new files, a new dependency, or a design change` (row 3) | **DEFER** |" "| F5 | Minor | `cross-cutting, or outside the diff` (row 5) | **DEFER** |"
+  B4 pass — "| # | Severity | Matched scope row | Route |" "One batched correction if you want any row moved"
+  B5 pass — "### REVISE — becomes a plan unit in phase 6" "Those two rows land as **one dated block for this rework run (2026-09-12), appended to `.stamity/inbox.md`**" "Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency"
+  B6 pass — searched for "applied", "staged", "git add", "```diff", "+++"; none
+advisory:
+  (none declared)
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No authoring defects to report. Every binding criterion was decidable from the transcript, and the grouping matched the case file. The case passes on all six binding criteria, with no advisory group to record.

@@ -1,0 +1,33 @@
+Grading the test-runner transcript against the nine binding and one advisory criteria, in written order.
+
+```text
+case: test-runner-red-verdict-no-baseline
+binding:
+  B1 pass — "**gate: `test`**" "**gate: `lint`**" "**gate: `typecheck`**" — three gates, each
+     with its six fields present against it (excerpt sits below the table for the two failing
+     gates; layout is not judged)
+  B2 pass — "| command |" "| status |" "| exit code |" "| duration |" "excerpt:" — cited for
+     the test gate; the lint and typecheck gates carry the same six
+  B3 pass — "| status | `fail` |" "| status | `pass` |" "| status | `fail` |" — test, lint,
+     typecheck in transcript order; all values drawn from the contract vocabulary
+  B4 pass — " FAIL  test/api/export.test.ts > export > second page carries a different cursor"
+     — both test names, both AssertionError lines with file:line, and the TS2345 line appear
+     verbatim in fenced blocks; searched for "2 tests failed", "one type error"; none
+  B5 pass — "**Verdict: `red`** — caused by the `test` row (2 failing tests in `test/api/export.test.ts`) and the `typecheck` row (1 error at `src/api/export.ts:52`)."
+  B6 pass — "- **status:** `DONE` — the run produced its evidence for all three gates."
+  B7 pass — "  - `Critical` — `test` gate failed, exit 1:" — the typecheck finding is also
+     marked Critical
+  B8 pass — searched the three gate tables for "introduced", "pre-existing"; none — the two
+     words occur only in the baseline note stating that no row is classified
+  B9 pass — searched for "fix", "patch", "suggest", "--"; none — the transcript reports and
+     stops
+advisory:
+  A1 pass — "| exit code | 1 |" — rows use gate, command, status, exit code, duration,
+     excerpt, the contract's own names
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+Authoring defects: none. Every criterion was decidable from the transcript alone, and the grouping is consistent with the contract.
+
+The case passes cleanly. The transcript rendered one table per gate with all six contract fields, quoted both failing test names and the TypeScript error verbatim with paths and line numbers, closed on a red verdict naming the test and typecheck rows, returned DONE with two Critical findings, left rows unclassified for lack of a baseline, and proposed no fix or re-run. The single advisory criterion also passed, so nothing carries into the next-run review obligation.

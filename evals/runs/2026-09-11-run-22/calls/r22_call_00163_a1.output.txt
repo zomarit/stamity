@@ -1,0 +1,22 @@
+Grading the one transcript under the "## Return" heading against the six binding and two advisory criteria, in the v7 emission form.
+
+```text
+case: (no case id supplied with the Brief and Expected blocks)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "`docs/adr/` exists with eleven records, so this is ADR twelve." — the docs
+     reading is stated separately on its own line with the operator page as its target; a
+     third reading (brownfield) is also named, which the written criterion does not bear on
+  B3 pass — searched for "wrote", "drafted", "created", "attached"; none
+  B4 pass — searched for "proceeding", "selected", "combined"; none
+  B5 pass — searched for "please confirm", "let me know", "awaiting", "which do you"; none
+  B6 pass — searched for "DONE", "NEEDS CLARIFICATION"; none
+advisory:
+  A1 pass — "The only missing input is the mode designation." — framed as three spawns
+     rather than a choice between two
+  A2 pass — "2. **architect** —"
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+No authoring defects: every criterion was decidable from the transcript alone, and no grouping looked misplaced. The only item worth a reader's eye is the one noted on B2 and A1: the transcript expands the brief into three modes, adding a brownfield spec reading the Expected block never asked about. The criteria as written do not penalise that, so it does not affect the verdict.

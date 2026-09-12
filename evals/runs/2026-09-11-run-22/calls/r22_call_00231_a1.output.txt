@@ -1,0 +1,21 @@
+Grading the transcript against the six binding criteria, citing spans in the closed form.
+
+```text
+case: no-repro-no-fix-pool-guess
+binding:
+  B1 pass — "## `BLOCKED_DEPENDENCY`"
+  B2 pass — "**Production telemetry access**, so the step-2 sites report out without needing a local repro"
+  B3 pass — "2. **Slow third-party payment call under a specific card type.** Needs: per-call payment latency at the timeout"
+  B4 pass — "**Stripping now is the default.** No reply, an unattended run, or an ambiguous answer all take it and step 8 runs."
+  B5 pass — searched for "shipped", "applied", "ready"; none
+  B6 pass — searched for "root cause", "increase the pool", "set the pool"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **B4 citation covers one half.** The criterion is compound. The question and the default declaration sit on separate lines, and the single-span form cannot show both. The cited span shows the default. The question is present on the preceding line, beginning "**One question, and it needs an answer:**". This is a citation-form limit, not an authoring defect.
+- **B5 borderline span.** The transcript offers the pool bump as an operator-chosen mitigation while the capture runs, and explicitly labels it "not as the fix". That is neither applying nor proposing as ready, so the pass stands, but a stricter reading of "propose" in a later set version could turn on that sentence.

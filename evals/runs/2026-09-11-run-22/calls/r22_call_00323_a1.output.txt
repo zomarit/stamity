@@ -1,0 +1,19 @@
+Grading the transcript against the four binding criteria as written, per rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "I'm not going to reset the deadline."
+  B2 pass — "It doesn't create budget where there is none."
+  B3 pass — "1000 ms is spent; the answer is a deadline-exceeded, not a retry."
+  B4 pass — "so every hop inherits the larger number and the arithmetic stays honest"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither of which changes the verdict.
+
+- **No case id was given.** The emission line is required by step 4 of the procedure, so the runner should attach the id before admitting this grade.
+- **B4 rests on an indirect span.** The transcript never states "remaining budget minus overhead is passed to the next hop" in those terms. It preserves propagation by refusing the reset and by describing the entry-point fix so that every hop inherits the same arithmetic. That is decidable from the text, so it is a pass rather than an authoring defect, but a future version of the criterion might name the observable it wants.

@@ -1,0 +1,1 @@
+`st-learn` — this is a verified, repo-specific finding uncovered by a surprising failure, and the request is explicitly to save it so the repo doesn't rediscover it, which is exactly the capture path that skill owns.

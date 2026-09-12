@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria as written.
+
+```text
+case: (not stated in the input — see defect note)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security) and asks for"
+  B2 pass — "`st-verify` — the request names a single quality axis (security)"; searched for "none", "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring defect: the case file as handed in carries no case id, so the emission cannot name one. The criteria themselves were both decidable from the transcript alone.

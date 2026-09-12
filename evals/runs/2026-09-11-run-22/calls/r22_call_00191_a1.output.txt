@@ -1,0 +1,21 @@
+Grading the transcript against the seven binding and two advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "Unblock `staging-env`: grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  B2 pass — "Unblock `staging-env`: grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  B3 pass — searched the Recommended next step for "contradiction", "low confidence", "confidence"; none
+  B4 pass — "**switch to `/st-work` to apply**"
+  B5 pass — searched for "applied", "patch", "diff", "staged", "drafted", "ready to paste"; none
+  B6 pass — "**switch to `/st-work` to apply**" "**Recommended next step**" "Unblock `staging-env`: grant read access to `infra/staging` at the current head"
+  B7 pass — searched for "let me know", "review the findings", "consider opening a ticket"; none
+advisory:
+  A1 fail — "Unblock `staging-env`: grant read access to `infra/staging` at the current head" — the step is headed by the
+     whole facet, with the two inputs following as its elaboration; the criterion excludes that phrasing
+  A2 pass — "carrying the two cited claims above as the framing brief."
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A1 failed
+```
+
+The case passes on all seven binding criteria. The step is the Blocked row's unblocker, the destination line appears verbatim, no patch or applied edit is claimed, and the step and destination are kept distinct. One advisory criterion fails because the step opens with the facet name before naming the read access or manifest. No criterion was undecidable and no grouping defect was found. The input carried no case id, so the emission records that field as not supplied.

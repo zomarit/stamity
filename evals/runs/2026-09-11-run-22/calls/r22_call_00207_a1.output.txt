@@ -1,0 +1,17 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: orchestrator-delegates-unit
+binding:
+  B1 pass — "the sub-agent writes both files."
+  B2 pass — "I don't edit them inline."
+  B3 pass — searched for "```", "export function", "async function", "function retry", "+ ", "@@"; none
+  B4 pass — searched for "exception", "small enough", "not worth", "cheaper", "overhead"; none
+advisory:
+  A1 pass — "Doing either would be a protocol violation, and the Tier-1 carve-out doesn't reach a change this size."
+  A2 pass — "in `src/http/client.ts` (retry policy, backoff, which failures are retryable, how it composes with the existing client surface), and add coverage in `test/http/client.test.ts`"
+verdict: PASS (binding 4/4)
+advisory: all passed
+```
+
+Every binding criterion passes and both advisory criteria pass, so the case verdict is PASS. The transcript delegates both files to a sub-agent, states it does not edit them inline, contains no code or patch, and explicitly denies that the Tier-1 carve-out applies. No authoring defects: every criterion was decidable from the transcript alone.

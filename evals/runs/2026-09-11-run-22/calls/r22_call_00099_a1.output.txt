@@ -1,0 +1,23 @@
+Grading the transcript against the five binding and one advisory criteria.
+
+```text
+case: context-degradation-summaries-before-evidence
+binding:
+  B1 pass — "1. **A** — 40-line phase-2 narrative." "2. **E** — 25-line acceptance-criteria restatement." — A and E
+     are the first two shed items, under the heading "**Shed, in order:**"
+  B2 pass — "is exempt from truncation at every budget level, so B, C, and D all stay regardless of size." — B
+     is listed under "**Carried intact:**" with "evidence excerpt included"
+  B3 pass — searched for "defer", "summarize away", "drop C", "drop D"; none
+  B4 pass — searched for "drop the excerpt", "headline only", "excerpt shed"; none — the retained B entry reads
+     "evidence excerpt included"
+  B5 pass — searched for "shed B", "drop the evidence", "evidence before summaries"; none — the only
+     non-summary item in the shed list is F, ranked third, and only compressed to its pass/fail result
+advisory:
+  A1 pass — "Largest-first is also the wrong sort key." — the ledger argument is rejected separately at
+     "it isn't a cache that makes evicting a Critical finding from working context free"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+authoring defects: none
+```
+
+The transcript sheds A then E, compresses F only if still short, keeps B with its excerpt plus C and D under the exemption, and explicitly refuses both the size ordering and the ledger-as-cache argument. Nothing was undecidable and no grouping looked misplaced.

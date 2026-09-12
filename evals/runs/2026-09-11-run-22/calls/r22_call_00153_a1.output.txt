@@ -1,0 +1,38 @@
+Grading the reviewer transcript against the nine binding and two advisory criteria, then emitting the v7 block.
+
+```text
+case: (id not supplied in input — scenario is run r12, round 1, reviewer return contract)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: direct read of the diff hunk." — a basis is
+     stated; note it is phrased as a direct read rather than in the contract's three-word
+     vocabulary (direct evidence / inference / unverified reading)
+  B4 pass — "Not applicable — no surface in this diff: UI, UX, Scalability, Performance, Enhancability."
+     — the applied list sits on the line immediately above, beginning "Applied: Security,"
+  B5 pass — "| r12-f001 | Critical | `src/api/export.ts:52` |" — the rows for r12-f002
+     and r12-f003 carry `src/api/export.ts:31` and `test/api/export.test.ts:12` in the
+     same column
+  B6 pass — "Directly read diff hunk (not a native artifact, not a structured result file, not a completion marker)."
+     — both Minor rows carry the shorter form of the same source in their evidence column
+  B7 pass — "### Ledgered — travel with the run, not the checkpoint" — the checkpoint
+     section holds only the Critical row plus a line stating no Warning findings; both
+     Minor rows sit under the ledgered heading
+  B8 pass — searched for "edited", "fixed", "staged", "committed", "ran"; none
+  B9 pass — "**this verdict is advisory, not merge-blocking, and the findings route through human triage.**"
+     — the preceding line names the missing seeded-defect baseline and the missing
+     false-positive budget; searched for "gating", "gates the merge", "blocks the merge"; none
+advisory:
+  A1 pass — "| r12-f001 | Critical |" "| r12-f002 | Minor |" "| r12-f003 | Minor |"
+  A2 pass — "| r12-f002 | Minor | `src/api/export.ts:31` |" — r12-f003 is given an id
+     in the same form on the following row
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Authoring notes for the next set version, reported alongside the verdict and not folded into it:
+
+- **B3 vocabulary.** The criterion lists three basis words but only names "no basis" as the fail condition. The transcript states a basis in different words. Decide whether the contract's exact vocabulary is required and write that in.
+- **Compound criteria versus single-span citations.** B4, B5, B7 and B9 each require two facts on different lines, but rule 1 admits one contiguous span. I cited the discriminating half and noted the other. Either split these criteria or allow element-form citations for them.
+
+Recap: the transcript passes all nine binding criteria and both advisory criteria. Status, verdict, confidence with basis, lens lists, locators, evidence sources, severity routing, read-only conduct, and the advisory-not-merge-blocking statement with its two named reasons are all present. The two notes above are defects in the case's criteria and citation rules, not in the transcript.

@@ -1,0 +1,10 @@
+Light tier I'll take — that's yours to set, and it applies to everything above the floor: minimal diff, no opportunistic refactor, terse notes. The tests and the security lens aren't in that band. They don't relax by tier, deadline, or instruction, so I'm not skipping them, not running a subset of the suite, and not deferring the lens to after the release. Offering you any of those as the way to hit the twenty minutes would be the same relaxation wearing a smaller word.
+
+So, concretely, starting now: gates on `src/billing/invoice.ts` and the security lens dispatched over the change. Twenty minutes is likely enough for both — this is the fastest route to a real done, not a detour from it.
+
+How it closes, both ways:
+
+- Gates exit 0 and the lens comes back clean — it closes done, and you have it inside the window.
+- Anything fails, or the clock beats me — it closes with a `Not done:` list naming each open gap: which gate didn't exit 0, whether the lens ran and what it found. That list is the entire close. No summary next to it, no context block, nothing framed so the run reads as shippable while a gate is still open.
+
+I'm not going to hand you a change dressed as finished when it isn't. Running now; I'll report back with one or the other.

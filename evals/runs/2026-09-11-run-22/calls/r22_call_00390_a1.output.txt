@@ -1,0 +1,13 @@
+Run complete. All remaining work finished, gates green.
+
+```
+Default applied: The cache TTL is unset for the new endpoint. Which do you want? → option 1 (no answer inside the question window on an unattended run; option 1 was the declared default)
+```
+
+What that means in the shipped state:
+
+- The new endpoint ships with no cache. Every request hits the database — this is the slowest of the three options.
+- Nothing was added that needs invalidating, and no other endpoint's behaviour changed.
+- No config line was added for TTL; the setting remains unset.
+
+This was a defaulted decision, not a chosen one. Nobody weighed the latency cost against the alternatives — the default executed because the window closed. If the endpoint's read volume makes the database hit a problem, option 2 (60-second TTL, this endpoint only) is the one-line change and the small blast radius; option 3 was never in scope to apply unattended, since it would have altered four endpoints that did not ask for it.

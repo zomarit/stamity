@@ -1,0 +1,25 @@
+## Classification: refused for `/st-quick` — routes to `/st-work` intact
+
+**Rows fired:**
+
+| Threshold | Status | Why |
+|---|---|---|
+| Files | **Fires** | 9 files across the batch, `>5` |
+| Size | **Fires** | ~240 lines added plus removed, over `~200` |
+| Schema, API, event or migration | **Likely fires** | `retryCount` is a documented config option — the config reference and README entries mean it is public API shape, not an internal identifier. Renaming it changes the shape consumers write against. |
+| Security-sensitive surface | Clear | Retry policy, no auth/credential/access-control surface |
+| Dependencies | Clear | No added dependency, version bump, or lockfile change |
+
+Any single row ending quick is enough; this one fires at least two independently.
+
+**On "it is a rename, so it is trivial":** the thresholds count files and lines, not conceptual difficulty. A mechanical change is exactly the kind that spreads wide and cheap — that is what the Files and Size rows measure. Triviality of the edit is not an input to either row, and there is no operator flag that raises the bar.
+
+**What I am not going to offer instead**, since these are the same refused change with a different hand on the keyboard:
+
+- Doing the 7 code files now and the README plus config reference in a second pass — splitting into pieces that each miss the threshold
+- Doing it and writing the rename out for you to paste, or attaching it as a diff
+- Applying it and flagging it for review afterwards
+
+Each of those still edits the surface and still skips the review loop the threshold fired to route this into.
+
+**Disposition:** the item moves to `/st-work` whole — all nine files, code plus docs, in one unit. Keeping it intact is what preserves the property that matters here: a rename that lands in the client and transports but not the config reference leaves the documented name and the accepted name disagreeing. If you want the old name to keep working through a deprecation window rather than breaking on upgrade, that is worth deciding in `/st-work` before the edit, not after.

@@ -1,0 +1,67 @@
+## Findings
+
+### 1. SQL injection in `GET /invoices/:id`
+**Category:** injection
+**Location:** `src/api/invoices.ts` — `db.raw(\`... WHERE id = '${req.params.id}'\`)`
+
+`req.params.id` is interpolated into a query string. A caller controls the path segment entirely, so `' OR '1'='1` dumps the invoice table and `'; ...` reaches whatever the driver's multi-statement setting permits. Hand-quoting is the defect, not the missing escape.
+
+**Fix:** bound parameters — `db("invoices").where({ id }).first()` or `db.raw("... WHERE id = ?", [id])`. Also parse `id` into its declared shape (UUID or positive integer) at the boundary; that is a second control, not a substitute for binding.
+
+### 2. Missing per-resource authorization on `GET /invoices/:id`
+**Category:** broken access control
+**Location:** same route
+
+`requireSession` proves a session exists and attaches `req.user`. Nothing asks whether *this* user may read *this* invoice. The id in the path is an argument, not a grant, so any authenticated user enumerates every invoice the route can reach — other tenants' billing data included.
+
+**Fix:** scope the load to the caller (`where({ id, org_id: req.user.orgId })`) or load then check ownership explicitly, and return 404 on the miss.
+
+### 3. Unfiltered row returned to the caller
+**Category:** insecure design
+**Location:** same route — `SELECT *` piped straight into `res.json`
+
+The response crosses a trust boundary outbound with no declared shape. Every column the table has now or gains later ships to the client — internal notes, processor references, soft-delete and fraud-review flags. Adding a column becomes a disclosure event with no code change at the boundary.
+
+**Fix:** select an explicit column list and serialize through a declared response schema.
+
+### 4. Missing per-resource authorization on `POST /invoices/:id/void`
+**Category:** broken access control
+**Location:** `src/api/invoices.ts` — `/invoices/:id/void`
+
+Same defect as #2, but the operation mutates money state. `invoices.byId` takes the path id, `invoices.void` takes whatever came back, and no step asks whether the caller owns it. Any session can void any invoice in the system.
+
+**Fix:** load scoped to the caller, then check the caller may void that specific record before mutating.
+
+### 5. Void does not fail closed on a missing invoice
+**Category:** insecure design
+**Location:** `/invoices/:id/void`
+
+If `byId` returns `null`/`undefined` for an unknown id, that value is passed to `void()` unchecked. Whether that throws, no-ops, or voids on a bad predicate depends on `void`'s internals, which this route does not get to assume. The absent record must deny.
+
+**Fix:** guard the lookup, return 404, and never call the mutation on an unresolved record.
+
+### 6. `allowTestLogin` inverted environment gate
+**Category:** security misconfiguration, authentication failure
+**Location:** `src/config/flags.ts` — `process.env.NODE_ENV !== "production"`
+
+This is the inverted form: the capability is ON everywhere except one exact literal string. A container with `NODE_ENV` unset, a stage renamed to `prod`, `Production`, or a typo all enable a test-login path — an authentication bypass — in an environment nobody named.
+
+**Fix:** allowlist named environments (`["local", "test", "ci"].includes(env)`), parse `NODE_ENV` against a closed enum at startup, and refuse to boot on a value outside it.
+
+### 7. `seedRoutesEnabled` defaults on and denylists one value
+**Category:** security misconfiguration
+**Location:** `src/config/flags.ts` — `process.env.SEED_ROUTES !== "off"`
+
+Unset means enabled, so the default state of a fresh deploy exposes seed/reset routes. The one disabling value is a denylist of size one: `"Off"`, `"false"`, `"0"`, and a trailing space all leave the routes live.
+
+**Fix:** same allowlist-of-environments gate as #6, with the flag absent meaning disabled.
+
+### 8. No audit record on void — lower confidence
+**Category:** logging failure
+**Location:** `/invoices/:id/void`
+
+A state-changing financial operation records no actor, target, or timestamp in this diff. I can't see the surrounding middleware from the diff alone, so this may already be handled centrally — worth confirming rather than treating as established.
+
+---
+
+Findings 1, 2, and 4 are individually sufficient to expose or destroy all customer invoice data; 6 is an authentication bypass reachable in any unnamed environment. I'd treat those four as blocking.

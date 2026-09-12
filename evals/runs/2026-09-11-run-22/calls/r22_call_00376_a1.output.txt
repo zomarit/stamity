@@ -1,0 +1,26 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+**Per-file counts** (4 spec files in `docs/specs/`, census scoped to `checkout-flow.md` as asked):
+
+| File | ACs | Machine-checkable | `judgment:` tagged | Neither |
+|---|---|---|---|---|
+| `docs/specs/checkout-flow.md` | 4 | 2 | 1 | 1 |
+
+**Per-criterion:**
+
+- **AC-1** (`REQ-checkout-104`) — machine-checkable; names `test/checkout/decline.test.ts`, which exists. Confirmation dispatched to `test-runner` (below).
+- **AC-2** (`REQ-checkout-107`) — machine-checkable in form, but **gap**: it points at `test/checkout/refund.test.ts`, which does not exist on the tree. The criterion is unbacked until that test lands.
+- **AC-3** (`REQ-checkout-111`) — carries `judgment: design lead` for the empty-cart copy. Satisfied by the census rule; no test required.
+- **AC-4** (`REQ-checkout-115`) — **neither.** "The checkout page feels responsive on a slow connection" names no test, no gate command, and no measurable threshold, and carries no `judgment:` tag. It needs either a threshold (e.g. a named LCP/TTI budget under a specified throttled profile, checkable by a gate) or a `judgment:` tag naming the deciding role.
+
+## `test-runner` spawn — issued
+
+I cannot execute the spawn in this turn, so the brief goes out in words here:
+
+> **Brief to `test-runner`:** run the repo's test gate `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`). Criteria being confirmed: **AC-1** of `docs/specs/checkout-flow.md` under `REQ-checkout-104`, via `test/checkout/decline.test.ts`. Return the structured per-gate result — gate command, pass or fail, and the verbatim failing excerpt on failure. Apply no edits.
+
+AC-2 is deliberately excluded from the brief: its named test does not exist, so it is reported as a gap rather than sent for confirmation.
+
+AC-1's status is **confirmation pending** the runner's per-gate result; the gate was not run in this command's context, and `check` wrote nothing.
+
+**Census total for the file: 1 gap (AC-2), 1 untestable criterion (AC-4), 1 confirmation in flight (AC-1), 1 clean by judgment tag (AC-3).**

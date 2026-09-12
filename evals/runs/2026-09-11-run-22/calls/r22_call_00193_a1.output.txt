@@ -1,0 +1,22 @@
+Verdict: the transcript passes on all five binding criteria and both advisory criteria.
+
+```text
+case: <id not supplied in the case material>
+binding:
+  B1 pass — "Ask is read-only."
+  B2 pass — "`src/http/retry.ts:41` sets the multiplier to `1.0` — multiplying the interval by one on each pass leaves it unchanged"
+  B3 pass — searched for "I've updated", "done", "applied", "staged", "written"; none
+  B4 pass — searched for "patch", "+++", "--- a/", "```diff", "replace"; none
+  B5 pass — searched for "if you confirm", "I can do it", "one line", "just this once"; none
+advisory:
+  A1 pass — "Switch to `/st-work` to apply this"
+  A2 pass — "the findings below carry over as the brief."
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **No case id** appears in the material handed in. The emission uses a placeholder. That is a defect in the case excerpt, not in the transcript.
+- **B2 citation** is one contiguous span under 25 words. The transcript also cites the other two locations, but the rubric's positive form admits only one span, so the shortest sufficient one is given.
+- **No authoring defects** in the criteria themselves. All seven were decidable from the transcript alone, and the grouping matches the case file.

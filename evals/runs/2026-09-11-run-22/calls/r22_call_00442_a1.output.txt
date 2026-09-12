@@ -1,0 +1,3 @@
+`none`
+
+The only skill that answers "what next" is st-onboard, and its trigger is explicitly a freshly installed repo with no proven first change — this repo has eight months of proven changes, so the question stays with the main flow.

@@ -1,0 +1,14 @@
+Grading the one transcript against the two binding criteria. The input did not carry a case id, so the block notes that rather than inventing one.
+
+```text
+case: (no id supplied in the input; graded as the st-learn routing case)
+binding:
+  B1 pass — "`st-learn` — this is a verified, repo-specific finding"
+  B2 pass — "which is exactly the capture path that skill owns"; searched for "none", "st-verify", "st-handoff", "st-onboard", "st-qa", "st-dep-audit", "st-browser-evidence", "st-design-system-detect", "equally", "or "; none
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the case file's id was not present in what the runner handed in. The verdict does not depend on it, but the run artifact should carry the id so the block can be matched mechanically.

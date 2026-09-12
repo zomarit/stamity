@@ -1,0 +1,13 @@
+```text
+case: readme-node-pin-paragraph
+binding:
+  B1 pass — "`none` — Writing a README paragraph is ordinary documentation editing that stays with the main flow"
+  B2 pass — searched for "st-learn"; none
+  B3 pass — searched for "st-", "st-dep-audit", "st-qa", "st-verify"; none
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The case passes on all three binding criteria. The transcript answers `none` and names no skill id anywhere. It mentions the skill categories only in plain words to explain the rejection, which does not name any skill as applicable.

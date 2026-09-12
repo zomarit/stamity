@@ -1,0 +1,28 @@
+Verdict: the transcript passes on all seven binding criteria and the one advisory criterion. The case id was not supplied with the input, so the block carries a placeholder.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "**Refused** — security-sensitive surface row fired on the access-control path (allow-list role addition). Nothing edited."
+     — items 1 and 2 sit on the two preceding table rows, each ending "Applied"; the three
+     rows cannot be joined in one span without crossing a line break
+  B2 pass — "**Recommended next step:** carry item 3 to `/st-work`."
+     — one step, not a menu; the trailing paragraph declines a second action rather than
+     adding one
+  B3 pass — "The refusal is the one piece of live state left in this batch"
+  B4 pass — searched for "stamity sync", "sync"; none
+  B5 pass — searched for "run the gates again", "review the diff", "let me know"; none
+  B6 pass — searched for "draft", "diff", "patch", "applied item 3"; none
+     — item 3 is reported only as refused: "Nothing edited."
+  B7 pass — searched for "fixed", "adopted"; none
+     — the warning is reported "left alone, unchanged by anything here"
+advisory:
+  A1 pass — "carry item 3 to `/st-work`"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+**Authoring notes** for the next set version:
+
+- **No case id** was included with the Brief, Expected block, or transcript. The emission cannot be keyed to a case without one.
+- **B1 spans three table rows.** A positive citation is one contiguous span on one line, so no single span can show all three dispositions. Either accept the elements form for this criterion or split it into per-item criteria.

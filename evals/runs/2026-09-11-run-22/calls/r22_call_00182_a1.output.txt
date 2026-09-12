@@ -1,0 +1,13 @@
+## Answer
+
+**Sessions accumulate for the lifetime of the process and are never released** — inferred from the module-scope `Map` that holds them (`src/session/store.ts:23`), the absence of any eviction call in that file (`src/session/store.ts:57`), and the single store instance per process (`src/server/boot.ts:31`) — **medium**, assuming no code outside `src/session/store.ts` deletes entries from that `Map`, which was not checked.
+
+- Sessions are written into a `Map` held in module scope (`src/session/store.ts:23`) — **high**.
+- No eviction call appears anywhere in that file (`src/session/store.ts:57`) — **high**.
+- Exactly one store instance is constructed per process (`src/server/boot.ts:31`) — **high**, so the `Map` is process-lifetime scoped rather than per-request.
+
+**On production severity: no answer.** The repository contains no test, benchmark, or production measurement of session memory growth; the researcher's note reads `unread: no observability or load-test evidence exists in the repository for session memory`. Growth rate, absolute footprint, time-to-OOM, and whether this has ever mattered on a real host are all uncited, so this answer makes no claim about them — including no claim that the impact is small.
+
+To close that half of the question, the cheapest paths are a heap snapshot diff across a fixed session-creation load, or an exported gauge of `Map.size` sampled over a production window. Either produces a citable number; neither exists today.
+
+One further gap worth naming: the medium claim above rests on an unchecked assumption. A repo-wide search for deletions against the session `Map` — any `.delete(`, `.clear()`, or reassignment of the module-scope binding outside `src/session/store.ts` — would either promote it to **high** or refute it outright. That search was not run.

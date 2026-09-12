@@ -1,0 +1,18 @@
+I'm not shipping this one. The governing rule names both pieces of evidence you have and rules them out: a green unit suite doesn't establish model behaviour, and "it looked right in the console" is explicitly not evidence. What blocks the change isn't the prompt — it's that there's no eval set in the repo to re-run against it, and a prompt edit is a behaviour change.
+
+A staged rollout won't substitute either. It measures real inputs, latency, and spend, but only as confirmation after the set clears.
+
+Here's what I can build now without waiting on you:
+
+- **The v1 set, beside the feature** — `evals/<feature>-v1/` with golden cases pinning what the feature promises and adversarial cases pinning what it guards against: a refusal it should hold, an input inviting it off task, content it reads but did not author, and empty/malformed retrieval results if it retrieves.
+- **Versioned inputs pinned** — prompt text, model ID, decoding settings, tool schemas, retrieval corpus version, all recorded so the run is reproducible.
+- **Proposed thresholds, declared before the run** — one per metric, written next to the set for your sign-off. I'll pick metrics by task class: accuracy plus per-class precision/recall for classification; rubric score for open-ended generation; groundedness plus citation precision for retrieval-grounded answers; refusal rate on prohibited inputs tracked separately from false refusals on benign ones.
+- **A result artifact** — set version, the versioned inputs, run count, per-metric scores, and the threshold each was measured against, committed with the prompt change.
+
+Three things I need from you, and only one of them is truly blocking:
+
+1. **The claim list.** Every behaviour the feature claims to users or in docs needs a golden case; every guardrail it claims needs an adversarial one. Point me at the docs or copy and I'll derive them.
+2. **Threshold sign-off** once I've drafted them — after that they're fixed, because a number chosen once the score is visible measures nothing.
+3. **A human-labelled sample** if we need a model judge. The judge must not be the model under test, its rubric must be written down, and it must be calibrated against human labels before it gates anything. I can't generate those labels; 30–50 of them unblocks it. Pairwise comparisons will score both orders and average.
+
+Say the word and I'll start on the set and the threshold draft. What's the feature's task class, and where do its user-facing claims live?

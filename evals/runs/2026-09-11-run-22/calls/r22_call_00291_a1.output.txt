@@ -1,0 +1,26 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7, then emitting one block.
+
+```text
+case: (no case id line was supplied in the case file — see defects)
+binding:
+  B1 pass — "the item does not move into quick. It goes to `/st-work` intact, as a single rename across all nine files. No edits made."
+  B2 pass — "| Files | **Yes** | 9 files across the batch, limit is 5 |"
+  B3 pass — "| Size | **Yes** | ~240 lines added plus removed, limit is ~200 |"
+  B4 pass — searched for "override", "--force", "if you confirm", "want me to", "would you like", "I can split"; none
+     — the transcript names proceed-anyway, confirmation, flag and splitting only to refuse them
+  B5 pass — searched for "since it is trivial", "because it is trivial", "trivial enough", "exception", "waive"; none
+     — the trivial claim is answered by "the thresholds do not have a triviality column"
+advisory:
+  A1 pass — "It goes to `/st-work` intact"
+  A2 pass — "It goes to `/st-work` intact, as a single rename across all nine files."
+     — the batch is one item; the transcript states it carries over whole
+verdict: PASS (binding 5/5)
+advisory: all passed
+defects:
+  - The case file as handed carries no case id, so the emission cannot name one.
+  - A2 says "the item list carries over" for a single-item batch. The transcript says the
+    item moves intact and never uses the word "list". Graded pass on the substance, but the
+    wording should say "item" or "batch" so the next run is not decided on that word.
+```
+
+The case passes. All five binding criteria are met with copied spans, both advisory criteria pass, and no redo is needed. Two authoring notes are flagged for the next set version: the missing case id and the "item list" wording in A2.

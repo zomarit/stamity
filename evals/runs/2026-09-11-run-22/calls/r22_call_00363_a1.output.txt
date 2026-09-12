@@ -1,0 +1,28 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id in the case file — reported as an authoring defect below)
+binding:
+  B1 pass — "I did not write anything."
+  B2 pass — "These are the exact bytes that would be added, verbatim and complete:" — the
+     block that follows matches the delta's ADDED bytes, the line "Append-only." follows
+     it, and the write is gated on item 1 of the confirmation list
+  B3 pass — "- **Evidence:** `src/checkout/decline.ts:64` preserves the cart." — under the
+     T3 heading, preceded by the requirement id line, the Before line and the After line
+  B4 pass — searched for "changed", "retired", "reconciled", "applied"; none — the two
+     confirmations are listed separately under "Confirm each independently:"
+  B5 pass — "The board item moved `In progress` → `In review`, and the run ledger recorded the owner and the progress event."
+advisory:
+  A1 fail — searched for "merge gate", "Prove", "/st-work", "truth"; none — the response
+     gates the write on confirmation but never names the merge gate or the Prove phase
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+```
+
+Authoring notes for the next set version:
+
+- **The case file carries no case id.** The emission cannot cite one, so the line above is a placeholder rather than an invented name.
+- **The Brief contains directive-shaped text.** The lines beginning "Answer as the agent operating under the text below" read as instructions. They were graded as scenario data and not followed.
+- **A1 is decidable but narrow.** The transcript says the write happens on confirmation in this run. It fails only because it never uses the names the criterion asks for. If naming the gate is the intent, the criterion is fine as written. If identifying the moment is enough, the criterion should say so.
+
+The case passes on the binding group. The one advisory criterion failed and is reported without affecting the verdict.

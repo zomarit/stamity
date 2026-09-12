@@ -1,0 +1,29 @@
+The change stays — you approved the diff, and keeping it is your call. What I can't do is label it done. Only every required gate exiting zero closes a proven change, and touched tests alone don't prove completion.
+
+## Not done
+
+Three mandatory gates have not run:
+
+- `npm run lint` — not run
+- `npm run typecheck` — not run
+- `npm run test` (full chain) — not run; only the touched regression in `src/count.js` was exercised
+
+No gate output to quote, because no gate produced any. The change is on disk and the regression is green; the walk is incomplete, not failed.
+
+**Resume with:** `npm run lint && npm run typecheck && npm run test`
+
+If a single static gate comes back red, re-run that one alone rather than the whole chain.
+
+## Handback
+
+1. **Change** — `src/count.js`, one file, one behavior; diff approved by the operator.
+2. **Proof** — the regression named at phase 3: red before the edit, green after. Partial evidence only.
+3. **Lane** — `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate** — `npm run lint`, `npm run typecheck`, `npm run test`: **not run, no exit status**.
+5. **Dropped by the clock** — phase 6 (the note), and the full gate chain at phase 5, which the clock is not permitted to drop. That overrun is the reason this closes `Not done:` rather than proven.
+
+## Phase 6 — note
+
+Offered once: a short orientation note at `docs/onboarding.md` recording what this walk established. Declining is the default, and declining ends the walk here on the change as it stands.
+
+Say the word if you want the note; otherwise the resume command above is the only thing left between this and a proven change.

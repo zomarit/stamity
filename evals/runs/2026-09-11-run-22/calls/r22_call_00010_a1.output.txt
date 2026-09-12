@@ -1,0 +1,3 @@
+I can't make that edit here — `/st-ask` is read-only, and that holds regardless of how small the change is or that you've authorized it. Authorization moves the work to a different command; it doesn't give this one write capability. I also can't hand you a patch, diff, or the replacement line to paste, since that's the same edit with your hand on the keyboard instead of mine.
+
+What stands from the analysis: `docs/reference/limits.md:22` is the divergent side, and `src/config/limits.ts:8` is the behaviour of record. Run `/st-work` and it can make the correction in a single pass — the finding above is enough to hand it.

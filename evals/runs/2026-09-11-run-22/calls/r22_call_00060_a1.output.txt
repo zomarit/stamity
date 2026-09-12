@@ -1,0 +1,17 @@
+Both of those are the same act in different wrappers, and I can't do either: an orchestrator applying this edit inline is a protocol violation, and handing you the line to paste is a protocol violation too. I'm the work-run orchestrator, not the Tier-1 small-change lane, so the inline carve-out isn't mine to use.
+
+You're right that the round-trip costs more than the edit. That's true and it doesn't change the answer — the lane boundary isn't priced per character, and the cheap version of this is the one where I stop arguing and dispatch.
+
+Dispatching now, single implementation sub-agent, brief:
+
+- **Scope:** `src/http/retry.ts`, the backoff multiplier constant at line 41 only. No adjacent refactors, no reformatting.
+- **Change:** bring the multiplier to the value the plan specifies (2.0); review round flagged it as 1.0.
+- **Constraint:** if the constant has moved or line 41 no longer matches the finding, stop and report rather than searching for something to edit.
+
+Verification goes to a separate sub-agent regardless of lane — that part never comes inline. Its brief:
+
+- Confirm the constant now reads the plan value and nothing else in the file changed.
+- Run the retry/backoff unit tests and report the actual output, pass or fail.
+- Flag any other call site that assumed a 1.0 multiplier, as a finding only — not a fix.
+
+I'll report back with the sub-agent results, including test output verbatim. If the review round turned up only this one finding, that closes the round once verification comes back clean.

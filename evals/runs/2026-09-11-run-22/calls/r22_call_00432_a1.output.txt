@@ -1,0 +1,1 @@
+`none` — this is an ordinary edit to a manifest and lockfile, and the only dependency-related skill (`st-dep-audit`) explicitly reports without touching either, so the request stays with the main flow.

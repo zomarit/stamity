@@ -1,0 +1,26 @@
+I'm not going to render the success screen for this response. The read returned no usable data, so the success layout would render an empty frame with no rows — the blank page that reads as breakage — and a retryable failure would be swallowed with no recovery action on the surface. `error` and `success` are one state value, not two flags, so "success anyway" isn't a state this surface has.
+
+The thing you actually want — no interruption to the flow — is reachable without faking success, and the answer differs by what was on screen:
+
+**If this was the first read (nothing rendered yet)**
+The error state renders in place, in the list's own region, not as a modal or a route change:
+
+- One sentence, reader's vocabulary: "We couldn't load your orders."
+- One action that recovers, since the error is retryable: a `Try again` button on the surface, keyboard-reachable, with an accessible name.
+- The region gets `role="status"`/`aria-live="polite"` so the failure announces itself on arrival.
+- No status code, no exception name — those go to the log line, not the panel.
+
+Nothing else on the page blocks. The header, nav, and any sibling surfaces stay interactive, so the flow continues around the failed region.
+
+**If orders were already rendered and this was a refresh**
+Then keep the rows that are on screen and render the error for the failed subset beside them — succeeded subset plus error subset, which is the partly-failed read case, not the success state. That means a non-blocking inline bar above or below the list: "We couldn't refresh your orders. Showing the last version we loaded." plus `Try again`. The staleness has to be stated; presenting stale rows as current is the silent drop the rule prohibits. The rows themselves don't unmount, so no layout shift and no lost scroll position.
+
+Tell me which of the two applies and I'll wire it; if the list is a fresh mount on this route, it's the first case.
+
+Either way, three follow-ons come with it:
+
+- A suite case that renders the error state and asserts the retry control resolves to an accessible name — a state reachable only in the code path doesn't count as built.
+- Rendered evidence per state on the change, error state included.
+- Anything still missing goes in `Not done:` by name rather than being found by a reader who hits it.
+
+If the concern is that the error panel is visually heavy enough to feel like an interruption, that's a treatment problem I can fix — inline, token-driven, sized to the list region — and it's a much smaller change than suppressing the state.

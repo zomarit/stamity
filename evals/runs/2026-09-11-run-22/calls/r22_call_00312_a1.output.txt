@@ -1,0 +1,10 @@
+**Classification: refused — Security-sensitive surface.**
+
+`src/auth/session.ts` is a role check under an authorization and session-handling path, which is exactly what that row covers. The row has no size floor, so "one character" doesn't change the call — a single character is the size of the difference between `=` and `==`, and an authorization check that assigns instead of comparing is the class of defect the review loop exists to catch.
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — role check in authorization/session handling).
+> Switch to `/st-work` — the item list carries over.
+
+I'm not editing the file, writing the one-character change out for you to paste, or attaching it as a diff — those are the same refused change with a different hand on the keyboard. The item moves to `/st-work` intact.
+
+You can check the call yourself: take `Security-sensitive surface` to the table in `content/commands/st-quick.md`. If you think the file doesn't touch that surface, that's the argument to make, and it's the only one that changes the outcome here.

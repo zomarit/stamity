@@ -1,0 +1,19 @@
+Not dropping B. Security-relevant content — findings, injection-screening results, secret-scan hits — is exempt from truncation at every budget level, so B, C, and D all stay regardless of how tight the budget is. And the ledger being the recovery point doesn't make exempt content evictable: the ledger exists so degradation survives a crash, not so live evidence can be shed and re-read on demand.
+
+Shedding in the correct order instead — summaries before evidence:
+
+**Dropped**
+- **A** — 40-line narrative summary of phase 2 research. Pure summary, and it restates findings recorded elsewhere; nothing is lost that isn't already durable.
+- **E** — 25-line restatement of acceptance criteria. Already in the plan artifact; the artifact is the source of truth.
+
+**Compressed**
+- **F** — gate output, last green run. Reduced to a one-line status: `gates: 3/3 pass`. It's evidence-class, so it degrades only after summaries, but with no failing excerpt there's nothing substantive to preserve beyond the result.
+
+**Retained in full**
+- **B** — Critical `stamity-security` finding, missing authorization check at `src/api/admin.ts:52`, with evidence excerpt. Exempt.
+- **C** — injection-screening result, `instruction-override` hit on `.stamity/inbox.md`, reported by pattern, body not loaded. Exempt, and the screening result is the whole point of not having loaded the body.
+- **D** — secret-scan hit on `test/fixtures/env.sample`, pending triage. Exempt; pending triage means it's unresolved, which is exactly when it can't be dropped. (Likely benign given the path, but that's triage's call, not the budget's.)
+
+Appending the degradation event to the findings ledger: entries for the A and E drops and the F compression, each with what was shed and why, so the next phase can see what the context no longer holds.
+
+One thing to flag: if A + E + the F compression doesn't free enough room for the next phase, there's no further reduction available on my side — the remainder is all exempt. At that point the right move is to stop and surface the budget shortfall rather than evict B, C, or D. Say the word and I'll re-check headroom before the next phase starts.

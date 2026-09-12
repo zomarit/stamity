@@ -1,0 +1,29 @@
+I can't hand this off. The structural check passing is not handoff approval — the semantic coverage review still stands open, and it fails.
+
+**The conflict.** REQ-CACHE-001 and unit U1 carry competing meanings on the same behavior:
+
+- **Requirement reading:** refresh happens in the background while the previous (stale) value stays on screen — stale-while-revalidate. "Continuing to show the previous value" is the requirement's own wording.
+- **Unit reading:** the previous value is suppressed the moment refresh starts, so the user sees an empty or loading state until the fresh value lands.
+
+These are opposite visible behaviors during the refresh window, and the acceptance criterion doesn't decide between them: asserting that a fresh value eventually appears is true under both readings, so it cannot catch the contradiction. No user decision on record settles it.
+
+**Clarification needed** (smallest question that decides it):
+
+> During a refresh of customer data, must the previously cached value remain visible on screen until the fresh value arrives, or is hiding it (loading/empty state) the intended behavior?
+
+If the answer is "remain visible," U1's description inverts and the criterion needs a second assertion — Given a cached value and a refresh in flight, When the view renders, Then the previous value is displayed — plus an expected behavior for the stale-value window in `edgeCases`. If the answer is "hiding is intended," then REQ-CACHE-001's text is what changes, and that edit belongs in the Spec delta as a `MODIFIED` entry rather than being silently overridden by a unit.
+
+I've asked rather than picked, because either choice is shippable and wrong-if-guessed: guessing "keep visible" builds caching the spec may not want, and guessing "hide" writes a plan that contradicts the requirement it cites.
+
+**Return contract**
+
+- `status: BLOCKED_AMBIGUITY` — semantic coverage review found REQ-CACHE-001 and U1 asserting opposite behavior for the refresh window; handoff blocked pending one clarification.
+- `intent chosen: feature because the plan adds cache-refresh behavior against REQ-CACHE-001 with no defect report or restructuring signal` — restate if the run's recorded intent differs.
+- Artifact path(s) written: **none** — the drafted plan is held unwritten; the lint gate blocks the write. Unit count: 1 affected (U1).
+- Structural coverage: **pass** (all IDs and dependencies resolve; no uncovered requirement). Unresolved semantic reading: REQ-CACHE-001 × U1, previous-value visibility during refresh. `semanticReview: required` remains unsatisfied.
+- Plan-lint: `L1 pass · L2 pass · L3 pass · L4 pass`. L1 passes narrowly — the criterion names an observable subject and a verifiable condition — but it leaves the contested behavior unasserted, which is why L1 alone did not catch this.
+- `sub_agents_spawned: 0 · task_structure: sequential` — the lint gate runs inline in this run.
+- Open questions carried: **1** (the visibility question above). Non-empty, so handoff is blocked.
+- Learnings written: `none` — this run met no qualifying non-obvious verified failure.
+- **Next step:** resolve the carried open question through the clarification step. Chosen by this run's state: an open question outranks the clean structural result, so `/st-work` is not the next action. Answer the question and I'll correct U1 (or the Spec delta), re-run the lint pass, and write the artifact.
+- Follow-ups appended to `.stamity/inbox.md`: **none yet** — the inbox append is a post-write side effect and no artifact exists to cite.

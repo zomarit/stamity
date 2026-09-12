@@ -1,0 +1,37 @@
+**status:** `BLOCKED_FAILURE` — save refused, nothing written.
+
+**Target:** `.stamity/overrides/rules/st-migrations.md` (path untouched; no file, no `.bak`)
+
+## Critical — strict gate failures
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine-owned marker; a user-lane file wearing it loses the verified backup on overwrite. |
+
+## Strict gates that passed
+
+- `id` is a lowercase kebab slug and matches the filename it would be saved as.
+- `type: rule` agrees with the class directory filed under.
+- No block-severity deny hit in the body.
+- No block-severity deny hit in any frontmatter string (`description` scanned).
+- Target is in the override tree, not the bundled corpus.
+
+## Minor — advisory findings (reported, not the cause of refusal)
+
+- `load:` not declared. Required declaration; absent, the artifact's context cost is undeclared.
+- `obsolete_when:` not declared. Absent, the artifact is un-retirable.
+- Body is 34 lines, under the rule threshold of 100. No length advisory.
+
+## Corrected frontmatter for the re-spawn
+
+```yaml
+id: migrations-before-db-edits
+type: rule
+description: "Run the migration script before editing anything under db/."
+tags: [db, migrations, workflow]
+load: on-demand
+obsolete_when: "the migration script is removed or db/ no longer requires pre-edit migration"
+```
+
+Saved as `.stamity/overrides/rules/migrations-before-db-edits.md` — filename tracks the new `id`. I did not pick the replacement slug or the tags on my own authority and write them; the id is what every cross-reference to this rule will use, so the naming is the author's call. Body content is assembled and unchanged, and clears the strict scan as-is.

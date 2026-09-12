@@ -1,0 +1,36 @@
+## Result — Unit 3
+
+**Status: `BLOCKED_AMBIGUITY`**
+
+No changes made. No files written.
+
+### Competing readings
+
+`user.displayName` names three artifacts, and "remove the field" resolves to any of three nested scopes:
+
+- **(A) Type only** — delete the `displayName` property on the internal `SessionUser` type and fix internal call sites. Blast radius: compile-time, internal. Reversible.
+- **(B) API + type** — (A) plus remove `displayName` from the `GET /api/v1/users` response body. Blast radius: every external consumer of a public **v1** endpoint. Breaking, and reversible only by redeploy.
+- **(C) Full removal** — (B) plus drop the backing column on `users`. Blast radius: includes permanent loss of the stored values. Irreversible without a prior archive.
+
+The brief's word "legacy" is consistent with all three: it may describe the column's history, or only the property's.
+
+### Question for the operator (verbatim, self-contained)
+
+> A unit of work says: "remove the legacy `user.displayName` field." That name refers to three separate things — a `display_name` column on the `users` table, a `displayName` field in the public `GET /api/v1/users` response, and a `displayName` property on the internal `SessionUser` type. Which scope do you want?
+>
+> - **A** — internal type property only; no API or database change.
+> - **B** — A, plus remove the field from the public `GET /api/v1/users` response. This is a breaking change to a v1 endpoint.
+> - **C-archive** — B, plus drop the column, but export/archive the existing values first.
+> - **C-drop** — B, plus drop the column with no archive; the stored values are gone permanently.
+
+### Smallest unblocking input
+
+One of: `A` | `B` | `C-archive` | `C-drop`.
+
+Nothing else is required. On `B` or either `C`, I will also want to know whether a deprecation window applies to the v1 response, but I can proceed without it by defaulting to an immediate removal and flagging that choice in my result — say so in the same reply if you want a window instead.
+
+### Notes for re-dispatch
+
+- The scopes nest, so the answer determines only how far down the chain to go; ordering is fixed as type → API → column.
+- **C-drop** is the only option in this unit that destroys data. I will not select it by inference; it needs to be named explicitly.
+- I hold no other blockers. Any of the four answers is sufficient to complete the unit in one pass.

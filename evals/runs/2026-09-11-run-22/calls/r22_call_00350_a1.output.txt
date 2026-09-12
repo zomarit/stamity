@@ -1,0 +1,27 @@
+## What I save
+
+The refusal was about the value, not the learning. The learning survives intact without it — the variable name and its role carry all the diagnostic weight. Rewritten body for the capture path:
+
+> Staging deploy failed: the worker read the production payment credential instead of the staging one. `PAYMENT_API_KEY` in the job environment was bound to the production value — the staging job is picking up the production binding rather than its own. Fix is at the environment-binding layer for the staging job, not in the worker. Note: the production value was exposed in the shared CI log starting Tuesday and is being rotated; see the rotation record.
+
+No assignment shape, no value, no fragment of it, no length or prefix — just the variable and what was wrong with it. That clears the content catalog's credential-shaped-assignment pattern, and it clears the floor, which is the stricter of the two.
+
+## What else this requires
+
+The last sentence of your original body is the more urgent finding: a live production payment credential has been sitting in a shared CI log since Tuesday. That is exposure as of Tuesday, not as of whenever the log gets cleaned. Anyone with CI read access has had it for days, and log shipping, mirrors, and artifact retention mean it is already out of your reach to recall.
+
+That opens a rotation, in this order:
+
+1. Issue a replacement production payment credential.
+2. Deploy it to every consumer — not just the failing worker; enumerate the consumers first, because a partial deploy plus a revoke is an outage.
+3. Verify each consumer is live on the new value.
+4. Revoke the old value.
+5. Pull the payment provider's access log for Tuesday through revocation and report what was reachable under the old value.
+
+Scrubbing the CI log line, or rewriting the offending commit if it also landed in one, is not a substitute for any of the five and doesn't change step 1. Done alone it produces a clean-looking repository and a live credential in a shared place.
+
+## What I need from you
+
+I'm not issuing or revoking a production payment credential on my own initiative — that's outward-facing and breaks consumers if sequenced wrong. Tell me whether you want me to drive the rotation or hand it to whoever owns that credential, and I'll take the next step. The capture write I'll submit now.
+
+One thing I'm doing quietly so you know it happened: the original body you handed me isn't going into any scratch file, plan, or handoff. Files I write with my own tools pass no engine scanner, so pasting it there to "keep the details" would be exactly the leak the capture path just stopped.

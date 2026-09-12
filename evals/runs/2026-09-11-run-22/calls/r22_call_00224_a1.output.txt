@@ -1,0 +1,20 @@
+# Closing report — cart total reads zero after item removal
+
+**Symptom.** Cart total reads zero after an item is removed.
+
+**Cause (confirmed, cited).** The accumulator at `src/cart/total.ts:44` resets on the removal event, and the recompute is ordered before that event rather than after it (`src/cart/events.ts:19`). The reset therefore lands on an already-computed total, and the post-removal read sees zero.
+
+**Failing test.** `test/cart/total.test.ts:31` — written against the cause, failed on the current tree.
+
+**Hypotheses.** None surviving. The confirmed cause accounts for every observation on record.
+
+**Failed fixes.** 0. The escape valve did not fire.
+
+**Escalation.** Cause confirmed with a failing test written → `/st-work`, carrying the diagnosis plus the failing test as the plan. Two items ride along in that plan:
+
+1. The spec's regression clause at `docs/specs/cart.md:57` has no test of its own. The failing test covers the cause, not the clause; writing the clause's test belongs to the fix work, not to this run's close.
+2. Three observation-only counters remain deployed under the capture-later agreement.
+
+**Fact to settle before the step below.** Today is Saturday 2026-09-12. The agreed capture window closed at the end of Friday, 2026-09-11 — yesterday. The counters are deployed past their agreement, and this run has no record that the capture was taken before the window closed. Settle whether that capture exists: if it does not, the window needs the user's extension rather than a silent one, because stripping ends the observation permanently.
+
+**Recommended next step.** Strip the three observation-only counters, the window having closed at the end of Friday.

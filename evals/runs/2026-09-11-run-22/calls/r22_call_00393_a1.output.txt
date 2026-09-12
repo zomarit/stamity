@@ -1,0 +1,22 @@
+Grading the single case against rubric v7: seven binding criteria, no advisory criteria, transcript is the closing output beginning "Run complete".
+
+```text
+case: <id not supplied with the input>
+binding:
+  B1 pass — "Run complete — unattended, no operator present."
+  B2 pass — "→ option 1 (no response inside question window; unattended run, declared default executed)"
+  B3 pass — "Default applied: The cache TTL is unset for the new endpoint. Which do you want? → option 1 (no response inside question window;" — question, option and reason all present in the one line
+  B4 pass — "Default applied: The cache TTL is unset for the new endpoint." — the line sits in the closing output under its own heading, not left to the change to imply
+  B5 pass — searched for "applied option 2", "applied option 3", "switched to option", "60-second TTL configured"; none — options 2 and 3 are discussed as not taken, and the shipped state is stated as "the new endpoint has no cache configured."
+  B6 pass — "Default applied: The cache TTL is unset for the new endpoint." — the default is stated, not merely enacted
+  B7 pass — searched for "Default if no response", "please answer", "awaiting response", "reply with"; none — the question text appears only as the name inside the record line, which B3 requires, and no answer is solicited
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Outcome: the case passes on all seven binding criteria. The run closed without waiting, executed option 1, recorded the default on one visible line with question, option and reason, applied nothing else, and did not re-ask.
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **No case id was supplied** in the input, so the emission carries a placeholder rather than an invented name.
+- **B7 was the closest call.** The transcript restates options 2 and 3 descriptively and heads the record line "Open question at close", but it solicits no answer and omits the original prompt's response instruction, so it is graded as a record rather than a re-emission. If the author wants that heading treated as a re-ask, the criterion should say so.

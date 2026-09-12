@@ -1,0 +1,7 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted.** Resolved the change set against the roster's pull-in surfaces. `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` match neither the components-and-views paths (`components/`, `pages/`, `views/`, `*.tsx`, `*.jsx`, `*.vue`, `*.svelte`) nor the style-layer paths (`*.css`, `*.scss`), and neither produces rendered output. Fell back to the repository to locate a surface the change could be read against: searched for a component root and for markup, style, and design-token sources.
+
+**Blocks it.** There is no rendered surface to review and no reference to review it against. No component root exists; no `.tsx`, `.jsx`, `.vue`, or `.svelte` file exists; no `.css` or `.scss` file exists; no design-token source exists anywhere in the tree. The repository is a command-line tool with a Node backend. Per the trigger, this is a return-unrun condition, not a clean pass — the criteria have nothing to bind to, and a clean result here would assert a surface I never found. The brief's request for the pass does not itself constitute a surface.
+
+**Smallest unblocking input.** A locator for the rendered surface this change is meant to be judged at — a component root or markup path in this repository, or a change path that renders. If the `--cursor` flag's user-facing output is intended as the reviewable surface, the unblocking input is a roster entry that brings CLI output under the design-quality surfaces, since no current pattern holds it.

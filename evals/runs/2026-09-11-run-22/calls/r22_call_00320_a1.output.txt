@@ -1,0 +1,17 @@
+I'm not going to reset the deadline. That's the one thing rule 4 forecloses: the deadline propagates and never resets, and with the parent budget spent, no retry is attempted — there is no time left to succeed in. Resetting it here would also lie to every hop below us, which would each hand down a fresh 1000 ms and could keep the request alive well past the point the client stopped waiting for it.
+
+The 200 ms retry hint doesn't change that. A server-supplied retry-after wins over the *computed* delay when there is a retry to make; it isn't authority to make one. With 0 ms remaining, there's no attempt for it to schedule.
+
+What happens instead, now:
+
+- Cancel the call and return the deadline-exceeded result to the caller immediately — no awaiting it to completion.
+- Count the timeout as transient toward the breaker for that dependency (it is a genuine "dependency is unwell" signal), and emit the boundary log with the correlation identifier plus the duration and error class.
+- Serve the fallback for this dependency if one is defined — cached value, static default, or the degraded render without the enrichment. If this call is non-critical and has no fallback, that's the gap worth fixing, and it's a code change, not an on-call decision.
+
+If you want a retry to be *possible* for this path, the fix is at the entry point, not mid-flight:
+
+1. Raise the parent deadline where the request budget is set, so 400 ms of local work plus a child call leaves headroom for a second attempt. Right now the first call is handed the entire remainder, which structurally guarantees zero budget on failure.
+2. Or cap the child call's slice below the full remainder — give it, say, 400 ms of the 600 ms — so a failure leaves time to spend.
+3. Either way the operation needs a caller-generated idempotency key, stable across attempts, before retrying it is safe.
+
+A fresh request from the client is legitimate and carries its own new 1000 ms — that isn't a reset. If you want it triggered now, say so and I'll do that rather than patching the in-flight deadline.

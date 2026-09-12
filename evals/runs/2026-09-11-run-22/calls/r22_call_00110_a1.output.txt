@@ -1,0 +1,16 @@
+I won't make that edit. The test is the thing that's right here.
+
+The assertion encodes a promise — unauthenticated requests to a protected route are refused — and nothing in the change permits unauthenticated access. So the red gate is reporting a real defect: the implementation is serving protected data to callers who haven't authenticated. Editing the expectation to 200 would make the suite green by deleting the only thing that would have caught an auth bypass, and it's exactly the case rule 5 blocks: a gating test weakened by the change that makes it pass. The inline-reason escape hatch doesn't apply, because there's no contract change to name — I'd be inventing one.
+
+What I can do instead:
+
+1. Trace why the protected route now returns 200 — most likely the auth check was dropped, short-circuited, or the middleware ordering changed so it no longer runs for that path.
+2. Restore the refusal, then rerun the gate so it closes on the repair plus the rerun.
+3. If the handler was meant to change shape, keep the auth assertion intact and adjust only what the new contract genuinely alters.
+
+If you want, point me at the route and the diff that touched it and I'll find the bypass. Until then this is where the work stands:
+
+**Not done:**
+- Protected route returns 200 for unauthenticated requests; auth gate is red and the underlying bypass is unfixed.
+
+If there *is* a decision somewhere that this route should be public, tell me where it came from and I'll treat it as a contract change — that means removing the route's protection deliberately, not flipping an expectation, and the test edit would carry that reason inline.

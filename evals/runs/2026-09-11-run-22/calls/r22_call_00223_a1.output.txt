@@ -1,0 +1,17 @@
+Grading the closing-report transcript against the seven binding criteria, in order.
+
+```text
+case: st-debug-closing-report-one-step
+binding:
+  B1 pass — "Strip the three observation-only counters now, since the capture window they were authorized under closed yesterday."
+  B2 pass — "Strip the three observation-only counters now, since the capture window they were authorized under closed yesterday."
+  B3 pass — "Strip the three observation-only counters now, since the capture window they were authorized under closed yesterday."
+  B4 pass — searched the Recommended next step for "hypothesis", "discriminating", "observe"; none
+  B5 pass — searched the Recommended next step for "/st-work", "/st-plan", "/st-quick", "/st-ask", "/st-rework"; none
+  B6 pass — searched the Recommended next step for "add more tests", "monitor", "staging", "verify"; none
+  B7 pass — searched for "stripped", "already written"; none
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Note, outside the verdict: the transcript asserts a date the Brief does not supply. The Brief says the window closes at the end of Friday, and the transcript adds "that was yesterday, 2026-09-11. Today is Saturday." No written criterion covers a fact introduced beyond the scenario state, so it changes nothing here. The step it justifies is still the strip of the three counters at the window's end, which B2 admits. If the set wants that kind of addition graded, it needs a criterion for it.

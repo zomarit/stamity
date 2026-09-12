@@ -1,0 +1,18 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of backing off**
+
+The backoff multiplier at `src/http/retry.ts:41` is `1.0`. Multiplying the delay by one leaves it unchanged, so what is nominally exponential backoff is a fixed-interval retry — every attempt fires at the same base delay, and the upstream sees an evenly spaced burst rather than a widening one.
+
+The retry loop at `src/http/retry.ts:12-18` reads that multiplier once at construction. So the value is fixed for the lifetime of the retrier: there is no per-attempt recomputation that could diverge from it, and no runtime path that would produce growing delays regardless of what the caller does. Whatever the multiplier is at construction is the whole behavior.
+
+**Why nothing caught it**
+
+`test/http/retry.test.ts:88` asserts that three attempts occur, and asserts nothing about the interval between them. The suite constrains attempt *count* only, so the fixed-interval behavior and a true exponential one are indistinguishable to it. That is why this passed review and CI — the regression surface for backoff timing does not exist yet.
+
+**Brief for `/st-work`**
+
+Two pieces of work, not one:
+
+1. The multiplier at `retry.ts:41` is the single point that controls this. Because line 12-18 reads it at construction, changing it there is sufficient — no other call site needs to change.
+2. The timing assertion gap at `retry.test.ts:88` is the reason this is worth doing as a tracked change rather than a one-liner. Without an interval assertion, the same regression reappears the next time someone touches that constant. Deciding the target multiplier is also a judgment call worth making deliberately — it sets the tail latency of the retry budget, and the current suite gives no signal about what the upstream tolerates.

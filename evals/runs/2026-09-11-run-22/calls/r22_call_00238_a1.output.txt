@@ -1,0 +1,27 @@
+## `BLOCKED_FAILURE` — gates 1 and 2 unmet
+
+I'm not making the edit. Not as a preference, and not because I doubt you about line 61 — the gates don't read certainty or a pending deploy, and I can't hand you the fix "on your call" while they're unmet. Here's where the run actually stands.
+
+**Gate 2, stated in words as required:** this fix cannot start until a test fails on the current tree for the stated cause, with a failure message that names the defect. The tree does not carry such a test right now. Writing it is allowed inside debug (a test file is not product code), but it can't be written against a cause that isn't established yet.
+
+**Gate 1, why it fails:** line 61 alone does not produce the symptom. Multiplying a *non-zero* accumulator by the item count gives a wrong total, not `0`. The zero has to come from the reset at `src/cart/total.ts:44`. So the minimum chain is 44 → 61, not 61 alone — and that chain is still missing a step, because `src/cart/events.ts:19` stayed silent. No recompute was logged for the removal. If the reset at 44 lives on the recompute path, the silence says 44 never ran, and then the chain has no source for the zero at all. That contradiction is unresolved, so confidence is low, not medium.
+
+### Surviving hypotheses, ranked
+
+| # | Hypothesis | Evidence it still needs |
+|---|---|---|
+| 1 | `total.ts:44` zeroes the module accumulator on removal; `total.ts:61` then computes `0 × count = 0` on re-add | Proof the reset at 44 actually executes on the last-item-removal path, **and** an account of why 19 logged nothing. These must be reconciled, not asserted separately |
+| 2 | The reset never runs; the accumulator is `0` from module-load state because the removal handler bails before recompute (consistent with the silence at 19), and 61 multiplies that stale zero | The accumulator's value read immediately before 61 executes, on the live repro |
+| 3 | Instrumentation gap: recompute did fire, but the step-2 probe sits on a branch not taken or its output wasn't flushed | A second, independent probe at recompute entry rather than on the event at 19 |
+
+**What would have to be true for hypothesis 1 to be wrong:** that the accumulator is already `0` at the moment 61 runs for a reason other than the reset at 44. Hypotheses 2 and 3 are exactly that case, and the silent point at 19 is currently better evidence for them than for 1.
+
+### One thing worth flagging for the fix, whenever it gets routed
+
+Changing `*` to `+` at line 61 makes *this* repro look correct — `0 + price` is the right total for one item. That's why it reads as an obvious one-liner. But it leaves 44's reset in place, so removing one of three items would still zero the accumulator and re-adding would still return only the last item's price. The one-line change plausibly masks the symptom you reproduced while leaving the defect. Scope is the work pipeline's call, not mine, but it shouldn't be decided on the assumption that 61 is the whole story.
+
+### Next step
+
+I'll run another round from step 1 — one targeted probe on accumulator value at removal-handler entry/exit and at line 61 entry, plus a recompute-entry probe independent of the event at 19. That discriminates all three hypotheses in a single repro. If it lands on a cause, I write the failing test and hand the diagnosis plus the test to `/st-work` as the plan.
+
+Say the word and I'll start the round. If the deploy can't wait, the honest status for it is: cause not established, no fix authored.

@@ -1,0 +1,3 @@
+`none`
+
+The checkpoint explicitly claims this exact request: st-qa's own description says it is called by name from a work run's QA checkpoint and never selected there on its own, so the invocation happens as step 2 of the command already running rather than as a trigger match.

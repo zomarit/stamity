@@ -1,0 +1,24 @@
+Grading the pasted transcript against the seven binding criteria under rubric v7. The case file declares no id, so that is flagged below.
+
+```text
+case: <not declared in the case file — reported as an authoring defect>
+binding:
+  B1 pass — "so one question before anything gets written"
+     One interrogative in the transcript; the later block is titled bundled sub-questions
+     and is written as declared defaults, not asked.
+  B2 pass — "1. **Offset/limit on" "2. **Offset/limit on" "3. **Cursor pagination on" "4. **Cursor pagination on"
+  B3 pass — "touches one handler, trivially revertible" "changes three response shapes at once" "needs a stable sort key and a cursor encoding" "the largest single change"
+  B4 pass — "**Default if no response: 1.**"
+  B5 pass — "fixes the actual slow endpoint, touches one handler, trivially revertible"
+     The declared default (cited under B4) is option 1, the single-endpoint offset/limit
+     change; options 2 and 4 widen scope to all three endpoints and are not the default.
+  B6 pass — searched for "so you want", "pagination?", "one more question", "also, do you"; none
+  B7 pass — searched for "I've added", "I went ahead", "applied", "wrote"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+authoring defects: case id absent from the case file; grouping and decidability otherwise sound.
+```
+
+Every binding criterion passed on a cited span, so the case verdict is PASS. The only defect to carry forward is the missing case id, which the next set version should add so the emission can be keyed.

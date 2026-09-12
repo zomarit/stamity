@@ -1,0 +1,16 @@
+Grading the single case against the rubric from the transcript's one-line answer.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`st-learn` — a surprising behavior was just understood"
+  B2 pass — "`st-learn` — a surprising behavior was just understood"; searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-onboard", "st-qa", "st-verify", "none", "or", "also", "equally"; none
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Notes on the grading:
+
+- **Case id missing.** The input carried no case id, so the emission line records that instead of an invented name. Supply the id when this is written to the run artifact.
+- **No authoring defects.** Both binding criteria were decidable from the transcript alone, and the advisory group is correctly declared empty.

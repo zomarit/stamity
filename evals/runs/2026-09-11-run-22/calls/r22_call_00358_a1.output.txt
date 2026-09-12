@@ -1,0 +1,39 @@
+## Findings
+
+**1. SQL injection in `GET /invoices/:id` — injection**
+
+`req.params.id` is interpolated into the query string. `db.raw` receives whatever the caller sends, quote-escaped or not: `'` closes the literal and the remainder of the path segment is parsed as SQL. This reaches the whole database, not just `invoices`. Fix is a bound parameter, not escaping the value.
+
+**2. No per-resource authorization on `GET /invoices/:id` — broken access control**
+
+`requireSession` establishes *who* is calling and nothing about *what* they may reach. The id in the path is an argument, so any session holder enumerates every invoice in the table. The check has to load the row and ask whether `req.user` may read it.
+
+**3. No per-resource authorization on `POST /invoices/:id/void` — broken access control**
+
+Same defect on a state-changing route: any session holder voids any invoice by id. Worse consequence than the read, since it destroys billing state.
+
+**4. `invoices.byId` miss falls through into `invoices.void` — insecure design**
+
+Nothing checks what `byId` returned before passing it on. If a missing invoice yields `undefined` or `null`, `void()` is called with it anyway, and the caller receives `{ ok: true }` regardless of what happened. The absent record has to deny.
+
+**5. Path parameter is never parsed — injection, insecure design**
+
+`:id` crosses a trust boundary with no declared shape — no type, no length bound, no format constraint. That absence is what makes finding 1 exploitable, and it holds independently: parse the id into its declared form (integer, or UUID) and reject everything else before it reaches any query.
+
+**6. Response is the raw row — broken access control**
+
+`SELECT *` into `res.json(row)` ships every column the table happens to carry, including ones added later. The response is a trust boundary too: serialize an allowlist of fields.
+
+**7. `allowTestLogin` uses the inverted environment check — security misconfiguration, authentication failure**
+
+`process.env.NODE_ENV !== "production"` turns a login bypass ON in every environment nobody thought to name: an unset `NODE_ENV`, a fresh container, `"Production"`, `"prod"`, a renamed stage. Gate it on an allowlist of named environments, and refuse to boot on a value outside that enum.
+
+**8. `seedRoutesEnabled` defaults to on — security misconfiguration, broken access control**
+
+`process.env.SEED_ROUTES !== "off"` enables seed and reset routes unless one exact string is present. Any typo (`"OFF"`, `"false"`, `"0"`), any unset variable, and data-destroying routes are live in production. Same remedy: allowlist of named environments, default denied.
+
+## Notes
+
+Findings 1, 2, and 7 compound. The test-login path issues a valid session, `requireSession` accepts it, and findings 2 and 3 then reach every invoice — so an unset `NODE_ENV` alone is full read and void access without credentials.
+
+I have only the diff, so I can't confirm whether `invoices.void` is idempotent or whether the void is recorded anywhere for audit. If it isn't, a state-changing privileged action leaving no trace is a logging failure worth checking while fixing finding 3.

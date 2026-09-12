@@ -1,0 +1,15 @@
+Grading this case against rubric v7 from the Brief, the Expected block, and the one-line transcript.
+
+```text
+case: (no case id supplied in the input; reported as an emission gap, not an authoring defect in the criteria)
+binding:
+  B1 pass — "`st-learn` — a surprising failure was just understood"
+  B2 pass — "which is exactly the capture path this skill describes"
+     searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-onboard", "st-qa", "st-verify", "none", "or", "either"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names st-learn alone, offers no sibling skill and does not answer none. The only gap is that the input carried no case id, so the emission cannot fill that field.

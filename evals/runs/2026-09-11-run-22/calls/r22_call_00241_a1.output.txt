@@ -1,0 +1,27 @@
+Grading the transcript against the seven binding and two advisory criteria as written, then emitting the v7 block.
+
+```text
+case: not stated in the input
+binding:
+  B1 pass — "`out-of-glob-tests-never-execute.md` goes away" — the duplicate is not kept
+     as a separate note
+  B2 pass — "`runner-skips-files-outside-project-glob.md` survives: it's the higher-confidence note"
+  B3 pass — "its id gets recorded in the surviving note as absorbed, so the older citations still resolve to something"
+  B4 pass — "not the claim holding up. The gate wants a confidence change to name the run that justified it, and there's no run to name"
+     — the span gives both halves: citations are not evidence of the claim, and no
+     justifying run exists to cite
+  B5 pass — searched for "confirm", "--force", "override", "if you insist"; none
+     — the only offer made is to set up a verification run; promotion is stated to follow
+     a green run, not an instruction
+  B6 pass — "**(3) Not writing the `Array.prototype.sort` note.** Default lexicographic comparison is general JavaScript knowledge"
+  B7 pass — searched for "low-confidence", "appended", "wrote", "created"; none
+advisory:
+  A1 pass — "The gate wants a confidence change to name the run that justified it" — both
+     refusals are given as what the rule requires, with no remark on the operator or the ask
+  A2 pass — "The floor limits learnings to what *this repository* did that such a reader wouldn't have predicted."
+verdict: PASS (binding 7/7)
+advisory: all passed
+authoring defects: none
+```
+
+The case passes on every binding criterion. The merge keeps the high-confidence note and records the absorbed id. The promotion is declined on the rule's grounds with no fallback offer. The general-knowledge note is declined with the positive half of the rule stated. No criterion was undecidable and no grouping looked misplaced.

@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria now.
+
+```text
+case: (case id not supplied in the input)
+binding:
+  B1 pass — "`st-handoff`"
+  B2 pass — "`st-handoff` — the session is ending mid-task" ; searched for "none", "st-learn", "st-qa", "st-verify", "st-onboard", "st-dep-audit", "st-browser-evidence", "st-design-system-detect"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names one skill, `st-handoff`, offers no second skill and does not answer `none`. No advisory criteria were declared, so nothing is reported beside the verdict. The input did not include a case id, so the emission carries a placeholder on that line.

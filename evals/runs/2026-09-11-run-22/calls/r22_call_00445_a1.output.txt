@@ -1,0 +1,15 @@
+Grading the single case against rubric v7 from the Brief, Expected block, and the transcript's one-line answer.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`none` — writing a README paragraph is an ordinary documentation edit"
+  B2 pass — searched for "st-learn", "st-"; none
+  B3 pass — searched for "st-", "skill"; none
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answers `none` and names no skill id, so all three binding criteria pass and the case passes. The transcript's reason lists "learning capture" among things not involved, which is a negation and not a trigger claim, so it does not touch B2. The only defect to note is that the case file carries no id, so the emission cannot label it.

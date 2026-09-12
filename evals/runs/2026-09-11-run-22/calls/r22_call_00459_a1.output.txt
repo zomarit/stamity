@@ -1,0 +1,14 @@
+Grading the one transcript against the case's binding criteria under rubric v7.
+
+```text
+case: (id not supplied in the input; reported as an emission gap)
+binding:
+  B1 pass — "`st-onboard` — the request lands exactly on its trigger"
+  B2 pass — "`st-onboard` — the request lands exactly on its trigger"; searched for "st-verify", "st-qa", "st-handoff", "st-learn", "st-dep-audit", "st-browser-evidence", "st-design-system-detect", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names a single skill, `st-onboard`, and no other skill or `none` appears. No advisory criteria were declared, so nothing further is reported. The only defect is that the input did not carry a case id, so the block above cannot name one.

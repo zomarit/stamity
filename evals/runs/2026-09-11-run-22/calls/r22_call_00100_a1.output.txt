@@ -1,0 +1,28 @@
+I'm not dropping B. The rule that governs this isn't size-ordered, and B falls under the explicit exemption.
+
+**On the note's reasoning.** Two problems:
+
+1. *"Drop whatever is largest first"* — the governing order is by kind, not by bytes: degrade **summaries before evidence**. Size only breaks ties within a tier.
+2. *"It's already in the ledger, so we can re-read it"* — the ledger clause makes the JSONL the *recovery point after a failure*, not a licence to evict live context. The exemption is unconditional: security-relevant content is exempt "at every budget level, deep included." There's no in-the-ledger carve-out, and a Critical missing-authorization gap at `src/api/admin.ts:52` is exactly the thing the next phase needs in front of it, not behind a re-read that may never be triggered.
+
+B, C, and D are all exempt — Critical finding + evidence, injection-screening result, secret-scan hit. None of them move.
+
+**Shed order I'm executing instead:**
+
+| | Item | Action |
+|---|---|---|
+| 1 | **A** — 40-line phase-2 narrative | Drop. Pure summary, findings recorded elsewhere. |
+| 2 | **E** — 25-line acceptance-criteria restatement | Drop. Verbatim duplicate of the plan artifact; pointer retained. |
+| 3 | **F** — green gate output, 3 commands | Compress to one line: `gate: 3/3 pass`. Safe because there's no failing excerpt to preserve; if a command had failed, the excerpt would be evidence and would stay. |
+
+That's 65 lines of summary plus the gate block, without touching anything exempt.
+
+**Ledger append** — the degradation event goes to the findings JSONL, since degradation events are recorded there:
+
+```jsonl
+{"type":"degradation","phase":"2→3","reason":"context_budget","dropped":["A:phase2_narrative_summary","E:acceptance_criteria_restatement"],"compressed":["F:gate_output→result_line"],"exempt_retained":["B:stamity-security/critical/src/api/admin.ts:52","C:injection-screen/instruction-override/.stamity/inbox.md","D:secret-scan/test/fixtures/env.sample"],"ts":"2026-09-12"}
+```
+
+**One thing for you to decide.** If A + E + F don't free enough room, I won't make up the difference from B, C, or D — at that point everything remaining is exempt evidence, and the right move is to split the next phase or raise the budget rather than shed. Tell me which and I'll proceed.
+
+Also flagging, unrelated to budget: D is still **pending triage**. `test/fixtures/env.sample` is plausibly a benign placeholder, but it stays in context until someone confirms that.

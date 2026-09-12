@@ -1,0 +1,18 @@
+Grading the single transcript in this input against the case's Expected block, rubric v7.
+
+```text
+case: (id not supplied in the run input — reported as a runner defect; graded under a working label st-quick-schema-migration-refusal)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold"
+  B2 pass — "`Schema, API, event or migration` threshold"
+  B3 pass — "(`orders.status` column addition plus a backfill migration)"
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "bad idea", "risky", "careless", "should have known", "judgement"; none
+  B6 pass — searched for "maybe", "would you like", "confirm", "proceed", "part of", "only the"; none
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+The transcript is the one blockquoted refusal at the end of the input. It names the row verbatim from the table, states the measured thing on this item, routes to `/st-work`, and adds nothing beyond that. The only defect to report is that the run input carried no case id, so the emission uses a working label until the runner supplies one.

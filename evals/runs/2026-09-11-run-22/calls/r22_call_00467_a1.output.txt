@@ -1,0 +1,10 @@
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`st-qa` — the operator is asking what a person should manually click through before merging"
+  B2 pass — "`st-qa`" is the only skill id named; searched for "none", "st-verify", "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard"; none
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names st-qa once, gives one reason, and offers no alternative or fallback. The only defect to report is that the case file carries no id line, so the emission cannot label it.

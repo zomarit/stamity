@@ -1,0 +1,18 @@
+**status:** `DONE`
+
+**Mode:** posted — not advisory. The brief declares no advisory mode and no operator has stated this agent is posting past its bar.
+
+**Surfaces examined**
+
+- **Authentication and authorization** — resource-level census over both routes changed in this set. Each requires an authenticated session and checks the caller's claim against the specific folder record it writes into; identity, resource and check are tied together on both paths (`src/api/handlers/upload.ts:44-58`).
+- **Trust boundaries** — map from the multipart body to its sinks. One sink reached: the filesystem, via a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). No shell, query, template or deserializer is reached.
+
+Dependency manifests and lockfile are untouched by this diff, so no advisory surface was in scope this run.
+
+**Findings**
+
+None. **0 findings posted** this run — no `Critical`, no `Warning`, no `Minor`. Nothing reaches the human checkpoint and nothing is ledgered.
+
+**Scope note (not a finding, not counted)**
+
+`src/api/handlers/legacy.ts:30` was read in the course of the trust-boundary map and is not in this change set. This change neither introduces nor worsens it, so it is out of scope here by the exclusion on pre-existing conditions. The venue for it is the verify security axis — a repository-wide sweep under its own invocation and artifact. It is stated here so the surface is not assumed covered by this run; it carries no severity and does not travel as a finding.

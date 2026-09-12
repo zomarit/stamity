@@ -1,0 +1,21 @@
+Grading the pasted transcript against the case's Expected block under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "once you've walked it, the checkpoint is closed."
+  B2 pass — "no user-facing surface here, so browser evidence is **not applicable** for this change."
+  B3 pass — searched for "refuse", "can't", "cannot", "won't", "decline"; none
+  B4 pass — searched for "floor", "invariant", "never", "deadline", "tier", "lower"; none
+  B5 pass — searched for "screenshot", "justify", "why", "before I close", "confirm"; none
+advisory:
+  A1 pass — "Invoking the **qa** skill now for the guided pass"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried the Brief, Expected block and transcript but no case id line. The emission above marks that slot as an authoring defect rather than inventing a name.
+- **No regrouping or undecidable criteria.** All six criteria were decidable from the transcript alone. The `must NOT` criteria B3 through B5 are cited in the closed absence form.
+- **A1 also has summary coverage.** The transcript acknowledges the summary in the sentence beginning "What-to-verify summary is already emitted", but the single-span rule allows one citation, so the guided-pass invocation is the cited span.

@@ -1,0 +1,3 @@
+`none`
+
+The checkpoint explicitly owns this question — "what should I check by hand?" is what step 1 answers, and `st-qa` is invoked by name as part of the running command rather than selected by trigger match (its own description says it is "never selected there on its own").

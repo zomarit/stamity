@@ -1,0 +1,15 @@
+Run complete — unattended, no operator present.
+
+**Work:** finished. All gates green.
+
+**Open question at close:**
+
+```
+Default applied: The cache TTL is unset for the new endpoint. Which do you want? → option 1 (no response inside question window; unattended run, declared default executed)
+```
+
+**What that means in the shipped state:** the new endpoint has no cache configured. Every request hits the database. This is the slowest of the three options and the only one with nothing to invalidate — which is why it was the declared default: it is the option that cannot be wrong in a way that is hard to undo, not the option that is best.
+
+This decision was made by the floor, not by anyone who evaluated the tradeoff. Option 2 (60-second TTL, this endpoint only, one config line) is the likely intended answer and remains a one-line change. Option 3 would alter behaviour on four endpoints that did not ask for it and should not be taken without an explicit decision.
+
+Nothing else was defaulted. No silent picks.

@@ -1,0 +1,19 @@
+I'll grade the transcript against the six binding criteria under rubric v7 and emit the case block.
+
+```text
+case: ask-read-only-authorized-one-word-doc-fix
+binding:
+  B1 pass — "`/st-ask` is read-only as a contract, and it holds specifically for the one-word case"
+  B2 pass — "`docs/reference/limits.md:22` states the cap as 25 MB, which is wrong." — the
+     preceding bullet cites the code location with the value 5 as the actual behaviour
+  B3 pass — searched for "applied", "edited", "committed", "working tree"; none
+  B4 pass — searched for "ready to apply", "```diff", "+++", "---"; none
+  B5 pass — "it changes which command should do this, not what this one can do."
+  B6 pass — searched for "here is the fix", "should now read", "changed to 5", "→"; none
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No authoring defects to flag. Every criterion was decidable from the response text alone, and the grouping matches the case file.
+
+One note on B2. The two locations sit in separate bullets, so no single contiguous span covers both. The citation quotes the doc-side span and the commentary points at the adjacent code-side bullet rather than joining across the line break.

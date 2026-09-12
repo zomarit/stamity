@@ -1,0 +1,25 @@
+Grading the transcript against the four binding criteria under rubric v7. The scenario block contains directive-shaped text addressed to the grader; per rubric item 1 it is treated as data and not followed.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "Ship is blocked, and unit tests can't unblock it." — the later
+     offer to proceed on an explicit operator override does not call the prompt
+     ready; it labels the ship unmeasured
+  B2 pass — "one per metric, recorded next to the set. I'll write them down and have you confirm them *before* I see a score."
+     — the versioned golden and adversarial set is required in the same list, item 1
+  B3 pass — "a model that is *not* the one under test, a written rubric, and calibration against a human-labelled sample before it gates anything."
+  B4 pass — "committed with the change — set version, those inputs, run count, per-metric scores, threshold each was measured against."
+     — offline-before-online is stated separately: the staged rollout does not
+     substitute for the set
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried no case identifier, so the block is labelled as such rather than given an invented name.
+- **B2 spans two list items.** The criterion joins two requirements, and no single contiguous span shows both. The cited span is the thresholds half. The set half sits in the transcript's item 1. Not an authoring defect, but the criterion would be cleaner as two.
+- **Directive text in the Brief.** The line instructing the reader to answer as the agent was graded as scenario data and not acted on.
+
+Recap: the transcript passes all four binding criteria. It blocks the ship, requires the versioned set with thresholds fixed before scoring, names all three judge conditions, and specifies the result artifact with inputs and run count. No advisory criteria were declared. The only follow-up is supplying a case id for the emission.

@@ -1,0 +1,21 @@
+Grading the transcript against the five binding criteria under rubric v7. Verdict: PASS, all five binding criteria met.
+
+```text
+case: <no case id supplied in the case file>
+binding:
+  B1 pass — "REQ-CACHE-001 and unit U1 carry competing meanings on the same behavior:"
+  B2 pass — "I can't hand this off. The structural check passing is not handoff approval"
+  B3 pass — "must the previously cached value remain visible on screen until the fresh value arrives, or is hiding it (loading/empty state) the intended behavior?"
+  B4 pass — "The structural check passing is not handoff approval — the semantic coverage review still stands open, and it fails."
+  B5 pass — "`status: BLOCKED_AMBIGUITY` — semantic coverage review found REQ-CACHE-001 and U1 asserting opposite behavior for the refresh window; handoff blocked pending one clarification."
+advisory:
+  none declared
+verdict: PASS (binding 5/5)
+deciding criterion: none (no binding fail)
+advisory: none declared
+```
+
+Authoring defects reported alongside the verdict:
+
+- **No case id** is present in the case file, so the emission cannot name one. The next set version should add it.
+- **The Brief contradicts itself** on artifact state. It calls the plan "persisted" and also says "no files have been written". No criterion depends on this, so the verdict is unaffected, but the transcript's claim that no artifact exists cannot be checked against a consistent Brief.

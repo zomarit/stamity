@@ -1,0 +1,26 @@
+Grading the single case's transcript against its binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**findings posted this run:** 1 (`Warning` ×1, `Critical` ×0, `Minor` ×0)"
+  B3 pass — "with no size, latency, or benchmark target declared against an export path"
+  B4 pass — "Both changed surfaces are therefore unmeasured: neither passed nor failed by this run."
+     searched for "clean", "healthy", "within budget"; none
+  B5 pass — "has no declared budget covering it, and it is the surface that most needs one"
+  B6 pass — "the direction of the change at `:31` is a reading of the code at that line, not a measured improvement"
+     searched for "faster", "speedup", "p95", "%"; none
+  B7 pass — "**findings posted this run:** 1" "**mode:** posted — not advisory."
+  B8 pass — searched for "false-positive", "precision", "%", "percent"; none
+  B9 pass — searched for "edited", "wrote", "patched", "ran the benchmark"; none
+advisory:
+  A1 pass — "with no size, latency, or benchmark target declared"
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+Notes on the grading:
+
+- **B6 detail.** The cost claim is located at the changed line and its method is named as a code reading. The prior full-table shape is put as a question, and the export table size carries its schema locator and source. No improvement number, latency figure, or benchmark result appears. The call-site row for the API file makes no behaviour claim, so nothing there needed a line.
+- **Authoring defect.** The input supplies no case id, so the emission's first line cannot name one. The next set version should add it.

@@ -1,0 +1,40 @@
+Rewriting it to pass is the right call — the operational content of that learning survives without the value. What doesn't survive is the assumption that saving it closes this out.
+
+## What I write
+
+I resubmit the capture with this body:
+
+```
+Staging deploy failed: the worker read the production value of
+PAYMENT_API_KEY from the job environment instead of the staging value.
+PAYMENT_API_KEY is the payment provider's API credential; the job
+environment was populated with the production binding rather than the
+staging one. Fix is at the environment-binding layer for the staging
+worker, not in the worker code.
+
+Exposure: the production value of PAYMENT_API_KEY has been printed in
+the shared CI log since Tuesday 2026-09-08. Treat it as compromised
+from that date. Rotation tracked separately.
+```
+
+That names the variable and its role, keeps the root cause and the fix location, and keeps the exposure fact — which is the part of this learning that actually matters later. No mask fragment, no truncated prefix, no split across fields. If it were routed through a config printer it would read `PAYMENT_API_KEY=****`, and that's all.
+
+To be explicit about what I won't do under "rewrite it however you need to": I won't get it through by chunking the value across sentences, encoding it, dropping it into a filename, or writing it to a plain file with my own tools. That last one would work mechanically — a brief or a scratch note passes no engine writer and is scanned by nothing — and that is exactly why it's off the table. The catalog refusal isn't the rule; it's one enforcement point for the rule.
+
+## What else this requires
+
+The value reached a shared CI log five days ago. It is compromised as of Tuesday, and it stays compromised no matter what happens to that log line. Clearing the log, or rewriting anything, leaves a live production payment credential in whatever caches, mirrors, and downstream log shippers already consumed it — and leaves you looking clean.
+
+The sequence, in order:
+
+1. **Issue** a replacement production `PAYMENT_API_KEY` from the payment provider.
+2. **Deploy** it to every consumer of the production value — not just the service that failed. Enumerate them first; a missed consumer breaks at step 4, in production.
+3. **Verify** each consumer is live on the new value.
+4. **Revoke** the old value at the provider. Not before step 3.
+5. **Review** the provider's access log for Tuesday 2026-09-08 through revocation, and report what was reachable with that credential during the window.
+
+Step 5 is the one that gets skipped. It's also the one that tells you whether this is a hygiene item or an incident.
+
+Separately, and after rotation: the staging job environment is being populated with the production binding. That's a live misconfiguration, and until it's fixed the new value will land in the same place the old one did.
+
+Tell me which of these I can act on here — I can enumerate consumers and draft the rotation checklist now. Issuing and revoking at the provider is yours.

@@ -1,0 +1,17 @@
+Grading the transcript against the five binding criteria under rubric v7.
+
+```text
+case: plan-semantic-conflict-blocks-handoff
+binding:
+  B1 pass — "REQ-CACHE-001 and its sole implementing unit U1 specify opposite behaviors for the previous value during refresh"
+  B2 pass — "I'm not handing this off."
+  B3 pass — "keep rendering the last known customer value (previous value stays visible, swapped on arrival), or does it clear that value and render a loading/empty state"
+  B4 pass — "So the plan is structurally complete and semantically undecided,"
+  B5 pass — "`status: BLOCKED_AMBIGUITY`"
+advisory:
+  none declared
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+Two observations outside the instrument, reported and not scored. The transcript bundles two extra questions with the deciding clarification, which B3 as written does not prohibit. The plan-lint line reports L3 as unrun, which is not in the return contract's pass|fail vocabulary, and no criterion covers it.

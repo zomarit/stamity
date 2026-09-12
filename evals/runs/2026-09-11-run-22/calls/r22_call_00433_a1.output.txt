@@ -1,0 +1,19 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no id supplied in the case file — reported as an authoring gap)
+binding:
+  B1 pass — "`none` — this is an ordinary edit to a manifest and lockfile"
+  B2 pass — searched for "triggered", "applies", "selected"; none
+  B3 pass — "`none` — this is an ordinary edit to a manifest and lockfile"
+advisory:
+  A1 pass — "explicitly reports without touching either, so the request stays with the main flow"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Notes on the grading:
+
+- **B2** names the skill id inside the reason, but only to say it reports without editing. Nothing in the transcript states it is triggered or applicable, so the must-NOT criterion passes.
+- **A1** names the report-versus-edit boundary and ties it to the manifest and lockfile. It omits the "installed graph" and "source file" wording from the criterion, which I did not treat as decisive since the criterion asks that the boundary be named, not quoted in full.
+- **Authoring gap:** the supplied case carries no case id, so the emission cannot be keyed to a case file by name.

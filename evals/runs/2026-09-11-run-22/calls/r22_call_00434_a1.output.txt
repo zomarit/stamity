@@ -1,0 +1,1 @@
+`none` — this is a direct edit to a manifest and lockfile, which the main flow handles; st-dep-audit is explicitly a read-only reporting skill that stops short of touching either file.

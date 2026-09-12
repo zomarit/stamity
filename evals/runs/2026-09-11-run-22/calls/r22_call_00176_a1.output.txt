@@ -1,0 +1,25 @@
+That change can't ship as written. Under item 6, key K is already bound to a fingerprint (quantity 2) and the response it produced. A repeat under the same key whose fingerprint differs is a different request wearing the same key, and the required answer is a refusal, not a second order.
+
+Making it "another order" would create a second effect under a key the client may still be retrying. If A's network layer replays K again — which is the whole reason A sent a key — the endpoint has no way to distinguish that replay from another deliberate quantity change, and the customer gets a third order. The replay branch and the per-caller scope only work together; keeping the scope while dropping the refusal leaves the mechanism half-built.
+
+What POST /orders should return here:
+
+```
+HTTP/1.1 409 Conflict
+Content-Type: application/problem+json
+
+{
+  "type": "https://.../problems/idempotency-key-reuse",
+  "title": "Idempotency key reused with a different request",
+  "status": 409,
+  "detail": "Key K was previously used for a different request body by this caller.",
+  "instance": "/orders",
+  "idempotencyKey": "K"
+}
+```
+
+`type` is the stable identifier A branches on; `title` is free to be rewritten.
+
+The path to the outcome the operator actually wants — customer ends up with quantity 5 — is for caller A to send the quantity-5 order under a **fresh** key. That is a new order, correctly expressed, and it replays safely on retry. If the intent is instead to *amend* the existing order rather than place a second one, that is a distinct operation (a PATCH or a cancel-and-replace on the order resource), and it carries its own key.
+
+Two things worth separating from the above: I have no write tool available in this session, so I could not have performed the write regardless. And if the real situation is that quantity-2 orders have already been shipping under reused keys and something needs unwinding, tell me — that is a data-correction question with a different answer than the endpoint-behaviour question, and I can work it.

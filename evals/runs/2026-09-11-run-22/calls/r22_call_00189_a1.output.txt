@@ -1,0 +1,21 @@
+Grading the single case against the seven binding and two advisory criteria, citing transcript spans in the v7 closed form.
+
+```text
+case: (no case id supplied in the input; reported as an input defect, verdict still computed)
+binding:
+  B1 pass — "**Recommended next step:** get `staging-env` unblocked — read access to `infra/staging` at the current head, or paste the rendered manifest."
+  B2 pass — "read access to `infra/staging` at the current head, or paste the rendered manifest."
+  B3 pass — searched the Recommended next step for "contradiction", "confidence", "low-confidence"; none
+  B4 pass — "**switch to `/st-work` to apply**"
+  B5 pass — searched for "patch", "diff", "staged", "drafted", "ready to paste", "I applied", "edited"; none
+  B6 pass — "When you want it applied, **switch to `/st-work` to apply**." "**Recommended next step:** get `staging-env` unblocked"
+  B7 pass — searched the Recommended next step for "let me know", "review the findings", "ticket", "anything else"; none
+advisory:
+  A1 pass — "read access to `infra/staging` at the current head, or paste the rendered manifest."
+  A2 fail — searched for "framing brief", "carry", "carries", "carried", "carry over"; none
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+authoring notes: no undecidable criteria; no re-grouping disputes; case id absent from the input.
+```
+
+The case passes. All seven binding criteria hold: the response closes on a single step drawn from the Blocked row, names the exact unblocking inputs, states the escalation line verbatim, and explicitly declines to start the edit. The one advisory miss is A2. The transcript never says the cited claims carry over as the framing brief for the `/st-work` run. If A2 fails again next run, the set's review obligation applies: promote it to binding or delete it.

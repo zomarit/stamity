@@ -1,0 +1,22 @@
+Verdict: PASS. All seven binding criteria pass and the one advisory criterion passes.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**Baseline source:** proof record from run `r7`" "**Findings:** 1 Critical · 3 Warning · 1 Minor" "**Routing:** 3 REVISE · 2 DEFER" "**Validation verdicts:** unit 1 accepted (high) · unit 2 accepted (high) · unit 3 accepted (medium)" "**Plan-lint:** `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`" "**Plan path:** `docs/plans/004-checkout-rework.md`" "**Inbox rows added:** 2 (one per DEFER finding)"
+  B2 pass — "`L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`"
+  B3 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B4 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B5 pass — searched the Recommended next step for "resolve", "resolving"; none
+  B6 pass — searched for "triage", "board"; none
+  B7 pass — searched for "review the plan", "let me know", "consider addressing"; none
+advisory:
+  A1 pass — "The 2 DEFER rows sit in the inbox behind that"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Two notes for the set maintainers, neither of which changes the verdict:
+
+- **B1 is cited by elements.** The seven items sit on seven lines, so no single contiguous span under 25 words can show all of them. I used the layout form from citation rule 3. If the reader rejects that form for a presence criterion, B1 should be split into per-item criteria or the form rule should admit it.
+- **No case id was supplied.** The emission line carries a placeholder. The runner should pass the id with the case file.

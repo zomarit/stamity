@@ -1,0 +1,74 @@
+## Gate results
+
+**gate: `test`**
+
+| Field | Content |
+|---|---|
+| command | `npm run test` |
+| status | `fail` |
+| exit code | 1 |
+| duration | 48.9s |
+
+excerpt:
+
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+Not truncated — the failure block is under 40 lines and is reproduced whole.
+
+---
+
+**gate: `lint`**
+
+| Field | Content |
+|---|---|
+| command | `npm run lint` |
+| status | `pass` |
+| exit code | 0 |
+| duration | 6.2s |
+| excerpt | *(empty)* |
+
+---
+
+**gate: `typecheck`**
+
+| Field | Content |
+|---|---|
+| command | `npm run typecheck` |
+| status | `fail` |
+| exit code | 2 |
+| duration | 11.7s |
+
+excerpt:
+
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+Not truncated.
+
+---
+
+**Verdict: `red`** — caused by the `test` row (2 failing tests in `test/api/export.test.ts`) and the `typecheck` row (1 error at `src/api/export.ts:52`).
+
+**Baseline:** none supplied with the brief, so no failing row is classified `introduced` or `pre-existing`. Whether these failures predate the change is not established by this run.
+
+**Redaction note:** `eyJvIjoyfQ` is left verbatim. It is the pagination cursor under assertion in that test, not a credential, and the whole signal of the failure is that the two sides are equal.
+
+## Return contract
+
+- **status:** `DONE` — the run produced its evidence for all three gates.
+- **findings:**
+  - `Critical` — `test` gate failed, exit 1: `second page carries a different cursor` (`test/api/export.test.ts:41:7`) and `rejects an unparseable cursor` (`test/api/export.test.ts:58:7`).
+  - `Critical` — `typecheck` gate failed, exit 2: TS2345 at `src/api/export.ts(52,17)`.
+
+No flags added, no selectors narrowed, no environment values edited, no gate re-run.

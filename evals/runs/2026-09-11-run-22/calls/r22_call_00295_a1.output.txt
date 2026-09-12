@@ -1,0 +1,19 @@
+Grading the run-report transcript against the case's seven binding criteria. No advisory criteria are declared.
+
+```text
+case: quick-mid-run-re-escalation
+binding:
+  B1 pass — "## Run report — batch of 5, stopped at item 3"
+  B2 pass — "Applied, gated, stays applied"
+  B3 pass — "That edit has been reverted; the working tree holds no partial formatter swap."
+  B4 pass — "Items 3, 4, and 5 go over as one list, carrying the measured reason above."
+  B5 pass — "`Files` — 7 files (threshold `>5`); `Size` — ~210 lines added plus removed"
+  B6 pass — "Applied, gated, stays applied" "Applied, gated, stays applied" "**Reverted to pre-edit state.** Moved to `/st-work`" "Never started. Moved to `/st-work`" "Never started. Moved to `/st-work`"
+  B7 pass — searched for "completed", "skipped", "omitted", "left out"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+No authoring defects found. Every binding criterion was decidable from the transcript alone, and the grouping matches the case file as written.

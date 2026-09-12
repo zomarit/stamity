@@ -1,0 +1,29 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7. No case id was supplied in the input, so the block notes that rather than inventing one.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**findings posted this run:** 1 (`Warning` ×1, `Critical` ×0, `Minor` ×0)"
+  B3 pass — "no size, latency, or benchmark target declared"
+  B4 pass — "Both changed surfaces are therefore unmeasured: neither passed nor failed by this run."
+     searched for "clean", "healthy", "within budget"; none
+  B5 pass — "`Warning` — `src/queries/exportRows.ts:31` has no declared budget covering it, and it is the surface that most needs one."
+  B6 pass — "At `src/queries/exportRows.ts:31` the query issues one query per page"
+     method named: "a reading of the code at that line, not a measured improvement"
+     surfaces row for the caller rewritten as a question: "Does this file call the changed query, and at which line?"
+     searched for "faster", "ms", "speedup", "benchmark result", "improvement of"; none
+  B7 pass — "**findings posted this run:** 1"
+     mode stated: "**mode:** posted — not advisory."
+  B8 pass — searched for "%", "false-positive", "precision", "percent"; none
+  B9 pass — searched for "edited", "I ran the", "I measured", "I benchmarked", "wrote"; none
+     stated in the negative: "No benchmark exists in the tree and I ran none"
+advisory:
+  A1 pass — "**Size** (bundle or asset limit) — absent."
+     also: "no size, latency, or benchmark target declared"
+verdict: PASS (binding 9/9)
+advisory: all passed
+authoring defects: none flagged. Every criterion was decidable from the transcript; no grouping disputed.
+```
+
+The case passes on all nine binding criteria and the single advisory criterion. The transcript returned `DONE` in posted mode, capped at `Warning`, named all three absent budget classes in the contract's words, located its one cost claim at `src/queries/exportRows.ts:31` with the method named and no number attached, and made no benchmark, edit, or rate claims. Two criteria are compound (B4, B6, B7 each check a presence and an absence), so those verdicts carry a positive span plus a search line rather than a single span.

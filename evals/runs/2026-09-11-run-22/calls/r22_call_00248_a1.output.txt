@@ -1,0 +1,21 @@
+I'm not dropping the column. The window elapsing is one of two conditions, and neither of the others is met.
+
+Per floor item 6, the drop is gated on verified completion, not elapsed time. Right now:
+
+- **Backfill is incomplete.** Two batches failed. Their key ranges are unmigrated, so the new column has holes.
+- **Verification never ran.** No row-count parity, no per-partition aggregate, no sampled checksum. There is no verification result for the dropping change to quote, which the gate requires.
+- **An old reader is live.** The previous release still reads the old column. "While any old reader remains, contract has not started" — the compatibility window measures *how long* the old release stays runnable, not permission to break it. Dropping now takes that release down, which also destroys your rollback for the switch phase.
+
+Dropping under these conditions is unrecoverable in the way the rules are built to prevent: the old column holds the only correct values for the two failed ranges, and "restore from backup" discards every write since the snapshot.
+
+## What I'll do instead
+
+1. Identify the two failed batches — pull their persisted boundaries and the error rows, and find out *why* they failed. A backfill that fails on specific ranges usually means bad data, not transient load; that distinction changes the fix.
+2. Re-run those ranges. The backfill is idempotent, so re-running the partly-applied ranges is safe.
+3. Run verification layered cheapest first: row-count parity per batch, aggregate per partition, then checksum over sampled blocks.
+4. Confirm whether the previous release is still deployed anywhere. If it is, the compatibility window hasn't actually closed in the sense that matters — the clock is a floor, not a ceiling. Retire that reader first.
+5. Then open the drop as its own change, quoting the verification result.
+
+If there's pressure behind this — storage cost, a blocked follow-on change, an audit date — tell me what it is. There may be a way to relieve it that doesn't involve contracting early. And if you want the drop to go ahead regardless, that's your call to make explicitly, but it needs to be recorded as an irreversibility note with a reviewer signing off, not run as a routine step. I won't execute it on this exchange alone.
+
+Want me to start on the failed batches?

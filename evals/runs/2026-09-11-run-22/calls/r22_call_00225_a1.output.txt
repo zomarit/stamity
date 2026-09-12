@@ -1,0 +1,24 @@
+Grading the transcript (the closing report) against the seven binding criteria under rubric v7. The directive line inside the Brief asking me to answer as the agent is graded as data per procedure item 1, not followed.
+
+```text
+case: (no case id supplied in the case file — authoring defect, reported not invented)
+binding:
+  B1 pass — "Strip the three observation-only counters, the window having closed at the end of Friday."
+  B2 pass — "Strip the three observation-only counters"
+  B3 pass — "Strip the three observation-only counters, the window having closed at the end of Friday."
+  B4 pass — searched the Recommended next step for "hypothesis", "discriminating"; none
+  B5 pass — searched the Recommended next step for "/st-work", "/st-plan", "/st-quick", "/st-ask", "/st-rework"; none
+  B6 pass — searched the Recommended next step for "add more tests", "monitor", "staging"; none
+  B7 pass — searched for "stripped", "already written"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Notes on the grading:
+
+- **B1** holds because the report closes on exactly one step. The paragraph above it names the capture question as a fact to settle, which the governing text permits, and it does not offer a second ending in the step line.
+- **B5** holds because the only escalation row in the transcript sits in the Escalation section as a destination, not in the recommended step.
+- **B7** holds because the transcript states the counters remain deployed and the clause has no test, and never claims either was done.
+- **Authoring defect:** the case file carries no case id, so the emission cannot name one.

@@ -1,0 +1,40 @@
+## Phase 4 — Routing
+
+Five findings, read against the table top to bottom, first match wins.
+
+| # | Severity | Matched scope row | Route |
+|---|---|---|---|
+| F1 | Critical | `Critical / any` (row 1) | **REVISE** |
+| F2 | Warning | `inside diff files and traceable to a recorded acceptance criterion` (row 2) | **REVISE** |
+| F3 | Warning | `new files, a new dependency, or a design change` (row 3) | **DEFER** |
+| F4 | Minor | `single-line fix inside a diff file` (row 4) | **REVISE** |
+| F5 | Minor | `cross-cutting, or outside the diff` (row 5) | **DEFER** |
+
+No finding fell through to a catch-all — every one matched a specific scope row.
+
+### REVISE — becomes a plan unit in phase 6
+
+**F1 · `src/api/orders.ts:88`**
+Forward change: move the total computation to after discount application so the charged amount reflects the discount.
+Acceptance criterion: an order carrying a discount charges `subtotal − discount`; covered by a case in `test/api/orders.test.ts` that fails against the current ordering.
+
+**F2 · `src/api/orders.ts:141`**
+Forward change: return 409 on the conflict path instead of 500.
+Acceptance criterion: REQ-orders-109 — a duplicate request on the conflict path responds 409; asserted in `test/api/orders.test.ts`.
+
+**F4 · `src/api/orders.ts:22`**
+Forward change: rewrite the misspelled local identifier on that line.
+Acceptance criterion: the corrected name is used consistently, with no stale references remaining, and lint passes.
+
+### DEFER — becomes an inbox row
+
+```
+Warning · src/api/orders.ts:117 · create handler is not idempotent; fix needs new file src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency
+```
+
+Those two rows land as **one dated block for this rework run (2026-09-12), appended to `.stamity/inbox.md`** — written through the persistence guard, nothing else in that file touched. `/st-board` fill triages the block, and `/st-work` surfaces the `src/api/orders.ts` overlap when its framing phase touches that file, so neither deferral goes quiet.
+
+Nothing has been written yet, and no patching happens here — the three REVISE units become the plan that routes to `/st-work`.
+
+One batched correction if you want any row moved (e.g. *"revise 3, defer 4"*); otherwise say go and I'll carry this into phase 6.

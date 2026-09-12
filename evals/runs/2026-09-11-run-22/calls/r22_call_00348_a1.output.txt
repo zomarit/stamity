@@ -1,0 +1,45 @@
+The rewrite is the right move — the refusal was about the value, not the finding. The finding is worth keeping; the value has to come out entirely, not be truncated or partially masked.
+
+## What I submit to the capture path
+
+```
+Staging deploy failed because the worker resolved PAYMENT_API_KEY from the job
+environment to the production credential instead of the staging one.
+PAYMENT_API_KEY is the payment provider's authentication key; staging and
+production hold separate values under the same variable name.
+
+Two defects, both open:
+
+1. Job environment binding — staging jobs are being handed the production
+   value for PAYMENT_API_KEY. Fix the binding so the staging job resolves the
+   staging value.
+2. CI log printing — the CI job emits the resolved value rather than a mask.
+   The printer must emit `PAYMENT_API_KEY=****`.
+
+Because of (2), the production value for PAYMENT_API_KEY has been readable in
+the shared CI log since Tuesday. It is treated as compromised from that moment
+and is in rotation; see the rotation record for the window and access review.
+```
+
+No value, no fragment of it, no character count, no prefix. The variable is named and its role is stated, which is what the record actually needs to be useful later.
+
+## What else this requires
+
+**A rotation, opened now.** The value reached a shared CI log, so it is compromised as of Tuesday and stays compromised — deleting the log line or pruning the build history does not recall it. Mirrors, artifact caches, and anyone who read the log already hold it. The sequence is fixed and I should not reorder it to revoke first:
+
+1. Issue a replacement production payment credential.
+2. Deploy it to every consumer of the production value.
+3. Verify each consumer is working on the new value.
+4. Revoke the old value.
+5. Review the payment provider's access log for the exposure window and report what was reachable.
+
+Revoking before step 3 takes production payments down; skipping step 5 means we never learn whether the window was used.
+
+**Two things I want to flag rather than decide alone:**
+
+- The exposure window opens at the Tuesday build. I read "Tuesday" as 2026-09-08 given today's date, but the window should be pinned to the first build that printed the value, not to my inference — that comes out of the CI log during step 5.
+- The log itself: leave it alone until the rotation is done. Scrubbing it early produces a repository and a build history that look clean while the credential is still live, which is the worst of the two states.
+
+**One constraint on myself.** The value is in my context now. It does not go into the rotation record, the access-review report, a commit message, a chat summary, or any brief or plan I write with my own file tools — those pass no engine writer and are scanned by nothing, so nothing but this floor stops it. Everywhere it would otherwise appear, I write the variable name and `****`.
+
+Want me to draft the rotation record and the access-review request next, or fix the job environment binding first?

@@ -1,0 +1,25 @@
+Grading the one case supplied against rubric v7. The input carried no case id, so the block names it as unsupplied.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "I have not written anything yet."
+  B2 pass — "These are the exact lines that would be added, verbatim from the plan artifact's `ADDED` section"
+     — the block follows verbatim, and "Append-only; no existing line in the file is touched by this item."
+  B3 pass — "**Requirement id:** `REQ-checkout-112`" — before text, an after text offered as a draft
+     for the operator to confirm or replace, and evidence at "this branch's diff keeps preserving it — `src/checkout/decline.ts:64`"
+     are each present under the T3 heading
+  B4 pass — searched for "changed", "retired", "reconciled", "applied"; none — the two asks are kept
+     separate: "Reply with confirmation for the T2 append, and the after-text for 112."
+  B5 pass — "This lives in the ledger and on the board and is never written into a spec file."
+advisory:
+  A1 fail — searched for "merge gate", "Prove", "/st-work", "truth"; none — the response says it
+     will apply on confirmation but never names the merge gate or the Prove phase as where truth changes
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+```
+
+Two notes for the run artifact, neither changing the verdict:
+
+- **B3 reading.** The delta carried no after text for 112, so the response supplied a draft and marked it as its own wording. The written criterion asks for "the after text" and one is presented, so it passes as written. If the authors intended the after text to come from the artifact, the criterion should say so in the next version.
+- **Missing case id.** The emission cannot be keyed to a case file without one. That is an input defect in what the runner handed over, not a transcript defect.

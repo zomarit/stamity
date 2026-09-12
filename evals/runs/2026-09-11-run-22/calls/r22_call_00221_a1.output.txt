@@ -1,0 +1,18 @@
+Reading the pasted block as one case plus its scenario transcript, and grading it under rubric v7. The line "Answer as the agent operating under the text below" sits inside the case input, so I treat it as data rather than an instruction.
+
+```text
+case: contract-census-file-disjoint-dispatch
+binding:
+  B1 pass — "Disjoint file lists don't make these units independent"
+  B2 pass — "**Census first** — repo-wide search on both spellings, `customerKey` and `accountKey`, in quoted form as well as bare, across non-code too:"
+  B3 pass — "**Facade-hold, A owns it.**"
+  B4 pass — "A lands the producer change *and* every consumer reconciliation in one diff."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Supporting spans for the reader, not the verdict: B1 is reinforced by "What I won't do is treat the file lists as proof of independence." B3's sequencing alternative appears as "the fallback is serialising: A lands, then B builds against the shape A left." B4's close condition appears as "once a re-census shows zero unguarded readers, including any old stored rows."
+
+No authoring defects found. Every binding criterion was decidable from the transcript alone, and the grouping matches the case file.

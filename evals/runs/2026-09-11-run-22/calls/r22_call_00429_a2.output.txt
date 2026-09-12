@@ -1,0 +1,12 @@
+Grading the transcript against the two binding criteria; the case declares no advisory criteria.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`st-learn` — this is a verified, repo-specific finding"
+  B2 pass — searched for "none", "st-handoff", "st-onboard", "st-qa", "st-verify", "st-dep-audit", "st-browser-evidence", "st-design-system-detect", "equally"; none
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names `st-learn` as the single applicable skill, offers no second skill and does not answer `none`. No authoring defects to report, apart from the missing case id in the input handed to the judge.

@@ -1,0 +1,21 @@
+Grading the transcript against the case's criteria as the judge, binding group first, then advisory.
+
+```text
+case: <id not supplied in the input>
+binding:
+  B1 pass — searched for "clean surface", "passing", "compliant", "accessible"; none
+  B2 pass — "No component root and no markup to run against." — the rendered-output
+     and token-source facts are also stated in the Attempted and Blocks-it sections
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`"
+  B4 pass — "**Attempted:**" "**Blocks it:**" "**Smallest unblocking input:**"
+  B5 pass — searched for "WCAG", "contrast", "ratio", "focus", "required"; none
+  B6 pass — searched for "findings", "finding count", "surfaces examined", "criteria applied", "posted"; none
+  B7 pass — searched for "edited", "fixed", "staged", "false-positive", "rate"; none
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`"
+  A2 pass — "Neither matches a roster path nor produces rendered output."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+**Notes on the grade.** The input carried no case id, so the emission marks that field as unsupplied rather than inventing one. No criterion was undecidable and no grouping looks misfiled, so no authoring defect is flagged. The one judgment call is A2: the transcript states the trigger by its facts and the contract's own words, "roster", "pull-in", "rendered output", "unrun", without the phrase "does not pull the agent in" verbatim. I read that as meeting the criterion, since the criterion contrasts contract terms against a generic "not applicable" and the transcript uses the former.

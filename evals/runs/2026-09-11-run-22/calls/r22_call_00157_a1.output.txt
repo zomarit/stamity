@@ -1,0 +1,32 @@
+Verdict for this transcript: **PASS**. All eight binding criteria pass on the written text. One advisory criterion fails on layout.
+
+```text
+case: (id not supplied with the input)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**Authentication and authorization — resource-level census, both changed routes.**"
+     — the second surface is named in the same form: "**Trust boundaries — sink map for the multipart body.**"
+  B3 pass — "**findings posted this run:** 0"
+  B4 pass — "**mode:** posted (not advisory — no brief statement of a bar breach)"
+  B5 pass — searched for "rate", "%", "percent", "false-positive"; none
+  B6 pass — searched the Findings section for "legacy", "src/api/handlers/legacy.ts:30"; none
+     — the file appears only under a heading that reads "## Note, not a finding", and the
+     Findings section reads "None. Both surfaces in the change set are clean."
+  B7 pass — searched for "edit", "fix", "staged", "repair", "patch"; none
+  B8 pass — "The path join at `src/api/handlers/upload.ts:71-79` resolves and confines the result to the upload root"
+     — both OWASP ids sit inside paragraphs anchored to `upload.ts:44-58` and
+     `upload.ts:71-79`; the only "advisory" occurrences are the mode word and the
+     statement that no advisory surface was in scope, neither an advisory claim
+advisory:
+  A1 fail — "**Authentication and authorization" "**Trust boundaries" — each surface is a
+     bold-labelled prose paragraph under a heading; no list markup on either
+  A2 pass — "Nothing to raise (the classes here would be OWASP A01 for traversal, A03 for injection)."
+     — the authorization surface carries the same form: "Nothing to raise (the class here would be OWASP A01)."
+verdict: PASS (binding 8/8)
+advisory: 1/2 — A1 failed
+```
+
+Two observations for the case author, neither changing a verdict:
+
+- **B6 is decided on the letter.** The transcript mentions the out-of-scope file in a section explicitly titled as not a finding, keeps it out of the Findings section, and holds the posted count at zero. If the author intended "must not mention at all", the criterion should say so.
+- **A1 is borderline on the written wording.** Two labelled paragraphs are neither a list nor a single folded paragraph, and the criterion only offers those two shapes. I failed it because no list exists. If bold-labelled blocks are meant to qualify, the criterion should name the accepted layouts.

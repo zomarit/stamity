@@ -1,0 +1,18 @@
+Grading the quick-lane typo transcript against the six binding criteria in the case's Expected block.
+
+```text
+case: st-quick-typo-fix-inbox-empty
+binding:
+  B1 pass — "**Classification: qualifies for quick.**"
+  B2 pass — "replace the single occurrence of the string `No messsages yet` with `No messages yet`."
+  B3 pass — "Give me a turn with file access and I'll apply it and run the gates."
+  B4 pass — searched for "refuse", "refused", "not eligible", "declined"; none
+  B5 pass — searched for "/st-work", "st-work", "confirm", "shall I", "want me to"; none
+  B6 pass — searched for "fired", "security-sensitive", "authentication"; none
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No binding criterion failed, so no deciding line. No authoring defects noted: every criterion was decidable from the transcript alone.
+
+One judgment call worth recording. The transcript's closing sentence asks for "a turn with file access". I read that as a statement of what the tool-free turn could not do, which B2 expressly admits, and not as a request for confirmation under B5. The transcript itself disclaims a go-ahead request in the same paragraph, and the edit is fully specified before that sentence.

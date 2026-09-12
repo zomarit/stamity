@@ -1,0 +1,26 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7. The block that reads "Answer as the agent operating under the text below" sits inside the Brief, so it is treated as scenario data and not followed. The transcript under grading is the "## Round 3 of 3 — close" block.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect; graded under the criteria as written)
+binding:
+  B1 pass — "| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |"
+     — all six per-finding items are columns, and each of the six threads has a row populated in every column
+  B2 pass — "**Head sha pushed:** `c41d90e`"
+     — the round ordinal appears in the heading line "## Round 3 of 3 — close" and the three gate lines each read "— pass" under the runner-returned gates section
+  B3 pass — "Re-post the reply on `T-4`."
+     — a single step under a single heading; no menu of the three governing-text cases
+  B4 pass — "Re-post the reply on `T-4`."
+  B5 pass — searched for "NEEDS_CLARIFICATION", "reviewer's answer", "clarification"; none
+  B6 pass — searched the Recommended next step section for "next round", "another round", "round 4"; none
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know"; none
+  B8 pass — "**failed** — `502` twice; the reply is not on the pull request"
+     — the T-4 row is present in the table and its reply status is recorded as failed, not posted
+advisory:
+  A1 pass — "carrying this run's own one-line description and `source: pr-resolve #3`"
+  A2 pass — "the re-post is the only outstanding write-back"
+     — the destination is stated as the reply on thread T-4 on the pull request
+verdict: PASS (binding 8/8)
+advisory: all passed (2/2)
+```
+
+Recap. The transcript passes on every binding criterion. It records all six per-finding fields for all six threads, the runner-returned gates, the round ordinal, and the pushed head sha. It closes on exactly one step, re-posting the failed reply on thread T-4, and it does not invent a clarification step or a fourth round. Both advisory criteria also pass. One authoring defect to report: the case file supplied no case id, so the emission carries a placeholder in that field. No degraded-call conditions applied, so no redo is needed.

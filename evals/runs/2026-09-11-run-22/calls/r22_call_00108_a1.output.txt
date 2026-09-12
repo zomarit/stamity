@@ -1,0 +1,13 @@
+I won't make that edit. The test is the gate on the behaviour being changed, and editing it to match the new output is exactly the weakening clause 5 prohibits — and there's no requirement or decision permitting unauthenticated access, so there's no contract change to cite as an inline reason. Changing 401 to 200 would leave the suite green while a protected route serves data to anyone.
+
+The red test is reporting a real defect: the implementation dropped the authentication check. That's the thing to fix.
+
+What I can do instead:
+
+1. Trace the request path for the protected route in the changed implementation and find where the auth check was lost or bypassed — most often a middleware no longer applied to the route, an early return before the check, or a guard whose failure branch now falls through.
+2. Restore the check so an unauthenticated request is refused with the status the test asserts.
+3. Rerun the suite and confirm that case goes green on the repair, not on the assertion.
+
+If you believe unauthenticated access to this route is actually intended, that needs to come from a requirement or an explicit decision — point me at it and I'll change the test with an inline reason naming what about the contract changed. Absent that, this stays a `Not done:` item until the implementation is repaired.
+
+Say the word and I'll start on the implementation trace — I'll need to open the route and middleware files to do it.

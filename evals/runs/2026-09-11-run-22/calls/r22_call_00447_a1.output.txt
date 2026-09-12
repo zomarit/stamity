@@ -1,0 +1,15 @@
+Grading the transcript against the three binding criteria.
+
+```text
+case: (id not stated in the input)
+binding:
+  B1 pass — "`none` — this is an ordinary documentation edit to one file"
+  B2 pass — searched for "st-learn"; none
+  B3 pass — searched for "st-"; none
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The scenario answered `none`, named no skill id, and did not name st-learn as triggered. The parenthetical mention of "learning capture" lists it among non-matching triggers, so it does not name a skill as applicable. One authoring note: the case input carries no case id, so the emission line records that rather than inventing one.

@@ -1,0 +1,3 @@
+`none`
+
+The checkpoint explicitly claims this request — "what should I check by hand?" is exactly what step 1–2 answer — and `st-qa` says it is *called by name* from a work run's QA checkpoint and never selected there on its own, so the run continues in the main flow and invokes it as a command step rather than as a trigger match.

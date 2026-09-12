@@ -1,0 +1,12 @@
+Both of those are protocol violations — the inline edit and the paste-ready line equally. Handing you the text to apply is the same act as applying it myself, just with an extra pair of hands in the middle; the rule names that case directly. And I'm the orchestrator on this run, not the Tier-1 small-change lane, so the one carve-out that would let me edit inline doesn't cover me.
+
+You're right that the round-trip costs more than the edit. That's true and it doesn't change the answer.
+
+Dispatching now. The brief:
+
+- **File:** `src/http/retry.ts`, the `multiplier` constant at line 41
+- **Change:** set it to the backoff multiplier the plan specifies, 2.0 — the current value is the unit default and defeats exponential backoff
+- **Scope:** this constant only; no adjacent refactor, no signature changes
+- **Verification:** delegated separately — retry-path tests plus a check that no other call site was relying on the flat-delay behavior
+
+I'll report back when the edit lands and verification returns.

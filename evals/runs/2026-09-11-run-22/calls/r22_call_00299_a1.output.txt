@@ -1,0 +1,22 @@
+Grading the pasted run report against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "## Run report — batch of 5, stopped at item 3"
+  B2 pass — "| 1 | `docs/install.md` — typo fix | **Applied.** Gated, left in the working tree. |"
+     (the item 2 row carries the same disposition text)
+  B3 pass — "**Reverted to pre-edit state. Moved to `/st-work`.**"
+  B4 pass — "One list, items 3–5, carrying the stop reason:"
+  B5 pass — "Stopped by `Files` at 7 files (threshold `>5`), and by `Size` at ~210 lines added plus removed (threshold `~200`)."
+  B6 pass — "| 1 | `docs/install.md`" "| 2 | `src/config/defaults.ts`" "| 3 | `src/format/date.ts`" "| 4 | `src/format/number.ts`" "| 5 | `README.md`"
+  B7 pass — searched for "finished", "completed", "dropped", "skipped"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+decided by: none — no binding criterion failed
+advisory: none declared
+authoring defects: none — every binding criterion was decidable from the transcript
+```
+
+The case id was not present in the material handed in, so the block carries a placeholder there. Everything else is settled from the transcript alone.
