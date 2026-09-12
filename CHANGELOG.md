@@ -48,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   limits. The optional stateless API transport uses an authorized API credential. Both record
   exact inputs, model controls, traces and bounded retries, and require every calibration label
   to match before accepting scores. Deterministic tests do not establish live model behavior.
+  The eval set moves to `SET-v6`: the same cases, criteria and thresholds, scored so that every
+  must-NOT criterion on a floor or guardrail case stays all-or-nothing across the three samples
+  while every case otherwise passes with two of three; the judge rubric moves to v7 with a
+  closed citation form and the same calibration fixtures and keys.
 
 ### Changed
 

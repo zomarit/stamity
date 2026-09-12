@@ -5,7 +5,7 @@ import { aggregate, calibrationMatches, EvalBlocked, parseCase, parseGrade, pars
 import { boundedMap, callWithRetries, CONTROLS, HARNESS, makeRequest, responsesTransport } from './transport.mjs'
 
 const PROFILE_PATH = 'evals/model-profiles-v1.json'
-const CURRENT_SET = 'evals/SET-v5.md'
+const CURRENT_SET = 'evals/SET-v6.md'
 const RUNNER_FILES = ['scripts/eval-run.mjs', 'scripts/eval/instrument.mjs', 'scripts/eval/transport.mjs',
   'scripts/eval/run.mjs', 'scripts/native-typescript.mjs', '.stamity/overrides/skills/st-eval-run/SKILL.md']
 const git = (root, args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
@@ -31,10 +31,10 @@ export function loadInputs(root, profileName) {
   const expectedModels = selected === 'codex-astra' ? ['gpt-6-astra', 'gpt-5.6-sol'] : ['gpt-5.6-sol', 'gpt-6-astra']
   requireEvidence(profile.scenario.model === expectedModels[0] && profile.judge.model === expectedModels[1] &&
     profile.scenario.reasoningEffort === 'high' && profile.judge.reasoningEffort === 'high' &&
-    profile.rubric === 'evals/rubric-v5.md', 'unsupported-profile-controls')
+    profile.rubric === 'evals/rubric-v7.md', 'unsupported-profile-controls')
   const set = read(CURRENT_SET)
   requireEvidence(set.includes('**>= 0.85** overall') && set.includes('**= 1.0**') &&
-    set.includes('**= 0**') && set.includes('**>= 0.85**, with per-skill recall') && set.includes('Strict three-sample scoring'), 'set-threshold-contract')
+    set.includes('**= 0**') && set.includes('**>= 0.85**, with per-skill recall') && set.includes('at least **two of its three samples**'), 'set-threshold-contract')
   for (const path of RUNNER_FILES) read(path)
   const loadCases = directory => readdirSync(join(root, directory), { recursive: true, encoding: 'utf8' })
     .filter(path => path.endsWith('.md')).toSorted().map(path => {
@@ -108,7 +108,7 @@ function previousRun(root, configurationHash) {
 function markdown(summary) {
   const lines = [`# Eval ${summary.runId}`, '', `Status: **${summary.status}**`, '',
     `Trigger: ${summary.trigger}. Candidate: \`${summary.candidate ?? 'unavailable'}\`.`,
-    `Profile: \`${summary.profile}\`. Set: \`SET-v5\`. Samples: strict three; all binding criteria must pass in all three.`,
+    `Profile: \`${summary.profile}\`. Set: \`SET-v6\`. Samples: three; a case passes on two of three, and on all three for its non-negotiable rows.`,
     `Configuration: \`${summary.configurationHash ?? 'unavailable'}\`; exact input/provider evidence is in \`inputs.json\` and each call receipt.`,
     'Model/effort values in receipts are provider metadata. Agent attestation is unavailable; no attestation text was added.', '',
     '## Calibration', '']

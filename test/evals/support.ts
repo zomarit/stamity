@@ -10,7 +10,7 @@ const posix = (value: string): string => value.replaceAll("\\", "/");
 
 export const CASES_DIR = "evals/cases-v5";
 export const EXEMPTIONS_FILE = "evals/coverage-exemptions-v5.md";
-export const SET_FILE = "evals/SET-v5.md";
+export const SET_FILE = "evals/SET-v6.md";
 export const RUBRIC_FILE = "evals/rubric-v4.md";
 export const README_FILE = "evals/README.md";
 export const RUNNER_SKILL_FILE = ".stamity/overrides/skills/st-eval-run/SKILL.md";
