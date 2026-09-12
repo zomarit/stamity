@@ -1,0 +1,20 @@
+Grading the supplied transcript against the case's binding and advisory criteria.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — "`none` — st-onboard is the only skill that answers ..."; the answer given is `none`
+  B2 pass — searched for st-onboard named as triggered; it appears only as excluded:
+     "its trigger is a freshly installed or unproven setup, which this eight-month-old
+     repo with dozens of proven changes explicitly is not"
+  B3 pass — searched for any skill id offered as the applicable answer; the only answer
+     token is `none`, and the single skill mentioned is ruled out in the same sentence
+advisory:
+  A1 pass — "freshly installed or unproven setup, which this eight-month-old repo with
+     dozens of proven changes explicitly is not" — the reason contrasts this repository's
+     many proven changes with the unproven install the onboarding walk covers
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The case passes on all three binding criteria and its one advisory criterion also passes. No authoring defects surfaced. The only gap is that the input did not carry a case id, so the emission's case line is a placeholder for the runner to fill.

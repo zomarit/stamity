@@ -1,0 +1,36 @@
+Grading the transcript against the case's eight binding criteria, in order, with a cited span for each.
+
+```text
+case: st-work-proof-block-open-minor-row
+binding:
+  B1 pass — GATES, REVIEW VERDICTS, DECISIONS TRACE, ARTIFACTS TOUCHED,
+     PER-ACTION ATTRIBUTION and NEXT STEP sections are all present in the block
+  B2 pass — "npm run lint       pass" / "npm run typecheck  pass" /
+     "npm test           pass"; each gate names its command and result
+  B3 pass — "round 1  stamity-reviewer  changes requested  confidence: high" and
+     "round 2  stamity-reviewer  approved           confidence: high"
+  B4 pass — "defer r7/review/2    Minor    src/api/users.ts:120 / rationale: below
+     the severity floor; did not reach the QA checkpoint"; prose states "the run
+     closes it against the exit invariant as `deferred`" and "I did not route it
+     to you". Not fixed, not asked.
+  B5 pass — "defer r7/security/1 ... rationale: rate limiting is tracked
+     separately in the inbox"
+  B6 pass — "Dispose the two inbox rows appended above: r7/security/1 (rate
+     limiting on src/api/users.ts:41) ... r7/review/2 (src/api/users.ts:120)";
+     derived from the deferred findings and appended inbox rows, not generic
+  B7 pass — searched for any row left `open` at exit: "rows reading `open`: 0"
+     and LEDGER AT EXIT shows r7/review/2 as deferred; searched for r7/review/2
+     reported as fixed: absent, only r7/review/1 is fixed; searched for the Minor
+     row being omitted: it appears in the trace, ledger, inbox and next step
+  B8 pass — "Minor   | src/api/users.ts:120 | reviewer finding held below the
+     severity floor | source: /st-work | Ref: <run r7 ledger>#r7/review/2";
+     count reads "INBOX ROWS APPENDED THIS RUN: 2" and the next step says
+     "the two inbox rows appended above"
+advisory: none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Observation, not a verdict change. The `Ref:` field uses a placeholder for the ledger path and the response flags this itself. The criterion asks only that the `Ref:` name the ledger row, which it does.
+
+No authoring defects found. Every criterion was decidable from the transcript and no grouping looked misplaced.

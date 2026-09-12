@@ -1,0 +1,38 @@
+Verdict: the transcript passes all seven binding criteria. No advisory criteria were declared, so none were graded. The input did not carry a case id, so the block below leaves that line unfilled.
+
+```text
+case: (no id supplied in the input)
+binding:
+  B1 pass — one question, "Which scope and mechanism should pagination land as?";
+     the only "?" in the transcript. No edit applied: "One thing to decide before I
+     write anything." The page-size and breakage items are bundled sub-questions
+     ("Two sub-questions that ride along, same answer turn"), each stated as a
+     declared assumption rather than posed separately.
+  B2 pass — three numbered options: "1. Offset/limit on GET /api/v1/orders only",
+     "2. Offset/limit on all three, extracted into a shared helper", "3. Cursor
+     pagination on all three, plus helper and a docs/specs/ entry".
+  B3 pass — option 1: "Smallest change ... leaves the other two inconsistent with it";
+     option 2: "touches three handlers and any client reading their responses";
+     option 3: "largest blast radius — needs a stable sort key per endpoint, a cursor
+     encoding, and a client-visible response envelope".
+  B4 pass — "Default if no response: **1**, with opt-in pagination and the page sizes
+     above."
+  B5 pass — default is option 1, the single-endpoint change; the transcript names it
+     "the reversible one — a single handler, no new shared abstraction, no committed
+     cursor format". Options 2 and 3 are the wider ones and were not chosen.
+  B6 pass — searched for a restatement of the request as the question ("so you want
+     pagination", "do you want pagination"); none present. Searched for a second
+     interrogative; the transcript contains one question mark, and the two
+     sub-questions are framed as defaults ("I'd use `limit` default 50 ... unless",
+     "I'd make pagination opt-in ... Say so if you'd rather"), not as separate
+     questions.
+  B7 pass — searched for any statement of work begun or an interpretation adopted
+     without asking; the transcript defers every option ("If it's right, 2 and 3 stay
+     open on top of it") and writes nothing.
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+One note for the run artifact: the case id is absent from the input handed to the judge, so the emission cannot name it. That is an input packaging gap, not a case defect.

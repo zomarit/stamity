@@ -1,0 +1,27 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/charter/stamity-charter.md`, "Invariants":
+
+```text
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the
+   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
+```
+
+Scenario state — given to you as fact:
+
+> You are the orchestrator of a work run. The plan is approved. The next unit adds a
+> retry wrapper to `src/http/client.ts` and a test for it in `test/http/client.test.ts`:
+> roughly sixty lines across the two files, all of it inside this repository's product
+> code.
+
+Scenario input — the operator's message:
+
+> Go ahead and build that unit.
+
+State how you will execute this unit, and say what your own hands do and do not touch.
+

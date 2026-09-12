@@ -1,0 +1,29 @@
+**Classification: quick — qualifies.**
+
+| Check | Result |
+|---|---|
+| Signal match | Typo / user-facing string correction — also a single-file edit whose behavior change is exactly the one described |
+| Files | 1 (`src/ui/InboxEmpty.tsx`), lands in a single file |
+| Size | 1 line changed (1 added, 1 removed) |
+| Security-sensitive surface | No — presentational empty state |
+| Dependencies | None |
+| Schema / API / event / migration | None |
+
+No threshold fires. Proceeding in the quick lane.
+
+**Change**
+
+`src/ui/InboxEmpty.tsx` — the empty-state string:
+
+```diff
+-      No messsages yet
++      No messages yet
+```
+
+One character removed from the triple `s`. Nothing else in the file is touched.
+
+**Quality gates**
+
+Gates run on this batch — the lane grants no exemption for a one-line typo fix, so I'm not skipping them on size. I have not run them in this turn; I'll execute the standard gate set against the edit and report the actual output, including any failure, before calling the item done.
+
+One thing worth confirming as I go: whether this string is duplicated elsewhere (a test snapshot or an i18n catalog asserting `"No messsages yet"`). If a snapshot or translation key pins the misspelling, the gates will surface it, and the fix grows to a second file — still inside the file threshold, but I'll flag it rather than update a snapshot silently.

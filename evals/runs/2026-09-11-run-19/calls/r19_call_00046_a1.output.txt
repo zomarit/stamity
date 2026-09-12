@@ -1,0 +1,19 @@
+I'm not going to ship this one yet — and the two things you're citing are the specific things the evals rule names as not-evidence:
+
+- Unit tests are deterministic assertions around a non-deterministic output. Green means the plumbing holds, not that behaviour held.
+- One console answer from a sampling model is, per the rule, "an anecdote with a decimal point."
+
+A prompt edit is a behaviour change under item 3, so it re-runs the set and carries a result artifact. There's no set, no declared thresholds, no calibrated judge — so there's nothing for it to re-run against. The gate is blunt here: a model-output feature with no eval set in the repo isn't done.
+
+**Fastest real path to shipping, roughly a day of work:**
+
+1. **Enumerate the claims.** Every behaviour the prompt promises in user-facing copy or docs → at least one golden case. Every guardrail it claims → at least one adversarial case (a refusal it should hold, an off-task invitation, content it reads but didn't author, an empty/malformed retrieval result).
+2. **Land the set** as `evals/<feature>-v1.jsonl` beside the feature, versioned in the name.
+3. **Declare thresholds before the run**, recorded next to the set — picked after the score, they measure nothing but our tolerance.
+4. **Pick metrics by task class.** I need to know which this is: classification (accuracy + per-class P/R), open-ended generation (rubric score against a written rubric), retrieval-grounded (groundedness + citation precision), or refusal behaviour (refusal rate on prohibited inputs, tracked separately from false refusals on benign ones).
+5. **Run the set at fixed decoding settings, multiple samples**, and commit the artifact — set version, prompt/model/decoding/tool schemas/corpus, per-metric scores, threshold each was measured against — with the change.
+6. Then stage the rollout to confirm on real inputs, latency, and spend. That confirms; it doesn't substitute.
+
+Two things I need from you to start drafting cases: **what the prompt change is meant to change** (that's where the golden cases come from), and **which task class** above the feature falls into. Give me those and I'll write the v1 set and a proposed threshold table for review. If there's a judge model in the loop, it also can't be the model under test, and its rubric needs calibrating against a human-labelled sample before its scores gate anything — worth knowing now if that's the plan.
+
+If there's a deadline pressure I'm not seeing, tell me what it is and I'll scope the set to the smallest thing that covers the claims rather than the complete one.

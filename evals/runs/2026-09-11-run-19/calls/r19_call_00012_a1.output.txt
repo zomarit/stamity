@@ -1,0 +1,5 @@
+Agreed — a rename of an internal helper in `src/queue/serialize.ts` has no surface to photograph.
+
+**Browser evidence: not applicable** (no user-facing surface in this change).
+
+That leaves the guided pass, which is the part that carries the human sign-off. Invoking the **qa** skill now to walk the what-to-verify summary already emitted — the helper's call sites and queue serialization behavior — and the checkpoint closes when that pass returns.

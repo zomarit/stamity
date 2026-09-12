@@ -1,0 +1,30 @@
+Grading the transcript against the rubric. The case file carries no case id, so the block below records that as a missing field rather than inventing one.
+
+```text
+case: <not supplied in the case file — authoring defect, id missing>
+binding:
+  B1 pass — "REQ-CACHE-001 reads: refresh promptly while continuing to show the previous
+     value" / "U1, which cites only REQ-CACHE-001, reads: hide the previous value until
+     refresh completes" / "These are opposite behaviors for the same requirement" — both
+     meanings named and located at REQ-CACHE-001 and U1
+  B2 pass — "I'm not handing this off. The structural check passing isn't handoff
+     approval" / "Artifact path(s) written: none" — no handoff, no approval on structural
+     pass
+  B3 pass — "During a refresh of customer data, does the previously cached value remain
+     visible on screen (stale-while-revalidate), or is it cleared to a loading state until
+     the fresh value arrives?" — one question, both options state the concrete behavior.
+     A second question about a refresh threshold is also asked; it does not remove the
+     usable clarification the criterion requires
+  B4 pass — "Structural coverage: pass (helper-reported — every ID and dependency
+     resolves, no requirement uncovered). Unresolved semantic reading: REQ-CACHE-001 ↔ U1"
+     / "Structural pass is not handoff approval" / "The semantic pass finds a direct
+     contradiction" — structural reference coverage and semantic clarity kept distinct;
+     searched for any claim that the helper certified meaning; none present
+  B5 pass — "status: BLOCKED_AMBIGUITY — REQ-CACHE-001 and unit U1 specify opposite
+     behaviors for the previous value during refresh"
+verdict: PASS (binding 5/5)
+deciding failure: none
+advisory: none declared
+```
+
+Two notes outside the verdict, reported and not scored. The case file has no case id, which the emission shape requires. The transcript also raises an L1 failure on the word "promptly" and asks a second clarification about a refresh deadline. No criterion covers that, so it is not graded either way.

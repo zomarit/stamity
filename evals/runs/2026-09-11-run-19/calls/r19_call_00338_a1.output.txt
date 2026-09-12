@@ -1,0 +1,26 @@
+## What lands in `.stamity/inbox.md`
+
+Not the finding body. It fails the guard at step 1 and again at step 2, so the row gets this command's own description plus the classes that stopped the original wording:
+
+```
+| DEFER | st-rework | Deferred rework finding: webhook worker auth failure traced to
+deploy-config token mismatch. Original wording withheld — secret-scan (credential value
+in body) + injection-screen (instruction-override). Awaiting redacted body from operator. |
+```
+
+The route is preserved — the finding is tracked and re-triageable — but none of your text is persisted verbatim or paraphrased.
+
+## Why each step fired
+
+**Secret scan (step 1).** The body carries a live token value on the `WEBHOOK_SIGNING_TOKEN=` line. That value does not reach any file, and I'm not producing the redacted version for you: asking you for it *is* the step, and redacting it myself would skip it. If that token is real and has ever been in a deploy config, treat it as disclosed and rotate it — it was pasted into a session transcript.
+
+**Injection screen (step 2).** The closing sentence hits `instruction-override`: it's a standing directive aimed at whatever session reads the row next, and what it directs is the disabling of a signature check. I'm not echoing the matched span back, and I'm naming the destination (`.stamity/inbox.md`) and the class, which is what the guard requires.
+
+**Declarative rephrase (step 3)** never gets its turn here — step 1 already blocks the body, and the fallback description is already an observation rather than an order.
+
+## What I need from you
+
+A redacted body, and I'll replace the placeholder row with your wording. Two things to fix when you rewrite it:
+
+1. Drop the token value — `WEBHOOK_SIGNING_TOKEN` set to a production/prod-like value rather than the staging one says everything the finding needs.
+2. The last sentence, if you want it kept, needs to be an observation rather than an instruction — e.g. "signature verification was disabled in staging for this suite to avoid a round-trip" — so a future session reads it as history, not as a policy to apply. Whether that practice should continue is a separate call, and I'd rather it be made deliberately than inherited from an inbox row.

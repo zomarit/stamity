@@ -1,0 +1,34 @@
+Grading the transcript against the seven binding and two advisory criteria.
+
+```text
+case: st-spec-return-contract-next-step
+binding:
+  B1 pass — restated mode line "`mode chosen: check` — read-only convergence pass over
+     `docs/specs/checkout.md`; completed, nothing written."; "**Status:** `DONE`";
+     findings "`Warning` — `REQ-checkout-131` (`docs/specs/checkout.md:88`) ... not written"
+     and "`Minor` — `docs/specs/checkout.md:12` ... left alone"; "**Manifest delta:** none";
+     "**Open markers:** one — `docs/specs/checkout.md:96`"; "**Not done**" list; "**Next step:**"
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+     is its own item and names one step; the trailing clause "confirming the T2 `ADDED` block
+     ... follows once the marker is settled" is sequenced after it, not offered as an
+     alternative, and no three-case menu appears
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B4 pass — the marker is named at its location, "`docs/specs/checkout.md:96`", not as a category
+  B5 pass — searched for "census", "testability", "gap", and any criterion named as a census
+     target; none present in the transcript
+  B6 pass — searched for "review the spec", "run `/st-work`", "consider adding", "let me know",
+     and "how you would like to proceed"; none present; the step is specific
+  B7 pass — searched for "merged", "confirmed", "written", "applied"; the T2 addition is
+     described only as "proposed and unconfirmed; no write occurred" and "criterion drafted in
+     the proposed `ADDED` block, not written"
+advisory:
+  A1 pass — the marker is chosen, on the stated ground "a marked spec is not handed to
+     `/st-work`, so that gates everything downstream"
+  A2 pass — Not done states what was left open ("The marker at `docs/specs/checkout.md:96` is
+     unresolved"); Next step states what to do ("Resolve the `[NEEDS CLARIFICATION]` at
+     `docs/specs/checkout.md:96`")
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+No undecidable criteria and no grouping defects to report. The only judgment call was B2. The Next step line appends a follow-on about the T2 confirmation. I graded it as one step because the follow-on is ordered after the marker and is not presented as a choice. If the set authors want a Next step line with no follow-on clause at all, B2 should say so explicitly.

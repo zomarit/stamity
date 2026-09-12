@@ -1,0 +1,28 @@
+Grading the closing-report transcript against the case's seven binding criteria.
+
+```text
+case: (no case id supplied in the input; verdict recorded without one)
+binding:
+  B1 pass — the transcript ends on "**Recommended next step:** write the test for the
+     regression clause at `docs/specs/cart.md:57`." — a single step, not a list or menu
+  B2 pass — "write the test for the regression clause at `docs/specs/cart.md:57`" is the
+     first of the two live conditions the criterion admits
+  B3 pass — the step names "the regression clause at `docs/specs/cart.md:57`", the specific
+     artifact at its location, not the category
+  B4 pass — searched for a hypothesis or discriminating observation as the step; the
+     transcript states "Hypotheses. None surviving." and the step is the clause test
+  B5 pass — searched for an escalation row presented as the recommended step; `/st-work`
+     appears only under "Escalation" as the destination ("→ `/st-work`, carrying the
+     diagnosis plus the failing test as the plan"), and the recommended-step line is the
+     clause test, not a switch
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" or similar
+     generic phrasing in the step; none present, the step is tied to one clause at one line
+  B7 pass — searched for a claim that the counters were stripped or the clause test written;
+     the transcript says the clause "has no test of its own" and the counters "are deployed",
+     and "the strip is overdue rather than pending" describes it as not yet done
+advisory: none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**One observation outside the criteria, not scored.** The transcript asserts "today is Saturday, 2026-09-12" and reasons that the Friday window may already be closed. The Brief gives no current date, so that fact is not part of the scenario's stated record. No written criterion touches it, so it changes nothing here. If the case authors want that kind of unsupported fact flagged, the next set version needs a criterion for it.

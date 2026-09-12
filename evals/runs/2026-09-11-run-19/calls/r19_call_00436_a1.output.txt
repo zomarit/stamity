@@ -1,0 +1,1 @@
+`none` — this is an ordinary edit to a manifest and lockfile, which st-dep-audit explicitly excludes (it reports without editing), and no other skill covers performing an upgrade.

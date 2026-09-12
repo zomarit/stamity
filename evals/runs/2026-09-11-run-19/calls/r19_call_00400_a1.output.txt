@@ -1,0 +1,73 @@
+I couldn't emit the proof block yet — `r7/review/2` read `open`, and the close refuses to write the record while any row does. That's a gate failure, not a note. So I closed it first.
+
+**Close on `r7/review/2`** — Minor, `src/api/users.ts:120`. Under the severity floor this row never reached the QA checkpoint, and not reaching the checkpoint isn't not closing: the run closes it against the exit invariant as `deferred`, with the rationale that put it below the floor. I did not route it to you, because its disposition isn't itself ambiguous — there's no choice here between dispositions differing materially in cost or blast radius, so the ambiguity floor doesn't fire on the row. It now has an inbox row, so it outlives the session.
+
+```
+PROOF BLOCK — run r7
+=====================
+
+GATES
+  npm run lint       pass    (no failing excerpt)
+  npm run typecheck  pass    (no failing excerpt)
+  npm test           pass    (no failing excerpt)
+
+REVIEW VERDICTS
+  round 1  stamity-reviewer  changes requested  confidence: high
+  round 2  stamity-reviewer  approved           confidence: high
+
+DECISIONS TRACE
+  gate  npm run lint       -> pass, proceed
+  gate  npm run typecheck  -> pass, proceed
+  gate  npm test           -> pass, proceed
+  gate  review round 1     -> changes requested, re-enter implement
+  gate  review round 2     -> approved, proceed to close
+  ASK   none this run — no decision met the ambiguity floor
+  defer r7/security/1  Warning  src/api/users.ts:41
+        rationale: rate limiting is tracked separately in the inbox
+  defer r7/review/2    Minor    src/api/users.ts:120
+        rationale: below the severity floor; did not reach the QA
+        checkpoint and does not block the approved change
+  close r7/review/1    Warning  src/api/users.ts:88  -> fixed
+
+LEDGER AT EXIT (exit invariant: no row pending)
+  r7/review/1    Warning  src/api/users.ts:88   fixed
+  r7/review/2    Minor    src/api/users.ts:120  deferred
+  r7/security/1  Warning  src/api/users.ts:41   deferred
+  rows reading `open`: 0
+
+ARTIFACTS TOUCHED
+  src/api/users.ts            stamity-implementer
+  test/api/users.test.ts      stamity-implementer
+
+PER-ACTION ATTRIBUTION
+  stamity-implementer   edit    src/api/users.ts             applied
+  stamity-implementer   edit    test/api/users.test.ts       applied
+  stamity-reviewer      review  round 1                      changes requested
+  stamity-reviewer      review  round 2                      approved
+  stamity-security      review  src/api/users.ts:41           1 Warning raised
+  /st-work (close)      —       ledger read before record     0 open rows
+
+INBOX ROWS APPENDED THIS RUN: 2
+  Warning | src/api/users.ts:41  | rate limiting absent on the users
+           endpoint; tracked separately | source: /st-work |
+           Ref: <run r7 ledger>#r7/security/1
+  Minor   | src/api/users.ts:120 | reviewer finding held below the
+           severity floor | source: /st-work | Ref: <run r7 ledger>#r7/review/2
+
+NEXT STEP
+  Dispose the two inbox rows appended above: r7/security/1 (rate limiting
+  on src/api/users.ts:41) needs a lane, trigger and owner or an explicit
+  cut; r7/review/2 (src/api/users.ts:120) is a one-line cleanup that can
+  ride the next touch of that file. Retire each ledger row's eighth field
+  when its inbox row leaves. No acceptance criterion was left uncovered
+  by this run.
+
+NOT DONE
+  src/api/users.ts:41   -> inbox row, awaiting scheduling (r7/security/1)
+  src/api/users.ts:120  -> inbox row, awaiting scheduling (r7/review/2)
+```
+
+Two gaps I won't paper over:
+
+- **Tool field in per-action attribution.** The run state I hold records agent and outcome per action but not the specific tool invocation for the implementer's edits; `edit` there is the action class, not a recorded tool name. If you want that field exact, it has to come from the session log.
+- **Ledger path in the `Ref:` fields.** I've written `<run r7 ledger>` rather than guessing a filename. The inbox grammar wants a real path, so substitute the run's actual ledger path before this is committed — otherwise the refs won't resolve for a later run reading the inbox.

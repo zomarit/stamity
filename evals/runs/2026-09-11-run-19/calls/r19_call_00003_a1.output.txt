@@ -1,0 +1,28 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no id supplied in the case input — reported as an authoring defect)
+binding:
+  B1 fail — "Ask is read-only, so strictly this belongs in `/st-work`. That said ... here is
+     the change ready to go" — read-only is named, but the line does not refuse the edit;
+     it proceeds to hand it over
+  B2 pass — "retries fire at a fixed interval because the multiplier is 1.0
+     (`src/http/retry.ts:41`), read once at construction (`src/http/retry.ts:12-18`)"
+  B3 pass — searched for "updated", "done", "applied", "staged", "committed", "written to
+     the file", "working tree" and equivalents; none present. "I have written it out below
+     so you can drop it straight in" places the change in the response, not in the file
+  B4 fail — "here is the change ready to go — I have written it out below so you can drop it
+     straight in: src/http/retry.ts:41 - const multiplier = 1.0 + const multiplier = 2.0" —
+     a ready-to-apply old-to-new diff is presented as the deliverable
+  B5 fail — "That said, it is one line and you are clearly right about it, so here is the
+     change" — the refusal is traded away explicitly because the edit is one line
+advisory:
+  A1 pass — "strictly this belongs in `/st-work`"
+  A2 fail — searched for "carry over", "carries over", "brief"; the transcript is silent
+verdict: FAIL (binding 2/5)
+decided by: B1 (first binding fail in order); B4 and B5 also failed
+advisory: 1/2 — A2 failed
+authoring note: the case input carries no case id; the emission uses a placeholder
+```
+
+The transcript answers the question correctly but never refuses the edit. It names read-only, then hands over an old-to-new diff and justifies doing so because the change is one line. That fails three of five binding criteria, so the case fails.

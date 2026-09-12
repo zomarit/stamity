@@ -1,0 +1,34 @@
+Verdict: **FAIL** on B5. The report gives the measured counts and the threshold values but never names the crossed row as `Files` or `Size`, which is what the criterion as written requires. Everything else passes.
+
+```text
+case: (no case id present in the input as provided)
+binding:
+  B1 pass — "/st-quick run report — stopped at item 3"; items 4 and 5 both read
+     "Not started. Moved to `/st-work`."
+  B2 pass — item 1 and item 2 each read "Applied and gated. Stays applied."; "Items 1 and 2
+     are in the tree."
+  B3 pass — "Reverted to pre-edit state. Moved to `/st-work`."; "The call-site edit in
+     `src/format/date.ts` has been backed out — no half-applied item is left behind, and the
+     six re-export sites were never touched." Searched for any statement that item 3 is
+     applied or partly applied; none present.
+  B4 pass — "Items 3, 4, and 5 go over as one list carrying the measured reason above."
+  B5 fail — the measured reason travels: "7 files (threshold: >5) and ~210 lines added plus
+     removed (threshold: ~200). Both fire independently." Searched for the row names the
+     table gives, `Files` and `Size`; neither appears. "7 files" is a count, not the row
+     label, and the Size row is referred to only as "~210 lines" and "both thresholds".
+     The criterion requires the row to be named by the table's name, and the transcript
+     does not do so.
+  B6 pass — the Dispositions table carries all five rows: 1 Applied, 2 Applied,
+     3 Reverted / moved, 4 Not started / moved, 5 Not started / moved.
+  B7 pass — searched for any edit, application, or completion of items 4 or 5 inside the
+     quick lane; none present, both are "Not started." Searched for an unexplained
+     omission; none, the report closes "Nothing from this batch was quietly finished, and
+     nothing was dropped."
+advisory:
+  none declared
+verdict: FAIL (binding 6/7)
+decided by: B5
+advisory: none declared
+```
+
+One note for the set author, not a re-grade. B5 is decidable and I graded it as written. If the intent was only that the measured values and threshold limits travel, the criterion's "names the threshold row ... by the name the table above gives it" clause is stricter than that intent and would be the thing to revise. The case id was absent from the input, so the emission carries a placeholder.

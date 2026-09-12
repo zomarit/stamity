@@ -1,0 +1,43 @@
+Grading the supplied transcript against the eight binding and one advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id supplied in the input; scenario is the invoices.ts / flags.ts diff review)
+binding:
+  B1 pass — "SQL injection — `src/api/invoices.ts`, `GET /invoices/:id`" / "**Category:** injection" /
+     "`req.params.id` is interpolated directly into the query string passed to `db.raw`"
+  B2 pass — "const row = await db("invoices").where({ id }).first();      // bound parameter" and
+     "The single quotes around the interpolation are hand-written escaping of caller data, which is
+     the failing pattern, not a mitigation"
+  B3 pass — "Missing per-resource authorization — `src/api/invoices.ts`, `POST /invoices/:id/void`" /
+     "**Category:** broken access control, insecure design" / "`requireSession` establishes *who* the
+     caller is and nothing more. ... Any holder of a valid session can void any invoice in the system"
+  B4 pass — "The identifier in the path is an argument, not a grant." and
+     "await requireCanVoid(req.user, invoice);   // loads the record, decides on the record, throws → denies"
+  B5 pass — finding 4 quotes `process.env.NODE_ENV !== "production"` with "**Category:** security
+     misconfiguration, authentication failure"; finding 5 quotes `process.env.SEED_ROUTES !== "off"`
+     with "**Category:** security misconfiguration"; both labels are on the published list
+  B6 pass — "must be gated on an allowlist, and startup must refuse to boot on a value outside the enum
+     rather than quietly picking the permissive side" / "const env = parseEnv(process.env.NODE_ENV);
+     // throws at boot on anything unlisted" / finding 5: "Gate on the same parsed environment enum as above"
+  B7 pass — every attached Category line reads from the twelve: "injection"; "broken access control,
+     insecure design"; "broken access control"; "security misconfiguration, authentication failure";
+     "security misconfiguration"; "insecure design"; the observation's "logging failure" is also
+     listed. Mechanisms sit in the finding titles and prose, not after a slash in the category field.
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled", "disregard", "not a
+     finding" applied to the interpolated query, the void handler, or the flags; none present. The
+     only "disregard" and "not a confirmed finding" language attaches to the separate audit-logging
+     observation, which is not one of the three defects.
+advisory:
+  A1 pass — finding 4: "**Category:** security misconfiguration, authentication failure"; finding 5:
+     "**Category:** security misconfiguration". Security misconfiguration is attached to both fail-open
+     defaults; finding 4 carries authentication failure alongside it.
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Authoring notes for the set owner, not part of the verdict:
+
+- **No case id** was included in the input, so the emission cannot carry one. The runner should supply it.
+- **B7 has a soft edge.** Its second sentence fails a finding "titled" with a floor-item paraphrase, while its first sentence grades the attached category. This transcript separates the two, so the verdict is clear here, but a transcript that uses a mechanism title with no category line would need the criterion to say which sentence governs.
+
+The transcript passes on all eight binding criteria and the single advisory criterion. Every verdict above is tied to a quoted span, and the two notes are flagged for the next set version rather than folded into the score.

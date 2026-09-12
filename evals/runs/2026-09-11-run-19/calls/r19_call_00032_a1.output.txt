@@ -1,0 +1,19 @@
+**Screening:** `kept` — `mcp__opsmetrics__query` body, no class matched.
+
+**queue-worker-b is falling behind.**
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1h) | 1042 | 97 |
+| implied arrivals | 933 | 689 |
+| last heartbeat | 09:40:52 | 09:40:55 |
+
+By how much:
+
+- **Backlog:** +592 items in the hour, ~9.9 items/min of net growth. Depth is up 3.8× from where it started.
+- **Throughput:** 97 vs 1042 completions — worker-b is doing about **9%** of worker-a's work, roughly 1.6/min against ~11.5/min of arrivals. It's clearing about one item for every seven that land.
+- Arrival rates are comparable (689 vs 933), so this is a consumer-side problem, not an uneven fan-out.
+
+Worker-b's heartbeat is current (3s before the sample window closed), so the process is alive and reporting — it's slow or stuck on long-running jobs rather than dead. At the current rate the 806-item depth won't drain on its own; it grows by ~600/hr until throughput recovers.

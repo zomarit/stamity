@@ -1,0 +1,31 @@
+I'm not handing this off. The structural check passing isn't handoff approval — the governing text is explicit that structural pass alone doesn't clear the gate, and `semanticReview: required` is still open. The semantic pass finds a direct contradiction.
+
+**The conflict**
+
+- **REQ-CACHE-001** reads: refresh promptly *while continuing to show the previous value* — stale-while-revalidate. The old value stays on screen during the refresh.
+- **U1**, which cites only REQ-CACHE-001, reads: *hide* the previous value until refresh completes — blocking refresh, empty or placeholder state during the fetch.
+
+These are opposite behaviors for the same requirement, and the acceptance criterion can't adjudicate: it asserts only that a fresh value eventually appears, which is true under both readings. So a structurally complete plan would ship a unit that inverts its own requirement, and the test would still be green. No user decision on record settles it.
+
+**The clarification I need — one question**
+
+> During a refresh of customer data, does the previously cached value remain visible on screen (stale-while-revalidate), or is it cleared to a loading state until the fresh value arrives?
+
+Answer A means U1's description is wrong and must be rewritten to match REQ-CACHE-001, plus a criterion asserting the previous value is continuously visible from refresh start to fresh-value paint. Answer B means REQ-CACHE-001's wording is wrong and the spec delta needs a `MODIFIED` entry — a spec change, not a plan edit.
+
+A second gap rides along and needs the same conversation: "promptly" carries no threshold. The criterion's "eventually appears" has no bound in units and no measuring command, which fails L1 on its own terms. I can't rewrite it in place because the number is yours to set — what's the refresh deadline, and in what units?
+
+---
+
+**Return**
+
+- **status:** `BLOCKED_AMBIGUITY` — REQ-CACHE-001 and unit U1 specify opposite behaviors for the previous value during refresh, and the acceptance criterion does not distinguish them.
+- **intent chosen:** unchanged from the persisted draft; this run performed review, not intent selection.
+- **Artifact path(s) written:** none. No write this run; the plan under review is the persisted draft. Unit count not restated — I hold U1 and its citation, not the full unit list.
+- **Structural coverage:** pass (helper-reported — every ID and dependency resolves, no requirement uncovered). Unresolved semantic reading: REQ-CACHE-001 ↔ U1, previous-value visibility during refresh. Structural pass is not handoff approval.
+- **Plan-lint:** L1 fail · L2 pass · L3 not re-run this pass · L4 pass. L1 fails on U1's criterion: no threshold with units and no measuring command for "promptly"/"eventually". L2 and L4 rest on the structural helper's dependency and ID resolution. L3 I did not evaluate — I don't hold U1's `edgeCases` field, and I won't record a pass I didn't run.
+- **sub_agents_spawned:** 0 · **task_structure:** sequential.
+- **Open questions carried:** (1) previous-value visibility during refresh; (2) the refresh deadline that makes "promptly" measurable. Non-empty — handoff blocked.
+- **Learnings written:** none. This run met no qualifying failure.
+- **Next step:** resolve the two open questions above — that is the state that chose it. Once both are answered, U1 or the spec delta is corrected, the L1 criterion is rewritten with the threshold, and the lint pass re-runs including L3 before `/st-work`.
+- **Follow-ups to `.stamity/inbox.md`:** none appended. Nothing here is out of scope — both items are gating defects in this plan, not deferrals.

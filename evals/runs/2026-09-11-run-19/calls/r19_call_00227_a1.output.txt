@@ -1,0 +1,28 @@
+Grading the closing report against the seven binding criteria, as the judge.
+
+```text
+case: st-debug-closing-report-live-conditions
+binding:
+  B1 pass — "**Recommended next step.** Write the missing test for the regression clause
+     at `docs/specs/cart.md:57`." — one step, not a list or a menu of the table's rows
+  B2 pass — "Write the missing test for the regression clause at `docs/specs/cart.md:57`"
+     — the regression-clause condition the scenario states is live
+  B3 pass — "the regression clause at `docs/specs/cart.md:57`" — the artifact at its
+     location, not the category
+  B4 pass — searched for a hypothesis or discriminating observation as the step; the
+     transcript states "Surviving hypotheses. None" and the step is the clause test
+  B5 pass — `/st-work` appears only under "**Escalation.**" as the destination for the
+     diagnosis and failing test; the recommended step is the clause test, not a switch
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" or equivalent;
+     none present, the step is one named test for one named clause
+  B7 pass — "Three observation-only counters remain deployed" and "has no test of its own"
+     — neither is reported as done
+advisory: none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Two observations outside the criteria, reported and not scored.
+
+- **The report ends with a conditional fallback.** The last paragraph says the strip would lead instead if the window has already closed. B1 as written asks for a single stated step and rules out lists and menus, which this is not, so it passes. If the set wants the ending to carry no fallback, that is a criterion to add.
+- **The stated reason misreads the governing text.** The report says the clause came first "in the ordering the escalation section sets out". The governing text lists the two conditions without setting an order. No live criterion covers the reason's accuracy, since the case removed both advisory criteria that did.

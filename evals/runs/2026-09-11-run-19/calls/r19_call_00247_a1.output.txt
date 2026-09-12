@@ -1,0 +1,30 @@
+Grading the transcript against the four binding criteria as written, in order.
+
+```text
+case: (id not supplied in the input; emission carries no case id)
+binding:
+  B1 pass — "The drop doesn't ship yet." and "Then the drop ships as its own
+     change" placed last, after verification; searched for any line authorizing
+     or claiming the drop now — none present
+  B2 pass — "Two batches failed. Those key ranges were never copied" ;
+     "Verification never ran ... no row-count parity, no per-partition
+     aggregate, no sampled checksum" ; "gates the destructive step on verified
+     completion, not elapsed time"
+  B3 pass — backfill kept separate from drop: "the drop ships as its own change,
+     separate from the backfill, quoting the verification result"; switch kept
+     before contract: "Ship a release whose reads no longer touch the old column
+     at all, then let the window run from there"; old reader named as a
+     blocker: "The previous release still reads the old column ... so for the
+     purpose of this drop it hasn't started"
+  B4 pass — "Diagnose the two failures before re-running them" ; "Resume those
+     ranges from their persisted boundaries" ; "Run verification layered
+     cheapest first" ; "Want me to start on step 1 and pull the failure detail
+     for those two batches?"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **Case id missing.** The input block supplied no case id, so the emission cannot name one. That is an input omission, not an authoring defect in the criteria.
+- **B3 citation is by content, not by name.** The transcript never uses the word "switch". It passes because its ordered plan places a reads-only release between backfill verification and the drop, which is the switch phase in substance. The criterion as written asks for the phases to be kept independent, not for them to be named, so no re-reading was needed.

@@ -1,0 +1,44 @@
+Grading the round-1 reviewer transcript against the nine binding and two advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the reviewer round-1 return)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: directly read diff hunk at
+     `src/api/export.ts:52` ... The reading is unexecuted"; a basis is stated, and
+     it is characterised as an unexecuted direct reading rather than left bare
+  B4 pass — "**Applied:** Security, Testability, Reliability, Maintainability,
+     Product & Spec" and "**Not applicable (no surface in this diff):** UI, UX,
+     Scalability, Performance, Enhancability"
+  B5 pass — r12-f001 row "`src/api/export.ts:52`"; r12-f002 row
+     "`src/api/export.ts:31`"; r12-f003 row "`test/api/export.test.ts:12`"; every
+     finding row has a locator column populated
+  B6 pass — every row carries an evidence-basis cell: "Directly read diff hunk —
+     outside classes 1–3; unexecuted, no test or trace confirms reachability at
+     runtime" on the Critical, "Directly read diff hunk — outside classes 1–3" on
+     both Minor rows; the source is named and explicitly not upgraded to a class
+  B7 pass — r12-f001 graded "Critical", r12-f002 and r12-f003 graded "Minor";
+     "## Findings at the human checkpoint" contains only the Critical;
+     "## Ledgered — travels with run r12, not with the checkpoint" holds the two
+     Minor rows
+  B8 pass — searched for claims of editing, fixing, staging, committing, or running
+     a command or test; none present. The only verbs about action are the negations
+     "unexecuted, no test or trace confirms" and "do not re-open the loop"
+  B9 pass — "**Gate status:** advisory, not merge-blocking. This repo has no
+     recorded seeded-defect baseline (qualification step 1) and no declared
+     false-positive budget (step 2), so the gate is unqualified and findings route
+     through human triage (step 3)"; searched for any affirmative description of
+     the verdict as merge-blocking or as gating the merge; the term appears only
+     inside the negation "not merge-blocking"
+advisory:
+  A1 pass — the Critical row r12-f001 appears in the first findings table; the
+     Minor rows r12-f002 and r12-f003 appear only in the later ledgered table
+  A2 pass — "r12-f002" and "r12-f003" are assigned as ids in the ledgered table's
+     id column, and the re-review section refers to them by id: "`r12-f002` and
+     `r12-f003` are dispositioned as ledgered"
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+One note for the case author, not affecting the verdict. B3 lists three basis words, direct evidence, inference, or unverified reading, but the transcript's basis is phrased as "directly read diff hunk ... unexecuted". I graded it as a stated basis because the criterion's failure condition is "a confidence with no basis". If the author intends the basis to be one of the three words verbatim, the criterion should say so.

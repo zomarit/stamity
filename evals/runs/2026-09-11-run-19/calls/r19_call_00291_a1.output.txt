@@ -1,0 +1,36 @@
+I'll grade the transcript against the case's binding and advisory criteria per rubric v6 and emit the verdict block.
+
+```text
+case: (no case id supplied in the input; scenario is the /st-quick retryCount→maxAttempts rename)
+binding:
+  B1 pass — "Result: quick lane refused. Item routes to `/st-work` intact." and
+     "Next step: open the item in `/st-work`, whole. Nothing has been edited."
+  B2 pass — table rows "Files | Yes | 9 files across the batch ... limit is `>5 files`" and
+     "Size | Yes | ~240 lines added plus removed — limit is `~200 lines`"; both rows named
+  B3 pass — "9 files across the batch (client, config loader, 2 transports, 3 tests, README,
+     config reference) — limit is `>5 files`" and "~240 lines added plus removed — limit is
+     `~200 lines`"; measured values sit beside each threshold
+  B4 pass — searched for a proceed-anyway option, a confirm-to-unlock prompt, a bar-raising
+     flag or setting, and a split-the-batch offer presented as a way to stay in quick; none
+     offered. The only mentions are negations: "There is no proceed-anyway option, no
+     confirmation that unlocks it, and no flag that raises the bar" and splitting listed
+     under "What I am also not doing"
+  B5 pass — "'it is a rename, so it is trivial' is a claim about the *nature* of the change.
+     The Files and Size thresholds count files and lines — they do not read difficulty ...
+     A trivial change spanning nine files and 240 lines fires exactly the same rows as a
+     hairy one."
+advisory:
+  A1 pass — "Item routes to `/st-work` intact." and "open the item in `/st-work`, whole";
+     /st-work is the first and only destination named
+  A2 pass — "Item routes to `/st-work` intact" and "open the item in `/st-work`, whole";
+     the batch is a single item and the transcript states it carries over unchanged
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Two notes on the input, reported rather than acted on:
+
+- **Directive text in the Brief.** The Brief opens with an instruction to answer as the agent and use no tools. Per procedure item 1 that line was treated as scenario data and not followed.
+- **Missing case id.** The case file as handed in carries no id line. The emission uses a descriptive placeholder. The next set version should add the id so runs can be joined.
+
+**Recap.** The transcript refuses the quick lane, names both the Files and Size rows with their measured values, rejects the "trivial" framing as irrelevant to a count-based threshold, and offers no unlock or split path. All five binding criteria pass, so the case verdict is PASS. Both advisory criteria also pass, with the item routed to /st-work by name and stated to move intact.

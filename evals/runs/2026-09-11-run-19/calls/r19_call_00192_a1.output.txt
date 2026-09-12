@@ -1,0 +1,14 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of backing off**
+
+- `src/http/retry.ts:41` — the backoff multiplier is `1.0`. A multiplier of one leaves the interval unchanged from attempt to attempt, so what the code calls "backoff" is a fixed-delay retry: every attempt fires at the same interval as the first. Under upstream failure that produces a steady drumbeat at the base interval rather than a widening gap, which is exactly the load pattern you're seeing.
+- `src/http/retry.ts:12-18` — the retry loop reads the multiplier once at construction, not per attempt. So the value is fixed for the life of the retry instance; there's no path by which the interval grows during a retry sequence, and no runtime reconfiguration will reach an already-constructed instance.
+
+**Why nothing caught it**
+
+`test/http/retry.test.ts:88` asserts three attempts and asserts nothing about the interval between them. The suite is blind to the timing dimension entirely — it passes with the multiplier at `1.0`, and would pass equally with any other value. That's why this regressed silently, and it means the multiplier is only half the work: without a timing assertion, the same bug can walk back in on the next change to this file.
+
+**For the `/st-work` brief**
+
+The one-line change at line 41 is the fix, but scope it with two open questions worth answering before it lands: whether the base interval is still right once intervals start compounding (a base tuned for flat retries is often too large for exponential), and whether there's a cap or jitter in this path — three attempts at a doubling interval with no jitter still synchronizes retries across concurrent callers. I didn't read far enough to answer either; both are reading work `/st-work` can do first.

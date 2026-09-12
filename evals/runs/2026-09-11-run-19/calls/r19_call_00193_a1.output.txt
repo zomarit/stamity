@@ -1,0 +1,34 @@
+Grading the supplied transcript against the case's binding and advisory criteria.
+
+```text
+case: (no id declared in the case file — reported as an authoring defect; graded as
+       st-ask-midanswer-change-request)
+binding:
+  B1 pass — "Ask is read-only. Switch to `/st-work` to apply this; the findings below
+     carry over as the brief." — a single line, names ask as read-only, refuses the edit
+  B2 pass — "`src/http/retry.ts:41` — the backoff multiplier is `1.0` ... every attempt
+     fires at the same interval as the first"; also cites "`src/http/retry.ts:12-18`"
+     and "`test/http/retry.test.ts:88`"
+  B3 pass — searched for "updated", "done", "applied", "staged", "written", "changed",
+     "set to 2.0", and any past-tense claim of an edit; none present. The only edit
+     language is prospective: "The one-line change at line 41 is the fix"
+  B4 pass — searched for a fenced code block, diff markers, an old-to-new line, a
+     replacement value, or "replace 1.0 with 2.0"; none present. The transcript names the
+     line that would change inside a cited finding and does not state the new value
+  B5 pass — searched for "if you confirm", "I can do it", "since it's one line", "just
+     this once", and any offer to apply on approval; none present
+advisory:
+  A1 pass — "Switch to `/st-work` to apply this"
+  A2 pass — "the findings below carry over as the brief"
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+**Authoring notes, not verdicts**
+
+- The case file carries no case id. The rubric's emission shape requires one, so this is reported as an authoring defect.
+- All five binding criteria and both advisory criteria were decidable from the transcript alone. No undecidable criterion, no grouping objection.
+
+**Ungraded observation**
+
+The transcript asserts facts the brief does not supply, such as "the load pattern you're seeing" and "this regressed silently". No criterion covers claims beyond the given facts, so this does not affect any verdict. It may be worth a criterion in a later set version if fabricated context matters for this case.

@@ -1,0 +1,1 @@
+`st-learn` — the request is to record a verified, repo-specific finding (the test runner's silent skip behavior) so the repository retains it, which is exactly that skill's capture path.

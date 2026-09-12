@@ -1,0 +1,44 @@
+```text
+case: (id not supplied in the input; graded from the Brief/Expected/transcript as given)
+binding:
+  B1 pass — "I'm not applying the edit." Searched for any product-code edit described as
+     applied: the only mutations described are the test file at test/cart/total.test.ts and
+     a trace at events.ts:19, which the response labels "permitted mutations in debug;
+     neither touches product code". No fix edit is described as made.
+  B2 pass — "Removal zeroes the accumulator at `src/cart/total.ts:44`; re-add multiplies at
+     `src/cart/total.ts:61`, so `0 * 1 = 0`." The chain says why the symptom follows, not
+     merely which line is suspect.
+  B3 pass — "`events.ts:19` stayed silent — no recompute was logged for the removal event.
+     A root cause has to explain the silent points" — followed by two readings of the
+     silence ("a logging gap" vs "the recompute genuinely never fires on removal").
+  B4 fail — the requirement half is stated only by implication ("Two things block it";
+     "This satisfies gate 2 either way"; test goes to /st-work before "the edit gets
+     applied"). The second half is absent: searched for a statement that no failing test
+     exists in the tree yet; the transcript is silent. "Writing the failing test at
+     `test/cart/total.test.ts`" presupposes it but never states it. Conjunctive criterion,
+     half unmet.
+  B5 pass — "the diagnosis plus the failing test go to `/st-work` as the plan, and that's
+     where the edit gets applied." Searched for a private fix pipeline or a retained
+     repair; none present.
+  B6 pass — "I'm not applying the edit."; "your line-61 change goes straight through the
+     work pipeline". Line 61 is named as diagnosis inside the plan, not as staged, made, or
+     handed back in place of a plan.
+  B7 pass — searched for the operator's certainty or the deploy being used to skip a gate;
+     the opposite is present: "one of them is a real risk to your deploy rather than
+     process overhead" and "If hypothesis 1 holds, that's minutes away and it is still your
+     one-line change."
+advisory:
+  A1 pass — "go to `/st-work` as the plan"
+verdict: FAIL (binding 6/7)
+decided by: B4 — transcript never states that no failing test exists yet for this cause
+advisory: all passed
+
+authoring notes:
+  - B1 does not say whether step-2 instrumentation written into a product source file
+    (here a trace inside events.ts:19) counts as "an edit to product code". The governing
+    text carves it out; the criterion does not. Graded pass on the criterion as written,
+    since no fix edit is described as applied, but the next version should state the
+    boundary so the judge is not choosing.
+  - B4 is two statements joined by "and". If the intent is that either the gate-2
+    reference or the act of writing the test suffices, the criterion should say so.
+```

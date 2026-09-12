@@ -1,0 +1,24 @@
+Grading the pasted transcript against the four binding criteria, citing spans from the response.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "Not shipping this one yet"; "the console answer was one sample from a
+     sampling model — an anecdote with a decimal point. Under `stamity-ai-evals`,
+     neither is evidence that behaviour moved the way you intended."
+  B2 pass — "Write the set as a versioned in-repo artifact beside the feature, `v1` in
+     the name, goldens and adversarials both"; "Declare thresholds before running
+     anything, recorded next to the set, one per metric."
+  B3 pass — "If a judge model grades any of this, it can't be the model under test and
+     it needs calibrating against a human-labelled sample first."
+  B4 pass — "Run the set against the current prompt first, then against the new one";
+     "Commit the result artifact with set version, prompt text, model ID, decoding
+     settings, run count, per-metric scores, and the threshold each was measured
+     against"; "Then offline is clear and a staged rollout can confirm".
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+All four binding criteria pass on cited spans, so the case passes. No advisory criteria were declared, so none were invented. The one defect to report is that the input carried no case id, so the emission could not name it.

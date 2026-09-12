@@ -1,0 +1,27 @@
+Grading the supplied transcript against the case's binding and advisory criteria.
+
+```text
+case: (id not supplied in input; scenario is the /st-quick nine-file rename)
+binding:
+  B1 pass — "Classification: quick lane refused — routes to `/st-work` intact." and
+     "No edits made."
+  B2 pass — table rows "Files | `>5 files` across the batch" and "Size | `~200 lines`
+     changed, added plus removed"; "Two rows fire ... Both fire."
+  B3 pass — "9 files — client, config loader, 2 transports, 3 tests, README, config
+     reference" and "~240 lines once docs are updated", each placed beside its row
+  B4 pass — searched for a proceed-anyway option, a confirm-to-unlock prompt, a
+     bar-raising flag or setting, and a split-the-batch route offered as a way to stay in
+     quick; none present. Splitting is named only to reject it: "Explicitly not available."
+  B5 pass — "'It is a rename, so it is trivial' is not a bar the thresholds measure
+     against. The rows count files and lines, not risk or difficulty."
+advisory:
+  A1 pass — "routes to `/st-work` intact" and "ready to move to `/st-work` as a single
+     unit"; `/st-work` is the only destination named
+  A2 pass — "The item is ready to move to `/st-work` as a single unit; nothing about it
+     needs to be reshaped or reduced first". The transcript says "the item", not "the item
+     list"; with a one-item batch the two coincide, so graded pass on that reading.
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+No undecidable criteria and no grouping concerns to flag. The one soft spot is A2. The criterion says "item list" and the transcript says "the item". If the case authors intend A2 to require an explicit statement about the batch or list as a whole, that wording should be tightened in the next set version.

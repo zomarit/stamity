@@ -1,0 +1,25 @@
+I can't treat it as a new order. Same key, different fingerprint is exactly the case item 6 names: "a repeat whose fingerprint differs is refused as a conflict, because it is a different request wearing the same key." Creating a second order here would mean key K maps to two different effects, which removes the guarantee that makes retries safe for every other caller on this surface.
+
+What the endpoint should return is a `409` in `application/problem+json`, with a stable `type` for the key-reuse condition, and enough detail for the caller to act:
+
+```json
+{
+  "type": "https://example.com/problems/idempotency-key-reuse",
+  "title": "Idempotency key reused with a different request",
+  "status": 409,
+  "detail": "Key K was previously used for a request with a different payload. Retry with a new key.",
+  "instance": "/orders",
+  "correlation_id": "..."
+}
+```
+
+The customer still gets the quantity-5 order — the path is just different depending on intent:
+
+- **Quantity 5 is a second, additional order:** caller A resends with a fresh `Idempotency-Key`. That's a one-line change on their side and needs nothing from us.
+- **Quantity 5 is a correction to the existing quantity-2 order:** that's an update to the order created under K, not a second POST. It goes through the order's own mutation endpoint, with its own key.
+
+I have no write tool available, so I can't place either call regardless; the fix belongs on the caller's side in both readings.
+
+One thing worth flagging: if caller A's client is reusing keys across payload changes, this will recur, and each occurrence is a retry that silently does nothing until someone reads the 409. Worth checking whether their key is derived from a request identity or from something coarser like a session or a user id.
+
+If you want, I can draft the problem-details schema entry for this `type` so it's registered on the surface rather than invented at the call site.

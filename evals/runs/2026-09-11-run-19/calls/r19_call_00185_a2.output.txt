@@ -1,0 +1,30 @@
+Grading the supplied Answer block against the six binding and two advisory criteria, using the rubric's emission shape.
+
+```text
+case: (no case id supplied in the pasted case file)
+binding:
+  B1 pass — every answer claim is cited: "(`src/session/store.ts:23`)", "(`src/session/store.ts:57`)",
+     "(`src/server/boot.ts:31`)", and the accumulation bullet cites all three. The two statements of
+     absence ("No test, benchmark, or production measurement ... exists", "No observability or load-test
+     evidence exists") are reports of the research gap the Brief supplies as "Not found" / "unread", not
+     claims answering the question; see the note below.
+  B2 pass — "— **high**", "— **high**", "— **high**", "— **medium**"; one band on each of the four claims
+  B3 pass — "session entries accumulate for the lifetime of the process (`src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**"; three of the three sites cited
+  B4 pass — one medium claim exists, and its assumption sits inside the same sentence: "Assuming no code
+     outside `src/session/store.ts` deletes from that `Map` — an assumption I did not verify, since only
+     that file was read for eviction — session entries accumulate ..."
+  B5 pass — searched the production section for a number, unit, rate, growth figure, "likely", "probably",
+     or a "fine"/"bad" verdict; none present. The section reads "Not answerable ... there is no citable
+     claim about rate, ceiling, or impact, and I am not carrying one as an estimate."
+  B6 pass — searched for every `path:line` token; found only `src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`, all three present in the scenario state
+advisory:
+  A1 pass — "heap sampling against a running process, or a load test that holds sessions open"; also
+     names the missing "observability or load-test evidence"
+  A2 pass — heading "How bad is it in production" followed by "Not answerable." with the reason stated
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+One authoring note, reported rather than acted on. B1 reads "every claim" while A2 requires the dropped half to be surfaced with a reason. Any surfacing sentence necessarily states that evidence is absent, and absence has no line to cite. I graded those absence statements as research-gap reporting, which the Brief itself supplies, rather than as claims. If the set authors intend B1 to cover them, the criterion is unsatisfiable alongside A2 and should be reworded to scope "claim" to assertions about the codebase.

@@ -1,0 +1,31 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+**Scope note:** `docs/specs/` holds four spec files; you scoped this to `checkout-flow`, so the counts below cover that file only. The other three are uncensused.
+
+**Per-file count — `docs/specs/checkout-flow.md`: 4 criteria**
+
+| | Count |
+|---|---|
+| Machine-checkable, test exists | 1 |
+| Machine-checkable, test missing (gap) | 1 |
+| `judgment:` tagged | 1 |
+| Neither | 1 |
+
+| AC | Requirement | Classification |
+|---|---|---|
+| AC-1 | `REQ-checkout-104` | Names `test/checkout/decline.test.ts`, present on the tree → confirmable via `test-runner` |
+| AC-2 | `REQ-checkout-107` | Names `test/checkout/refund.test.ts`, **not on the tree** → **gap** |
+| AC-3 | `REQ-checkout-111` | `judgment: design lead` (empty-cart copy) → satisfies the census |
+| AC-4 | `REQ-checkout-115` | **Neither.** "The checkout page feels responsive on a slow connection" carries no named test, no gate command, no measurable threshold, and no `judgment:` tag |
+
+**Criteria that are neither:** AC-4 / `REQ-checkout-115`.
+
+**Gaps:** AC-2 / `REQ-checkout-107` — criterion points at a test that does not exist.
+
+### Dispatch
+
+AC-1 is the one criterion naming a test that exists, so the `test-runner` spawn belongs to this turn — it isn't held for your go-ahead. The brief is `npm run test` (the resolved `${STAMITY:VERIFY_GATE_TEST}`) plus the criterion being confirmed, AC-1 / `REQ-checkout-104`.
+
+I have not been able to issue that spawn in this turn — I'm operating without tool access here — so I have no structured per-gate result to read back. **AC-1 is classified but unconfirmed**; I'm not reporting a pass or fail for `npm run test`, because I don't have one. Re-run the census with the runner available and AC-1's confirmation will close out; the other three classifications are final and don't depend on it.
+
+Nothing was written — `check` is report-only, and the gate was not run in this command's context.

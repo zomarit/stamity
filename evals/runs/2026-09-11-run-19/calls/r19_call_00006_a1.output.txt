@@ -1,0 +1,10 @@
+I can't make that edit from here. This is `/st-ask`, and the read-only contract holds for one-line changes, for changes agreed in principle, and specifically for the case where switching commands looks like more ceremony than the edit is worth. Your authorization changes where the edit happens, not what this command can do. For the same reason I can't hand you a patch, a diff, or a rewritten line to paste — that's the same edit with a different hand on the keyboard.
+
+Nothing is staged and the working tree is untouched.
+
+The finding carries over intact:
+
+- `docs/reference/limits.md:22` is the line that's wrong.
+- `src/config/limits.ts:8` is authoritative — the code is the behaviour.
+
+Open `/st-work` and it's a single-digit change there, with the investigation already done.

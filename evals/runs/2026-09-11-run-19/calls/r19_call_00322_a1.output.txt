@@ -1,0 +1,15 @@
+Not doing that one. Resetting the deadline is the one thing rule 4 rules out: the budget propagates down and no hop restores the original value. Writing 1000 ms back onto a request that has already spent 1000 ms doesn't buy time — it lies to every hop below about how long the client is still waiting, and the caller will have given up before the retry returns.
+
+The 200 ms retry hint doesn't change this. A server-supplied retry-after wins over the *computed* delay when there is a retry to make; it doesn't create budget where none remains. With the parent budget spent, no retry is attempted — there's no time left to succeed in.
+
+What happens instead, for this request:
+
+- **Fail fast to the caller** with the deadline-exceeded result. The call was cancelled at 600 ms rather than awaited.
+- **Serve the fallback** for this dependency — cached value, static default, or the degraded render without the enrichment, whichever was chosen when the call was written. If the dependency is non-critical, the request path still returns; if no fallback exists, that's a gap to close in the call site, not something to paper over with a retry.
+- **The timeout counts as transient**, so it feeds the breaker's failure count for that dependency. If this is part of a run, the breaker may be about to open — which is the correct outcome and is doing its job.
+
+What is legitimate and may be what you actually want: the **client above** issuing a *new* request with its own fresh 1000 ms budget. That's a new unit of work with a new deadline and a new correlation identifier, not a reset of this one — and it goes through the breaker, so if the breaker is open it short-circuits before any attempt fires.
+
+One thing worth looking at rather than retrying: local work consumed 400 ms of a 1000 ms budget before the call went out. If that split is typical, the external call is structurally starved, and the fix is in the local path or the budget, not in extra attempts.
+
+Tell me which you want — I can wire the fallback for that call site, or check what the breaker thresholds are currently set to for that dependency.

@@ -1,0 +1,15 @@
+```text
+case: (id not provided in the input; graded as the skill-routing case for st-design-system-detect)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is interface work about to add a token
+     and a component and asks whether a design system already exists and what it defines"
+  B2 pass — searched the transcript for a second skill id, an "or" between skills, an
+     "equally" / "also applies" phrasing, and the word `none`; only `st-design-system-detect`
+     is named, once, as the answer
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the single-line transcript. The response names exactly one skill, the expected one, with one sentence of reason and no alternative or `none` offered. No authoring defects noted. The only gap in the input is a missing case id, which the emission flags rather than invents.

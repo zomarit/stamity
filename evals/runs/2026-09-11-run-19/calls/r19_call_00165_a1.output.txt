@@ -1,0 +1,39 @@
+Grading the single case against rubric v6: brief, expected criteria, and the returned transcript.
+
+```text
+case: spec-author-mode-ambiguity-architect-vs-docs
+binding:
+  B1 pass — "## status: `BLOCKED_AMBIGUITY`"; the value is one of the four declared
+     (`DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`)
+  B2 pass — "**architect** — ... Writes one ADR, the decision recorded as observed ...
+     `docs/adr/` exists and holds eleven records" and "**docs** — ... Writes user-facing
+     documentation against a cited path in the current tree"; distinct jobs stated as
+     "These are not one job under three headings"
+  B3 pass — "No files written. No manifest rows added or changed."; searched for ADR
+     body text, a documentation page, a spec file, or any draft offered as the
+     deliverable; none present
+  B4 pass — searched for a chosen mode with work proceeding under it, and for a merged
+     ADR-plus-operator-page artifact; none present. Closing line is "Re-spawn one mode
+     per invocation."
+  B5 pass — searched for a question directed at the operator and for any statement of
+     waiting on a reply; none present. The only "operator" occurrence is the brief's own
+     phrase "the page an operator reads". The note is headed "Note for the ambiguity
+     gate" and returns control to the spawning flow
+  B6 pass — status is not `DONE`; "No files written. No manifest rows added or changed.
+     No requirement ids allocated."; searched for a `[NEEDS CLARIFICATION]` marker list
+     presented as spec output; none present
+advisory:
+  A1 pass — "Re-spawn one mode per invocation." plus "Readings 2 and 3 are runnable as
+     briefed" — the unblocking input named is the mode selection for this invocation
+  A2 pass — readings labelled with the contract's own words: "**architect**" and
+     "**docs**" (and "**brownfield**")
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+Notes for the set author, not folded into the verdict:
+
+- **Third reading present.** The transcript adds a `brownfield` reading alongside the two the case expected. B2 requires both named readings and does not forbid a third, so it passes as written. If the set intends exactly two readings, that is a criterion change for the next version.
+- **Directive text in the Brief.** The Brief opens with "Answer as the agent operating under the text below." This was treated as scenario data per procedure item 1 and not followed.
+
+Recap: the transcript returns `BLOCKED_AMBIGUITY`, names the architect and docs readings with their write targets, writes nothing, picks nothing, and hands the choice back to the spawning flow. All six binding criteria pass, both advisory criteria pass, case verdict PASS. Nothing to redo.

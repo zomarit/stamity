@@ -1,0 +1,21 @@
+**status:** `BLOCKED_AMBIGUITY`
+
+**severity:** Critical
+
+The brief names no mode and carries work for three, each with a different evidence rule. It cannot be satisfied in one invocation, and blending the rules is what the mode contract exists to prevent.
+
+**Competing readings**
+
+1. **brownfield** — "Write up the new export-scheduling behaviour." The behaviour is landed and running at `src/schedule/cron.ts:18-44`, so a spec over the touched surface under `docs/specs/` is the fit. Evidence rule: every claim about existing behaviour carries `file:line`.
+2. **architect** — "Record why we chose a cron trigger over a queue consumer." The decision is visible in the code and no ADR records it; `docs/adr/` exists with eleven records, so this is the twelfth. Evidence rule: the decision is recorded as observed, with the alternatives the code rules out — here, the queue consumer.
+3. **docs** — "produce the page an operator reads to configure it." The user-facing docs tree exists and carries no export-schedule page. Evidence rule: documented behaviour exists in the current tree at a cited path.
+
+**Why not blended**
+
+The three rules are not compatible under one pass. A brownfield spec asserts behaviour against `file:line`; an ADR asserts a rationale that the code only partly witnesses — the rejection of the queue consumer is an inference the spec rules would not license. Operator docs assert configurability, which requires the configuration surface to be verifiable in the tree independently of the spec being written in the same pass. Writing all three together would let the ADR's weaker evidence standard and the docs page's assumed config surface pass as spec-grade truth.
+
+**What it blocks**
+
+All three artifacts. No files written, no manifest rows added or changed, no requirement ids allocated.
+
+Resolution is the spawning flow's: run the ambiguity gate and re-spawn as three invocations, one per mode. The natural order is brownfield first (it establishes the behaviour and the `file:line` evidence the other two cite), then architect, then docs — docs last, since the operator page should cite a configuration surface already fixed by the spec.

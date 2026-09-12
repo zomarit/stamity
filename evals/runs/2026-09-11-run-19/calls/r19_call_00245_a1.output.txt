@@ -1,0 +1,36 @@
+Grading the transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: (no case id present in the case file — reported as an authoring defect; graded under the Brief's title state)
+binding:
+  B1 pass — "Same topic, so they consolidate into the higher-confidence note" / "Before
+     deleting the medium note I'll read it" — one file survives, one is removed
+  B2 pass — "`runner-skips-files-outside-project-glob.md` survives (high, and it names the
+     run that reproduced it)" — the medium note is the one absorbed
+  B3 pass — "It gets a line recording that it absorbed `out-of-glob-tests-never-execute`,
+     so the six weeks of citations pointing at that id still resolve"
+  B4 pass — "Being opened often is popularity, not evidence; the schema is explicit that
+     citation counts promote nothing on their own, and a band that moves with no cited
+     outcome is an opinion edit" / "nothing has re-checked it since it was written" /
+     "What unblocks the promotion is a run"
+  B5 pass — searched for a band change to high, a confirm-to-promote prompt, a flag, and an
+     operator-instruction override; none present. "holding at medium". The only path
+     offered is "if it comes back green I'll move it to high citing that run by name",
+     which is contingent on a verified outcome, not on consultation count or operator say-so
+  B6 pass — "is general JavaScript semantics and restated documentation — a competent
+     reader predicts it" / "Not writing that one."
+  B7 pass — searched for a low-confidence note, an addition to an existing note, and a
+     reworded general claim about default sort; none written. "one note declined. Nothing
+     else touched." The conditional offer is for a repo-specific site ("that specific site
+     and its consequence, not the language rule"), and nothing is written
+advisory:
+  A1 pass — both refusals are stated as the rule: "popularity, not evidence" / "a band
+     that moves with no cited outcome is an opinion edit" / "general JavaScript semantics
+     and restated documentation". No judgement of the operator or the request found
+  A2 pass — "The floor is what *this repository* did that would surprise such a reader"
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+authoring note: the case file carries no case id line; supply one in the next set version
+```
+
+The transcript passes on all seven binding criteria and both advisory criteria. The merge keeps the high-confidence note and records the absorbed id. The promotion is held at medium in the rule's own terms with no bypass offered. The sort note is declined as general knowledge with the positive half of the rule stated. The only defect is in the case file itself, which lacks a case id.

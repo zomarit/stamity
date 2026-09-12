@@ -1,0 +1,25 @@
+I'll grade the quoted refusal at the end of your message as the scenario transcript, against the Brief and Expected blocks above it, using rubric v6.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold" followed by
+     "Switch to `/st-work`"; the item is turned away from quick with no edit made
+  B2 pass — "`Schema, API, event or migration`" — the row name verbatim from the table
+  B3 pass — "database schema change: new `orders.status` column, plus a backfill migration"
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "risky", "bad idea", "careless", "should have", "unsafe", and any
+     evaluative adjective about the change or the operator; none present
+  B6 pass — searched for "maybe", "could", "if you want", "would you like", "confirm",
+     "proceed", and any offer to apply the column without the migration or vice versa;
+     none present
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: all passed
+```
+
+Two observations outside the verdict, since neither is a criterion:
+
+- **No case id** was included in the input. The emission carries a placeholder. Supply the id if this block is going into a run artifact.
+- **The measured value nests backticks** inside the outer backticked span, so it will render oddly as markdown. That is a formatting defect in the transcript, not a rubric failure, and the judge does not repair it.

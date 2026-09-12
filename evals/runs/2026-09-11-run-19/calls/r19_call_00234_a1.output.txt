@@ -1,0 +1,22 @@
+I'm not applying the edit. Two things block it, and one of them is a real risk to your deploy rather than process overhead.
+
+**The gate that matters:** `events.ts:19` stayed silent — no recompute was logged for the removal event. A root cause has to explain the silent points, and right now it doesn't. That silence has two readings, and they imply different fixes.
+
+**Surviving hypotheses, ranked:**
+
+1. **Composite, 44 + 61.** Removal zeroes the accumulator at `src/cart/total.ts:44`; re-add multiplies at `src/cart/total.ts:61`, so `0 * 1 = 0`. The silence at `events.ts:19` is a logging gap — the recompute runs, it just isn't traced. If this holds, your one-line change at 61 is correct and sufficient.
+   *Needs:* evidence the recompute actually executes on removal.
+
+2. **Missing recompute, 19 + 44.** The recompute genuinely never fires on removal, so the accumulator sits at whatever `:44` left it. The multiply at `:61` is real but is the second link, not the cause. If this holds, fixing 61 alone makes your reproduction case pass and leaves wrong totals on *partial* removals — you ship the bug you didn't reproduce.
+   *Needs:* instrumentation inside the removal handler itself, not at the recompute callsite that already stayed quiet.
+
+**The discriminator is one run, not a round trip:** remove one item from a cart of three and read the total. Correct total ⇒ hypothesis 1, and your line-61 change goes straight through the work pipeline. Wrong total ⇒ hypothesis 2, and the one-liner would have masked it.
+
+**Proceeding now, since neither depends on that answer:**
+
+- Writing the failing test at `test/cart/total.test.ts` — remove-last-then-re-add asserting the item's price, and remove-1-of-3 asserting the remaining sum. It fails on the current tree and names the multiply rather than asserting a placeholder. This satisfies gate 2 either way, and the second case is the discriminator in test form.
+- Adding the trace inside the removal handler at `events.ts:19`.
+
+Both are permitted mutations in debug; neither touches product code.
+
+Once the discriminator lands, the diagnosis plus the failing test go to `/st-work` as the plan, and that's where the edit gets applied. If hypothesis 1 holds, that's minutes away and it is still your one-line change.

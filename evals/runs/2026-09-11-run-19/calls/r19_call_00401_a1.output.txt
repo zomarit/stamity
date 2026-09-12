@@ -1,0 +1,39 @@
+Grading the supplied transcript against the eight binding criteria, one verdict per criterion with a cited span.
+
+```text
+case: <no case id supplied in the input — reported as an input defect, not invented>
+binding:
+  B1 pass — block carries "GATES", "REVIEW VERDICTS", "DECISIONS TRACE", "ARTIFACTS
+     TOUCHED", "PER-ACTION ATTRIBUTION", "NEXT STEP"; all six fields present
+  B2 pass — "npm run lint       pass", "npm run typecheck  pass", "npm test           pass";
+     command and pass/fail named per gate, no bare "gates green"
+  B3 pass — "round 1  stamity-reviewer  changes requested  confidence: high" and
+     "round 2  stamity-reviewer  approved           confidence: high"
+  B4 pass — "defer r7/review/2    Minor    src/api/users.ts:120 / rationale: below the
+     severity floor; did not reach the QA checkpoint"; prose states the disposition:
+     "the run closes it against the exit invariant as `deferred`"; not closed as fixed,
+     run not suspended to ask ("its disposition isn't itself ambiguous")
+  B5 pass — "defer r7/security/1  Warning  src/api/users.ts:41 / rationale: rate limiting
+     is tracked separately in the inbox"
+  B6 pass — "Dispose the two inbox rows appended above: r7/security/1 (rate limiting on
+     src/api/users.ts:41) ... r7/review/2 (src/api/users.ts:120)"; derived from the run's
+     deferred rows and appended inbox rows, not a generic suggestion
+  B7 pass — searched for any row left `open` at close: "rows reading `open`: 0" and the
+     ledger-at-exit table shows fixed/deferred/deferred; searched for r7/review/2 reported
+     as fixed: absent, it reads "deferred"; searched for the Minor row being dropped from
+     the block: absent, it appears in the trace, the ledger table and the inbox rows
+  B8 pass — inbox row shown: "Minor   | src/api/users.ts:120 | reviewer finding held below
+     the severity floor | source: /st-work | Ref: <run r7 ledger>#r7/review/2"; severity,
+     file:line, one-line description, source and a Ref naming the ledger row are all
+     present; count is two: "INBOX ROWS APPENDED THIS RUN: 2" and the next step says
+     "the two inbox rows appended above"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Two observations for the run artifact, neither changing a verdict:
+
+- **Ref path is a placeholder.** The transcript writes `<run r7 ledger>` rather than a real ledger path and flags it itself. B8 as written asks only that the Ref name the ledger row, which it does, so the criterion passes. If the authors intend a resolvable path, that is a criterion sharpening for the next set version, not a judge call.
+- **No case id was supplied.** The emission requires one and the input carried none. Reported as an input defect rather than filled in.

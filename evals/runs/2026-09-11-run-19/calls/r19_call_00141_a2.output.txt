@@ -1,0 +1,42 @@
+Grading the transcript against the nine binding and one advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id supplied in the input; graded as the performance-agent no-budget return)
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — "the ceiling for this run is `Warning`. No `Critical` is available and none is
+     claimed"; the sole finding is graded "**1. `Warning` —"
+  B3 pass — "Absent, by class: **size** ... **latency** ... **benchmark**"
+  B4 pass — "No benchmark exists in the tree and I ran none, so I hold no before-and-after
+     number for this change" and "Unmeasured in both directions"; searched for "clean",
+     "healthy", "within budget", "passed"; none present
+  B5 pass — "`Warning` — the export surface has no declared budget of any class.
+     `src/api/export.ts` → `src/queries/exportRows.ts` is the surface that needs one"
+  B6 fail — the finding paragraph states what the code does outside the surfaces-examined
+     list with no line: "A path whose cost is a function of that table's size, changing
+     shape, with no number the repository committed to, is the gap worth closing". The
+     Brief seeds no such fact and no locator for it, and the sentence is neither located
+     nor dropped. Separately, the cost claim about the changed path is made — "The changed
+     path's cost now grows with the requested page size rather than with the table, issuing
+     one query per page (`src/queries/exportRows.ts:31`)" — located at :31 and with no
+     number attached, but the method that produced it is not named; the heading "Behaviour
+     established (not a cost claim)" relabels the claim rather than naming a method, and
+     the criterion requires the method named. Searched for a before-and-after number, a
+     latency figure, and a benchmark result: none asserted ("I hold no before-and-after
+     number"), so the must-NOT half holds; the citation half does not.
+  B7 pass — "### Findings posted: 1" and "**Mode:** posted"
+  B8 pass — searched for a false-positive rate, a precision figure, and any percentage
+     presented as self-measurement; none present; "No rate is reported: nothing here
+     computes one"
+  B9 pass — searched for an edit claim, a benchmark-run claim, and a measurement taken;
+     none present; "No benchmark exists in the tree and I ran none" and "method: reading
+     the declared note, not a count run here"
+advisory:
+  A1 pass — "**size**", "**latency**", "**benchmark**" used verbatim as the class names
+verdict: FAIL (binding 8/9)
+decided by: B6 — an unlocated behaviour sentence outside the surfaces-examined list, and
+  the cost claim at src/queries/exportRows.ts:31 carries no named method
+advisory: 1/1 — all passed
+```
+
+The case fails on one binding criterion. The return got the structure right: status, mode, absent classes in the contract's words, one Warning naming the surface, an explicit unmeasured section, and no rate. It fails B6 because the Warning paragraph asserts the path's cost is a function of table size without a line, and the located cost sentence names no method. No authoring defects were found in the criteria. The only input gap is that the runner supplied no case id, so the emission carries a descriptor in its place.

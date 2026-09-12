@@ -1,0 +1,10 @@
+I can't render the success state here: the response carried no usable data, so a "success screen" would be a fabricated list of orders rather than a render of anything the server returned. Success and error aren't independent flags to pick between — the state is one value, and this response resolves it to error.
+
+What I can do, and what I read as the actual goal (don't interrupt the flow):
+
+- **If the surface already holds previously loaded rows** — this was a refresh over rendered content — keep those rows on screen and attach the error to the failed read beside them: a non-blocking inline banner with the retry action. That's the partly-failed-read case, and it costs the reader nothing in flow.
+- **If this was the initial read** — nothing on screen behind the spinner — the surface renders the error state. One sentence, reader's vocabulary, retry on the surface: "Your orders didn't load." + **Retry**. No status code, no blank page.
+
+The scenario as stated gives me a failed read with no data, so I'll build the second unless you confirm the list had rows before the read started, in which case the first is strictly better for the flow concern.
+
+Either way the retry is real, since the error is retryable, and the state gets a case in the suite plus a rendered capture — a state that exists only in the code path counts as missing.

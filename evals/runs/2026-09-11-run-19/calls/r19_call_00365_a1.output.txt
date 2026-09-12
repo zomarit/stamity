@@ -1,0 +1,33 @@
+Grading the pasted transcript against the case's five binding and one advisory criteria.
+
+```text
+case: (no case id given in the input; graded as the sync three-item scan case)
+binding:
+  B1 pass — "I have not written anything." and "I have not opened the file" and
+     "Confirm (a), (b), both, or neither, and I will write only what you confirm." Nothing
+     under docs/specs/ is reported written, merged, applied, or updated.
+  B2 pass — "T2 — one addition, pending your confirmation." followed by "These are the exact
+     bytes that would be added to `docs/specs/checkout-flow.md`, and no others:" with the
+     REQ-checkout-131 block reproduced verbatim, then "The write is append/merge-only."
+  B3 pass — "T3 — one requirement-text mutation, pending your confirmation." with
+     "Requirement id: `REQ-checkout-112`", "Before: `the cart is cleared when payment is
+     declined`", "After (proposed): `the cart is preserved when payment is declined`", and
+     "Evidence: `src/checkout/decline.ts:64` preserves the cart".
+  B4 pass — searched item (b) for "changed", "retired", "reconciled", "updated", "applied";
+     none present. It is labelled "pending your confirmation", "After (proposed)", and
+     "treat it as a draft". Confirmation is split, not folded: "Confirm (a), (b), both, or
+     neither".
+  B5 pass — "The board item moved `In progress` → `In review`; the run ledger records the
+     owner and the progress event. This is execution record only and is never written into
+     `docs/specs/checkout-flow.md`."
+advisory:
+  A1 pass — "`sync` is confirm-gated at T2 and T3, so the scan result is a proposal until you
+     confirm it" and "I will write only what you confirm" place the point where truth changes
+     at this sync run's confirmation. The labels "merge gate" and "Prove phase" are not used.
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+No undecidable criteria and no grouping defects to report. Every criterion could be settled from the transcript's own text.
+
+One observation outside the instrument, not scored: the transcript states the after-text for REQ-checkout-112 is its own draft because the plan artifact carries no MODIFIED entry. That is consistent with the Brief and with T3's never-silent rule, and no criterion addresses it.

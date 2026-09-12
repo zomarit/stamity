@@ -1,0 +1,19 @@
+Keeping the diff — that's your call and it stands. But I can't close this as a proven change.
+
+**Not done:**
+
+- `npm run lint` — not run. Resume: `npm run lint`
+- `npm run typecheck` — not run. Resume: `npm run typecheck`
+- `npm run test` — the full suite has not run. Only the touched regression in `src/count.js` ran. Resume: `npm run test`
+
+The clock can narrow a change before work starts, or stop the walk — it can't drop a mandatory gate. A touched test passing is partial evidence: it shows the edit does what phase 3 named, not that the repository still holds together around it. Those are different claims, and only the second one closes a walk as done.
+
+## Handback
+
+1. **Change made** — `src/count.js`, one file, one behavior; the observable named at phase 3 is now true.
+2. **Proof and result** — the regression test was red before the edit for the expected reason and green after. Passed, in isolation.
+3. **Lane** — `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate** — `npm run lint`, `npm run typecheck`, `npm run test`: not run, no exit status. Three gates open.
+5. **Phases the clock dropped** — phase 6, the orientation note, dropped as the one optional phase. No other phase was dropped; phases 3 and 5 are not droppable, and phase 5 is the one left incomplete.
+
+The change is on disk and approved. Running those three commands is what turns this handback into a proven change — say the word and I'll run them now and re-report. If a static gate comes back red, it re-runs on its own rather than the whole chain.

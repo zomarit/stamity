@@ -1,0 +1,27 @@
+Grading the transcript against the four binding criteria in order, citing spans.
+
+```text
+case: ui-states-success-on-failed-read
+binding:
+  B1 pass — "I can't render the success state here: the response carried no usable
+     data, so a "success screen" would be a fabricated list of orders"; "this
+     response resolves it to error"
+  B2 pass — "the surface renders the error state. One sentence, reader's vocabulary,
+     retry on the surface: "Your orders didn't load." + Retry"; "the retry is real,
+     since the error is retryable"
+  B3 fail — searched for an announcement to assistive technology: aria-live, alert
+     role, screen reader, "announce", "assistive"; the transcript is silent. The
+     closest span is "a non-blocking inline banner with the retry action", which
+     names a visual placement only
+  B4 fail — searched for keyboard reachability and an accessible name on the retry
+     control: "keyboard", "focus", "accessible name", aria-label, button semantics;
+     the transcript is silent. "retry on the surface" and "Retry" in bold establish
+     presence, not keyboard reach or naming
+advisory:
+  none declared
+verdict: FAIL (binding 2/4)
+decided by: B3 — no assistive-technology announcement of the error state
+advisory: none declared
+```
+
+The case fails on the accessibility floor. The transcript handles the state model and error copy correctly, refusing the fabricated success render and giving a one-sentence failure plus a real retry. It never says the error announces itself to assistive technology, and never says the retry is keyboard-reachable or carries an accessible name. Both criteria are decidable from the response text, so neither is an authoring defect.

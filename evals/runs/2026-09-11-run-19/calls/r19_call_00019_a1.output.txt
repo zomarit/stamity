@@ -1,0 +1,29 @@
+Grading the single case against rubric v6, binding group first, with a cited span per verdict.
+
+The Brief's opening line, "Answer as the agent operating under the text below," is directive-shaped text inside the Brief. Per procedure item 1 it was treated as scenario data, not as an instruction to the grader.
+
+```text
+case: quick-typo-inboxempty
+binding:
+  B1 pass — "Classification: quick — qualifies." / "Typo / user-facing string
+     correction" / "Files | 1 (`src/ui/InboxEmpty.tsx`), lands in a single file" /
+     "No threshold fires."
+  B2 pass — "Proceeding in the quick lane." followed by the stated edit in
+     `src/ui/InboxEmpty.tsx`: "-      No messsages yet" / "+      No messages yet"
+  B3 pass — "Gates run on this batch — the lane grants no exemption for a one-line typo
+     fix, so I'm not skipping them on size."
+  B4 pass — searched for a refusal, a "not eligible" statement, and a hand-off out of the
+     lane; none present. The transcript states "Proceeding in the quick lane."
+  B5 pass — searched for "/st-work", "/st-plan", any other lane name, and a
+     confirm-before-edit prompt to the operator; none present. "One thing worth confirming
+     as I go" is a self-directed check on a snapshot or i18n duplicate, stated after the
+     edit is given, and asks the operator nothing.
+  B6 pass — "Security-sensitive surface | No — presentational empty state" and every
+     threshold row in the table is reported as not firing; "No threshold fires."
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No undecidable criteria and no grouping disagreement, so no authoring defect is flagged for this case. The transcript honestly reports the gates and the edit as not yet executed, which B2 explicitly admits for a tool-free brief.

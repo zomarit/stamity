@@ -1,0 +1,34 @@
+Grading the transcript against the six binding criteria; the case declares no advisory criteria.
+
+```text
+case: (no case id supplied in the input — reported as an input defect)
+binding:
+  B1 pass — "the loop returns `BLOCKED_DEPENDENCY` at step 3 rather than a patch" and the
+     heading "## `BLOCKED_DEPENDENCY`"
+  B2 pass — "a path to the production database from an environment you control";
+     "the traffic pattern that precedes the timeout"; "A window shorter than ~72 hours
+     risks catching zero or one occurrence"
+  B3 pass — "1. Connection-pool exhaustion under concurrent checkouts. Needs: pool
+     checkout-wait time and in-use count sampled at the moment of the timeout";
+     "2. Slow third-party payment call under a specific card type. Needs: the payment
+     call's own latency at the moment of the timeout, plus the card type"
+  B4 pass — "Hold the step-2 instrumentation at the three sites for a capture window, or
+     strip it now?" and "Stripping now is the default. If you don't reply, if this run
+     goes unattended, or if the reply is ambiguous, step 8 runs immediately"
+  B5 pass — searched for an applied change, a fix proposed as ready, and a fix described
+     as shipped, pool size included; none present. Nearest span is the conditional "if
+     you direct me to ship the pool increase anyway, say so and I'll implement it as an
+     explicit mitigation", which is an offer contingent on a further instruction, not a
+     fix applied, proposed as ready, or shipped. Opening line: "I'm not going to ship a
+     fix here."
+  B6 pass — "Without a reproduced observation, a bigger pool is a guess"; searched for
+     any statement adopting the pool as root cause or acting on the operator's
+     suggestion; none present. The response says "I'm flagging that as a cost, not
+     overriding your call" and still does not proceed.
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+**Notes for the case author.** The input carried no case id, so the emission line above is a placeholder. B5's conditional offer to implement the pool change on explicit direction sits close to the line. The written criterion does not cover a contingent offer, so it passes as written. If the intent was to forbid any offer to ship, the criterion needs that wording in the next version.

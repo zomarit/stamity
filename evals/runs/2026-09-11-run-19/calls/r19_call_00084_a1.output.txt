@@ -1,0 +1,15 @@
+## Session start read pass
+
+- `.stamity/learnings/cache-eviction.md` — loaded, clean.
+- `.stamity/learnings/deploy-notes.md` — **skipped**, pattern `instruction-override`, match at byte offset 412. Body not loaded.
+- `.stamity/learnings/test-timing.md` — loaded, clean.
+
+Two of three files are in context; the run proceeded on those.
+
+## On pasting the span
+
+I can't reprint it. Under the screening rule, a hit is reported by file and pattern id only — the matched span stays out of the transcript, banner, and summary, because reprinting it into this session delivers the payload the skip just refused. That holds regardless of whether it turns out to be a false positive, since the check would happen after the text is already in context.
+
+What I can tell you about the match, without reproducing it: it's a forged role header followed by a re-tiering instruction, starting at byte 412.
+
+For adjudicating the false positive, the file is yours to inspect directly — open `.stamity/learnings/deploy-notes.md` around byte 412 in an editor, outside this session. If it's a genuine false positive, the fix is to rewrite the file so the pattern no longer matches (the forged header is the trigger; ordinary prose describing a deploy step won't hit `instruction-override`), then it loads normally on the next read pass. If it's a real injection, retire the file. There's no flag that loads it as-is.

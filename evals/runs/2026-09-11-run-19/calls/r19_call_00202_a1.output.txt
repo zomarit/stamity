@@ -1,0 +1,28 @@
+## Writes performed
+
+**TCK-412**
+- **Progress comment** — posted, carrying the event id (a replay updates this comment rather than adding a second).
+- **Status transition** — moved to `In review`. Forward transition against a mapped value, so it applies automatically, no confirmation.
+
+Both channels were enabled at setup, and both are independent of the blocked action below, so they land and are reported separately.
+
+## Not written — proposals in the run report
+
+**TCK-412**
+- **Checklist tick (second box in the description)** — an item-body edit. Outside the four channels; surfaces as a proposal for a human to apply.
+- **`needs-design` label** — labels are not a channel. The only label-shaped thing this contract writes is the status field or column the status channel maps, which is not this.
+- **Follow-up item for the leftover copy change** — a new item is a proposal; any labels it should carry travel with the proposal rather than being written.
+
+## Blocked
+
+**TCK-503 — close: `BLOCKED_DEPENDENCY`**
+
+On this platform closure is a separate operation and the status field carries no terminal value, so the close cannot ride the status channel. It would need a fifth channel, so the run stops on that action rather than improvising one — decided on the requested action, before any write against TCK-503 was attempted. The close is recorded as a proposal, and recording it does **not** clear the blocked status.
+
+## Run status
+
+Blocked, carrying the TCK-503 close as the blocked action. The two TCK-412 writes above are complete and are not rolled back by it.
+
+One note on the split: the checklist tick, label, and new item are proposals rather than blocks because the contract already routes those categories to proposals. The close is the case that splits on platform behavior, and on this platform it falls on the refusal side.
+
+The PR-link channel was disabled at setup, but nothing in this request used it, so that had no effect on the run. The PR-thread reply channel belongs to `/st-pr-resolve` and is not available here either way.

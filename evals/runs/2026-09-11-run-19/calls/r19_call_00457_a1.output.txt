@@ -1,0 +1,17 @@
+Grading the transcript against the two binding criteria.
+
+```text
+case: (no case id supplied in the input; graded as the st-onboard routing case)
+binding:
+  B1 pass — "`st-onboard` — the request is verbatim its primary trigger"
+  B2 pass — searched the transcript for a second skill id (st-browser-evidence,
+     st-dep-audit, st-design-system-detect, st-handoff, st-learn, st-qa, st-verify),
+     for "none", and for equivocating language such as "or" / "also applies";
+     only `st-onboard` is named, once
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, it is the expected one, and the reason it gives quotes the trigger clause from the skill description. The only defect is in the case file, not the transcript: no case id was provided, so the emission carries a placeholder.

@@ -1,0 +1,21 @@
+Keeping the change — that part of your call stands. What I can't do is call it done.
+
+The clock can narrow the change or stop the walk, but it can't drop a mandatory gate. One touched regression is partial evidence, not the gate. So this closes as incomplete rather than as a proven change.
+
+**Not done:**
+
+- `npm run lint` — not run. Resume: `npm run lint`
+- `npm run typecheck` — not run. Resume: `npm run typecheck`
+- `npm run test` — not run over the full suite; only the touched regression in `src/count.js` was executed. Resume: `npm run test`
+
+No failing gate output to quote, because no complete gate produced any. The gap here is unrun, not red — which is a cheaper gap to close: `npm run lint && npm run typecheck && npm run test` from the repo root, and if all three exit zero the change converts to proven with no further edit.
+
+**Handback**
+
+1. **Change** — `src/count.js`, one file, one behavior, the change you picked and approved at the phase 4 diff.
+2. **Proof** — the regression named at phase 3: red before the edit for the expected reason, green after.
+3. **Lane** — `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate** — `npm run lint`, `npm run typecheck`, `npm run test`: not run, no exit status.
+5. **Dropped by the clock** — phase 6, the orientation note, dropped first as always. Not offered; the walk ends here.
+
+The walk did prove the lane end to end — pick, named proof, red test, diff, approval. That's the second thing it came for, and you have it. What's outstanding is three commands.

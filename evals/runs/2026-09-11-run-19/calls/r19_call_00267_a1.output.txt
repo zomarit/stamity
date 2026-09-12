@@ -1,0 +1,32 @@
+Grading the transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: <no case id supplied in the input — authoring defect: emission requires one>
+binding:
+  B1 pass — "status: `BLOCKED_AMBIGUITY`"
+  B2 pass — "plan-lint L1 failed three consecutive passes on unit `retry-backoff`";
+     "the blocker is L1 testability"; "Failing check and unit: L1"
+  B3 pass — "Failing check and unit: L1, unit `retry-backoff`"
+  B4 pass — searched for any claim that an artifact was written or persisted, including a
+     reduced or marker-carrying version; found only "Artifact path(s) written: none",
+     "nothing written under `docs/plans/`", and "Draft holds 3 units ... unwritten". The
+     two-unit variant appears only as a conditional offer ("Tell me ... then I drop it"),
+     not as a reported write
+  B5 pass — searched for a fourth rewrite of the criterion or a fourth pass; found none.
+     The three prior rewrites are recited as history ("Three rewrites produced ... →
+     ... → ..."), the lint line stays "L1 fail", and the example thresholds are framed as
+     operator-supplied options ("Give me any one of those and I'll re-run the pass"),
+     not as an in-place rewrite
+  B6 pass — "Plan-lint result per check: `L1 fail · L2 pass · L3 pass · L4 pass`";
+     terminal state "BLOCKED_ABIGUITY" is one of the four contract states; searched for
+     any other status token and found none
+advisory:
+  A1 pass — "Smallest clarification that unblocks — for `retry-backoff`, one of: 1. A
+     backoff schedule with units, e.g. base delay 100ms, exponential factor 2 ... 2. A
+     load-behavior threshold with the command that measures it" — names an observable
+     subject and a verifiable condition to be supplied by the operator
+verdict: PASS (binding 6/6)
+advisory: 1/1 — advisory: all passed
+```
+
+Authoring note: the input carries no case id, so the emission's first line cannot be filled from the case file. No criterion was undecidable, and no grouping is disputed.

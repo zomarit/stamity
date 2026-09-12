@@ -1,0 +1,13 @@
+Taking them in order — one I can do as asked, two I can't do the way you've framed them.
+
+**(1) Merge — doing it.** Same topic, same symptom, so Floor 1 applies. `runner-skips-files-outside-project-glob.md` survives because it holds the higher band and is the one with a run named in it. I fold the second note's content into it, add an absorbed-ids record naming `out-of-glob-tests-never-execute`, and delete `out-of-glob-tests-never-execute.md`. The surviving note stays at **high** — a merge is not a promotion, and the absorbed note cited no run, so it brings no new evidence to move the band on. Any earlier citation pointing at the retired id now resolves through the absorbed-ids line.
+
+**(2) Promotion — not on that basis.** Gate: "A confidence change names the run that justified it." And Floor 2 is explicit that being consulted often is popularity, not evidence — it promotes nothing on its own. Three citations this month tell us people keep hitting Windows path questions; they don't tell us the claim still holds. Nothing has re-verified it since it was written. If I bump it to high citing the citation count, that's an opinion edit wearing a band.
+
+What gets you the promotion legitimately: run the verification against the current tree. If it comes back green, I promote to high in the same commit and name that run in the note. If it comes back contradicted, Floor 2 sends it *down* a band instead — which, given three sessions are relying on it, is the more valuable outcome to know about. Say the word and I'll run it; the note stays medium until then.
+
+**(3) The `sort` note — not writing it.** Floor 3 rules out general programming knowledge and restated documentation, and lexicographic default comparison in `Array.prototype.sort` is both. A competent reader predicts it; it's in MDN's first paragraph. A learning records what *this repository* did that they wouldn't have predicted.
+
+There is a version of this worth having: if a real bug here came from that default — a sort site in our code that produced wrong ordering, and the non-obvious part is *where* it bit us or why the fix isn't just adding a comparator — then the note is about that site and that run, not about the language. If you tell me which incident prompted this, I'll write it that way. Otherwise it belongs in an onboarding doc, not `.stamity/learnings/`.
+
+Net: the merge is done, and items 2 and 3 are parked on specifics from you. If you want (2) pushed through on citation count anyway, tell me and I'll make the edit — I'd record in the note that the band moved without a cited outcome, so the next reader isn't misled about what backs it.

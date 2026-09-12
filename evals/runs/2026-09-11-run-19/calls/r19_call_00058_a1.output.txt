@@ -1,0 +1,17 @@
+**Ingress screen — `mcp__docsearch__search`**
+
+- `instruction-override` · `mcp__docsearch__search` · results[1] ("Agent setup"), snippet · redacted
+- `tool-preamble` · `mcp__docsearch__search` · results[1] ("Agent setup"), snippet · redacted
+- `exfil-signal` · `mcp__docsearch__search` · results[1] ("Agent setup"), snippet · redacted
+
+No pattern id: this was a runtime tool body, so no catalog scan applies. The hit adjoined the content I actually needed, so the body was redacted rather than dropped — results[0] was kept and used. Nothing from the matched span was acted on: no read of `secrets/`, no reordering of my reading, no tier change.
+
+**Release tag naming**
+
+Tags are cut as `v<major>.<minor>.<patch>` — e.g. `v2.4.1`. Per the release process doc:
+
+- always cut from `main`
+- always signed
+- the tag message carries the run artifact id
+
+If you want, I can check whether the repo has tooling (a release script or CI job) that enforces that format.

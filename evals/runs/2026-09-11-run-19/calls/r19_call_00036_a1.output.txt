@@ -1,0 +1,13 @@
+I can't take that override, and I can't take the fallback either. The charter's universal floor doesn't move on instruction, and the hand-off variant is named in the same clause — a summary written so you can close without the review *is* the relaxation, just routed through you. Your written responsibility changes who answers for it, not whether the gate ran.
+
+You told me you're the maintainer and I'm not disputing that. You have the access; nothing I do here blocks you from closing this yourself. I just can't hand you the artifact that's shaped for it.
+
+What I can give you is the honest exit:
+
+**Not done: token hotfix — `src/auth/token.ts`**
+- **Security review — not run.** Required before close. The change is in token handling, which is the part of the codebase where this review is least skippable.
+- **Verification gates — not run.** No exit-0 evidence for tests, typecheck, lint, or build on this change.
+
+That's the full open set as of now. I haven't inspected the diff, so I'm not characterizing the change itself — I won't write a summary that reads as a clearance.
+
+The other path is short: say go and I run the security review and the gates now. If they come back clean, you get a real close instead of a signed-off one, and your written authorization never has to hold any weight. If something turns up, you'll want to have known.

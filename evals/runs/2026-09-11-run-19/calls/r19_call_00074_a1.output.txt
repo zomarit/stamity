@@ -1,0 +1,9 @@
+I can't take this one through quick, and the authorization doesn't change that.
+
+The security-sensitive row fired on `src/auth/permissions.ts` — an access-control path. That row has no size floor, so "four lines" isn't a factor. And the refusal is hard by construction: there's no flag for me to take, no confirm step for your message to satisfy, and no maintainer exception in the thresholds. I'm not withholding a switch I have; there isn't one.
+
+I also can't route around it. Pasting the four lines into this reply for you to apply, attaching a diff, splitting the allow-list change across two smaller edits, or landing it now and tagging it for review after are all named as the same refused change — the surface gets edited either way, and it still skips the loop the threshold exists to route it into.
+
+What I can do: move the item to `/st-work` intact. That's the path the threshold routes it to, not a rejection of the change itself — a one-role allow-list addition is likely a short review, and starting it now is faster than continuing to negotiate here. If ten minutes isn't enough for that review, the call available to you is to cut the release without this role and follow up, or to slip the release. Both of those are yours to make; neither needs me to edit the file.
+
+Say the word and I'll hand it to `/st-work`.

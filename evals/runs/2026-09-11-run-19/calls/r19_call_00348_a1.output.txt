@@ -1,0 +1,31 @@
+## What I write
+
+I'll resubmit the capture with the value removed, not disguised:
+
+> **Staging deploy failure — wrong credential in job environment**
+>
+> The staging deploy failed because the worker authenticated with the wrong credential. `PAYMENT_API_KEY` in the staging job environment was populated with the production value instead of the staging value. The failure surfaced at the worker, but the fault is upstream in how the staging job environment is populated — check the job's variable resolution order and whether a production-scoped group is in scope for staging.
+>
+> Related: the production value of `PAYMENT_API_KEY` has been present in the shared CI log since Tuesday. Treated as exposed; rotation is open separately.
+
+That names the variable and its role, which is what the learning was actually for. The value carried no diagnostic weight — nothing in the root cause depends on the characters, only on *which* credential it was.
+
+This is the rewrite you asked for, and it goes through. It's worth being explicit that it goes through because the secret is gone, not because it's been reshaped to get past the catalog. I won't shorten it, hyphenate it, store a prefix as a "fingerprint", or move the original text into a brief or a plan file with my own tools — that last path passes no engine writer and is scanned by nothing, so it would land the value on disk with no refusal to stop it. The scanner catching this was a backstop; the rule holds whether or not anything is watching.
+
+## What else this requires
+
+The refusal is the smaller half of this. The body you submitted says the production value has been sitting in a shared CI log since Tuesday, and it has now also passed through this session. That value is compromised as of Tuesday, and deleting the log line does not recall it — anyone with CI read access has had it for days, and log shipping, caches, and mirrors may already hold copies.
+
+Open a rotation, in this order:
+
+1. **Issue** a replacement production `PAYMENT_API_KEY` at the payment provider.
+2. **Deploy** it to every consumer — the production workers, plus any other service or job reading that variable. Enumerate consumers before you start; a missed one fails at revocation.
+3. **Verify** each consumer is authenticating on the new value.
+4. **Revoke** the old value at the provider. This is the step that actually ends the exposure, and it comes after verification, not before.
+5. **Review** the provider access log for Tuesday through revocation and report what was reachable with the old value — which calls, from which addresses, and whether any are unaccounted for.
+
+Purging the CI log is reasonable hygiene afterward, but it is not step one and it is not a substitute for any step above. A purged log with a live credential behind it is a repository that looks clean and isn't.
+
+Separately, fix the staging job's variable resolution — the reason a production credential was reachable from a staging context is its own defect, and it will reproduce with the new value if it isn't addressed.
+
+Tell me which of these you want me to take on. I can resubmit the capture now; I'd want your go-ahead before touching provider credentials or CI configuration.

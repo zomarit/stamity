@@ -1,0 +1,54 @@
+**status:** `DONE`
+
+---
+
+## pattern-match-checklist
+
+- **The helper implements fixed-interval retry, not exponential backoff.** Backoff multiplier is `1.0` at `src/http/retry.ts:41`, so the three attempts fire at a constant interval.
+- **The interval is fixed at construction, not per call.** The multiplier is read once when the helper is constructed, `src/http/retry.ts:12-18` — a caller cannot vary spacing per request without constructing a second helper.
+- **The retry predicate is caller-supplied, and the helper declares no default.** `src/http/retry.ts:29`. Any endpoint adopting the helper must supply its own predicate; there is no inherited behaviour to fall back on.
+- **Exactly one endpoint establishes the usage pattern today.** `src/api/report.ts:77` constructs the helper and calls it. That call site is the only in-scope precedent for what a predicate argument looks like.
+- **The export endpoint has no current relationship to the helper.** `src/api/export.ts` contains no reference to it anywhere — adoption is a new integration, not a modification of existing wiring.
+
+*Finding (severity: `Minor`)* — three attempts at a fixed interval is a weaker backoff profile than exponential for an endpoint that may pull large payloads. Next step: the implementer should confirm with the export endpoint's timeout budget whether 3 × fixed interval fits inside it before wiring the helper in; if it does not, the choice is a second helper instance rather than a change to this one, because of `retry.ts:12-18`.
+
+**Confidence: high — `direct`.** Every line above was read at the cited location in `src/http/retry.ts` and `src/api/report.ts`. The `Minor` finding's *implication* is not direct; it is flagged as a check for the implementer, not asserted.
+
+---
+
+## impact-map
+
+- **Adoption requires one new construction site in `src/api/export.ts`**, modelled on `src/api/report.ts:77`. That file currently has no reference to the helper, so nothing existing is displaced.
+- **Adoption requires a retry predicate to be chosen for export.** Forced by `src/http/retry.ts:29` — the helper has no default, so this is not optional and not inheritable from `report.ts` without deliberately importing the same predicate.
+- **No impact on `src/http/retry.ts` itself is implied by adoption.** The helper is already multi-caller by construction (caller-supplied predicate, per-instance multiplier), so a second consumer needs no change to the helper. This is assembled from `retry.ts:29` plus `retry.ts:12-18` plus the existence of `report.ts:77` as a working consumer; the step between them is that a helper parameterised per instance admits a second instance without modification.
+- **Blast radius on `src/api/report.ts` is nil if export constructs its own instance**, and non-nil if export shares `report.ts`'s instance — sharing would couple the two endpoints' interval and attempt count, because both are fixed at construction (`retry.ts:12-18`). Next step: the implementer should construct a separate instance in `export.ts` unless there is a stated reason to share.
+- **`docs/reference/http.md` was in scope and consulted; it yielded no claim bearing on adoption impact** — see sources below.
+
+**Confidence: medium — `inferred`.** The construction and predicate requirements are direct from the cited lines; the "no change needed to the helper" and "blast radius" claims are assembled across `retry.ts:12-18`, `retry.ts:29` and the `report.ts:77` precedent, with the step named above. Not raised to high because the impact of *sharing* versus *separate instance* is reasoned from the helper's shape, not observed at a second call site — there is only one existing consumer.
+
+---
+
+## unknowns
+
+**Q3 — does the helper retry on 5xx responses only, or on connection errors as well? Unresolved.**
+
+- **Probed:** read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`.
+- **Why the probe did not settle it:** the retry predicate is supplied by the caller at `src/http/retry.ts:29` and the file declares no default, so the helper itself has no 5xx-versus-connection-error behaviour to read. The predicate that `src/api/report.ts:77` passes is imported from a path outside this brief's scope, so its contents were not resolved. Nothing in `src/http/` locates a claim about connection-error behaviour in either direction.
+- **Smallest input that would settle it:** the import path of the predicate argument at `src/api/report.ts:77` added to scope — one file read of that predicate answers Q3 for the existing consumer and establishes whether export can reuse it or must author its own.
+
+**Confidence: high that the question is unresolved within scope; the answer itself is `unverified`.** No reading located a claim about connection-error handling either way. This is explicitly not `inferred` — the absence of `ECONNRESET`/`ETIMEDOUT` in `src/http/` is consistent with both readings, since the predicate lives elsewhere, and must not be treated as evidence that connection errors are excluded.
+
+*Finding (severity: `Warning`)* — Q3 is the question that decides whether export can reuse `report.ts`'s predicate or needs its own, and it is the one question this brief could not answer. Handing to the implementer without it risks export silently inheriting 5xx-only retry when connection errors are the failure mode that matters for a long-running export. Next step: re-spawn with the predicate's import path in scope, or have the implementer resolve it as their first action before wiring.
+
+---
+
+## Sources consulted
+
+- `src/http/retry.ts` — read end to end.
+- `src/http/` — grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`.
+- `src/api/export.ts` — read; no reference to the retry helper.
+- `src/api/report.ts` — read at the `:77` call site.
+- `docs/reference/http.md` — in scope and consulted; no claim located bearing on the three questions.
+- Not consulted, out of bounds per brief: the queue worker and anything under `src/worker/`. Also unresolved: the predicate import path referenced from `src/api/report.ts:77`, which lies outside scope.
+
+**Handoff:** implementer. Q1 and Q2 are settled and safe to act on; Q3 must be resolved before the predicate argument is written.

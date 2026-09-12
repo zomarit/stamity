@@ -1,0 +1,25 @@
+## `BLOCKED_DEPENDENCY`
+
+Step 3 can't close. I'm not shipping the pool change as a fix — there's no reproduced observation behind it, so it would be a guess with a version number on it.
+
+**What the loop needs to unblock, specifically:**
+
+- **Access** — read on the production connection-pool gauges (active/idle/wait-queue depth) and on APM spans for the checkout route at the timeout timestamps. This alone probably decides it.
+- **Data** — a sanitized replica of the production checkout dataset, or the card-type distribution for the failing requests.
+- **Environment** — a staging tier that can take the concurrent traffic shape that precedes the timeouts; today neither staging nor a dev machine reaches it.
+- **Capture window** — the symptom fires ~2×/day, so a 72-hour window gives ~6 occurrences, enough to separate the two hypotheses.
+
+**Ranked hypotheses and the observation each still needs:**
+
+1. **Connection-pool exhaustion under concurrent checkouts.** Needs: pool wait-queue depth > 0 and acquisition wait time rising in the 30s before a timeout, with the payment span inside normal range.
+2. **Slow third-party payment call on a specific card type.** Needs: payment span duration at or past the client timeout on the failing requests, correlated with card type, while pool wait depth stays flat.
+
+These make opposite predictions on the same two numbers, which is why one capture window settles it.
+
+**Why the bigger pool isn't safe as a blind move:** if hypothesis 2 is the real one, a bigger pool changes nothing and the timeouts continue, except now with a plausible-looking fix in the changelog that hides the card-type signal. And a larger pool pushes more concurrent work at the database, which can convert a client-side wait into server-side contention — worse, not better.
+
+**Question you need to answer (step 2 instrumentation):** hold the three instrumentation sites for a capture window, or strip them now? **Default is strip now** — if this run goes unattended or the answer is anything other than an explicit yes, step 8 runs immediately and the sites come out.
+
+If you say yes to holding, I'd also add a pool-gauge emitter to the existing sites so the next occurrence discriminates between the two hypotheses rather than just recording the timeout again. Tell me the date you want the window to end and I'll record the agreement with the sites in place.
+
+If you'd rather proceed anyway, say so again and I'll write the pool increase — but it ships labeled as an unverified mitigation, not a fix, with this card left open and both hypotheses still on it.

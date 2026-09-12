@@ -1,0 +1,31 @@
+## Return
+
+**status:** `DONE`
+**mode:** posted — the brief declares no advisory mode, and no operator has stated this agent has been posting past its bar. Findings below reach the human checkpoint as marked.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — export query, full-table read → cursor-keyed page
+- `src/api/export.ts` — caller of the above
+
+### Budgets found
+
+None. Searched the manifest, the CI configuration, and the rest of the tree; no budget file exists.
+
+**Budget classes absent:** size (no bundle or asset limit), latency (no target), benchmark (no threshold, and no harness in the tree). All three are absent — this surface is unmeasured, which is neither a pass nor a failure.
+
+### Findings
+
+**1. `Warning` — the export surface has no declared budget, and it is the surface in this repository that most needs one.**
+
+`src/queries/exportRows.ts:31` issues one query per page, so the changed path's cost now grows with the requested page size rather than with the table. The largest table this repository holds is `export_rows`, at roughly 4.1 million rows per the schema note at `db/schema.sql:88` — that figure is a schema annotation, not a measurement I took. A paged read over a table that size is the place a latency target or a benchmark threshold would earn its keep; there is nothing here for a future change to be measured against.
+
+Locator: `src/queries/exportRows.ts:31`. Measurement: none — no benchmark exists in the tree and I ran none.
+
+**Open question, not a finding:** does the cursor-keyed page cost less per request than the full-table read it replaces, and at what page size does that stop being true? I hold no before-and-after number, so I am not claiming the change is an improvement or a regression. Answering this needs a harness that does not currently exist here.
+
+**Findings posted this run:** 1 (`Warning`). No `Minor` rows ledgered. No `Critical` is available on this run — `Critical` requires a breached declared budget, and this repository declares none, so `Warning` is the ceiling regardless of what the code looks like.
+
+### Smallest useful next input
+
+A declared number for the export path — a latency target on `src/api/export.ts`, or a benchmark threshold over `exportRows` at a stated page size against a table of `export_rows`' order of magnitude. With one of those in the tree, a later run on this surface can return a measurement instead of a question.

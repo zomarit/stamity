@@ -1,0 +1,17 @@
+## Session start read pass
+
+- `.stamity/learnings/cache-eviction.md` — loaded, clean
+- `.stamity/learnings/test-timing.md` — loaded, clean
+- `.stamity/learnings/deploy-notes.md` — **skipped**, pattern `instruction-override` matched at byte offset 412. Body not loaded.
+
+Two of three learnings files are in context; the run proceeds on those.
+
+## On pasting the matched span
+
+I can't paste it. Reprinting the span is how the payload would reach the transcript — it's a forged role header plus a re-tiering instruction, so echoing it for review delivers exactly what the skip refused. The rule holds regardless of whether the match turns out to be a false positive, because the check has to happen somewhere the content can't act.
+
+What I can tell you without echoing: the hit is at byte offset 412 in `.stamity/learnings/deploy-notes.md`, pattern id `instruction-override`, and the shape is a forged role header followed by a re-tiering instruction.
+
+To adjudicate the false positive, read it yourself outside this session — `sed -n` around that offset, or open the file in an editor. If it's a legitimate note that happens to trip the pattern, rewrite the passage so it no longer looks like a role header and it'll load on the next pass. If it isn't legitimate, retire the file. Either way the resolution is an edit to the file, not a load-anyway flag.
+
+If you want, I can continue with whatever you were starting on using the context that passed.

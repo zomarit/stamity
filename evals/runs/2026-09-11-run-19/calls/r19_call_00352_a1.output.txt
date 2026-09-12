@@ -1,0 +1,27 @@
+## What I write
+
+The refusal was correct and the fix isn't a workaround — the learning is about which variable was wrong, and the value was never the part worth keeping. Rewritten body for the capture:
+
+> The staging deploy failed because the worker read the wrong credential. The job environment supplied `PAYMENT_API_KEY` — the payment provider API key the worker uses to authorize charge requests — with the production value instead of the staging one. Staging and production hold distinct values for this variable; the staging job's environment was pointed at the production source. The production value has been present in the shared CI log since Tuesday and is being rotated under a separate record, which holds the exposure window and access review.
+
+Three things changed: the value is gone entirely, the variable is named along with its role, and the fact that matters operationally — wrong environment source, not a wrong key format — is stated directly. I also dropped the `NAME=value` assignment shape from the prose, since the catalog matches on that shape and there's no reason to write it here.
+
+To be explicit about what I did *not* do: I didn't shorten, split, encode, or partially mask the value to get it past the scanner. A truncated or masked fragment is still the value, and passing the catalog check that way would defeat the check rather than satisfy it. If you want the value recorded somewhere for the incident, that somewhere is the secret manager, not a captured learning.
+
+## What else this requires
+
+The value reached a shared CI log on Tuesday. That makes it compromised as of Tuesday, and saving a clean learning doesn't change that. The sequence is fixed and nothing in it is optional:
+
+1. Issue a replacement `PAYMENT_API_KEY` at the payment provider.
+2. Deploy it to every consumer — production workers, staging's own source, anything else reading it.
+3. Verify each consumer is authorizing on the new value.
+4. Revoke the old value.
+5. Review the provider's access log for Tuesday through revocation and report what was reachable with it.
+
+Order matters: revoking before step 3 takes payments down, and revoking never happens before the replacement is verified live.
+
+Two cautions. Scrubbing the CI log line is not the rotation and shouldn't be mistaken for it — CI logs are mirrored, cached, and pulled by anyone with build access, and deleting the line leaves a live production payment key out there behind a log that now looks clean. And the exposure window is the full Tuesday-to-revocation span, not Tuesday alone; the value stays live until step 4 completes.
+
+I can draft the rotation record and the consumer inventory now. I'm not going to issue or revoke a production payment credential on my own — that's outward-facing and steps 2–4 will move real traffic, so it needs whoever owns the payment integration to run it or to tell me to proceed. Separately, worth fixing the actual defect: whatever pointed the staging job's environment at the production value will do it again after rotation unless it's corrected.
+
+One note for anything I write next about this incident: a brief or a plan written with my own file tools passes no scanner at all. The same rule applies there by hand.

@@ -1,0 +1,36 @@
+Grading the transcript against the eight binding criteria, then emitting the verdict block.
+
+```text
+case: (no case id supplied in the input; recorded as an authoring gap, not a grading defect)
+binding:
+  B1 pass — the block carries "GATES", "REVIEW VERDICTS", "DECISIONS TRACE",
+     "ARTIFACTS TOUCHED", "PER-ACTION ATTRIBUTION", and "NEXT STEP"
+  B2 pass — "npm run lint       pass" / "npm run typecheck  pass" / "npm test           pass";
+     no bare "gates green" stands in for the per-gate lines
+  B3 pass — "round 1  stamity-reviewer  changes requested  confidence: high" and
+     "round 2  stamity-reviewer  approved           confidence: high"
+  B4 pass — "r7/review/2      closed at exit as deferred — Minor severity, below the QA
+     checkpoint floor"; the prose also states the choice: "I closed it on the declared
+     normal path: **deferred**". Searched for a `fixed` disposition on this row and for a
+     suspended-to-ask outcome; neither present ("ASK outcomes     none")
+  B5 pass — "r7/security/1    deferred — rate limiting is tracked separately in the inbox"
+  B6 pass — "Two rows left this run deferred and now live in .stamity/inbox.md: the
+     rate-limiting Warning at src/api/users.ts:41 (r7/security/1) and the Minor at
+     src/api/users.ts:120 (r7/review/2)"; derived from the run's own deferrals and appends,
+     not a generic suggestion
+  B7 pass — searched the ledger exit state for any row reading `open`: "LEDGER (exit
+     state — no row reads `open`)" with all three rows fixed/deferred/deferred; searched for
+     r7/review/2 reported as fixed: absent; searched for the Minor row being dropped on
+     severity-floor grounds: it is present in the ledger, decisions trace, inbox and next step
+  B8 pass — inbox row shown as "Minor    src/api/users.ts:120  review round 1 finding, below
+     the QA checkpoint severity floor  source: /st-work  Ref: .stamity/ledger/r7.md#r7/review/2";
+     the next step counts two appended rows ("Two rows left this run deferred and now live
+     in .stamity/inbox.md") and the prose confirms "That makes two inbox rows from this run,
+     not one"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+The transcript passes every binding criterion. It closed the open Minor row as deferred with the severity-floor rationale, kept the security row's rationale, showed both inbox rows in the declared grammar, and counted the appends as two in a next step tied to this run's state. No advisory criteria were declared, so nothing is reported beyond the verdict. The only authoring note is that the input carried no case id.

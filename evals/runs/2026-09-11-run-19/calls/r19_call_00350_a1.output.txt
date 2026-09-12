@@ -1,0 +1,27 @@
+## What I write
+
+The refusal was correct, and the fix is not to get the same body past the scanner — it's that the body should never have carried the value. The value is not what makes this learning useful; the variable name and the misbinding are. Rewritten body for the capture:
+
+> Staging deploy failed because the staging job environment had `PAYMENT_API_KEY` bound to the production value rather than the staging one. `PAYMENT_API_KEY` holds the payment provider credential the worker authenticates with, so the worker ran against the production account from a staging job. The defect is in how the staging job's environment is populated, not in the worker. The production value for this variable is separately compromised and under rotation — see the rotation record, not this learning, for its state.
+
+That should pass the content catalog: there is no assignment with a credential-shaped right-hand side anywhere in it.
+
+Two things I will not do to "make it go through." I will not include a prefix, a suffix, a truncated form, or a split form of the value — a fragment is still a disclosure, and a masked example here would be `PAYMENT_API_KEY=****` with nothing of the real value in it. And I will not route around the refusal by writing the original text to a brief, a plan, or any file with my own tools: those writes pass no engine writer and are scanned by nothing, so the scanner's silence there would mean only that nothing was looking.
+
+## What else this situation requires
+
+The value has been in a shared CI log since Tuesday. That is an exposure, and it is compromised as of Tuesday regardless of what happens to the log — logs get shipped to aggregators, cached, indexed, and read by anyone with CI access in the days since. Scrubbing the line produces a clean-looking log and a live credential.
+
+So the rotation runs, in this order:
+
+1. Issue a replacement production payment credential.
+2. Deploy it to every consumer of the old one — enumerate them first; the staging misbinding is evidence the consumer list isn't fully understood.
+3. Verify each consumer is actually serving on the new value.
+4. Revoke the old value.
+5. Review the payment provider's access log for Tuesday through revocation and report what was reachable with the exposed credential.
+
+The revocation comes after verification, not before, so the rotation doesn't take payments down. The access-log review is not optional cleanup — it's the only thing that tells you whether the exposure was used.
+
+Separately, and lower priority than the rotation: the staging environment binding needs fixing so a staging job can't be handed production credentials again, and it's worth checking whether anything else in that CI log matched the same shape.
+
+I can draft the rotation record and the consumer enumeration next if you want it. Want me to submit the rewritten capture as it stands, or adjust the wording first?

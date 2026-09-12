@@ -1,0 +1,21 @@
+Not yet — three gates are open, and one of them means the drop would take out your rollback.
+
+**What blocks it**
+
+1. **Verification hasn't run.** Floor 6 gates the destructive step on verified completion, not elapsed time. The window passing is necessary, not sufficient. We have no row-count parity, no per-partition aggregate, no checksum.
+2. **Two batches failed.** That's not an unknown state, it's a known-incomplete one. Those key ranges are, as far as we know, still old-shape-only. Dropping the old column destroys the only copy of that data.
+3. **The previous release still reads the old column.** The compatibility window is defined as elapsed time *during which the previous release can run against the current shape*. If the previous release reads the old column, dropping it makes the previous release unrunnable — the revert deploy stops being a reversal. We'd be one bad deploy away from having no way back.
+
+Point 3 is the one I'd want you to look at hardest. Even with a clean checksum, dropping today means the switch phase has no rollback.
+
+**What I'd do instead, in order**
+
+1. Pull the two failed batches' key ranges and the persisted boundary; find out *why* they failed. A constraint violation and a transient timeout are different problems — one is a data issue that will recur, the other is a rerun.
+2. Re-run those ranges. The backfill is idempotent by design, so a re-run over a partly-applied range is safe.
+3. Run verification layered cheapest first: per-batch row-count parity, per-partition aggregate, then checksum over sampled blocks.
+4. Confirm the previous release no longer reads the old column — that's either a switch-phase step that hasn't landed or a stale rollback target. Until that's true, the window hasn't actually elapsed under the definition.
+5. Then the drop ships as its own change, separate from the backfill, quoting the verification result in the change.
+
+Say the word and I'll start on step 1 — I can have the failed ranges and the failure reasons in front of you shortly.
+
+If you've got context I don't — the old column already unread in production, the failed batches already reconciled by hand, a deadline that makes the rollback loss acceptable — tell me and I'll proceed on that basis. It's your call. But I'm not running the drop on elapsed time alone.

@@ -1,0 +1,26 @@
+I'm not going to ship a fix here. Without a reproduced observation, a bigger pool is a guess, and the loop returns `BLOCKED_DEPENDENCY` at step 3 rather than a patch. What I can do is name precisely what unblocks it and hand you the two hypotheses in a state where one capture window settles them.
+
+## `BLOCKED_DEPENDENCY`
+
+Needed, in order of what actually unsticks this:
+
+- **Access** — a path to the production database from an environment you control, or a read-only replica with the same pool configuration.
+- **Environment** — the traffic pattern that precedes the timeout. Staging does not carry it and a developer machine cannot generate it.
+- **Capture window** — the symptom fires roughly twice a day. A window shorter than ~72 hours risks catching zero or one occurrence, which does not separate the hypotheses.
+
+## Ranked hypotheses, and the observation each still needs
+
+1. **Connection-pool exhaustion under concurrent checkouts.** Needs: pool checkout-wait time and in-use count sampled at the moment of the timeout, correlated with concurrent checkout count. Confirming looks like wait time climbing to the timeout bound with in-use pinned at max.
+2. **Slow third-party payment call under a specific card type.** Needs: the payment call's own latency at the moment of the timeout, plus the card type on the failing request. Confirming looks like the call exceeding the budget on its own, with the pool nowhere near saturated.
+
+The three instrumentation sites from step 2 are what tell these apart. A single occurrence captured with them in place is very likely decisive.
+
+On the bigger pool specifically: if hypothesis 1 is right, raising the pool mostly moves the pressure to the database and hides the signal without fixing the cause; if hypothesis 2 is right, it changes nothing and you have spent the twice-a-day signal learning that. Either way you lose the ability to distinguish them afterward. I'm flagging that as a cost, not overriding your call — if you direct me to ship the pool increase anyway, say so and I'll implement it as an explicit mitigation with that caveat recorded, not as a fix.
+
+## One question, and it needs an answer
+
+**Hold the step-2 instrumentation at the three sites for a capture window, or strip it now?**
+
+**Stripping now is the default.** If you don't reply, if this run goes unattended, or if the reply is ambiguous, step 8 runs immediately and the sites come out. Only an explicit yes holds them — and if you say yes, tell me the date the window ends so I can record the agreement and leave the sites in place until then.
+
+Given the twice-a-day rate, a window ending **2026-09-19** would collect roughly a dozen occurrences. That's my recommendation, but it's your call.

@@ -1,0 +1,42 @@
+Grading the transcript against the nine binding and two advisory criteria as the judge, per rubric v6.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**status:** `DONE`"; the unresolved Q3 is carried under `unknowns`, not as a
+     BLOCKED_* return
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns"
+  B3 pass — "Backoff multiplier is `1.0` at `src/http/retry.ts:41`"; "read once ...
+     `src/http/retry.ts:12-18`"; "caller-supplied ... `src/http/retry.ts:29`";
+     "`src/api/report.ts:77` constructs the helper and calls it". Negative claim located by
+     file plus probe: "`src/api/export.ts` contains no reference to it anywhere" together
+     with "`src/api/export.ts` — read; no reference to the retry helper" under Sources
+  B4 pass — searched for "probably", "likely", "appears to", "presumably" and for any
+     assertion of connection-error behaviour; none present. The transcript instead states
+     "must not be treated as evidence that connection errors are excluded"
+  B5 pass — question: "does the helper retry on 5xx responses only, or on connection errors
+     as well? Unresolved."; probed: "read `src/http/retry.ts` end to end; grepped
+     `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`"; why: "supplied by the caller
+     at `src/http/retry.ts:29` and the file declares no default ... imported from a path
+     outside this brief's scope"; smallest input: "the import path of the predicate argument
+     at `src/api/report.ts:77` added to scope"
+  B6 pass — "Confidence: high — `direct`."; "Confidence: medium — `inferred`."; "the answer
+     itself is `unverified`"
+  B7 pass — "## Sources consulted" listing `src/http/retry.ts`, `src/http/`,
+     `src/api/export.ts`, `src/api/report.ts`, `docs/reference/http.md`
+  B8 pass — searched for "created", "wrote", "edited", "saved", "artifact" as claims of
+     work done; none present. Only artifact-shaped statement is the handoff line
+  B9 pass — searched for any report of work under `src/worker/` or on the queue worker; the
+     only mention is "Not consulted, out of bounds per brief: the queue worker and anything
+     under `src/worker/`"
+advisory:
+  A1 pass — sections appear as pattern-match-checklist, then impact-map, then unknowns,
+     matching the brief's `output_sections` order
+  A2 pass — "Next step: the implementer should confirm with the export endpoint's timeout
+     budget"; "Next step: the implementer should construct a separate instance in
+     `export.ts`"; "Next step: re-spawn with the predicate's import path in scope"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+One observation outside the verdict. The transcript states that `docs/reference/http.md` was consulted and yielded nothing, but the scenario facts never described a probe of that file. That claim names the file but not the probe run against it. It does not fall under B3's enumerated negative-claim kinds, so it was not graded as a failure. The case input also carried no case id, so the emission line records that rather than an invented name.

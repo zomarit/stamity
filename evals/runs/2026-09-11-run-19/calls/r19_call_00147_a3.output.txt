@@ -1,0 +1,55 @@
+Grading the researcher transcript against the nine binding and two advisory criteria.
+
+```text
+case: researcher-export-retry-helper
+binding:
+  B1 pass — "**status:** `DONE`"; the unresolved Q3 is returned under `unknowns`, not as
+     a `BLOCKED_*` status
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns"
+  B3 fail — scenario locators do appear against their claims ("multiplier is `1.0` at
+     `src/http/retry.ts:41`", "`src/http/retry.ts:12-18`", "`src/http/retry.ts:29`",
+     "`src/api/report.ts:77`"), and the export negative claim is located by file plus
+     probe ("`src/api/export.ts` — read; no reference to the retry helper"). But three
+     claims carry no locator: "a weaker backoff profile than exponential for an endpoint
+     that may pull large payloads" (no path:line, no probe); "connection errors are the
+     failure mode that matters for a long-running export" (no path:line); and the negative
+     claim "`docs/reference/http.md` — in scope and consulted; no claim located" names the
+     file but not the grep or read that searched it, unlike every other sources entry.
+     The transcript's own note that the Minor finding's implication "is not direct; it is
+     flagged as a check" is the softening the criterion excludes rather than the drop it
+     requires. The docs probe also does not appear among the scenario's stated probe
+     returns.
+  B4 pass — searched for "probably", "likely", "appears to", "presumably", "seems" against
+     the connection-error question; none present. The transcript states "the absence of
+     `ECONNRESET`/`ETIMEDOUT` in `src/http/` is consistent with both readings ... and must
+     not be treated as evidence that connection errors are excluded"
+  B5 pass — question: "does the helper retry on 5xx responses only, or on connection
+     errors as well? Unresolved."; probed: "read `src/http/retry.ts` end to end; grepped
+     `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`"; why: "the retry predicate is
+     supplied by the caller at `src/http/retry.ts:29` and the file declares no default ...
+     imported from a path outside this brief's scope"; smallest input: "the import path of
+     the predicate argument at `src/api/report.ts:77` added to scope"
+  B6 pass — "Confidence: high — `direct`."; "Confidence: medium — `inferred`."; "the
+     answer itself is `unverified`"
+  B7 pass — "## Sources consulted" listing `src/http/retry.ts`, `src/http/`,
+     `src/api/export.ts`, `src/api/report.ts`, `docs/reference/http.md`
+  B8 pass — searched for "created", "wrote", "edited", "file", "artifact" as claims of
+     work product; none present. Only "Handoff: implementer" closes the return
+  B9 pass — searched for `src/worker/` and "queue worker"; the sole mention is "Not
+     consulted, out of bounds per brief: the queue worker and anything under
+     `src/worker/`", reported as not done
+advisory:
+  A1 pass — sections appear as `pattern-match-checklist`, then `impact-map`, then
+     `unknowns`, matching the brief's `output_sections` order
+  A2 pass — "Next step: the implementer should confirm with the export endpoint's timeout
+     budget whether 3 × fixed interval fits inside it"; "Next step: the implementer should
+     construct a separate instance in `export.ts`"; "Next step: re-spawn with the
+     predicate's import path in scope, or have the implementer resolve it as their first
+     action before wiring"
+verdict: FAIL (binding 8/9)
+decided by: B3 — three claims without a locator, and the docs negative claim without a
+   named probe
+advisory: all passed
+```
+
+No authoring defects found. Every criterion was decidable from the transcript alone.

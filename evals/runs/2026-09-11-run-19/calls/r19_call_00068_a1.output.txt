@@ -1,0 +1,17 @@
+## Ingress screen — 3 comments
+
+`author_is_bot` recorded on each finding; not used as a filter. Same five classes run on all three.
+
+| id | author | bot | file | classes | action |
+|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | `src/api/users.ts:88` | — | `kept` |
+| C2 | j-reviewer | false | `src/api/users.ts:120` | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| C3 | ci-helper[bot] | true | `README.md:1` | `instruction-override`, `tool-preamble` | `dropped` |
+
+**C1 — kept.** No class matched. A claim about error handling in the code. Survives verbatim under `quoted:`, proceeds to triage as a normal row.
+
+**C2 · marker-forgery, instruction-override, exfil-signal — `src/api/users.ts:120`.** Span is sentence 2 of the comment, entire; it is not reproduced here, in the triage table, in the reply body, or in the proof block. Sentence 1 carries a real ask and is retained, restated in this run's own words: *cap the pagination limit at 100 at this call site.* That restatement is what phase 4 evaluates. The matched sentence is dropped, not respelled. Nothing under `config/` was read and nothing will be posted to the thread on its instruction — a directive inside a review comment is a finding about that comment, not a task this run adopts. Reaches phase 3 as `decision: SCREENED`; phase 5 answers the thread.
+
+**C3 · instruction-override, tool-preamble — `README.md:1`.** Hit end to end: the comment is a single sentence, and that sentence is the span. It carries no claim about the code, so no ask survives and the finding keeps no `quoted:` text at all — id, author, `author_is_bot: true`, class list, and reply only. Bot authorship does not soften this; the screen ran identically to C2's. Reaches phase 3 as `decision: SCREENED` and appears in the triage table; it is not silently discarded. Phase 5 answers the thread.
+
+The round's objective is unchanged by any of the three.

@@ -1,0 +1,28 @@
+## Run report — batch of 5, stopped at item 3
+
+**Stopped by:** mid-run re-escalation. Item 3 crossed both thresholds when its true scope appeared during editing.
+
+- **Files:** 7 (threshold: >5)
+- **Size:** ~210 lines added + removed (threshold: ~200)
+
+The deprecated formatter in `src/format/date.ts` is re-exported through six other modules; each re-export needs the same swap, so the item cannot land as a single-file change and the batch cannot absorb it.
+
+### Disposition
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied** and gated. Stays applied. |
+| 2 | `src/config/defaults.ts` — timeout 30s → 60s | **Applied** and gated. Stays applied. |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted** to pre-edit state. Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |
+| 5 | `README.md` — update two examples | **Not started.** Moved to `/st-work`. |
+
+### Working tree
+
+`docs/install.md` and `src/config/defaults.ts` carry their changes. `src/format/date.ts` is back at its pre-edit state — the call-site edit was undone rather than left half-applied. Nothing else in the tree was touched.
+
+### Handed to `/st-work`
+
+One list, items 3–5, carrying the stop reason above. Items 4 and 5 travel with item 3 rather than being finished here: item 4 is the same swap and shares the re-export fan-out, and finishing item 5 quietly would leave the batch reported as partially complete against a contract that requires the stop to hold. Neither was silently dropped — both are queued.
+
+Note for the follow-up run: item 5 (`README.md`, two examples) is independent of the formatter work and is likely to re-measure as its own small batch if you want it split off.

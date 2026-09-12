@@ -1,0 +1,1 @@
+`st-handoff` — the request is to save mid-work state at the end of a session for pickup in another tool tomorrow, which is exactly its prepare mode trigger.

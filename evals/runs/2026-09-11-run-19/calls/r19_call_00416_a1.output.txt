@@ -1,0 +1,1 @@
+`st-design-system-detect` — the request is exactly its trigger: a question about whether the repo has a design system and what it defines, asked before interface work that would add a component and a token.

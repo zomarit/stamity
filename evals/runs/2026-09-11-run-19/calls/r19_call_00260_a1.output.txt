@@ -1,0 +1,41 @@
+Nothing written yet — here are the three pieces for review.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001-worktree-lane.md` and `002-board-fill-source.md` are taken, so `003` is the next free number. Plan slug `status-json-flag` (the artifact's `id`); the unit keeps its own slug `json-flag-render`.
+
+## Head
+
+```text
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — migration intent only, and this is `feature`. `depends_on` is omitted — this run has no predecessor plan and is not a split; `001` and `002` are unrelated artifacts, not sequencing. Both absences are valid heads and the freshness guard reads them as satisfied.
+
+One thing to confirm before I write: the scenario fixes today as `2026-09-02` UTC and I've stamped that, but the system clock here reads `2026-09-12`. If the stamp should track the real clock, say so and I'll write `9f3c1ab 2026-09-12`.
+
+## Unit — `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Option declaration**, on the `status` verb's command definition in `src/commands/status.ts`:<br>`{ name: "json", kind: "boolean", default: false, takesValue: false, alias: none }`<br>— declared `--json`, no value argument, no short alias; `-j` is not registered.<br><br>**Payload type**, exported from `src/commands/status.ts`:<br>`type StatusJson = { workspace: string; branch: string; managedFiles: number; driftedFiles: number; lastSync: string }`<br>`managedFiles` and `driftedFiles` are integers; `workspace`, `branch`, `lastSync` are strings. Exactly these five keys, no others.<br><br>**Render entry**:<br>`function renderStatusJson(status: StatusJson): string`<br>returns `JSON.stringify(status) + "\n"` — one object, written once to stdout.<br><br>**Exit and stream contract**: exit `0` on success, exit `1` on a drift finding (the JSON object is still printed on the drift path); nothing is written to stderr on the success path.<br><br>**Unflagged path**: when `json` is `false` the existing human renderer runs unchanged. |
+| `testCriteria` | 1. `stamity status --json` on a clean workspace writes exactly one JSON object to stdout and `JSON.parse` accepts it whole.<br>2. The parsed object's key set is exactly `{workspace, branch, managedFiles, driftedFiles, lastSync}`.<br>3. `typeof workspace === "string"`, same for `branch` and `lastSync`; `Number.isInteger(managedFiles)` and `Number.isInteger(driftedFiles)` both hold.<br>4. On the clean run, exit code is `0` and stderr is empty.<br>5. On a drift finding, exit code is `1`, stdout is still one parseable JSON object, and `driftedFiles >= 1`.<br>6. Invoked without `--json`, stdout is identical to the pre-change human rendering.<br>7. `-j` is rejected as an unknown flag, and `--json` accepts no value argument. |
+| `edgeCases` | • Drift present under `--json`: the object prints to stdout in full and the process exits `1` — the non-zero exit does not suppress or redirect the payload.<br>• Workspace with nothing managed: `managedFiles` and `driftedFiles` serialize as `0`, not `null` and not omitted.<br>• `lastSync` never synced: serializes as a string (empty string), never `null` — the type is string in all cases.<br>• `--json` passed twice: parsed as the single boolean `true`, one object printed. |
+| `depends_on` | none |
+| `verify` | `npm run test` |
+
+## One flag before I write
+
+`files` lists only `src/commands/status.ts` and the test, so I've placed the `--json` option declaration in the command module. If this repo actually declares verb options centrally in `src/cli.ts`, the unit needs `src/cli.ts` added to `files` and the interfaces split across the two — tell me which and I'll adjust before the write rather than after.
+
+Say go and I'll write `docs/plans/003-status-json-flag.md` with this head, this unit, and the surrounding sections.

@@ -1,0 +1,37 @@
+Grading the pasted Answer block against the case's binding and advisory criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — every substantive claim is a cited bullet: "src/session/store.ts:23, high",
+     "src/session/store.ts:57, high", "src/server/boot.ts:31, high", and the accumulation
+     claim cites all three. See authoring note below on the negative-evidence sentence.
+  B2 pass — each of the four claims carries a band: three marked "high", one marked "medium".
+  B3 pass — "Session entries therefore accumulate for the lifetime of the process
+     (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`,
+     **medium** ..." — band is medium; citation set includes all three sites.
+  B4 pass — the medium claim names its assumption inside the same sentence: "unverified
+     assumption stated here: that no code outside `src/session/store.ts` deletes from the
+     `Map`, since call sites were not read and nothing was executed". No low-band claims
+     exist; the one medium claim satisfies the requirement.
+  B5 pass — searched the "How bad is it in production?" section and the closing section for
+     a rate, growth figure, time-to-OOM number, "likely", "probably", or a fine/not-fine
+     summary; none present. The section opens "No answer." and states the candidates
+     "rate, ceiling, time-to-OOM, whether it matters at your traffic" are "deleted rather
+     than softened". The phrase "the severity question is open, not small" characterises
+     the question as unresolved and non-trivial; it states no estimate or severity level.
+  B6 pass — enumerated every path:line in the Answer: `src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`. All three appear in the Brief's
+     facts; no other locator appears.
+advisory:
+  A1 pass — "Heap or RSS measurement against real session traffic, or a load test that
+     drives session creation and samples `Map` size over time."
+  A2 pass — "No answer. There is no test, benchmark, or production measurement of session
+     memory growth in the repository" and the researcher's note quoted verbatim.
+verdict: PASS (binding 6/6)
+advisory: all passed
+```
+
+**Authoring note on B1.** The severity section asserts there is no test, benchmark, or measurement in the repository. That sentence restates the Brief's "Not found" fact, which carries no locator, so no path:line citation for it is possible. I graded B1 on the four substantive claims and treated the restatement as the surfacing that A2 requires. B1 as written does not say whether a restated locator-less negative finding counts as a claim. The next set version should state that explicitly so the judge is not choosing a reading.
+
+**Authoring note on case id.** The input carries no case identifier, so the emission cannot name one. The runner should supply it in the case file header.

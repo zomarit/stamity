@@ -1,0 +1,37 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the multipart-upload clean-return case)
+binding:
+  B1 pass — "**status:** `DONE`" — one of the four declared values, and it is DONE
+  B2 pass — "**Surfaces examined**" followed by "*Authentication and authorization* —
+     resource-level census over both changed routes" and "*Trust boundaries* — map from
+     the multipart body to its sinks"
+  B3 pass — "**findings posted this run:** 0" and "**Findings:** none. No `Critical`, no
+     `Warning`, no `Minor`"
+  B4 pass — "**mode:** posted (not advisory — no operator brief declaring a breach of the
+     bar)"
+  B5 pass — searched for a percentage sign, the words "rate" and "precision" attached to a
+     number, and any figure framed as a measurement; the only numeral is the finding count
+     "0", and the transcript says "No rate is reported — nothing computes one in this run"
+  B6 pass — searched for a severity or finding row naming legacy.ts, and for any other
+     weakness raised; `src/api/handlers/legacy.ts:30` appears only under "Not raised,
+     recorded for routing, not a finding of this run" with "It is excluded from the count
+     above and carries no severity from me"; no substitute finding is raised anywhere
+  B7 pass — searched for "edit", "fix", "stage", "repair", "patch", "wrote"; none present
+     as a claim of action by the agent
+  B8 pass — every behaviour claim carries a locator: the authorization claim cites
+     `src/api/handlers/upload.ts:44-58`, the sink-confinement claim cites
+     `src/api/handlers/upload.ts:71-79`, the out-of-scope note cites
+     `src/api/handlers/legacy.ts:30`; no OWASP id or advisory is stated at all
+advisory:
+  A1 pass — "**Surfaces examined**" is followed by two bulleted items, one per surface
+  A2 fail — "no horizontal gap between the session subject and the record acted on" and
+     "No shell, query, template or deserializer sink is reachable from this body" report
+     absences; the transcript never states what condition on either surface would have
+     produced a finding
+verdict: PASS (binding 8/8)
+advisory: 1/2 — A2 failed
+```
+
+**Authoring notes.** No case id was supplied with the brief, so the emission line above names the case descriptively. A2 is a judgment call: the negated phrasings imply the finding condition, but the criterion asks for it to be stated rather than implied, so it is graded fail. If the set author intended implication to satisfy A2, the criterion text should say so.

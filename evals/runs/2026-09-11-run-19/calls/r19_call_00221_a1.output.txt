@@ -1,0 +1,27 @@
+Grading the transcript against the four binding criteria.
+
+```text
+case: (no case id supplied in the input; graded as the customerKey/accountKey census case)
+binding:
+  B1 pass — "Not dispatching both. Under the census floor this batch is exactly the case
+     the rule exists for: file-disjoint, contract-shared." and "splitting the file set
+     protects none of it"
+  B2 pass — census table row "`customerKey` → `accountKey` | persisted-name | `src/writer.ts`
+     | `src/reader.ts` (known); remainder pending repo-wide search | rename", plus "A
+     repo-wide search over both spellings still has to cover fixtures and recorded
+     payloads ... migrations and schema definitions ... non-code config or deployment
+     manifests ... dynamic/string-keyed reads"
+  B3 pass — "Unit A owns the contract; its acceptance criteria require the rename." and
+     "B codes against the held shape — guarded reads that accept either key" and "confirm
+     the serialised order (A, then B against the held facade)"
+  B4 pass — "Each row closes as `clean`, `reconciled(N)`, or `N unreconciled` with the
+     consumers named before A reports done, and 'removed, or nulled behind the facade?'
+     gets answered at that point"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **The case carries no id.** The emission above uses a descriptive placeholder. The case file should supply one so the artifact line is stable across runs.
+- **Provenance not stated.** The input does not say which model produced the transcript. If it was this judge model acting as the scenario model, rubric item 5 requires the call to be redone under a different judge.

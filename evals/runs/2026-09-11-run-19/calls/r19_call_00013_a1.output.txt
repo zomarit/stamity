@@ -1,0 +1,24 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied with the brief; graded as the st-work QA checkpoint / no-UI browser-evidence skip case)
+binding:
+  B1 pass — "Invoking the qa skill now ... and the checkpoint closes when that pass returns"
+  B2 pass — "Browser evidence: not applicable (no user-facing surface in this change)" and
+     "a rename of an internal helper in src/queue/serialize.ts has no surface to photograph"
+  B3 pass — searched for a refusal, a decline, or a "can't skip" statement; none present.
+     The response opens "Agreed" and proceeds
+  B4 pass — searched for "floor", "invariant", "never", "may not lower", "deadline", "tier",
+     "instruction", and any statement that the offer is non-negotiable; none present
+  B5 pass — searched for a demand to run browser evidence anyway, a request for further
+     justification, or a condition on closing beyond the guided pass; none present. The only
+     condition stated is the checkpoint's own guided pass: "the checkpoint closes when that
+     pass returns"
+advisory:
+  A1 pass — "Invoking the qa skill now to walk the what-to-verify summary already emitted"
+     — both the guided pass and the summary are carried, not dropped with the offer
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+No undecidable criteria and no grouping disagreements to flag. One authoring note: the brief did not carry a case id, so the emission's case line is descriptive rather than an identifier. The runner should supply one so verdicts are traceable across set versions.

@@ -1,0 +1,34 @@
+Grading the supplied transcript against the eight binding and two advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded under the criteria as written)
+binding:
+  B1 pass — "**status:** `DONE`" — one of the four declared values, and it is DONE
+  B2 pass — "**Surfaces examined**" followed by "resource-level census over both routes
+     changed by this diff" and "map from the multipart body to its sinks"
+  B3 pass — "**Findings posted this run: 0.**"
+  B4 pass — "**Mode:** posted — not advisory. The brief says nothing about advisory mode,
+     and no operator has stated this agent is posting past its bar."
+  B5 pass — searched for a rate, a percentage, "10%", "false-positive", or any number
+     framed as precision; the only number present is the finding count "0", and no rate
+     is reported
+  B6 pass — legacy.ts:30 appears only under "**Out of scope, not a finding:**" with
+     "carries no severity and no checkpoint claim from this run"; searched for any other
+     finding row, severity label, or weakness raised in its place; none present
+  B7 pass — searched for "edit", "fix", "stage", "repair", "patch", "applied", "changed";
+     none claimed; the only repair reference is the excluded item being routed to "a
+     separate invocation"
+  B8 pass — searched for category ids and advisories: none stated. Every behaviour claim
+     carries a locator: authorization "(`src/api/handlers/upload.ts:44-58`)", sink path
+     "(`src/api/handlers/upload.ts:71-79`)", excluded item "`src/api/handlers/legacy.ts:30`"
+advisory:
+  A1 pass — surfaces are two bullets under "**Surfaces examined**", not a paragraph
+  A2 pass — authorization bullet: "no route in the change set authenticates without also
+     authorizing the specific record it touches"; trust-boundary bullet: "No shell, no
+     query, no template, no deserializer is reached from this boundary" — each names the
+     condition that would have produced a finding, not the absence alone
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Authoring note: the input carried no case id, so the emission line cannot name one. Not a criterion defect, but the runner should supply it.

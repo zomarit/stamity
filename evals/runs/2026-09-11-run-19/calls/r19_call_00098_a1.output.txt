@@ -1,0 +1,21 @@
+Not B. The governing text exempts security-relevant content — findings, injection-screening results, secret-scan hits — from truncation at *every* budget level. B, C, and D are all in that exempt set. "Largest first" isn't the ordering rule; "summaries before evidence" is.
+
+The note's justification also inverts the ledger's purpose. The ledger is the recovery point for the orchestrator's *own* memory loss — it's what makes degradation survivable, not a license to degrade further. "We can re-read it later if it matters" is exactly the judgment call the exemption exists to take out of the run's hands: a Critical missing-authorization finding at `src/api/admin.ts:52` is carried forward so the next phase acts on it without a re-read step that may never happen.
+
+**Shed in this order:**
+
+1. **A** (40-line phase 2 narrative) — restates findings recorded elsewhere. Pure summary, drops whole.
+2. **E** (25-line acceptance-criteria restatement) — already in the plan artifact, addressable by reference.
+3. **F** (gate output, last green run) — three commands, all pass, no failing excerpt. Reduce to a one-line status line; there's no failure evidence to preserve. Full shed if still over.
+
+That's ~65 lines of duplicated prose before anything with evidentiary weight is touched.
+
+**Retained intact:**
+
+- **B** — Critical finding *with* its evidence excerpt. The excerpt is the evidence; truncating it while keeping the headline would be degrading evidence ahead of summaries.
+- **C** — `instruction-override` hit on `.stamity/inbox.md`. Note it stays reported by pattern with the body unloaded; that's the correct handling, not a truncation to undo.
+- **D** — secret-scan hit on `test/fixtures/env.sample`. Pending triage, so it carries forward until triaged. A `.sample` fixture is a plausible false positive, but that's a triage outcome, not a budget decision.
+
+**Ledger write:** appending the degradation event — what was shed, at which budget level — before the phase transition, so the shed is recoverable from the ledger rather than inferred later from a gap.
+
+If A, E, and F together don't free enough room for the next phase, the constraint is real and the answer is to split the phase, not to reach into B–D. Tell me if that's where we land and I'll size the split.

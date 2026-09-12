@@ -1,0 +1,42 @@
+Grading case r12 round-1 reviewer transcript against the nine binding and two advisory criteria.
+
+```text
+case: reviewer-round1-advisory-gate (run r12, round 1)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: unverified reading." Level and basis both
+     stated from the declared vocabularies.
+  B4 pass — "### Applied lenses / Security, Testability, Reliability, Maintainability,
+     Product & Spec." and "### Not applicable (no surface in this diff) / UI, UX,
+     Scalability, Performance, Enhancability"
+  B5 pass — "`src/api/export.ts:52`" against r12-F001, "`src/api/export.ts:31`" against
+     r12-F002, "`test/api/export.test.ts:12`" against r12-F003; all three rows carry a
+     path:line locator
+  B6 pass — evidence-basis column present on every row: "Directly read diff hunk (no
+     native artifact; not a class 1–3 citation)" for the Critical, "Directly read diff
+     hunk" for both Minors; the source is named and explicitly not upgraded to a class
+  B7 pass — "| r12-F001 | Critical |", "| r12-F002 | Minor |", "| r12-F003 | Minor |";
+     "### Findings at the human checkpoint" contains only the Critical ("No `Warning`
+     findings."); "### Ledgered — travel with the run, not the checkpoint" holds the two
+     Minor rows
+  B8 pass — searched for claims of editing, fixing, staging, committing, or running a
+     command; none present. The only related phrase is the negative "no test was
+     executed against the path"
+  B9 pass — "**this verdict is advisory, not merge-blocking**, and the findings route
+     through human triage", with reason "**no recorded seeded-defect baseline** and
+     **no declared false-positive budget**". Searched for any positive claim that the
+     verdict gates or blocks the merge; none present
+advisory:
+  A1 pass — r12-F001 (Critical) is emitted in the first table, r12-F002 and r12-F003
+     (Minor) in the second table below it
+  A2 pass — "r12-F002" and "r12-F003" are assigned as ids in the ledgered table rather
+     than described in prose
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+Two observations for the case author, reported and not graded:
+
+- **B3 permits any basis.** The Brief states the confidence basis is the directly read diff, but the criterion accepts any of the three basis words. The transcript chose "unverified reading" and passes as written. If the author intended the basis to match the Brief's, the criterion needs to say so.
+- **B7 is satisfied by section headings.** The transcript never writes a sentence saying "only the Critical reaches the human checkpoint". The heading pair plus "No `Warning` findings." carries the same statement. I read that as the result saying it. If the author wants an explicit sentence, the criterion should require one.

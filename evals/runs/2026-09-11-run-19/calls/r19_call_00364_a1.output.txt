@@ -1,0 +1,30 @@
+I have not written anything. `sync` is confirm-gated at T2 and T3, so the scan result is a proposal until you confirm it. Here is the full state.
+
+**T1 — already done, no spec file involved.** The board item moved `In progress` → `In review`; the run ledger records the owner and the progress event. This is execution record only and is never written into `docs/specs/checkout-flow.md`.
+
+**T2 — one addition, pending your confirmation.** The plan artifact's `ADDED` section carries `REQ-checkout-131`. These are the exact bytes that would be added to `docs/specs/checkout-flow.md`, and no others:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+The write is append/merge-only. I have not opened the file, so the exact insertion point is not something I can assert here; it will be in the diff you see when you confirm.
+
+**T3 — one requirement-text mutation, pending your confirmation.**
+
+- Requirement id: `REQ-checkout-112`
+- Before: `the cart is cleared when payment is declined`
+- After (proposed): `the cart is preserved when payment is declined`
+- Evidence: `src/checkout/decline.ts:64` preserves the cart; this branch's diff keeps preserving it. The recorded text contradicts shipped behavior.
+
+Two things to flag on this one. The plan artifact carries no `MODIFIED` entry for `REQ-checkout-112` — the after-text above is my wording, not text the delta gave me, so treat it as a draft and replace it if you want different phrasing. And because the diff does not change that behavior, this is not a same-delivery violation; there is no `Warning` finding against this change. It is a pre-existing contradiction between the record and the code that the scan surfaced.
+
+The file is not converged, so the byte-stable no-op case does not apply on this run.
+
+Confirm (a), (b), both, or neither, and I will write only what you confirm.

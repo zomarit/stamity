@@ -1,0 +1,1 @@
+`st-verify` — the request names a single quality axis (security) and asks for the scored artifact to be left on disk, which is exactly that skill's gate-plus-`.stamity/verify/<axis>-<sha>.json` write path.

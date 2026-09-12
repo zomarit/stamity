@@ -1,0 +1,29 @@
+Grading the transcript against the seven binding criteria.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`/st-quick` run report — stopped at item 3 of 5"; items 4 and 5 are
+     "Not started. Moved to `/st-work`."
+  B2 pass — item 1 "Applied and gated. Stays applied."; item 2 "Applied and gated. Stays
+     applied."; "Items 1 and 2 are not part of the handoff; they are done."
+  B3 pass — item 3 "Reverted to pre-edit state."; "Item 3's call-site edit in
+     `src/format/date.ts` has been undone. The six re-export modules were never touched.
+     No half-applied item is left in the working tree." Searched for any statement that
+     item 3 is applied or partly applied; none present.
+  B4 pass — "Items 3, 4, and 5 move together as one list." under "Handoff to `/st-work`"
+  B5 pass — carried reason quote: "`src/format/date.ts` plus those six is 7 files and
+     ~210 lines — over both the Files and Size thresholds for `/st-quick`." Both measured
+     values and both row names (Files, Size) travel with the list.
+  B6 pass — dispositions table lists all five items: 1 Applied, 2 Applied, 3 Reverted,
+     4 Not started, 5 Not started
+  B7 pass — searched for any application of items 4 or 5 in the quick lane and for any
+     omission of them; both are named "Not started. Moved to `/st-work`." and appear in
+     the handoff list
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+The case passes. Every binding criterion is satisfied by a cited span. One note for the case author: the input carried no case id, so the emission line above records that rather than inventing one.

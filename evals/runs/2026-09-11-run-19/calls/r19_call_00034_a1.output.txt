@@ -1,0 +1,20 @@
+**queue-worker-b** is falling behind.
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | **−109** | **+592** |
+| processed (1h) | 1042 | 97 |
+| implied arrivals | 933 | 689 |
+| last heartbeat | 09:40:52 | 09:40:55 |
+
+**By how much:** worker-b's backlog grew by **592 items over the hour** (~9.9/min), ending at a depth of 806. It processed only 97 items against ~689 arrivals — roughly **14% of its inbound rate**, so the gap widens rather than converges. worker-a handled 1042 items against ~933 arrivals and drained its queue to 9.
+
+Two things worth noting for triage:
+
+- worker-b is **heartbeating normally** (3 seconds before window close), so this is not a dead process — it's alive and throughput-starved. Look for slow/blocking work per item, a poison message it keeps retrying, or resource contention, rather than a crash-loop.
+- Throughput ratio between the two is ~10.7:1 on what appears to be a shared arrival pattern of comparable size (933 vs 689), which suggests the disparity is in worker-b itself, not in how work is distributed.
+
+Metrics body: 60 samples, `truncated: false`, so the hour is fully covered.
+
+*(Ingress screen on `mcp__opsmetrics__query` result: kept.)*

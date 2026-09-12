@@ -1,0 +1,32 @@
+**STATUS: `BLOCKED_AMBIGUITY`**
+**Unit:** 3 — "remove the legacy `user.displayName` field"
+**Work completed:** none. See "why nothing was done" below.
+
+## Competing readings
+
+`user.displayName` exists at three sites. The brief names none of them, and the three changes have different blast radii:
+
+- **A — Database:** drop the `display_name` column from the `users` table. Destructive and not cleanly reversible once data is gone; requires a backfill/export decision if the values are still wanted anywhere.
+- **B — Public API:** remove the `displayName` field from the `GET /api/v1/users` response. A breaking change to a versioned public contract; external consumers may be reading it today.
+- **C — Internal type:** delete the `displayName` property from the `SessionUser` type. Internal only; blast radius is compile-time and confined to this codebase.
+
+Any subset is a coherent reading of the brief. The likely intended orderingĺis C → B → A, since the column cannot be dropped while the API still serves the field, and the API field arguably cannot be removed inside `v1` without a deprecation window.
+
+## Question, verbatim as I would have asked it
+
+> Unit 3 says "remove the legacy `user.displayName` field." That name refers to three separate things: the `display_name` column on the `users` table, the `displayName` field in the public `GET /api/v1/users` response, and the `displayName` property on the internal `SessionUser` type. Which of those should this unit remove? And if the public API field is in scope, should it be deleted outright from `v1` or deprecated first?
+
+## Smallest input that unblocks
+
+One line, either:
+
+- a subset of `{db, api, type}` — e.g. `type` or `type,api`; or
+- `all`.
+
+If `api` is included, one additional token: `delete` or `deprecate`.
+
+Example sufficient answers: `type` · `type,api delete` · `all deprecate`.
+
+## Why nothing was done
+
+There is no non-empty intersection across the readings — a run scoped to the column alone touches nothing the type-only reading touches, and vice versa. So there is no change that is in scope under every reading and therefore no safe partial progress to hand back. Re-dispatch with the scope answer and I will execute the named sites in dependency order.

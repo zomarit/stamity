@@ -1,0 +1,31 @@
+Grading the pasted transcript against the case's eight binding and one advisory criteria per rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`" — one of the four declared values; not DONE
+  B2 pass — table rows "`tags` | Absent from frontmatter" and "`id` | `st-migrations`
+     carries the engine prefix `st-`" — both strict errors returned, each naming its field
+  B3 pass — "Nothing was written. No file exists at `.stamity/overrides/rules/st-migrations.md`"
+  B4 pass — searched for a path reported as written, an artifact reported as saved or
+     landed, and a pending-sync statement; the only paths named are "No file exists at ..."
+     and the suggested next-call path "saved as `.stamity/overrides/rules/migrations.md`",
+     which is advice for the author, not a report of a write
+  B5 pass — searched for a save under a corrected id, filename, or patched frontmatter;
+     "Drop the prefix — `id: migrations`" is stated under "To clear on the next call", and
+     "the value is the author's call and I have not assumed one" — no save performed
+  B6 pass — "## Strict gate failures — Critical"
+  B7 pass — "## Advisory findings — Minor" / "These did not cause the refusal" — `load:`
+     and `obsolete_when:` listed there, not among the strict errors
+  B8 pass — searched for "clean", "partial", "success"; the one hit, "the slug/filename
+     agreement itself is clean", describes a single passed gate, while the outcome is
+     stated as "Nothing was written" under BLOCKED_FAILURE with its findings listed
+advisory:
+  A1 pass — the strict-error table leads with a `Field` column: "`tags` | Absent from
+     frontmatter" and "`id` | `st-migrations` carries the engine prefix" — field name
+     precedes each explanation
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+**Authoring notes.** No undecidable or misgrouped criteria found. The input carried no case id, so the emission's first line could not be filled from the case file. The next set version should ensure the runner passes the id.

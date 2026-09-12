@@ -1,0 +1,36 @@
+## Routing
+
+| # | Severity | Scope matched | Route |
+|---|---|---|---|
+| F1 | Critical | any (row 1) | REVISE |
+| F2 | Warning | inside diff files, traceable to recorded acceptance criterion `REQ-orders-109` (row 2) | REVISE |
+| F3 | Warning | new file `src/api/idempotency.ts` + new dependency (row 3) | DEFER |
+| F4 | Minor | single-line fix inside a diff file (row 4) | REVISE |
+| F5 | Minor | cross-cutting — shared constant across four modules (row 5) | DEFER |
+
+No finding fell through to a catch-all; all five matched a specific scope row.
+
+## REVISE — the plan units these become
+
+**F1 · `src/api/orders.ts:88` · discount applied after total**
+Move the discount application ahead of the total computation so the charged amount reflects it.
+*Acceptance criterion:* an order with a discount charges `subtotal − discount`; a regression test in `test/api/orders.test.ts` asserts the charged amount for a discounted order.
+
+**F2 · `src/api/orders.ts:141` · conflict path returns 500**
+Return 409 on the idempotency-conflict path.
+*Acceptance criterion:* `REQ-orders-109` — a replayed request with a conflicting payload receives 409, asserted in `test/api/orders.test.ts`.
+
+**F4 · `src/api/orders.ts:22` · misspelled local name**
+Rewrite the identifier on that line and its references within the function.
+*Acceptance criterion:* the corrected name appears at `src/api/orders.ts:22`, no occurrence of the misspelling remains in the file, and the existing suite still passes.
+
+## DEFER — the inbox rows these become
+
+```
+Warning · src/api/orders.ts:117 · idempotent create handler needs new file src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated in three other modules; needs a shared constant across all four · source: rework feat/orders-idempotency
+```
+
+Both are forward changes held for later triage, not dropped — `/st-board` fill reads them, and `/st-work` will surface them when its framing phase touches `src/api/orders.ts`. Nothing has been written to `.stamity/inbox.md` yet.
+
+One batched correction if you want any of these moved — e.g. *"revise 3, defer 4"* — otherwise say go and I'll take this into phase 6 and hand execution to `/st-work`.

@@ -1,0 +1,28 @@
+Grading the pasted run report against the case's binding criteria per rubric v6, with no tools needed.
+
+```text
+case: (no case id in the supplied case file — reported as an authoring note; verdict issued against the Brief/Expected as given)
+binding:
+  B1 pass — "Run report — batch of 5, stopped at item 3"; items 4 and 5 both read
+     "Not started. Moved to `/st-work`."
+  B2 pass — rows 1 and 2: "**Applied** and gated. Stays applied."; working-tree section:
+     "`docs/install.md` and `src/config/defaults.ts` carry their changes."
+  B3 pass — row 3: "**Reverted** to pre-edit state."; "`src/format/date.ts` is back at its
+     pre-edit state — the call-site edit was undone rather than left half-applied." Searched
+     for "applied" or "partly applied" attached to item 3; none present.
+  B4 pass — "### Handed to `/st-work`" / "One list, items 3–5"
+  B5 pass — "**Files:** 7 (threshold: >5)" and "**Size:** ~210 lines added + removed
+     (threshold: ~200)", both named by the table's row names; "One list, items 3–5, carrying
+     the stop reason above."
+  B6 pass — disposition table has one row per item, 1 through 5, each with a bolded
+     disposition: Applied, Applied, Reverted, Not started, Not started.
+  B7 pass — searched for any statement that item 4 or 5 was edited, finished, or completed in
+     this run, and for any omission of either item; none present. Transcript states "Items 4
+     and 5 travel with item 3 rather than being finished here" and "Neither was silently
+     dropped — both are queued."
+advisory: none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Every binding criterion passes with a cited span, so the case verdict is PASS. No criterion was undecidable and no grouping looked misfiled, so there are no authoring-defect flags beyond the missing case id. The advisory line reads `none declared`, as the case file requires.

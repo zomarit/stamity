@@ -1,0 +1,1 @@
+`none` — st-onboard is the only skill that answers "what should we do next," and its trigger is a freshly installed or unproven setup, which this eight-month-old repo with dozens of proven changes explicitly is not; an open-ended planning question belongs to the main flow.

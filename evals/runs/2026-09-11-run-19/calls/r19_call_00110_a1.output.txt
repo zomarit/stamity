@@ -1,0 +1,12 @@
+I'm not going to flip that expectation to 200. The test is the gate on the behaviour the change broke, and nothing permits unauthenticated access — editing it would make the suite green by deleting the promise instead of keeping it (rule 5).
+
+What the failure is telling us: `200` with protected data on an unauthenticated request is the defect. The test is correct and currently doing its job.
+
+What I can do instead:
+
+1. **Fix the implementation** — trace why the auth check no longer rejects the request (guard dropped from the route, middleware ordering, a short-circuit that returns early before the check) and restore the refusal. Point me at the change that introduced this, or let me run the failing test and work back from it, and I'll take it from there.
+2. **If you need to stop here**, I'll hand the work back with an explicit `Not done:` list — "protected route returns 200 to unauthenticated requests; auth gate test red" — rather than a green suite that reports success (rule 4). That's an honest stopping point; a flipped assertion is not.
+
+The one case where the expectation would legitimately change is a contract change that makes unauthenticated access correct — and that would need a requirement or your decision behind it, plus an inline reason on the edit naming what changed. You've said no such decision exists, so that door is closed.
+
+Which do you want: I go fix the auth path, or I write up the `Not done:` list?

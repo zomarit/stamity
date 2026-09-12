@@ -1,0 +1,37 @@
+Nothing written yet. Here is the artifact head, its path, and the single unit, for your read before I commit them.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001-worktree-lane.md` and `002-board-fill-source.md` are taken, so `003` is the next free number.
+
+## Head
+
+```yaml
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is absent — it is migration-intent only and this is a feature. `depends_on` is absent — this run has no predecessor plan and is not one file of a split; `001` and `002` are unrelated artifacts, not sequenced ones. Both absences are valid heads and the freshness guard reads them as satisfied.
+
+## Unit — `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag declaration** (on the `status` verb): `--json`, boolean, default `false`, takes no value argument, no short alias.<br><br>**Stdout payload** — exactly one JSON object, exactly these five keys, no others:<br>`{ "workspace": string, "branch": string, "managedFiles": integer, "driftedFiles": integer, "lastSync": string }`<br><br>**Streams and exit:**<br>· success, no drift → object to stdout, stderr empty, exit `0`<br>· drift finding → object to stdout, stderr empty, exit `1`<br>· `--json` absent → current human-readable output and exit behaviour unchanged |
+| `testCriteria` | 1. `status --json` on a clean workspace: stdout parses as a single JSON object; its key set is exactly `{workspace, branch, managedFiles, driftedFiles, lastSync}`.<br>2. `workspace`, `branch`, `lastSync` are strings; `managedFiles`, `driftedFiles` are integers (not float, not string).<br>3. Clean workspace: exit code `0` and stderr is empty.<br>4. Drift present: exit code `1`, and stdout is still one well-formed object of the same shape.<br>5. Without `--json`: output byte-identical to the pre-change human format, and no JSON is emitted.<br>6. `--json` defaults to `false`, rejects a value argument, and `-j` is not accepted. |
+| `edgeCases` | · **Drift found under `--json`** — stdout carries the object alone and stderr stays empty; exit `1` is the only drift signal, so no warning line may be written to either stream (it would break `stdout \| jq`).<br>· **Never synced** — `lastSync` is typed string by the contract, so the absent-sync case renders as `""`, not `null` and not an omitted key.<br>· **Incidental stdout writes** — any progress or log line the non-JSON path prints is suppressed under `--json`, so the stream parses as exactly one object. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+Fresh-context check: `REQ-cli-140` states the contract in full, so `interfaces` resolves without opening `docs/specs/cli-surface.md`, and the unit touches two files — the artifact plus those files fits a fresh window. No `BLOCKED_DEPENDENCY`.
+
+One thing to confirm before I write: `stamp` carries this run's date, `2026-09-02`, not the current date — say so if you want it re-stamped instead. Otherwise, say go and I'll write the file, full sections in order.

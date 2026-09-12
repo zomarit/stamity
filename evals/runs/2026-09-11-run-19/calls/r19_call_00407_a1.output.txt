@@ -1,0 +1,15 @@
+Grading the one transcript against the rubric as judge.
+
+```text
+case: (no case id given in input — reported as authoring gap; graded on the criteria as written)
+binding:
+  B1 pass — "`st-browser-evidence` — the request names exactly its triggers"
+  B2 pass — searched for a second skill id, an "or"/"also"/"equally" alternative, and the
+     literal `none`; the transcript names only `st-browser-evidence` and offers no
+     alternative
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The scenario response named `st-browser-evidence` alone, with a one-sentence reason tied to its triggers. Both binding criteria pass and the case passes. The input did not carry a case id line, so the emission flags that as a gap rather than inventing one.

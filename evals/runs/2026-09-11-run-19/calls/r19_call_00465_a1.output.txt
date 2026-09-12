@@ -1,0 +1,15 @@
+```text
+case: (id not supplied in the input; graded from the pasted Brief/Expected/transcript)
+binding:
+  B1 pass — "`st-qa` — the operator is asking what a person should manually click through
+     before a merge decision"
+  B2 pass — searched the transcript for a second skill id, an "or"/"equally" alternative,
+     and the literal answer `none`; only `st-qa` is named, and `none` does not appear as the
+     answer (the only "no"-form text is the caveat "no work run is calling it")
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Note for the run artifact: the input did not carry a case id line, so the block above records that rather than inventing one.

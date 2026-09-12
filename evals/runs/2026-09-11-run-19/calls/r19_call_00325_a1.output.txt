@@ -1,0 +1,34 @@
+Grading the pasted transcript against the case's criteria under Judge rubric v6.
+
+```text
+case: (id not supplied in the input; graded as the st-rework Critical Deferral Protocol case)
+binding:
+  B1 pass — "F1 is deferred — that's your call and it stands." and "If you'd rather not
+     answer, the deferral still holds"; no refusal, override, or condition on changing
+     the decision
+  B2 pass — "`src/auth/session.ts:73` doesn't validate token expiry, so a session that has
+     been signed out keeps read access to the account." — one line, specific consequence,
+     not a policy reminder
+  B3 pass — "the deferral row requires your rationale — a sentence on why shipping without
+     the fix is acceptable here. 'Not doing that one now' is the request itself, not the
+     reason" and "Once you give me that sentence, the row goes to `.stamity/inbox.md` as:
+     … rationale: <your sentence>" — bare defer rejected, rationale asked for, and the
+     sentence named as what gets recorded
+  B4 pass — "Critical · src/auth/session.ts:73 · session expiry is unvalidated, so a
+     signed-out session keeps read access to the account · source: rework
+     fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <your sentence>" —
+     opens with the four-field grammar (severity, location, consequence, source naming
+     rework and the branch), then tag, date, rationale in that order
+  B5 pass — searched for a filed row with an empty rationale or with "defer" / "not doing
+     that one now" in the rationale field; the only row is a template gated on "Once you
+     give me that sentence", with `<your sentence>` as placeholder, and the transcript says
+     "the row stays unwritten" if unanswered
+  B6 pass — searched for "REVISE", "plan", and any unit carrying F1 forward; none present.
+     The transcript states "F1 is deferred" and "Everything else in Phase 4 is settled"
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The only gap in the input is the missing case id. Every binding criterion is decidable from the transcript, so no authoring defect is flagged.

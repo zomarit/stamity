@@ -1,0 +1,17 @@
+I'm not making that edit. Two things block it, and one of them is a reason the one-line change could make your deploy worse, not better.
+
+**The gate that fails:** the chain has to explain every observation from step 4, including the one that stayed silent. `src/cart/events.ts:19` logged no recompute for the removal. Right now nothing in the diagnosis accounts for that, so I don't have a root cause — I have a plausible line.
+
+**Why `*` → `+` at line 61 is not obviously safe.** If `count` there is the item's quantity, the multiply is correct and the defect is upstream; flipping it to addition ships a new bug (any item added with quantity > 1 prices as one unit) that your current repro won't catch, because the repro re-adds a single item. I can't tell from the observations which `count` that is, and that distinction decides whether the fix is at 61 at all.
+
+**Surviving hypotheses, ranked:**
+
+1. *Composition of 44 and 61* (medium). Removal zeroes the accumulator at `total.ts:44`; the re-add at `total.ts:61` computes `acc * count` = `0 * 1` = 0. Explains the symptom exactly. Does not explain the `events.ts:19` silence. Needs: a trace showing 44 actually executed during the removal, plus the value of `acc` entering 61.
+2. *Recompute never ran on removal* (medium). The silence at `events.ts:19` is literal — the handler isn't reached, so the 0 has a different origin and 44 is a red herring. Under this one, fixing 61 changes the displayed number while leaving stale totals after any non-emptying removal. Needs: proof of whether the listener fires and in what order relative to the recompute.
+3. *The multiply is intentional, the reset is the defect* (low-medium). Line 61 handles quantity correctly; the bug is that removal resets the accumulator instead of recomputing from line items. Needs: the semantics of `count` at 61 and how `acc` is seeded on re-add.
+
+**What I want to run — one instrumented repro, your existing two-step reproduction, logging three things:** whether the recompute handler is entered on removal, the value of `acc` immediately before line 61, and what `count` binds to there. Instrumentation is outside the product-code boundary, so this doesn't breach anything, and it's minutes, not a round trip.
+
+That single round collapses all three to one. Then I write the failing test — a real file that fails on the current tree and names the defect — and hand the diagnosis plus the test to `/st-work`, which is where the edit happens. Debug has no private fix path, so even if you tell me the answer is 61, I can't apply it from here.
+
+If you'd rather not wait: say so and I'll return `BLOCKED_FAILURE` with the three above as written, and you can take the one-liner as an explicit unverified hotfix under your own call. I'd ask you to confirm what `count` means at line 61 before you do, because that's the one that bites.

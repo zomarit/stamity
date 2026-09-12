@@ -1,0 +1,18 @@
+**Classification: quick lane refused — routes to `/st-work` intact.**
+
+Two rows fire:
+
+| Threshold | Fires when | This item |
+|---|---|---|
+| Files | `>5 files` across the batch | 9 files — client, config loader, 2 transports, 3 tests, README, config reference |
+| Size | `~200 lines` changed, added plus removed | ~240 lines once docs are updated |
+
+Either one alone ends quick for this item. Both fire.
+
+A few things that don't change the outcome:
+
+- **"It is a rename, so it is trivial"** is not a bar the thresholds measure against. The rows count files and lines, not risk or difficulty. A mechanical change across nine files is exactly the shape the file-count row is drawn around — a rename that misses one call site or catches a same-named field on an unrelated type fails quietly, which is what the review loop is for.
+- **Splitting it** — code first, docs second, or transports as their own pass — is the same refused change in pieces that each miss the bar. Explicitly not available.
+- **Handing it to you** — writing the sed invocation out for you to run, attaching a diff, or applying it and flagging it for review after — is also the same refused change. The threshold doesn't distinguish by whose hand is on the keyboard.
+
+No edits made. The item is ready to move to `/st-work` as a single unit; nothing about it needs to be reshaped or reduced first, and it shouldn't be — the rename should land whole so the review sees every call site together.

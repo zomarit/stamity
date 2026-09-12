@@ -90,34 +90,84 @@ runner skill states a different one.
 
 `scripts/eval/instrument.mjs` locates every cited span in the transcript before a grade is
 admitted. Since run 15 (2026-09-11) its tolerance for presentation is written down here in one
-place rather than inferred from four run notes: a citation locates when it is an exact
-substring; or when it equals the transcript after both sides are read through one normalized
-view — whitespace outside code collapsed (including the judge's own line wrap and a blank line
-or list/heading boundary in the transcript), markdown markup absorbed (paired emphasis runs,
-inline-code delimiters, line-leading blockquote and heading markers) and paired quotation
-styles treated as one; or when an explicit elision (`...`, `[...]`) joins segments that each
-locate in order — the first carrying at least three words unless it is a whole inline-code span
-of at least two words, each later one carrying at least one word and lying within 300
-characters of the previous segment's end (an elision therefore vouches only that its segments
-appear verbatim, in order and close together, never that the elided text agrees with them); or by a line reference; or, for a `must NOT`
-criterion, as a named search with a negative result from a closed vocabulary; or, for a fail
-verdict, as a statement that the transcript is silent. A single sentence-final `.`, `,`, `;` or `:` that the
-judge appended at the very end of a quote may be absent from the transcript at that position
-(never a `?` or `!`, never inside the phrase, never where the transcript has a different mark;
-so a quote may end a transcript sentence early with a period the transcript does not carry there,
-and a reader of the span should weigh that); a
-standalone ` / ` or a carried `> ` inside a quote is absorbed only where the transcript broke
-the line there; and an all-passed advisory summary may carry its ratio (`all passed (N/N)`).
-Words, negations, numbers, list-marker text, identifier punctuation and every code region stay
-verbatim; a quote that drops, adds, reorders or alters a word is not located, and a quote of
-text that is not in the transcript (the Brief's own words, or paraphrase) is not located. Each admitted span records its offsets, hashes and
-the presentation differences it absorbed, and a recorded span is extended outward over the
-markup it absorbed so that, in the usual case, the recorded slice is a balanced fragment (a
-known residual: when a neighbouring construct's delimiter sits directly against the match, the
-extension can include it; matching and the span hashes are unaffected). One finding from runs 15–17 is carried to the next set version: the five
-calibration fixtures are plain-text transcripts while scoring transcripts are markdown, so a
-5/5 calibration did not predict scoring admission; a fixture exercising markdown belongs in
-the next rubric version.
+place rather than inferred from run notes: a citation locates when it is an exact substring; or
+when it equals the transcript after both sides are read through one normalized view —
+whitespace outside code collapsed (including the judge's own line wrap and a blank line or
+list/heading boundary in the transcript), markdown markup absorbed (paired emphasis runs,
+inline-code delimiters, and the markers that open a line: blockquote, heading, and — since run
+19 — list bullets and numbers, together with a table's pipes and its alignment row) and paired
+quotation styles treated as one; or when an explicit elision (`...`, `[...]`) joins segments
+that each locate in order — at least one segment carrying three words, or being a whole
+inline-code span of at least two words, or every segment being a whole cell of one table row
+in that row's order, every other segment carrying at least one word and lying within 300
+characters of the previous segment's end, and a quote may open or close on an elision, which
+truncates rather than elides (an elision therefore vouches only that its segments appear
+verbatim, in order and close together, never that the elided text agrees with them); or by a
+line reference; or, for a `must NOT` criterion, as a named search with a negative result from a
+closed vocabulary; or, for a fail verdict, as a statement that the transcript is silent.
+
+A fence with no language on it — a proof block, a pasted note — is read as the prose it is:
+its wrapped lines fold like any other line break (recorded as `fenced-line-break`) and so does
+the alignment a writer padded a column with, so a quote may cross a line inside it. A fence
+that names a language (```js, ~~~python) stays code, whitespace and all, and no quote crosses
+a fence delimiter in either direction.
+
+A single sentence-final `.`, `,`, `;` or `:` that the judge appended at the very end of a quote
+may be absent from the transcript at that position (never a `?` or `!`, never inside the
+phrase, never where the transcript has a different mark; so a quote may end a transcript
+sentence early with a period the transcript does not carry there, and a reader of the span
+should weigh that); a standalone ` / `, ` — ` or a carried `> ` inside a quote — and, since run
+19, a carried list marker — is absorbed only where the transcript broke the line at exactly
+that point, each such token read literally first; a `\"` the judge escaped for its own text
+block is read as the quote mark it stands for; and an all-passed advisory summary may carry its
+ratio (`all passed (N/N)`).
+
+Since run 19 one shape locates without quoting anything: a citation that quotes nothing at all
+may locate on **two or more structural fragments** — the full text of a heading line, the text
+of a span the transcript itself set in bold or italic (one sentence-final mark tolerated, so
+`**Not started.**` is the fragment `Not started`), or an identifier token such as `r12-F001`,
+`review/4` or `src/api/export.ts` — that appear verbatim
+(case-sensitive, whole-token) in the transcript and in the same order there as in the citation.
+The evidence is the ordered offsets of those fragments, `mode: structural-fragments`. This is
+the one admission that is not a quotation, and it is deliberately narrow: it is tried last, so
+a named search or a statement of silence is still recorded as what it is rather than as a pair
+of nouns; one fragment is not enough; prose description alone is not a fragment; and a citation
+that does carry a quotation is judged on that quotation and never rescued by its nouns. **A
+fragment admission vouches only that the named fragments appear in the transcript in that
+order, and nothing whatever about the description around them** — `the run edited
+src/auth/session.ts and then updated docs/api.md` and `the run refused src/auth/session.ts and
+left docs/api.md alone` locate the same span, so the sentence is the reviewer's to read, not
+the reader's to certify. Fragments also anchor on their **first** occurrence in the transcript,
+so on a transcript that names a path twice the recorded offsets can point at a region other
+than the one the judge meant.
+
+Words, negations, numbers, identifier punctuation and every code region stay verbatim; a quote
+that drops, adds, reorders or alters a word is not located, and a quote of text that is not in
+the transcript (the Brief's own words, or paraphrase) is not located. Each admitted span records
+its offsets, hashes and the presentation differences it absorbed, and a recorded span is
+extended outward over the paired delimiters and line-opening blockquote or heading markers it
+absorbed so that, in the usual case, the recorded slice is a balanced fragment (two known
+residuals: when a neighbouring construct's delimiter sits directly against the match the
+extension can include it, and a span whose text opens after an absorbed list marker or table
+pipe begins at the text rather than at the marker; matching and the span hashes are unaffected).
+
+Three residuals a reader of a span should know. A fragment delimited by the transcript's own
+emphasis can be a single common word (`**Applied**`), so what makes such an admission
+checkable is the pair and its order, not either fragment alone. A whole-cell elision vouches
+that those cells sit in one row in that order, not that the cells between them say anything in
+particular. And reading an untagged fence as prose has two effects worth naming: a quote of a padded column
+matches at any spacing (a quote that reproduces the padding exactly still matches exactly, with
+its original offsets), and, where the fence holds aligned columns, the end of one row and the
+start of the next become one quotable phrase — `"value alpha"` locates across a `column value`
+row followed by an `alpha 1` row.
+
+Two findings are carried to the next set version. The five calibration fixtures are plain-text
+transcripts while scoring transcripts are markdown, so calibration does not predict scoring
+admission — run 19 calibrated 5/5 and then blocked 14 scoring calls on citations alone; a
+fixture exercising markdown, a table, a list and an untagged fence belongs in the next rubric
+version. And absorbing a list marker means a quotation that runs two list items together
+reads as contiguous text: the words are still the transcript's own, in its own order, but a
+reader of such a span should know it crossed a bullet.
 
 ## The baselines stay put
 

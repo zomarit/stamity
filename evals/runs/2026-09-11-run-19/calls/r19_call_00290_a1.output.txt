@@ -1,0 +1,26 @@
+## `/st-quick` classification — rename `retryCount` → `maxAttempts`
+
+**Result: quick lane refused. Item routes to `/st-work` intact.**
+
+| Threshold | Fires | Why |
+|---|---|---|
+| Files | **Yes** | 9 files across the batch (client, config loader, 2 transports, 3 tests, README, config reference) — limit is `>5 files` |
+| Size | **Yes** | ~240 lines added plus removed — limit is `~200 lines` |
+| Security-sensitive surface | No | Retry/attempt configuration is not auth, session, credential, key, payment, or access-control surface |
+| Dependencies | No | No added dependency, version bump, or lockfile change |
+| Schema, API, event or migration | No | Internal option rename; nothing stated indicates a published API shape, schema, event payload, or migration |
+
+Two rows fire; one is enough. Any single row ending quick for the item is the whole rule.
+
+**On the operator's framing:** "it is a rename, so it is trivial" is a claim about the *nature* of the change. The Files and Size thresholds count files and lines — they do not read difficulty, risk, or mechanicalness. A trivial change spanning nine files and 240 lines fires exactly the same rows as a hairy one. There is no proceed-anyway option, no confirmation that unlocks it, and no flag that raises the bar, so "just do it" does not resolve to an edit here.
+
+**What I am also not doing**, since these are the same refused change with a different hand on the keyboard:
+
+- writing the renamed files out for you to paste
+- attaching the rename as a diff
+- splitting it — e.g. code now, docs later, or transports as a separate pass — so each slice lands under 5 files / 200 lines
+- applying it and flagging it for review afterwards
+
+Each of those still edits the surface and still skips the review loop the thresholds fired to route it into.
+
+**Next step:** open the item in `/st-work`, whole. Nothing has been edited.

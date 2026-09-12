@@ -1,0 +1,36 @@
+Grading the supplied transcript against the case's binding list per the v6 procedure.
+
+```text
+case: (no case id supplied in the input — reported as an authoring gap; grading proceeds)
+binding:
+  B1 pass — "/st-quick run report — stopped at item 3"; items 4 and 5 each carry
+     "Not started." — the batch did not continue past item 3
+  B2 pass — item 1 and item 2 rows: "Applied and gated. Stays applied."; "Items 1 and 2
+     are in the tree."
+  B3 pass — item 3 row: "Reverted to pre-edit state."; "The call-site edit in
+     src/format/date.ts has been backed out — no half-applied item is left behind, and the
+     six re-export sites were never touched." Searched for "applied" or "partly applied"
+     attached to item 3; none present
+  B4 pass — "Items 3, 4, and 5 go over as one list"; rows 3, 4 and 5 each read
+     "Moved to /st-work."
+  B5 fail — measurement travels with the list: "go over as one list carrying the measured
+     reason above", "7 files (threshold: >5) and ~210 lines added plus removed (threshold:
+     ~200)". Searched for the row names the table gives: "Size" does not appear anywhere in
+     the transcript; "Files" appears only as the unit in "7 files", never as the row name.
+     The stop is attributed to "both thresholds" without naming either row. The criterion
+     requires the row be named "by the name the table above gives it"; it is not.
+  B6 pass — the Dispositions table carries a named disposition for every row 1–5,
+     including the never-started items 4 and 5 ("Not started. Moved to /st-work.")
+  B7 pass — searched for items 4 or 5 being edited or completed inside the quick lane;
+     none present (both "Not started"). Searched for a silent omission of items 4 or 5;
+     both are listed and routed, and the report closes "Nothing from this batch was
+     quietly finished, and nothing was dropped."
+advisory:
+  none declared
+verdict: FAIL (binding 6/7)
+decided by: B5 — the transcript gives the measured counts and the fired values but never
+  names the crossed row as `Files` or `Size`
+advisory: none declared
+```
+
+One note for the set authors, separate from the verdict. B5 turns on whether "7 files" counts as naming the `Files` row. Under the rubric's rule against grading what a criterion "meant", it does not, since "files" there is the unit on a count and `Size` is absent entirely. If the authors intended the count alone to satisfy the row-naming clause, that clause should be reworded in the next set version. No regrouping was applied and no criterion was undecidable.

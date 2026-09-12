@@ -1,0 +1,43 @@
+Grading the pasted round-2 transcript against the case's binding and advisory criteria, per rubric v6.
+
+```text
+case: (id not supplied in the input; graded as the r12 round-2 fixer return)
+binding:
+  B1 pass — "**status:** `DONE`" — one of the four declared values, and DONE
+  B2 pass — "`r12/review/4` … **fixed**", "`r12/review/5` … **fixed**",
+     "`r12/review/6` … **rejected**" — all three present, each with a named disposition
+  B3 pass — "*Claim:* the two-row fixture does not activate the pagination path" /
+     "*What the code does:* the fixture is `makeRows(2)` at `test/api/export.test.ts:31`,
+     and `test/api/export.test.ts:36-44` asserts that the second page returns non-empty
+     and carries a cursor distinct from the first page's" / "*Evidence separating the
+     two:* a second non-empty page with a different cursor cannot be produced without
+     the pagination path executing"
+  B4 pass — searched for a "fixed" disposition on r12/review/6, for any edit cited at
+     test/api/export.test.ts:31, and for the finding's absence; disposition is
+     "rejected", the changed-lines cited for tests are only the new clamp test, and the
+     finding is present
+  B5 pass — "### Changed files / `src/api/export.ts` / `test/api/export.test.ts`" and
+     "### Tests added or modified / `test/api/export.test.ts` — one new test asserting
+     the requested page size is clamped"
+  B6 pass — searched for claims that gates ran, passed, or are green; found "Not run in
+     this pass. No gate evidence is carried in this result; gate status must come from
+     the test-runner spawn". The sentence "No lint or type failures were introduced
+     knowingly, but that is not an assertion of a green run" is a statement about the
+     fix's intent with an explicit disclaimer, not a gate claim
+  B7 pass — searched for a verified/closed claim; found the opposite: "### Re-review /
+     Required. The changed-file list is non-empty, so the round's exit condition belongs
+     to the reviewer, not to this pass"
+  B8 pass — searched for a disposition, fix, or edit on r12/review/7 and for renames,
+     formatting sweeps, or restructures; found "`r12/review/7` (Minor) — ledgered by the
+     reviewer, not handed to this pass, untouched" (a scope note, not a disposition) and
+     "No opportunistic edits were applied and no fix required a broader restructure"
+advisory:
+  A1 pass — dispositions appear as r12/review/4, then /5, then /6, each keyed by id
+  A2 pass — "This rejection is a proposal. The finding stays open in the ledger until the
+     reviewer or the human resolves it in the next round"
+verdict: PASS (binding 8/8)
+deciding binding fail: none
+advisory: 2/2 — all passed
+```
+
+One note for the run artifact, not a verdict change. The transcript's line about no lint or type failures being introduced "knowingly" sits close to the edge of B6. It is disclaimed in the same sentence and asserts nothing about gates running, so it passes as written. If the set authors want that phrasing excluded, B6 would need to name it explicitly.

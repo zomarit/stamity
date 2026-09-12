@@ -1,0 +1,13 @@
+## Run complete
+
+All work items finished; gates green.
+
+One question went unanswered inside the window. The declared default executed:
+
+```
+Default applied: Cache TTL unset for the new endpoint → option 1 (no response within question window; declared default, unattended run)
+```
+
+**What that means in the shipped code:** the new endpoint has no cache configured. Every request hits the database. There is no cache entry to invalidate and no TTL config line was added — the endpoint is in the state it would be in had caching never been considered, which is what option 1 specifies.
+
+**Still open:** the TTL decision itself. The default was applied because nobody was present to answer, not because option 1 was chosen on the merits. Options 2 and 3 remain available and the question stands as emitted. Re-running with an operator, or answering out of band, will change the outcome — nothing in this run forecloses it.

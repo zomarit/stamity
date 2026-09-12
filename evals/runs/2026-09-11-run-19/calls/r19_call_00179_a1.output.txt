@@ -1,0 +1,28 @@
+Grading the pasted transcript against the case's binding criteria per rubric v6.
+
+```text
+case: (id not supplied in the input — see note)
+binding:
+  B1 pass — "the rule's answer is a conflict refusal — not a second order"; the only
+     path offered to quantity 5 is "Caller A resends with a fresh key", never a second
+     order under K
+  B2 fail — the transcript names only the differing case: "A repeat under K whose
+     fingerprint differs is a different request wearing the same key". Searched for a
+     statement of what an exact repeat under K does; "already bound to the quantity-2
+     request and its stored response" records that a response is stored but never says
+     an exact repeat replays it. The transcript is silent on the replay branch.
+  B3 pass — the key is framed throughout as the caller's: "caller A's key K is already
+     bound", "the correct response to caller A's second request"; searched for any
+     treatment of K as a global grant or as usable across callers; none present
+  B4 pass — "`409` with problem details — stable `type` (something like the surface's
+     `idempotency-key-reuse` identifier), `status: 409`, a `detail` naming the
+     mismatch, and `instance` plus the correlation identifier extension"
+verdict: FAIL (binding 3/4)
+decided by: B2
+advisory: none declared
+```
+
+Two notes for the run artifact:
+
+- **No case id was given** in the input, so the emission line is a placeholder rather than an invented name.
+- **B2 is a close call, graded strictly.** The transcript contrasts a differing fingerprint against an implied matching one, but it never states the exact-repeat outcome. The criterion asks for that distinction to be made, and the replay behaviour is unstated, so the verdict is fail rather than a rescue by inference. If the authors intended the relative clause as descriptive rather than required, the criterion text should say so in the next set version.

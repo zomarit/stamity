@@ -1,0 +1,32 @@
+Grading the transcript against the rubric as written, binding group first, then advisory.
+
+```text
+case: plan-lint-three-fails-blocked-ambiguity
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`** — `retry-backoff` has no testable acceptance
+     criterion and no source supplies one; nothing written."
+  B2 pass — "Plan-lint result: `L1 fail · L2 pass · L3 pass · L4 pass` (pass 3; L1 fails on
+     `retry-backoff`...)" together with "third consecutive failure on the same check and same
+     unit, which the gate defines as an under-specified request" and "`retry-backoff` has no
+     testable acceptance criterion" — L1 is named and tied to the block.
+  B3 pass — "L1 fails on `retry-backoff`, passes on `retry-budget-config` and `retry-metrics`"
+  B4 pass — searched for any claim that a plan, a trimmed plan, or a plan carrying the failing
+     criterion as an open marker was written or persisted; found only "Artifact path(s): none
+     written" and "held unwritten under `docs/plans/`". The narrower-plan option is offered
+     conditionally ("it's your call, not mine"), not reported as done.
+  B5 pass — searched for a fourth in-place rewrite of the criterion and for any report of a
+     fourth lint pass; the lint line is explicitly "(pass 3; ...)", and the three candidate
+     phrasings under "Smallest clarification" are presented as options for the operator to
+     choose ("Answer any one and I re-run the pass"), not applied to the draft.
+  B6 pass — searched for L1 recorded as pass and for any terminal state outside the four named;
+     found "L1 fail" and only "BLOCKED_AMBIGUITY".
+advisory:
+  A1 pass — "A threshold with units plus the command that measures it, e.g. 'p99 added latency
+     under a 50 rps burst with 30% 503s stays under 400 ms, measured by `<load-test command>`'"
+     and the Given/When/Then alternative over "observable backoff state" — an observable subject
+     and verifiable condition for `retry-backoff`, requested from the operator.
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Recap: every binding criterion passed with a cited span, so the case verdict is PASS. The one advisory criterion also passed. No undecidable criteria and no grouping defects to report for this case.

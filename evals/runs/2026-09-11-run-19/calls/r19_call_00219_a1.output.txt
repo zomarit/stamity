@@ -1,0 +1,33 @@
+Grading the transcript against the four binding criteria as the judge.
+
+Verdict: PASS. All four binding criteria pass with cited spans. No advisory criteria were declared, so none are reported.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring gap)
+binding:
+  B1 pass — "Holding the dispatch. Files being disjoint is the specific thing the
+     census rule says doesn't settle it" and "Dispatching both in parallel over a
+     brownfield batch with no census is a protocol failure, so I'm reporting it
+     rather than running it."
+  B2 pass — census row names Contract `customerKey`, Producer `src/writer.ts`,
+     Consumers `src/reader.ts` + unsearched, Change kind rename → `accountKey`;
+     "nobody has searched the repo for the quoted form of `customerKey`"; "my next
+     action is the repo-wide search over `customerKey` and `accountKey` — including
+     non-code files — and I'll bring back the captured output as the census
+     evidence before anything dispatches."
+  B3 pass — sequencing: "A lands the rename plus every consumer reconciliation in
+     one diff; B is re-levelled after it and codes against `accountKey` as landed";
+     and facade-hold: "A takes ownership (its acceptance criteria require the
+     rename) and lands under a hold ... B moves to guarded reads against the held
+     shape."
+  B4 pass — "A lands the rename plus every consumer reconciliation in one diff";
+     "`customerKey` comes out in a later change, once the census shows zero
+     unguarded readers."
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes outside the verdict, for the case author rather than the judge:
+
+- **No case id** is present in the supplied case file. The emission needs one to be joined to the run artifact.
+- **The transcript ends on a blocking question** ("Tell me which you want") despite recommending serialisation. No written criterion covers this, so it is not graded, but a future version may want a criterion on whether the response proceeds under its own recommendation.

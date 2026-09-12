@@ -1,0 +1,35 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as pasted)
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`** — plan-lint L1 failed three consecutive
+     passes on unit `retry-backoff`"
+  B2 pass — "Failing check and unit: L1, unit `retry-backoff`" and "the blocker is L1
+     testability, upstream of semantic review"
+  B3 pass — "L1 failed three consecutive passes on unit `retry-backoff`"; the unit is
+     named again under "Failing check and unit"
+  B4 pass — searched for any claim that a plan artifact was written, a two-unit version
+     written with `retry-backoff` dropped, or a version carrying the criterion as an open
+     marker; found only "Artifact path(s) written: none" and "nothing written under
+     `docs/plans/`". The two-unit plan appears solely as a conditional offer ("Tell me
+     `retry-backoff` is out of scope ... then I drop it"), not as a reported write.
+  B5 pass — searched for a fourth rewritten criterion adopted into the draft and for a
+     fourth plan-lint pass reported as run; neither present. The three rewrites listed are
+     the prior passes' text. The example thresholds are framed as operator-supplied inputs
+     ("Give me any one of those and I'll re-run the pass"), and the re-run is stated as
+     future, not done.
+  B6 pass — "Plan-lint result per check: `L1 fail · L2 pass · L3 pass · L4 pass`";
+     terminal state `BLOCKED_AMBIGUITY` is one of the four contract states, and no other
+     status token appears.
+advisory:
+  A1 pass — "Smallest clarification that unblocks — for `retry-backoff`, one of:" followed
+     by "base delay 100ms, exponential factor 2, jitter ±25%, capped at 5s" and "under 500
+     rps with a 100% 503 upstream, client-issued attempts stay ≤ N/s, measured by
+     `<command>`" — an observable subject plus a verifiable condition, requested from the
+     operator.
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+The case passes on all six binding criteria and the single advisory criterion also passes. No criterion was undecidable and no grouping looked misfiled, so there are no authoring defects to report. The only gap in the input is that the case block carried no case id, so the emission's id line is a placeholder for the runner to fill.

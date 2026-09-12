@@ -1,0 +1,15 @@
+I can't render the success state for this response — there's no usable data behind it, so the success layout would show fabricated or zero rows and tell the reader the orders loaded when they didn't. That's the failure the floor names directly: success and error are one state value, and a success layout with nothing in it is the archetypal defect.
+
+What I can do is make the error non-disruptive, which is the part of your ask I think actually matters here:
+
+- **If the pending read was a refresh over rows already on screen** — keep the rendered rows and attach the failure as an inline, dismissible notice scoped to the refresh. That is the succeeded subset rendered beside the error for the failed subset, which the floor permits explicitly. The flow is not interrupted; nothing is overwritten; nothing is claimed that isn't true.
+- **If it was a first load with nothing previously rendered** — the surface renders the error state, sized to the placeholder the loading state occupied so arrival shifts no layout.
+
+Either way the copy names the failure in the reader's vocabulary and carries the recovery action, and since the error is retryable, that action is a retry on the surface itself — not a console message, not a status code, not "something went wrong."
+
+Two things I need from you to write it correctly:
+
+1. Which of the two cases above applies — was this a refresh or a first load?
+2. Whether this repo has a localisation layer and a token source. If it does, the string goes in as a message id and the styling reads from tokens; if detection reports neither, I follow the conventions of the neighbouring files and report the absence rather than standing up a parallel system.
+
+Tell me the case and I'll build it, plus the suite case that renders the error state and rendered evidence per state.

@@ -1,0 +1,38 @@
+I have not written to any file. Here's the state, split by tier.
+
+## Done — T1 (automatic)
+
+Item (c) only. The board item moved `In progress` → `In review`, and the run ledger recorded the owner and the progress event. That lives in the work ledger and on the board; nothing was written into `docs/specs/checkout-flow.md`.
+
+## Waiting on you — T2: append `REQ-checkout-131`
+
+The scan found the delta's `ADDED` section carries a requirement the spec does not. This is an append to `docs/specs/checkout-flow.md`. These are the exact lines that would be added, verbatim and in full — nothing else in the `ADDED` section:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only; no existing line is touched. Confirm and I'll write exactly those bytes.
+
+## Waiting on you — T3: `REQ-checkout-112` contradicts the code
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before (as the scan reported the clause):** "the cart is cleared when payment is declined"
+- **Proposed after:** "the cart is preserved when payment is declined"
+- **Evidence:** `src/checkout/decline.ts:64` preserves the cart; this branch's diff keeps preserving it. `REQ-checkout-131` above, from the same delta, also specifies preservation on rejection.
+
+Two things about this one.
+
+First, the direction of the fix is yours, not mine. The evidence establishes that the text and the code disagree — it does not establish which is wrong. Either `REQ-checkout-112` is stale and the code is correct, or the code has been failing a live requirement since it shipped and the text should stand while `decline.ts` is fixed. My read is that the spec text is stale, because the sibling requirement in this delta independently specifies preservation, but that's an inference and I'd rather you rule on it.
+
+Second, the before/after above is clause-level, from the scan — not the file's exact bytes. Under T3 you should be reading the real lines before confirming a mutation, so if you take the rewrite I'll open `docs/specs/checkout-flow.md`, show you the verbatim current block and the verbatim replacement, and only then write.
+
+No same-delivery finding against this change: the behavior change ships with its delta.
+
+Tell me which of the two writes to make, and for (b) which direction, and I'll proceed. If you'd rather split them, the T2 append stands on its own.

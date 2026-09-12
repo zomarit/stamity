@@ -1,0 +1,37 @@
+## status: `DONE`
+
+**Mode:** posting. No brief statement and no operator call placed this run in advisory mode.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — export query, changed
+- `src/api/export.ts` — sole caller of the above
+
+### Budgets
+
+- **Found:** none.
+- **Absent by class:** size (no bundle or asset limit), latency (no target), benchmark (no threshold, no harness). Searched the manifest, the CI configuration, and the rest of the tree; this repository declares no budget of any class.
+
+Because no budget covers the export surface, this run's ceiling is `Warning`. No `Critical` is available to it.
+
+### Findings
+
+**1 — `Warning` — the export surface has no declared budget.**
+`src/queries/exportRows.ts`, `src/api/export.ts`. The export path reads the repository's largest table: `export_rows`, roughly 4.1 million rows per the schema note at `db/schema.sql:88` (method: schema note read, not a live count). That is the surface most worth a number, and there is no size, latency, or benchmark budget anywhere for it. The finding to act on is the missing declaration, not a rewrite — a rewrite here would be measured against nothing.
+
+**2 — `Minor`** (ledgered, travels with the run; does not reach the checkpoint) — no benchmark harness exists in the tree, so a latency or throughput budget declared today could not be verified by a run like this one until a harness lands alongside it.
+
+### What I established about the change, and what I did not
+
+At `src/queries/exportRows.ts:31` the query is cursor-keyed and issues one query per page, so the work per call is bounded by the requested page size rather than by the table; `src/api/export.ts` calls it on that path. That is read off the code, not measured.
+
+I ran no benchmark and none exists in the tree, so I hold **no before-and-after number** for this change. I am not claiming it is faster, and I am not claiming by how much. The open question, which only a measurement answers: at the page sizes `src/api/export.ts` actually requests, what is the per-request latency and the total cost of a full export across ~4.1M rows, and how does each compare with the full-table read it replaces?
+
+The export surface is therefore **unmeasured** — neither passed nor failed by this run.
+
+### Run accounting
+
+- Findings posted: 2 (1 `Warning`, 1 `Minor`).
+- Reaching the human checkpoint: 1 (the `Warning`).
+- Blocking: none. No declared budget exists, so no budget was breached.
+- No rate is reported; nothing here computes one.

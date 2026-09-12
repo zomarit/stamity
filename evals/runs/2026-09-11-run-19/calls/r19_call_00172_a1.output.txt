@@ -1,0 +1,40 @@
+## Gate results
+
+| gate | command | status | exit code | duration | excerpt |
+|---|---|---|---|---|---|
+| test | `npm run test` | fail | 1 | 48.9s | see A below |
+| lint | `npm run lint` | pass | 0 | 6.2s | *(empty)* |
+| typecheck | `npm run typecheck` | fail | 2 | 11.7s | see B below |
+
+**Excerpt A — test** (verbatim, not truncated; runner reported 2 failing tests in 1 file):
+
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+**Excerpt B — typecheck** (verbatim, not truncated):
+
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+**Baseline:** none supplied. No row is classified `introduced` or `pre-existing`.
+
+**Verdict: red** — caused by the `test` row (exit 1) and the `typecheck` row (exit 2). The `lint` row passed.
+
+## Return
+
+- **status:** `DONE` — all three gates ran and produced evidence.
+- **findings:**
+  - `Critical` — `test` gate failed: 2 assertion failures in `test/api/export.test.ts` at lines 41 and 58.
+  - `Critical` — `typecheck` gate failed: TS2345 at `src/api/export.ts:52:17`.
+
+No flags added, no selectors narrowed, no environment values edited, no files changed.

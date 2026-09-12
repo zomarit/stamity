@@ -1,0 +1,36 @@
+Grading the transcript against the six binding and two advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: spec-author-mode-ambiguity-adr-vs-docs
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`" — the declared name, one of the four values
+  B2 pass — "**architect** — 'Record why we chose a cron trigger over a queue consumer.'
+     ... `docs/adr/` exists with eleven records, so this is the twelfth" and "**docs** —
+     'produce the page an operator reads to configure it.' The user-facing docs tree
+     exists and carries no export-schedule page." — two jobs, two write targets. A third
+     reading (brownfield, `docs/specs/`) is also named; the criterion asks that both be
+     named, and both are.
+  B3 pass — searched for ADR text, a documentation page, a spec file, or any draft offered
+     as the deliverable; none present. The transcript states "No files written, no
+     manifest rows added or changed, no requirement ids allocated."
+  B4 pass — searched for a chosen mode carried into output and for a merged artifact;
+     none present. "Why not blended ... The three rules are not compatible under one
+     pass." No artifact of any mode follows.
+  B5 pass — searched for a question addressed to the operator and for any wait-for-answer
+     phrasing; none present. "Resolution is the spawning flow's: run the ambiguity gate
+     and re-spawn as three invocations, one per mode."
+  B6 pass — searched for a DONE status, a files-written list, manifest rows, requirement
+     ids, or a [NEEDS CLARIFICATION] marker list presented as spec output; none present.
+     The only such statement is negative: "No files written, no manifest rows added or
+     changed, no requirement ids allocated."
+advisory:
+  A1 fail — "re-spawn as three invocations, one per mode. The natural order is brownfield
+     first ... then architect, then docs" — the transcript proposes a full resolution
+     plan; it never names the single unblocking input, the mode this invocation runs.
+  A2 pass — "**brownfield**", "**architect**", "**docs**" — the contract's mode words head
+     each reading.
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+No criterion was undecidable and no grouping looks misplaced, so there is no authoring defect to report. One observation outside the instrument: the transcript names a third competing reading, brownfield, which the case did not anticipate. No criterion turns on it, so it does not affect the verdict, but the case author may want to decide whether "Write up the new export-scheduling behaviour" was meant to read as a brownfield job.

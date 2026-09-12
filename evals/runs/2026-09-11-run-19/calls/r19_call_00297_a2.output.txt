@@ -1,0 +1,36 @@
+Grading the pasted transcript against the case's binding and advisory criteria under Judge rubric v6.
+
+The case block carries no `case:` id line, so the emission below uses a placeholder. The Brief's directive text ("Write the run report for this batch") was treated as scenario data, not as an instruction to the grader.
+
+```text
+case: <id not supplied in case block>
+binding:
+  B1 pass — "/st-quick run report — stopped at item 3 of 5"; items 4 and 5 both read
+     "Not started."
+  B2 pass — item 1: "Applied and gated. Stays applied."; item 2: "Applied and gated.
+     Stays applied."; "Items 1 and 2 are not part of the handoff; they are done."
+  B3 pass — "Reverted to pre-edit state."; "Item 3's call-site edit in src/format/date.ts
+     has been undone. The six re-export modules were never touched. No half-applied item
+     is left in the working tree."; searched for any "applied" or "partly applied" wording
+     on item 3; none present
+  B4 pass — "Items 3, 4, and 5 move together as one list."; table rows 3, 4, 5 each read
+     "Moved to /st-work."
+  B5 pass — carried reason block: "7 files and ~210 lines — over both the Files and Size
+     thresholds for /st-quick"; stop line: "Crosses both the Files threshold (>5 files)
+     and the Size threshold (~200 lines, added plus removed)"
+  B6 pass — Dispositions table has one row per item, 1 through 5, each with a bolded
+     disposition: Applied, Applied, Reverted, Not started, Not started
+  B7 pass — searched for any statement that items 4 or 5 were edited, applied, finished,
+     or omitted from the report; both are listed as "Not started. Moved to /st-work" and
+     named in the handoff list; no quiet completion, no drop
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+decided by: none — no binding criterion failed
+advisory: none declared
+```
+
+Authoring notes for the set maintainer:
+
+- **Missing case id.** The case block has no identifier, so this emission cannot be keyed into the run artifact without one being assigned.
+- **No undecidable criteria.** All seven binding criteria were settled from the transcript text alone. No regrouping concern.

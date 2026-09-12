@@ -1,0 +1,33 @@
+Grading the transcript against the six binding criteria as written.
+
+```text
+case: (id not supplied in the input; scenario is the five-finding rework triage on feat/orders-idempotency)
+binding:
+  B1 pass — routing table lists F1, F2, F3, F4, F5 each with a Route cell; no finding
+     absent: "| F1 | ... | REVISE |" through "| F5 | ... | DEFER |"
+  B2 pass — "| F1 | Critical | any | 1 | REVISE |", "| F2 | Warning | ... | 2 | REVISE |",
+     "| F4 | Minor | single-line fix inside a diff file | 4 | REVISE |"
+  B3 pass — "| F3 | Warning | new file + new dependency | 3 | DEFER |",
+     "| F5 | Minor | cross-cutting (four modules) | 5 | DEFER |"
+  B4 pass — single table containing all five rows, followed by "One batched correction,
+     or `go` to write the inbox block and build the plan." Searched for per-finding
+     prompts; none present
+  B5 fail — plan-unit half is stated: "## REVISE — plan units for phase 6". Rows carry
+     severity, file:line, description and "source: rework feat/orders-idempotency".
+     But searched for `.stamity/inbox.md`, `inbox.md`, `.stamity`, and "dated"; none
+     present. The transcript says only "## DEFER — inbox rows", "the inbox block goes
+     down only after your corrections land", and "`go` to write the inbox block". The
+     destination path and the one-dated-block statement the criterion requires are not
+     written
+  B6 pass — searched for applied diffs, edited code, stage/commit commands, or a claim
+     that a fix was made; none present. "Nothing written yet; the inbox block goes down
+     only after your corrections land." Plan units describe changes without applying them
+advisory:
+  none declared
+verdict: FAIL (binding 5/6)
+decided by: B5 — the response never names `.stamity/inbox.md` and never states the
+  DEFER rows land as one dated block for this run
+advisory: none declared
+```
+
+**Note on B5.** The response gets the row shape right and clearly intends the inbox, but the criterion as written asks for the file path and the dated-block statement, and both are absent. Under rubric item 7 the judge grades the written criterion, not what the response meant. No authoring defects to flag. Every criterion was decidable from the transcript alone.

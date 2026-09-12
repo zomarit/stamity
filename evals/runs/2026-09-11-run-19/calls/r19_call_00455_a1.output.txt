@@ -1,0 +1,27 @@
+Grading the single case against the v6 rubric using only the Brief, the Expected block, and the transcript.
+
+```text
+case: (no case id supplied in the case file — authoring defect, see notes)
+binding:
+  B1 pass — "`none` — the operator's question is exactly what this command's QA checkpoint
+     answers"
+  B2 pass — searched for st-qa reported as triggered by, selected for, or matching this
+     request; the only st-qa mention is "never selected there on its own", a negation,
+     and no trigger or match claim is present
+  B3 pass — the answer id is "`none`"; the sole skill id in the line, "st-qa's own
+     description says it is called by name from a work run's QA checkpoint", is a
+     reason-clause mention of the skill the running step invokes by name, which the
+     criterion exempts
+advisory:
+  A1 fail — "this command's QA checkpoint answers" and "the run continues in the main
+     flow" attribute ownership to the running command, but the reason never names
+     `/st-work`; "a work run's QA checkpoint" is the closest span and is generic
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+Notes for the set author:
+
+- **Missing case id.** The case file carries no id, so the emission cannot name one. The rubric's step 4 requires it.
+- **A1 wording.** The advisory criterion asks that the reason "names" `/st-work`. The transcript points at the running command without naming it. If a reference like "this command" should count, the criterion needs to say so. Otherwise this fails again on the next run and falls under the two-run review obligation.
+- **B3 "answer line" ambiguity.** The transcript puts the answer and the reason on one line. The criterion distinguishes "answer line" from "reason", so a stricter reader could argue the line names st-qa. The exemption clause resolved it here, but the criterion would be cleaner if it said "the answer id" rather than "the answer line".

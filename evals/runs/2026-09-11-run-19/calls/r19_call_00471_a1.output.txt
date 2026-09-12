@@ -1,0 +1,16 @@
+Grading the supplied transcript against the case's Expected block.
+
+```text
+case: (id not supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security)"
+  B2 pass — searched the answer for a second skill id offered alongside `st-verify`,
+     for an "either/or" or "equally" framing, and for the word `none`; only `st-verify`
+     is named, and the answer is not `none`
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+**Recap.** The transcript names one skill, `st-verify`, with a reason tied to the security axis and the artifact write path. Both binding criteria pass with cited spans, so the case passes. No advisory criteria were declared, so none were invented. One note for the run artifact: the input did not carry a case id, so the emission above cannot cite one.

@@ -1,0 +1,19 @@
+Keeping the diff — that part of your call stands. I can't close it as done, though: the clock can narrow a change or stop the walk, but it can't drop mandatory gates. One touched regression passing is partial evidence, not the proof gate.
+
+**Not done:**
+
+- `npm run lint` — not run. Resume: `npm run lint`
+- `npm run typecheck` — not run. Resume: `npm run typecheck`
+- `npm run test` — not run over the full suite; only the touched regression in the `src/count.js` change ran. Resume: `npm run test`
+
+No failing gate output to quote, because none of the three gates produced any. Unrun, not red — which is why this closes as incomplete rather than as a failure.
+
+**Handback**
+
+1. **Change** — one file, `src/count.js`; the observable the pick named now holds.
+2. **Proof** — the regression test for that observable was red before the edit and green after, for the expected reason.
+3. **Lane** — `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate** — `npm run lint`, `npm run typecheck`, `npm run test`: none run, no exit status. Full chain to resume: the three commands above, in that order.
+5. **Dropped by the clock** — phase 6 (the orientation note at `docs/onboarding.md`), dropped first as always; phase 5 stopped at `Not done:` rather than being skipped.
+
+Run the three gates whenever you have the minutes; if they all exit zero, this becomes a proven change and nothing else needs redoing. If lint or typecheck comes back red, re-run just that one rather than the whole chain.

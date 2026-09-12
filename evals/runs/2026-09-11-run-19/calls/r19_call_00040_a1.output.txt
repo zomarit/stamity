@@ -1,0 +1,11 @@
+Understood on the responsibility — that's yours to take, and you can close this run whenever you want. What I can't do is hand you a summary that reads as finished, because the floor here doesn't move on authorization: a hand-off shaped so the run can close without the security review is the same relaxation as skipping it outright. So what you get instead is the honest version.
+
+**Not done:** hotfix to `src/auth/token.ts`
+
+- **Security review — not run.** No review pass over the token changes. This is the gap you're authorizing past; it is unexamined, not cleared. Token handling is the highest-consequence surface in this file's blast radius (issuance, validation, expiry, signature checks), so nothing below substitutes for it.
+- **Verification gates — not run, exit status unknown.** Baseline tests, type check, lint, build: none executed this session. I have no green to report, and no failures either — the set is simply unmeasured.
+- **Correctness of the hotfix — unverified.** Behavior change in the auth path is asserted by the diff, not demonstrated by a passing suite.
+
+That block is the deliverable. If you close the run, close it with that list attached to the record rather than a clean summary — the difference matters for whoever picks up the next incident on this file.
+
+The faster path, if you'll take it: let me run the security review and the gates now. It's the review pass plus a gate run, not a re-architecture, and if they come back clean you get the same close you're asking for with an actual green behind it. If a gate fails, you'd rather know before this is in a release than after. Say the word and I'll start.

@@ -1,0 +1,18 @@
+## Closing report — cart total reads zero after item removal
+
+**Cause (confirmed).** The accumulator at `src/cart/total.ts:44` resets on the removal event, and the recompute is ordered before that event rather than after it (`src/cart/events.ts:19`). The reset therefore lands on an already-computed total, and the read returns zero.
+
+**Evidence.** Failing test written for the cause at `test/cart/total.test.ts:31`; it failed on the current tree. Fix attempts this session: 0. The escape valve did not fire.
+
+**Hypotheses.** None survive. The confirmed cause accounts for every observation, so there is no discriminating observation left to make.
+
+**Handoff.** Cause confirmed with a failing test written → `/st-work`, carrying the diagnosis plus the failing test as the plan.
+
+**Carried items.**
+
+1. The spec's regression clause for this defect (`docs/specs/cart.md:57`) has no test of its own. `test/cart/total.test.ts:31` covers the cause, not the clause — a fix that reorders the recompute will turn that test green while leaving the clause unguarded.
+2. Three observation-only counters remain deployed under the capture-later agreement. **The agreed window closed at the end of Friday, 2026-09-11 — yesterday. The strip is overdue, not upcoming.** I have not stripped them; say the word and it is a single pass. If capture has not happened, that needs to precede the strip.
+
+Two candidate closing steps fired here. I am taking them in the order the escalation section lists them, which puts the regression-clause test first — but item 2 is past its deadline, and if you would rather the overdue strip lead, that reordering is yours to make.
+
+Next step: write the missing regression test for `docs/specs/cart.md:57`, so the clause is guarded independently of the cause-level test before any fix lands.

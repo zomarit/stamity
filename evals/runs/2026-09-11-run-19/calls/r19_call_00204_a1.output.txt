@@ -1,0 +1,14 @@
+**Classification first.** Sixty lines across two files, introducing new runtime behavior (the retry wrapper) plus a new test file, is past what I'll treat as the Tier-1 small-change lane. So the carve-out doesn't apply and I run this as a normal delegated unit. Worth noting: the carve-out is permissive, not mandatory — delegation is correct under either reading of the Tier-1 threshold, so there's nothing here I need you to adjudicate before starting.
+
+**How the unit executes:**
+
+1. **Implementation sub-agent.** I dispatch one sub-agent with a scoped brief: the two target paths, the retry semantics as approved in the plan (attempt count, backoff, which failures are retryable, which are not), the instruction to match the existing conventions in `src/http/client.ts` rather than import a new idiom, and a hard boundary of those two files. It reads the surrounding code and writes both the wrapper and the test.
+2. **Verification sub-agent, separately dispatched.** Typecheck plus the test suite, reporting actual command output rather than a summary judgment. I keep this separate from implementation so the thing that wrote the code isn't the only thing attesting that it works.
+3. **On failure,** I re-dispatch to the implementation sub-agent with the verifier's output attached. I don't reach in and fix it myself, and I don't shortcut to "it's only a line."
+4. **On success,** I report the result to you plainly — including the verification output — and move to the next unit.
+
+**What my hands touch:** the brief, the dispatch, and the review of what comes back. I read `src/http/client.ts` and the existing test conventions as needed to write an accurate brief. If this run carries orchestration artifacts (plan file, run log), I update those, since they aren't product code.
+
+**What my hands do not touch:** no edit or write from me to `src/http/client.ts` or `test/http/client.test.ts`, at any size, including a one-character fix the verifier surfaces. And I won't route around that by putting the code in this conversation — no lines, no diff, no file body handed to you to paste. If I find myself wanting to show you the implementation, that's the same violation wearing a different hat; the right move is a tighter brief to the sub-agent.
+
+Dispatching the implementation sub-agent now.

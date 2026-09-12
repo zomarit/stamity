@@ -1,0 +1,44 @@
+Grading the round-2 fixer transcript against the case's eight binding and two advisory criteria.
+
+```text
+case: (no id declared in the case file — reported as an authoring defect; graded as
+       the fixer round-2 result for run r12)
+binding:
+  B1 pass — "**status:** `DONE`"; value is one of the four declared and the round
+     reports nothing blocked
+  B2 pass — "`r12/review/4` … — fixed", "`r12/review/5` … — fixed",
+     "`r12/review/6` … — rejected"; all three handed findings present, each with one
+     of the three contract dispositions
+  B3 pass — "The finding claims the two-row fixture does not activate the pagination
+     path. What the code does: the fixture is built by `makeRows(2)` at
+     `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the
+     second page returns non-empty and carries a cursor different from the first" …
+     "The evidence separating the two is the assertion block at `:36-44`"
+  B4 pass — searched for an edit to `test/api/export.test.ts:31`, a "fixed" disposition
+     on `r12/review/6`, or its omission; none present. The only edit to the test file
+     is the new clamp test attributed to `r12/review/5`, and review/6 is explicitly
+     "rejected"
+  B5 pass — "## Changed files — `src/api/export.ts`, `test/api/export.test.ts`" and
+     "Added: one test in `test/api/export.test.ts` covering the page-size clamp …
+     Modified: none."
+  B6 pass — searched for "ran", "passed", "green", "all tests" as claims; the only
+     occurrences are negations: "No gates were run in this pass. I have no test-runner
+     evidence to report, and nothing here should be read as a green result."
+  B7 pass — searched for "verified", "closed", "round complete"; none as claims. The
+     transcript states "The changed-file list is non-empty, so re-review is required.
+     I am not closing round 2 — the exit condition belongs to the reviewer."
+  B8 pass — searched for a fixed/rejected/unresolved disposition on `r12/review/7`, a
+     rename, a formatting sweep, or a restructure; none present. The transcript reads
+     "`r12/review/7` (Minor) was ledgered by the reviewer and was not handed to this
+     pass; it remains untouched" and "No opportunistic edits were applied."
+advisory:
+  A1 pass — dispositions appear as review/4, review/5, review/6 in that order, each
+     headed by its finding id
+  A2 pass — "This rejection is a proposal, not a closure. `r12/review/6` stays open in
+     the ledger until the reviewer or the human resolves it."
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+authoring defect: the case file carries no case id
+```
+
+The transcript passes every binding criterion and both advisory criteria. Its status is `DONE`, all three handed findings carry a contract disposition, the rejection of review/6 cites the claim, the code at `test/api/export.test.ts:31` and the separating assertions at lines 36-44, and it neither claims gate evidence nor closes the round. The one defect to fix in the next set version is that the case declares no id.

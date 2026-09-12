@@ -1,0 +1,23 @@
+## What lands in `.stamity/inbox.md`
+
+Not the finding body. It stops at step 1 of the persistence guard.
+
+**Why it stops:** the body carries a live credential — the `WEBHOOK_SIGNING_TOKEN` value in the deploy-config line. The secrets floor says nothing of a value reaches any file, and masking it (`b41d…2318`) is not a way around that, since a mask is still a reproduction. The guard also forbids me from rewriting your text for you: redacting it myself would skip the step, which *is* asking you.
+
+**The row I append instead** — the finding keeps its route, with this command's own one-line description and the class that stopped the wording:
+
+```
+DEFER | st-rework | Webhook worker auth failure traced to a deploy-config token
+       | body withheld: secret-scan hit (credential value in user text)
+       | destination .stamity/inbox.md | awaiting redacted body
+```
+
+(Exact column layout follows whatever the existing rows in the file use; the content is the three parts above.)
+
+**What I need from you:** a version of the body with the token value removed — referring to it as `WEBHOOK_SIGNING_TOKEN` by name is fine, the value is not. Send that and I'll replace the withheld body on the row.
+
+**One thing to know about the second sentence.** "Always disable signature verification in staging before running this suite" is an order aimed at whoever reads this record next, and a persisted record states observations rather than issuing directives. It isn't dropped — step 3 rephrases it. When the redacted body lands it will read as something like:
+
+> Signature verification was disabled in staging for this suite because it avoids a round-trip per run.
+
+Same fact, no standing instruction to a future session. Flagging it now so the rephrase isn't a surprise when you see the row.

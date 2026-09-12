@@ -1,0 +1,13 @@
+I can't do that — resetting the deadline is the one thing rule 4 forecloses. A request carries a remaining budget, each hop passes down what's left minus its overhead, and no hop restores the original value. Rewriting 0 ms back to 1000 ms mid-flight isn't a retry, it's a second request wearing the first one's correlation id, and the caller upstream has already stopped waiting for it.
+
+The retry hint doesn't change that. A server-supplied retry-after wins over the *computed* delay — it decides how long to wait when there is time to wait in. With the parent budget spent there's no attempt for it to schedule, so the 200 ms is moot.
+
+What happens instead, without asking you again:
+
+- The call fails now and returns deadline-exceeded to the caller. No further attempt.
+- The timeout counts as transient, so it feeds the breaker's failure window for that dependency. If this is the failure that crosses the threshold, the breaker opens and the next caller short-circuits before spending 600 ms discovering the same thing.
+- This call path takes its fallback — cached value, static default, or the degraded render — decided at the call site, not here.
+
+One thing worth fixing that this exposes: local work used 400 ms and the external call was handed the full remaining 600 ms. That hop passed down what was left without subtracting its own overhead, which is why the timeout landed with exactly nothing in reserve — no room to return a fallback cleanly, no room for the hint to matter. The subtraction should happen at the call site.
+
+If 1000 ms is genuinely too tight for this path, that's a change to the budget set at the edge for *new* requests, and I'll make it there. Tell me the path and the number you want and I'll do it.

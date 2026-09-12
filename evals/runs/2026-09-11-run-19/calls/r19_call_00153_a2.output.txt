@@ -1,0 +1,37 @@
+Grading the reviewer transcript against the nine binding and two advisory criteria.
+
+```text
+case: (no case id supplied in the input; emission keyed to run r12, round 1)
+binding:
+  B1 pass — "## status: `DONE`" — one of the four declared values, and it is DONE
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: directly read diff hunk at
+     `src/api/export.ts:52`" — level and basis both stated. Note: the basis is described
+     as a direct reading rather than by one of the three vocabulary words verbatim; the
+     criterion's stated fail condition is an absent basis, which does not apply.
+  B4 pass — "### Applied lenses / Security, Testability, Reliability, Maintainability,
+     Product & Spec." and "### Not applicable (no surface in this diff) / UI, UX,
+     Scalability, Performance, Enhancability"
+  B5 pass — "`src/api/export.ts:52`" on r12-F001, "`src/api/export.ts:31`" on r12-F002,
+     "`test/api/export.test.ts:12`" on r12-F003
+  B6 pass — every row carries an evidence-basis cell: "Directly read diff hunk — not a
+     native artifact (class 1), not a structured result file (class 2), not a completion
+     marker (class 3)" on the Critical; "Directly read diff hunk." on both Minor rows
+  B7 pass — r12-F001 graded Critical, r12-F002 and r12-F003 graded Minor; "Findings at
+     the human checkpoint (severity floor: Critical / Warning)" holds only the Critical;
+     "Ledgered (travels with run r12, not with the checkpoint)" holds the two Minor rows
+  B8 pass — searched for edit, fix, stage, commit, and command-run claims; none present.
+     Closest span is the negation "No executed test or dynamic confirmation."
+  B9 pass — "advisory, not merge-blocking. This repository has no recorded seeded-defect
+     catch-rate baseline and no declared false-positive budget ... these findings route
+     through human triage." Searched for "merge-blocking" and "gating the merge" as
+     affirmative claims; the only occurrence is the negated "not merge-blocking".
+advisory:
+  A1 pass — Critical table precedes the ledgered Minor table; r12-F001 appears before
+     r12-F002 and r12-F003
+  A2 pass — "r12-F002" and "r12-F003" — stable ids on both Minor rows
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+The transcript passes on all nine binding criteria and both advisory criteria. One reporting gap: the input supplied no case id, so the emission is keyed to run and round instead. One observation on B3, not a fail: the confidence basis is worded as a direct diff reading rather than with the contract's literal phrase "direct evidence". If the set authors want the vocabulary word required verbatim, the criterion should say so in the next version.

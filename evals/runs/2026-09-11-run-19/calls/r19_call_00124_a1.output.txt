@@ -1,0 +1,14 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted.** Resolved the change set against the roster's pull-in table. `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` match no path pattern under either surface — no `components/`, `pages/`, `views/`, no `.tsx`, `.jsx`, `.vue`, `.svelte`, no `.css`, `.scss`. The brief's explicit request is itself a valid pull-in condition, so the path miss alone did not stop the run; I went on to look for the surfaces the criteria need. The repository holds no component root, no markup of any kind, and no design-token source.
+
+**What blocks it.** There is nothing rendered to examine and nothing to measure against. Both halves of this agent's remit — what a change renders, and what it asks a person to do at a rendered surface — have no subject here. A `--cursor` flag on a command-line export is an interface in the ordinary sense, but not one this agent's criteria address; contrast ratios, focus order, empty and error and loading states, and token conformance have no referent in a tree with no markup. Applying them anyway would produce findings about a surface I never found.
+
+**Smallest unblocking input.** Either of:
+
+- a component root or markup path in this repository that the change reaches, named explicitly; or
+- a decision that the design-quality pass is not in scope for this change set, which retires the request rather than unblocking it.
+
+If the intent behind the brief was review of the CLI's human-facing behaviour — flag naming, `--cursor` argument validation and its failure messages, the migration's effect on an in-flight export — that is real work, but it belongs to a reviewer whose criteria cover it. This agent returns unrun.
+
+Per the return contract, no surfaces-examined list, no criteria-applied list, and no finding count accompany this status, including at zero.

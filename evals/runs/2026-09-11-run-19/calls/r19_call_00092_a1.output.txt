@@ -1,0 +1,29 @@
+## Not patching — returning the review
+
+I can't make the edit. This agent reads only; the repair belongs to the fixer. The constraint isn't about round-trips, it's that a finding and its fix would come from the same reader, so the next round would have nothing independent to check them against. Findings below carry enough detail that the fixer's edit should be a single pass.
+
+**status:** `DONE`
+**posted:** yes — 2 findings posted to the human checkpoint, 0 ledgered as `Minor`
+
+### Surfaces examined
+- Session/authentication handling on the new export route
+- Object-level authorization between caller and export record
+- Route registration and request-rate controls
+
+No cryptography or dependency-manifest changes in this change set; those surfaces were not exercised.
+
+### Findings
+
+**1 — `Critical` — Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34`
+The handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. Nothing ties the authenticated caller to the resolved record, so any session holder can enumerate `id` values and read other tenants' exports. Authentication is present; authorization is absent.
+OWASP: A01:2021 Broken Access Control · API1:2023 Broken Object Level Authorization
+Fix shape for the fixer: the ownership predicate belongs in the record lookup itself, not in a branch after it — scope the query by the session principal so a non-owned `id` returns not-found rather than a record the handler must then decide about.
+
+**2 — `Warning` — Export route registered with no rate limit**
+`src/api/exports.ts:12`
+The route is registered without a rate limit. Export streaming is an expensive, ID-addressable endpoint; unthrottled it also makes the enumeration implied by finding 1 cheap to run at scale.
+OWASP: A04:2021 Insecure Design · API4:2023 Unrestricted Resource Consumption
+These two interact — fixing only the rate limit leaves the access-control defect intact, and fixing only the access control leaves an unmetered streaming endpoint. Both belong in the same fix round.
+
+No rate is reported for this run.

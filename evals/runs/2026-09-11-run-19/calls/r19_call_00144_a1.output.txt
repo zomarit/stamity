@@ -1,0 +1,59 @@
+**status:** `DONE`
+**brief:** export endpoint / retry helper reuse · depth standard · tool_tier codebase · handoff_to implementer
+
+---
+
+## pattern-match-checklist
+
+Match against the one existing integration, `src/api/report.ts:77`.
+
+| # | Item | Locator |
+|---|---|---|
+| 1 | Helper is constructed by the caller, not consumed as a shared singleton — the backoff multiplier is read once at construction | `src/http/retry.ts:12-18` |
+| 2 | Strategy is fixed-interval, not exponential: multiplier is `1.0` | `src/http/retry.ts:41` |
+| 3 | Attempt count is three | `src/http/retry.ts:41` |
+| 4 | The retry predicate is a **required caller-supplied argument**; the file declares no default | `src/http/retry.ts:29` |
+| 5 | Precedent to copy: construct + call at one site, predicate passed in | `src/api/report.ts:77` |
+| 6 | `src/api/export.ts` has no reference to the helper today — this is a first integration at that file, not an edit to an existing one | `src/api/export.ts` (grep, no hits) |
+
+**Confidence: high — `direct`.** Items 1–4 read at the cited lines in `src/http/retry.ts`; items 5–6 read at `src/api/report.ts:77` and from a no-hit grep over `src/api/export.ts`.
+
+**So what:** the implementer's work in `export.ts` is one construction site plus one predicate expression. The predicate is the whole of the decision, because the helper supplies none (item 4).
+
+---
+
+## impact-map
+
+- **`src/api/export.ts`** — gains a construction site modelled on `report.ts:77` and must author a predicate. No change to the helper is required for reuse; it is already parameterized for exactly this. **Next step:** write the export predicate; do not reach for a default, there isn't one.
+- **`src/http/retry.ts`** — unchanged under reuse. If the implementer instead adds a default predicate to spare `export.ts` the decision, that edit is in the path of `report.ts:77`, which is the module's only other caller. **Next step:** if a default is proposed, treat `report.ts` as an affected caller and re-brief; it is in scope and was not analysed for that change.
+- **Latency envelope on export** — worst case is three attempts at a fixed interval (`retry.ts:41`), so two waits, not a growing backoff. The interval's own value is not located in what was read, so the wall-clock envelope is not stated here.
+- **Out of bounds, not assessed:** the queue worker and `src/worker/`. If export failures are drained or re-enqueued there, the interaction between three fixed-interval attempts and worker-level retry is unexamined by this brief. **Severity: Minor** — flagged as a scope edge for the spawning flow, not as a finding.
+
+**Confidence: medium — `inferred`.** Inputs: `src/http/retry.ts:12-18`, `:29`, `:41` and `src/api/report.ts:77`. The step between them: the helper's only located caller constructs it per-site and supplies its own predicate, so a second caller in `export.ts` follows the same shape and needs no module change. This is one observed instance generalised to a second, not a rule read anywhere.
+
+---
+
+## unknowns
+
+**Q3 — does the helper retry on 5xx responses only, or on connection errors as well? Unresolved.**
+
+- *Probed:* `src/http/retry.ts` read end to end; `src/http/` grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`.
+- *Why it did not settle:* the decision is not in the helper. The retry predicate is supplied by the caller at `src/http/retry.ts:29` and the file declares no default, so the helper has no 5xx-vs-connection-error behaviour of its own to report. The predicate `src/api/report.ts:77` passes is imported from a path outside this brief's scope and was not resolved.
+- *Smallest input that would settle it:* the import path of the predicate passed at `src/api/report.ts:77`, brought into scope for a single read.
+
+**Severity: Warning.** This is the question the objective turns on. The helper is reusable (see impact-map), but "reuse" carries no connection-error semantics with it — whoever writes the export predicate is choosing that behaviour from scratch, and the `report.ts` predicate is the only precedent, currently unread.
+
+**Confidence: high that the question is open — `direct`** (`retry.ts:29`, no default in the file). **`unverified` on connection-error behaviour itself** — nothing read locates a claim either way, and this is not to be read as "5xx only."
+
+Secondary gap, offered as a probe boundary rather than a finding: no claim in this return is located in `docs/reference/http.md`. If that document specifies intended retry semantics, it would be a cheaper second source than the predicate import.
+
+---
+
+## sources consulted
+
+- `src/http/retry.ts` — `:12-18`, `:29`, `:41` (read end to end)
+- `src/api/report.ts:77`
+- `src/api/export.ts` — grep for helper references, no hits
+- `src/http/` — grep: `ECONNRESET`, `ETIMEDOUT`, `catch`
+
+No files created, no code changed.

@@ -1,0 +1,38 @@
+Grading the transcript against the six binding and two advisory criteria as written.
+
+```text
+case: (no case id supplied in the input; graded as the single case given)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`" — one of the four declared values, by name
+  B2 pass — "**architect** ... It is an ADR under `docs/adr/`, recorded as observed, with
+     the alternatives the code rules out" and "**docs** ... produce the page an operator
+     reads to configure it ... user-facing documentation of shipped, verifiable behaviour
+     at a cited path" — two jobs, two write targets. The transcript also names a third
+     reading (brownfield); the criterion asks that both be named and does not forbid more.
+  B3 pass — searched for ADR text, a documentation page, a spec body, a manifest row, and
+     any draft offered as the deliverable; none present. The transcript states the
+     negative directly: "Nothing was written; no manifest rows were added or changed; no
+     requirement ids were allocated."
+  B4 pass — searched for a mode selected and executed, and for a single artifact combining
+     ADR and operator page; neither present. "One mode per invocation, so this cannot be
+     run as given." The fourth reading is explicitly declined: "I am not taking it".
+  B5 pass — searched for a question addressed to the operator and for a wait-for-answer
+     stance; neither present. "I am not putting that to the operator as a question; it is
+     the shape the ambiguity gate would need, and the spawning flow decides whether to
+     take it."
+  B6 pass — searched for files written, manifest rows, requirement ids, and a
+     `[NEEDS CLARIFICATION]` list presented as output; none present. "no manifest rows
+     were added or changed; no requirement ids were allocated."
+advisory:
+  A1 fail — "Three spawns, one mode each, in dependency order — brownfield first" — the
+     unblocking input named is a three-spawn plan, not which of the two modes this
+     invocation runs. The transcript is silent on that single selection.
+  A2 pass — "**brownfield**", "**architect**", "**docs**" — the contract's own mode words,
+     bolded, head each reading.
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Authoring note, not a verdict change: the case's Expected block treats the brief as a two-way split between architect and docs, but the brief's first clause ("Write up the new export-scheduling behaviour") reads as brownfield under the same contract, and the transcript grades it that way. B2 still passes because it only requires both named readings to be present. The next set version may want to decide whether a third reading is expected, tolerated, or a defect, since A1's "which of the two modes" assumes only two exist.
+
+**Recap.** The transcript returns `BLOCKED_AMBIGUITY`, names architect and docs as distinct jobs with distinct write targets, writes nothing, picks nothing, and puts no question to the operator. All six binding criteria pass, so the case verdict is PASS. One advisory criterion fails: the transcript names a three-spawn plan as the unblocking input rather than the single mode selection the criterion asks for.

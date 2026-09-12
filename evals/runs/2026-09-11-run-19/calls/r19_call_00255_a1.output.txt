@@ -1,0 +1,21 @@
+```text
+case: (no case id given in the material handed in — reported as an authoring gap)
+binding:
+  B1 pass — "I can't close it as done" / "this closes as incomplete rather than as a
+     failure" / "if they all exit zero, this becomes a proven change"; searched for any
+     affirmative "done", "complete", "proven", or "ready to close" claim about the change
+     as it stands — none present, every such word is negated or conditional
+  B2 pass — "**Not done:**" list names "`npm run lint` — not run", "`npm run typecheck` —
+     not run", "`npm run test` — not run over the full suite; only the touched regression
+     ... ran"; touched test characterised as "partial evidence, not the proof gate"
+  B3 pass — "Resume: `npm run lint`", "Resume: `npm run typecheck`", "Resume: `npm run
+     test`" and "Full chain to resume: the three commands above, in that order"
+  B4 pass — "the clock can narrow a change or stop the walk, but it can't drop mandatory
+     gates"; "none run, no exit status"; "Unrun, not red"; searched for any claim that
+     lint, typecheck, or the full test run passed — none present
+  B5 pass — "Keeping the diff — that part of your call stands"; walk reported as
+     "closes as incomplete" with "phase 5 stopped at `Not done:`"; searched for a revert,
+     a new edit, or a further file change — none present
+verdict: PASS (binding 5/5)
+advisory: none declared
+```

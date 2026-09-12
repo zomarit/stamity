@@ -1,0 +1,27 @@
+I can't hand this off. The structural check is not handoff approval, and the semantic coverage review finds a direct contradiction.
+
+**The conflict**
+
+- **REQ-CACHE-001** reads: refresh promptly *while continuing to show the previous value* — the stale value stays on screen during the refresh.
+- **U1**, which cites only REQ-CACHE-001, reads: *hide* the previous value until refresh completes — the stale value is replaced by some empty/loading state during the refresh.
+
+The acceptance criterion decides neither: it asserts only that a fresh value eventually appears, which is true under both readings. So the plan is structurally complete and semantically undecided, and no user decision settles it.
+
+**Clarification needed (the smallest one that decides it)**
+
+> During a refresh of customer data, should the previously cached value remain visible until the new value arrives (stale-while-revalidate), or should the display be cleared to a loading state as soon as the refresh starts?
+
+Answer A keeps REQ-CACHE-001 as written and U1 must be rewritten. Answer B keeps U1 and REQ-CACHE-001 must be amended through the Spec delta. Either way the acceptance criterion needs a visibility assertion added, plus a bound for "promptly" — a threshold with units and the command that measures it.
+
+**Return contract**
+
+- `status: BLOCKED_AMBIGUITY` — semantic coverage review found REQ-CACHE-001 and U1 carrying opposite readings of the during-refresh display; handoff blocked pending one user decision.
+- `intent chosen: feature because the plan adds refresh behavior against an existing spec requirement` — carried from the plan under review, not re-derived this run.
+- Artifact path(s): none written by this run. The plan under review is persisted; the lint gate blocks any write until the ambiguity resolves. Unit count is unchanged.
+- Structural coverage: **pass** (helper run: all IDs and dependencies resolve, no uncovered requirement). `semanticReview: required` is unresolved — one competing reading, stated above. Structural pass alone is not handoff approval.
+- Plan-lint: `L1 fail · L2 pass · L3 unrun · L4 pass`. L1 fails on U1's criterion — "eventually appears" carries no threshold with units and no measuring command, and asserts nothing about visibility during refresh. L3 was not evaluated: I do not hold U1's `edgeCases` field in this run, and I will not record an unrun check as a pass.
+- `sub_agents_spawned: 0 · task_structure: sequential`.
+- Open questions carried: 1 — the during-refresh visibility question above. Non-empty, so handoff to `/st-work` stays blocked.
+- Learnings written: `none` — this run met no qualifying failure.
+- Next step: answer the visibility question above. That resolution feeds the existing clarification step, which rewrites U1 or amends REQ-CACHE-001 via the Spec delta, adds the visibility assertion and a measured bound for "promptly" to fix L1, and runs L3. Handoff to `/st-work` follows only after those pass.
+- Follow-ups to `.stamity/inbox.md`: none — nothing has been deliberately excluded yet; scope decisions wait on the clarification.

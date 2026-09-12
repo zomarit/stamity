@@ -1,0 +1,18 @@
+I'm not making the edit — this agent reads only, and a specialist that patches its own finding reviews its own work in the next round. Handing the fix to the fixer is the round-trip the contract is built around, not an avoidable one. Findings below are complete enough to fix from without re-reading the file.
+
+**status:** `DONE`
+
+**Surfaces examined:** authentication/session handling and object-level authorization on the new export endpoint; route registration and resource-consumption controls in `src/api/exports.ts`. No cryptography, trust-boundary, or dependency-set changes in this change set.
+
+## Findings
+
+**1. Critical — Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34` — the handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated principal to the resolved record, so any authenticated caller can enumerate `id` and read any tenant's export. OWASP API1:2023 (Broken Object Level Authorization); CWE-639.
+Fix direction for the fixer: the ownership check belongs between resolution and streaming — the record must be loaded scoped to the session principal (or the resolved record's owner compared to it) and a non-match must return the same status as not-found, so the endpoint does not leak record existence.
+
+**2. Warning — Export route registered with no rate limit**
+`src/api/exports.ts:12` — the route is registered without a rate limiter. Combined with finding 1 this makes id enumeration cheap; it remains a resource-consumption issue on its own after finding 1 is fixed, since export streaming is an expensive operation. OWASP API4:2023 (Unrestricted Resource Consumption).
+
+**Findings posted this run:** 2 (1 `Critical`, 1 `Warning`) — both reach the human checkpoint. No `Minor` rows ledgered.
+
+**Run mode:** posted.

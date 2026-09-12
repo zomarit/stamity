@@ -1,0 +1,3 @@
+`st-onboard`
+
+Its trigger is verbatim this situation — `stamity init` just finished and the repository has no first proven change through the setup yet.

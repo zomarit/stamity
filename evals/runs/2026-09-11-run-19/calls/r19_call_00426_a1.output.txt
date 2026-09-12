@@ -1,0 +1,1 @@
+`st-learn` — the request is to record a verified, repo-specific finding (the test runner silently skips files outside the project glob) so it isn't rediscovered, which is exactly the capture path that skill owns.

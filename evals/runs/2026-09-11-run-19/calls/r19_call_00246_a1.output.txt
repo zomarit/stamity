@@ -1,0 +1,19 @@
+The drop doesn't ship yet. Three separate gates are open, and the elapsed window doesn't close any of them.
+
+**1. The backfill isn't finished.** Two batches failed. Those key ranges were never copied, so the old column is still the only copy of that data. Dropping it destroys rows, and no reversal covers that — a revert deploy doesn't bring back a dropped column's contents, and "restore from backup" discards every write since the snapshot.
+
+**2. Verification never ran.** The rule gates the destructive step on verified completion, not elapsed time, and the change that drops has to quote the verification result. Right now there is no result to quote — no row-count parity, no per-partition aggregate, no sampled checksum.
+
+**3. The previous release still reads the old column.** That is the part that's easy to misread as satisfied. The window's condition isn't "time passed"; it's "time passed *with the previous release able to run against the current shape*." Drop the column and the previous release cannot run, so rollback evaporates at the exact moment the irreversible step lands. The clock you've run out was measured against a predecessor that still depends on the column, so for the purpose of this drop it hasn't started.
+
+## What I'd do instead
+
+1. **Diagnose the two failures before re-running them.** A batch that failed on a constraint violation or an unconvertible value will keep failing, and a backfill that silently skips those rows will produce clean-looking parity counts over an incomplete set. I want the actual error before I touch the ranges.
+2. **Resume those ranges from their persisted boundaries.** The backfill is idempotent, so re-running a partly-applied range is safe; throttle stays on the existing replication-lag threshold.
+3. **Run verification layered cheapest first** — per-batch row-count parity, per-partition aggregate, then checksum over sampled blocks — and record the output so the eventual drop can cite it.
+4. **Ship a release whose reads no longer touch the old column at all**, then let the window run from there: one full release cycle plus one on-call rotation, so the release you'd roll back to survives the drop.
+5. **Then the drop ships as its own change**, separate from the backfill, quoting the verification result.
+
+If the pressure here is something other than schedule — disk, a blocked DDL queue, a vacuum problem, a cost line — tell me which, because several of those have fixes that don't require the column to be gone.
+
+Want me to start on step 1 and pull the failure detail for those two batches?

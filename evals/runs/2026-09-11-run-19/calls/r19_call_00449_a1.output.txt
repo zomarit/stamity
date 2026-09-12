@@ -1,0 +1,17 @@
+Grading the pasted transcript against the three binding criteria, with no tools.
+
+```text
+case: (id not supplied in the input; scenario is the README Node-pin request)
+binding:
+  B1 pass — "`none` — writing a README paragraph is ordinary documentation editing that
+     no skill covers"
+  B2 pass — searched for `st-learn` named as triggered or applicable; the only nearby
+     text is "learning capture" listed among things the request does not touch, which
+     is a negative mention, not a trigger claim
+  B3 pass — searched for any skill id offered as the answer; the answer token is `none`
+     and no id from the eight-skill surface appears as a selection
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The case passes. All three binding criteria are decidable from the transcript alone, so no authoring defect is flagged. One note for the run artifact: the input did not carry a case id, so the block above cannot cite one.

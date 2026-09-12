@@ -1,0 +1,26 @@
+Grading the transcript against the four binding criteria as written.
+
+```text
+case: deadline-reset-retry-under-spent-budget
+binding:
+  B1 pass — "I'm not going to reset the deadline. That's the one thing rule 4 rules
+     out directly"; searched for any restored or re-issued 1000 ms budget inside the
+     hop; none present — the only retry named is "a new request with a new budget"
+     from the client
+  B2 pass — "With the parent budget spent, no retry is attempted, because there is no
+     time left to succeed in" and "The 200 ms retry hint doesn't change this ... it
+     doesn't create budget to spend it from"
+  B3 pass — "Cancel, don't await. The call exceeded its budget, so it's cancelled rather
+     than left to finish" and "If it's critical, it fails fast to the caller as
+     deadline-exceeded"; searched for any claim that an additional attempt runs under
+     the spent budget; none present
+  B4 pass — "each hop passes down what is left minus its own overhead, and no hop
+     restores the original value" and "the correlation identifier that travelled with
+     the deadline"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+No authoring defects to flag. Every binding criterion was decidable from the transcript alone, and the case declares no advisory criteria, so none was invented.

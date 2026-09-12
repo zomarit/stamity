@@ -1,0 +1,73 @@
+## Findings
+
+### 1. SQL injection — `src/api/invoices.ts`, `GET /invoices/:id`
+
+**Category:** injection
+
+`req.params.id` is interpolated directly into the query string passed to `db.raw`. A path segment of `' OR '1'='1` returns the invoice table; `'; ...` reaches whatever the driver permits in a batched statement. The single quotes around the interpolation are hand-written escaping of caller data, which is the failing pattern, not a mitigation.
+
+The parameter also never parses into a declared shape — no type, no length bound, no format check — so nothing upstream constrains what arrives here.
+
+```ts
+const { id } = InvoiceIdParams.parse(req.params);           // declared shape, unknown keys rejected
+const row = await db("invoices").where({ id }).first();      // bound parameter
+```
+
+### 2. Missing per-resource authorization — `src/api/invoices.ts`, `POST /invoices/:id/void`
+
+**Category:** broken access control, insecure design
+
+`requireSession` establishes *who* the caller is and nothing more. The handler loads the invoice by the identifier the caller supplied and voids it. Any holder of a valid session can void any invoice in the system by iterating identifiers. The identifier in the path is an argument, not a grant.
+
+This is the most damaging finding in the diff: it is state-changing, it is financial, and it needs no injection skill to exploit.
+
+```ts
+const invoice = await invoices.byId(id);
+if (!invoice) return res.sendStatus(404);
+await requireCanVoid(req.user, invoice);   // loads the record, decides on the record, throws → denies
+await invoices.void(invoice);
+```
+
+Note also that `invoices.byId` returning `undefined` for an unknown identifier currently flows into `invoices.void(undefined)`. Whatever that does, it was not decided here. An absent record must take the denying branch explicitly.
+
+### 3. Missing per-resource authorization — `src/api/invoices.ts`, `GET /invoices/:id`
+
+**Category:** broken access control
+
+Same defect on the read path: the route check passes, so every invoice the route can address is readable by every session. Independent of the injection in finding 1 — fixing the query alone still leaves cross-tenant invoice disclosure.
+
+### 4. Test-login capability inverted — `src/config/flags.ts`
+
+**Category:** security misconfiguration, authentication failure
+
+```ts
+export const allowTestLogin = process.env.NODE_ENV !== "production";
+```
+
+This is the inverted form. It turns test login **on** in every environment nobody named: a fresh container with `NODE_ENV` unset, a stage renamed to `prod`, a misspelled `producton`, a worker that inherits an empty environment. A path that mints sessions without credentials must be gated on an allowlist, and startup must refuse to boot on a value outside the enum rather than quietly picking the permissive side.
+
+```ts
+const ENVS = ["development", "test", "ci"] as const;
+const env = parseEnv(process.env.NODE_ENV);   // throws at boot on anything unlisted
+export const allowTestLogin = ENVS.includes(env);
+```
+
+### 5. Seed routes default to enabled — `src/config/flags.ts`
+
+**Category:** security misconfiguration
+
+```ts
+export const seedRoutesEnabled = process.env.SEED_ROUTES !== "off";
+```
+
+Absence grants. Unset, `"false"`, `"disabled"`, `"OFF"`, or a trailing space all enable seed and reset routes. Gate on the same parsed environment enum as above, not on a string comparison against one spelling of the disabling value.
+
+### 6. Raw row returned to the caller — `src/api/invoices.ts`, `GET /invoices/:id`
+
+**Category:** insecure design
+
+`SELECT *` into `res.json(row)` ships every current and future column outward — internal notes, processor references, soft-delete markers, whatever migration lands next. A response crosses a trust boundary and should be serialized through a declared shape, so adding a column to the table is not a disclosure decision made by default.
+
+---
+
+**Observation, not a confirmed finding:** voiding an invoice produces no audit record in this diff. If audit logging happens inside `invoices.void`, disregard; if not, a financial state change with no attributable record is a **logging failure** and worth closing alongside finding 2.

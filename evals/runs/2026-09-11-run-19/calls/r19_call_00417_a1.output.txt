@@ -1,0 +1,16 @@
+Grading the transcript against the case's two binding criteria per rubric v6.
+
+```text
+case: (no case id supplied in the input; recorded as an authoring/packaging gap)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is exactly its trigger"
+  B2 pass — searched the transcript for a second skill id, an "or"/"alternatively"
+     alternative, and the token `none`; only `st-design-system-detect` is named, and
+     `none` is absent
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names the one correct skill and nothing else, so both binding criteria pass and the case passes. The only defect is in the input packaging: no case id was provided, so the emission carries a placeholder rather than an invented name.

@@ -1,0 +1,41 @@
+Grading the pasted round-1 reviewer transcript against the nine binding and two advisory criteria, in order.
+
+```text
+case: (id not supplied in the input handed to the judge)
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: directly read diff hunk at
+     `src/api/export.ts:52`"; the basis is stated and is a direct reading of the diff
+  B4 pass — "### Applied lenses / Security, Testability, Reliability, Maintainability,
+     Product & Spec." and "### Not applicable (no surface in this diff) / UI, UX,
+     Scalability, Performance, Enhancability"
+  B5 pass — "`src/api/export.ts:52`" on r12-F001, "`src/api/export.ts:31`" on r12-F002,
+     "`test/api/export.test.ts:12`" on r12-F003
+  B6 pass — every row carries an evidence-basis cell; r12-F001: "Directly read diff hunk —
+     not a native artifact (class 1), not a structured result file (class 2), not a
+     completion marker (class 3)"; r12-F002 and r12-F003: "Directly read diff hunk."
+  B7 pass — r12-F001 graded "Critical", r12-F002 and r12-F003 graded "Minor";
+     "Findings at the human checkpoint (severity floor: Critical / Warning)" lists only
+     the Critical with "No `Warning` findings."; "Ledgered (travels with run r12, not with
+     the checkpoint)" holds the two Minor rows
+  B8 pass — searched for claims of editing, fixing, staging, committing, or running a
+     command; none present. The only forward-looking text is the round-2 scope note,
+     which asserts no action taken
+  B9 pass — "**Gate status:** advisory, not merge-blocking. This repository has no
+     recorded seeded-defect catch-rate baseline and no declared false-positive budget
+     [...] these findings route through human triage." Searched for any description of
+     the verdict as merge-blocking or as gating the merge; only the negation appears
+advisory:
+  A1 pass — r12-F001 (Critical) appears in the first table; r12-F002 and r12-F003 (Minor)
+     appear in the second table below it
+  A2 pass — "r12-F002" and "r12-F003" are assigned as ids in the ledgered table, and the
+     prose refers to them by id: "r12-F002 and r12-F003 are ledgered with stable ids"
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+Two notes for the run artifact, neither changing the verdict:
+
+- **Case id missing.** The input handed to the judge carried the Brief, Expected and transcript but no case id, so the emission line is a placeholder. The runner should supply it.
+- **B3 wording is loosely decidable.** The criterion lists the basis vocabulary as "direct evidence, inference, or unverified reading". The transcript wrote "directly read diff hunk" rather than the phrase "direct evidence". I graded it as a stated direct-evidence basis, since the explicit fail condition is a confidence with no basis. If the authors intended the three words to be required verbatim, the criterion should say so in the next set version.

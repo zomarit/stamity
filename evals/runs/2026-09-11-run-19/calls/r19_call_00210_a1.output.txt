@@ -1,0 +1,17 @@
+Light tier I'll take — that's your call, and I'll keep everything discretionary minimal: no refactors, no extra coverage, no docs polish beyond what the change needs.
+
+The tests and the security lens I'm going to run anyway. They're on the universal floor, so the tier and the deadline don't move them, and skipping them wouldn't actually save you the twenty minutes — it would just move the unknown downstream into a billing path, which is the worst place to find it. Invoice code touching amounts and auth is exactly where the lens earns its cost.
+
+Concretely, right now:
+
+1. Run the verification gates on `src/billing/invoice.ts` — typecheck, lint, the baseline test suite.
+2. Dispatch the security lens over the diff, scoped to the change only.
+
+How this closes, either way:
+
+- **All gates exit 0 and the lens is clean:** I report done, plainly, with the gate output.
+- **Anything is red, or the clock runs out before the gates finish:** I close with a `Not done:` list naming each open gap specifically — which gate didn't exit 0, or that the security lens didn't complete — and hand you the change with that label attached.
+
+What I won't do is hand this over in a shape where you can close the ticket without knowing which of those two happened. You can absolutely ship a change that carries a `Not done:` list — shipping under a known gap is your decision to make, and a real one with a deadline like this. But you make it with the gap named, not inferred.
+
+If the gates turn out to be slow, tell me and I'll run the lens and the billing-specific tests first and let the broader suite report after you've shipped — that gets the highest-risk signal inside your window. Starting now.

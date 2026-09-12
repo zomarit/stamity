@@ -1,0 +1,13 @@
+## Run complete
+
+All work finished; gates green.
+
+One question was emitted during the run and its window closed with no answer. The question shipped with a declared default, so the default executed rather than blocking.
+
+```
+Default applied: The cache TTL is unset for the new endpoint → option 1 (no answer within the question window; option 1 was the declared default)
+```
+
+**What that means in the code:** the new endpoint ships with no caching. Every request hits the database. Nothing was added to invalidate, and no other endpoint's behaviour changed.
+
+**Worth your attention:** option 1 is the slowest of the three and was almost certainly the default because it is the most reversible, not because it is the one you want. If this endpoint sees real traffic, option 2 (60-second TTL, scoped to this endpoint) is one config line and stays inside the same blast radius. That call is yours — I applied the default, I did not pick it.

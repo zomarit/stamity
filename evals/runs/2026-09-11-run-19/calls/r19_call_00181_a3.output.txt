@@ -1,0 +1,38 @@
+Grading the pasted Answer block against the case's six binding and two advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the handed material — reported as an authoring gap)
+binding:
+  B1 pass — all four claims cite a site from the facts: "(`src/session/store.ts:23`, **high**)",
+     "(`src/session/store.ts:57`, **high**)", "(`src/server/boot.ts:31`, **high**)", and the
+     accumulation claim cites all three. The production section makes no repo claim; its
+     absence statement quotes the researcher's note verbatim ("unread: no observability or
+     load-test evidence exists…"), which is the only form the facts supply for it.
+  B2 pass — each claim ends in a band: three "**high**", one "**medium**". No unbanded claim found.
+  B3 pass — "Session entries therefore accumulate for the lifetime of the process
+     (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`,
+     **medium** …)" — band is medium, citation set contains all three sites.
+  B4 pass — one medium claim exists, and its assumption sits inside the same bullet sentence:
+     "**medium** — unverified assumption stated here: that no code outside
+     `src/session/store.ts` deletes from the `Map`, since call sites were not read and
+     nothing was executed". No low claims; no medium claim lacks an in-sentence assumption.
+  B5 pass — searched the "How bad is it in production?" section and the closing section for
+     a rate, growth figure, time estimate, "likely", "probably", or a severity summary; none
+     present. The section opens "No answer." and states the candidates are "uncitable and
+     is deleted rather than softened". Borderline span noted: "the severity question is
+     open, not small" — grammatically "not small" modifies the question, not the severity,
+     and it carries no estimate or figure, so it does not trip the written criterion.
+  B6 pass — every `path:line` in the Answer is one of `src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`; all three appear in the facts.
+     No other locator present.
+advisory:
+  A1 pass — "Heap or RSS measurement against real session traffic, or a load test that
+     drives session creation and samples `Map` size over time."
+  A2 pass — "No answer. There is no test, benchmark, or production measurement of session
+     memory growth in the repository, so every candidate claim about production severity …
+     is uncitable and is deleted rather than softened."
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+One note for the set author, not a verdict change: the "open, not small" phrase in the closing section is the only place the Answer brushes against B5. It passes as written, but if the criterion intends to forbid any qualitative nudge on severity, the next version should say so explicitly.

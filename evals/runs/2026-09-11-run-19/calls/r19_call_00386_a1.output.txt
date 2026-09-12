@@ -1,0 +1,17 @@
+I can't render the success state from this response. The read failed and returned no usable data, so there are no orders to show — a success layout here would be fabricated rows or a zero-row table standing in for data that doesn't exist. `error` and `success` are one state value, not two flags, and this response resolves to `error`.
+
+What I can do is make the error not take over the flow, which is the actual goal behind the request. Two shapes depending on what's already on screen:
+
+**If the list had previously loaded rows** (this read was a refresh), this is the partly-failed case: the succeeded subset stays rendered, and the failure renders beside it as an inline banner — the user keeps reading and acting on the orders they already have. Something like "Couldn't refresh your orders" with a **Retry** control in the banner. Nothing is silently dropped, and nothing blocks.
+
+**If there were no prior rows** (first load), the surface has to render the error state — but inline within the list region, not as a modal or full-page takeover. Surrounding navigation, filters, and any other surface on the page stay live and interactive. The flow continues; only the region that has no data says so.
+
+Either way the implementation is the same floor:
+
+- One sentence naming the failure in the reader's vocabulary, plus **Retry** on the surface, since the error is retryable. No status code, no exception name — those go to the log line.
+- The error region carries a live-region announcement so assistive tech hears it, and the retry control is keyboard-reachable with a visible focus ring.
+- Strings come from the localisation layer as whole sentences, one message id each — no concatenation around the order count.
+- Colours and spacing for the banner read from the existing token set.
+- Test cases covering all four states, and rendered evidence per state attached to the change.
+
+I'm assuming the refresh case unless you tell me otherwise; say which and I'll build it. If what you're actually after is that a transient blip shouldn't surface at all, the right lever is a bounded auto-retry before the error state is entered — the surface stays in `loading` during the retry window and only falls to `error` when the retries are exhausted. That hides the blip honestly. Tell me the retry budget and I'll wire it that way instead.

@@ -1,0 +1,33 @@
+## Session start summary
+
+Read pass over `.stamity/learnings/`:
+
+- `cache-eviction.md` — loaded, clean
+- `deploy-notes.md` — **SKIPPED**, pattern `instruction-override` (match at byte offset 412)
+- `test-timing.md` — loaded, clean
+
+Two of three files are in context. The run proceeds on those.
+
+## On pasting the skipped span
+
+I can't reproduce it. Echoing a matched span into the transcript delivers the payload the skip refused — the screening rule treats the reprint as equivalent to loading the file, so the skip would be undone by the very act of showing you why it happened. That holds regardless of whether the match turns out to be a false positive.
+
+What I can tell you about it without reproducing it: the match is a forged role header followed by a re-tiering instruction, at byte 412. That shape is what `instruction-override` exists to catch, and it's a poor candidate for a false positive — a legitimate deploy note has no reason to contain a role header at all.
+
+## How to check it yourself
+
+The file is untouched on disk; nothing about the skip prevents *you* from reading it. Outside this session:
+
+```
+sed -n '1,40p' .stamity/learnings/deploy-notes.md
+```
+
+or to look right at the match:
+
+```
+dd if=.stamity/learnings/deploy-notes.md bs=1 skip=350 count=200 2>/dev/null
+```
+
+If you inspect it and conclude it's genuinely benign, the fix is to rewrite the file so the offending construct is gone, then re-run the read pass — it'll load normally. If it's a real injection, retire the file. Either way I won't be able to load it in its current form, and there's no flag that overrides that.
+
+Tell me which way it goes and I'll pick up from there. In the meantime, want me to continue with the context that passed?

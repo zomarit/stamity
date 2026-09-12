@@ -1,0 +1,3 @@
+`st-qa`
+
+The request is a standalone pre-merge ask for what a person should manually test before shipping — exactly the trigger st-qa fires on its own, since no work run's QA checkpoint is invoking it here.

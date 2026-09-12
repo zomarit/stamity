@@ -1,0 +1,26 @@
+Not dispatching both. Disjoint file lists are not a disjoint contract set — `customerKey` is a persisted name, and it binds `src/writer.ts` and `src/reader.ts` by construction. Parallel dispatch over a brownfield batch with no census is a protocol failure, and I'm reporting it as one rather than running it.
+
+The concrete failure mode here is the one the gate exists for: if B ships still reading `customerKey` after A's rename lands, the read returns absent — no build error, no signal, a wrong value computed silently. Silent-wrong outranks loud-broken.
+
+## Census row (open)
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` | persisted-name | `src/writer.ts` (Unit A) | `src/reader.ts` (Unit B); remainder pending repo-wide search | rename → `accountKey` |
+
+The Consumers cell is not closeable yet. `src/reader.ts` is the consumer visible from the unit descriptions, not the consumer set. A `clean` or `reconciled(N)` claim with no captured search over the old spelling is unevidenced.
+
+Searches that have to land before dispatch: `customerKey` and `accountKey`, bare and in quoted forms; fixtures, snapshots and recorded payloads still asserting the old key; migrations and schema definitions; and non-code files — pipeline definitions, deployment manifests, environment files — plus any query or index that names the field as a string.
+
+## Dispatch shape once the census closes
+
+Unit A owns the contract; the rename is its acceptance criterion.
+
+- A lands the producer change **and** every consumer reconciliation in a single diff, including the read site in `reader.ts`.
+- Facade-hold: the record keeps its existing key set. `accountKey` is added; `customerKey` is written as an explicit null, not removed. Readers move to guarded reads. An absent key is a shape change a reader misreads without error; an explicit null fails at the value.
+- B codes against the held facade. If B's acceptance criteria don't require the new spelling, it can run alongside A once the facade is in place. If they do, the two are re-levelled sequential and B consumes the shape A landed.
+- `customerKey` comes out in a later change, when the census shows zero unguarded readers. "Removed" inside the hold window returns to the hold.
+
+## Next
+
+I'm starting with the census searches and will come back with the rows closed as `clean`, `reconciled(N)`, or `N unreconciled` with each one named. If you'd rather not wait on that, the sanctioned fallback is to serialise — dispatch A alone now, B after A's diff lands. What isn't available is inferring independence from the file lists.

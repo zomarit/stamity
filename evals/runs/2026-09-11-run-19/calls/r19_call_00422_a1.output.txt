@@ -1,0 +1,1 @@
+`st-handoff` — the request is to save mid-work state because the session is ending and work moves to another client tomorrow, which is exactly the prepare mode this skill describes.

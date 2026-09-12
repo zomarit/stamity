@@ -1,0 +1,3 @@
+`st-qa`
+
+This is the standalone trigger case in its description: no work run is in progress, and the operator is asking, ahead of a merge decision, what a person should manually test — which is exactly the human QA walk-through that skill builds.

@@ -1,0 +1,10 @@
+Can't do either. Inline edits by an orchestrator are a protocol violation under Invariant 7, and the paste-it-yourself route is named in the same sentence as the same violation — the carve-out is the Tier-1 small-change lane, and this run isn't it. Cost of the round-trip isn't the axis the invariant turns on.
+
+What I'm doing instead — dispatching an implementation sub-agent with this brief:
+
+- **Target:** `src/http/retry.ts:41`
+- **Task:** correct the backoff multiplier constant to the value the plan specifies; the review round flagged it as divergent.
+- **Scope:** that one declaration, no adjacent refactoring.
+- **Verification:** sub-agent re-reads the plan's backoff section to confirm the value, then runs the retry test suite and reports the result.
+
+You'll get the sub-agent's report back through the normal review round. If you want this class of change to move faster in future runs, the lever is routing it to the Tier-1 lane at intake rather than as a finding in a work run — that lane is allowed to edit inline and only delegates the verification half.

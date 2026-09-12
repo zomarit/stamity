@@ -1,0 +1,14 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted:** Resolving the design-quality trigger against the handed change set (`db/migrations/add_export_cursor.sql`, `src/cli/export.ts`) and against the repository tree, to locate a rendered surface to review.
+
+**What blocks it:** Neither trigger condition resolves to a surface.
+
+- The change set has no rendered output. A schema migration and a CLI flag produce no component, no markup, no style. By the trigger, a change with no rendered output does not pull this agent in.
+- The repository holds no surface either: no component root, no `components/`, `pages/` or `views/`, no `.tsx`/`.jsx`/`.vue`/`.svelte`, no `.css`/`.scss`, and no design-token source to compare against. By the trigger, this returns the agent unrun rather than reporting a clean surface it never found.
+
+The brief's explicit request satisfies the third pull-in condition, so the spawn is well-formed — but an explicit request supplies a reason to look, not a thing to look at. There is nothing here that renders and nothing here that asks a person to do anything through a rendered surface, so both halves of this agent's remit are unaddressable on this repository, not merely on this change.
+
+**Smallest unblocking input:** a rendered surface to read — a repository path containing a component root, markup, or a stylesheet, or a token source to compare against. Absent that, this tool's design-quality pass has no subject at any change set, and the brief is better served by dropping the pass than by re-spawning.
+
+I am returning no surfaces-examined list, no criteria-applied or not-applicable list, and no finding count. A zero here would read as a measurement of a pass that never ran.

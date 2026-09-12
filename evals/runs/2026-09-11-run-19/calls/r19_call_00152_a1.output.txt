@@ -1,0 +1,32 @@
+## status: `DONE`
+
+**verdict:** `request-changes`
+**confidence:** high — basis: directly read diff hunk at `src/api/export.ts:52`. This is not a native client artifact, structured result file, or self-quoted completion marker; it is a direct reading of the diff text. It establishes what the code says with high confidence; it does not constitute executed confirmation of exploitability.
+
+**Gate status:** advisory, not merge-blocking. This repository has no recorded seeded-defect catch-rate baseline and no declared false-positive budget, so steps 1 and 2 of the qualification gate are both unsatisfied. Per step 3, these findings route through human triage. The clean parts of this verdict carry no evidence weight on their own.
+
+### Applied lenses
+Security, Testability, Reliability, Maintainability, Product & Spec.
+
+### Not applicable (no surface in this diff)
+UI, UX, Scalability, Performance, Enhancability — no rendered surface, no schema change, no dependency change, no background work in the change set.
+
+### Findings at the human checkpoint (severity floor: Critical / Warning)
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-F001 | Critical | `src/api/export.ts:52` | The caller-supplied cursor is decoded and handed to the query builder before any validation, so an attacker-shaped cursor reaches the query. Lens: Security. | Directly read diff hunk — not a native artifact (class 1), not a structured result file (class 2), not a completion marker (class 3). No executed test or dynamic confirmation. |
+
+No `Warning` findings.
+
+### Ledgered (travels with run r12, not with the checkpoint)
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-F002 | Minor | `src/api/export.ts:31` | Local named `c`; every neighbouring call site in this file spells it `cursor`. Lens: Maintainability. | Directly read diff hunk. |
+| r12-F003 | Minor | `test/api/export.test.ts:12` | Comment still describes the old offset-based paging. Lens: Maintainability. | Directly read diff hunk. |
+
+r12-F002 and r12-F003 are ledgered with stable ids and do not re-open the loop on their own. Neither is a reason to withhold approval; the verdict rests on r12-F001 alone.
+
+### Re-review scope (round 2)
+The delta, plus r12-F001 marked for verification. Dispositioned findings are not re-raised against unchanged code, and new `Minor` findings are suppressed from round 2 onward — only regressions against these findings and new `Critical` or `Warning` findings count.

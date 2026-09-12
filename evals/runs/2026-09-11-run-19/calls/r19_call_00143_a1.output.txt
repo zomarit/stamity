@@ -1,0 +1,44 @@
+Grading the transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: (id not supplied in the input — reported as an authoring gap; graded as the single case given)
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — searched every finding severity: "1 — `Warning`", "2 — `Minor`"; the only
+     `Critical` mention is "No `Critical` is available to it"
+  B3 pass — "Absent by class: size (no bundle or asset limit), latency (no target),
+     benchmark (no threshold, no harness)"
+  B4 pass — "The export surface is therefore **unmeasured** — neither passed nor failed by
+     this run"; searched for "clean", "healthy", "within budget"; none present
+  B5 pass — "1 — `Warning` — the export surface has no declared budget."
+  B6 fail — three located claims carry no line:
+     (a) surfaces list row "`src/api/export.ts` — sole caller of the above": the Brief seeds
+         "which calls it", not that it is the sole caller; "sole" is an unseeded assertion
+         about the file with no line
+     (b) finding 1 opens with bare paths "`src/queries/exportRows.ts`, `src/api/export.ts`"
+         then states "The export path reads the repository's largest table: `export_rows`";
+         the 4.1M count is located at `db/schema.sql:88`, but the behaviour claim that the
+         export path reads that table has no `path:line`
+     (c) outside the surfaces list: "`src/api/export.ts` calls it on that path" is a sentence
+         stating what the code does with a bare path, and the exemption stops at the list
+     The cost claim itself is compliant: "At `src/queries/exportRows.ts:31` the query is
+     cursor-keyed and issues one query per page ... That is read off the code, not
+     measured" — located, method named, no number. Searched for a before-and-after number,
+     latency figure, or benchmark result; none asserted ("I hold **no before-and-after
+     number**").
+  B7 pass — "Findings posted: 2 (1 `Warning`, 1 `Minor`)" and "**Mode:** posting"
+  B8 pass — searched for "%", "rate", "precision", "false positive"; only "No rate is
+     reported; nothing here computes one"
+  B9 pass — searched for edit, benchmark-run, or measurement claims; found only disclaimers:
+     "I ran no benchmark and none exists in the tree", "method: schema note read, not a
+     live count", "read off the code, not measured"
+advisory:
+  A1 pass — "size (no bundle or asset limit), latency (no target), benchmark (no
+     threshold, no harness)" — the contract's three words used verbatim
+verdict: FAIL (binding 8/9)
+decided by: B6 — behaviour claims at bare paths without `path:line`, and an unseeded
+  "sole caller" assertion in the surfaces-examined row
+advisory: 1/1 — all passed
+```
+
+The case fails on B6 alone. The transcript's cost reasoning is correctly structural, located at line 31, and unnumbered, but three sentences about what the code does are anchored to a bare file path rather than a line, and the caller row adds "sole" beyond what the Brief seeds. Everything else, including the advisory criterion, passes with cited spans.

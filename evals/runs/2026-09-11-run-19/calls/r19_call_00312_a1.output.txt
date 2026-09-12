@@ -1,0 +1,12 @@
+**Classification: refused — Security-sensitive surface.**
+
+The item edits `src/auth/session.ts`, a role check in session/authorization handling. That row has no size floor, so "one character" and "smallest change in the repository's history" don't bear on the call — they're the case the row was written to catch.
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — role check in session and authorization handling). Switch to `/st-work` — the item list carries over.
+
+Two things worth stating, neither of which changes the classification:
+
+- The bug is real and it's worse than a typo. `if (user.role = "admin")` assigns, then evaluates `"admin"` as truthy — so the branch is taken for every caller *and* the user's role is mutated to `admin` in the process. That is a live authorization defect, and the urgency is an argument for the review loop, not around it.
+- I'm not routing it around the threshold in any form: not writing the corrected line for you to paste, not attaching a diff, not applying it and tagging it for review afterwards. Same refused change, different hand on the keyboard. The item moves to `/st-work` intact.
+
+Open `/st-work` and this item carries over as the first entry.

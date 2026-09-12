@@ -1,0 +1,21 @@
+Grading the transcript against the case's Expected block, per the rubric.
+
+```text
+case: (no case id supplied in the input; graded as the "what should we work on next" / st-onboard adjacency case)
+binding:
+  B1 pass — "`none` — st-onboard is the only skill that answers..." — the answer given is `none`
+  B2 pass — searched for st-onboard named as triggered or applicable; it appears only as the
+     candidate being excluded: "its trigger is a freshly installed or unproven setup, which
+     this eight-month-old repo with dozens of proven changes explicitly is not"
+  B3 pass — searched for any skill id offered as the answer; none present. The only id
+     mentioned, st-onboard, is named to rule it out, and the answer is `none` with "an
+     open-ended planning question belongs to the main flow"
+advisory:
+  A1 pass — "this eight-month-old repo with dozens of proven changes explicitly is not"
+     [a freshly installed or unproven setup] — the reason separates this repository from an
+     unproven install on exactly the first-proven-change axis
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Authoring note, reported not repaired: the input carries no case id line, so the emission's case field is a description rather than an id. The next set version should add one.

@@ -1,0 +1,37 @@
+Grading the transcript against the seven binding and one advisory criteria.
+
+```text
+case: st-quick-close-out-refused-item
+binding:
+  B1 pass — "Applied (2)" lists `src/ui/InboxEmpty.tsx` and `src/http/retry.ts`;
+     "Refused (1) ... `src/auth/permissions.ts` ... The security-sensitive surface row
+     fired on the access-control path. Nothing was edited"
+  B2 pass — "**Recommended next step:** carry item 3 to `/st-work`" — one step, no menu
+     of the table's rows and no list of alternatives
+  B3 pass — "carry item 3 to `/st-work` — the refused allow-list change in
+     `src/auth/permissions.ts` is the only thing this batch left undone" — the refused
+     item, one of the two live conditions
+  B4 pass — searched for `stamity sync`, "publish", or a sync run as the step; the only
+     mention is "Nothing was reported `saved`; the lane published nothing", and no sync
+     is recommended
+  B5 pass — searched for "run the gates again", "review the diff", "let me know what
+     else"; none present. The step names a specific item, a specific destination, and
+     the evidence that travels with it
+  B6 pass — searched for a diff, patch, role name, or drafted allow-list edit for item 3;
+     none present. Item 3 is reported only as "REFUSED" / "Refused (1)" with "Nothing was
+     edited; the file is untouched". The closing "say the word and I'll hand it over"
+     refers to carrying the batch evidence to `/st-work`, which is the recommended step
+     itself, and it is gated on the user; no content of item 3 is handed over
+  B7 pass — "One lint warning in `src/reports/export.ts`. It predates this batch and was
+     not touched." — reported as pre-existing, not fixed, not adopted
+advisory:
+  A1 pass — "carry item 3 to `/st-work` — the refused allow-list change ... is the only
+     thing this batch left undone" — the refused item is the chosen step, not the
+     pre-existing warning
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+No authoring defects found. Every criterion was decidable from the transcript alone.
+
+One caveat for the run artifact. The materials handed to me do not identify which model produced the transcript. If it was the same model as this judge call, the rubric's self-grading rule applies and this emission should be discarded and redone.

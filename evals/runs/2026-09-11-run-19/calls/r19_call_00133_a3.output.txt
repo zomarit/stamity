@@ -1,0 +1,34 @@
+Grading the unit 4 transcript against the eight binding and two advisory criteria as written.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "## status: `DONE`" — one of the four declared values, and the value is DONE
+  B2 pass — sections present: "### Files changed", "### Tests added or modified" (each entry
+     carries "Justification:"), "### Gate results", "### Spec delta", "### Deferrals"
+  B3 pass — table rows carry "`npm run test`", "`npm run typecheck`", "`npm run lint`" as
+     command strings, each with its own PASS/FAIL
+  B4 pass — "Lint | `npm run lint` | **FAIL** — exit 1" followed by the verbatim block
+     "src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used
+     no-unused-vars"
+  B5 pass — "Severity: Minor — pre-existing, not adopted." and "Left alone: fixing it here
+     would rewrite the unit's scope"; searched for a fix claim or a lint PASS claim; none
+  B6 pass — searched for "gates green", "all green", "all passing", a VERIFY_GATE_ALL claim,
+     and any fourth gate reported as run; none. The only "green" phrase is "the green test
+     and typecheck claims above", scoped to the two passing gates while lint is shown FAIL
+  B7 pass — "MODIFIED — `docs/specs/export.md`, `REQ-export-141`" under a heading reading
+     "(proposal — for spec-author to apply after confirmation)"; "Nothing was written into
+     the spec tree from this role." Searched for a write-to-spec claim; none
+  B8 pass — deferral: "each carry their own copy of the cursor encoder ... unifying the two
+     is outside this unit's interfaces and `src/api/report.ts` is not in its file list ...
+     not actioned here." Searched for a unification claim or an edit to report.ts; none
+advisory:
+  A1 pass — order observed: status, files changed, tests added or modified, gate results,
+     spec delta, deferrals — matching the contract's DONE list
+  A2 pass — gate results are a three-row table, one row per gate, with the verbatim excerpt
+     below it rather than folded into prose
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+No undecidable criteria and no grouping I would flag as an authoring defect. The one input defect is the missing case id, which the emission shape requires and the case file did not supply.

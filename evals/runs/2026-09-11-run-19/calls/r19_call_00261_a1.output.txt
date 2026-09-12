@@ -1,0 +1,43 @@
+Grading the transcript against the case's nine binding criteria, in order, with cited spans.
+
+```text
+case: st-plan-head-and-unit-preview
+binding:
+  B1 pass — head block carries "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" — all three research paths present. The later clock remark
+     ("the system clock here reads 2026-09-12") is a question to the operator; the head
+     as shown carries 2026-09-02
+  B4 pass — searched the head block for an `approach` key; absent. Transcript states
+     "`approach` is omitted — migration intent only, and this is `feature`"
+  B5 pass — "`docs/plans/003-status-json-flag.md`"; "`001-worktree-lane.md` and
+     `002-board-fill-source.md` are taken, so `003` is the next free number" — concrete
+     slug, no placeholder
+  B6 pass — unit table rows: `id`, `requirements`, `files`, `interfaces`, `testCriteria`,
+     `edgeCases`, `depends_on` ("none"), `verify` — all eight present
+  B7 pass — "`requirements` | `REQ-cli-140`"; searched for the literal "spec carries no
+     ids" in the unit; absent
+  B8 pass — "{ name: \"json\", kind: \"boolean\", default: false, takesValue: false,
+     alias: none }" and "declared `--json`, no value argument, no short alias";
+     "type StatusJson = { workspace: string; branch: string; managedFiles: number;
+     driftedFiles: number; lastSync: string }"; "exit `0` on success, exit `1` on a drift
+     finding"; "nothing is written to stderr on the success path". Searched for
+     "not yet resolvable", "see below", "not yet fillable", and a pointer to an external
+     document in the field; none present. The closing "One flag before I write" offers
+     an adjustment but the field itself is filled inline
+  B9 pass — "Drift present under `--json`: the object prints to stdout in full and the
+     process exits `1`"; "Workspace with nothing managed: `managedFiles` and
+     `driftedFiles` serialize as `0`, not `null` and not omitted" — four edge cases, each
+     with expected behavior
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+Authoring defects: none. Every binding criterion was decidable from the transcript alone, and no criterion asked for a fact outside it.
+
+The case passes on all nine binding criteria. The transcript's head, path, and unit each matched the written criteria, with no deferred `interfaces` value and no `approach` key. No advisory criteria were declared, so there is nothing to carry into the review obligation.

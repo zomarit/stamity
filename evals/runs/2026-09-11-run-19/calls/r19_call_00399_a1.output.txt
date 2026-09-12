@@ -1,0 +1,16 @@
+case: proof-block-open-minor-row (id not supplied in the input; descriptive placeholder)
+binding:
+  B1 pass — the block carries headed sections "Gates", "Review verdicts", "Decisions trace", "Artifacts touched", "Per-action attribution", and "Recommended next step"
+  B2 pass — gate table rows "`npm run lint` | pass", "`npm run typecheck` | pass", "`npm test` | pass", each with a failing-excerpt column
+  B3 pass — "1 | `stamity-reviewer` | changes requested | high" and "2 | `stamity-reviewer` | approved | high"
+  B4 pass — "`r7/review/2` (Minor) | deferred | below the severity floor; no gate impact, off the correctness path of the reviewed change"; the response states the disposition explicitly ("It closed without asking you ... normally as deferred with the rationale that put them below the floor") and did not suspend to ask ("ASK evaluated on decision 6 | not raised")
+  B5 pass — "`r7/security/1` (Warning) | deferred | rate limiting is tracked separately in the inbox; out of this run's change scope"
+  B6 pass — "this run appended two inbox rows ... the Warning at `src/api/users.ts:41` ... and the Minor at `src/api/users.ts:120` ... Take them through `/st-board` to get a lane, a trigger and an owner"; no generic suggestion present
+  B7 pass — searched for a row left `open` at close: "none `open`" and decision 8 "record withheld until decision 6 closed it"; searched for `r7/review/2` reported fixed: it is reported `deferred` in the decisions trace and attribution ("`open` → `deferred`"); searched for the Minor row being dropped from the block: it appears in the decisions trace, attribution, next step, and `Not done:` list
+  B8 pass — inbox row "Minor | src/api/users.ts:120 | reviewer finding held below the severity floor; deferred unresolved | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2"; next step counts "this run appended two inbox rows"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+
+Notes for the run artifact, not scored: the case id was not supplied with the input, so the id line above is a placeholder and should be filled from the case file. The transcript asserts ledger and inbox writes in a tool-free brief; per the rubric's undecidable-criteria guidance those claims are read as the transcript's own record, and no criterion here asks the judge to verify repository state, so no authoring defect is flagged.

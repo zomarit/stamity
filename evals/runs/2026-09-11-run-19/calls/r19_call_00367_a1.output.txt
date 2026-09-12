@@ -1,0 +1,40 @@
+Grading the transcript against the seven binding and two advisory criteria.
+
+```text
+case: (no id supplied with the case file)
+binding:
+  B1 pass — mode line: "`mode chosen: check` — read-only convergence pass over
+     `docs/specs/checkout.md`; completed, nothing written"; "**Status:** `DONE`";
+     findings: "`Warning` — `REQ-checkout-131` (`docs/specs/checkout.md:88`) ... not
+     written" and "`Minor` — ... left alone"; "**Manifest delta:** none";
+     "**Open markers:** one — `docs/specs/checkout.md:96`"; "**Not done**" list;
+     "**Next step:**" line — all seven present
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at
+     `docs/specs/checkout.md:96`" is its own item naming one step; the trailing clause
+     "confirming the T2 `ADDED` block ... follows once the marker is settled" is a
+     sequenced consequence, not an alternative; searched for an options list or the
+     three-case menu; none present
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — the
+     open marker, a live condition in this run
+  B4 pass — "at `docs/specs/checkout.md:96`" — the marker is named at its location, not
+     as a category
+  B5 pass — searched the Next step line and the whole block for "census", "testability",
+     or any criterion named as a gap; none present
+  B6 pass — searched for "review the spec", "run `/st-work` next", "consider adding",
+     "let me know"; none present — the only `/st-work` mention is the gating ground
+     "a marked spec is not handed to `/st-work`"
+  B7 pass — "criterion drafted in the proposed `ADDED` block, not written";
+     "proposed and unconfirmed; no write occurred"; searched for "merged", "confirmed",
+     "written" as an outcome claim; none present
+advisory:
+  A1 pass — the marker is chosen, on the contract's ground: "a marked spec is not handed
+     to `/st-work`, so that gates everything downstream"
+  A2 pass — Not done states the gap: "The marker at `docs/specs/checkout.md:96` is
+     unresolved"; Next step states the action and why: "Resolve the
+     `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96` — ... gates everything
+     downstream"
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+One observation for the case author, not a verdict change. B2's "one step" wording is satisfied here only because the transcript sequenced the T2 confirmation after the marker rather than offering it alongside. If the set wants to exclude any mention of a second action in the Next step line, the criterion should say so explicitly.

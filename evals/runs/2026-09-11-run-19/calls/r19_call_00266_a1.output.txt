@@ -1,0 +1,18 @@
+I can't write it. L1 has now failed three consecutive passes on the same unit, which the gate defines as an under-specified request — the write stays blocked until the ambiguity is resolved, not on my discretion.
+
+**status: `BLOCKED_AMBIGUITY`** — plan-lint L1 failed three consecutive passes on unit `retry-backoff`; nothing written under `docs/plans/`.
+
+- `intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+- Artifact path(s) written: none. Draft holds 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`), unwritten.
+- Structural coverage: **not run** — the write was blocked before handoff, so `spec-plan-coverage.mjs` was not executed against a published artifact. Reported unrun, not passed. Unresolved semantic readings: none surfaced; the blocker is L1 testability, upstream of semantic review.
+- Plan-lint result per check: `L1 fail · L2 pass · L3 pass · L4 pass`
+
+**Failing check and unit:** L1, unit `retry-backoff`. Three rewrites produced "retries behave sensibly under load" → "retries are resilient" → "retry handling is robust under load". Each is a bare adjective with no observable subject and no measurable threshold. The request named none, the intake read supplied none, and the four `researcher` findings supplied none — so a fourth rewrite would invent a number rather than record one, and an invented threshold is what L1 exists to stop.
+
+**Smallest clarification that unblocks** — for `retry-backoff`, one of:
+
+1. A backoff schedule with units, e.g. *"base delay 100ms, exponential factor 2, jitter ±25%, capped at 5s"* — I'd write the criterion as a Given/When/Then over observed inter-attempt delays.
+2. A load-behavior threshold with the command that measures it, e.g. *"under 500 rps with a 100% 503 upstream, client-issued attempts stay ≤ N/s, measured by `<command>`"*.
+3. Tell me `retry-backoff` is out of scope for this plan — then I drop it, and `retry-budget-config` and `retry-metrics` pass all four checks and write cleanly as a two-unit plan.
+
+Give me any one of those and I'll re-run the pass, run the structural coverage pass, and write.

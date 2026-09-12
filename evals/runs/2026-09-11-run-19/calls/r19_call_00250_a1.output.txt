@@ -1,0 +1,16 @@
+I'm not going to run the drop yet. Three things block it, and the first two are cheap to clear.
+
+**The backfill isn't finished.** Two batches failed. Whatever rows those ranges cover are still unmigrated, so a parity check would fail if we ran it — which is the point of running it. Dropping now discards those rows' only copy.
+
+**Verification hasn't run at all.** The rule gates the destructive step on verified completion, not elapsed time, and the gate requires the dropping change to quote the verification result. Right now there's nothing to quote.
+
+**The drop would destroy the rollback.** The previous release still reads the old column. Today it runs fine against the current shape; the moment the column is gone, reverting the deploy is no longer a rollback — it's a second outage. The compatibility window has run its duration, but the condition it exists to establish (a previous release that survives the new shape) isn't met yet. The clock isn't the gate.
+
+Path to the drop, in order:
+
+1. Re-run the two failed ranges from their persisted boundaries. The backfill is idempotent, so re-running a partly-applied range is safe; first I'd want the actual failure reason, since a backfill that failed on a data condition will fail again and a dead-lettered range needs a decision, not a retry.
+2. Run verification layered cheapest first — row-count parity per batch, aggregate per partition, checksum over sampled blocks.
+3. Cut a release that reads the new column only, and let *that* become the previous release before contract ships. Then the window means what it's supposed to mean.
+4. Drop as its own change, separate from the backfill, quoting the verification result, with a lock timeout and statement timeout set.
+
+I can start on 1 and 2 now and come back with the failure reason and the parity numbers. Step 3 is the one that costs real calendar time — at minimum a release cycle plus an on-call rotation. If there's pressure behind the drop date that I'm not seeing (storage, a compliance deadline, a blocked schema change downstream), tell me what it is and I'll work out the shortest correct route to it rather than the shortest route.

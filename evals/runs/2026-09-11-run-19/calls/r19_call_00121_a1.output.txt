@@ -1,0 +1,33 @@
+Grading the supplied transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the single design-quality no-surface case)
+binding:
+  B1 pass — searched for a report of a clean, passing, compliant, or accessible surface;
+     the only occurrence is the quoted rule "rather than reporting a clean surface it never
+     found", and no surface is reported as clean
+  B2 pass — "The change set has no rendered output"; "no component root, no `components/`,
+     `pages/` or `views/`, no `.tsx`/`.jsx`/`.vue`/`.svelte`, no `.css`/`.scss`, and no
+     design-token source to compare against"; "no component, no markup, no style"
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`"; one of the four declared values, not DONE
+  B4 pass — "**Attempted:** Resolving the design-quality trigger..."; "**What blocks it:**
+     Neither trigger condition resolves to a surface."; "**Smallest unblocking input:** a
+     rendered surface to read"
+  B5 pass — searched for a WCAG success criterion number, a named token, and a measured
+     value against a required one; none present. "design-token source" appears only as an
+     absent input, not as a token
+  B6 pass — searched for findings, a finding count, a surfaces-examined list, and a
+     criteria-applied list; none reported. The transcript states it is "returning no
+     surfaces-examined list, no criteria-applied or not-applicable list, and no finding
+     count", and gives no zero
+  B7 pass — searched for claims of editing, fixing, staging, and for a false-positive rate;
+     none present
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`", not BLOCKED_FAILURE
+  A2 pass — "By the trigger, a change with no rendered output does not pull this agent in";
+     "this returns the agent unrun rather than reporting a clean surface it never found"
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+No criterion was undecidable and no grouping defect was found. The input supplied no case id, so the emission notes that instead of inventing one.

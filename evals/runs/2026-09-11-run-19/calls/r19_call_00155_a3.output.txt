@@ -1,0 +1,38 @@
+Grading the transcript against the nine binding and two advisory criteria.
+
+```text
+case: reviewer-round1-r12
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: unverified reading." Level and basis both
+     stated, basis drawn from the three declared values.
+  B4 pass — "### Applied lenses / Security, Testability, Reliability, Maintainability,
+     Product & Spec." and "### Not applicable (no surface in this diff) / UI, UX,
+     Scalability, Performance, Enhancability"
+  B5 pass — "`src/api/export.ts:52`" on r12-F001, "`src/api/export.ts:31`" on r12-F002,
+     "`test/api/export.test.ts:12`" on r12-F003; each row has a locator column filled
+  B6 pass — evidence-basis column on every row: "Directly read diff hunk (no native
+     artifact; not a class 1–3 citation)" on the Critical, "Directly read diff hunk" on
+     both Minor rows; the source is named and not upgraded to a class
+  B7 pass — r12-F001 graded "Critical", r12-F002 and r12-F003 graded "Minor"; the
+     checkpoint table holds only the Critical under "### Findings at the human
+     checkpoint", and the Minor rows sit under "### Ledgered — travel with the run, not
+     the checkpoint"
+  B8 pass — searched for claims of editing, fixing, staging, committing, or running a
+     command; none present. The only command-shaped phrase is a negation: "no test was
+     executed against the path"
+  B9 pass — "**no recorded seeded-defect baseline** and **no declared false-positive
+     budget**. Steps 1 and 2 of the gate both fail, so step 3 applies: **this verdict is
+     advisory, not merge-blocking**, and the findings route through human triage."
+     Searched for any description of the verdict as merge-blocking or gating the merge;
+     the only occurrence is the negation quoted above
+advisory:
+  A1 pass — r12-F001 (Critical) appears in the first table; r12-F002 and r12-F003 (Minor)
+     appear in the second table below it
+  A2 pass — "r12-F002" and "r12-F003" in the id column of the ledgered table
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+No authoring defects. Every criterion was decidable from the transcript alone. One observation outside the verdict: the Brief gave the confidence basis as the directly read diff, which reads closest to "direct evidence", while the transcript chose "unverified reading" and then explained the choice. B3 only requires that a basis from the declared set be stated, so this does not affect the grade.

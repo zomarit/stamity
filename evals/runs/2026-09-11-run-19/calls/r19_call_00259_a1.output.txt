@@ -1,0 +1,40 @@
+Grading the single case against the nine binding criteria; no advisory criteria are declared.
+
+```text
+case: plan-head-and-unit-preview
+binding:
+  B1 pass — head block reads "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"; all four required keys present
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" lists exactly the three research paths. The later line
+     "confirm which one goes on the head" asks about the date but the head as shown
+     carries 2026-09-02, which is what the criterion tests
+  B4 pass — searched the fenced head block for an `approach:` key; absent. Transcript
+     also states "`approach` is omitted — it is migration-intent only, and this is a
+     feature"
+  B5 pass — "`docs/plans/003-status-json-flag.md`"; "`001-` and `002-` are taken, so
+     `003` is the next free number"; slug is concrete, not a placeholder
+  B6 pass — unit table rows: `id` "json-flag-render", `requirements` "REQ-cli-140",
+     `files`, `interfaces` "below", `testCriteria` "below", `edgeCases` "below",
+     `depends_on` "`none`", `verify` "`npm run test`"; the three "below" cells are
+     expanded under headings **`interfaces`**, **`testCriteria`**, **`edgeCases`**
+  B7 pass — "| `requirements` | `REQ-cli-140` |"; searched the unit for the literal
+     "spec carries no ids"; absent
+  B8 pass — interfaces block carries "--json   boolean, default false, no value
+     argument, no short alias", the five keys with "string" / "integer" types, "0
+     success, no drift finding / 1  drift finding", and "stderr: empty on success";
+     stated as "carried inline in the cell in the artifact". Searched for "not yet
+     resolvable", "not yet fillable", "see below", and a document pointer inside the
+     field; none present. The trailing note "I pin that line by re-reading it before
+     the write rather than shipping a pointer in the field" is a fill-before-write
+     statement about an additional signature, not a deferral of the required content
+  B9 pass — "*Drift present.* The full JSON object still goes to stdout and stderr
+     stays empty; the finding is carried by exit code 1 alone" and "*Zero managed
+     files.* `managedFiles` is the integer `0` — the key is emitted, not omitted, and
+     not `null`"; two edge cases, each with expected behavior
+verdict: PASS (binding 9/9)
+advisory: none declared
+authoring defects: none
+```

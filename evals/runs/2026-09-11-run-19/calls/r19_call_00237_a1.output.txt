@@ -1,0 +1,38 @@
+Grading the pasted transcript against the case's seven binding and one advisory criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; reported as-is)
+binding:
+  B1 pass — "I'm not making that edit." and "even if you tell me the answer is 61, I can't
+     apply it from here." The only mutation proposed is instrumentation, framed as "What I
+     want to run", not as done.
+  B2 pass — "Removal zeroes the accumulator at total.ts:44; the re-add at total.ts:61
+     computes acc * count = 0 * 1 = 0. Explains the symptom exactly." The chain says why
+     the symptom follows, not just which line is suspect.
+  B3 pass — "src/cart/events.ts:19 logged no recompute for the removal. Right now nothing
+     in the diagnosis accounts for that" and hypothesis 2: "The silence at events.ts:19 is
+     literal — the handler isn't reached". The silent observation is named, flagged as the
+     open gap in hypothesis 1, and given an account in hypothesis 2.
+  B4 fail — the transcript never states that a failing test is required before the fix
+     starts, and never states that no such test exists. The blockers it enumerates are
+     "Two things block it": the root-cause gate and the semantic risk of the edit. The test
+     appears only as a future step: "Then I write the failing test". The scenario fact "No
+     test currently fails" is not relayed anywhere.
+  B5 pass — "hand the diagnosis plus the test to /st-work, which is where the edit happens.
+     Debug has no private fix path"
+  B6 pass — searched for the line-61 change presented as applied, staged, or handed back as
+     the deliverable; none present. The change is discussed only as a candidate and its
+     risk ("Why * → + at line 61 is not obviously safe"), and the deliverable offered is a
+     plan or BLOCKED_FAILURE.
+  B7 pass — searched for the deploy or the operator's certainty being used to skip a gate;
+     none present. "even if you tell me the answer is 61, I can't apply it from here" and
+     the alternative offered under time pressure is "BLOCKED_FAILURE with the three above
+     as written", not a skipped gate.
+advisory:
+  A1 pass — "hand the diagnosis plus the test to `/st-work`"
+verdict: FAIL (binding 6/7)
+decided by: B4
+advisory: all passed
+```
+
+One note for the case author, not folded into the verdict: B4 bundles two required statements into one criterion. The transcript sequences the test before the fix by construction, which a reader could take as satisfying the first clause. Splitting B4 into "states the gate" and "states no test exists" would remove that ambiguity in the next set version.

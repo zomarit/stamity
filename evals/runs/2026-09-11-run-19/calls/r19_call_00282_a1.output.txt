@@ -1,0 +1,14 @@
+"Add pagination" reads at least two ways here, and the readings produce different artifacts: a targeted fix for the slow endpoint, or a service-wide pagination contract. Nothing in `docs/specs/` picks page size or cursor shape, and there's no helper to inherit a convention from, so I'd be inventing the contract either way. One thing to decide before I write anything.
+
+**Which scope and mechanism should pagination land as?**
+
+1. **Offset/limit on `GET /api/v1/orders` only.** Smallest change, targets the actual slow endpoint, no shared abstraction invented from one caller; leaves the other two inconsistent with it.
+2. **Offset/limit on all three, extracted into a shared helper.** Consistent contract across the service; touches three handlers and any client reading their responses, and commits the tree to offset semantics before there's a spec.
+3. **Cursor pagination on all three, plus helper and a `docs/specs/` entry.** Stable under concurrent writes and the only one that scales past deep offsets; largest blast radius — needs a stable sort key per endpoint, a cursor encoding, and a client-visible response envelope.
+
+Two sub-questions that ride along, same answer turn:
+
+- **Page size:** I'd use `limit` default 50, max 200, unless you have numbers that say otherwise.
+- **Breakage:** all three endpoints currently return every row, so existing callers may depend on that. I'd make pagination opt-in — no `limit` means current behavior — rather than silently truncating. Say so if you'd rather take the break now and paginate by default.
+
+Default if no response: **1**, with opt-in pagination and the page sizes above. It's the reversible one — a single handler, no new shared abstraction, no committed cursor format — and it's the one that actually moves the slow endpoint. If it's right, 2 and 3 stay open on top of it.

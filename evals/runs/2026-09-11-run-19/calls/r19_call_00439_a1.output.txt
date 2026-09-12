@@ -1,0 +1,18 @@
+Grading the transcript against the case's criteria. The case file supplied no `case:` id, so the line below records that as an authoring gap.
+
+```text
+case: (id not supplied in case file — authoring defect, reported)
+binding:
+  B1 pass — the answer line is "`none`"
+  B2 pass — searched for st-onboard named as triggered; the only mention is "only matches
+     `st-onboard`'s trigger when a repo is freshly installed and has no proven change
+     through it yet — here the setup is eight months old", which negates the trigger
+     rather than asserting it
+  B3 pass — no skill id is given as the answer; the response states "this is ordinary
+     planning that stays with the main flow"
+advisory:
+  A1 pass — "has no proven change through it yet — here the setup is eight months old with
+     dozens of green-gated changes" distinguishes this repository from an unproven install
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
