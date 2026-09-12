@@ -91,7 +91,8 @@ describe("prospective calibration keys", () => {
     ["contradictory prose criterion", () => currentText.replace("B1 fails because naming", "B1 passes because naming")],
     ["manufactured zero-advisory ratio", () => currentText.replace("advisory none declared\n```", "advisory 0/0\n```")],
     ["key with legacy version downgrade", () => currentText.replace("# Judge rubric v6\n", "# Judge rubric v5\n")],
-    ["unknown rubric version", () => currentText.replace("# Judge rubric v6\n", "# Judge rubric v7\n")],
+    // v7 is a supported version from SET-v6 on, so the unknown-version case moved to v8.
+    ["unknown rubric version", () => currentText.replace("# Judge rubric v6\n", "# Judge rubric v8\n")],
     ["malformed rubric version", () => currentText.replace("# Judge rubric v6\n", "# Judge rubric v6 draft\n")],
   ])("blocks %s before calibration instead of inferring a favorable key", (_name, mutate) => {
     expect(() => parse(mutate())).toThrow();
@@ -100,8 +101,11 @@ describe("prospective calibration keys", () => {
   it("keeps profile roles, effort, default, set and unselected instruments unchanged", () => {
     const legacy = JSON.parse(read("evals/model-profiles-v1.json"));
     const current = JSON.parse(read("evals/model-profiles-v2.json"));
-    expect(current).toEqual({ ...legacy, profiles: { ...legacy.profiles,
-      "codex-astra": { ...legacy.profiles["codex-astra"], rubric: "evals/rubric-v6.md" } } });
+    // v1 moved to SET-v6 and rubric v7 for both Codex profiles; v2 is the retained
+    // prospective document and keeps the rubric and set it was written against.
+    expect(current).toEqual({ ...legacy, set: "evals/SET-v5.md", profiles: { ...legacy.profiles,
+      "codex-astra": { ...legacy.profiles["codex-astra"], rubric: "evals/rubric-v6.md" },
+      "codex-astra-judge": { ...legacy.profiles["codex-astra-judge"], rubric: "evals/rubric-v5.md" } } });
   });
 
   it.each([

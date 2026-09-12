@@ -27,7 +27,7 @@ route changes the default profile or establishes a passing run by its existence.
 
 ## 1. Preconditions
 
-Read `evals/SET-v5.md` first for the case roster, thresholds and run-artifact
+Read `evals/SET-v6.md` first for the case roster, thresholds and run-artifact
 shape. Resolve the operator's named profile from `evals/model-profiles-v1.json`
 (its `defaultProfile` is `claude` when none was named), following
 `evals/MODEL-PROFILES-v1.md`. Read the selected profile's `rubric` next for the
@@ -174,7 +174,7 @@ them. Position preference alone can flip a verdict.
 
 ## 5. Aggregate
 
-Compute exactly the metrics `evals/SET-v5.md` declares, by its own definitions:
+Compute exactly the metrics `evals/SET-v6.md` declares, by its own definitions:
 
 A case passes only when all three admitted samples pass every binding criterion.
 The artifact lists each floor and per-skill recall, binding/advisory citations,
@@ -197,7 +197,7 @@ and a score with no decoding note beside it cannot be reproduced or compared.
 ## 6. Run artifact
 
 Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
-`evals/SET-v5.md` declares for it. At minimum it records:
+`evals/SET-v6.md` declares for it. At minimum it records:
 
 - the set/rubric versions and repo sha,
 - the selected model profile, profile document version/path/hash, and exact

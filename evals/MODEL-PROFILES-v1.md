@@ -1,15 +1,15 @@
 # Eval model profiles v1
 
-This extends `SET-v5.md` with explicit model choices. The machine-readable source is
+This extends `SET-v6.md` with explicit model choices. The machine-readable source is
 [`model-profiles-v1.json`](model-profiles-v1.json), committed at the run's repository sha.
-The case roster, sealed briefs, expected criteria and thresholds remain those of `SET-v5`.
+The case roster, sealed briefs, expected criteria and thresholds remain those of `SET-v6`.
 No profile starts a model call or changes Stamity's product-level `models.pins` settings.
 
 | Profile | Model under test | Judge | Rubric |
 |---|---|---|---|
 | `claude` (default) | `claude-opus-5` | `claude-fable-5-1` | `rubric-v4.md` |
-| `codex-astra` | `gpt-6-astra` | `gpt-5.6-sol` | `rubric-v5.md` |
-| `codex-astra-judge` | `gpt-5.6-sol` | `gpt-6-astra` | `rubric-v5.md` |
+| `codex-astra` | `gpt-6-astra` | `gpt-5.6-sol` | `rubric-v7.md` |
+| `codex-astra-judge` | `gpt-5.6-sol` | `gpt-6-astra` | `rubric-v7.md` |
 
 Ask the runner to **run the full eval set with profile `codex-astra`** to measure Astra,
 or select `codex-astra-judge` to have Astra grade Sol. With no profile named, `claude`
@@ -43,7 +43,7 @@ request and records attestation as unavailable. Do not prepend this profile docu
 model-role instructions to the Brief.
 Model and reasoning selection belong to the dispatch controls, not the sealed prompt.
 
-The profiles declare tool-free scenarios, as `SET-v5` already does. If the harness can
+The profiles declare tool-free scenarios, as `SET-v6` already does. If the harness can
 remove tools and repository access, do so. If it exposes them despite the sealed Brief's
 instruction to use none, record that as instruction-only isolation and inspect the tool
 trace. Any scenario tool use or extra repository/context read invalidates that sample;

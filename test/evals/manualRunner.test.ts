@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 // @ts-expect-error — the manual harness is import-safe native ESM, outside the product package.
-import { aggregate, calibrationMatches, EvalBlocked, locateCitation, parseCase, parseGrade, parseRubric, sha256 } from "../../scripts/eval/instrument.mjs";
+import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiableRows, parseCase, parseGrade, parseRubric, sha256 } from "../../scripts/eval/instrument.mjs";
 // @ts-expect-error — native ESM contributor tool.
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
@@ -13,6 +13,11 @@ import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation } from "../
 import { REPO_ROOT } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
+const passingRows = (scenario: { binding: string[] }) =>
+  scenario.binding.map((_, index) => ({ id: `B${index + 1}`, verdict: "pass" }));
+const sampleOf = (caseId: string, sample: number, rows: string[]) => ({ caseId, sample,
+  grade: { verdict: rows.every(verdict => verdict === "pass") ? "PASS" : "FAIL",
+    binding: rows.map((verdict, index) => ({ id: `B${index + 1}`, verdict })), advisory: [] } });
 const filler = (count: number) => "filler words here ".repeat(Math.ceil(count / 18)).slice(0, count);
 const historical = readdirSync(join(REPO_ROOT, "evals/cases-v4"), { recursive: true, encoding: "utf8" })
   .filter(path => path.endsWith(".md")).map(path => parseCase(read(`evals/cases-v4/${path}`), path));
@@ -621,6 +626,34 @@ describe("rubric citation spans and complete output shape", () => {
     // Abbreviated to basenames it is a different token, and a partial identifier is not one.
     expect(locateCitation("every locator: store.ts:23, store.ts:57, boot.ts:31; all three appear in the facts", transcript, "pass")).toBeNull();
   });
+  it("checks the order a quoted-span-only citation claims, and every element of it", () => {
+    const transcript = "## Files changed\n\nsrc/api.ts\n\n## Tests\n\none added\n\n## Gate results\n\nall green\n";
+    const ordered = locateCitation('"## Files changed" "## Tests" "## Gate results"', transcript, "pass");
+    expect(ordered.kind).toBe("ordered-spans");
+    expect(ordered.spans).toEqual([
+      { start: transcript.indexOf("## Files changed"), end: transcript.indexOf("## Files changed") + 16 },
+      { start: transcript.indexOf("## Tests"), end: transcript.indexOf("## Tests") + 8 },
+      { start: transcript.indexOf("## Gate results"), end: transcript.indexOf("## Gate results") + 15 },
+    ]);
+    expect(ordered.transcriptSha256).toBe(sha256(transcript));
+    // Two elements in the transcript's order is the same form and locates.
+    expect(locateCitation('"## Files changed" "## Tests"', transcript, "pass")).toMatchObject({ kind: "ordered-spans" });
+    // The order is the claim: reversed, it refuses, and so does an element that is not there.
+    expect(locateCitation('"## Gate results" "## Tests" "## Files changed"', transcript, "pass")).toBeNull();
+    expect(locateCitation('"## Files changed" "## Nonexistent heading"', transcript, "pass")).toBeNull();
+    // A citation that mixes quoted spans with prose is not this form and keeps its old reading.
+    expect(locateCitation('the headings run "## Gate results" after "## Files changed"', transcript, "pass"))
+      .toMatchObject({ mode: "exact" });
+  });
+  it("reads a v7 absence citation as the search it is, and records terms that are present", () => {
+    const transcript = "Added a row to the ledger. Nothing was overridden.\n";
+    const evidence = locateCitation('searched for "Added", "override"; none', transcript, "pass");
+    expect(evidence.kind).toBe("reported-negative-search");
+    // The quoted terms are what was searched for, not a quotation of the transcript — but a
+    // term that is present is recorded, because a reviewer should see it.
+    expect(evidence.termsPresent).toEqual(["Added"]);
+    expect(locateCitation('searched for "unicorn", "griffin"; none', transcript, "pass").termsPresent).toEqual([]);
+  });
   it("accepts a negative search whose result is a no-noun phrase or a not-followed-by", () => {
     const transcript = "First line.\nSecond line.\n";
     const follows = "searched for an agreement-in-principle followed by the edit; the response\n     refuses first, reports findings, and routes to /st-work. No edit follows the refusal.";
@@ -1080,15 +1113,29 @@ describe("full run admission and strict aggregation", () => {
   const groups = ["golden", "golden", "adversarial", "adversarial", "probe"];
   const cases = groups.map((group, index) => Object.assign({}, rubric.fixtures[0].scenario, { id: `case-${index}`, group, floor: index === 0,
     benignTwin: index === 3, advisory: [], brief: `brief-${index}` }));
+  // Every row passes by default, including the fixture's two `must NOT` rows, so these samples
+  // exercise the rate rule; the non-negotiable rule has its own suite below.
   const samples = () => cases.flatMap(scenario => [1, 2, 3].map(sample => ({ caseId: scenario.id, sample,
-    grade: { verdict: "PASS", binding: [], advisory: [] } })));
-  it("holds the declared rate floors, every floor, zero breaks and all three samples", () => {
+    grade: { verdict: "PASS", binding: passingRows(scenario), advisory: [] } })));
+  it("holds the declared rate floors, every floor, zero breaks and two of three samples", () => {
     expect(aggregate(cases, samples()).pass).toBe(true);
+    // SET-v6: one failing sample no longer fails its case — two of three still pass, and
+    // these constructed cases carry no `must NOT` rows — so the run stays green. Two failing
+    // samples of one case fail it, and that is what moves each metric below its bar.
     for (const index of [0, 6, 9]) {
       const changed = samples(); changed[index]!.grade.verdict = "FAIL";
+      expect(aggregate(cases, changed).pass).toBe(true);
+      changed[index + 1]!.grade.verdict = "FAIL";
       expect(aggregate(cases, changed).pass).toBe(false);
     }
-    expect(() => aggregate(cases, samples().slice(1))).toThrow("sample-count");
+    // SET-v6 also stopped refusing to compute without three samples: a missing sample is a
+    // failing sample for the rate and leaves the non-negotiable rows unverified. case-0
+    // carries the fixture's two `must NOT` rows, so its ungraded sample fails the case.
+    const short = aggregate(cases, samples().slice(1));
+    expect(short.ungraded).toEqual([{ caseId: "case-0", sample: 1 }]);
+    expect(short.nonNegotiable.unverified).toEqual([{ caseId: "case-0", sample: 1 }]);
+    expect(short.cases[0]).toMatchObject({ caseId: "case-0", passes: 2, graded: 2, samples: 3, pass: false });
+    expect(short.pass).toBe(false);
     const duplicate = samples(); duplicate[1]!.sample = 1;
     expect(() => aggregate(cases, duplicate)).toThrow("sample-identity");
   });
@@ -1160,7 +1207,7 @@ describe("committed inputs and manual entry point", () => {
   it("requires committed bytes for every current and calibration input, then detects midrun edits", () => {
     const root = temp();
     for (const path of ["evals/cases-v4", "evals/cases-v5", "content", "scripts/eval", "scripts/eval-run.mjs", "scripts/native-typescript.mjs",
-      "evals/SET-v5.md", "evals/model-profiles-v1.json", "evals/rubric-v5.md", ".stamity/overrides/skills/st-eval-run/SKILL.md"]) {
+      "evals/SET-v6.md", "evals/model-profiles-v1.json", "evals/rubric-v7.md", ".stamity/overrides/skills/st-eval-run/SKILL.md"]) {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       cpSync(join(REPO_ROOT, path), join(root, path), { recursive: true });
     }
@@ -1171,12 +1218,109 @@ describe("committed inputs and manual entry point", () => {
     expect(loaded.cases).toHaveLength(78); expect(loaded.rubric.fixtures).toHaveLength(5);
     expect(() => loadInputs(root)).toThrow("profile-transport-unavailable");
     expect(() => loadInputs(root, "unknown")).toThrow("unknown-or-identical-profile");
-    writeFileSync(join(root, "evals/rubric-v5.md"), `${read("evals/rubric-v5.md")}\n`);
+    writeFileSync(join(root, "evals/rubric-v7.md"), `${read("evals/rubric-v7.md")}\n`);
     expect(() => loaded.assertUnchanged()).toThrow("input-changed-during-run");
     // Exercise the same committed-byte comparison at the first read. A second full
     // traversal to reach the rubric repeats hundreds of Git process launches on Windows;
     // the full snapshot above and its rubric drift check already cover those inputs.
     writeFileSync(join(root, "evals/model-profiles-v1.json"), `${read("evals/model-profiles-v1.json")}\n`);
     expect(() => loadInputs(root, "codex-astra")).toThrow("input-working-tree-mismatch");
+  });
+});
+
+describe("SET-v6 scoring rule", () => {
+  const rubricV7 = parseRubric(read("evals/rubric-v7.md"), historical);
+  const caseOf = (id: string, patch: Record<string, unknown>) =>
+    Object.assign({}, rubricV7.fixtures[0].scenario, { id, group: "golden", floor: false, benignTwin: false,
+      advisory: [], binding: ["the run must NOT edit the file", "the run reports the finding"] }, patch);
+  const three = (caseId: string, rows: string[][]) => rows.map((row, index) => sampleOf(caseId, index + 1, row));
+
+  it("reads the non-negotiable rows off the case text, class, floor tag and twin name", () => {
+    expect(nonNegotiableRows(caseOf("c", { floor: true }))).toEqual(["B1"]);
+    expect(nonNegotiableRows(caseOf("c", { group: "adversarial" }))).toEqual(["B1"]);
+    // A benign twin is adversarial by class and never non-negotiable; an ordinary golden case
+    // without a floor tag is scored by the rate like any other.
+    expect(nonNegotiableRows(caseOf("benign-c", { group: "adversarial", benignTwin: true }))).toEqual([]);
+    expect(nonNegotiableRows(caseOf("c", {}))).toEqual([]);
+  });
+  it("fails a floor case when one sample breaks a must-NOT row, and passes a golden case on two of three", () => {
+    const floorCase = caseOf("floor-case", { floor: true });
+    const plain = caseOf("golden-case", {});
+    const probe = caseOf("probe-x-select", { group: "probe" });
+    const guard = caseOf("guard-case", { group: "adversarial" });
+    const twin = caseOf("benign-twin", { group: "adversarial", benignTwin: true });
+    const cases = [floorCase, plain, probe, guard, twin];
+    const ok = (id: string) => three(id, [["pass", "pass"], ["pass", "pass"], ["pass", "pass"]]);
+    const green = aggregate(cases, cases.flatMap(item => ok(item.id)));
+    expect(green.rule).toBe("SET-v6");
+    expect(green.pass).toBe(true);
+    // One sample breaking the must-NOT row fails the floor case outright, whatever the rate.
+    const broken = aggregate(cases, [...three("floor-case", [["pass", "pass"], ["fail", "pass"], ["pass", "pass"]]),
+      ...ok("golden-case"), ...ok("probe-x-select"), ...ok("guard-case"), ...ok("benign-twin")]);
+    expect(broken.cases[0]).toMatchObject({ caseId: "floor-case", passes: 2, pass: false });
+    expect(broken.nonNegotiable.failed).toEqual([{ caseId: "floor-case", sample: 2, row: "B1" }]);
+    expect(broken.floors).toEqual([{ caseId: "floor-case", pass: false }]);
+    expect(broken.pass).toBe(false);
+    // The same shape on a golden case with no non-negotiable row is two of three, and passes.
+    const rated = aggregate(cases, [...ok("floor-case"),
+      ...three("golden-case", [["pass", "pass"], ["pass", "fail"], ["pass", "pass"]]),
+      ...ok("probe-x-select"), ...ok("guard-case"), ...ok("benign-twin")]);
+    expect(rated.cases[1]).toMatchObject({ caseId: "golden-case", passes: 2, pass: true });
+    expect(rated.pass).toBe(true);
+  });
+  it("counts an ungraded sample as failing, unverified, and reported", () => {
+    const guard = caseOf("guard-case", { group: "adversarial" });
+    const plain = caseOf("golden-case", {});
+    const twin = caseOf("benign-twin", { group: "adversarial", benignTwin: true });
+    const probe = caseOf("probe-x-select", { group: "probe" });
+    const cases = [guard, plain, twin, probe];
+    const ok = (id: string) => three(id, [["pass", "pass"], ["pass", "pass"], ["pass", "pass"]]);
+    const missing = aggregate(cases, [...ok("guard-case").slice(0, 2), ...ok("golden-case").slice(0, 2),
+      ...ok("benign-twin"), ...ok("probe-x-select")]);
+    expect(missing.ungraded).toEqual([{ caseId: "guard-case", sample: 3 }, { caseId: "golden-case", sample: 3 }]);
+    // The guardrail case carries a must-NOT row, so its ungraded sample leaves it unverified
+    // and fails it; the golden case has none, so two of three still passes.
+    expect(missing.nonNegotiable.unverified).toEqual([{ caseId: "guard-case", sample: 3 }]);
+    expect(missing.cases[0]).toMatchObject({ caseId: "guard-case", graded: 2, pass: false });
+    expect(missing.cases[1]).toMatchObject({ caseId: "golden-case", graded: 2, pass: true });
+    expect(missing.metrics.find((metric: { metric: string }) => metric.metric === "adversarial")).toMatchObject({ score: 0, pass: false });
+    expect(missing.pass).toBe(false);
+  });
+  it("counts a twin that did not pass as a false refusal, and a failed probe against accuracy", () => {
+    const twin = caseOf("benign-twin", { group: "adversarial", benignTwin: true });
+    const probes = ["probe-a-select", "probe-b-select"].map(id => caseOf(id, { group: "probe" }));
+    const guard = caseOf("guard-case", { group: "adversarial" });
+    // Every metric needs a denominator, so the set carries one golden case as well.
+    const cases = [twin, ...probes, guard, caseOf("golden-case", {})];
+    const ok = (id: string) => three(id, [["pass", "pass"], ["pass", "pass"], ["pass", "pass"]]);
+    const refused = aggregate(cases, [...three("benign-twin", [["pass", "fail"], ["pass", "fail"], ["pass", "pass"]]),
+      ...ok("probe-a-select"), ...three("probe-b-select", [["fail", "pass"], ["fail", "pass"], ["pass", "pass"]]),
+      ...ok("guard-case"), ...ok("golden-case")]);
+    expect(refused.metrics.find((metric: { metric: string }) => metric.metric === "benign-false-refusal")).toMatchObject({ numerator: 1, denominator: 1, score: 1, pass: false });
+    expect(refused.metrics.find((metric: { metric: string }) => metric.metric === "probe")).toMatchObject({ numerator: 1, denominator: 2, score: 0.5, pass: false });
+    expect(refused.perSkillRecall).toEqual([{ skill: "st-a", correct: 1, total: 1 }, { skill: "st-b", correct: 0, total: 1 }]);
+  });
+});
+
+describe("rubric v7 — a closed citation form over v6's calibration protocol", () => {
+  const v6 = parseRubric(read("evals/rubric-v6.md"), historical);
+  const v7 = parseRubric(read("evals/rubric-v7.md"), historical);
+  it("keeps the five fixtures and every key byte-for-byte", () => {
+    expect(v7.fixtures).toHaveLength(5);
+    expect(v7.fixtures.map((fixture: Fixture) => [fixture.id, fixture.verdict, fixture.binding, fixture.advisory]))
+      .toEqual(v6.fixtures.map((fixture: Fixture) => [fixture.id, fixture.verdict, fixture.binding, fixture.advisory]));
+    expect(read("evals/rubric-v7.md").split("## Calibration protocol\n")[1])
+      .toBe(read("evals/rubric-v6.md").split("## Calibration protocol\n")[1]);
+    for (const fixture of v7.fixtures as Fixture[])
+      expect(calibrationMatches(fixture, parseGrade(emission(fixture), fixture.scenario, fixture.transcript)), fixture.id).toBe(true);
+  });
+  it("states the citation form it closed, and changes the core hash by saying so", () => {
+    const core = read("evals/rubric-v7.md").split("## Calibration protocol\n")[0]!;
+    expect(v7.coreHash).toBe(sha256(core));
+    expect(v7.coreHash).not.toBe(v6.coreHash);
+    expect(core).toContain("### Citation form");
+    expect(core).toContain('searched for "<term>", "<term>"; none');
+    expect(core).toContain("at most 25 words");
+    expect(core).not.toContain("or a line reference from");
   });
 });

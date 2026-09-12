@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "set": "evals/SET-v5.md",
+  "set": "evals/SET-v6.md",
   "defaultProfile": "claude",
   "profiles": {
     "claude": {
@@ -11,13 +11,13 @@
     },
     "codex-astra": {
       "harness": "codex",
-      "rubric": "evals/rubric-v5.md",
+      "rubric": "evals/rubric-v7.md",
       "scenario": { "model": "gpt-6-astra", "reasoningEffort": "high" },
       "judge": { "model": "gpt-5.6-sol", "reasoningEffort": "high" }
     },
     "codex-astra-judge": {
       "harness": "codex",
-      "rubric": "evals/rubric-v5.md",
+      "rubric": "evals/rubric-v7.md",
       "scenario": { "model": "gpt-5.6-sol", "reasoningEffort": "high" },
       "judge": { "model": "gpt-6-astra", "reasoningEffort": "high" }
     }

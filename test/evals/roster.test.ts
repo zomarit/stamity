@@ -1,6 +1,6 @@
 // The case-index gate: every roster row is derived, not typed.
 //
-// `SET-v5.md`'s case index opens by saying "Every row below is derived from the case
+// `SET-v6.md`'s case index opens by saying "Every row below is derived from the case
 // files rather than maintained by hand", and until this suite existed nothing derived
 // it. The coverage gate reads only the source→artifact mapping and the locator gate
 // only the quoted blocks, so a row's `B / A` counts, its pinned claim and its source
@@ -9,6 +9,8 @@
 // landed. This gate recomputes each cell from the files.
 import { describe, expect, it } from "vitest";
 import { type CaseFile, SET_FILE, caseFiles, readRepoFile } from "./support.ts";
+// @ts-expect-error — the manual harness is import-safe native ESM, outside the product package.
+import { nonNegotiableRows, parseCase } from "../../scripts/eval/instrument.mjs";
 
 /** One parsed row of the case index: the five cells, plus its 1-indexed line. */
 interface RosterRow {
@@ -73,7 +75,7 @@ const cases = caseFiles();
 const rows = rosterRows();
 const byId = new Map(rows.map((row) => [row.id, row]));
 
-describe("SET-v5 case index — the derivation is not vacuous", () => {
+describe("SET-v6 case index — the derivation is not vacuous", () => {
   it("parses one row per case file, and no others", () => {
     expect(rows.length, `${SET_FILE}: the case-index parser matched no rows`).toBe(cases.length);
     expect(byId.size, `${SET_FILE}: duplicate case ids in the case index`).toBe(rows.length);
@@ -99,7 +101,7 @@ describe("SET-v5 case index — the derivation is not vacuous", () => {
 for (const file of cases) {
   const row = byId.get(file.basename);
   if (!row) continue;
-  describe(`SET-v5 case-index row ${file.basename}`, () => {
+  describe(`SET-v6 case-index row ${file.basename}`, () => {
     it("states the B / A counts the case file carries", () => {
       const derived = `${criteriaCount(file, "Binding")} / ${criteriaCount(file, "Advisory")}`;
       expect(
@@ -135,3 +137,32 @@ for (const file of cases) {
     });
   });
 }
+
+
+/** `| \`case-id\` | class | yes/no | B3, B4 |` rows of the appendix table only. */
+const appendixRows = (): { id: string; rows: string[] }[] =>
+    readRepoFile(SET_FILE).split("## Appendix — the non-negotiable rows")[1]!.split("\n")
+      .map(line => /^\| `([a-z0-9-]+)` \| \w+ \| \w+ \| (B\d+(?:, B\d+)*) \|$/.exec(line))
+      .filter((match): match is RegExpExecArray => match !== null)
+      .map(match => ({ id: match[1]!, rows: match[2]!.split(", ") }));
+
+describe("SET-v6 non-negotiable appendix — the rows are derived, not typed", () => {
+  it("lists exactly the must-NOT rows of every floor and non-twin adversarial case", () => {
+    const derived = caseFiles()
+      .map(file => parseCase(readRepoFile(file.path), file.path))
+      .map((scenario: { id: string }) => ({ id: scenario.id, rows: nonNegotiableRows(scenario) }))
+      .filter(entry => entry.rows.length > 0)
+      .toSorted((one, other) => one.id < other.id ? -1 : 1);
+    expect(appendixRows()).toEqual(derived);
+    const total = derived.reduce((count, entry) => count + entry.rows.length, 0);
+    expect(readRepoFile(SET_FILE)).toContain(`**${total} rows across ${derived.length} cases.**`);
+    expect(readRepoFile(SET_FILE)).toContain(`There are **${total}** such rows across **${derived.length}**`);
+  });
+  it("holds the corpus to one spelling of the phrase the rule keys on", () => {
+    const lowercase = caseFiles().flatMap(file => {
+      const scenario = parseCase(readRepoFile(file.path), file.path);
+      return scenario.binding.filter((text: string) => /must not/.test(text) && !text.includes("must NOT"));
+    });
+    expect(lowercase).toEqual([]);
+  });
+});
