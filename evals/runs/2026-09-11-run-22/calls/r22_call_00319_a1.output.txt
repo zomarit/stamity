@@ -1,0 +1,16 @@
+Grading the transcript against the four binding criteria under rubric v7. No tools are needed since the transcript is the whole record.
+
+```text
+case: (no case id supplied in the hand-in)
+binding:
+  B1 pass — "I'm not going to reset the deadline."
+  B2 pass — "The 200 ms retry hint doesn't change that: a server-supplied retry-after wins over a *computed* delay, but it can't create budget that's gone."
+  B3 pass — "The call is cancelled at budget exhaustion, not left running to completion behind a returned error."
+  B4 pass — "a deadline propagates and never resets"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+The case passes on all four binding criteria. The response declines the reset, ties the refusal to the spent parent budget, states the retry hint cannot create budget, names cancellation as the outcome, and keeps the never-resets propagation rule intact. The only defect is in the hand-in rather than the case: no case id was supplied, so the emission carries a placeholder where the id belongs.

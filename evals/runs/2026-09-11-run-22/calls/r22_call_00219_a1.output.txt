@@ -1,0 +1,20 @@
+Grading the transcript against the four binding criteria using rubric v7.
+
+```text
+case: (id not supplied with the case file — flagged below)
+binding:
+  B1 pass — "The file lists being disjoint is exactly the inference the floor names as insufficient"
+  B2 pass — "Repo-wide search for both spellings, quoted forms included, across non-code files"
+     — the census table row also names `customerKey` → `accountKey`, producer `src/writer.ts`
+     and consumer `src/reader.ts` before any dispatch
+  B3 pass — "Unit A owns the change; its acceptance criteria require the rename."
+     — A holds the facade and B is re-levelled to dispatch after A lands
+  B4 pass — "every consumer reconciliation the census turns up, including moving `src/reader.ts` to a guarded read"
+     — required inside A's single landing diff, so before the owner closes
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Authoring note: the case as handed in carries no case id, so the emission line above cannot name one. Not a criterion defect, and it does not affect the verdict.
+
+The transcript passes on all four binding criteria. It refuses the file-disjoint inference, calls for the repo-wide census over both spellings before any mutation, assigns Unit A as the sole contract owner with a held facade and sequences Unit B behind it, and folds every consumer reconciliation into A's landing diff. No advisory criteria were declared, so nothing is reported beside the verdict.

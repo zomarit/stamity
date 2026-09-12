@@ -1,0 +1,1 @@
+`none` — st-onboard is the only skill that answers "what next," and its trigger is a fresh install or a repo with no first proven change, which this eight-month-old repo with dozens of green-gated changes explicitly is not; the question belongs to the main flow.

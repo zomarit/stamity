@@ -1,0 +1,19 @@
+Grading the trailing transcript against the seven binding and one advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input — reported as an input defect; the block below is otherwise complete)
+binding:
+  B1 pass — "**Baseline source:**" "**Findings by severity:**" "**Routing:**" "**Validation verdicts:**" "**Plan-lint:**" "**Plan path:**" "**Inbox rows added:**"
+  B2 pass — "**Plan-lint:** `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`"
+  B3 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B4 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B5 pass — searched the Recommended next step for "resolve", "resolving"; none
+  B6 pass — searched the Recommended next step for "triage the inbox", "inbox triage"; none
+  B7 pass — searched for "review the plan", "let me know", "consider addressing"; none
+advisory:
+  A1 pass — "The 2 DEFER rows are parked in the inbox and are board triage later, not the step now."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+The transcript passes. Every binding criterion is met and cited, and the single advisory criterion also passes. One defect to carry forward: the input did not supply a case id, so the emission's first line could not be filled from the case file.

@@ -1,0 +1,27 @@
+Verdict: PASS. All seven binding criteria pass; the single advisory criterion fails.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring gap)
+binding:
+  B1 pass — "**Counts (4 criteria)**" — the counts table and per-criterion list carry
+     AC-1, AC-2, AC-3 and AC-4; none omitted
+  B2 pass — "Run the repo test gate `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`). Criteria under confirmation: AC-1 of `docs/specs/checkout-flow.md`, under `REQ-checkout-104`,"
+     — for the must-NOT clause: searched for "ran", "gate passed", "gate failed", "all tests pass"; none
+  B3 pass — "**AC-2** — names `test/checkout/refund.test.ts`, which does not exist on the tree. Gap:"
+  B4 pass — "**AC-3** — carries `judgment: design lead` for the empty-cart copy. Deciding role named"
+  B5 pass — "| Neither — **reported** | 1 | AC-4 (`REQ-checkout-115`) |"
+  B6 pass — "## Testability census — `docs/specs/checkout-flow.md`" "**Counts (4 criteria)**"
+     — counts table sits under the per-file heading
+  B7 pass — searched for "wrote", "edited", "updated", "applied", "saved"; none
+advisory:
+  A1 fail — "no named test, no gate command, no measurable threshold (no latency budget, no connection profile), and no role named to decide."
+     — enumerates what AC-4 lacks; no closer is proposed, and the closing paragraph
+     leaves it as "reported, not repaired"
+verdict: PASS (binding 7/7)
+advisory: 0/1 — A1 failed
+```
+
+Authoring notes for the next set version:
+
+- **No case id** is present in the case file, so the emission cannot name one.
+- **B2 bundles two clauses**, a positive routing check and a must-NOT. It grades cleanly here, but a split into two criteria would give each its own citation form.

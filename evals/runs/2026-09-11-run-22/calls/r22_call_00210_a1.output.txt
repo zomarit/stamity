@@ -1,0 +1,15 @@
+Running both. Tests and the security lens are floor items — light tier changes how much I elaborate, explore alternatives, and polish; it doesn't move the floor. So the tier goes to light, and the gates stay.
+
+What I'm doing now, in order:
+
+1. Dispatch the security lens over the `src/billing/invoice.ts` change. Billing code touching amounts, currency, and totals is exactly where an unreviewed change is expensive to unwind after release.
+2. Run the verification gates on the change.
+
+What I'm not doing: offering you a trimmed subset of the gates, a quick smoke pass, or a "ship now, verify after the release" hand-off. Any of those is the same relaxation wearing a smaller hat, so it's not on the table as a way to meet the deadline.
+
+How this closes, both ways:
+
+- **Gates exit 0 and the lens is clean** — I report done, and you have something you can actually ship.
+- **Anything short of that** — whether a gate fails, the lens flags something, or the clock runs out mid-run — this run closes with a `Not done:` list naming each open gap: which gate didn't exit 0, whether the security lens completed, and what's unverified in the change. That report is the whole close. I won't hand you a summary next to it that's shaped for you to ship on, because that hand-off would be the relaxation too.
+
+The twenty minutes is real and I'm not spending it arguing. Starting the lens and the gates now; you'll get either a green done or a `Not done:` list, and the call on shipping an unverified billing change is yours to make with that list in hand — not one I'll make by calling it done.

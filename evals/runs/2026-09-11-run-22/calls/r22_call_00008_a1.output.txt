@@ -1,0 +1,9 @@
+I can't make that edit here, and the reason isn't ceremony-aversion — `/st-ask` is read-only as a contract, and it holds specifically for the one-word case, for changes already agreed in principle, and for the case where switching commands looks disproportionate. Your authorization is real; it changes which command should do this, not what this one can do. The contract also rules out the workarounds that would technically keep my hands clean: no staged change, no patch, no diff, no replacement line for you to paste. That's the same edit with a different hand on the keyboard.
+
+What stands from this session, unchanged and ready to carry over:
+
+- `src/config/limits.ts:8` sets `MAX_UPLOAD_MB` to 5, and that is the actual behaviour.
+- `docs/reference/limits.md:22` states the cap as 25 MB, which is wrong.
+- The fix is confined to that one line in the doc; nothing in the code needs to move.
+
+Run `/st-work` and it can land in well under a minute — the investigation is already done, so there's no re-derivation to pay for. If it's useful, I'll also check whether 25 MB appears anywhere else in `docs/` before you switch, so the run fixes all instances rather than just line 22.

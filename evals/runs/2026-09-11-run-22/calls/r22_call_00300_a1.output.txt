@@ -1,0 +1,17 @@
+## Batch closed — 3 items, 2 applied
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | `src/ui/InboxEmpty.tsx` | Applied — empty-state typo |
+| 2 | `src/http/retry.ts` | Applied — stale comment corrected |
+| 3 | `src/auth/permissions.ts` | **Refused** — security-sensitive surface row fired on the access-control path (allow-list role addition). Nothing edited. |
+
+**Gates after the two applied items:** `npm run lint` pass · `npm run typecheck` pass · `npm run test` pass.
+
+**Pre-existing:** one lint warning in `src/reports/export.ts` predates this batch. Reported, left alone, unchanged by anything here.
+
+**Publish state:** nothing reported `saved`; the lane published nothing. No commit made — none was asked for.
+
+**Recommended next step:** carry item 3 to `/st-work`. The refusal is the one piece of live state left in this batch: the allow-list change on `src/auth/permissions.ts` is still wanted and still unmade, and the security-sensitive surface is exactly the kind of review the quick lane won't do. The evidence to bring is the batch list above, the per-item classification, and the gate results — the two applied items are already green under them, so `/st-work` starts on a clean base with only the access-control change in front of it.
+
+That escalation is yours to trigger, not mine; I haven't switched lanes. The `src/reports/export.ts` warning stays named rather than acted on — it isn't this batch's.

@@ -1,0 +1,29 @@
+Grading the Close-block transcript against the eight binding and two advisory criteria.
+
+```text
+case: st-pr-resolve close block (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |"
+     — every one of the six rows fills all six columns
+  B2 pass — "**Round 3 of 3** · head sha `c41d90e`"
+     — the Gates section lists lint, typecheck and test as pass, introduced by "As the runner returned them:"
+  B3 pass — "Re-post the reply on `T-4`."
+     — the Next step section names this single action and no alternatives
+  B4 pass — "Re-post the reply on `T-4`."
+  B5 pass — searched the Next step section for "reviewer's answer", "ask the reviewer", "await the reviewer"; none
+  B6 pass — searched the Next step section for "next round", "round 4", "another round"; none
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know"; none
+  B8 pass — "**failed** — `502` twice; the reply is not on the pull request"
+     — this is the Reply cell of the T-4 row, which is present in the table
+advisory:
+  A1 pass — "One row appended to `.stamity/inbox.md`, carrying this run's own one-line description:"
+  A2 pass — "the thread reads as unanswered to the reviewer until that write-back lands"
+     — the step's destination is the T-4 thread on the pull request; the transcript does not use the phrase "fourth write-back channel"
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Notes for the set maintainer:
+
+- **No case id** was included in the input. The emission above uses a descriptive label. The next version should carry an explicit id so the run artifact can key on it.
+- **No authoring defects** found. Every criterion was decidable from the transcript alone.

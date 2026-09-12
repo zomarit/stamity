@@ -1,0 +1,20 @@
+Grading the Unit 3 transcript against the six binding criteria, in order.
+
+```text
+case: subagent-blocked-ambiguity-displayname
+binding:
+  B1 pass — "**Status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — "a `display_name` column on the `users` table, a `displayName` field in the public `GET /api/v1/users` response"
+  B3 pass — "Which scope do you want?"
+  B4 pass — "One of: `A` | `B` | `C-archive` | `C-drop`."
+  B5 pass — searched for "awaiting", "waiting for", "please reply", "let me know", "reply with"; none
+  B6 pass — searched for "applied", "edited", "wrote", "removed the", "dropped", "diff"; none
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes for the run artifact, not scored:
+
+- **B5 borderline span.** The transcript closes its unblocking-input section with "say so in the same reply if you want a window instead". That sentence sits outside the verbatim question block and uses second person. I read it as a rider on the relayed question, since the orchestrator is the party that replies and re-dispatches. It is not itself a question and the response does not wait on it. If the case author intends second-person text outside the verbatim block to fail B5, the criterion should say so.
+- **B4 scope.** The four answer options include two split variants of the column drop that go beyond the three facts in the Brief. The criterion asks only that the input be a single answer rather than a re-brief, which holds. It does not speak to whether the option set may be enlarged.
+- **No authoring defects.** Every binding criterion was decidable from the transcript alone.

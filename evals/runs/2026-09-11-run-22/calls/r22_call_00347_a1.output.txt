@@ -1,0 +1,20 @@
+Grading the transcript against the six binding criteria, in order, under rubric v7.
+
+```text
+case: st-rework-routing-five-findings
+binding:
+  B1 pass — "No catch-all rows were needed; every finding matched a specific scope above them."
+  B2 pass — "| F1 | Critical | any | Critical · any | **REVISE** |" "| F2 | Warning | inside diff file, traceable to recorded criterion `REQ-orders-109` | Warning · inside diff + traceable | **REVISE** |" "| F4 | Minor | single-line fix inside diff file | Minor · single-line fix inside a diff file | **REVISE** |"
+  B3 pass — "| F3 | Warning | new file `src/api/idempotency.ts` + new dependency | Warning · new files / new dependency / design change | **DEFER** |" "| F5 | Minor | cross-cutting across four modules | Minor · cross-cutting, or outside the diff | **DEFER** |"
+  B4 pass — "## Routing — 5 findings" "One batched correction if you want any row moved"
+  B5 pass — "## REVISE — plan units for phase 6" "one dated block appended to `.stamity/inbox.md`, dated 2026-09-12, for this rework run on `feat/orders-idempotency`" "Minor · src/api/orders.ts:64 · hard-coded timeout literal shared with three other modules; needs an extracted shared constant · source: rework feat/orders-idempotency"
+  B6 pass — searched for "applied", "patched", "staged", "git add", "diff --git", "wrote the fix"; none
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Citation form on B2, B3, B4, B5.** Each of these criteria names several elements, so the verdicts cite one copied span per element on a single line, in the element form. Each span sits on one transcript line and contains no double-quote character.
+- **No authoring defects found.** Every binding criterion was decidable from the transcript's own statements. The case correctly reads `advisory: none declared`, so no advisory criterion was invented.
+- **Not scored, observed only.** The transcript also names `/st-work` as the execution destination. That was the deleted advisory criterion and it plays no part in the verdict.

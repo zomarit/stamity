@@ -1,0 +1,12 @@
+```text
+case: (id not supplied in the input; graded as the skill-selection case for the "save where we are" request)
+binding:
+  B1 pass — "`st-handoff`"
+  B2 pass — "`st-handoff` — the request is mid-task state" ; searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-learn", "st-onboard", "st-qa", "st-verify", "none", "or"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `st-handoff`, gives one reason, offers no alternative, and does not answer `none`. No authoring defects found. The only gap is that the case block carried no case id, so the emission line above is a placeholder rather than an identifier from the case file.

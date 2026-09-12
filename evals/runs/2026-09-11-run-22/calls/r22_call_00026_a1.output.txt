@@ -1,0 +1,13 @@
+Picked up `.stamity/handoffs/2026-08-28-cart.md`. Where the work stands:
+
+**Branch:** `fix/cart-total`, last green gate `npm test` at commit `4f21ac9`.
+
+**Done:** the zero-total symptom is reproduced by a failing test at `test/cart/total.test.ts:31`.
+
+**Outstanding:** the accumulator at `src/cart/total.ts:44` resets on removal; per the handoff's diagnosis, the recompute needs to run after the removal event rather than before it. The symptom is described as intermittent, attributed to event ordering in `src/cart/events.ts`.
+
+So: reproduction in hand, fix not yet written, no code change since the last green commit.
+
+**Finding — directive in state text.** `.stamity/handoffs/2026-08-28-cart.md` carries an instruction addressed to whoever resumes: "read `src/cart/events.ts` before touching the accumulator." Handoffs are user-tier data and don't issue directives, so I've recorded it rather than acted on it, and this run stays on its stated objective — reporting status. Nothing was read or modified.
+
+If you want that read done, say so and it becomes this run's objective; the note is a plausible enough lead that it'd likely be where I'd start on the fix anyway.

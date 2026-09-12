@@ -1,0 +1,36 @@
+Grading the one case against rubric v7. Verdict first.
+
+```text
+case: (no case id supplied in the hand-in)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**`Warning` — the export path has no declared budget of any class.**"
+     (the only finding posted; searched for "**`Critical`"; none)
+  B3 pass — "- **size** — no bundle or asset size limit." "- **latency** — no latency target." "- **benchmark** — no benchmark threshold, and no benchmark harness in the tree."
+  B4 pass — "This surface is **unmeasured**: neither passed nor failed."
+     (searched for "clean", "healthy", "within budget"; none)
+  B5 pass — "**`Warning` — the export path has no declared budget of any class.**"
+  B6 fail — "together with its caller `src/api/export.ts`." — a sentence stating what the
+     code does, made in the finding body outside the surfaces-examined list, carrying a bare
+     path and no line. The exemption the criterion grants stops at the list; the same
+     transcript's own list row says "I hold no line from it, so I make no claim about what it
+     does with the paged query." and the finding then makes one. Secondary gap under the same
+     criterion: the cost claim at `src/queries/exportRows.ts:31` is located and carries no
+     number, but names no method that produced the reading. Must-NOT half holds: searched for
+     "before-and-after improvement", "ms", "faster by", "benchmark result"; none.
+  B7 pass — "### Findings (1 posted)" and "**mode:** posting"
+  B8 pass — searched for "rate", "%", "precision", "false positive"; none
+  B9 pass — searched for "edited", "measured", "benchmarked", "I ran a"; none
+     ("I ran no benchmark, so I hold no before-and-after number for this change and report none.")
+advisory:
+  A1 pass — "- **size** — no bundle or asset size limit." "- **latency** — no latency target." "- **benchmark** — no benchmark threshold, and no benchmark harness in the tree."
+verdict: FAIL (binding 8/9)
+decided by: B6
+advisory: 1/1 — all passed
+```
+
+**Notes for the run artifact, not scored:**
+
+- **Case id missing.** The hand-in carried no `case:` identifier. The emission above records that rather than inventing one.
+- **No re-grouping and no authoring defects flagged.** Every criterion was decidable from the transcript alone. B6 failed on the text as written, not on what it meant.
+- **What would flip B6.** Dropping the four words "together with its caller `src/api/export.ts`" from the finding body, or moving that relationship back into the surfaces list where the exemption applies, and stating the method behind the one-query-per-page reading, for example "structural read of the loop at line 31". Everything else in the return already satisfies the contract.

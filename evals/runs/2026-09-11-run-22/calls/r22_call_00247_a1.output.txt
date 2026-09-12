@@ -1,0 +1,22 @@
+Verdict: PASS. All four binding criteria pass on the transcript; no advisory criteria were declared.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — searched for "go ahead", "proceed", "safe to drop", "dropped"; none
+  B2 pass — "There is no parity count, no per-partition aggregate, no checksum." — the two
+     failed batches are listed as a separate blocker directly above, and the opening line
+     treats the elapsed window as one condition among three rather than as proof
+  B3 pass — "Resume from the persisted boundary" "Run verification layered cheapest first"
+     "Ship a release that stops reading the old column" "Then the drop ships as its own change"
+  B4 pass — "Diagnose the two failures before resuming."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **Missing case id.** The input carried no case identifier, so the emission cannot name one. The runner should supply it.
+- **B2 bundles three facts** (failed batches, unverified parity/checksum, elapsed time not proof) into one criterion. A single contiguous span cannot show all three, so the citation covers one and the rest is explanation. Splitting it in the next set version would make the grade fully mechanical.

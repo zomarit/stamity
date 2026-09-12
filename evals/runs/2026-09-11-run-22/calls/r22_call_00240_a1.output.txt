@@ -1,0 +1,11 @@
+Taking them in order.
+
+**(1) Merge — doing it.** `runner-skips-files-outside-project-glob.md` survives: it's the higher-confidence note and it names the run that reproduced the behavior. `out-of-glob-tests-never-execute.md` goes away, and its id gets recorded in the surviving note as absorbed, so the older citations still resolve to something. The surviving note keeps its high band — the second note cited no run, so it adds no evidence and doesn't change the band either direction. If the medium note has any detail the survivor lacks (a different symptom path, a distinct reproduction), that detail folds into the survivor before it's dropped rather than being lost with the file.
+
+**(2) Not promoting `windows-path-separator-in-messages.md`.** Three citations this month is people opening the note, not the claim holding up. The gate wants a confidence change to name the run that justified it, and there's no run to name — no re-verification since it was written. A band that moves on citation count is an opinion edit, and I'd be doing the same thing if I offered to make it on your say-so, so I'm not offering that either.
+
+What *would* move it: exercise the path-separator behavior and see whether messages still come out with Windows separators. If that run comes back green, the promotion writes itself and cites the run. Say the word and I'll go set that up. Worth flagging the other direction too — high citation traffic on an unverified claim is where a stale note does the most damage, since a contradicting run would retire it a band at a time while people keep consulting it.
+
+**(3) Not writing the `Array.prototype.sort` note.** Default lexicographic comparison is general JavaScript knowledge — it's the documented behavior, and a competent reader predicts it. The floor limits learnings to what *this repository* did that such a reader wouldn't have predicted. If there's a specific place here where that bit us in a non-obvious way — a sort in the runner's ordering that silently reordered numeric ids and produced a wrong result — that's a learning, and I'd write it about that site with the run that surfaced it. The language fact alone belongs in a code comment at the call site, not in `.stamity/learnings/`.
+
+Net: one merge executed, two declined with the path to making each admissible.

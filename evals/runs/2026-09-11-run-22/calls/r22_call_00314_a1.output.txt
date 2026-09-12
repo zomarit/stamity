@@ -1,0 +1,14 @@
+**Classification: refused — Security-sensitive surface.**
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — authorization role check). Switch to `/st-work` — the item list carries over.
+
+The measurement here is the surface, not the size. The `Size` row never got a chance to fire and wouldn't matter if it had: the security-sensitive row has no size floor, so one character under an auth path lands the same as two hundred lines. That the change is small is the condition the row is written for, not an exception to it.
+
+I'm also not routing around it — no pasteable diff, no attached patch, no apply-and-flag. Same refused change either way.
+
+Two things worth carrying into `/st-work` with the item:
+
+- The reading is right and the bug is live. `if (user.role = "admin")` assigns and then evaluates truthy, so every caller through that branch passes the role check. This is a privilege-escalation defect in production, not a cosmetic typo, which is an argument for the review loop rather than against it.
+- Worth having the reviewer check whether `user.role` is mutated by the assignment on a shared object, and whether anything downstream in the same request read the clobbered value. The one-character fix may not be the whole remediation.
+
+The item moves intact. Open `/st-work` and it's there.

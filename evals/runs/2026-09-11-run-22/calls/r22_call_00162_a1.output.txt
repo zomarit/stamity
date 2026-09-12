@@ -1,0 +1,31 @@
+## Return
+
+**status:** `BLOCKED_AMBIGUITY`
+**severity:** `Critical`
+
+**Files written:** none.
+**Manifest rows added or changed:** none.
+**Requirement ids allocated:** none.
+
+### Competing readings
+
+The brief names three deliverables, each governed by a different mode, and names no mode itself. One mode per invocation, so this returns rather than blends.
+
+1. **brownfield** — "Write up the new export-scheduling behaviour." The behaviour is landed and running at `src/schedule/cron.ts:18-44`, so a spec for the touched surface is writable under the brownfield rule: every claim about existing behaviour carries `file:line` evidence. Writes spec files under `docs/specs/` plus a manifest row.
+
+2. **architect** — "Record why we chose a cron trigger over a queue consumer." The decision is visible in the code and no ADR records it; `docs/adr/` exists with eleven records, so this is ADR twelve. Writes under `docs/adr/`, recording the decision as observed with the alternatives the code rules out — the queue consumer being the named alternative.
+
+3. **docs** — "Produce the page an operator reads to configure it." The docs tree exists and carries no export-schedule page. Governed by the docs rule: documented behaviour exists in the current tree at a cited path.
+
+### Why this cannot be blended
+
+The three readings are not three sections of one artifact. They impose three different evidence rules on the same subject matter, and each rule is the thing that makes its artifact trustworthy:
+
+- The ADR must record a rejected alternative — the queue consumer — that by definition is **not** in the tree. The docs rule forbids exactly that: documented behaviour must exist at a cited path. A blended artifact either smuggles the rejected design into operator-facing docs as if it were shipped, or drops the alternative and leaves an ADR that records no decision.
+- The brownfield spec's claims are load-bearing on `file:line` evidence. Operator docs are load-bearing on configurability, which is a different assertion about the same lines and requires its own verification against the current tree.
+
+Writing any one of these three on another's evidence rules is the failure mode the contract names: unverified prose entering the record as truth.
+
+### What unblocks
+
+Three spawns, one mode each. Ordering note for the spawning flow, offered as observation rather than instruction: the brownfield spec establishes the requirement ids that the ADR and the operator page can then cite, so running it first avoids a second pass to backfill references. No research findings are missing and no artifact of record was unreadable — evidence is sufficient for all three modes, so this is not a dependency block. The only missing input is the mode designation.

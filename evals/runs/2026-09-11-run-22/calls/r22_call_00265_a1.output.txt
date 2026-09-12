@@ -1,0 +1,22 @@
+Grading the transcript against the six binding and one advisory criteria under rubric v7. Verdict: the case passes.
+
+```text
+case: <no case id supplied in the input>
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — "**Blocking check and unit:** L1 on `retry-backoff`."
+  B3 pass — "L1 on `retry-backoff`. Three rewrites"
+  B4 pass — searched for "wrote", "persisted", "has been written", "open marker", "dropped"; none
+  B5 pass — searched for "pass 4", "fourth pass", "re-ran", "rewrote"; none
+  B6 pass — searched for "L1 pass", "DONE", "BLOCKED_FAILURE", "BLOCKED_DEPENDENCY"; none
+advisory:
+  A1 pass — "**Smallest clarification that unblocks:** one measurable acceptance criterion for `retry-backoff`"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Authoring notes, reported alongside the verdict and not folded into it:
+
+- **No case id was supplied.** The emission requires one, so the line above carries a placeholder. The next set version should name the case.
+- **B5 is decidable but its boundary is thin.** The transcript supplies two example criteria under the clarification request and asks the operator to choose. It does not report a fourth lint pass and states that further rewriting would only produce another synonym, so it was graded as not a rewrite. If the authors intend example criteria offered to the operator to count as a rewrite, the criterion should say so.
+- **B4 search terms avoid the word "written".** The return contract's own heading reads "Artifact path(s) written:" and the transcript reports it as none, so that term appears in the transcript without reporting an artifact. The absence search used terms that would only match a persisted artifact claim.

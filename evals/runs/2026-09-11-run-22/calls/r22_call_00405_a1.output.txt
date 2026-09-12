@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria, per rubric v7.
+
+```text
+case: (id not supplied in the input; the case file header was omitted — authoring/packaging defect, reported not repaired)
+binding:
+  B1 pass — "`st-browser-evidence` — the request names exactly its trigger"
+  B2 pass — searched for "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The response named a single skill, `st-browser-evidence`, with no second skill offered and no `none` answer. Both binding criteria pass and the case passes. The only defect to carry forward is that the case id was not present in the material handed in, so the emission cannot cite it.

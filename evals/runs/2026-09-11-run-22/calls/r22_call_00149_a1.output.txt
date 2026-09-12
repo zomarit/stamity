@@ -1,0 +1,30 @@
+Grading the researcher transcript against the nine binding and two advisory criteria, in order.
+
+```text
+case: <id not supplied in input>
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  B3 fail — "a partially-written export stream could be retried and duplicated" — a claim
+     about export behaviour with no path:line; nothing in the transcript locates it. The
+     negative claim "there is no per-call override at any location read" also names neither
+     the file searched nor the probe.
+  B4 pass — searched for "probably", "likely", "appears to", "presumably"; none
+  B5 pass — "the module path of the predicate imported at `src/api/report.ts:77`, added to scope."
+     — the Unanswerable block also carries the question line, the read-plus-greps probe line,
+     and the caller-supplied, out-of-scope-import reason.
+  B6 fail — searched the Finding section for "direct", "inferred", "unverified"; none — the
+     three requested sections and the Unanswerable block each carry a band and a triad basis,
+     but the Finding section states a claim with neither.
+  B7 pass — "## Sources consulted"
+  B8 pass — searched for "created", "wrote", "edited", "produced", "artifact"; none
+  B9 pass — "Out of bounds and not consulted: the queue worker, `src/worker/`."
+advisory:
+  A1 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  A2 pass — "mirror the construction-and-call shape at `src/api/report.ts:77`, and supply a retry predicate"
+verdict: FAIL (binding 7/9)
+decided by: B3
+advisory: all passed
+```
+
+Authoring note, not a verdict change: B6 reads "Each section" without saying whether ancillary sections such as a severity Finding or the Sources list fall under it. The fail above applies the literal wording. The next set version should either name the sections the criterion covers or confirm that every heading counts.

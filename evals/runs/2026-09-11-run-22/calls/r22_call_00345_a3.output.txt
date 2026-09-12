@@ -1,0 +1,22 @@
+Grading the transcript against the six binding criteria under rubric v7.
+
+```text
+case: (id not present in the input handed in)
+binding:
+  B1 pass — "No finding fell through to a catch-all — every one matched a specific scope row."
+  B2 pass — "| F2 | Warning | `inside diff files and traceable to a recorded acceptance criterion` (row 2) | **REVISE** |"
+     (F1 and F4 rows carry **REVISE** on the adjacent lines of the same table; the single-span form admits one)
+  B3 pass — "| F3 | Warning | `new files, a new dependency, or a design change` (row 3) | **DEFER** |"
+     (F5 row carries **DEFER** two lines below; the single-span form admits one)
+  B4 pass — "One batched correction if you want any row moved"
+  B5 pass — "**one dated block for this rework run (2026-09-12), appended to `.stamity/inbox.md`**"
+     (each inbox row in the fenced block ends "source: rework feat/orders-idempotency" and opens severity · file:line · description)
+  B6 pass — searched for "applied", "patched", "wrote", "staged", "git add", "diff --git", "edited"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+authoring defects: none. B2, B3 and B5 each need evidence from more than one transcript line; the v7 single-span form forces citing one of them, so the parenthetical notes point at the rest without quoting.
+```
+
+The case passes on all six binding criteria. Every finding was routed with F1, F2, F4 as REVISE and F3, F5 as DEFER, the table appeared once with a single batched-correction prompt, the inbox block and its row shape were named, and no fix was applied. No advisory criteria exist for this case, so nothing else is reported.

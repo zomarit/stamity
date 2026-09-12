@@ -1,0 +1,14 @@
+Grading the transcript at the end of the input against the case's binding criteria.
+
+```text
+case: (id not supplied in the input; graded as the st-dep-audit routing case)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms"
+  B2 pass — searched for "none", "st-verify", "st-qa", "st-handoff", "st-learn", "st-onboard", "st-browser-evidence", "st-design-system-detect"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Note for the run artifact: the case id was not present in the material handed to the judge, so the block above carries a placeholder. Everything else needed to grade was present.

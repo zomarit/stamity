@@ -1,0 +1,38 @@
+## Result — Unit 3
+
+**Status:** `BLOCKED_AMBIGUITY`
+
+**Brief:** "Unit 3: remove the legacy `user.displayName` field."
+
+**Nothing was changed.** No migration written, no handler edited, no type modified.
+
+### Why
+
+`displayName` exists in three places with three different blast radii, and "the field" names none of them uniquely:
+
+| # | Reading | Change | Blast radius |
+|---|---------|--------|--------------|
+| A | The type property | Delete `displayName` from the internal `SessionUser` type | Internal only; compile-time, reversible |
+| B | The API field | Remove `displayName` from the `GET /api/v1/users` response | Breaking change for external consumers of a public, versioned endpoint |
+| C | The column | Drop `displayName` from the `users` table | Irreversible data loss; requires migration and a backup/backfill decision |
+
+These are separable, not strictly nested — the column can outlive the API field, and the API field can outlive the type property. So I can't pick the largest and call it a superset, and I can't pick the smallest and call it a safe down payment: either guess silently redefines the unit.
+
+I stopped rather than starting at A and working up, because a partial removal leaves `displayName` in an inconsistent half-removed state that is worse than either endpoint if the run is interrupted or the answer turns out to be A.
+
+### Question for the operator (verbatim, self-contained)
+
+> `user.displayName` currently exists in three places: as a column on the `users` table, as a field on the public `GET /api/v1/users` response, and as a property on the internal `SessionUser` type. Unit 3 says "remove the legacy `user.displayName` field" without saying which. Which scope did you mean: **type-only**, **api+type**, or **full** (including dropping the column)?
+
+### Smallest input that unblocks
+
+One token: `type-only` | `api+type` | `full`.
+
+That alone is sufficient — absent further instruction I will apply these defaults, which you can override in the same reply:
+
+- **`api+type`** — treat as a breaking change to `v1` and flag it for release notes; I will *not* invent a deprecation window or a `v2` on my own. If a deprecation window is required, say so and I'll return the field behind a sunset header instead of removing it.
+- **`full`** — write the column drop as a forward migration with an explicit down migration, and **do not run it**; hand back the migration file for review. If you want it applied in this run, or want a backup/export of the column contents first, say so.
+
+### Re-dispatch
+
+Re-dispatch Unit 3 with the scope token. No other context from this attempt is needed; the question above stands on its own.

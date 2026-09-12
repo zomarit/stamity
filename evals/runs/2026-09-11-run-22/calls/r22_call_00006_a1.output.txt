@@ -1,0 +1,5 @@
+I can't make that edit here, and the authorization isn't what's blocking it — this command is read-only regardless of approval, explicitly including one-line changes and changes already agreed in principle. Approval moves it to a different command; it doesn't extend this one.
+
+I also can't hand you the replacement line or a diff to paste, which the contract treats as the same edit with a different hand on the keyboard.
+
+What carries over to `/st-work` is the finding as it stands: `src/config/limits.ts:8` sets `MAX_UPLOAD_MB` to 5, `docs/reference/limits.md:22` states a different cap, and the code is the behaviour — so the doc line is the side that's wrong. That's enough for the edit to be a single obvious change once you're in a command that can write.

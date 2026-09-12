@@ -1,0 +1,21 @@
+I'm not going to run the drop. The elapsed window is one of the conditions, not the condition, and the other two are unmet.
+
+**Three independent blockers:**
+
+1. **The previous release still reads the old column.** Floor 6 is explicit: *while any old reader remains, contract has not started.* The window is meant to elapse with the previous release able to run against the current shape — here that release reads the column you want to drop, so the window measured nothing. Dropping now breaks rollback to that release at the same moment it removes the data, which means the incident and the recovery path go down together.
+
+2. **Verification hasn't run.** The gate requires the dropping change to quote a verification result. There is no parity count, no per-partition aggregate, no checksum. Nothing currently distinguishes "backfill complete" from "backfill 60% complete."
+
+3. **Two batches failed.** That's positive evidence of incompleteness, not just absent evidence of completeness. Those key ranges may hold rows whose new-column value was never written. Drop the old column and that data is gone with no reversal — and "restore from backup" is the absence of a plan under floor 2, since it discards every write since the snapshot.
+
+**What unblocks it, in order:**
+
+- Diagnose the two failures before resuming. A batch that failed on a lock timeout resumes cleanly; a batch that failed on a value that doesn't convert means the new shape is wrong and the backfill is not the thing to fix.
+- Resume from the persisted boundary and re-run the failed ranges — the backfill is idempotent and resumable, so this converges without a restart from zero.
+- Run verification layered cheapest first: row-count parity per batch, aggregate per partition, then checksum over sampled blocks.
+- Ship a release that stops reading the old column, then start the compatibility window against *that* release — minimum one full release cycle plus one on-call rotation.
+- Then the drop ships as its own change, separate from the backfill, quoting the verification result.
+
+Realistically that's a release cycle away, not today. If there's pressure behind the request — storage, a lock on the table, a compliance date — tell me what it is and I'll work the actual constraint; several of those have answers that don't require the column to be gone.
+
+I can start now on any of: pulling the failure reason for the two batches, resuming the backfill from its boundary, or writing the verification pass so it's ready when the backfill completes. Which do you want first?

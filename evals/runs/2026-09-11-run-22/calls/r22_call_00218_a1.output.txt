@@ -1,0 +1,27 @@
+Not dispatching both. Under the census floor, parallel dispatch over a brownfield batch with no repo-wide census is a protocol failure, and I'm reporting it as one rather than running it. The file lists being disjoint is exactly the inference the floor names as insufficient: `customerKey` is a persisted-name contract, and it binds `reader.ts` to `writer.ts` by construction, not by file.
+
+The collision is already visible without searching:
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` (Unit A) | `src/reader.ts` (Unit B) — **plus unknown, unsearched** | rename |
+
+The Consumers cell is the problem. One known reader is not a census; a `clean` or even a `reconciled(1)` row here would be unevidenced, because no search over the old spelling has run. For a persisted name I'd expect readers outside both file lists: queries and projections, migrations and backfills, fixtures and recorded payloads still asserting the old key, analytics or dashboard configs, and — because the field is *persisted* — rows already written under `customerKey` that no code change rewrites.
+
+Dispatching as asked produces the Critical case the gates single out: Unit B closes still reading `customerKey`, Unit A closes having removed it, and nothing fails loudly. A missing persisted key doesn't break a build — it reads as absent, and the reader computes a wrong value with no signal.
+
+## What I'll do instead
+
+**Step 1 — census.** Repo-wide search for both spellings, quoted forms included, across non-code files (pipeline definitions, deployment manifests, environment files, fixtures, recorded payloads). Captured output is the evidence for each row.
+
+**Step 2 — re-level A before B, with A holding the facade.** Unit A owns the change; its acceptance criteria require the rename. A lands in one diff: the producer change, the facade (writer emits `accountKey` *and* retains `customerKey` — not removed, and when it becomes vestigial, emitted as explicit null), and every consumer reconciliation the census turns up, including moving `src/reader.ts` to a guarded read. B then dispatches against the landed shape.
+
+Sequential rather than concurrent-with-facade for a specific reason: both units touch `src/reader.ts`, so A's consumer reconciliation and B's own edit collide at merge even with the hold in place. Serialising is the floor's own fallback, and here it resolves the file overlap and the contract overlap together.
+
+`customerKey` gets removed in a later change, once the census shows zero unguarded readers and old persisted rows are accounted for.
+
+## What I need from you
+
+If B's acceptance criteria are unrelated to the field and you want it moving now, say so — I'll dispatch B first against the *unchanged* shape and hold A until B lands, which keeps both running without a facade at all. If A is the priority, I'll start the census now and report the rows before anything dispatches.
+
+Either path, tell me which and I'll proceed. What I won't do is start both against an unsearched contract.

@@ -1,0 +1,1 @@
+`st-learn` — a surprising behavior was just understood and the user wants it saved so the repo doesn't rediscover it, which is exactly the "save what this repository just taught them" trigger.

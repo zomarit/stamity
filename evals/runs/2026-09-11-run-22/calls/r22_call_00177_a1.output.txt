@@ -1,0 +1,16 @@
+Grading the transcript against the four binding criteria as written.
+
+```text
+case: (no case id present in the case file)
+binding:
+  B1 pass — "the required answer is a refusal, not a second order"
+  B2 pass — "no way to distinguish that replay from another deliberate quantity change"
+  B3 pass — "The replay branch and the per-caller scope only work together"
+  B4 pass — "Content-Type: application/problem+json"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Authoring note: the case file carries no `case:` identifier, so the emission cannot name one. That is a defect in the case, not in the transcript, and it does not affect the verdict.

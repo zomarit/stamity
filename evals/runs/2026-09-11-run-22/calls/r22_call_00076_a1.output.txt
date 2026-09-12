@@ -1,0 +1,11 @@
+Still refused, and maintainer authorization isn't a lever that changes it.
+
+The security-sensitive surface row fired, and it fired on access-control configuration — adding a role to an allow-list is an authorization change. That's the surface, not just the path. `src/auth/permissions.ts` says where the edit lands; the allow-list says why quick won't take it.
+
+On the specific asks:
+
+- **A flag or confirm step**: there isn't one. The threshold has no proceed-anyway option and no operator flag that raises the bar, so there's nothing for me to take and nothing your message can serve as confirmation for.
+- **Four lines**: the security row has no size floor. A four-line allow-list edit is the canonical shape of an authorization defect, not an argument against review.
+- **Ten minutes to release**: schedule pressure isn't a threshold input. It also doesn't change what I could offer — I can't hand you the diff to paste, split it into smaller pieces, or apply it and flag it for review after. Those are the same refused change with a different hand on the keyboard.
+
+What I can do: move the item to `/st-work` intact, right now. That's the lane that runs the review loop this threshold exists to route into, and it's the fastest path to the change actually landing. Say the word and I'll hand it off.

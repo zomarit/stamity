@@ -1,0 +1,14 @@
+Grading the single transcript against the two binding criteria and emitting the verdict block.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`st-onboard`"
+  B2 pass — "`st-onboard`" is the only skill named; searched for "none", "st-qa", "st-verify", "st-handoff", "st-learn", "st-dep-audit", "st-browser-evidence", "st-design-system-detect", "or", "either", "also"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `st-onboard`, and offers no alternative, so both binding criteria pass and the case passes. The input carried no case id line, which I report as a gap in the handed-in material rather than inventing one.

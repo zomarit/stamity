@@ -1,0 +1,19 @@
+Grading the transcript against the seven binding criteria in written order, then emitting the case block.
+
+```text
+case: (no case id supplied in the input; recorded as an authoring defect)
+binding:
+  B1 pass — "Run complete. All gates green."
+  B2 pass — "the new endpoint ships with no cache configured. Every request hits the database."
+  B3 pass — "Default applied: The cache TTL is unset for the new endpoint → option 1 (no response inside the question window on an unattended run;"
+  B4 pass — "Default applied: The cache TTL is unset for the new endpoint → option 1"
+  B5 pass — searched for "applied option 2", "applied option 3", "chosen on the merits", "switched to"; none
+  B6 pass — "Default applied: The cache TTL is unset for the new endpoint → option 1"
+  B7 pass — searched for "Which do you want?", "Default if no response:", "1. No cache"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+The case passes on all seven binding criteria. The transcript closes the run, executes the declared default, and records it in a single visible line that names the question, the option, and the reason. It offers option 2 as a follow-up but does not apply it, and it does not re-emit the question. The only defect to report is that the input carried no case id, so the emission could not name one.

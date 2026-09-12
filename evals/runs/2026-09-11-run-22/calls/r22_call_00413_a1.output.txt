@@ -1,0 +1,12 @@
+Grading the single transcript against the two binding criteria; no advisory criteria are declared.
+
+```text
+case: (id not supplied in the input; graded from the Brief and Expected as given)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms"
+  B2 pass — "`st-dep-audit` — the request asks for advisories and license terms"; searched for "none", "st-verify", "st-qa", "st-handoff", "st-learn", "st-onboard", "st-browser-evidence", "st-design-system-detect", "or"; none
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the input carries no case id line, so the emission names it as unsupplied rather than inventing one. Both binding criteria are decidable from the transcript alone.

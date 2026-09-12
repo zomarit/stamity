@@ -1,0 +1,46 @@
+## Findings
+
+### 1. `GET /invoices/:id` — SQL interpolation
+**Category:** injection
+
+`req.params.id` is concatenated into the query string. Any caller controls the tail of the `WHERE` clause: `1' OR '1'='1` returns the whole table, and `db.raw` with a stacked-statement-capable driver reaches further than `SELECT`.
+
+Fix: bound parameters (`db.raw("SELECT ... WHERE id = ?", [id])` or the query builder). Independently, parse `:id` before use — a declared shape with a type and a length bound (UUID, or integer with a range), rejecting anything else. Bound parameters are the fix; the parse is the floor that keeps the next sink safe too.
+
+### 2. `GET /invoices/:id` — no per-resource authorization
+**Category:** broken access control
+
+`requireSession` establishes *who* the caller is and nothing more. The route never asks whether `req.user` may read *this* invoice, so the identifier in the path acts as a grant: a valid session for any account enumerates every invoice in the table. Load the record, compare its owner/tenant against `req.user`, deny otherwise.
+
+### 3. `GET /invoices/:id` — `SELECT *` and raw row returned to the caller
+**Category:** insecure design, broken access control
+
+The response crosses a trust boundary unparsed. `SELECT *` ships every present and future column — internal notes, ledger references, soft-delete and fraud flags, whatever the next migration adds — and `res.json(row)` may also emit driver result metadata. Select named columns and serialize through an explicit allowlist of response fields.
+
+### 4. `POST /invoices/:id/void` — no per-resource authorization on a state change
+**Category:** broken access control
+
+Same defect as #2, with write effect: any authenticated caller voids any invoice by guessing or scraping an id. Authorization must load the invoice and check this caller against it, before `invoices.void`.
+
+### 5. `POST /invoices/:id/void` — missing-record path does not fail closed
+**Category:** insecure design
+
+If `invoices.byId` returns `null`/`undefined` for an unknown id, that value flows straight into `invoices.void`. The behaviour then depends on what `void` does with nothing — at best a 500, at worst an unguarded write. An absent record must deny (404/403) before the mutation. Same principle if `byId` throws: the catch must deny rather than continue.
+
+### 6. `allowTestLogin = process.env.NODE_ENV !== "production"`
+**Category:** security misconfiguration, authentication failure
+
+This is the inverted form. The test-login path is ON in every environment nobody named: a fresh container with `NODE_ENV` unset, a renamed stage, `NODE_ENV=Production`, `NODE_ENV=prod`, a process started by a supervisor that drops the variable. Since it bypasses authentication, one unnamed environment is a full authentication bypass in whatever that environment can reach.
+
+Fix: gate on an allowlist — `const allowTestLogin = ["development", "test"].includes(env)` — where `env` comes from a startup parse that validates `NODE_ENV` against a closed enum and refuses to boot on any other value.
+
+### 7. `seedRoutesEnabled = process.env.SEED_ROUTES !== "off"`
+**Category:** security misconfiguration, integrity failure
+
+Defaults to enabled, and only the exact string `"off"` disables it — `"false"`, `"0"`, `"OFF"`, or a trailing space all leave seed and reset routes live. Absent configuration must deny. Gate these on the same validated environment enum as #6, not on a free-text variable; the integrity exposure is that seed/reset routes rewrite or destroy production data.
+
+### Noted, not verifiable from this diff
+Voiding an invoice is a financial state change and the handler emits no audit record. If the surrounding app has no logging middleware capturing actor, target, and outcome for mutations, that is a **logging failure** — I can't tell from the diff alone which is the case.
+
+## Suggested order
+#6 and #7 are one-line config changes that currently expose authentication bypass and data-destroying routes; do them first. #1 and #4 next — injection and an unauthorized write. #2, #3, #5 follow.

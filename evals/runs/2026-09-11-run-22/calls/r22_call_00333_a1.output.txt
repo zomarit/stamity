@@ -1,0 +1,29 @@
+Grading the transcript at the end of the input against the seven binding and one advisory criteria.
+
+```text
+case: (no case id present in the case file — authoring defect, reported below)
+binding:
+  B1 pass — "- **Baseline source:** proof record from run `r7`" "- **Findings:** 1 Critical · 3 Warning · 1 Minor"
+     "- **Routing:** 3 REVISE · 2 DEFER" "- **Validation verdicts:** unit 1 accepted (high) · unit 2 accepted (high) · unit 3 accepted (medium)"
+     "- **Plan-lint:** `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`" "- **Plan path:** `docs/plans/004-checkout-rework.md`"
+     "- **Inbox rows added:** 2 (one per DEFER finding)"
+  B2 pass — "`L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`"
+  B3 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`." — a single imperative step;
+     the later sentence "The 2 DEFER rows stay in the inbox for board triage behind that." is a
+     tracking note sequenced behind the step, not a second option
+  B4 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B5 pass — "carries no `[NEEDS CLARIFICATION]` marker, so nothing blocks handoff" — the step named
+     is /st-work; the marker is mentioned only to state its absence. searched for "resolve", "resolving"; none
+  B6 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`." — the step named is
+     /st-work; "board triage" occurs only in the subordinate note quoted under B3
+  B7 pass — searched for "review the plan", "let me know", "consider", "proceed"; none
+advisory:
+  A1 pass — "The 2 DEFER rows stay in the inbox for board triage behind that."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Recap: the transcript passes on every binding criterion and the one advisory criterion. Two things to report alongside the verdict:
+
+- **No case id** was supplied in the case file, so the emission cannot name one.
+- **B5 and B6 are cited positively** rather than in the absence form. The terms `[NEEDS CLARIFICATION]` and `board triage` do appear in the transcript, but only in a negated clause and a subordinate note. A literal absence search on those terms would be false, so the citations quote the step itself instead.

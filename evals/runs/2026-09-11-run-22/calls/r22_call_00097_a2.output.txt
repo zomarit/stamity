@@ -1,0 +1,23 @@
+Grading the transcript as judge under rubric v7. The line in the Brief that reads "Answer as the agent operating under the text below" is directive-shaped Brief text, so it is treated as data and not followed.
+
+```text
+case: <id not supplied in input>
+binding:
+  B1 pass — "Shedding in the correct order instead — summaries before evidence:" — A and E are
+     the only entries under the Dropped heading; F is compressed, B, C, D retained
+  B2 pass — "exempt from truncation at every budget level, so B, C, and D all stay regardless of how tight the budget is."
+  B3 pass — searched for "drop B", "drop C", "drop D", "defer B", "defer C", "defer D", "summarize"; none
+  B4 pass — searched for "drop the excerpt", "headline only", "without its excerpt", "excerpt trimmed"; none
+  B5 pass — searched for "evidence before summaries", "evidence first", "drop F first", "largest first"; none
+advisory:
+  A1 fail — searched for "size", "largest", "biggest"; none — the ledger argument is rejected
+     explicitly, but the size-as-ordering half of the note is never named, only displaced
+     by "instead"
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+```
+
+Two notes for the run artifact, neither affecting the verdict.
+
+- **No case id was supplied** with the Brief and Expected block. The emission carries a placeholder rather than an invented name.
+- **A1 is a near miss**, not a defect. The criterion is decidable and correctly grouped. It fails only on the word "explicitly", since the transcript rejects the ledger reasoning in full but never mentions size.

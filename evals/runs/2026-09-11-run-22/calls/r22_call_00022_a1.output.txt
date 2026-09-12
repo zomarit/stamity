@@ -1,0 +1,15 @@
+**Classification: qualifies for quick.**
+
+- Typo / user-facing string correction — matches the "Typo, comment, or user-facing string correction" signal.
+- Thresholds checked: 1 file (≤5), ~2 lines added+removed (≤200), no auth/authz/credential/payment/access-control surface, no dependency or lockfile change, no API/schema/event/migration. No row fires.
+
+**Exact edit** — `src/ui/InboxEmpty.tsx`:
+
+```diff
+-No messsages yet
++No messages yet
+```
+
+i.e. replace the single occurrence of the string `No messsages yet` with `No messages yet`.
+
+**Status: not done.** This turn has no tool access, so the edit above is written but not written to disk, and the quality gates — which the lane runs on every batch, a one-line typo fix included — have not run. Nothing here is a request for go-ahead; the edit is fully specified and ready to land. Give me a turn with file access and I'll apply it and run the gates.

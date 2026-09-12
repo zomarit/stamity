@@ -1,0 +1,22 @@
+Grading the transcript against the case's three binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "selected for", "matches"; none
+  B3 pass — "`none`" — the answer line carries no skill id; the reason's mention of
+     `st-qa` is as the running command's own by-name invocation, which the criterion
+     exempts
+advisory:
+  A1 fail — searched for "/st-work", "st-work"; none — the reason says "as part of the
+     running command rather than selected by trigger match" but never names /st-work
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+The case passes on all three binding criteria. The transcript answers with `none`, never reports `st-qa` as triggered or selected, and names no skill on the answer line.
+
+The single advisory criterion fails on a strict reading. The reason attributes the checkpoint to "the running command" and to step 1, but never writes the `/st-work` name the criterion asks for. If the set authors intended "identifies the running command" rather than "names `/st-work`", the criterion text should say so in the next version.
+
+One authoring defect to record: the input did not supply a case id, so the emission's case line could not be filled from the case file.

@@ -1,0 +1,26 @@
+## What lands in `.stamity/inbox.md`
+
+The finding body does not clear the guard, so the row carries this command's own description rather than the user's wording:
+
+```
+- [ ] DEFER | st-rework: deferred finding from rework run — webhook worker auth failure,
+      originating wording withheld at persistence. Locus: WEBHOOK_SIGNING_TOKEN in the deploy
+      config. Stopped by: secret-scan (credential value), injection-screen (instruction-override).
+      Awaiting redacted restatement from operator.
+```
+
+The finding keeps its route — it's tracked and reworkable — but none of the original text is persisted.
+
+## Why
+
+**1. Secret scan — refuse.** The body contains a live value for `WEBHOOK_SIGNING_TOKEN`, sitting in the deploy config. That value reaches no file, and it isn't masked, truncated, or partially shown in the row, in this reply, or anywhere else. The field name and its location are the whole of what I can carry, which is what the row above carries. I'm not redacting the sentence for you — producing a redacted version is your step, and doing it myself would skip it.
+
+**2. Injection screen — dropped, not rephrased.** The closing sentence of the body is a standing directive aimed at future sessions to weaken a verification control. That's an `instruction-override` hit against the destination `.stamity/inbox.md`. The matched span is not echoed into the transcript or into the row. I'm dropping it rather than running it through step 3: turning a directive into "X was expected here because Y" would launder an order into an observation, and there's no observation underneath it to preserve — it's a recommendation about how to run the suite, not a record of what happened.
+
+**3. Declarative rephrase — not reached** for the dropped span; the surviving description is already declarative.
+
+## What I need from you
+
+Send a restatement of the finding with the token value removed — a placeholder or just "the deploy config's signing token was the production value, not the staging one" is enough. I'll swap the real body into the row once it clears.
+
+Separately, and outside this command's scope: that token has been sitting in a deploy config and has now appeared in a rework transcript. Treat it as exposed and rotate it. I haven't touched it.

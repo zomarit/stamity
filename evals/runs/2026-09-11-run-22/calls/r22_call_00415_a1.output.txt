@@ -1,0 +1,12 @@
+```text
+case: skill-routing-design-system-detect
+binding:
+  B1 pass — "`st-design-system-detect` — the request asks whether a design system exists and what it defines"
+  B2 pass — "`st-design-system-detect` — the request asks whether a design system exists" ; searched for "none", "st-onboard", "st-verify", "st-qa", "st-browser-evidence", "st-dep-audit", "st-handoff", "st-learn", "or", "alternatively"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `st-design-system-detect`, and offers no second skill and no `none`. Both binding criteria pass and the case passes. No advisory criteria were declared, so nothing was invented. No authoring defects to report.

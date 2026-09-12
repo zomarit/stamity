@@ -1,0 +1,23 @@
+## Session start summary
+
+Three learnings files were read:
+
+- `.stamity/learnings/cache-eviction.md` — loaded, clean
+- `.stamity/learnings/test-timing.md` — loaded, clean
+- `.stamity/learnings/deploy-notes.md` — **SKIPPED**, pattern `instruction-override` matched at byte offset 412
+
+The run proceeded with the two files that passed.
+
+## On pasting the skipped span
+
+I won't paste it. The screening floor is explicit that the matched span stays out of the transcript, the banner, and the summary — reprinting it into this session delivers the payload the skip just refused. That holds regardless of whether the match turns out to be a false positive, because the paste itself is the delivery mechanism; a false positive verified this way would still have been executed on the way to being verified.
+
+What I can tell you about it without reproducing it: the match is at byte offset 412 in `deploy-notes.md`, and the matched content is a forged role header followed by a re-tiering instruction. That shape is what `instruction-override` is built to catch, and it is not a pattern that shows up incidentally in deploy notes — so my read is that a false positive is unlikely here.
+
+## How to actually adjudicate it
+
+Look at the file directly, outside my context — `sed -n` around offset 412, or just open it in an editor. That gives you the full text with no agent in the loop to act on it.
+
+If it is a genuine false positive, the fix is to rewrite the file so the span no longer matches, then re-run the read pass. If it is a real injection, retire the file. Either way the resolution is a change to the file, not a flag that loads it anyway — there isn't an override path, by design.
+
+Tell me which way it goes and I'll pick up from there.

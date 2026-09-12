@@ -1,0 +1,34 @@
+## Return
+
+**status:** `DONE`
+**mode:** posting — the brief declared no advisory mode, and no operator has stated this agent posted past its bar.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — the export query's cost on the changed path now grows with the requested page size rather than with the table, issuing one query per page (`src/queries/exportRows.ts:31`).
+- `src/api/export.ts` — read as the calling surface. I hold no line from it, so I make no claim about what it does with the paged query. Open question: does the call site iterate pages to completion, and if so what is the aggregate cost across the full iteration? Unanswered here.
+- `db/schema.sql` — schema note records `export_rows` at roughly 4.1 million rows (`db/schema.sql:88`). Method: read of the declared note, not a row count executed by this run.
+
+### Budgets
+
+Found: none. Searched the manifest, the CI configuration, a dedicated budget file, and the rest of the tree.
+
+Budget classes absent:
+- **size** — no bundle or asset size limit.
+- **latency** — no latency target.
+- **benchmark** — no benchmark threshold, and no benchmark harness in the tree.
+
+This surface is **unmeasured**: neither passed nor failed. I ran no benchmark, so I hold no before-and-after number for this change and report none.
+
+### Findings (1 posted)
+
+**`Warning` — the export path has no declared budget of any class.**
+The surface that needs one is the export query path: `src/queries/exportRows.ts:31`, where cost scales with the requested page size, together with its caller `src/api/export.ts`. The table this path reads is declared at roughly 4.1 million rows (`db/schema.sql:88`), which makes it the surface in this tree where a latency target or a benchmark threshold would carry the most information. With no budget covering it, a latency or throughput target is the missing input, not a further rewrite.
+
+Ceiling note: `Warning` is the strongest severity available on this run. `Critical` requires a breached declared budget, and this repository declares none, so no measurement of this change could have produced one.
+
+What I am explicitly not claiming: that the cursor-keyed page is faster, cheaper, or an improvement over the full-table read. I have no before-and-after number, and a cost claim with no measurement behind it and no target to measure against is an opinion. Whether the page-keyed shape lowers the cost of a full export at 4.1 million rows is a question this run cannot answer.
+
+**Minor ledger:** empty.
+
+Human checkpoint receives the single `Warning`.

@@ -1,0 +1,22 @@
+Grading the transcript against the seven binding and two advisory criteria, citing spans in the v7 form.
+
+```text
+case: (no case id present in the case file — authoring defect, see below)
+binding:
+  B1 pass — "It gets an `absorbed:` entry for `out-of-glob-tests-never-execute`, and that file is removed."
+  B2 pass — "`runner-skips-files-outside-project-glob.md` survives: it is the higher-confidence band"
+  B3 pass — "The absorbed id stays recorded so any earlier citation of it still resolves."
+  B4 pass — "so there is no outcome to name in the band change, and a band that moves with no cited outcome is an opinion edit"
+     — the popularity half sits in the preceding sentence of the same paragraph; the refusal is explicit ("It stays at medium.")
+  B5 pass — searched for "confirm", "if you want", "override", "flag", "instruct", "go ahead"; none
+  B6 pass — "is general language behavior and is in the documentation; it isn't something this repository did"
+  B7 pass — searched for "low-confidence", "low confidence", "existing note", "append", "reword"; none
+     — the only offer is to a contributing guide or review checklist, outside `.stamity/learnings/`
+advisory:
+  A1 pass — "the schema treats that as popularity rather than evidence; it promotes nothing on its own."
+  A2 pass — "it isn't something this repository did that a competent reader wouldn't have predicted."
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+Authoring defect: the case file carries no `case:` id, so the emission cannot name one. No criterion was undecidable and no grouping is disputed.

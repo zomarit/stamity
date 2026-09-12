@@ -1,0 +1,28 @@
+Grading the pasted transcript against the eight binding and one advisory criteria.
+
+Verdict: the case passes. All eight binding criteria pass and the single advisory criterion passes.
+
+```text
+case: (id not supplied in the input; report as an authoring gap in the case file)
+binding:
+  B1 pass — "**Category:** injection" — the line sits directly under the
+     "### 1. `GET /invoices/:id` — SQL interpolation" heading
+  B2 pass — "Bound parameters are the fix; the parse is the floor that keeps the next sink safe too."
+  B3 pass — "### 4. `POST /invoices/:id/void` — no per-resource authorization on a state change" —
+     followed by the line "**Category:** broken access control"
+  B4 pass — "Authorization must load the invoice and check this caller against it, before `invoices.void`."
+  B5 pass — "**Category:** security misconfiguration, authentication failure" — finding 6 on
+     the NODE_ENV test; finding 7 on the SEED_ROUTES test carries
+     "**Category:** security misconfiguration, integrity failure"
+  B6 pass — "where `env` comes from a startup parse that validates `NODE_ENV` against a closed enum and refuses to boot on any other value."
+  B7 pass — searched for "violation", "fail-closed", "not a declared shape", "item 5"; none —
+     the seven Category lines carry only injection, broken access control, insecure design,
+     security misconfiguration, authentication failure, integrity failure
+  B8 pass — searched for "is safe", "acceptable", "out of scope", "already handled"; none
+advisory:
+  A1 pass — "**Category:** security misconfiguration, authentication failure"
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Two notes outside the verdict. The input carries no case id, so the emission line above cannot name one. No criterion was undecidable and no grouping looked wrong, so there is no authoring defect to flag beyond the missing id.

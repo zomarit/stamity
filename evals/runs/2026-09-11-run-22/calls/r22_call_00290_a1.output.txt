@@ -1,0 +1,17 @@
+**Classification: refused for the quick lane.** Two rows fire.
+
+| Threshold | Fires? | Why |
+|---|---|---|
+| Files | **Yes** | 9 files across the batch, limit is 5 |
+| Size | **Yes** | ~240 lines added plus removed, limit is ~200 |
+| Security-sensitive surface | No | `retryCount` is retry policy, not auth/creds/payments/access control |
+| Dependencies | No | No added dependency, bump, or lockfile change |
+| Schema, API, event or migration | No* | *See note below — worth a second look. |
+
+Either of the first two rows alone ends quick for this item. Both fire, so it ends here.
+
+On "it is a rename, so it is trivial": the thresholds do not have a triviality column. They count files and lines, and mechanical changes are exactly the kind that spread across many files while each individual edit looks safe. The refusal is hard — there is no proceed-anyway, no confirmation that unlocks it, and no flag that raises the bar. I also will not route around it: no writing the rename out for you to paste, no attaching it as a diff, no splitting the nine files into two batches of five and four, and no applying it and flagging it for review afterwards. Those are the same refused change with a different hand on the keyboard.
+
+One thing to carry into `/st-work`, since it may widen the scope past a pure rename: `retryCount` appears in the config loader and the config reference, which means it is likely part of a user-facing config surface. If external callers set that option, renaming it is an API shape change and would fire the fifth row too — and it needs a deprecation path for the old name rather than a straight swap. Worth confirming there before treating it as internal-only.
+
+**Disposition:** the item does not move into quick. It goes to `/st-work` intact, as a single rename across all nine files. No edits made.

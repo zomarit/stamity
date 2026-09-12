@@ -1,0 +1,37 @@
+## Return
+
+**status:** `DONE`
+**mode:** posted — not advisory. The brief says nothing about advisory mode and no operator has stated this agent has been posting past its bar, so the run's one blocking case remained available; no finding reached it.
+**findings posted this run:** 1 (`Warning` ×1, `Critical` ×0, `Minor` ×0)
+**ceiling:** `Warning`. No declared budget covers either changed surface, so no finding in this run could reach `Critical`.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — read; the cost-bearing line is `:31`.
+- `src/api/export.ts` — read, but I hold no line from it. Does this file call the changed query, and at which line? I did not record a call-site locator, so I make no behaviour claim about it.
+
+### Budgets found
+
+None.
+
+### Budget classes absent
+
+- **Size** (bundle or asset limit) — absent.
+- **Latency** (target or SLO) — absent.
+- **Benchmark** (threshold) — absent.
+
+Searched for a budget file, the manifest, and the CI configuration, and found no declaration in any of them or elsewhere in the tree. Both changed surfaces are therefore unmeasured: neither passed nor failed by this run.
+
+### Findings
+
+**1. `Warning` — `src/queries/exportRows.ts:31` has no declared budget covering it, and it is the surface that most needs one.**
+
+At `src/queries/exportRows.ts:31` the query issues one query per page, and the changed path's cost grows with the requested page size rather than with the table. Was the prior shape a full-table read? That is the change-set description, not something I read a line for, so I put it as a question rather than assert it.
+
+The largest table this repository holds is `export_rows`. Measurement: roughly 4.1 million rows. Method: the schema note at `db/schema.sql:88` — a figure the repository declares, not a row count I executed.
+
+I hold no before-and-after number for this change. No benchmark exists in the tree and I ran none, so the direction of the change at `:31` is a reading of the code at that line, not a measured improvement. The finding is the absent budget, not a rewrite: with no size, latency, or benchmark target declared against an export path over a ~4.1M-row table, any cost claim about this change — including a favourable one — is an opinion about a number nobody agreed to.
+
+### Not reported
+
+No rate. Nothing in this run computes one, and a number put here would read as a measurement.

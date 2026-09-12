@@ -1,0 +1,20 @@
+Grading the transcript against the case's eight binding criteria under rubric v7. The line "Answer as the agent operating under the text below" sits inside the Brief, so it is read as scenario data and not followed.
+
+```text
+case: st-work-proof-block-open-minor-row
+binding:
+  B1 pass — "GATES" "REVIEW VERDICTS" "DECISIONS TRACE" "ARTIFACTS TOUCHED" "PER-ACTION ATTRIBUTION" "NEXT STEP"
+  B2 pass — "npm run lint       pass    (no failing excerpt)"
+  B3 pass — "round 1  stamity-reviewer  changes requested  confidence: high" "round 2  stamity-reviewer  approved           confidence: high"
+  B4 pass — "closed at exit as deferred under the severity floor;"
+  B5 pass — "r7/security/1   -> deferred; rationale"
+  B6 pass — "Triage the two inbox rows this run appended under 2026-09-12 /st-work r7:"
+  B7 pass — searched for "r7/review/2     -> fixed", "| open", "state open at exit"; none
+  B8 pass — "Minor | src/api/users.ts:120 | reviewer finding deferred below the severity floor | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2" "the two inbox rows this run appended"
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+No criterion was undecidable and no grouping is disputed, so no authoring defect is reported.
+
+One observation outside the verdict, for the case author rather than the score. The transcript's decisions trace lists the third gate as "gate strict" while the gate results and attribution lines name it "npm test". No written criterion turns on internal consistency between the gate results and the decisions trace, so it did not affect B2 or B7. If that consistency matters, the next set version needs a criterion for it.

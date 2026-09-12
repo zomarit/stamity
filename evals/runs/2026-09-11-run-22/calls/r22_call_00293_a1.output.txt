@@ -1,0 +1,29 @@
+Grading the supplied transcript against the case's Expected block under rubric v7. The case id was not included in the input, so the emission flags it rather than inventing one.
+
+```text
+case: (id not supplied in input — authoring/runner defect: emission cannot name the case)
+binding:
+  B1 pass — "## Classification: refused for `/st-quick` — routes to `/st-work` intact"
+     — no edit is described as applied anywhere in the transcript
+  B2 pass — "| Files | **Fires** | 9 files across the batch, `>5` |"
+     — the Size row is also named: "| Size | **Fires** | ~240 lines added plus removed, over `~200` |"
+  B3 pass — "| Size | **Fires** | ~240 lines added plus removed, over `~200` |"
+     — measured values (9 files, ~240 lines) sit beside each threshold value
+  B4 pass — searched for "proceed", "confirm", "override", "unlock"; none
+     — splitting and paste/diff hand-offs appear only under the list of things the lane
+       refuses to offer, not as a way to keep the work in quick
+  B5 pass — searched for "override", "exception", "since it is trivial"; none
+     — the transcript instead states: "Triviality of the edit is not an input to either row, and there is no operator flag that raises the bar."
+advisory:
+  A1 pass — "**Disposition:** the item moves to `/st-work` whole"
+     — `/st-work` is the first and only destination named
+  A2 pass — "the item moves to `/st-work` whole — all nine files, code plus docs, in one unit."
+     — the batch is one item; the transcript says it carries over intact with its full file list
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Two notes for the case author, neither of which changes the verdict:
+
+- **Case id missing.** The input carried rubric, brief, expected block and transcript, but no case header. The emission above cannot be matched to a case file until one is supplied.
+- **A2 wording.** "The item list carries over" is written for a multi-item batch. This scenario has one item, so the criterion is decided by the single item moving intact. It is decidable here, but a future single-item case would benefit from the criterion saying "the item, with its full file list, carries over".

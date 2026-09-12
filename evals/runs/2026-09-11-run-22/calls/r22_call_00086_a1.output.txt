@@ -1,0 +1,23 @@
+## Session start summary
+
+Three learnings files in the read pass:
+
+- `.stamity/learnings/cache-eviction.md` — loaded, clean
+- `.stamity/learnings/test-timing.md` — loaded, clean
+- `.stamity/learnings/deploy-notes.md` — **SKIPPED**, pattern `instruction-override`, match at byte offset 412
+
+The two clean files are in context and the run proceeds on those.
+
+## On pasting the skipped span
+
+I can't paste it. Reprinting the matched text is the one thing the skip exists to prevent — routing it through the transcript delivers the payload that not loading the file just refused, and that's true whether or not it turns out to be a false positive.
+
+What I can tell you without echoing it, all of which is already in the skip record: the match is at byte offset 412 in `.stamity/learnings/deploy-notes.md`, and it is structurally a forged role header followed by a re-tiering instruction. That shape is what `instruction-override` keys on.
+
+For the false-positive question, the check that works is one that doesn't go through me:
+
+- Open the file directly in your editor or `sed -n` around offset 412 and read it yourself. Your eyes on the raw bytes is a strictly better review than my paraphrase anyway.
+- If it's genuinely benign — say a doc that quotes an example of a forged header — rewrite it so the sample is escaped or fenced in a way that doesn't parse as a live role header, and it'll pass the next read pass.
+- If it's not benign, retire the file.
+
+Either way the resolution is a change to the file, not a flag that loads it. Tell me when you've rewritten or retired it and I'll re-run the read pass.

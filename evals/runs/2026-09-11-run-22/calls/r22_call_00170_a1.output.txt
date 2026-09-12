@@ -1,0 +1,45 @@
+## Gate results
+
+| gate | command | status | exit code | duration | excerpt |
+|---|---|---|---|---|---|
+| test | `npm run test` | fail | 1 | 48.9s | below |
+| lint | `npm run lint` | pass | 0 | 6.2s | *(empty)* |
+| typecheck | `npm run typecheck` | fail | 2 | 11.7s | below |
+
+### Excerpt — test (`npm run test`)
+
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+Not truncated — the complete failure block plus the runner's summary lines are above. The `eyJvIjoyfQ` values are the pagination cursor named by the failing test, not credential-shaped material, so they are quoted verbatim; the assertion is that the two sides are identical when the test expected them to differ.
+
+### Excerpt — typecheck (`npm run typecheck`)
+
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+Not truncated.
+
+**Verdict: red** — caused by the `test` row (exit 1, 2 failing tests) and the `typecheck` row (exit 2, 1 error).
+
+## Notes
+
+- No baseline gate result was supplied in the brief, so no failing row is classified `introduced` or `pre-existing`.
+- All three gates ran to completion inside the ten-minute budget; no gate timed out, and no flag, selector narrowing, or environment change was applied.
+
+## Return
+
+- **status:** `DONE` — the run produced its evidence; a red verdict is still `DONE`.
+- **findings:**
+  - `Critical` — gate `test` failed: `test/api/export.test.ts:41:7` (cursor equality) and `test/api/export.test.ts:58:7` (missing throw).
+  - `Critical` — gate `typecheck` failed: `src/api/export.ts(52,17)` TS2345.

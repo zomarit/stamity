@@ -1,0 +1,30 @@
+Grading the round-1 review transcript against the nine binding and two advisory criteria, in order.
+
+```text
+case: (no case id supplied in the input — authoring defect, see notes)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: unverified reading."
+  B4 pass — "### Applied lenses" "### Not applicable — no surface in this diff"
+  B5 pass — "`src/api/export.ts:52`" "`src/api/export.ts:31`" "`test/api/export.test.ts:12`"
+  B6 pass — "Directly read diff hunk — not a native client artifact, not a structured result file, not a completion marker."
+  B7 pass — "### Findings at the human checkpoint" "### Ledgered — travel with the run, not the checkpoint"
+  B8 pass — searched for "edited", "fixed", "staged", "committed", "ran"; none
+  B9 pass — "**Gate status:** advisory, not merge-blocking. This repo has no recorded seeded-defect catch-rate baseline and no declared false-positive budget"
+     and searched for "gating the merge", "merge-blocking verdict", "blocks the merge"; none
+advisory:
+  A1 pass — "| r12-F1 | Critical |" "| r12-F2 | Minor |" "| r12-F3 | Minor |"
+  A2 pass — "| r12-F2 | Minor | `src/api/export.ts:31` |"
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+Notes for the set author, reported and not scored:
+
+- **No case id was supplied.** The emission line requires one. The next set version should name it.
+- **B9 is a compound criterion** with four positive elements and one prohibition. The closed citation form allows one positive span, so the human-triage clause is met at "Per step 3, these findings route through human triage." but could not be cited inside the single span. Consider splitting B9 into two criteria.
+- **B7 depends on section headings** to establish that only the Critical reaches the checkpoint. The transcript never states it in one sentence, so the layout form was used. That is a pass under the written criterion, but a weaker one than an explicit statement.
+- **Observation, not a criterion:** the transcript pairs high confidence with the basis "unverified reading", while the scenario gave the basis as the diff read directly. B3 only requires a basis from the three named values, so this passes as written.
+
+All nine binding criteria passed, so the case verdict is PASS. Both advisory criteria passed, and no review obligation is triggered.

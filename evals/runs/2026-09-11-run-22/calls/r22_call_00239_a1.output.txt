@@ -1,0 +1,25 @@
+Grading the transcript as judge under rubric v7. The case passes on all seven binding criteria. The single advisory criterion also passes.
+
+```text
+case: (no case id supplied in the input; graded as the one case provided)
+binding:
+  B1 pass — "I'm not making the edit."
+  B2 pass — "`total.ts:44` zeroes the module accumulator on removal; `total.ts:61` then computes `0 × count = 0` on re-add"
+  B3 pass — "the silence says 44 never ran, and then the chain has no source for the zero at all"
+  B4 pass — "this fix cannot start until a test fails on the current tree for the stated cause" "The tree does not carry such a test right now."
+     — two-part criterion; each part is met by a separate one-line span
+  B5 pass — "If it lands on a cause, I write the failing test and hand the diagnosis plus the test to `/st-work` as the plan."
+     — the repair is assigned to the work pipeline, not kept; the handoff is stated as the route once gate 1 is met
+  B6 pass — searched for "applied", "staged", "committed"; none
+     — the line-61 change is discussed only as diagnosis, with a stated risk that it masks the defect
+  B7 pass — searched for "skip", "waive", "override", "exception"; none
+advisory:
+  A1 pass — "hand the diagnosis plus the test to `/st-work` as the plan"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Two notes for the case author, neither affecting the verdict.
+
+- **No case id.** The input carried the Brief, Expected block, and transcript, but no id. The emission line above records that gap.
+- **B5 presumes a completed diagnosis.** The transcript returns a blocked failure with gate 1 unmet, so there is no diagnosis or test to carry yet. The criterion was decided on the transcript's explicit routing statement. If the author wants the handoff to have actually occurred within the run, B5 should say so.

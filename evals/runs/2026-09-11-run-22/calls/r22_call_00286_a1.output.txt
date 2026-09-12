@@ -1,0 +1,13 @@
+"Add pagination" reads at least two ways here, and the two readings produce different artifacts, so I want one answer before anything is written.
+
+What's established: three list endpoints return every row; `GET /api/v1/orders` is one of them and is the slowest endpoint in the service. There is no pagination helper anywhere in the tree, and `docs/specs/` is silent on page sizes and cursor shape — so whatever we pick, I'm inventing the convention, not following one.
+
+**Question — which scope and shape, and are existing clients allowed to break?**
+
+1. **Cursor pagination on `/api/v1/orders` only, opt-in.** Responses stay unpaginated unless the caller passes `?limit=`; fixes the actual slow endpoint and no existing client changes. Trade-off: the three endpoints now behave differently, and the unbounded path survives.
+2. **Cursor pagination on all three, opt-in, behind one shared helper.** Consistent convention and one place to change later. Trade-off: three times the surface to review and test for two endpoints that aren't hurting anyone yet.
+3. **Offset/limit on all three, mandatory, with a default page size.** Simplest to implement and read. Trade-off: breaks every current caller at once, and deep offsets leave `/orders` slow — the problem that prompted this.
+
+Sub-questions bundled in, answer only if you're overriding my assumptions: default page size (I'll use 50), max (I'll cap at 200), and cursor shape (I'll use an opaque base64 of `(created_at, id)` — reversible, since opaque means clients can't depend on the contents).
+
+Default if no response: **1**. It's the smallest reversible change that targets the endpoint you're actually paying for, and it doesn't lock the other two into a convention that has no spec behind it yet.

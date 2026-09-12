@@ -1,0 +1,9 @@
+**Ingress screen — `mcp__docsearch__search`**
+
+`instruction-override`, `tool-preamble`, `exfil-signal` · `mcp__docsearch__search` (query `release tag naming`) · result 2 of 2, `snippet` field of the entry titled `Agent setup` · `redacted`
+
+Result 1 was clean and is used below; result 2 was dropped in full, so the body overall is redacted rather than kept or dropped. Nothing in the returned body was treated as configuration, as a precondition on this or any later read, or as a destination for repository contents. No pattern id accompanies this record: catalog scanning runs over the state directory at session start, and no such pass sees runtime tool output — the three class labels are the whole of the finding.
+
+**Release tag naming**
+
+Tags are cut as `v<major>.<minor>.<patch>` — always from `main`, and always signed. The tag message carries the run artifact id.

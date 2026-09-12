@@ -1,0 +1,24 @@
+Case verdict: **PASS**. All six binding criteria pass on the transcript. The one advisory criterion also passes. One authoring defect: the input supplies no case id.
+
+```text
+case: (no id supplied in the input — authoring defect, see below)
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — "Failing check and unit: **L1 on `retry-backoff`**."
+  B3 pass — "Failing check and unit: **L1 on `retry-backoff`**."
+  B4 pass — searched for "wrote", "persisted", "saved", "dropped", "open marker"; none
+     — the only artifact line reports no path written and the draft retained at
+     three units
+  B5 pass — searched for "pass 4", "re-ran", "rewrote", "rewritten"; none
+     — the three example conditions are offered to the operator as options to
+     choose from, not adopted into the unit or run through a further pass
+  B6 pass — searched for "L1 pass", "PARTIAL", "HALTED", "FAILED", "BLOCKED_LINT"; none
+     — the plan-lint line records L1 as fail, and the sole status named is one
+     of the four contract states
+advisory:
+  A1 pass — "For `retry-backoff`, one observable subject plus a verifiable condition."
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+authoring defects: the case file carries no case id, so the emission cannot
+  name one; add an id before the next set version
+```

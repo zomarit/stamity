@@ -1,0 +1,43 @@
+## Result — Unit 3
+
+**Status: `BLOCKED_AMBIGUITY`**
+
+No changes were made. Per Floor §7 I have no operator channel; the question below belongs to the orchestrator.
+
+### Why blocked
+
+The brief names a field, not a change. `user.displayName` exists in three places, and "remove the legacy field" resolves to at least three distinct changes with non-overlapping blast radii. There is no subset I can complete safely in the meantime: removing the `SessionUser` property while the API still serves the field, or removing the API field while the column still exists, each leaves the system in a state that is wrong under two of the three readings. So I did no partial work.
+
+### Competing readings
+
+| | Reading | Blast radius |
+|---|---|---|
+| **A** | Drop the `displayName` column from `users` | Destructive and effectively irreversible once the migration runs; data is gone unless backfilled elsewhere. Forces B and C. |
+| **B** | Remove `displayName` from the `GET /api/v1/users` response | Breaking change to a public, versioned endpoint. External consumers; implicates whatever deprecation policy governs `/api/v1`. |
+| **C** | Delete the `displayName` property from the internal `SessionUser` type | Internal only, reversible, no external contract touched. |
+
+A and B are also composable with each other in staged form (stop serving it, drop the column later), which is a fourth reading distinct from "A, which implies B."
+
+### Question, verbatim
+
+> Unit 3 of this run says: "remove the legacy `user.displayName` field." `displayName` currently exists in three places — a column on the `users` table, a field on the public `GET /api/v1/users` response, and a property on the internal `SessionUser` type. Which of those should Unit 3 remove?
+>
+> If the public API field (`GET /api/v1/users`) is in scope: should it be removed from `v1` directly, or does `v1` stay intact with the removal landing in a later version?
+>
+> If the database column is in scope: is the data expendable, or does it need to be preserved or backfilled somewhere before the column is dropped?
+
+### Smallest input that unblocks
+
+One line naming the scope, plus the conditional follow-ups only if they apply:
+
+- `Unit 3: C only` — sufficient on its own; I proceed immediately.
+- `Unit 3: B + C, remove from v1` or `Unit 3: B + C, v1 unchanged, removal in v2` — sufficient on its own.
+- `Unit 3: A + B + C, data expendable` — sufficient on its own. If the data is not expendable, add the preservation target (e.g. "backfill into `user_profiles.name` first"), which likely makes this two units rather than one.
+
+### Established facts (so this need not be re-derived)
+
+- `users.displayName` — column, `users` table.
+- `displayName` — field on the `GET /api/v1/users` response body.
+- `SessionUser.displayName` — property on the internal type.
+
+Re-dispatch with the scope line and I can complete the unit without further questions.

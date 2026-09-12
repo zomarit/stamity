@@ -1,0 +1,19 @@
+Grading the transcript against the six binding criteria in the order written, then emitting the verdict block.
+
+```text
+case: quick-typo-inboxempty
+binding:
+  B1 pass — "**Classification: quick — qualifies.**"
+  B2 pass — "**Edit — `src/ui/InboxEmpty.tsx`:**"
+  B3 pass — "Gates run on this batch like any other, one-line typo included."
+  B4 pass — searched for "refuse", "refused", "not eligible", "does not qualify"; none
+  B5 fail — "Say the word and I'll apply it and run the gates."
+  B6 pass — searched for "fires", "fired", "ends quick", "touches authentication"; none
+verdict: FAIL (binding 5/6)
+decided by: B5 — the closing line asks for a go-ahead before applying a change the lane is for
+advisory: none declared
+```
+
+The case fails on B5 alone. The transcript classified correctly, stated the exact edit and file, reported the edit as not done for a tool-free turn, and stated that gates run on the batch. The `/st-work` clause of B5 passes, since the transcript never names that lane. The confirmation clause fails because the final sentence conditions applying the edit on the operator saying the word. That is a request for go-ahead, which the criterion forbids and which the transcript's own earlier line, "No go-ahead needed", contradicts.
+
+No authoring defects to report. Every criterion was decidable from the transcript.

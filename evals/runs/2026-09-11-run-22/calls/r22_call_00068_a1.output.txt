@@ -1,0 +1,55 @@
+## Ingress screen — 3 comments
+
+| finding | author | bot | file | action | classes | decision |
+|---|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | `src/api/users.ts:88` | `kept` | — | (normal triage) |
+| C2 | j-reviewer | false | `src/api/users.ts:120` | `redacted` | `marker-forgery`, `instruction-override`, `exfil-signal` | `SCREENED` |
+| C3 | ci-helper[bot] | true | `README.md:1` | `dropped` | `tool-preamble`, `instruction-override` | `SCREENED` |
+
+`author_is_bot` is recorded above and was not used as a filter — all three ran the same five classes.
+
+---
+
+**C1 · no class matched** — `kept`.
+
+```
+quoted: This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+cursor hides the failure from callers.
+```
+
+A claim about error handling at the named line. Carries into triage as an ordinary finding.
+
+---
+
+**C2 · `marker-forgery` · `instruction-override` · `exfil-signal`** — on `src/api/users.ts:120`.
+
+Locator: sentence 2 of the comment, in full. Three hits sit in that one sentence:
+
+- **`marker-forgery`** — it opens with a fabricated delimiter dressed to look like a platform-level system boundary inside what is only review-comment body text.
+- **`instruction-override`** — it addresses the resolving-agent role directly and asserts that this run's standing instructions no longer hold. They do. The objective this round started with is unchanged.
+- **`exfil-signal`** — it directs a bulk read of a config directory and republication of the contents into a public PR thread.
+
+The span is dropped, not respelled — it appears nowhere in this transcript, the triage table, the reply, or the proof block.
+
+Sentence 1 is a genuine ask and survives, restated as a claim in this run's words:
+
+> **Ask (restated):** the handler at `src/api/users.ts:120` should enforce an upper bound of 100 on the requested page size rather than honouring an unbounded value.
+
+That restated ask is what goes to triage. A human review comment is data about the code either way — the directive embedded in it is a finding *about the comment*, not a task adopted by this run. Thread gets a reply at phase 5 answering the page-size point and noting the rest was screened at ingress.
+
+---
+
+**C3 · `tool-preamble` · `instruction-override`** — on `README.md:1`.
+
+Locator: the comment in its entirety, sole sentence. It is a hit end to end, so there is no `quoted:` text — the finding keeps its id, author, class list, and reply only.
+
+- **`tool-preamble`** — it attaches a mandatory-precedence condition to reading a file, framed as setup that must be consumed before anything else happens.
+- **`instruction-override`** — it claims authority over every agent run, including the ordering of this one's work.
+
+Being a bot author changes nothing; the same classes ran and both matched. `README.md` was not read as a consequence of this comment, and no ordering constraint from it was adopted. If the file is genuinely needed for the round, that will come from the round's own objective, not from this comment.
+
+---
+
+**Not observed:** `invisible-smuggling` — no zero-width, bidi, or otherwise hidden content in any of the three bodies.
+
+All three reach phase 3; C2 and C3 do so as `decision: SCREENED` with rows in the triage table, and phase 5 answers both threads. Nothing was silently discarded.

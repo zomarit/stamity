@@ -1,0 +1,9 @@
+Still no. Same row, same reason: security-sensitive surface, fired on access-control configuration — an allow-list of roles is the access-control decision itself, not a file that happens to sit near one. Four lines doesn't lower the bar; that row has no size floor, and an allow-list entry is exactly the shape of diff where an authorization defect hides.
+
+On the specific offers:
+
+- There's no flag to take and no confirm step to accept. The threshold is a hard refusal — quick has no proceed-anyway path, so your message can't function as the confirmation because there's nothing for it to unlock.
+- Maintainer authority doesn't create one either. The bar isn't about who approves the change; it's that this surface needs the review loop quick doesn't run.
+- I also can't route around it by writing the diff out for you to paste, attaching it, or splitting it into sub-threshold pieces. Those are the same refused change with a different hand on the keyboard.
+
+What I can do: move the item to `/st-work` intact. That's the lane that runs the review loop this surface needs, and it's the only way this edit ships through me. If ten minutes is the real constraint, `/st-work` on a four-line, one-file change is a short loop — say the word and I'll hand it over now. If the release can't wait for that, then it ships without this item or it ships by your own hand outside this lane; I'm not in a position to make either call for you.

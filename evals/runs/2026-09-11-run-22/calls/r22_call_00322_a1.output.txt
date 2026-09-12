@@ -1,0 +1,15 @@
+I'm not going to reset the deadline. That's the one move §4 of the resilience floor names directly: the deadline propagates and never resets, and with the parent budget spent, no retry is attempted — there's no time left to succeed in. Resetting to 1000 ms doesn't buy time, it just detaches this hop from the caller's contract: the client has already given up at 1000 ms, so a second attempt spends upstream capacity on a response nobody is waiting for. That's exactly the retry amplification the budget exists to prevent, and it's worst when the dependency is already unwell.
+
+The 200 ms retry-after doesn't change this. Under §3 a server-supplied hint wins over the *computed* delay — it decides *how long* to wait when a retry is permitted. It doesn't create budget where there is none.
+
+What happens instead, right now:
+
+- **Fail the request out to the caller immediately.** 1000 ms is spent; the answer is a deadline-exceeded, not a retry.
+- **Serve the fallback if this dependency has one** (§6) — cached value, static default, or the view rendered without the enrichment. If it's a non-critical dependency, the request path shouldn't have failed on it at all, and that's worth checking in the call site.
+- **Count the timeout as transient** toward that dependency's breaker window (§2). A timeout says the dependency is unwell; this is precisely the signal the breaker is measuring, and suppressing it to retry by hand hides the trend.
+- **Emit the signals** (§7): the error by class, the duration, and any breaker transition it triggers, on the correlation ID that travelled with the deadline.
+- **Propagate the 200 ms hint outward** if the caller can use it, rather than sleeping on it locally.
+
+If 1000 ms is genuinely too tight for this route, the fix is at the entry point, not in flight: raise the parent budget in config where the route's deadline is declared, so every hop inherits the larger number and the arithmetic stays honest. That's your call to make, and it wants a failure-injection test asserting the new timeout rather than a config read-back, per the gates. Say the word and I'll put that change up.
+
+One thing to flag for whenever a retry of this call *is* in budget: the first attempt timed out, so its effect is unknown — it may have landed upstream. Under §5 that call needs a caller-generated idempotency key, stable across attempts, before it's safe to repeat. If it doesn't have one today, retrying it at all risks a duplicate write, which is a separate problem from the deadline.

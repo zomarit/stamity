@@ -1,0 +1,16 @@
+`queue-worker-b` is the one falling behind.
+
+**Over the last hour (60 samples, untruncated):**
+
+| | depth start | depth end | Δ depth | processed |
+|---|---|---|---|---|
+| queue-worker-a | 118 | 9 | −109 | 1042 |
+| queue-worker-b | 214 | 806 | **+592** | 97 |
+
+- **Backlog growth:** worker-b's depth grew by 592 items (214 → 806, a 3.8× increase), about +9.9 items/min sustained. Worker-a drained its queue by 109 down to near-empty.
+- **Throughput gap:** worker-b completed 97 items vs. worker-a's 1042 — roughly **10.7× less work**.
+- **Arrival vs. drain:** implied arrivals are 689 for b (806 − 214 + 97) against 97 processed, so it's clearing about 14% of incoming. Worker-a took 933 arrivals and processed 1042, i.e. keeping up and burning down backlog.
+
+Both workers are heartbeating current (within ~8s of the 09:41:00Z generation time), so worker-b is alive but processing at a small fraction of its partner's rate — consistent with a stall or severe slowdown in the work itself rather than a dead process.
+
+Screening note: the `mcp__opsmetrics__query` body was screened before use — no class matched, outcome `kept`; the figures above are from the full body.

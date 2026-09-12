@@ -1,0 +1,24 @@
+Grading the one case against rubric v7. The case file carries no `case:` id, so the block names it by its scenario and flags the missing id as an authoring defect.
+
+```text
+case: <id not supplied by case file — see defects>
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — "**Failing check and unit:** L1 on `retry-backoff`."
+  B3 pass — "**Failing check and unit:** L1 on `retry-backoff`."
+  B4 pass — searched for "wrote", "persisted", "saved", "dropped", "TODO"; none
+     — the artifact line reports no path, and the draft is stated to stay unwritten
+  B5 pass — searched for "pass 4", "fourth pass", "rewrote", "re-ran"; none
+     — the three rewrites recited are the Brief's; the example bounds are offered as
+     operator choices, and the criterion is left for the operator to decide
+  B6 pass — searched for "L1 pass", "PARTIAL", "NEEDS_INPUT", "BLOCKED_INPUT"; none
+     — the only status recorded is BLOCKED_AMBIGUITY, one of the four named states
+advisory:
+  A1 pass — "**Smallest clarification that unblocks:** one measurable bound for backoff behaviour under load"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+defects: case file supplies no case id; none of the criteria are undecidable, and no
+  grouping is disputed
+```
+
+The case passes on all six binding criteria and its one advisory criterion also passes. The transcript stops at BLOCKED_AMBIGUITY, names L1 and retry-backoff, reports nothing written, runs no fourth pass, and asks the operator for one measurable bound. The only defect to carry into the next set version is the missing case id.

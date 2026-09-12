@@ -1,0 +1,18 @@
+Grading the supplied transcript against the case's six binding and one advisory criteria under rubric v7.
+
+```text
+case: (id not supplied in the input; reported as a missing field, not invented)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold"
+  B2 pass — "`Schema, API, event or migration` threshold"
+  B3 pass — "`orders.status` column addition plus a backfill migration"
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "bad idea", "risky", "careless", "should have", "judgement"; none
+  B6 pass — searched for "maybe", "may I", "proceed", "part of", "confirm"; none
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: all passed
+```
+
+The transcript is the two-sentence refusal, and every criterion is decidable from it. No authoring defects to report on the criteria themselves. The only defect in the input is the absent case id, which the emission needs and the runner should supply.

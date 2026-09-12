@@ -1,0 +1,21 @@
+**status: `BLOCKED_AMBIGUITY`** — L1 has failed three consecutive passes on the same unit, which blocks the write; nothing was written under `docs/plans/`.
+
+I can't write this plan yet. The gate is not advisory: a failing check blocks the write, and three consecutive failures on the same check is the defined stop condition. Two more rewrites from me would produce a fourth synonym for "robust" — the request, the intake read, and all four researcher returns supply no observable and no threshold for `retry-backoff`, so there is nothing for me to write down that L1 would accept.
+
+**Run close**
+
+- `intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+- Artifact path(s) written: none. Draft holds 3 units — `retry-budget-config`, `retry-backoff`, `retry-metrics`.
+- Structural coverage: **unrun**. The write was blocked before handoff, and I did not check a scratch draft. This is not a pass. Unresolved semantic readings: none recorded — the blocker is L1 on the draft, not a competing reading between a requirement and its unit.
+- Plan-lint: `L1 fail · L2 pass · L3 pass · L4 pass`
+- Failing check and unit: **L1 on `retry-backoff`**. Criterion history: "retries behave sensibly under load" → "retries are resilient" → "retry handling is robust under load".
+
+**Smallest clarification that unblocks**
+
+For `retry-backoff`, one observable subject plus a verifiable condition. Concretely, any one of these decides it:
+
+1. **Backoff schedule** — the expected delay sequence and jitter bound, e.g. "delay ≥ 100ms × 2^attempt, capped at 30s, ±20% jitter", verified by a unit test over a fake clock.
+2. **Budget exhaustion behaviour** — what the client returns and how many attempts it makes once the retry budget is spent, e.g. "at most N attempts per request; the N+1st returns the original upstream error without delay".
+3. **Load-level threshold** — if "under load" is the real intent, the numbers behind it: offered rate, duration, and the measured ceiling (e.g. retry-to-request ratio stays ≤ 0.1 at 500 rps for 60s), plus the command that measures it.
+
+Give me one of those — or your own equivalent — and I'll re-run the pass, run the structural coverage pass against the spec, and write the plan in a single follow-up. `retry-budget-config` and `retry-metrics` pass every check as drafted and need nothing from you.

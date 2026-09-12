@@ -1,0 +1,14 @@
+Grading the single transcript against the two binding criteria.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap, not a verdict factor)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is interface work that would add a token and a component"
+  B2 pass — searched for "st-browser-evidence", "st-dep-audit", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `st-design-system-detect`, and no other skill or `none` appears anywhere in it. Both binding criteria pass, so the case passes. The only defect to report is that the case file carries no id line.

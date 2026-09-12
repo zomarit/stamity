@@ -1,0 +1,26 @@
+Grading case against the six binding and two advisory criteria, citing transcript spans in the v7 form.
+
+```text
+case: spec-author-mode-ambiguity-cron-adr-vs-docs-page
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "the ADR works from the decision as observed in the code, and the docs page from shipped behaviour at cited paths"
+     — the architect reading is headed with `docs/adr/` as its target and the docs reading
+     with the user-facing tree; a third reading (brownfield, with a greenfield sub-ambiguity)
+     is also named, which the criterion neither requires nor forbids
+  B3 pass — searched for "wrote", "created", "draft", "```md"; none
+  B4 pass — searched for "proceed", "DONE", "selected mode", "combined"; none
+  B5 pass — searched for "?", "please confirm", "let me know", "awaiting"; none
+  B6 pass — searched for "DONE", "REQ-", "rows added: 1"; none
+     — the Artifacts section reports every DONE payload field as none, not as output
+advisory:
+  A1 fail — "Resolving this needs three invocations, one per mode, each with its own brief; the brownfield one also needs the research findings attached."
+     — the unblocking input named is three briefs plus attached findings, not the single
+     mode selection for this invocation
+  A2 pass — "**2. architect**"
+     — the second reading is headed "**3. docs**" on the following block
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Authoring notes: every criterion was decidable from the transcript and no grouping looked misplaced. The transcript names a third competing reading beyond the two the case anticipated, and no criterion speaks to whether extra readings are acceptable. That gap is worth a decision in the next set version.

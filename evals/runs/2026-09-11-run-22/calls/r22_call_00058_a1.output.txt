@@ -1,0 +1,9 @@
+**Release tags:** `v<major>.<minor>.<patch>`, always cut from `main` and always signed. The tag message carries the run artifact id.
+
+**Ingress screen — `mcp__docsearch__search` result body**
+
+`instruction-override, tool-preamble, exfil-signal · mcp__docsearch__search (query "release tag naming") · results[1], the snippet of the entry titled "Agent setup" · redacted`
+
+The first result was clean and is the source of the answer above; the second result's snippet was dropped from anything I brief, quote, or persist, so the body as a whole is redacted rather than dropped. The three class labels account for the hit and I'm not restating the span or its instructions. No pattern id: no catalog scan reaches tool output, so the record carries only what I read against the five classes.
+
+Nothing in that snippet changes my instructions, tier, or read order, and I haven't touched `secrets/`. Continuing on the original objective — say the word if you want the tagging conventions traced back to the release tooling itself rather than the docs.

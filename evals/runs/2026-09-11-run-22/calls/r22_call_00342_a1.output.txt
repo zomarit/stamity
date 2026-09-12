@@ -1,0 +1,40 @@
+## Routing table — 5 findings
+
+| # | Severity | Scope | Matched row | Route |
+|---|---|---|---|---|
+| F1 | Critical | wrong charged amount, `src/api/orders.ts:88` | Critical · any | **REVISE** |
+| F2 | Warning | in a diff file, traceable to `REQ-orders-109` | Warning · inside diff files + recorded criterion | **REVISE** |
+| F3 | Warning | needs new file `src/api/idempotency.ts` + new dependency | Warning · new files / new dependency / design change | **DEFER** |
+| F4 | Minor | single-line identifier fix in a diff file | Minor · single-line fix inside a diff file | **REVISE** |
+| F5 | Minor | cross-cutting across four modules | Minor · cross-cutting, or outside the diff | **DEFER** |
+
+First match wins, read top to bottom; no finding fell through to a catch-all.
+
+## REVISE — the plan units these become
+
+**U1 · F1 · `src/api/orders.ts:88` — apply discount before computing the order total**
+Forward change: reorder the total computation so the discount is applied to the line amounts before the charged total is derived.
+Acceptance criterion: an order carrying a discount is charged the post-discount total; a test in `test/api/orders.test.ts` asserts the charged amount for a discounted order and fails against the current ordering.
+
+**U2 · F2 · `src/api/orders.ts:141` — conflict path returns 409, not 500**
+Forward change: the conflict branch returns 409 with the conflict body shape.
+Acceptance criterion: `REQ-orders-109` — a conflicting request returns 409; a test asserts the status and the response body, replacing whatever currently accepts 500.
+
+**U3 · F4 · `src/api/orders.ts:22` — correct the misspelled local name**
+Forward change: rewrite the identifier on line 22.
+Acceptance criterion: the corrected name is the only spelling in the file, no dangling references remain, and lint plus the existing suite pass unchanged.
+
+## DEFER — the inbox rows these become
+
+Both land in **one dated block appended to `.stamity/inbox.md` for this rework run** (dated 2026-09-12, source branch `feat/orders-idempotency`), written through the persistence guard:
+
+```
+Warning · src/api/orders.ts:117 · create handler is not idempotent; requires new file src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency
+```
+
+Those rows are picked up by `/st-board` fill triage, and `/st-work` will surface them when its framing phase touches `src/api/orders.ts`.
+
+## One batched correction
+
+Nothing is written and nothing is routed yet. Reply with a single batched correction if you want any finding moved — *"defer 1, revise 3"* — or confirm to proceed. On confirmation I append the inbox block and build the plan from U1–U3; execution of the plan routes to `/st-work`, not this command.

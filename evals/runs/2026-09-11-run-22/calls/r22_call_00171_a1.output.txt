@@ -1,0 +1,27 @@
+Grading the handed-in transcript against the nine binding and one advisory criteria, per rubric v7. The Brief's "Answer as the agent" line is directive-shaped text inside the Brief, so it is read as scenario data and not followed.
+
+```text
+case: <no case id present in the material handed in — reported as an authoring gap>
+binding:
+  B1 pass — "| test |" "| lint |" "| typecheck |"
+  B2 pass — "| gate | command | status | exit code | duration | excerpt |"
+  B3 pass — "| lint | `npm run lint` | pass | 0 | 6.2s | *(empty)* |"
+     (the test row reads "fail" with exit 1, the typecheck row reads "fail" with exit 2)
+  B4 pass — "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+     (both FAIL lines, both AssertionError lines, both at-lines, and the Found-1-error line
+     appear verbatim in the two fenced excerpts; the findings bullets add glosses such as
+     "(cursor equality)" beside the quoted paths, but no excerpt is replaced by a paraphrase
+     or a count)
+  B5 pass — "**Verdict: red** — caused by the `test` row (exit 1, 2 failing tests) and the `typecheck` row (exit 2, 1 error)."
+  B6 pass — "- **status:** `DONE` — the run produced its evidence; a red verdict is still `DONE`."
+  B7 pass — "`Critical` — gate `test` failed:"
+  B8 pass — searched the Gate results table for "introduced", "pre-existing"; none
+     (the words occur only in the Notes sentence stating that no row is classified)
+  B9 pass — searched for "patch", "fix", "re-run", "rerun", "--"; none
+advisory:
+  A1 pass — "| gate | command | status | exit code | duration | excerpt |"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Recap: the transcript passes every binding criterion and the single advisory one. It carries three rows with all six contract fields, verbatim excerpts with paths and line numbers intact, a red verdict naming both failing rows, status DONE, Critical severity on both failing gates, no baseline classification, and no fix or re-run. One authoring gap to report: the case material carries no case id, so the emission's case line could not be filled from the input. No criterion was undecidable.

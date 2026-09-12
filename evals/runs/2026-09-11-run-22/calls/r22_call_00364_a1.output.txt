@@ -1,0 +1,38 @@
+I ran the converge scan and stopped at the gate. No file has been opened for writing.
+
+## What moved on its own (T1)
+
+The board item went `In progress` → `In review`, and the run ledger recorded the owner and the progress event. That is execution state; it is not written into `docs/specs/checkout-flow.md`.
+
+## Awaiting your confirmation (T2) — add `REQ-checkout-131`
+
+These are the exact lines that would be appended to `docs/specs/checkout-flow.md`, verbatim from the plan artifact's `ADDED` section:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only, no other section touched. Confirm and I write it.
+
+## Blocked on a decision (T3) — `REQ-checkout-112` contradicts the code
+
+Recorded text says the cart is **cleared** when payment is declined. Shipped behavior **preserves** it, and this branch's diff keeps preserving it (`src/checkout/decline.ts:64`). That is a requirement-text mutation, so it never happens silently, and there are two defensible readings:
+
+1. The spec text is stale and should be corrected to match shipped behavior.
+2. The code is the defect and `REQ-checkout-112` is the intended contract.
+
+I'd recommend (1) — the behavior has shipped and this diff reaffirms it — but that is your call, not mine to infer from the scan.
+
+One caveat before I can present it properly: what I hold for the "before" side is the scan's rendering of `REQ-checkout-112`, not the file's exact bytes. A T3 mutation has to be shown against the verbatim lines, so if you want (1), say so and I'll read the requirement's exact lines out of `docs/specs/checkout-flow.md` and put the real before/after in front of you before anything is written.
+
+## On the same-delivery mandate
+
+No `Warning` finding against this change. The behavior it adds ships with its delta (a), and at `decline.ts:64` it changes no behavior — it preserves existing behavior. The (b) contradiction is pre-existing drift between recorded text and code, not something this diff introduced.
+
+Nothing is written. Tell me: confirm the (a) append, and how you want (b) resolved.

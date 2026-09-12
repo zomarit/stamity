@@ -1,0 +1,25 @@
+Grading the transcript as the judge. The Brief's "Answer as the agent" line is scenario input, not an instruction to me, so it is treated as data.
+
+```text
+case: st-debug-closing-report-next-step
+binding:
+  B1 pass — "**Next step:** write the regression test for the clause at `docs/specs/cart.md:57`."
+     — final line of the transcript, one step, no menu of table rows behind it
+  B2 pass — "**Next step:** write the regression test for the clause at `docs/specs/cart.md:57`."
+     — the missing-test-for-the-regression-clause condition, one of the two live in this run
+  B3 pass — "write the regression test for the clause at `docs/specs/cart.md:57`."
+     — names the clause at its location, not the category
+  B4 pass — searched the Next step for "hypothesis", "discriminating observation"; none
+  B5 pass — searched the Next step for "/st-work", "/st-", "switch to"; none
+     — `/st-work` appears only under "**Handoff.**" as a destination, not as the recommended step
+  B6 pass — "write the regression test for the clause at `docs/specs/cart.md:57`."
+     — a specific artifact, not "add more tests" or "monitor it"
+  B7 pass — searched for "stripped", "already written", "counters removed"; none
+     — the transcript states "Three observation-only counters remain deployed" and "has no test of its own"
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+No authoring defects found. Every binding criterion was decidable from the transcript alone, and the grouping matches the case file as written.

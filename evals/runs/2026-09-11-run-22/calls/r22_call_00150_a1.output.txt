@@ -1,0 +1,33 @@
+## Review result — run r12, round 1
+
+**status:** `DONE`
+**verdict:** `request-changes`
+**confidence:** high — basis: directly read diff hunk (static reading; no executed test or native artifact confirms the runtime path)
+
+**Gate status:** This repository has no recorded seeded-defect baseline and no declared false-positive budget, so steps 1 and 2 of the qualification gate are unsatisfied. This verdict is **advisory, not merge-blocking**, and routes through human triage. A clean verdict from this gate would carry no evidence; a `request-changes` verdict still needs human confirmation before it blocks anything.
+
+### Applied lenses
+Security, Testability, Reliability, Maintainability, Product & Spec.
+
+### Not applicable (no surface in this diff)
+UI, UX, Scalability, Performance, Enhancability. No rendered surface, no schema change, no dependency change, no background work in the change set.
+
+### Findings at the human checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-F001 | `Critical` | `src/api/export.ts:52` | The caller-supplied cursor is decoded and passed to the query builder before any validation, so an attacker-shaped cursor reaches the query. | Directly read diff hunk — not a native client artifact, not a structured result file, not a completion marker. No test exercises a malformed cursor against this path. |
+
+No `Warning` findings.
+
+### Ledgered — travels with the run, not the checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-F002 | `Minor` | `src/api/export.ts:31` | Local named `c`; every neighbouring call site in this file spells it `cursor`. | Directly read diff hunk. |
+| r12-F003 | `Minor` | `test/api/export.test.ts:12` | Stale comment describes the old offset-based paging. | Directly read diff hunk. |
+
+Both carry stable ids and do not re-open the loop.
+
+### Re-review scope
+Round 2 scope is the delta plus r12-F001, marked for verification. New `Minor` findings are suppressed from round two onward; only regressions against r12-F001–F003 and new `Critical` or `Warning` findings count. r12-F002 and r12-F003 are dispositioned as ledgered and are not re-raised against unchanged code.

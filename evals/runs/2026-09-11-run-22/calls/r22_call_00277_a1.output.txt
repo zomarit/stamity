@@ -1,0 +1,27 @@
+Grading the transcript against the eight binding and two advisory criteria, in order.
+
+```text
+case: (no case id was supplied with the input; graded as the st-pr-resolve close-block case)
+binding:
+  B1 pass — "| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |"
+  B2 pass — "**Round ordinal:** 3 (of 3; cap spent). **Head sha pushed:** `c41d90e`."
+     The three gate lines sit directly above this span under the Gates heading, one per
+     command, each marked pass.
+  B3 pass — "**Recommended next step: re-post the `T-4` reply.**"
+  B4 pass — "**Recommended next step: re-post the `T-4` reply.**"
+  B5 pass — searched the Recommended next step for "NEEDS_CLARIFICATION", "clarification"; none
+  B6 pass — searched the Recommended next step for "next round", "another round", "round 4"; none
+  B7 pass — searched the Recommended next step for "wait for the reviewer", "merge when ready", "let me know"; none
+  B8 pass — searched the T-4 row for "posted"; none
+     The row is present and its reply cell reads failed with the 502 detail.
+advisory:
+  A1 pass — "One row appended to `.stamity/inbox.md` for `T-6`, carrying this run's own one-line description:"
+  A2 fail — searched the Recommended next step for "pull request", "pull-request", "PR", "channel"; none
+     The step names the T-4 reply but does not say the re-post lands on the pull-request
+     thread. The destination is implied by the earlier T-4 row, not stated in the step.
+verdict: PASS (binding 8/8)
+advisory: 1/2 — A2 failed
+authoring defects: none. Every criterion was decidable from the response text alone.
+```
+
+The case passes on all eight binding criteria. The one advisory miss is that the recommended step never states the pull-request thread as the destination for the re-post. If A2 fails again next run, the set rules require promoting or deleting it.

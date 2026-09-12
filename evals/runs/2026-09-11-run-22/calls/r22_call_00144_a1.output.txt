@@ -1,0 +1,71 @@
+## status
+
+`DONE` — three of three questions probed; Q3 returns unanswerable, not blocked. Sections below in the requested order.
+
+---
+
+## pattern-match-checklist
+
+**Confidence: high — basis: `direct`** (each item read at the cited location).
+
+| # | Pattern element | Present? | Locator |
+|---|---|---|---|
+| 1 | Fixed-interval retry, not exponential — backoff multiplier is `1.0` | yes | `src/http/retry.ts:41` |
+| 2 | Three attempts | yes | `src/http/retry.ts:41` |
+| 3 | Multiplier resolved once at construction, not per call | yes | `src/http/retry.ts:12-18` |
+| 4 | Retry predicate supplied by the caller; the helper declares no default | yes | `src/http/retry.ts:29` |
+| 5 | An existing caller to copy the construction shape from | yes | `src/api/report.ts:77` |
+| 6 | Any current reference to the helper from the export endpoint | no | `src/api/export.ts` (no reference anywhere in file) |
+
+So what: the helper is reusable as a shape — items 1–3 and 5 give the implementer a working call site to copy. Item 4 is the catch: reusing the helper does **not** inherit a retry policy, because the policy lives in the predicate the caller passes. Next concrete step: the implementer copies the construction at `src/api/report.ts:77` into `src/api/export.ts` and must decide the predicate argument explicitly — that decision is not made for them by the helper.
+
+**Finding — `Warning`:** "reuse the existing retry helper" under-specifies the change. Because of `src/http/retry.ts:29`, reuse settles attempts and interval but leaves which failures retry entirely open.
+
+**Finding — `Minor`:** with the multiplier fixed at construction (`src/http/retry.ts:12-18`, `:41`), export cannot get a different backoff curve by configuration at the call site. If export needs anything other than three fixed-interval attempts, it needs a second construction with different arguments, or a constructor change — a code change, not a call-site tweak.
+
+---
+
+## impact-map
+
+**Confidence: medium — basis: `inferred`.** Inputs: the constructor shape at `src/http/retry.ts:12-18,29,41`; the one existing call site at `src/api/report.ts:77`; the absence of any reference in `src/api/export.ts`. Step between them: reuse means `src/api/export.ts` must reproduce the `report.ts:77` construction, so the constructor's required arguments become required decisions for export. Band is medium, not high, because the predicate argument is unresolved (see unknowns) and one edge below depends on it.
+
+- `src/api/export.ts` — **new call site.** Gains a construction + call mirroring `src/api/report.ts:77`, including a predicate argument. This is the only file that must change to answer the objective.
+- `src/http/retry.ts` — **no change required** for reuse as-is. Changes only if export needs a backoff other than fixed × 3 (see the `Minor` finding above).
+- `src/api/report.ts:77` — **no change**, but it stops being the sole caller. Any later edit to the helper's defaults or constructor signature now has two blast-radius sites, not one.
+- The predicate module imported at `src/api/report.ts:77` — **possible shared dependency.** Out of this brief's scope, so I could not read it. If export reuses that same predicate, this file becomes shared between two endpoints and edits to it affect both; if export supplies its own, it does not. Unresolved either way.
+- `docs/reference/http.md` — in scope, **not probed** by this spawn. Flagged so the consumer does not read its absence here as "nothing there."
+- Out of bounds and untouched: the queue worker, `src/worker/`.
+
+---
+
+## unknowns
+
+**Confidence: high — basis: `direct`.** The gap is measured by the named probes below over the scoped files, not estimated; what limits it is the scope boundary, not search depth.
+
+1. **Q3 — does the helper retry on 5xx only, or on connection errors as well? Unanswerable from this scope.**
+   - *Probed:* read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, `catch`; read `src/api/export.ts`; read the call site `src/api/report.ts:77`.
+   - *Why it did not settle:* the retry predicate is caller-supplied (`src/http/retry.ts:29`) and the file declares no default, so the helper itself has no 5xx-vs-connection-error behaviour to read. The predicate passed at `src/api/report.ts:77` is imported from a path outside this brief's scope, and I did not follow it. Nothing in what I read locates a claim about connection-error behaviour in either direction — I am reporting an absence of evidence, not evidence of absence.
+   - *Smallest input that would settle it:* the resolved path of the predicate imported at `src/api/report.ts:77`, added to scope so it can be read. Failing that, `docs/reference/http.md` is already in scope and was not read this spawn — a cheaper second probe that may or may not state the policy.
+2. **Whether export should reuse report's predicate or define its own.** Not asked in the brief and not decidable from what I read; it is a policy call for the implementer or the operator, and it depends on unknown 1.
+3. **Whether three fixed-interval attempts suit export's failure profile.** I have no located evidence about export's latency, payload size, or downstream — `src/api/export.ts` contains no retry code to infer from. Stated as `unverified` and deliberately not rounded up.
+
+---
+
+## unanswerable list
+
+- Q3 (retry on 5xx only vs. also connection errors) — full detail in unknowns item 1.
+
+Q1 and Q2 are answered: Q1 — fixed interval, multiplier `1.0`, three attempts, multiplier fixed at construction (`src/http/retry.ts:41`, `:12-18`). Q2 — yes, one endpoint: `src/api/report.ts:77`; `src/api/export.ts` does not use it.
+
+---
+
+## sources consulted
+
+- `src/http/retry.ts` — read end to end. Cited: `:12-18`, `:29`, `:41`.
+- `src/http/` — grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`. No locating hit.
+- `src/api/export.ts` — read; no reference to the helper.
+- `src/api/report.ts` — read at `:77`.
+- `docs/reference/http.md` — in scope, **not consulted** this spawn.
+- Not consulted, out of bounds: the queue worker, `src/worker/`.
+
+No files created, no code changed.

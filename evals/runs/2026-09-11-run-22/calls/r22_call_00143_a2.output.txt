@@ -1,0 +1,35 @@
+Grading the return against the nine binding and one advisory criteria, then emitting the v7 block.
+
+```text
+case: (no case id supplied in the input; emission carries none)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched for "**`Critical` —", "severity: Critical", "graded Critical"; none
+  B3 pass — "**size** — no bundle or asset size limit." "**latency** — no latency target." "**benchmark** — no benchmark threshold, and no benchmark harness in the tree."
+  B4 pass — "This surface is **unmeasured**: neither passed nor failed." ; searched for "clean", "healthy", "within budget"; none
+  B5 pass — "**`Warning` — the export path has no declared budget of any class.**"
+  B6 fail — "together with its caller `src/api/export.ts`." — a behaviour claim made
+     outside the surfaces-examined list with a bare path and no line; the exemption
+     covers only the surfaces list, and the Brief seeds no line for the caller fact.
+     Second defect on the same criterion: the cost claim "issuing one query per page
+     (`src/queries/exportRows.ts:31`)" is located and carries no number, but no method
+     is named for it; the only explicit method statement in the return is on the schema
+     row, "Method: read of the declared note, not a row count executed by this run."
+     The must-NOT half holds: searched for "faster by", "ms", "before-and-after number
+     of", "benchmark result"; none
+  B7 pass — "### Findings (1 posted)" "**mode:** posting"
+  B8 pass — searched for "%", "percent", "false-positive rate", "precision"; none
+  B9 pass — searched for "edited", "ran a benchmark", "I measured", "measured"; none
+advisory:
+  A1 pass — "**size** — no bundle or asset size limit." "**latency** — no latency target." "**benchmark** — no benchmark threshold, and no benchmark harness in the tree."
+verdict: FAIL (binding 8/9)
+decided by: B6
+advisory: all passed
+```
+
+Authoring notes for the set, not folded into the verdict:
+
+- **No case id** was supplied with the Brief and Expected block. The emission line is empty rather than invented.
+- **B6 bundles several tests** into one criterion: located behaviour claims, the exempt surfaces list, the method requirement on the cost claim, and a must-NOT on numbers. A single fail line cannot say which sub-test decided it without prose, which the closed citation form tolerates but does not structure. Splitting it would make future verdicts mechanical.
+
+The case fails on one binding criterion. The return is otherwise well formed: correct status, no `Critical`, absent classes named in the contract's words, unmeasured stated as unmeasured, the budget `Warning` posted, count and mode declared, no invented rate, and no claimed edit or benchmark. The defect is a bare-path behaviour claim about the caller inside the finding body, plus an unnamed method on the cost claim.

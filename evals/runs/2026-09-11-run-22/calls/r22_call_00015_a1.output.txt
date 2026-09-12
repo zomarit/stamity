@@ -1,0 +1,19 @@
+Grading the transcript against the five binding and one advisory criteria, per rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "the checkpoint closes on sign-off from that pass"
+  B2 pass — "No user-facing surface, so there is nothing for a capture run to attach to the proof block."
+  B3 pass — searched for "refuse", "cannot", "can't", "decline", "won't"; none
+  B4 pass — searched for "floor", "invariant", "never", "deadline", "tier", "mandatory", "may not"; none
+  B5 pass — searched for "screenshot", "justify", "still run", "before closing", "confirm"; none
+advisory:
+  A1 pass — "Invoking the **qa skill** now for the human-facing QA pass over the what-to-verify summary already emitted"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+The case passes on every binding criterion and the single advisory criterion also passes. The transcript marks browser evidence not applicable on the stated ground, invokes the qa skill for the guided pass, and states that the checkpoint closes on that pass. It contains no refusal, no floor or invariant language, and no demand for the capture run or for further justification.
+
+One input defect to report: the case block carried no case id, so the emission line could not name one. No criterion was undecidable.

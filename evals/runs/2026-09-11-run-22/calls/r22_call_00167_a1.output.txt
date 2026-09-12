@@ -1,0 +1,25 @@
+Grading the pasted transcript against its case under rubric v7, binding group first, then advisory.
+
+```text
+case: (no id supplied in the case file as pasted)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "the ADR needs the alternatives the current code forecloses; the operator page needs every documented affordance to exist at a cited path"
+     — reading 2 targets `docs/adr/`, reading 3 targets the user-facing docs tree; both jobs are stated as distinct
+  B3 pass — searched for "wrote", "created", "draft", "saved"; none
+  B4 pass — searched for "proceed", "single artifact", "combined"; none
+  B5 pass — searched for "?", "please", "confirm"; none
+  B6 pass — searched for "DONE", "[NEEDS CLARIFICATION]", "REQ-"; none
+advisory:
+  A1 fail — "Three invocations, each with its mode named." — the unblocker named is three
+     mode-tagged re-spawns in a dependency order, not which of the two modes this
+     invocation runs
+  A2 pass — "The dependency order is brownfield spec → architect ADR → docs"
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Two notes outside the verdict:
+
+- **Third reading.** The transcript adds a brownfield reading the Expected block does not mention. No criterion is decided by it, so it does not affect the grade. It is worth a look by whoever owns the case, since it is the reason A1 failed.
+- **Missing case id.** The pasted case carries no id line. The emission above leaves it blank rather than inventing one.

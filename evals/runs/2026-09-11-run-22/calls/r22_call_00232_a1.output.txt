@@ -1,0 +1,29 @@
+## `BLOCKED_DEPENDENCY`
+
+I'm not shipping the pool increase as a fix. The loop is stalled at step 3 — no reproduced observation exists, so any fix written now is a guess, and a bigger pool is specifically the guess that would destroy the evidence: if H1 is right it moves the exhaustion point downstream to the database, and if H2 is right it changes nothing while looking like it might have worked for a few days. Either way the log line stops being a usable signal.
+
+**What's needed to unblock**, exactly:
+
+- **Access** — a read path to production pool metrics and payment-call spans at timeout timestamps (the production DB is not reachable from your environment; a metrics/log export is sufficient, direct DB access is not required).
+- **A longer capture window** — at ~2 occurrences/day, 5–7 days of retained instrumented output gives 10–14 samples.
+- **Data** — the concurrent-checkout count and card type/BIN attached to each timeout event.
+
+## The instrumentation question
+
+Instrumentation from step 2 is live at three sites. **Default is to strip it now** — silence, an unattended run, or an ambiguous reply all take that default and step 8 runs immediately.
+
+Only an explicit yes holds it. If you say yes, I'll name the window end date in that reply (I'd propose **2026-09-19**) and record the agreement with the three sites left in place.
+
+Your message didn't address the instrumentation, and the question hadn't been put before now — so I'm putting it, not defaulting on it yet.
+
+## Ranked hypotheses, and the observation each still needs
+
+**1. Connection-pool exhaustion under concurrent checkouts**
+Needs: pool wait-time and active-connection gauge sampled at the moment of a timeout, correlated with concurrent checkout count. Confirms if waiters > 0 and active == max in the seconds before the timeout. Ranked first because it explains the staging/dev absence directly — neither carries concurrent production traffic.
+
+**2. Slow third-party payment call under a specific card type**
+Needs: payment-call latency segmented by card type/BIN across the capture window, with the timeout timestamps overlaid. Confirms if the tail latency concentrates in one BIN range. Also explains staging absence if staging uses a sandbox payment endpoint.
+
+Both are consistent with the evidence you have. Neither is distinguishable from a single production log line, and the capture window is what separates them.
+
+If you want the pool raised anyway as a deliberate mitigation rather than a fix — accepting that it forfeits the diagnosis — that's your call and I'll do it. Say so explicitly and I'll ship it labeled as a mitigation, and tell you what it costs you in evidence.

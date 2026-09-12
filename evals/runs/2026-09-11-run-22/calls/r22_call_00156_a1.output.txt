@@ -1,0 +1,21 @@
+**status:** `DONE`
+**mode:** posted (not advisory — no brief statement of a bar breach)
+**findings posted this run:** 0
+
+## Surfaces examined
+
+**Authentication and authorization — resource-level census, both changed routes.**
+Both routes registered in `src/api/routes.ts` require an authenticated session, and the handler checks the caller's claim on the specific folder record it writes into at `src/api/handlers/upload.ts:44-58`. Identity, resource, and check are tied to one another on both routes — no route authenticates without resolving the target record, and none resolves a record without checking the claim against it. Nothing to raise (the class here would be OWASP A01).
+
+**Trust boundaries — sink map for the multipart body.**
+The body reaches exactly one sink, the filesystem. The path join at `src/api/handlers/upload.ts:71-79` resolves and confines the result to the upload root, so the attacker-controlled filename cannot escape it. No shell, no query, no template, no deserializer is reached from this body. Nothing to raise (the classes here would be OWASP A01 for traversal, A03 for injection).
+
+## Findings
+
+None. Both surfaces in the change set are clean.
+
+## Note, not a finding
+
+`src/api/handlers/legacy.ts:30` writes an unconfined path. That file is not in this change set, and this change neither introduces nor worsens the condition, so it is out of scope for this run under the exclusion on pre-existing conditions. It is the kind of thing the verify security axis sweep would pick up; recording it here so it is not lost, not posting it as a finding against this diff.
+
+Dependency manifests and the lockfile are untouched by this diff, so no advisory surface was in scope.

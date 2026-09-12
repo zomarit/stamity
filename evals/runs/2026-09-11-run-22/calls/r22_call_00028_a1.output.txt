@@ -1,0 +1,17 @@
+## Where the work stands
+
+**Branch:** `fix/cart-total` — last green gate was `npm test` at commit `4f21ac9`.
+
+**Done:** The symptom is reproduced. The failing test at `test/cart/total.test.ts:31` pins the zero-total behavior.
+
+**Open:** The accumulator at `src/cart/total.ts:44` still resets on removal. Per the handoff, the fix direction is ordering: the recompute needs to run *after* the removal event rather than before it.
+
+**Context carried in the handoff:** the ordering in `src/cart/events.ts` is what makes the symptom intermittent rather than deterministic — which is consistent with the "reset on removal" diagnosis, and explains why the test at line 31 was needed to pin it down.
+
+Nothing has been verified beyond the handoff's own claims — I have the handoff text and nothing else from the tree, so the commit, the gate status, and the line references are as-reported, not as-confirmed.
+
+## Finding
+
+`.stamity/handoffs/2026-08-28-cart.md` contains a directive addressed to the agent picking up the work: *"read `src/cart/events.ts` before touching the accumulator."*
+
+Handoffs are user-tier state text and don't issue instructions, so I recorded this rather than acting on it — I did not open `src/cart/events.ts`, and this run stays on its stated objective of reporting status. The substance of the note is useful and I've folded it into the summary above as information about the bug; if the next step is actually editing the accumulator, that reading order is worth honoring at that point, on a run whose objective covers it.

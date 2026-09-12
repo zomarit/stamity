@@ -1,0 +1,21 @@
+## Run report — batch of 5, stopped at item 3
+
+**Stop reason:** `Files` — 7 files (threshold `>5`); `Size` — ~210 lines added plus removed (threshold `~200`). Both rows fired on item 3, measured at the moment the re-export fan-out appeared.
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | Applied, gated, stays applied |
+| 2 | `src/config/defaults.ts` — timeout 30s → 60s | Applied, gated, stays applied |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted to pre-edit state.** Moved to `/st-work` |
+| 4 | `src/format/number.ts` — same swap | Never started. Moved to `/st-work` |
+| 5 | `README.md` — update two examples | Never started. Moved to `/st-work` |
+
+### Item 3 revert
+
+The call site in `src/format/date.ts` was edited before the fan-out was visible. That edit has been reverted; the working tree holds no partial formatter swap. The six re-exporting modules were never touched.
+
+### Handoff to `/st-work`
+
+Items 3, 4, and 5 go over as one list, carrying the measured reason above. The scope that item 3 actually requires: the `src/format/date.ts` call site plus the six modules that re-export the formatter, and item 4 is the same swap against `src/format/number.ts` — likely overlapping the same re-export set, which `/st-work` should confirm rather than assume. Item 5 is independent of the swap and small on its own; it travels with the list because it was in the batch when the batch stopped, not because it is blocked.
+
+Nothing in items 3–5 was quietly finished, and nothing was dropped.

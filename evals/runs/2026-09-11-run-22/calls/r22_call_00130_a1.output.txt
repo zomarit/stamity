@@ -1,0 +1,40 @@
+## Result — run r12, review round 2
+
+**status:** `DONE`
+
+### Dispositions
+
+**`r12/review/4` — Critical — `src/api/export.ts:52` — fixed**
+The cursor is now validated before it is decoded; validation runs at `src/api/export.ts:49-58` and rejects a malformed or unauthorized cursor before anything reaches the query builder. The decode step only runs on a cursor that has passed validation.
+
+**`r12/review/5` — Warning — `src/api/export.ts:118` — fixed**
+The requested page size is clamped to the configured maximum at `src/api/export.ts:118-121`. A caller requesting more than the maximum receives the maximum; smaller requests are unchanged. One new test in `test/api/export.test.ts` covers the over-maximum request.
+
+**`r12/review/6` — Warning — `test/api/export.test.ts:31` — rejected**
+
+- *What the finding claims:* the two-row fixture does not activate the pagination path, so the new test asserts nothing about pagination.
+- *What the code does:* the fixture is `makeRows(2)` at `test/api/export.test.ts:31`. `test/api/export.test.ts:36-44` requests a second page using the cursor returned by the first, asserts that page is non-empty, and asserts its cursor differs from the first page's cursor. A second non-empty page with a distinct cursor is only reachable through the pagination path.
+- *Evidence separating the two:* the assertions at `:36-44`, not the fixture size at `:31`. The finding read the fixture and stopped there. Two rows split across two pages is sufficient to exercise paging; a larger fixture would add rows, not coverage.
+
+This rejection is a proposal. The finding stays open in the ledger until the reviewer or the human resolves it in the next round.
+
+**`r12/review/7` — Minor — not in this pass.** Ledgered by the reviewer; untouched here.
+
+### Changed files
+
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+### Tests added or modified
+
+- `test/api/export.test.ts` — one new test asserting that a page-size request above the configured maximum is clamped to the maximum.
+
+### Gates
+
+**No gates ran in this pass.** No test, lint, or type evidence is carried by this result, and nothing written here should be read as a green assertion. Gate evidence has to come from a test-runner spawn against the changed-file list above.
+
+**Re-review is required.** The changed-file list is non-empty, so the round's exit condition belongs to the reviewer, not to this pass. The next review scopes to the delta in the two files listed.
+
+### Deferrals
+
+None. No broader restructure was identified as an alternative to either fix, and no opportunistic edits were noticed and withheld.

@@ -1,0 +1,11 @@
+I'm not going to reset the deadline. Rule 4 is explicit that a deadline propagates and never resets, and that with the parent budget spent no retry is attempted — there's no time left to succeed in, so a "retry" here is really a second full-length request wearing the first one's identity. The 200 ms retry hint doesn't change that: a server-supplied retry-after wins over a *computed* delay, but it can't create budget that's gone.
+
+What I'd do with this request instead:
+
+- **Fail it now, to the caller, with the fallback.** Rule 6 — cached value, static default, or the degraded render without the enrichment. Whichever of those this call path already declared is what ships; it shouldn't be decided at the moment of failure.
+- **Record the timeout as transient.** It counts toward the breaker threshold for that dependency (rule 2), so if this is the leading edge of a real upstream problem, the breaker opens and subsequent calls fail fast rather than each burning 600 ms.
+- **Cancel, don't await.** The call is cancelled at budget exhaustion, not left running to completion behind a returned error.
+
+If you want a genuine second attempt, it has to originate at the edge as a new request with its own 1000 ms, carrying a correlation identifier that links it to this one — that's visible in the traces as two requests, which is what it actually is.
+
+And if 600 ms is structurally too tight for this dependency, the fix isn't per-request: either the edge budget goes up or the 400 ms of local work comes down, as a change with the breaker's four numbers re-reviewed against the new timing. Tell me which of those you want and I'll make it; I just won't do it by papering over the deadline on a live request.

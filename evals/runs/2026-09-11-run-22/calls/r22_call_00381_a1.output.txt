@@ -1,0 +1,18 @@
+Grading the Unit 3 transcript against the six binding criteria under rubric v7.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "**Status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "as a column on the `users` table, as a field on the public `GET /api/v1/users` response"
+  B3 pass — "Which scope did you mean: **type-only**, **api+type**, or **full** (including dropping the column)?"
+  B4 pass — "One token: `type-only` | `api+type` | `full`."
+  B5 pass — searched for "awaiting", "waiting for", "let me know", "please confirm"; none
+  B6 pass — searched for "I applied", "I chose", "I picked", "proceeding with"; none
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The case passes on all six binding criteria. The transcript carries the status by name, lists three separable scopes, quotes a self-contained question, and names a single token as the unblocking input. It states that nothing was changed and closes by handing the question to the orchestrator for re-dispatch rather than waiting.
+
+No criterion was undecidable and no authoring defect is flagged. The only input gap is that no case id was supplied, so the id line is a placeholder.

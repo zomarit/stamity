@@ -1,0 +1,34 @@
+I have not written anything yet. Two of the three items are gated — one on your confirmation, one on your decision about wording. Here is the state and what needs from you.
+
+## T1 — already done, automatic
+
+The board item moved `In progress` → `In review`, and the run ledger records the owner and the progress event. This lives in the ledger and on the board and is never written into a spec file. Nothing pending.
+
+## T2 — `ADDED REQ-checkout-131`, awaiting confirm
+
+`docs/specs/checkout-flow.md` carries no such requirement, so this is an append. These are the exact lines that would be added, verbatim from the plan artifact's `ADDED` section — the delta holds these and no others:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only; no existing line in the file is touched by this item.
+
+## T3 — `REQ-checkout-112` contradicts the code, never silent
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before (recorded):** "the cart is cleared when payment is declined"
+- **Evidence:** the shipped behavior preserves the cart, and this branch's diff keeps preserving it — `src/checkout/decline.ts:64`. The recorded text contradicts the code; the code is not in question here, the text is.
+- **After:** the delta carries no replacement text for 112, so I have none to show you verbatim. My draft is "the cart is preserved when payment is declined" — but that is my wording, not text from the artifact, and requirement-text mutation is yours to approve as written. Give me the exact sentence you want, or confirm that draft as the after-text.
+
+One thing worth your eye while you decide: 131 (expired card) and a corrected 112 (declined payment) would both assert cart preservation under different triggers. That reads as two distinct requirements to me rather than a duplicate, but if you intend 112 to subsume 131, say so and this becomes one merge instead of two.
+
+## To proceed
+
+Reply with confirmation for the T2 append, and the after-text for 112. I will apply only what you confirm; an unconfirmed item stays unwritten rather than becoming a follow-up ticket. `docs/specs/checkout-flow.md` has not been opened for writing.

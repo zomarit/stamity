@@ -1,0 +1,1 @@
+`st-onboard` — the request lands exactly on its trigger: `stamity init` has just finished and nothing has been run through the setup yet, so the skill's job of guiding the first proven change applies.

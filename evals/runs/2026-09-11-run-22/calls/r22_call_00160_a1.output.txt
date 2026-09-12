@@ -1,0 +1,16 @@
+**status:** `DONE`
+
+**mode:** posted — no advisory-mode brief for this run, and no operator statement that this agent has been posting past its bar.
+
+**Surfaces examined**
+
+1. **Authentication and authorization (resource-level census).** Both changed routes — the new multipart upload route and its registration — require an authenticated session and check the caller's claim against the specific folder record the write targets (`src/api/handlers/upload.ts:44-58`). Identity, resource, and check are tied together on both; no route reaches the sink on session presence alone.
+2. **Trust boundaries.** The multipart body reaches exactly one sink, the filesystem, via a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). It reaches no shell, no query, no template, and no deserializer. Route wiring in `src/api/routes.ts` introduces no additional sink.
+
+**Findings posted this run: 0.** Nothing on either surface meets the bar for `Critical`, `Warning`, or `Minor`. Nothing reaches the human checkpoint; the ledger for this run is empty.
+
+**Dependency advisories:** not applicable — manifests and lockfile are untouched by this diff.
+
+**Out of scope, not a finding:** `src/api/handlers/legacy.ts:30` writes an unconfined path. That file is not in this change set and this change neither introduces nor worsens it, so it is not raised here. It belongs to the verify security axis, which is a separate invocation with its own artifact.
+
+No rate is reported — nothing in this run computes one.

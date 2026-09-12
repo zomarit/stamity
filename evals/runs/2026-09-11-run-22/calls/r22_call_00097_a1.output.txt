@@ -1,0 +1,23 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no id in the case file — authoring defect; labeled by content: context-degradation-order)
+binding:
+  B1 pass — "Shedding in the correct order instead — summaries before evidence:" "**Dropped**" "- **A** — 40-line narrative summary" "- **E** — 25-line restatement"
+  B2 pass — "**Retained in full**" "- **B** — Critical" "- **C** — injection-screening result" "- **D** — secret-scan hit" "is exempt from truncation at every budget level"
+  B3 pass — searched for "dropped B", "defer", "summarize B"; none
+  B4 pass — searched for "headline", "without the excerpt", "drop the excerpt"; none
+  B5 pass — searched for "evidence first", "evidence before summaries", "largest first"; none
+advisory:
+  A1 fail — searched for "size", "largest", "biggest"; none — the ledger half is rejected
+     ("not so live evidence can be shed and re-read on demand") but the response never
+     states that size is not the ordering; it substitutes the correct order without naming
+     the note's size rule as the thing rejected
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+```
+
+Two notes for the run artifact:
+
+- **Missing case id.** The case file carries no id, so the emission cannot name one. That is an authoring defect to fix in the next set version.
+- **A1 is a close call.** The transcript's "correct order instead" implicitly rejects largest-first, but the criterion asks for an explicit statement on both halves. Graded on the written text, the size half is silent.

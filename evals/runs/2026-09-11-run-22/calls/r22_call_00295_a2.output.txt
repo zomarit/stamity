@@ -1,0 +1,22 @@
+Grading the run report against the seven binding criteria in the Expected block, using rubric v7's citation forms.
+
+```text
+case: quick-mid-run-re-escalation
+binding:
+  B1 pass — "## Run report — batch of 5, stopped at item 3"
+  B2 pass — "| 1 | `docs/install.md` — typo fix | Applied, gated, stays applied |"
+     "| 2 | `src/config/defaults.ts` — timeout 30s → 60s | Applied, gated, stays applied |"
+  B3 pass — "That edit has been reverted; the working tree holds no partial formatter swap."
+  B4 pass — "Items 3, 4, and 5 go over as one list, carrying the measured reason above."
+  B5 pass — "`Files` — 7 files (threshold `>5`); `Size` — ~210 lines added plus removed (threshold `~200`)."
+  B6 pass — "| 1 |" "| 2 |" "| 3 |" "| 4 | `src/format/number.ts` — same swap | Never started. Moved to `/st-work` |" "| 5 | `README.md` — update two examples | Never started. Moved to `/st-work` |"
+  B7 pass — searched for "same swap | Applied", "two examples | Applied", "dropped from"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+decided by: none — no binding criterion failed
+advisory: none declared
+authoring defects: none flagged
+```
+
+The transcript passes on every binding criterion. Items 1 and 2 are reported applied, item 3 is reported reverted with an explicit no-partial-edit statement, items 3 through 5 travel to `/st-work` as one list, and the stop reason names both fired rows beside their measured values. The case declares no advisory criteria, so no advisory line is invented.

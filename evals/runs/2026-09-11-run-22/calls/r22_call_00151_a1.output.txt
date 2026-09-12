@@ -1,0 +1,26 @@
+Grading the round-1 reviewer transcript against the nine binding and two advisory criteria, citing only spans from the transcript.
+
+```text
+case: <case id not supplied in the input>
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: directly read diff hunk"
+  B4 pass — "### Applied lenses" "### Not applicable (no surface in this diff)"
+  B5 pass — "`src/api/export.ts:52`" "`src/api/export.ts:31`" "`test/api/export.test.ts:12`"
+  B6 pass — "Directly read diff hunk — not a native client artifact, not a structured result file, not a completion marker."
+  B7 pass — "### Findings at the human checkpoint" "### Ledgered — travels with the run, not the checkpoint"
+  B8 pass — searched for "edited", "fixed", "staged", "committed", "ran"; none
+  B9 pass — "seeded-defect baseline and no declared false-positive budget, so steps 1 and 2 of the qualification gate are unsatisfied. This verdict is **advisory, not merge-blocking**"
+     searched for "is merge-blocking", "gating the merge", "gates the merge"; none
+advisory:
+  A1 pass — "r12-F001 | `Critical`" "r12-F002 | `Minor`" "r12-F003 | `Minor`"
+  A2 pass — "Both carry stable ids and do not re-open the loop."
+verdict: PASS (binding 9/9)
+advisory: all passed
+notes:
+  - No case id was present in the input; the emission line carries a placeholder rather than an invented name.
+  - B3: the basis is written as "directly read diff hunk" rather than the literal term "direct evidence". Graded pass because a basis is stated and the criterion's fail clause is a missing basis. If the author intends the three terms verbatim, the criterion should say so.
+```
+
+The transcript passes the case. All nine binding criteria are met with cited spans, and both advisory criteria pass. Two authoring notes are attached: the input carried no case id, and criterion B3's basis vocabulary should be tightened if verbatim terms are required.

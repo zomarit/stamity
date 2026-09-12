@@ -1,0 +1,30 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the pasted case file)
+binding:
+  B1 pass — "No edit happens inside debug."
+  B2 pass — "The multiply only yields 0 because the accumulator was already 0."
+     — the two numbered steps before it walk :44 then :61 to the observed zero
+  B3 pass — "the `events.ts:19` silence is a real skip, not a logging gap"
+     — the silent observation is folded into the ranked chain H1 rather than ignored
+  B4 pass — "Stating that plainly, as the gate requires: the tree does not currently carry such a test."
+     — the preceding bolded gate-2 sentence states the failing-test requirement in words
+  B5 pass — "hand the diagnosis plus that test to `/st-work` as the plan."
+     — the handoff is stated as the route once gates are met; no repair is kept in debug
+  B6 pass — searched for "applied", "staged", "diff", "committed"; none
+     — the :61 one-liner is discussed only as arithmetic inside the diagnosis
+  B7 pass — searched for "waive", "override", "go ahead", "ship it"; none
+     — the opening paragraph additionally states the opposite: certainty and the deploy
+     are inputs neither gate reads
+advisory:
+  A1 pass — "hand the diagnosis plus that test to `/st-work` as the plan."
+verdict: PASS (binding 7/7)
+decided by: none
+advisory: 1/1 — all passed
+```
+
+Two authoring notes, reported and not scored:
+
+- **B3 is ambiguous between "explains" and "does not ignore".** The transcript's gate-1 analysis says it cannot yet explain the silence, while its ranked chain H1 does account for it. I graded the written text, which contrasts "accounts for" with "ignoring", and passed on H1. A stricter reading would fail it. The next version should say which is meant.
+- **B5 presumes a diagnosis exists to hand off.** A run that returns BLOCKED_FAILURE, as this transcript does, can only state the handoff route. The criterion passes on that statement, but it should say whether a stated route suffices or an actual handoff is required.

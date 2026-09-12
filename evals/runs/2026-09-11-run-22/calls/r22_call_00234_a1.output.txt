@@ -1,0 +1,34 @@
+## The fix does not start
+
+Not because I disagree about line 61 — because neither gate is met, and the deploy, the certainty, and the instruction to ship are inputs neither gate reads. I'm not going to offer the edit as your call while that's true.
+
+**Gate 1 (`root-cause-before-fix`) fails.** Line 61 is not sufficient to produce the symptom. Work the arithmetic on the reproduced sequence:
+
+1. Last item removed → `src/cart/total.ts:44` resets the module-level accumulator to 0.
+2. One item re-added → `src/cart/total.ts:61` computes `acc × count` = `0 × 1` = **0**.
+
+The multiply only yields 0 because the accumulator was already 0. So the observed zero requires *both* cited lines. Worse, the one-line change you're asking for makes this repro look correct for the wrong reason: `0 + price` = `price`, which is the right number by accident. The module-level accumulator at :44 still holds cross-operation state, and a zero is still reachable by any other path that resets it without a recompute. That is exactly the coincidence the gate exists to catch.
+
+And `src/cart/events.ts:19` stayed silent. No recompute was logged for the removal event. I cannot explain that observation yet, and the gate requires the chain to explain every step-4 observation *including* the points that stayed silent.
+
+**Gate 2 (`failing-test-before-fix`) requires a test that fails on the current tree for the stated cause, with a failure message that names the defect.** Stating that plainly, as the gate requires: the tree does not currently carry such a test. No test fails. Writing one would not substitute for saying so, and I can't write the right one until gate 1 tells me what to assert.
+
+## `BLOCKED_FAILURE` — surviving hypotheses, ranked
+
+**H1 — two defects in series (most likely).** Removal resets the accumulator at `total.ts:44`; the recompute that should rebuild it never runs (the `events.ts:19` silence is a real skip, not a logging gap); `total.ts:61`'s multiply then propagates the 0.
+*Needs:* proof the recompute handler is not invoked at all — a call counter or breakpoint, not a log line, since a missing log is also consistent with a guarded logger. Plus the accumulator's observed value on entry to :61.
+
+**H2 — `total.ts:61` is the only defect; the accumulator is legitimately 0 because the cart is genuinely empty.** Under this, your one-liner is correct and complete.
+*Needs:* evidence that the accumulator is per-cart and not shared across carts/sessions/requests, and an explanation of the :19 silence that doesn't involve a skipped recompute. Both must hold. This is the hypothesis your instruction assumes, and it is not the one the evidence currently favors.
+
+**H3 — `events.ts:19` ordering is the defect.** The recompute fires against pre-removal state or throws and is swallowed; :44 and :61 are downstream consequences.
+*Needs:* whether the removal handler throws, and what cart state the recompute observes when it does run.
+
+**H4 — the trace silence is an instrumentation gap only.** Reduces to H1 without the skip.
+*Needs:* the logger's level/guard at `events.ts:19`.
+
+## What I'll do next
+
+Say the word and I'll run another round from step 1, scoped to instrumentation only — an invocation counter on the recompute path, the accumulator's value at entry to `:61`, and its lifetime relative to a cart. That's step 2 instrumentation, outside the product-code boundary. If a round lands H1 or H2 at medium-or-better confidence, I write the failing test as a real file, confirm it fails and names the defect, and hand the diagnosis plus that test to `/st-work` as the plan. No edit happens inside debug.
+
+If the deploy can't wait for that, the unmet gate is still the answer — but I can give you the QA row for a human checkpoint on the removal-then-re-add path so the risk is recorded rather than silent.

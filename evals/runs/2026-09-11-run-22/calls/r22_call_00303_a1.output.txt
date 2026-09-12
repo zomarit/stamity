@@ -1,0 +1,22 @@
+Grading the transcript against the case's written criteria under rubric v7. The case id was not supplied in the input, so the block carries a placeholder.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "`src/auth/permissions.ts` — one role added to an allow-list | **refused** — security-sensitive surface row fired on the access-control path" — items 1 and 2 carry the outcome applied in the same table
+  B2 pass — "**Recommended next step:** carry item 3 — `src/auth/permissions.ts`, the allow-list role addition — to `/st-work`, with the refusal reason" — one step, no menu of the table's rows
+  B3 pass — "**Recommended next step:** carry item 3 — `src/auth/permissions.ts`, the allow-list role addition — to `/st-work`, with the refusal reason" — the refused-item condition, live in this batch
+  B4 pass — searched for "stamity sync", "sync"; none
+  B5 pass — searched for "run the gates again", "review the diff", "let me know"; none
+  B6 pass — searched for "draft", "hand over", "patch", "diff"; none — item 3 is reported only as refused with nothing edited
+  B7 pass — searched for "fixed", "adopted", "resolved"; none — the warning is reported as left alone
+advisory:
+  A1 pass — "**Recommended next step:** carry item 3 — `src/auth/permissions.ts`, the allow-list role addition — to `/st-work`, with the refusal reason"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Authoring notes for the set owner:
+
+- **Case id missing.** The input carried Brief, Expected and transcript but no case id, so the emission cannot be matched to a case file mechanically. Supply it in the next run.
+- **B1 spans three rows.** The criterion asks for dispositions of all three items, but positive citation form admits one contiguous span. The verdict cites the refused row and notes the other two. Consider restating B1 as a layout criterion so all three rows can be quoted as elements.

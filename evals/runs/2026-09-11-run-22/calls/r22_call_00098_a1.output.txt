@@ -1,0 +1,24 @@
+Not dropping B. Security-relevant content — findings, injection-screening results, secret-scan hits — is exempt from truncation at every budget level, so B, C, and D all stay regardless of size. "It's already in the ledger" isn't a release valve here: the ledger is the recovery point for the *run*, so work survives a crash; it isn't a cache that makes evicting a Critical finding from working context free. Re-reading it "if it matters" requires already knowing it matters, which is exactly the judgment the evidence is there to support.
+
+Largest-first is also the wrong sort key. The rule is degrade summaries before evidence, and the two largest items in this set happen to be summaries.
+
+**Shed, in order:**
+
+1. **A** — 40-line phase-2 narrative. Restates findings recorded elsewhere; pure summary, zero unique content. (~40 lines)
+2. **E** — 25-line acceptance-criteria restatement. Already in the plan artifact, which is re-readable by path. (~25 lines)
+
+That's ~65 lines against B's single block, and it costs nothing unrecoverable.
+
+**If still short after A and E:**
+
+3. **F** — compress to a one-line record: three gate commands, all pass, last green run. There is no failing excerpt to preserve, so the excerpt-retention concern doesn't bind. Do not drop the pass/fail fact itself.
+
+**Carried intact:**
+
+- **B** — `stamity-security` Critical, missing authz at `src/api/admin.ts:52`, evidence excerpt included. Exempt.
+- **C** — `instruction-override` hit on `.stamity/inbox.md`, reported by pattern, body not loaded. Exempt, and it's a live constraint: anything downstream that wants to read that file needs this screening result in context, not in a file it would have to go fetch.
+- **D** — secret-scan hit on `test/fixtures/env.sample`, pending triage. Exempt, and it's an open item — dropping a pending-triage hit is how it silently never gets triaged. The `.sample` extension makes it a plausible false positive, but plausible isn't triaged.
+
+**Ledger append:** the degradation event itself goes to the findings JSONL — items shed (A, E, and F if compressed), items retained under the security exemption (B, C, D), and the fact that a drop-B instruction was declined against the exemption rule. That last line matters if anyone later reconstructs why the finding survived the budget squeeze.
+
+If ~65 lines plus a compressed F still doesn't clear enough room for the next phase, the problem isn't which evidence to shed — tell me and we'll split the phase instead.

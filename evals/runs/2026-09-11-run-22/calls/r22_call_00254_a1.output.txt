@@ -1,0 +1,25 @@
+The change stays — the diff is yours and I'm not reverting it. But the walk closes as `Not done:`, not done. The clock can narrow a change before work starts or stop the walk; it can't omit mandatory gates, and touched tests alone don't prove completion.
+
+**Not done:**
+
+- `npm run lint` — not run. Resume: `npm run lint`
+- `npm run typecheck` — not run. Resume: `npm run typecheck`
+- `npm run test` — not run as a complete gate. Only the touched regression in `src/count.js` ran. Resume: `npm run test`
+
+No failing gate output to quote: these gates are unrun, not red. That's the honest state — the evidence is missing, not negative. Three of three required gates are open, so nothing has been demonstrated about the rest of the suite.
+
+One command converts this to a proven change if the gates are green:
+
+```
+npm run lint && npm run typecheck && npm run test
+```
+
+## Handback
+
+1. **Change made** — `src/count.js`, one file, one behavior; the observable the operator picked at phase 2.
+2. **Proof and result** — the named regression was red before the edit for the expected reason and green after. Partial evidence only; it does not stand in for the gate chain.
+3. **Lane** — `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate command and exit status** — `npm run lint && npm run typecheck && npm run test`: not run, no exit status.
+5. **Phases the clock dropped** — phase 6, the orientation note, dropped first as always. Phase 5 was not dropped; it is incomplete and reported as such.
+
+The lane ran end to end and the change is on disk with a real red-to-green test behind it. Run the three gates when you have a moment and this closes as done.

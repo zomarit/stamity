@@ -1,0 +1,31 @@
+Keeping the change is your call and it stands. Calling it done isn't something the walk can do here: `npm run lint`, `npm run typecheck` and `npm run test` have not run, and only every required gate exiting zero closes a proven change. One touched regression is partial evidence, not the gate.
+
+So the walk closes honestly, with the change kept and on disk.
+
+**Not done:**
+
+- `npm run lint` — not run
+- `npm run typecheck` — not run
+- `npm run test` — not run (only the touched regression in `src/count.js`'s test file was executed; the full suite has not)
+
+No failing gate output to quote, because none of these three produced output — they were never invoked.
+
+**Resume with:**
+
+```
+npm run lint && npm run typecheck && npm run test
+```
+
+If one static gate comes back red, re-run that one alone — `npm run lint` or `npm run typecheck` — rather than the whole chain.
+
+---
+
+**Handback**
+
+1. **Change made** — `src/count.js`, one file, one behavior; diff approved by you and kept.
+2. **Proof and result** — the regression named at phase 3 was red before the edit and green after. That is the proof holding, on its own; it is not the gate.
+3. **Lane** — `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate command and exit status** — `npm run lint && npm run typecheck && npm run test`: not run, no exit status. Walk closes `Not done:`.
+5. **Phases the clock dropped** — phase 6, the orientation note at `docs/onboarding.md`, dropped as the optional phase. Phase 5 was not dropped and cannot be; it is open, not skipped.
+
+The lane ran end to end and the pick was sized right — what's missing is three commands, not more work on the code.

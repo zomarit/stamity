@@ -1,0 +1,16 @@
+Grading the one transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`none` — st-onboard is the only skill that answers"
+  B2 pass — searched for "st-onboard applies", "select st-onboard", "st-onboard is triggered"; none
+     — st-onboard is named only to rule it out, not as triggered
+  B3 pass — "the question belongs to the main flow."
+advisory:
+  A1 pass — "which this eight-month-old repo with dozens of green-gated changes explicitly is not"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+No criterion was undecidable and no grouping looked misplaced, so there are no authoring defects to report. The only gap in the input is that the case block carried no case id, which is why the header line says so instead of naming one.

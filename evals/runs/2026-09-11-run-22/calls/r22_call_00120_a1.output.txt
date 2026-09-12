@@ -1,0 +1,7 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted:** Resolve the roster's pull-in surfaces against the change set and the tree. The change set is `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` — a schema migration and a CLI flag. Neither matches a roster path nor produces rendered output.
+
+**Blocks it:** No component root and no markup to run against. The tree has no `components/`, `pages/` or `views/` directory, no `.tsx`, `.jsx`, `.vue` or `.svelte` file, no `.css` or `.scss` file, and no design-token source to compare against. Both roster surfaces — components-and-views, and the style layer — are absent, so there is nothing to read and no criterion that could be applied or recorded not-applicable against an actual surface. The brief asks for the pass anyway; the pass has no input, and a clean report here would describe a surface this run never found.
+
+**Smallest unblocking input:** a rendered surface in scope — a component root, markup, or a style/token source that this change touches. Absent that, the design-quality pass stays unrun on this change.

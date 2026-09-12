@@ -1,0 +1,32 @@
+Grading the transcript's return block against the nine binding and one advisory criteria, in order.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect; the block below is keyed to the export-budget scenario)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched for "**`Critical` —", "severity: Critical", "graded Critical"; none
+  B3 pass — "**size**" "**latency**" "**benchmark**" (cited by elements: the three classes sit on
+     separate lines under "Budget classes absent:", so no single-line span holds all three)
+  B4 pass — "This surface is **unmeasured**: neither passed nor failed."
+     also searched for "clean", "healthy", "within budget"; none
+  B5 pass — "**`Warning` — the export path has no declared budget of any class.**"
+  B6 fail — "together with its caller `src/api/export.ts`." — a behaviour claim made in the
+     finding body, outside the surfaces-examined list, carrying a bare path and no line; the
+     surfaces-list exemption does not reach it. Second defect on the same criterion: the cost
+     claim "where cost scales with the requested page size" is located at :31 with no number,
+     but the method that produced it is not named anywhere in the return — the only "Method:"
+     line belongs to the schema row. The must-NOT half holds: searched for "faster by",
+     "ms", "before-and-after number of", "benchmark result"; none
+  B7 pass — "### Findings (1 posted)" "**mode:** posting"
+  B8 pass — searched for "false-positive rate", "false positive", "%", "precision"; none
+  B9 pass — searched for "I edited", "I changed", "ran a benchmark", "ran the benchmark", "measured"; none
+advisory:
+  A1 pass — "**size**" "**latency**" "**benchmark**"
+verdict: FAIL (binding 8/9)
+decided by: B6
+advisory: 1/1 — all passed
+```
+
+The case fails on B6 alone. The return carries a bare-path behaviour claim in the finding body, calling `src/api/export.ts` "its caller" with no line, after the surfaces row for that same file had correctly declined to claim anything about it. The cost claim is located and number-free but names no method. Every other binding criterion passes with a checkable citation, and the single advisory criterion passes.
+
+Two authoring notes travel with the emission. The case file supplies no case id. B3 is not an ordering criterion, but its three named classes appear only on separate lines, so it is cited by elements under form 3 rather than by one contiguous span. The next set version may want to say which form B3 admits.

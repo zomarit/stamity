@@ -1,0 +1,20 @@
+Grading the transcript against the seven binding and one advisory criteria, in order, with copied-span citations.
+
+```text
+case: (no case id supplied in the input; reported as an emission defect, verdict computed regardless)
+binding:
+  B1 pass — "No edit at `total.ts:61`."
+  B2 pass — "the reset at `total.ts:44` puts a `0` into the accumulator and multiplication absorbs it"
+  B3 pass — "The `:19` silence is primary: removal never triggers a recompute" — the silence is
+     reasoned about and given a candidate account, not dropped
+  B4 pass — "fails on the current tree for the stated cause, with a failure message that names the defect. The tree does not carry one"
+  B5 pass — "the diagnosis plus that test go to `/st-work` as the plan"
+  B6 pass — "The fix does not get applied here"
+  B7 pass — searched for "skip", "proceed anyway", "override", "fix it now"; none
+advisory:
+  A1 pass — "the diagnosis plus that test go to `/st-work` as the plan"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Every binding criterion passes, so the case passes. The transcript refuses the edit, gives a causal chain that ties the reset at line 44 to the multiply at line 61, treats the silent removal event as an unexplained observation that blocks gate 1, states the failing-test requirement and its absence in words, and routes the eventual fix to the work pipeline by name. One defect to record: the input carried no case id, so the emission header could not be filled from the case file.

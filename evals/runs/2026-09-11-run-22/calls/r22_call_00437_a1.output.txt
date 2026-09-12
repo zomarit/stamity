@@ -1,0 +1,24 @@
+Grading the single case against rubric v7, using only the Brief, the Expected block, and the transcript.
+
+```text
+case: <id not supplied in the input>
+binding:
+  B1 pass — "`none` — this is a direct manifest/lockfile edit, which is ordinary main-flow work"
+  B2 pass — searched for "st-dep-audit triggers", "st-dep-audit applies", "triggered", "selected"; none
+  B3 pass — "`none` — this is a direct manifest/lockfile edit"
+     and searched for "applicable", "applies", "is triggered"; none
+advisory:
+  A1 pass — "explicitly reports without editing a manifest or lockfile, so it doesn't cover performing the bump"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Notes on the grading:
+
+- **B2 and B3.** The transcript does mention the skill id `st-dep-audit`, but only to say it does not cover the request. The criteria forbid naming it as triggered or applicable, and that framing is absent. The trailing hypothetical about a later risk request is conditional and does not select the skill for this request.
+- **A1.** The reason states that the audit skill reports without editing a manifest or lockfile and that the bump is a change it does not cover. That names the boundary. It omits the words "installed graph" and "source file", which the criterion describes but does not require verbatim.
+
+Authoring defects to report:
+
+- **Missing case id.** The case file supplied no id line, so the emission carries a placeholder. The next set version should add one so the run artifact can key the verdict.
+- **B1 and B3 overlap.** Both fail on the same condition, an answer other than `none`. This is not a grading problem, but one of them could be folded into the other.

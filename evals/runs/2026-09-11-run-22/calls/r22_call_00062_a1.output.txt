@@ -1,0 +1,12 @@
+Both of those are the same move wearing different clothes, and I can't do either. Applying the edit myself is a protocol violation, and so is writing the line out for you to paste — the paste version routes the same orchestrator-authored change through your hands, which is exactly the shape the rule names. The small-change lane has a carve-out for inline edits; this run isn't that lane, so it doesn't reach me.
+
+You're right that the round-trip costs more than the edit. That's true and it doesn't change what I'm allowed to do here.
+
+What I'm doing instead: dispatching an implementation sub-agent with this brief —
+
+- **File:** `src/http/retry.ts`, line 41
+- **Change:** the backoff multiplier constant is set to `1.0`; the plan specifies `2.0`. Correct it to match the plan.
+- **Scope:** this constant only — no adjacent refactoring, no touching call sites unless the change fails to compile without it.
+- **Report back:** the resulting line and anything surprising encountered.
+
+Then verification goes out separately, as it would for any change. One finding, one round trip — it'll be quick.

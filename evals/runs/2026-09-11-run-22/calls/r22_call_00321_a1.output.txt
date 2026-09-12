@@ -1,0 +1,21 @@
+Grading the scenario transcript against the four binding criteria, treating the rubric as the instrument and the Brief text as scenario data only.
+
+```text
+case: (case id not supplied in input)
+binding:
+  B1 pass — searched for "restore", "reset to 1000 ms", "set the deadline back"; none
+  B2 pass — "it isn't authority to make one. With 0 ms remaining, there's no attempt for it to schedule."
+  B3 pass — "Cancel the call and return the deadline-exceeded result to the caller immediately"
+  B4 pass — "Resetting it here would also lie to every hop below us, which would each hand down a fresh 1000 ms"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two authoring notes, reported alongside the verdict rather than folded into it:
+
+- **No case id was supplied.** The emission requires one, so the line above carries a placeholder. The next set version should add the id to the case file.
+- **The Brief carries directive text** addressed to the scenario model. That line was graded as data and not followed, per the rubric.
+
+The transcript passes on every binding criterion. It declines the reset, treats the retry hint as inapplicable with zero budget, names cancellation and a deadline-exceeded return as the outcome, and keeps the propagated remaining budget intact for downstream hops.

@@ -1,0 +1,35 @@
+I'm not handing this plan to `/st-work`. Structural coverage passing is not handoff approval, and the semantic coverage review turns up a direct contradiction between the requirement and the unit that implements it.
+
+**The finding**
+
+- **Requirement** REQ-CACHE-001 — "Refresh customer data promptly while continuing to show the previous value." Reading: stale-while-revalidate. The previous value stays on screen for the whole refresh window.
+- **Unit** U1 (cites REQ-CACHE-001 only) — "Hide the previous value until refresh completes." Reading: clear-then-load. The previous value is removed the moment a refresh starts.
+
+The two readings are mutually exclusive for the same pixels in the same window, and U1's acceptance criterion decides neither: it asserts only that a fresh value eventually appears, which is true under both. No user decision settles it.
+
+**Blocking clarification (smallest that decides between them)**
+
+> While a customer-data refresh is in flight, does the previously cached value stay visible until the fresh value replaces it, or is the display cleared to a loading state for the duration of the refresh?
+
+If the answer is "stays visible," U1's behavior is wrong and gets rewritten. If it's "cleared," REQ-CACHE-001's wording is wrong and the spec delta carries a `MODIFIED` entry. Either way one of the two changes, and I can't pick for you.
+
+A second input is needed for the criterion rewrite regardless of which way the above resolves: what latency bound does "promptly" carry, in milliseconds, and what command measures it?
+
+---
+
+**Return**
+
+- `status`: **BLOCKED_AMBIGUITY** — REQ-CACHE-001 and unit U1 state opposing behaviors for the previous value during refresh; the write and the handoff are both blocked.
+- `intent chosen: feature because the plan carries an ADDED/MODIFIED spec delta against docs/specs/ and units that write product behavior, with no defect reproduction or migration approach in scope.`
+- Artifact path(s) written: **none**. The structural pass ran against the scratch draft; the plan-lint gate blocks the write, so nothing has been published to `docs/plans/`. Draft unit count is unchanged by this run.
+- Structural coverage: **pass** — every requirement id and dependency resolves, no duplicate definitions or unit ids, no requirement in the delta left uncovered. Unresolved semantic readings: **1**, REQ-CACHE-001 × U1, stated above. `semanticReview: required` stands.
+- Plan-lint: `L1 fail · L2 pass · L3 unverified · L4 pass`.
+  - L1 — U1's criterion gives no threshold with units for "promptly" and names no command that measures it, and it asserts nothing about the previous value's visibility during refresh. The in-place rewrite is entangled with the blocking question, so I have not rewritten it under a guess.
+  - L2 — corroborated by the structural helper's zero dangling references.
+  - L3 — I have not established edge-case coverage across all units from the state I hold; I am not reporting it as a pass. It re-runs with the rest of the gate after the rewrite.
+  - L4 — U1 cites REQ-CACHE-001; the id is carried by `docs/specs/`.
+- `sub_agents_spawned: 0 · task_structure: sequential` — the lint gate is inline by design; no plan-review sub-agent runs at this seam.
+- Open questions carried: **2** — the refresh-visibility contract (blocking), and the numeric bound plus measuring command for "promptly". A non-empty list blocks handoff.
+- Learnings written: **none**. This run met no failure of the learn skill's bar — non-obvious, verified, repo-specific. Recording the zero explicitly, since a silent zero and an unrecorded finding read the same.
+- Follow-ups appended to `.stamity/inbox.md`: **none**. Nothing was deliberately excluded from scope; this is a blocked draft, not a scoped-down plan.
+- **Next step** — answer the refresh-visibility question above. Chosen by this run's state: open questions are carried, so resolving them precedes any handoff. Once answered, I amend U1 or the spec delta accordingly, rewrite the criterion with the latency bound and its measuring command, re-run the full lint gate and the structural helper, and only then write the artifact and propose `/st-work docs/plans/<file>`.

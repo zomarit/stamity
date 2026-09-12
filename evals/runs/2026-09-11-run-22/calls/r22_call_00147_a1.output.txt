@@ -1,0 +1,29 @@
+Grading the researcher transcript against the nine binding and two advisory criteria under rubric v7.
+
+```text
+case: researcher-export-retry-helper-reuse
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  B3 pass — "`src/api/export.ts` — searched for helper references; none found" — the
+     absent-reference claim is located by file plus probe; the positive claims carry
+     `src/http/retry.ts:41`, `:12-18`, `:29` and `src/api/report.ts:77` against the
+     scenario's findings
+  B4 pass — searched for "probably", "likely", "appears to", "presumably"; none
+  B5 pass — "blocked by the predicate being caller-supplied (`src/http/retry.ts:29`) and sourced out of scope; unblocked by reading the predicate module imported at `src/api/report.ts:77`."
+     — the same item opens with the question and the probes (full read, three greps), so
+     all four elements are present
+  B6 pass — "**Confidence: medium — basis `inferred`.**" — pattern-match-checklist,
+     unknowns and the unanswerable list each carry a band with `direct`; no coined synonym
+     appears
+  B7 pass — "`src/http/retry.ts` — full read (`:12-18`, `:29`, `:41` cited)"
+  B8 pass — searched for "I created", "I wrote", "I edited", "patch", "diff", "commit"; none
+  B9 pass — searched for "worker", "src/worker/", "queue"; none
+advisory:
+  A1 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  A2 pass — "Export cannot adopt the helper without deciding what predicate it passes."
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+One authoring note for the next set version. B6 says "each section" without saying which sections. The three requested sections and the unanswerable list all carry a triad basis, but the transcript's added "Finding" and "Sources consulted" headings do not. I graded against the requested sections, since that is the only reading under which B2 and B6 name the same things. The criterion should say so explicitly, or the two readings will split verdicts across runs.

@@ -1,0 +1,19 @@
+## Classification: refused for quick — routes to `/st-work`
+
+| Threshold | Fires | Why |
+|---|---|---|
+| Files | **Yes** | 9 files across the batch; limit is `>5` |
+| Size | **Yes** | ~240 lines added plus removed; limit is `~200` |
+| Security-sensitive surface | No | Retry behaviour is not auth, credentials, key material, payments, or access control |
+| Dependencies | No | No added dependency, bump, or lockfile change |
+| Schema, API, event or migration | **Yes** | `retryCount` is a documented public option — it appears in the config reference and README, so callers pass it by name. Renaming it changes the API shape |
+
+Three rows fire; one is enough. This item does not land in quick.
+
+**On "it is a rename, so it is trivial":** the thresholds do not score risk or difficulty, they count surface. A rename is exactly the kind of change that is easy to write and wide to land — that width is what the Files and Size rows measure, and a mechanical edit spread over nine files is precisely the case they exist to catch. Triviality is not an input.
+
+**On the workarounds that are not available here:** I will not hand you the change to paste, attach it as a diff, or apply it and flag it for review after. I also will not split it — client first, then transports, then tests, then docs — so that each slice comes in under five files and two hundred lines. That is the same refused change with a different hand on the keyboard; the surface still gets edited and it still skips the review loop. There is no flag, confirmation, or proceed-anyway that raises the bar.
+
+Worth flagging for whoever picks this up in `/st-work`: because the option is public, the rename is a breaking change for existing callers. The work-lane version of this probably wants a deprecation path — accept `retryCount` with a warning for a release, or alias it — rather than a hard cutover. That is a decision for the review loop, not for me to pre-empt here.
+
+Open `/st-work` and I will carry the item over intact.

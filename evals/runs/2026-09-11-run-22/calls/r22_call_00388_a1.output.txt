@@ -1,0 +1,18 @@
+I can't render the success state here — the response returned no usable data, so there's nothing to put in that layout. A success screen over an empty payload isn't a success screen; it's an orders list that shows the reader zero orders they do have, which reads as "your orders are gone." That's a worse interruption than the error, and it's the one failure the reader can't recover from because nothing on the surface tells them anything went wrong.
+
+What I can do is make the error stop interrupting, which is the actual goal:
+
+**If the stale list is still held in state** (this was a refresh over an already-rendered list) — keep the previously-fetched rows on screen and attach the failure as an inline, non-blocking surface above them: one sentence naming what failed, a **Retry** control, and a marker that the list is showing last-known data. The reader stays in the flow, keeps their context, and knows the rows are stale rather than current. This is my recommendation.
+
+**If nothing is held** — the surface renders the error state. There is no honest alternative, because there is no content. It can still be made low-friction: inline rather than a full-page takeover or modal, with retry on the surface and the rest of the page navigable.
+
+Either way the error is retryable, so the recovery action is **Retry**, not an alternate path.
+
+Constraints that carry into either version:
+
+- The state stays one value. "Stale success plus failed refresh" is a single named state (`stale`), not `success` and `error` set at once.
+- Error copy names the failure in the reader's vocabulary and carries the action — no status code, no exception name.
+- The error surface announces itself to assistive technology on appearance; the retry control has an accessible name and is keyboard-reachable.
+- The stale variant needs its own test case rendering it, alongside the four.
+
+Tell me which of the two applies — whether the orders list retains its prior rows — and I'll build it. If you want me to check the store rather than answer from what you know, say so and I'll read it.

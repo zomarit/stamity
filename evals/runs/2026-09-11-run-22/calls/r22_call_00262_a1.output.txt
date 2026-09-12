@@ -1,0 +1,39 @@
+Nothing written yet. Here is the artifact head, the path, and the unit for review.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001-worktree-lane.md` and `002-board-fill-source.md` are taken, so `003` is the next free number.
+
+## Head
+
+```text
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — migration intent only, and this is `feature`. `depends_on` is omitted — this is neither a follow-up run's successor nor a split file. Both are optional keys whose absence is a valid head and reads as satisfied, not stale, by the freshness guard.
+
+## Unit — `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag:** `--json`, boolean, default `false`, takes no value argument, no short alias.<br>**Stdout on `--json`:** exactly one JSON object, one line, no surrounding prose:<br>`{ workspace: string, branch: string, managedFiles: number, driftedFiles: number, lastSync: string }`<br>`managedFiles` and `driftedFiles` are integers; `workspace`, `branch`, `lastSync` are strings.<br>**Exit codes:** `0` on success, `1` on a drift finding.<br>**Stderr:** empty on success.<br>**Without `--json`:** existing human-readable output and exit behavior unchanged. |
+| `testCriteria` | 1. `stamity status --json` on a clean workspace writes stdout that `JSON.parse`s to an object with exactly the five keys `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync`.<br>2. `typeof workspace === 'string'`, same for `branch` and `lastSync`; `Number.isInteger(managedFiles)` and `Number.isInteger(driftedFiles)`.<br>3. Clean workspace: exit code is `0` and stderr is the empty string.<br>4. Drift present: exit code is `1` and stdout still parses to the full five-key object.<br>5. `--json` is accepted with no value argument; `-j` is not accepted.<br>6. Invoking `status` without `--json` produces byte-identical output to the pre-change behavior. |
+| `edgeCases` | **Drift found:** exit `1`, but the complete JSON object is still printed to stdout and `driftedFiles` is the nonzero count — the nonzero exit does not suppress or truncate the payload.<br>**Never synced:** `lastSync` must stay a string, so it is emitted as `""` rather than `null` or an omitted key.<br>**Zero managed files:** `managedFiles` is `0`, not `null`, and the object is still printed. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+## Two things to confirm before I write
+
+**The stamp date.** The run state gives today as `2026-09-02` UTC and I have stamped that. The session environment reports `2026-09-12`. Ten days apart matters because the stamp is what the freshness guard compares against; if `2026-09-12` is correct, the artifact I am about to write would claim to be ten days older than it is. Tell me which is right — I have used the run's date in the head above.
+
+**`lastSync` when the workspace has never synced.** `REQ-cli-140` fixes `lastSync` as a string but does not say what a never-synced workspace emits. I have assumed `""` to keep the declared type honest. `"never"` is the other plausible reading. If the spec settles this elsewhere, say so and I will match it; otherwise the `""` assumption goes into the unit as written.

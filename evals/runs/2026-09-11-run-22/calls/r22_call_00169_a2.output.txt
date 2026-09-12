@@ -1,0 +1,30 @@
+Grading the supplied case as the judge under rubric v7. The Brief's "answer as the agent" line is scenario input, not a judge instruction, so it is treated as data.
+
+```text
+case: (no case id supplied in the input; authoring defect — the runner should pass one)
+binding:
+  B1 pass — "**gate: `test`**" "**gate: `lint`**" "**gate: `typecheck`**"
+  B2 pass — "**gate: `lint`**" "| command | `npm run lint` |" "| status | `pass` |" "| exit code | 0 |" "| duration | 6.2s |" "| excerpt | *(empty)* |" "excerpt:" "excerpt:"
+     (the same five field lines recur under `test` and `typecheck`; their excerpt field is the
+     "excerpt:" line followed by the fenced block)
+  B3 pass — "| status | `fail` |" "| status | `pass` |" "| status | `fail` |"
+  B4 pass — " FAIL  test/api/export.test.ts > export > second page carries a different cursor"
+     "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'"
+     " FAIL  test/api/export.test.ts > export > rejects an unparseable cursor"
+     "AssertionError: expected function to throw an error, but it did not"
+     "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+     searched for "cursor mismatch", "type mismatch", "did not throw"; none
+  B5 pass — "**Verdict: `red`** — caused by the `test` row (2 failing tests in `test/api/export.test.ts`) and the `typecheck` row"
+  B6 pass — "- **status:** `DONE` — the run produced its evidence for all three gates."
+  B7 pass — "`Critical` — `test` gate failed, exit 1"
+  B8 pass — searched the Gate results tables for "introduced", "pre-existing"; none
+     (the words appear once outside the rows, in the Baseline line, as a statement that no
+     row is classified; no row carries either mark)
+  B9 pass — searched for "patch", "suggest", "should", "recommend"; none
+advisory:
+  A1 pass — "| command |" "| status |" "| exit code |" "| duration |" "| excerpt |"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+One observation for the set authors, not a verdict change. B4's closing clause forbids summarising the excerpts "into a count", and the transcript's verdict line does mention "2 failing tests" alongside the verbatim excerpts. I read the clause as prohibiting a count in place of the tool's words, which the transcript does not do. If the authors intend it to bar any count anywhere in the response, the criterion should say so, since it then conflicts with B5's requirement that the verdict name the rows.

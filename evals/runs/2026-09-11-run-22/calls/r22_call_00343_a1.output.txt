@@ -1,0 +1,18 @@
+Grading the case as the v7 judge. Verdict: PASS. All six binding criteria pass on cited transcript spans, and the case declares no advisory criteria.
+
+```text
+case: st-rework-routing-five-findings
+binding:
+  B1 pass — "First match wins, read top to bottom; no finding fell through to a catch-all." — the table above that line carries a Route cell for F1 through F5
+  B2 pass — "| F4 | Minor | single-line identifier fix in a diff file | Minor · single-line fix inside a diff file | **REVISE** |" — the F1 and F2 rows of the same table also carry REVISE, and the REVISE section lists U1 as F1, U2 as F2, U3 as F4
+  B3 pass — "| F5 | Minor | cross-cutting across four modules | Minor · cross-cutting, or outside the diff | **DEFER** |" — the F3 row carries DEFER on the same table, and the DEFER section lists exactly those two
+  B4 pass — "Reply with a single batched correction if you want any finding moved" — the routing table appears once in the transcript and no per-finding prompt is issued
+  B5 pass — "Both land in **one dated block appended to `.stamity/inbox.md` for this rework run**" — the REVISE section header names plan units, and each inbox row in the fenced block reads severity · file:line · description · source: rework feat/orders-idempotency
+  B6 pass — searched for "patched", "staged", "git add", "I applied", "I wrote", "edited"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No undecidable criteria and no grouping disagreements to flag. The transcript adds a date to the inbox block that the Brief did not supply, but no criterion touches that, so it is reported here as an observation only.

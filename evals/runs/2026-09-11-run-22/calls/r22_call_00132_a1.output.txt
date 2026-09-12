@@ -1,0 +1,39 @@
+**status:** `DONE`
+
+## Unit
+Run r12, unit 4 — cursor pagination on the user-export endpoint.
+
+## Files changed
+- `src/api/export.ts` — endpoint now accepts a cursor and returns `nextCursor` in the response body.
+- `test/api/export.test.ts` — two tests added, one modified.
+
+## Tests added or modified
+- **Added** (2, both written red first and watched fail for the expected reason before the implementation landed):
+  - pagination request with a cursor returns the next page — justification: proves the cursor is consumed, not ignored.
+  - response carries `nextCursor` for a truncated result set — justification: proves the new field is populated and terminates correctly; this is the observable behaviour change.
+- **Modified** (1):
+  - `exports every row` — the behaviour it asserted moved under pagination. Updated in place with an inline comment naming the move, rather than deleted, so the old guarantee stays traceable.
+
+## Gate results
+
+- `npm run test` — **pass** (exit 0, whole suite green).
+- `npm run typecheck` — **pass** (exit 0).
+- `npm run lint` — **fail** (exit 1). Verbatim output:
+  ```
+  src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars
+  ✖ 1 problem (1 error, 0 warnings)
+  ```
+  **Pre-existing.** The brief's baseline lint result from before this unit carries the identical error at the identical location. `src/reporting/csv.ts` is not in this unit's file list, so it is left alone — fixing it here would widen the diff past the unit's surface. No lint or type failure was introduced by this unit.
+
+Targeted pass only (`test`, `lint`, `typecheck` over the unit's surface); `${STAMITY:VERIFY_GATE_ALL}` was **not run** — the blast radius is confined to the two files in the list. These are local checks; the flow's independent test-runner produces the gate evidence of record.
+
+## Spec delta (proposal — for spec-author to apply after confirmation)
+
+- `MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the user-export endpoint response gains a `nextCursor` field. It carries the cursor for the following page when the result set is truncated, and is absent/null on the final page. The endpoint accepts a cursor parameter selecting the page to return.
+
+No `ADDED` or `REMOVED` bullets.
+
+## Deferrals
+
+- **Warning** — duplicated cursor encoder. `src/api/export.ts` and `src/api/report.ts` each carry their own copy. Unifying them is outside this unit's interfaces, so both copies stand; this unit's change was made to the `export.ts` copy only, which widens the drift between the two. Worth a unit of its own.
+- **Minor** — the pre-existing `no-unused-vars` error in `src/reporting/csv.ts:88` keeps the repository lint gate red for anyone running it untargeted. Not this unit's to fix.

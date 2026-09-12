@@ -1,0 +1,17 @@
+Grading the transcript against the five binding criteria under rubric v7.
+
+```text
+case: (id not supplied in the input handed to the judge — see note below)
+binding:
+  B1 pass — "REQ-CACHE-001 and unit U1 state opposing behaviors for the previous value during refresh"
+  B2 pass — "I'm not handing this plan to `/st-work`."
+  B3 pass — "stay visible until the fresh value replaces it, or is the display cleared to a loading state"
+  B4 pass — "Structural coverage passing is not handoff approval, and the semantic coverage review turns up a direct contradiction"
+  B5 pass — "`status`: **BLOCKED_AMBIGUITY**"
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+**Note on the case id.** The material I was given carried the Brief, the Expected block, and the transcript, but no case id line. The verdict is unaffected. The run artifact should supply the id when this block is filed.
+
+**Observation, not a grade.** The transcript asks a second question about a latency bound for "promptly" alongside the blocking visibility question. B3 as written is satisfied by the visibility question alone, so the second question did not affect the verdict. If the authors intended B3 to require exactly one question in total, the criterion text should say so in the next set version.

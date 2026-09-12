@@ -1,0 +1,21 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered by", "selected for", "matches", "newly triggered"; none
+  B3 pass — "`none`" — the answer line carries no skill id; the reason's mention of st-qa
+     describes the running command's own step-2 invocation by name, which the criterion
+     exempts
+advisory:
+  A1 fail — searched for "/st-work", "st-work"; none — the reason attributes ownership
+     to "the command already running" and "a work run's QA checkpoint" but never names
+     the /st-work command
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+The case passes. All three binding criteria are met: the scenario model answered `none`, named no skill on the answer line, and never described st-qa as triggered by or selected for the request. The one advisory criterion fails on a literal reading, since the reason identifies the checkpoint owner only by reference and not by the name `/st-work`.
+
+Two notes for the run artifact. The input carried no case id, so the emission's case line is a placeholder. A1 is a completeness measure and its fail is recorded only. Under the SET-v4 review obligation, a second consecutive fail would require a reviewed decision to promote or delete it.

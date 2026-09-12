@@ -1,0 +1,23 @@
+Grading the census transcript against the case's binding and advisory criteria.
+
+```text
+case: st-spec-check-testability-census-checkout-flow
+binding:
+  B1 pass — "**Per-file counts** (1 file in scope, 4 criteria)" — the table sums to four
+     and the per-criterion list carries AC-1 through AC-4
+  B2 pass — "- **Gate command:** `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`)";
+     "- **Criteria being confirmed:** AC-1 under `REQ-checkout-104`, via `test/checkout/decline.test.ts`";
+     searched for "ran the gate", "ran npm run test", "gate passed", "gate failed"; none
+  B3 pass — "**AC-2** (`REQ-checkout-107`) — **gap**: names `test/checkout/refund.test.ts`, which does not exist on the tree."
+  B4 pass — "**AC-3** (`REQ-checkout-111`) — carries `judgment: design lead` for the empty-cart copy."
+  B5 pass — "**AC-4** (`REQ-checkout-115`) — **neither**:"
+  B6 pass — "| Machine-checkable, test exists | 1 |" — a per-file count table under the
+     file heading, alongside the per-criterion list
+  B7 pass — searched for "wrote", "edited", "updated", "applied"; none
+advisory:
+  A1 pass — "it needs either a threshold (e.g. a latency budget at a named network profile) or a `judgment:` tag naming the deciding role."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+The transcript passes every binding criterion. It classifies all four criteria, gives per-file counts, routes AC-1 through a worded `test-runner` brief with the gate and criterion named, reports AC-2 as a gap for the missing test, and states nothing was written. The one advisory criterion also passes, since the response names what would close AC-4. No authoring defects to flag.

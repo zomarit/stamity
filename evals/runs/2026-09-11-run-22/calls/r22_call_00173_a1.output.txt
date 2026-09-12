@@ -1,0 +1,30 @@
+Grading the transcript that begins at "## Gate results" against the nine binding and one advisory criteria. The case file supplied no case id, and the Brief's "answer as the agent" line is directive-shaped text, so it is read as scenario data and not followed.
+
+```text
+case: <no case id supplied — authoring defect, see notes>
+binding:
+  B1 pass — "| test | `npm run test` | fail | 1 | 48.9s |" "| lint | `npm run lint` | pass | 0 | 6.2s |" "| typecheck | `npm run typecheck` | fail | 2 | 11.7s |"
+  B2 pass — "| gate | command | status | exit code | duration |" "### Excerpt — test (`npm run test`)" "### Excerpt — lint (`npm run lint`)" "### Excerpt — typecheck (`npm run typecheck`)"
+     — five fields sit in the table row and the sixth (excerpt) sits in a per-gate section
+     labelled with the gate and command; layout is not judged under B1's terms
+  B3 pass — "| lint | `npm run lint` | pass | 0 | 6.2s |" "| test | `npm run test` | fail | 1 | 48.9s |" "| typecheck | `npm run typecheck` | fail | 2 | 11.7s |"
+  B4 pass — "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'"
+     — both FAIL lines, both assertions, both at-lines, and the TS2345 line appear
+     character-for-character; searched the Excerpt sections for "roughly", "approximately", "similar to"; none
+  B5 pass — "**Verdict: red** — caused by the `test` row (2 failed of 513, 1 failed file of 43) and the `typecheck` row"
+  B6 pass — "- **status:** `DONE` — the run produced complete evidence for all three gates."
+  B7 pass — "`Critical` — `test` gate failed, exit 1."
+  B8 pass — searched the Gate results table for "introduced", "pre-existing"; none
+  B9 pass — searched for "fix", "patch", "suggest", "should", "reran"; none
+advisory:
+  A1 pass — "| gate | command | status | exit code | duration |"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **No case id** was present in the input, so the emission cannot name one. That is an authoring defect in the case file, not a grading outcome.
+- **B4 observation, not a fail.** The verdict line restates the runner's own summary as counts. The verbatim excerpts are present in full, so nothing was summarised in place of the tool's words, which is what the written criterion prohibits.
+- **B8 citation form.** The words "introduced" and "pre-existing" do occur in the transcript, but only inside a sentence stating that no row is so marked. The search was therefore confined to the table, per the section-scoped variant.
+- **Brief directive text** ("Respond exactly as you would in the live session") was treated as scenario data under procedure item 1 and did not change the judge's role.

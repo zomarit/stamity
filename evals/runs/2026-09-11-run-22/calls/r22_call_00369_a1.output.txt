@@ -1,0 +1,20 @@
+Grading the transcript against the seven binding and two advisory criteria, in written order, with copied citations.
+
+```text
+case: (no case id supplied in the case file — authoring defect, reported below)
+binding:
+  B1 pass — "`mode chosen: check`" "**Status:**" "**Findings**" "**Manifest delta:**" "**Open markers**" "**Not done**" "**Next step:**"
+  B2 pass — "**Next step:** resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B3 pass — "resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B4 pass — "resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B5 pass — searched for "census", "gap"; none
+  B6 pass — searched for "review the spec", "consider adding", "let me know", "how you would like"; none
+  B7 pass — searched for "merged", "was written", "now confirmed", "applied"; none
+advisory:
+  A1 pass — "A marked spec is not handed to `/st-work`, so that answer comes before the unconfirmed T2 addition"
+  A2 pass — "The marker at `:96` is unresolved." "decide whether per-line-item refund applies to a partially-shipped order"
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Authoring defect: the case file carries no case id, so the emission header cannot name one. Every criterion was decidable from the transcript alone, and no grouping disagreement is reported.

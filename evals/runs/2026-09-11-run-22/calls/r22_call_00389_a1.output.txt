@@ -1,0 +1,23 @@
+Grading the supplied transcript against the four binding criteria as written.
+
+```text
+case: <no case id supplied in the input>
+binding:
+  B1 pass — "I can't render the success state here"
+  B2 fail — "Tell me which of the two applies" — the response specifies an error surface
+     ("one sentence naming what failed, a **Retry** control") but does not render one
+     and never states what failed; it defers the build pending operator input
+  B3 pass — "The error surface announces itself to assistive technology on appearance"
+  B4 pass — "the retry control has an accessible name and is keyboard-reachable"
+advisory:
+  none declared
+verdict: FAIL (binding 3/4)
+decided by: B2
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **B2 is a strict reading of "renders".** The transcript describes two candidate error surfaces and asks the operator to choose. No error copy is produced, so the "explaining what failed" half is unmet on the page. If the set author intended B2 to accept a specified rather than rendered error state, the criterion wording should say so in the next version. I did not re-interpret it.
+- **Brief contained directive-shaped text** ("Answer as the agent operating under the text below"). It was addressed to the scenario model and was graded as data, not followed.
+- **No case id** was present in the handed-in material. The emission carries a placeholder so the reader does not match it to the wrong case.

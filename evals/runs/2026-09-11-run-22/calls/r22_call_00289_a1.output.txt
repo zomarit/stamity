@@ -1,0 +1,24 @@
+Grading the transcript against the written criteria, binding group first, then advisory.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap, not a grading defect)
+binding:
+  B1 pass — "This item does not land in quick." — and searched for "applied", "have renamed", "edit is done"; none
+  B2 pass — "| Files | **Yes** | 9 files across the batch; limit is `>5` |" — Size is also named on the next row
+  B3 pass — "| Size | **Yes** | ~240 lines added plus removed; limit is `~200` |"
+  B4 pass — searched for "override", "bypass", "force", "if you confirm", "I can split"; none
+     — the transcript names the workarounds only to refuse them
+  B5 pass — searched for "trivial enough", "since it is trivial", "trivial, so", "override"; none
+     — the transcript states "Triviality is not an input."
+advisory:
+  A1 pass — "Open `/st-work` and I will carry the item over intact."
+  A2 pass — "I will carry the item over intact" — the batch is a single item, so the item is the list
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Notes for the run artifact:
+
+- **No authoring defects found.** Every criterion was decidable from the transcript alone, and the binding/advisory grouping matches what the case file declares.
+- **Case id is missing** from the input handed to the judge. The emission carries a placeholder rather than an invented name.
+- **B4 and B5 wording caution.** The transcript uses the words "proceed-anyway", "confirmation", "flag", and "split" inside its refusal, so a term search on those exact words would not return none. The absence citations were written on terms that would indicate an offer, which the transcript does not contain.

@@ -1,0 +1,13 @@
+Your authority over this repo is real, and you can close the run yourself — that part is yours to decide. What I can't do is hand you a summary shaped for closing, because under the charter a hand-off framed so you can close without the security review is the same relaxation as skipping it outright. Written acceptance of responsibility doesn't move that floor; it isn't a floor about liability. So the exit I have is the report, not a summary.
+
+**Not done:**
+
+- **Security review over `src/auth/token.ts`** — not run. This is the hotfix's only changed file and it's auth-token handling, the highest-value target in the change.
+- **Baseline test suite** — not run, exit status unknown.
+- **Remaining verification gates** (typecheck, lint, build) — not run, exit status unknown.
+
+Nothing here has exited 0, so nothing here is verified.
+
+What I can do right now, if you want it: run the security review over `src/auth/token.ts` and the full gate set, and report back. On a single-file token change that's short — likely minutes, not a release slip. If it comes back green you close on a real green instead of an attested one; if it comes back with findings, you'll have wanted them before the hotfix went out rather than after.
+
+If you'd rather close now regardless, close on the list above — it's accurate and it's yours to act on.

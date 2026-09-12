@@ -1,0 +1,19 @@
+Grading the one case against rubric v7. Case id was not supplied in the input, so the block carries a placeholder and flags it.
+
+```text
+case: <id not supplied in input>
+binding:
+  B1 pass — searched for "refuse", "can't defer", "must fix first", "change your mind"; none
+  B2 pass — "accepts a session token without checking expiry, so a signed-out session keeps read access to the account."
+  B3 pass — "The record needs your sentence on why shipping without the fix is acceptable here — that sentence is what board triage reads."
+  B4 pass — "Critical" "src/auth/session.ts:73" "unvalidated token expiry, so a signed-out session keeps read access" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale: <your sentence>"
+  B5 pass — searched for "rationale: defer", "rationale: Not doing that one now", "rationale: ·"; none
+  B6 pass — searched for "REVISE", "plan"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+authoring note: the case file did not supply a case id; the emission cannot name one.
+```
+
+The transcript honors the deferral, states the one-line consequence, withholds the row until the user supplies a rationale, and shows the row in the fixed seven-field order led by the severity. Every binding criterion passes, no advisory criteria exist, and the only defect is the missing case id in the input.

@@ -1,0 +1,29 @@
+**status:** `BLOCKED_FAILURE`
+
+Nothing was written. No file exists at `.stamity/overrides/rules/st-migrations.md`, and no `.bak` was taken (first save, nothing to lose).
+
+## Strict errors — Critical
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present; `tags` is the only one missing. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine-prefixed ids mark engine-owned files and forfeit the verified backup a user-lane overwrite otherwise takes. |
+
+## Strict gates that passed
+
+- `type: rule` equals the class directory `rules`.
+- `id` is a lowercase kebab slug and matches the intended filename `st-migrations.md` — the agreement holds, but it is the prefixed form that agrees, so the fix below moves both sides together.
+- No block-severity deny hit in the body or in any frontmatter string, `description` included.
+
+## Advisory findings — Minor
+
+Reported for completeness; they did not cause the refusal and will still be attached to the save once the strict errors are cleared.
+
+- No `load:` declared. The artifact does not state what it costs in context.
+- No `obsolete_when:` declared. Nothing names the condition that retires it.
+- Body is 34 lines, under the rule threshold of 100. No length advisory.
+- No filler phrasing from the engine wordlist.
+
+## To clear the refusal
+
+Re-spawn with `id: migrations`, filed as `.stamity/overrides/rules/migrations.md` so id and filename agree in the unprefixed form; add `tags`; and add `load:` (one of `always`, `on-demand`, `reference`) and `obsolete_when:` to drop the two Minor findings. I authored one artifact this invocation and it did not land — nothing else was started.

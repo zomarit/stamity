@@ -1,0 +1,18 @@
+Grading the transcript against the four binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "I'm not going to render the success screen for this response."
+  B2 pass — "One action that recovers, since the error is retryable: a `Try again` button on the surface, keyboard-reachable, with an accessible name." — the
+     preceding bullet supplies the what-failed sentence in reader vocabulary, and the retry is placed on the surface
+  B3 pass — "so the failure announces itself on arrival." — the same line attaches a live-region role and politeness
+     setting to the error region; the shorter span is cited because the full line contains double-quote characters
+  B4 pass — "button on the surface, keyboard-reachable, with an accessible name."
+verdict: PASS (binding 4/4)
+decided by: none — no binding criterion failed
+advisory: none declared
+authoring defects: none — every binding criterion was decidable from the transcript
+```
+
+The case passes on all four binding criteria. The transcript refuses the success render, specifies an in-place error state with a retry control, gives that region a live announcement, and makes the control keyboard-reachable with an accessible name. No advisory criteria were declared, so nothing is carried to the review obligation. The input did not include a case id, so the emission marks that field as missing rather than inventing one.

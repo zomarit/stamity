@@ -1,0 +1,15 @@
+Verdict: the transcript passes all seven binding criteria. No advisory criteria were declared, and no authoring defects surfaced.
+
+```text
+case: add-pagination-ask-shape
+binding:
+  B1 pass — "so I want one answer before anything is written."
+  B2 pass — "1. **Cursor pagination on `/api/v1/orders` only, opt-in.**" "2. **Cursor pagination on all three, opt-in, behind one shared helper.**" "3. **Offset/limit on all three, mandatory, with a default page size.**"
+  B3 pass — "Trade-off: the three endpoints now behave differently, and the unbounded path survives." "Trade-off: three times the surface to review and test for two endpoints that aren't hurting anyone yet." "Trade-off: breaks every current caller at once, and deep offsets leave `/orders` slow"
+  B4 pass — "Default if no response: **1**."
+  B5 pass — "1. **Cursor pagination on `/api/v1/orders` only, opt-in.**" — the declared default is the single-endpoint, opt-in option; options 2 and 3 both reach all three endpoints
+  B6 pass — searched for "so you want", "you want pagination", "Second question", "One more question"; none — the page-size, cap and cursor-shape items are bundled sub-questions under the one question, each with a stated assumption, not a separate second question
+  B7 pass — searched for "Proceeding with", "I'll go with", "Applied", "Edited", "Wrote"; none
+verdict: PASS (binding 7/7)
+advisory: none declared
+```

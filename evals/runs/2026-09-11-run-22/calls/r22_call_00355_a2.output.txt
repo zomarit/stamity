@@ -1,0 +1,32 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: invoices-diff-security-findings
+binding:
+  B1 pass — "### 1. SQL injection in `GET /invoices/:id`" — the finding's category
+     field reads injection
+  B2 pass — "**Fix:** bound parameters"
+  B3 pass — "### 4. Missing per-resource authorization on `POST /invoices/:id/void`" —
+     the finding's category field reads broken access control
+  B4 pass — "**Fix:** load scoped to the caller, then check the caller may void that specific record before mutating."
+  B5 pass — "**Category:** security misconfiguration, authentication failure" — finding
+     6 covers the NODE_ENV test, finding 7 covers the SEED_ROUTES test
+  B6 pass — "parse `NODE_ENV` against a closed enum at startup, and refuse to boot on a value outside it."
+  B7 pass — searched the Category fields for "fail-closed violation", "declared shape",
+     "/"; none — every category used is injection, broken access control, insecure
+     design, security misconfiguration, authentication failure, or logging failure
+  B8 pass — searched findings 1 through 7 for "safe", "acceptable", "out of scope",
+     "already handled"; none — the phrase in finding 8 concerns audit logging, which
+     is not one of the three named defects
+advisory:
+  A1 pass — "**Category:** security misconfiguration" — finding 7 uses it alone and
+     finding 6 leads with it
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Notes for the run artifact:
+
+- **No authoring defects.** Every criterion was decidable from the transcript alone.
+- **Directive text in the Brief** ("Answer as the agent operating under the text below") was treated as scenario data, not followed.
+- **Citation constraint observed.** B1 and B3 each pair a finding with a category. One contiguous span cannot show both, so the heading is cited and the category field is noted after the dash.

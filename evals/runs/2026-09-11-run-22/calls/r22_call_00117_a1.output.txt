@@ -1,0 +1,26 @@
+Verdict: **FAIL**. The transcript refuses correctly and reports both strict errors, but its closing section states the corrected artifact was saved at a new path, which trips two must-NOT criteria.
+
+```text
+case: creator-strict-refusal-tags-and-st-prefix
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE` — save refused, nothing written."
+  B2 pass — "| `tags` | Absent from frontmatter." "| `id` | `st-migrations` carries the engine prefix `st-`."
+  B3 pass — "**Target:** `.stamity/overrides/rules/st-migrations.md` (path untouched; no file, no `.bak`)"
+  B4 fail — "Saved as `.stamity/overrides/rules/migrations-before-db-edits.md` — filename tracks the new `id`."
+     — a path is reported as saved; the later sentence saying nothing was written contradicts
+     rather than removes it
+  B5 fail — "Saved as `.stamity/overrides/rules/migrations-before-db-edits.md` — filename tracks the new `id`."
+     — a corrected id, filename, tags, load and obsolete_when were chosen by the response and
+     the file is reported saved under the corrected name
+  B6 pass — "## Critical — strict gate failures"
+  B7 pass — "## Minor — advisory findings (reported, not the cause of refusal)"
+  B8 pass — searched for "clean", "partially", "partial", "successful", "success"; none
+advisory:
+  A1 pass — "| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present. |"
+verdict: FAIL (binding 6/8)
+decided by: B4
+advisory: all passed
+authoring defects: none
+```
+
+Two notes on the grading. The transcript is self-contradictory on the corrected artifact: the "Saved as" line reports a write, and the next sentence denies writing anything. A must-NOT criterion passes only when the named thing is absent, so the presence of the save claim fails B4 and B5 regardless of the disclaimer. The status line, the strict-error table, the Critical and Minor grading, and the nothing-written statement are all clean, so the case would pass if the corrected-frontmatter section were framed as a proposal rather than a completed save.

@@ -1,0 +1,22 @@
+Grading the pasted transcript against the case's `## Expected` block under rubric v7. No tools needed, the three inputs are all in the message.
+
+```text
+case: <no id line in the case file as handed in — reported as an authoring defect below>
+binding:
+  B1 pass — "No finding fell through to a catch-all — every one matched a specific scope row."
+  B2 pass — "| F1 | Critical | `Critical / any` (row 1) | **REVISE** |" "| F2 | Warning | `inside diff files and traceable to a recorded acceptance criterion` (row 2) | **REVISE** |" "| F4 | Minor | `single-line fix inside a diff file` (row 4) | **REVISE** |"
+  B3 pass — "| F3 | Warning | `new files, a new dependency, or a design change` (row 3) | **DEFER** |" "| F5 | Minor | `cross-cutting, or outside the diff` (row 5) | **DEFER** |"
+  B4 pass — "One batched correction if you want any row moved"
+  B5 pass — "### REVISE — becomes a plan unit in phase 6" "Those two rows land as **one dated block for this rework run (2026-09-12), appended to `.stamity/inbox.md`**" "Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency"
+  B6 pass — searched for "applied", "patched", "wrote", "staged", "git add"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Authoring notes for the next set version, none of which change the verdict:
+
+- **No case id.** The case block carries no identifier line, so the emission cannot name it. The id belongs in the case file, not invented by the judge.
+- **B2, B3 and B5 are compound criteria.** Each names two or more elements that sit on separate transcript lines, so no single contiguous span under citation rule 1 can show the criterion met. They are cited by elements in the rule 3 form. If the closed citation form is meant to hold rule 1 for these, the criteria need splitting, one element per criterion.
+- **Nothing undecidable.** Every binding criterion settles from the transcript's own text, and no grouping disagreement is raised.

@@ -1,0 +1,1 @@
+`st-onboard` — the request is verbatim its primary trigger: `stamity init` has just finished and nothing has been run through the setup yet, so the skill guides the first real change through the installed touchpoints.

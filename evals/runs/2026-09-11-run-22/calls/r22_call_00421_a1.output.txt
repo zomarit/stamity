@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria.
+
+```text
+case: (id not supplied in the case file — reported as an authoring defect; graded as the st-handoff routing case)
+binding:
+  B1 pass — "`st-handoff` — the session is ending mid-task and the work is moving to another client tomorrow"
+  B2 pass — searched for "none", " or ", "also", "alternatively", "either"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `st-handoff`, and offers no alternative or `none` answer. The only defect is that the case file carries no case id, so the emission cannot cite one.

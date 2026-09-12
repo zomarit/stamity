@@ -1,0 +1,82 @@
+The record can't be written yet. `r7/review/2` reads `open`, and per the close rule a row still `open` when the record is written is a gate failure, not a note — so I closed it first rather than emitting a proof block over it.
+
+It's Minor, so the severity floor governs: the run closes its own Minor rows, normally as deferred with the rationale that put them below the floor. Nothing about this row's disposition is materially ambiguous, so the ambiguity floor did not fire and I did not stop to ask. Closing it `deferred` means it also earns an inbox row.
+
+**Ledger rewrite** — `r7/review/2`, in place, id preserved:
+
+```
+r7/review/2 | Minor | stamity-reviewer | src/api/users.ts:120 | deferred |
+rationale: below the severity floor — non-blocking, did not reach the QA
+checkpoint; carried to the inbox rather than fixed in this run
+```
+
+**Inbox append** — `.stamity/inbox.md`, dated block for this run, now two rows:
+
+```
+## 2026-09-12 — /st-work r7
+
+Warning | src/api/users.ts:41 | no rate limiting on the users endpoint | source: /st-work | Ref: .stamity/ledger/r7.md#r7/security/1
+Minor | src/api/users.ts:120 | reviewer finding deferred below the severity floor | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2
+```
+
+---
+
+```
+PROOF BLOCK — /st-work r7 — 2026-09-12
+
+GATES
+  npm run lint       pass    (no failing excerpt)
+  npm run typecheck  pass    (no failing excerpt)
+  npm test           pass    (no failing excerpt)
+
+REVIEW VERDICTS
+  round 1  stamity-reviewer  changes requested  confidence: high
+  round 2  stamity-reviewer  approved           confidence: high
+
+DECISIONS TRACE
+  gate lint       -> pass, proceed
+  gate typecheck  -> pass, proceed
+  gate strict     -> pass, proceed
+  r7/review/1     -> fixed at src/api/users.ts:88 after round 1
+  r7/security/1   -> deferred; rationale "rate limiting is tracked separately
+                     in the inbox"
+  r7/review/2     -> closed at exit as deferred under the severity floor;
+                     Minor, never reached the QA checkpoint; disposition not
+                     itself ambiguous, so no ASK
+  ASK outcomes    -> none; the ambiguity floor did not fire this run
+  exit invariant  -> satisfied: 0 rows open, 1 fixed, 2 deferred with
+                     rationale, 0 rejected
+
+ARTIFACTS TOUCHED
+  src/api/users.ts            stamity-implementer
+  test/api/users.test.ts      stamity-implementer
+  .stamity/ledger/r7.md       /st-work (close)
+  .stamity/inbox.md           /st-work (close)
+
+PER-ACTION ATTRIBUTION
+  stamity-implementer  tool not recorded  edited src/api/users.ts        -> applied
+  stamity-implementer  tool not recorded  edited test/api/users.test.ts  -> applied
+  stamity-reviewer     tool not recorded  review round 1                 -> changes requested
+  stamity-reviewer     tool not recorded  review round 2                 -> approved
+  stamity-security     tool not recorded  scan src/api/users.ts:41       -> Warning raised
+  /st-work             Bash               npm run lint                   -> pass
+  /st-work             Bash               npm run typecheck              -> pass
+  /st-work             Bash               npm test                       -> pass
+  /st-work             Edit               rewrite r7/review/2 -> deferred -> closed
+  /st-work             Edit               append 2 inbox rows            -> written
+
+NEXT STEP
+  Triage the two inbox rows this run appended under 2026-09-12 /st-work r7:
+  the Warning at src/api/users.ts:41 (rate limiting on the users endpoint) and
+  the Minor at src/api/users.ts:120. Neither has a lane, trigger or owner yet;
+  until one lands, neither ledger row can gain its `retired` field. No
+  acceptance criteria were left uncovered by this run.
+
+  Not done:
+    src/api/users.ts:41   -> inbox row, 2026-09-12 /st-work r7 (unscheduled)
+    src/api/users.ts:120  -> inbox row, 2026-09-12 /st-work r7 (unscheduled)
+```
+
+Two notes on what I filled in. The `Ref:` fields use `.stamity/ledger/r7.md` as this run's ledger path; if the ledger lives elsewhere, both inbox rows need that segment corrected or later runs won't resolve the backrefs. And tool-level detail for the sub-agents wasn't in the run state handed to me, so those lines read `tool not recorded` rather than a guess — the attribution requirement is met at agent and outcome granularity only.
+
+If you know something about the `users.ts:120` finding that makes deferring it materially worse than fixing it, say so and I'll reopen the row; that's the one case where a Minor should have reached you instead of being closed by the run.

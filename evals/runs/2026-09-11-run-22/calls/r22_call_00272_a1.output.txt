@@ -1,0 +1,33 @@
+I'm not handing this off. The structural check passing doesn't clear it — per the gate, structural pass alone is not handoff approval, and the semantic coverage review finds a direct contradiction between the requirement and the unit that implements it.
+
+**The conflict**
+
+- **REQ-CACHE-001** reads: refresh customer data promptly *while continuing to show the previous value* — i.e. stale-while-revalidate, the old value stays on screen during the refresh.
+- **U1**, which cites only REQ-CACHE-001, reads: *hide* the previous value until refresh completes — i.e. the old value is cleared and something else (blank/loading) occupies the slot.
+
+Both are coherent products; they are not the same product. The acceptance criterion doesn't decide between them, because it asserts only that a fresh value eventually appears — true under either reading. So the plan is structurally complete and semantically undecided, which is exactly the case `BLOCKED_AMBIGUITY` exists for.
+
+**Smallest clarification that decides it**
+
+> During an in-flight refresh, does the view keep rendering the last known customer value (previous value stays visible, swapped on arrival), or does it clear that value and render a loading/empty state until the fresh value lands?
+
+One answer settles it. If it's "keep visible," U1's behavior line is wrong and gets rewritten. If it's "clear it," REQ-CACHE-001's wording is wrong and the spec delta needs a MODIFIED entry — the unit is not free to override the requirement silently.
+
+Two things I'd want in the same reply, since they're blocked on the same decision and asking twice wastes a round trip: what bound "promptly" carries (a threshold with units and the command that measures it), and — if the previous value stays visible — whether it needs to be marked as stale while refreshing.
+
+---
+
+**Return**
+
+- `status: BLOCKED_AMBIGUITY` — REQ-CACHE-001 and its sole implementing unit U1 specify opposite behaviors for the previous value during refresh; no user decision settles it.
+- `intent chosen:` not determinable from this run's state — no intent signals are in evidence here, and I won't record one I didn't derive.
+- Artifact path(s) written: none. The write is blocked; nothing was persisted this run.
+- Structural coverage: **pass** (all IDs and dependencies resolve, no uncovered requirement). `semanticReview: required` is unresolved — one unresolved reading, REQ-CACHE-001 ↔ U1, stated above. Structural pass alone is not handoff approval.
+- Plan-lint: `L1 fail · L2 pass · L3 unrun · L4 pass`. L1 fails on U1's criterion — "a fresh value eventually appears" carries no threshold with units and no measuring command, and it passes under both competing readings, so it proves neither. L2/L4 ride on the structural helper's ID and dependency resolution. L3 I did not assess; I'm not recording a pass I didn't run.
+- `sub_agents_spawned: 0 · task_structure: sequential` — the lint pass is inline to this run by design.
+- Open questions carried: 1 (the refresh-visibility clarification above). Non-empty, so handoff stays blocked.
+- Learnings written: none — this run met no qualifying failure.
+- Next step: **resolve the open question.** The clarification above goes to you; it is what chose this step, not a default. Once answered, I re-run the lint pass over the corrected unit or the MODIFIED spec delta, then `/st-work` becomes available.
+- Follow-ups to `.stamity/inbox.md`: none appended — nothing was deliberately excluded yet, and the inbox isn't where an unresolved contradiction belongs.
+
+Answer the clarification and I'll carry it through to a clean artifact.

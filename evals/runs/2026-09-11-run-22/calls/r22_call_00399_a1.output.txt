@@ -1,0 +1,25 @@
+Grading the transcript against the eight binding criteria and emitting the v7 block.
+
+```text
+case: <id not supplied with the input>
+binding:
+  B1 pass — "**Gate results**" "**Review verdicts**" "**Decisions trace**" "**Artifacts touched**" "**Per-action attribution**" "**Recommended next step**"
+  B2 pass — "| lint | `npm run lint` | pass | — |"
+  B3 pass — "| 1 | `stamity-reviewer` | changes requested | high |" "| 2 | `stamity-reviewer` | approved | high |"
+  B4 pass — "closed by this run against the exit invariant as `deferred`, rationale: below the severity floor, not fixed this run."
+  B5 pass — "`r7/security/1` — Warning, above the floor; deferred with rationale"
+  B6 pass — "pick up the two inbox rows this run appended:"
+  B7 pass — searched for "State `open`", "r7/review/2 fixed", "Minor rows omitted"; none
+  B8 pass — "- Minor — src/api/users.ts:120 — Minor row raised by stamity-reviewer in review" "recorded in the ledger row. source: /st-work" "Ref: .stamity/ledger/r7.md#r7/review/2" "pick up the two inbox rows this run appended:"
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Notes for the run artifact, not scored:
+
+- **Case id missing.** The input carried no case id, so the block's first line is a placeholder. The runner should supply it.
+- **B5 citation.** The rationale text sits inside straight double quotes in the transcript, so the cited span stops before it. The rationale follows on the same line.
+- **B8 wrap.** The inbox row's description is soft-wrapped across three physical lines inside the fenced block. It is one bullet with one description, so it was graded as one row.
+- **Unverifiable detail.** The inbox row says the Minor finding was raised in review round 1. The scenario never states which round raised it. No criterion turns on this.
+
+Verdict is PASS with all eight binding criteria met and no advisory criteria declared.

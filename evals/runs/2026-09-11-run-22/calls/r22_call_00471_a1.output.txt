@@ -1,0 +1,14 @@
+Grading the one case against the two binding criteria; the case file declares no advisory criteria and no case id.
+
+```text
+case: (no id declared in the case file — authoring defect, verdict still computed)
+binding:
+  B1 pass — "`st-verify`"
+  B2 pass — "`st-verify` — the request names a single quality axis (security)"; searched for "none", "st-qa", "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the transcript alone. The response names one skill, st-verify, and offers no alternative and no `none`. One defect to report for the next set version: the case file carries no case id, so the emission's first line cannot be filled from the input.

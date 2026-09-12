@@ -1,0 +1,21 @@
+**status:** `BLOCKED_AMBIGUITY`
+
+**severity:** Critical — no artifact written.
+
+## Competing readings
+
+The brief names no mode and its three clauses land in three different modes. One mode per invocation, so none of them can be served here.
+
+1. **brownfield** — "Write up the new export-scheduling behaviour." The trigger is landed and running at `src/schedule/cron.ts:18-44`, so this is not greenfield: the behaviour exists in the tree and every claim about it would have to carry `file:line` evidence. Writes spec files under `docs/specs/` for the touched surface.
+2. **architect** — "Record why we chose a cron trigger over a queue consumer." A decision already visible in the code, with no ADR recording it against eleven existing records in `docs/adr/`. Writes the twelfth ADR, the decision recorded as observed, with the alternatives the code rules out.
+3. **docs** — "produce the page an operator reads to configure it." User-facing documentation for shipped, verifiable behaviour; the docs tree exists and carries no export-schedule page.
+
+## Why not blended
+
+Each reading carries a different evidence rule. The spec needs `file:line` on every behavioural claim; the ADR needs the alternatives the current code forecloses; the operator page needs every documented affordance to exist at a cited path in the current tree. Writing them in one pass means one artifact inherits another's evidence rule — a brownfield spec on architect reasoning, or an operator page asserting configuration surface the spec merely proposed. That is the failure the mode contract exists to prevent, so the brief returns rather than blending.
+
+## What unblocks
+
+Three invocations, each with its mode named. The dependency order is brownfield spec → architect ADR → docs, since the ADR cites the specified surface and the operator page documents only what the spec has pinned to the tree. The spawning flow runs the ambiguity gate and re-spawns.
+
+No files written, no manifest rows added or changed, no requirement ids allocated.

@@ -1,0 +1,27 @@
+Grading the transcript against the seven binding and two advisory criteria, in order, with copied citations.
+
+```text
+case: <id not supplied in the input>
+binding:
+  B1 pass — "**Next step: unblock `staging-env`** — either grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+     One step under a single heading; the ladder's rows are not offered as a menu.
+  B2 pass — "either grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  B3 pass — searched the Recommended next step section for "contradiction", "low-confidence", "confidence"; none
+  B4 pass — "**switch to `/st-work` to apply**"
+  B5 pass — searched for "applied", "patch", "diff", "staged", "drafted", "ready to paste"; none
+  B6 pass — "One facet is Blocked, and that outranks the correction as the step to take next"
+     The unblocker is the step; `/st-work` is named separately as the destination for the correction.
+  B7 pass — searched for "let me know", "review the findings", "open a ticket", "anything else"; none
+advisory:
+  A1 fail — "**Next step: unblock `staging-env`**" — the step is labelled with the whole facet,
+     the exact phrase the criterion excludes; the manifest and read access follow only as the means.
+  A2 fail — searched for "framing brief", "carry", "carried", "carries", "brief"; none
+verdict: PASS (binding 7/7)
+advisory: 0/2 — A1, A2 failed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input did not carry a case id, so the emission uses a placeholder. That is an input gap, not a grading decision.
+- **No authoring defects.** Every criterion was decidable from the transcript alone. No re-grouping was needed.
+- **A1 is a judgement call.** The response does name both unblocking inputs, but it headlines the step with the facet name. I graded the written text, which excludes that phrasing. If the authors intended "names the inputs anywhere in the step" to suffice, the criterion should say so in the next set version.

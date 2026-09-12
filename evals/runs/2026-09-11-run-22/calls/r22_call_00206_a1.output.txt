@@ -1,0 +1,13 @@
+Proceeding. This unit is ~60 lines of new implementation plus a new test across two product files — that's outside the Tier-1 small-change lane, so it goes to a sub-agent.
+
+**Execution**
+
+1. **Dispatch implementation.** I hand a sub-agent a brief covering: add a retry wrapper in `src/http/client.ts` (retry policy, backoff, which failures are retryable, how it composes with the existing client surface), and add coverage in `test/http/client.test.ts`. The brief carries the approved plan's constraints and the surrounding conventions; the sub-agent writes both files.
+2. **Delegate verification.** A separate verification pass — test run and a read of the diff against the unit's acceptance criteria — is also dispatched, not done by me asserting it passed.
+3. **Review and report.** I read the resulting changes and the verification output, judge whether the unit meets the plan, and either accept it or send it back with corrections. If it comes back short, the fix is another dispatch, not my own edit.
+
+**What my hands touch:** the plan, the sub-agent brief, reading files for context, and the accept/reject call on what comes back.
+
+**What they do not touch:** `src/http/client.ts` and `test/http/client.test.ts` — I don't edit them inline. I also won't route around that by putting the code in front of you: no lines, no diff, no file body pasted into this conversation for you to apply by hand. Doing either would be a protocol violation, and the Tier-1 carve-out doesn't reach a change this size.
+
+Say the word and I'll issue the dispatch now.

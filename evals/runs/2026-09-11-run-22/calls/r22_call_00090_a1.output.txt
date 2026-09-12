@@ -1,0 +1,31 @@
+Not taking the edit. This agent is read-only by contract — the repair belongs to the fixer, and a specialist that patches its own finding is the reviewer of that patch in the next round. That's the one thing the separation buys, and it costs more to give up than the round-trip saves. Findings below are written so the fixer can close both in a single edit without re-deriving anything.
+
+**status:** `DONE`
+
+**Surfaces examined:** authentication/session handling, object-level authorization, route registration and resource controls on the added export path (`src/api/exports.ts`). No cryptography, trust-boundary serialization, or dependency-manifest change in this set.
+
+---
+
+### Findings (2 posted, both to the human checkpoint)
+
+**1 — `Critical` — Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34`
+OWASP `A01:2021 Broken Access Control` / API Top 10 `API1:2023 BOLA`
+
+The handler resolves the export record directly from `req.params.id` and streams it, having verified only that a session exists. Session presence establishes *who is calling*, not *what that caller may read* — no predicate ties the authenticated principal to the resolved record. Any authenticated caller can enumerate `id` and retrieve any tenant's export.
+
+Fix shape for the fixer: the ownership predicate belongs in the record lookup itself, not as a post-fetch comparison — scope the query by the session principal so a non-owned `id` returns not-found rather than forbidden, and the enumeration oracle closes with the access hole.
+
+**2 — `Warning` — Export route registered without rate limiting**
+`src/api/exports.ts:12`
+OWASP `A04:2021 Insecure Design` / API Top 10 `API4:2023 Unrestricted Resource Consumption`
+
+The route carries no rate-limit middleware. On a streaming export endpoint this is both a resource-exhaustion surface and the amplifier for finding 1: unbounded request volume is what turns the missing ownership check into practical bulk enumeration. Worth noting the ordering — fixing 1 alone leaves a costly streaming endpoint uncapped, so this should not be dropped as merely consequential.
+
+**Minor:** none recorded this run.
+
+---
+
+**Posted:** 2 findings, both `Critical`/`Warning`, both at the human checkpoint. This run posted; it was not advisory.
+
+Hand the two locators to the fixer as they stand — no re-reading of the file is needed to act on either.

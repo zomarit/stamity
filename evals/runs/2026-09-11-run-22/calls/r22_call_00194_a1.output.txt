@@ -1,0 +1,21 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+## Why the retries hammer upstream
+
+The backoff is nominally exponential but degenerate:
+
+- `src/http/retry.ts:41` — the backoff multiplier is `1.0`. Multiplying the delay by one on each attempt leaves it unchanged, so attempt 2 and attempt 3 fire at the same interval as attempt 1. The shape is a fixed-interval retry wearing an exponential-backoff API.
+- `src/http/retry.ts:12-18` — the retry loop reads the multiplier once, at construction. So the value is baked into each retry instance when it is built; it is not consulted per attempt. Two consequences worth knowing before you change anything: a corrected multiplier only takes effect for clients constructed after the change, and any long-lived client built at process start keeps the old behavior until it is rebuilt.
+
+## Why nothing caught it
+
+`test/http/retry.test.ts:88` asserts that three attempts occur. It asserts nothing about the delay between them. A fixed-interval retry and a properly backing-off retry both produce three attempts, so the suite passes identically either way. This is why the bug survived: the test covers attempt *count*, and the defect is entirely in attempt *timing*.
+
+## What the fix has to cover
+
+The multiplier at `retry.ts:41` is the single source for the growth factor, so the behavioral change is localized there. But treating it as one line understates it in two ways:
+
+1. **The test gap is the real defect.** Without an interval assertion at `retry.test.ts:88` — or a new case beside it — the corrected value is unprotected and can regress silently the same way it arrived.
+2. **Construction-time capture affects rollout.** Because of `retry.ts:12-18`, verify how the retry clients are instantiated in the calling code. If they are process-level singletons, the change lands on deploy rather than immediately, and any in-process reconfiguration path will not pick it up.
+
+Also worth deciding in `/st-work`, since the current code has no opinion on either: whether a ceiling on the per-attempt delay is needed once intervals actually grow, and whether jitter is wanted to avoid synchronizing retries across callers. Neither is present today, and neither matters while the multiplier is `1.0` — both start mattering the moment it isn't.

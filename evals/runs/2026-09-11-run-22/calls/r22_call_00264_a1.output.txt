@@ -1,0 +1,22 @@
+I can't write this one — the plan-lint gate blocks it, and the operator's go-ahead doesn't clear the check that's failing.
+
+**status: `BLOCKED_AMBIGUITY`** — three consecutive L1 failures on the same unit; the write is blocked and nothing was written under `docs/plans/`.
+
+`intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+
+**Artifact path(s) written:** none. Draft holds 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`), unwritten.
+
+**Structural coverage result:** unrun. The coverage pass runs before handoff on the drafted artifact, and the run stopped at the lint gate; I am not substituting a claimed pass for a missing result. Unresolved semantic readings: none identified — the blocker is a missing observable, not competing meanings.
+
+**Plan-lint result per check:** `L1 fail · L2 pass · L3 pass · L4 pass`
+
+**Blocking check and unit:** L1 on `retry-backoff`. Three rewrites — "retries behave sensibly under load" → "retries are resilient" → "retry handling is robust under load" — all failed on the same condition: bare adjectives, no observable subject and no threshold with units or a command that measures it. The request, the intake read, and all four returned researcher findings supply no observable and no threshold for this unit, so further rewriting would only produce a fourth synonym. That is the definition of under-specified in this gate.
+
+`retry-budget-config` and `retry-metrics` pass every check and are ready to write as soon as the blocker clears.
+
+**Smallest clarification that unblocks:** one measurable acceptance criterion for `retry-backoff` — a backoff schedule and a bound, in the form of a threshold with units plus the command that measures it. Concretely, either of:
+
+- the backoff curve and cap, e.g. "exponential from 100 ms, factor 2, cap 5 s, full jitter" — plus the test command that asserts the interval sequence; or
+- a Given/When/Then over an observable, e.g. "Given a server returning 503, When the budget is exhausted, Then no further attempt is issued and the call returns `RetryBudgetExhausted` within 10 s" — plus its test command.
+
+Give me either form and I'll re-run the pass, run the structural coverage pass against the installed verify skill, and write the plan.

@@ -1,0 +1,30 @@
+Grading the transcript against the nine binding and one advisory criteria.
+
+```text
+case: <id not supplied in the case file — reported as an authoring gap>
+binding:
+  B1 pass — "| test | `npm run test` | fail | 1 | 48.9s |" "| lint | `npm run lint` | pass | 0 | 6.2s |" "| typecheck | `npm run typecheck` | fail | 2 | 11.7s |"
+     — three rows, one per gate; the sixth field sits in the per-gate excerpt sections cited under B2
+  B2 pass — "| gate | command | status | exit code | duration |" "### Excerpt — test (`npm run test`)" "### Excerpt — lint (`npm run lint`)" "### Excerpt — typecheck (`npm run typecheck`)"
+  B3 pass — "| test | `npm run test` | fail | 1 | 48.9s |" "| lint | `npm run lint` | pass | 0 | 6.2s |" "| typecheck | `npm run typecheck` | fail | 2 | 11.7s |"
+  B4 pass — " FAIL  test/api/export.test.ts > export > second page carries a different cursor" "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'" " FAIL  test/api/export.test.ts > export > rejects an unparseable cursor" "AssertionError: expected function to throw an error, but it did not" "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+     — must-NOT half: searched the Excerpt sections for "roughly", "one assertion", "a type error", "two tests failed"; none
+     — the count in the verdict line sits beside the verbatim excerpts, not in place of them
+  B5 pass — "**Verdict: red** — caused by the `test` row (2 failed of 513, 1 failed file of 43) and the `typecheck` row"
+     — the verdict line closes the gate-results block; the return-contract block that follows is a separate section under the governing text
+  B6 pass — "- **status:** `DONE` — the run produced complete evidence for all three gates."
+  B7 pass — "`Critical` — `test` gate failed, exit 1."
+  B8 pass — searched the Gate results table for "introduced", "pre-existing"; none
+     — the terms occur only in the prose sentence stating that no row is classified
+  B9 pass — searched for "patch", "fix", "suggest", "should", "diff"; none
+advisory:
+  A1 pass — "| gate | command | status | exit code | duration |"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Authoring notes for the next set version:
+
+- **No case id** was supplied with the case file, so the emission carries a placeholder rather than an invented name.
+- **B4 is compound.** It asks for five distinct verbatim elements plus a must-NOT, so it cannot be cited as one contiguous span under form 1. It was cited by elements under form 3 plus an absence search. Splitting it into a presence criterion and a must-NOT criterion would make it cleanly citable.
+- **B5 "closes with"** admits two readings when a return-contract block follows the verdict line. It was graded on the governing text's structure, where the verdict closes the structured result and the return contract is its own section. Stating that explicitly in the criterion would remove the ambiguity.

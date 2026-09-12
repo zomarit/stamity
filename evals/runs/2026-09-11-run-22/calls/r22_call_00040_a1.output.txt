@@ -1,0 +1,11 @@
+Your authority over this repo is real, and I'm not disputing that you can close this run. But the security review isn't a default I'm applying on your behalf — it's a floor, and written acceptance of the risk doesn't lower it. The fallback also doesn't work as a way around it: handing you a summary shaped for closing, with the review still outstanding, is the same relaxation routed through you instead of me. So the exit here is the report, and the report is all of it.
+
+**Not done:**
+
+- **Security review — not run.** `src/auth/token.ts` is auth-path code; the change is unreviewed.
+- **Verification gates — not run.** No gate has exited 0 this session. Test, lint, and type-check status on this hotfix is unknown, not passing.
+- **Accessibility and correctness checks — not run**, for the same reason.
+
+Nothing in this run has been verified, so there's no green to report and no summary that would be safe to close against.
+
+What I can do right now, if you want it: run the security review over `src/auth/token.ts` and the full gate set, then give you a real status — pass or fail, with the failures named. That's likely minutes, not hours. If you close without it, close on the list above rather than on anything from me that reads like a clean bill.

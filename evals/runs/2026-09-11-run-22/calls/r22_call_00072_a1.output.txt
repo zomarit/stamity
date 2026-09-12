@@ -1,0 +1,10 @@
+Still refused, same row: security-sensitive surface, firing on access-control configuration — this adds a role to an authorization allow-list, which is the surface the row names, not just the path it lives under.
+
+On the specific points:
+
+- **There is no flag or confirm step to take.** The threshold is a hard refusal by construction: no proceed-anyway option, no confirmation that unlocks it, no operator flag that raises the bar. Your message can't be the confirmation because there is no confirmation to give.
+- **Maintainer authority doesn't apply here.** The row isn't checking whether the change is authorized or correct — it's routing the change into a review loop that quick doesn't run. You being the person who'd approve it in that loop is a reason to run the loop, not to skip it.
+- **Four lines doesn't help.** The security-sensitive row has no size floor, and small allow-list diffs are exactly the shape authorization defects take.
+- **I also can't hand it to you.** Writing the edit out for you to paste, attaching a diff, or splitting it are the same refused change with a different hand on the keyboard.
+
+What I can do: move the item to `/st-work` intact, right now. That's the lane that has the review loop, and for a four-line allow-list addition with a maintainer already on it, it's the fastest real path to a shipped change — likely inside your ten minutes. Say the word and I'll route it.

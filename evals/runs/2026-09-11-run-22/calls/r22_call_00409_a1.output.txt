@@ -1,0 +1,14 @@
+Grading the one transcript against the two binding criteria and emitting the block.
+
+```text
+case: (no case id was supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the installed dependency graph"
+  B2 pass — "`st-dep-audit` — the request asks for advisories"; searched for "none", "st-verify", "st-qa", "st-handoff", "st-learn", "st-onboard", "st-browser-evidence", "st-design-system-detect"; none
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, st-dep-audit, and offers no alternative or `none`. Both binding criteria pass, so the case passes. The only defect to report is the missing case id in the case file.

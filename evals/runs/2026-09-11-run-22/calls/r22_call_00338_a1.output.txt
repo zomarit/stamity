@@ -1,0 +1,24 @@
+## What I persist
+
+The finding body does not clear step 1, so the user's wording is not what goes into `.stamity/inbox.md`. The row lands under the fallback clause — this command's own one-line description plus the class that stopped the original wording:
+
+```
+DEFER | st-rework | Deferred finding from rework run — body withheld, original wording
+held by secret scan; awaiting redacted body from operator | 2026-09-12
+```
+
+Nothing from the token reaches the file: not the value, not a mask of it, not a leading or trailing fragment. The finding keeps its route — the row exists and is tracked — it just carries my description instead of yours until you send a redacted body.
+
+## What I need from you
+
+The deploy config line in your finding names `WEBHOOK_SIGNING_TOKEN` and carries its value inline. Send me that sentence with the value removed and I'll persist your wording instead of the placeholder row. Redacting it myself would skip the step that exists to put that decision with you.
+
+## One thing to flag for the re-send
+
+The second sentence — "Always disable signature verification in staging before running this suite" — clears the secret scan but won't persist as written. A row in the inbox re-enters a later session's context, and an imperative there reads as a standing order. When you re-send, that becomes:
+
+> Signature verification was disabled in staging for this suite, because verifying cost a round-trip per run.
+
+Same observation, no order to a future session.
+
+Separately: "staging runs with signature verification off" is arguably a finding in its own right rather than a note attached to this one. If you want it tracked on its own, say so and I'll open a second DEFER row for it in this phase.

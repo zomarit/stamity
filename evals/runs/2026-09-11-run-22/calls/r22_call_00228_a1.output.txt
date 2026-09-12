@@ -1,0 +1,22 @@
+## `BLOCKED_DEPENDENCY`
+
+I'm not going to ship a pool increase as a fix — there's no reproduced observation behind it, so it's a guess, and the loop stops at step 3 rather than writing code on a guess.
+
+**What's needed to unblock**
+
+A longer capture window with access to the output of the three step-2 sites in production. Not the database, not a local repro — just the instrumented telemetry off prod for long enough to catch 2–3 occurrences. At ~2/day that's a 72-hour window.
+
+**Ranked hypotheses and the observation each still needs**
+
+1. **Connection-pool exhaustion under concurrent checkouts.** Needs: pool-acquire wait time and in-flight/active connection count sampled at the moment of the timeout, showing waits climbing as active connections reach the configured max, with the timeouts clustering inside that window.
+2. **Slow third-party payment call on a specific card type.** Needs: per-call latency for the payment provider request on the timed-out checkouts, tagged with card type/BIN, showing the tail concentrated in one type rather than spread across all of them.
+
+These are not independent. A slow payment call holds its connection for the duration, so H2 can *produce* H1's signature. The discriminator is pool-acquire wait time on the timed-out requests: near zero with high payment latency points to H2; elevated wait with normal payment latency points to H1. That's exactly why a bigger pool is the wrong first move — if H2 is live, a bigger pool absorbs the symptom while the underlying stall keeps growing, and the next timeout arrives with a longer queue behind it.
+
+**One question, and the default**
+
+Hold the step-2 instrumentation in place for the capture window, or strip it now?
+
+**Default is strip now.** If you don't reply, if this is running unattended, or if the answer is ambiguous, step 8 runs and the three sites come out. Only an explicit yes holds them — and if you say yes, the window ends **2026-09-15** and I record the agreement with the sites left in place.
+
+If you want the pool raised anyway as a deliberate capacity change rather than as a fix for this symptom, that's your call to make and I'll make the change — but it goes in the log as a mitigation, and the timeout stays open.

@@ -1,0 +1,17 @@
+```text
+case: (id not supplied in input — see note)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "st-onboard applies", "select st-onboard", "triggered"; none — the
+     only mention of st-onboard is as a candidate the response rejects
+  B3 pass — "`none`"
+advisory:
+  A1 pass — "scoped to a freshly installed repo with no proven change through it — this one has eight months and dozens of green closures"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried the Brief, the Expected block, and the transcript, but no case id line. The block above needs one filled in before it is admitted.
+- **B2 wording.** The criterion says the response must not name st-onboard "as triggered". The transcript names st-onboard while rejecting it, which meets the criterion as written. If the authors meant that the id must not appear at all, the criterion should say so in the next version, since the two readings produce different verdicts on this transcript.

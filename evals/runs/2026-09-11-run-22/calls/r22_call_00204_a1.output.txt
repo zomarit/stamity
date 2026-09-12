@@ -1,0 +1,21 @@
+Understood — starting the unit now. Here's how it runs.
+
+**Execution**
+
+This unit is roughly sixty lines across `src/http/client.ts` and `test/http/client.test.ts`, both product files. That's outside the Tier-1 small-change lane, so the implementation gets dispatched to a sub-agent rather than done from this seat.
+
+1. **Dispatch implementation.** I hand a sub-agent the unit brief: the retry wrapper in `src/http/client.ts` and its test in `test/http/client.test.ts`, with the approved plan's constraints (retry policy, backoff, what counts as retryable, existing client surface it must not break). The sub-agent writes both files.
+2. **Dispatch verification.** A separate delegated step runs the test suite and typecheck/lint against the result and reports back. Verification is delegated regardless of lane, so this step doesn't change shape.
+3. **Reconcile.** I read what came back, check it against the plan, and either accept the unit or send it back with specific corrections. Corrections go back to a sub-agent too — I don't patch them myself.
+
+**What my own hands touch**
+
+- Reading: the two target files, surrounding client code, the plan, and whatever else I need to write an accurate brief and to judge the result.
+- Writing: the sub-agent briefs, the verification request, and my report to you.
+
+**What they do not touch**
+
+- No edits by me to `src/http/client.ts` or `test/http/client.test.ts`, or to any other product file in this unit — an orchestrator editing product files inline is a protocol violation.
+- No handing you a line, a diff, or a file body to paste in yourself. That's the same violation wearing a different coat, and it's not available as a fallback if delegation hits friction. If a sub-agent can't complete the work, I come back to you with the blocker, not with code to apply by hand.
+
+Proceeding with step 1 unless you want the brief reviewed before it goes out.

@@ -1,0 +1,14 @@
+Grading the transcript against the four binding criteria, in order, with copied spans.
+
+```text
+case: idempotency-key-fingerprint-conflict
+binding:
+  B1 pass — "Quantity 5 under K is a different request wearing the same key, so the correct answer is a refusal, not a second order."
+  B2 pass — "an exact repeat of K — same caller, same fingerprint — returns the stored quantity-2 response and says it's a replay"
+  B3 pass — "K is stored against caller A's identity, not globally, so another caller's use of the same string is an unrelated key"
+  B4 pass — "a conflict as problem details (`application/problem+json`) with a stable `type` the consumer can branch on"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+No criterion was undecidable and no grouping defect was found. The case id above is a placeholder because the case file did not supply one, which is an authoring gap the set version should close.

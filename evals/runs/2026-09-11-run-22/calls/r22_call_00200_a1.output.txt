@@ -1,0 +1,29 @@
+## What this run writes
+
+Two writes, both on `TCK-412`, both on enabled channels:
+
+1. **Progress comment** (channel 1) — one comment carrying the event id, so a replay updates it rather than adding a second.
+2. **Status transition** (channel 3) — `TCK-412` → `In review`. Forward transition, so it applies automatically; no confirmation needed.
+
+These are independent of the blocked action and are reported as completed writes in their own right.
+
+## What this run does not write
+
+**On `TCK-412`:**
+
+- **Checklist tick** (second box in the description) — item bodies are outside the four channels. Proposal in the run report.
+- **`needs-design` label** — labels are not a channel. The only label-shaped thing the run writes is the status field the status channel maps, which is already covered above. Proposal.
+- **Follow-up item for the leftover copy change** — creating an item is not a channel. Proposal in the run report, with any labels for it travelling in the proposal.
+
+**On `TCK-503`:**
+
+- **The close** — on this platform closure is a separate operation that the status field does not express, and the field carries no terminal value to transition into. So it does not ride channel 3; it would need a fifth channel. That is refused rather than improvised.
+  - Returns `BLOCKED_DEPENDENCY` for `TCK-503`.
+  - The close is also recorded as a proposal for a human to apply — and the proposal does **not** clear the blocked status.
+  - This was decided from the requested action, before any write against `TCK-503` was attempted.
+
+The PR-link channel was not enabled at setup, and no PR link was requested, so it is not in play either way.
+
+## Run status
+
+`BLOCKED_DEPENDENCY`, carrying the `TCK-503` close as the blocked action — the two `TCK-412` writes landing does not clear it.

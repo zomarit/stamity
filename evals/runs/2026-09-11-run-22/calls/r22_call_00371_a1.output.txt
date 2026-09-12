@@ -1,0 +1,18 @@
+```text
+case: (no case id supplied in the input handed to the judge — authoring defect, reported below)
+binding:
+  B1 pass — "**mode chosen: check**" "**Status:** `DONE`" "**Findings**" "**Manifest delta:** none" "**Open markers**" "**Not done**" "**Next step:**"
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96` on per-line-item refund of partially-shipped orders"
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B4 pass — "`[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96` on per-line-item refund of partially-shipped orders"
+  B5 pass — searched for "census", "gap"; none
+  B6 pass — searched for "review the spec", "run `/st-work` next", "consider adding", "let me know"; none
+  B7 pass — searched for "merged", "was confirmed", "was written", "applied"; none
+advisory:
+  A1 pass — "while it stands, the spec is not handed to `/st-work`"
+  A2 pass — "The clarification marker at `docs/specs/checkout.md:96` is open." "**Next step:** Resolve the `[NEEDS CLARIFICATION]`"
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+One authoring defect to record with the emission. The case file handed in carries no `case:` id, so the block above cannot be keyed to a case in the run artifact. Every criterion was decidable from the transcript alone, and no re-grouping was needed.

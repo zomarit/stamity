@@ -1,0 +1,14 @@
+Not dispatching both. Disjoint file lists don't make these units independent — `customerKey` is a persisted-name contract that binds `writer.ts` and `reader.ts` by construction, and it's exactly the case the census exists to catch. Parallel dispatch over a brownfield batch with no census is a protocol failure, so I'd be reporting it as one whether or not the collision landed.
+
+The collision is also already visible without any search: A renames the field, B reads the old spelling. Dispatched concurrently, B closes reading a key the store no longer writes — silent-wrong, no build error, Critical on review.
+
+**What I'll do instead**, which still lets both run concurrently:
+
+1. **Census first** — repo-wide search on both spellings, `customerKey` and `accountKey`, in quoted form as well as bare, across non-code too: migrations, seed data, fixtures, recorded payloads, deployment manifests, env files. Persisted names leave traces well outside `src/`. Captured output is the evidence; I'm not calling anything `clean` from the two files I've been handed.
+2. **Facade-hold, A owns it.** A's acceptance criteria require the rename, so A lands the producer change *and* every consumer reconciliation in one diff. Inside the hold window this is an add, not a rename: the record keeps `customerKey` in its key set, populated alongside `accountKey`. A dropped field goes out as an explicit null, never absent — an absent key is a shape a reader misreads without error, while a null fails at the value.
+3. **B codes against the held facade** — `reader.ts` moves to a guarded read of `accountKey`. B does not mutate the contract.
+4. **Removal of `customerKey` is a later change**, once a re-census shows zero unguarded readers, including any old stored rows.
+
+If you'd rather skip the facade, the fallback is serialising: A lands, then B builds against the shape A left. That's slower but sound. What I won't do is treat the file lists as proof of independence.
+
+Say which you want and I'll start the searches.

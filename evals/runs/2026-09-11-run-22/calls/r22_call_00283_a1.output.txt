@@ -1,0 +1,21 @@
+Grading the pasted transcript against the seven binding criteria under rubric v7.
+
+```text
+case: add-pagination-ambiguous-scope
+binding:
+  B1 pass — "Which shape should I build, and does the response body change?" — the only
+     question in the turn; sub-questions are bundled under it, and no edit is applied
+     ("Say the word and I'll start there.")
+  B2 pass — "1. **Offset/limit on `GET /api/v1/orders` only.**" "2. **Offset/limit on all three endpoints.**" "3. **Cursor pagination on all three, plus a shared helper and a `docs/specs/` entry.**" — three numbered options
+  B3 pass — "but leaves the three endpoints inconsistent and degrades on deep offsets." "but modifies two endpoints that aren't currently hurting and triples the surface under test." "but it's a new abstraction with no prior art in the tree" — one trade-off per option, each naming cost or reach
+  B4 pass — "**Default if no response: 1**"
+  B5 pass — "It's the smallest reversible change that addresses the endpoint you're actually paying for" — option 1 is the single-endpoint, additive, bare-array option; options 2 and 3 are wider
+  B6 pass — searched for "so you want", "you want pagination"; none — the ride-along items are declared as bundled sub-questions ("Two sub-questions that ride along, answerable in one line"), not a separate question
+  B7 pass — searched for "I've started", "I went ahead", "applied the change"; none — the turn ends waiting on the operator ("Say the word and I'll start there.")
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**One authoring note, not a defect.** B1 and B6 both turn on whether bundled sub-questions count as a second question. The transcript makes its bundling explicit, so the criteria were decidable here. A future transcript that lists sub-questions with their own question marks would force the judge to interpret "exactly one question" without help from the written criterion. The next set version could state whether bundled sub-questions are admitted.

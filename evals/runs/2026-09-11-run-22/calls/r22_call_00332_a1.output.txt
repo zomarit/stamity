@@ -1,0 +1,13 @@
+## Proof block
+
+- **Baseline source:** proof record from run `r7`
+- **Findings:** 1 Critical · 3 Warning · 1 Minor
+- **Routing:** 3 REVISE · 2 DEFER
+- **Validation verdicts:** unit 1 accepted (high) · unit 2 accepted (high) · unit 3 accepted (medium)
+- **Plan-lint:** `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`
+- **Plan path:** `docs/plans/004-checkout-rework.md`
+- **Inbox rows added:** 2 (one per DEFER finding)
+
+## Recommended next step
+
+Run `docs/plans/004-checkout-rework.md` through `/st-work`. The plan is persisted and carries no `[NEEDS CLARIFICATION]` marker, so nothing blocks handoff; execution stopped at your instruction, which leaves the plan as the open output. The 2 DEFER rows stay in the inbox for board triage behind that.

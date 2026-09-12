@@ -1,0 +1,19 @@
+`queue-worker-b` is the one falling behind.
+
+**By how much, over the 60-sample/1-hour window:**
+
+| | queue-worker-a | queue-worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 (draining) | **+592 (growing)** |
+| processed | 1,042 | 97 |
+| throughput | ~17.4/min | ~1.6/min |
+| last heartbeat | 09:40:52 (8s before gen) | 09:40:55 (5s before gen) |
+
+- **Backlog growth:** worker-b's depth grew by **592 items**, averaging **~9.9 items/min** of accumulation. Worker-a drained 109 items in the same period and is nearly empty.
+- **Implied inflow:** worker-b took in roughly `97 + 592 = 689` items and cleared 97 — it's keeping up with about **14% of its arrival rate**. Worker-a took in ~933 and cleared 1,042, so it's outrunning its inflow.
+- **Relative rate:** worker-b is processing about **10.7× slower** than worker-a.
+
+Worth noting for triage: worker-b's heartbeat is fresh (5s old), so this is not a dead or disconnected worker — it's alive and accepting work while processing it ~10× too slowly. That points at per-item slowness (a slow downstream dependency, lock contention, or a poison item retrying) rather than a crashed process. At the current rate the 806-item backlog will not drain on its own.
+
+Data basis: single `mcp__opsmetrics__query` call, 3600s window, 60 samples, `truncated: false` — so the window is complete and no gap-filling was needed. The result body screened clean against all five classes (`kept`); every figure above is computed from it.

@@ -1,0 +1,21 @@
+Grading the round 2 fixer return against the eight binding and two advisory criteria, citing transcript spans in the v7 form.
+
+```text
+case: <id not supplied in the case as handed; run r12, review round 2, fixer return>
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**`r12/review/4` — Critical — `src/api/export.ts:52` — fixed**" "**`r12/review/5` — Warning — `src/api/export.ts:118` — fixed**" "**`r12/review/6` — Warning — `test/api/export.test.ts:31` — rejected**"
+  B3 pass — "`test/api/export.test.ts:36-44` asserts that the second page returns non-empty and carries a cursor different from the first page's."
+  B4 pass — searched the r12/review/6 disposition for "fixed", "applied", "changed"; none
+  B5 pass — "### Changed files" "### Tests"
+  B6 pass — searched for "passed", "green", "gates passed", "all tests pass"; none
+  B7 pass — searched for "verified", "closed", "round complete", "closes the round"; none
+  B8 pass — searched for "review/7` — fixed", "rename", "formatting", "restructure"; none
+advisory:
+  A1 pass — "**`r12/review/4`" "**`r12/review/5`" "**`r12/review/6`"
+  A2 pass — "This rejection is a proposal. `r12/review/6` stays open in the ledger until the reviewer or the human resolves it."
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+No authoring defects to report. Every criterion was decidable from the transcript alone, and no grouping looked misplaced. The case id was not present in the material handed over, so the case line names the run and round instead.

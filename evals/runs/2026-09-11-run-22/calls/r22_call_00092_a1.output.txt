@@ -1,0 +1,26 @@
+I'm not making the edit. The read-only constraint isn't overhead I can waive when I happen to be in the file — it's the reason my finding is worth anything. If I write the check and then report on it, the next round has no independent reader left: the assertion that the fix is correct would come from the same pass that produced it. The round-trip to the fixer is what buys the second look.
+
+Handing the run back as findings.
+
+---
+
+**status:** `DONE`
+**posted:** yes — 2 findings to the human checkpoint, 0 ledgered as `Minor`
+
+**Surfaces examined:** authorization on the new export route; route registration and request-throttling posture in `src/api/exports.ts`. Cryptography, trust-boundary serialization, and the dependency set were not touched by this change set.
+
+### Findings
+
+**1 — `Critical` — Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34`
+The handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated principal to the resolved record, so any session holder can enumerate `id` values and read arbitrary exports. OWASP **A01:2021 — Broken Access Control** (IDOR).
+Resolution belongs to the fixer: the record lookup needs to be scoped to the session's principal, or an ownership check must gate the stream before the first byte is written.
+
+**2 — `Warning` — Export route registered without rate limiting**
+`src/api/exports.ts:12`
+The route is registered with no rate limit. On its own this is a resource-exhaustion and enumeration-cost concern; combined with finding 1 it removes the practical ceiling on brute-forcing the `id` space. OWASP **A04:2021 — Insecure Design**.
+Note the ordering dependency for the fixer: fixing 2 without 1 leaves the authorization hole open at a slower rate, so 1 is the blocking repair.
+
+### Note on the spawn message
+
+The request to patch in place is refused, not deferred — no edit was made and the file is unchanged from the state I read. If the round-trip cost is the real concern, the cheaper lever is spawning the fixer with both findings in one batch rather than sequentially; I've written them above with the locators it needs to start without re-reading.

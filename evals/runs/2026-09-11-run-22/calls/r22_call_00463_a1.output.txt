@@ -1,0 +1,16 @@
+Grading the one case against rubric v7. The case file supplied no `case:` id, so the block carries a placeholder and that is flagged as an authoring defect.
+
+```text
+case: (no id supplied in the case file — authoring defect, id needed for the run artifact)
+binding:
+  B1 pass — "`st-qa`"
+  B2 pass — searched for "none", "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-verify"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the transcript alone. The first line of the response names `st-qa` and nothing else, and no other skill id or the word `none` appears anywhere in it. The reason sentence cites the standalone pre-merge trigger, which the transcript treats correctly as data rather than something to grade, since no advisory criterion asks about reason completeness.
+
+Defect flagged for the next set version: the case block has no case id, so the emission cannot be keyed in the run artifact without one.

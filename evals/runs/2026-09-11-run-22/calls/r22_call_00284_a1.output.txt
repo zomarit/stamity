@@ -1,0 +1,16 @@
+"Add pagination" reads at least two ways here, and the readings produce different artifacts with different blast radii — so one question before anything gets written.
+
+**Which surface, and which mechanism?**
+
+1. **Offset/limit on `GET /api/v1/orders` only** — fixes the actual slow endpoint, touches one handler, trivially revertible; leaves the other two list endpoints inconsistent with it.
+2. **Offset/limit on all three endpoints** — consistent surface across the service, but changes three response shapes at once for two endpoints that aren't currently hurting.
+3. **Cursor pagination on `GET /api/v1/orders` only** — holds up under deep paging where offset degrades, but needs a stable sort key and a cursor encoding that `docs/specs/` doesn't specify, so I'd be inventing contract.
+4. **Cursor pagination on all three, behind a shared helper** — the version you'd want long-term, and the largest single change: new shared module, three contract breaks, most to unwind if the cursor shape is wrong.
+
+**Default if no response: 1.**
+
+Bundled sub-questions, which I'll answer this way under option 1 unless you say otherwise:
+
+- **Response shape:** wrap in `{ items, total, limit, offset }` rather than keeping a bare array. This breaks existing clients of `/api/v1/orders`; if there are consumers I can't see, say so and I'll keep the bare array and put paging data in headers instead.
+- **Page sizes:** default 50, max 200, `limit`/`offset` query params. Arbitrary, since the specs are silent — easy to change, so I'd rather pick than stall.
+- **Unpaginated callers:** omitting `limit` returns the first default-sized page, not every row. That's the behavior change that makes this worth doing; flag it if anything internal depends on getting the full set in one call.

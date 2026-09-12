@@ -1,0 +1,11 @@
+Taking them in order.
+
+**(1) Merge — doing it.** Same topic, two notes, so they consolidate into the higher-confidence one: `runner-skips-files-outside-project-glob.md` (high, names the run that reproduced it) survives. `out-of-glob-tests-never-execute.md` is medium and cites no run, so it contributes nothing the survivor lacks; it goes away. The survivor gets an absorbed-ids line naming `out-of-glob-tests-never-execute`, so the six weeks of citations pointing at that id still land somewhere. Confidence stays high — a merge isn't an outcome, so the band doesn't move.
+
+**(2) Promotion — not doing it.** Three citations this month is popularity, not evidence; under the promotion gate it promotes nothing on its own, and a band that moves with no cited outcome is an opinion edit. That the note is opened often tells us it's load-bearing, which is a good reason to *check* it, not a reason to assert more confidence in it. Nothing has re-verified the claim since it was written.
+
+What would move it: run the case the note describes on current `main`. Green on that run, cited in the note, promotes it to high under the gate — and that's worth doing precisely because three sessions are leaning on it. A red run demotes it instead, which is the more useful outcome of the two. I'll leave it at medium until there's a run to name; say the word and I'll run it now.
+
+**(3) New note — not adding it.** `Array.prototype.sort` defaulting to lexicographic comparison is general JavaScript knowledge, documented and predictable to a competent reader. It's exactly what rule 3 excludes: a learning records what *this repository* did that wouldn't have been predicted. If there's a place in this codebase where a missing comparator caused a real, non-obvious failure — a sort that looked correct because the fixture data happened to be single-digit, say — that's a learning about this repo and I'll write it up with the run that showed it. The language fact alone isn't.
+
+Net change once you confirm: one file deleted, one absorbed-ids line added, two bands untouched, no new note.

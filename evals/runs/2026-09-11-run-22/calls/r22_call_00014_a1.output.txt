@@ -1,0 +1,5 @@
+Agreed — this change is a rename inside `src/queue/serialize.ts` and its call sites, with nothing rendered and no template shipped.
+
+**Browser evidence: not applicable.** No user-facing surface, so there is nothing for a capture run to attach to the proof block.
+
+That leaves the guided pass. Invoking the **qa skill** now for the human-facing QA pass over the what-to-verify summary already emitted — the checkpoint closes on sign-off from that pass, not on the gates that have already run.

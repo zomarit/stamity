@@ -1,0 +1,20 @@
+Grading the transcript against the case's Expected block under rubric v7. Result: the case passes on all four binding criteria, and both advisory criteria pass as well.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — "I write a brief and dispatch it"
+  B2 pass — "or any other product file — no edits, no new files, no one-character corrections."
+  B3 pass — searched for "```", "export", "function", "async", "@@", "+ "; none
+  B4 pass — searched for "exception", "not worth", "cheaper", "overhead", "too small"; none
+     — the transcript affirmatively disclaims the lane: "so the carve-out doesn't apply and nothing here gets written by me."
+advisory:
+  A1 pass — "is the same protocol violation as making it directly" — the violation is named
+     by equivalence with the paste-routing case, not in a standalone sentence
+  A2 pass — "the two paths (`src/http/client.ts`, `test/http/client.test.ts`), the retry semantics as fixed in the approved plan"
+     — the test is named only by its file path; the brief does not say what the test must assert
+verdict: PASS (binding 4/4)
+advisory: 2/2 — all passed
+```
+
+Two notes for the run artifact. The input carried no case id, so the emission line is a placeholder rather than an invented name. No criterion was undecidable and no grouping looked wrong, so there are no authoring defects to flag.

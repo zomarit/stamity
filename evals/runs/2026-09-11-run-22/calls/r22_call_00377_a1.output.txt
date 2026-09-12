@@ -1,0 +1,20 @@
+Grading the transcript against the seven binding and one advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input — authoring defect; graded under the working label st-spec-check-testability-census)
+binding:
+  B1 pass — "1 gap (AC-2), 1 untestable criterion (AC-4), 1 confirmation in flight (AC-1), 1 clean by judgment tag (AC-3)."
+  B2 pass — "run the repo's test gate `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`). Criteria being confirmed: **AC-1**"
+     must-NOT clause: searched for "ran the gate", "gate passed", "gate failed", "test output"; none
+  B3 pass — "machine-checkable in form, but **gap**: it points at `test/checkout/refund.test.ts`, which does not exist on the tree."
+  B4 pass — "**AC-3** (`REQ-checkout-111`) — carries `judgment: design lead` for the empty-cart copy."
+  B5 pass — "**AC-4** (`REQ-checkout-115`) — **neither.**"
+  B6 pass — "| `docs/specs/checkout-flow.md` | 4 | 2 | 1 | 1 |"
+  B7 pass — searched for "written", "edited", "updated", "applied"; none
+advisory:
+  A1 pass — "It needs either a threshold (e.g. a named LCP/TTI budget under a specified throttled profile, checkable by a gate)"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Authoring note, not a verdict: the case arrived without a case id, so the emission carries a working label rather than one from the case file. No criterion was undecidable and no grouping is disputed.

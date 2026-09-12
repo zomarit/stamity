@@ -1,0 +1,29 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+**Per-file counts** (1 file in scope, 4 criteria)
+
+| Classification | Count |
+|---|---|
+| Machine-checkable, test exists | 1 |
+| Machine-checkable, test missing (gap) | 1 |
+| `judgment:` tagged | 1 |
+| Neither | 1 |
+
+**Per-criterion**
+
+- **AC-1** (`REQ-checkout-104`) — machine-checkable; names `test/checkout/decline.test.ts`, present on the tree. Confirmation dispatched to `test-runner` (brief below).
+- **AC-2** (`REQ-checkout-107`) — **gap**: names `test/checkout/refund.test.ts`, which does not exist on the tree. The criterion points at a test that was never written; nothing here is confirmable until it is.
+- **AC-3** (`REQ-checkout-111`) — carries `judgment: design lead` for the empty-cart copy. Satisfies the census; the design lead decides.
+- **AC-4** (`REQ-checkout-115`) — **neither**: "the checkout page feels responsive on a slow connection" names no test, no gate command, and no measurable threshold, and carries no `judgment:` tag. "Feels responsive" and "slow connection" are both undefined — it needs either a threshold (e.g. a latency budget at a named network profile) or a `judgment:` tag naming the deciding role.
+
+## `test-runner` brief — issued
+
+I can't spawn in this turn's own context, so the brief goes out in words here:
+
+- **Gate command:** `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`)
+- **Criteria being confirmed:** AC-1 under `REQ-checkout-104`, via `test/checkout/decline.test.ts`
+- **Return:** structured per-gate result — gate command, pass/fail, and the verbatim failing excerpt if it fails
+
+The spawn is reported as issued. AC-1's status is *dispatched, not yet confirmed* — the census will read the runner's per-gate result when it returns; the gate is not run in this command's context.
+
+`check` is report-only on both sides: no edits from the runner, and nothing written by this command.

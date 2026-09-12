@@ -1,0 +1,82 @@
+Nothing written yet — this is the preview only.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001` and `002` are taken, so `003` is the next free number. I picked `status-json-flag` as the plan slug rather than reusing the unit slug `json-flag-render`, so the artifact name reads as the capability and the unit id stays distinct inside it.
+
+## Head
+
+```text
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — it is migration-intent only and this is `feature`. `depends_on` is omitted — this run has no predecessor plan and is not a split; `001` and `002` are unrelated artifacts, not sequenced ones. Both absences are valid heads and the freshness guard reads them as satisfied.
+
+## Unit `json-flag-render`
+
+Rendered as a field list rather than the field table, because `interfaces` has to carry a fenced block inline.
+
+**`id`** — `json-flag-render`
+
+**`requirements`** — `REQ-cli-140`
+
+**`files`** — `src/commands/status.ts`, `test/commands/status.test.ts`
+
+**`interfaces`**
+
+Flag declaration on the `status` verb:
+
+```
+--json    boolean, default false, no value argument, no short alias
+```
+
+Emitted object — exactly one, to stdout, on `status --json`:
+
+```ts
+export interface StatusJson {
+  workspace: string;     // absolute path of the workspace root
+  branch: string;        // current branch name
+  managedFiles: number;  // integer, count of files under management
+  driftedFiles: number;  // integer, count of managed files showing drift
+  lastSync: string;      // ISO-8601 UTC timestamp of the last sync
+}
+```
+
+Exit and stream contract:
+
+- clean run → stdout carries one `StatusJson` object, stderr empty, exit code `0`
+- drift finding → stdout carries one `StatusJson` object with `driftedFiles > 0`, exit code `1`
+- `--json` absent → existing human-readable rendering and existing exit codes, unchanged
+- no key beyond the five; no trailing prose, banner, or second object on stdout
+
+**`testCriteria`**
+
+- `status --json` on a clean workspace writes stdout that `JSON.parse` accepts as a single object whose key set is exactly `{workspace, branch, managedFiles, driftedFiles, lastSync}`
+- `workspace`, `branch`, `lastSync` are `typeof === "string"`; `managedFiles` and `driftedFiles` satisfy `Number.isInteger`
+- clean workspace → exit code `0`
+- workspace with at least one drifted file → exit code `1`, and stdout still parses to a full `StatusJson` with `driftedFiles > 0`
+- on the clean run, stderr is the empty string
+- invoked without `--json`, the command produces the pre-existing human-readable output and its pre-existing exit code
+- `--json` consumes no following token: `status --json extra` leaves `extra` to positional parsing rather than binding it to the flag
+
+**`edgeCases`**
+
+- *Drift present.* The non-zero exit is the only drift signal; the JSON object is still written to stdout in full and stderr stays empty. A consumer that pipes stdout gets valid JSON on both exit paths.
+- *Workspace never synced.* `lastSync` is typed `string` by `REQ-cli-140` with no null case, so emit the empty string `""` and never `null` or an absent key — the key set stays fixed at five.
+- *`--json` passed twice.* Idempotent: one object, exit code as for a single `--json`.
+
+**`depends_on`** — `none`
+
+**`verify`** — `npm run test`
+
+## Two things to confirm before I write
+
+1. **`lastSync` with no prior sync.** `REQ-cli-140` types it as a string and gives no null or sentinel case. I resolved it to `""` above and stated that in the edge case. If the intended sentinel is something else (`"never"`, key omitted), say so and I will change the unit and flag the spec gap in the plan.
+2. **The stamp date.** The run holds `2026-09-02` UTC, but today is `2026-09-12`. I have stamped `9f3c1ab 2026-09-02` as the run gave it. If `9f3c1ab` is no longer head, the stamp is stale on arrival and the freshness guard will fire on the first implementer run.

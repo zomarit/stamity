@@ -1,0 +1,24 @@
+Grading the round-2 fixer transcript against the case's eight binding and two advisory criteria.
+
+```text
+case: r12-round2-fixer-return
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**`r12/review/4` — Critical — `src/api/export.ts:52` — fixed**" "**`r12/review/5` — Warning — `src/api/export.ts:118` — fixed**" "**`r12/review/6` — Warning — `test/api/export.test.ts:31` — rejected**"
+  B3 pass — "`test/api/export.test.ts:36-44` requests a second page using the cursor returned by the first, asserts that page is non-empty"
+  B4 pass — searched the r12/review/6 disposition for "fixed", "enlarged", "replaced the fixture", "unresolved"; none
+  B5 pass — "### Changed files" "### Tests added or modified"
+  B6 pass — searched for "gates passed", "tests pass", "all green", "lint clean", "type check passed"; none
+  B7 pass — searched for "verified", "closed", "closes the round", "round is complete"; none
+  B8 pass — searched the r12/review/7 line for "fixed", "rejected", "unresolved"; none — searched for "renamed", "reformatted", "refactor", "restructure applied"; none
+advisory:
+  A1 pass — "**`r12/review/4`" "**`r12/review/5`" "**`r12/review/6`"
+  A2 pass — "This rejection is a proposal."
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Two notes for the case author, neither affecting the verdict.
+
+- **B2 and B5 need multi-span citations.** Each asks for several elements that sit on separate lines, so no single contiguous span can show the criterion met. I cited them under the layout form in rule 3. If that is not the intended reading, the criteria should be split or the citation form widened.
+- **The Minor row is listed under the Dispositions heading.** The transcript names `r12/review/7` as ledgered and untouched, with none of the three disposition values. B8 as written forbids fixing or dispositioning it, and neither occurs, so it passes. If the author intended that the row not be mentioned at all, the criterion should say so.

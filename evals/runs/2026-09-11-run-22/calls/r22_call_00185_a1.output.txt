@@ -1,0 +1,25 @@
+Grading the supplied Answer block against the case's six binding and two advisory criteria under rubric v7.
+
+```text
+case: (no case id given in the case file)
+binding:
+  B1 pass — "sessions are written into a module-scope `Map` at `src/session/store.ts:23`"
+  B2 pass — "at `src/server/boot.ts:31` — **medium**, on the unverified assumption"
+  B3 pass — "no eviction call appears anywhere in that file per `src/session/store.ts:57`, and exactly one store instance is constructed per process at `src/server/boot.ts:31` — **medium**,"
+  B4 pass — "**medium**, on the unverified assumption that no eviction, expiry, or delete path exists outside `src/session/store.ts`"
+  B5 pass — searched for "likely", "probably", "fine", "MB", "GB", "per hour", "per day", "%"; none
+  B6 pass — searched for ".ts:0", ".ts:1", ".ts:4", ".ts:6", ".ts:7", ".ts:8", ".ts:9", "store.ts:3", "boot.ts:2", "boot.ts:5", "line-line", ".md:", ".js:", "http"; none
+advisory:
+  A1 pass — "Heap or RSS measurement from a running process over a session-churn workload"
+  A2 pass — "**Production severity: no claim.** No test, benchmark, or production measurement of session memory growth was found"
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+Notes for the set maintainers, reported and not scored:
+
+- **The case file carries no id.** The emission shape requires one, so the line above says so rather than naming the case.
+- **B1 has one borderline span.** The closing paragraph says the structural reading does not by itself establish a production problem. I read it as commentary on the answer's own evidence rather than a claim about the repository or production, so it does not need a citation or a band. If the criterion intends every declarative sentence to count as a claim, that paragraph would fail B1 and B2, and the criterion wording should say so.
+- **B6 strains the closed citation form.** The absence form lists terms searched for, but the criterion asks whether any citation other than the three known ones appears. The term list above covers every other line-number prefix and any URL, which is the closest the form allows.
+
+The case passes on all six binding criteria, and both advisory criteria also pass.
