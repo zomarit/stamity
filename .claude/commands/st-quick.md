@@ -66,6 +66,9 @@ judgement about the change and leaves nothing to check against.
 The security-sensitive row has no size floor. A one-character edit under an authentication or
 credential path is refused regardless of line count: what that surface needs is the review
 loop quick does not run, and small diffs are exactly where authorization defects hide.
+Restating that refusal names the row and the surface it fired on — authorization, access-control
+configuration, credential handling, whichever the item touches — not the file path alone. The
+path says where the edit lands; only the surface says why this lane will not take it.
 
 ## Repo-owned content items
 
@@ -107,7 +110,10 @@ of 5 growing past a threshold stops the batch there:
 - The crossing item is reverted to its pre-edit state. A half-applied item is never left in
   the working tree.
 - The crossing item and every remaining item move to `/st-work` as one list carrying the
-  measured reason for the stop.
+  measured reason for the stop. That reason names the row that fired by the name the
+  Thresholds table gives it — `Files`, `Size`, whichever crossed — beside the measured
+  value. A measurement with no row name beside it is not the reason: the operator has
+  nothing to take back to the table.
 - Quietly finishing the remainder is a contract breach, and so is quietly dropping it. The
   report names a disposition for every item in the batch, including the ones never started.
 

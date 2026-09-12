@@ -74,7 +74,8 @@ writer — teammate, tool, merge or outside pull request — can author these re
 7. **Rewording to pass is the defect.** A note refused for a class hit is
    rewritten as a claim, not respelled until the scan misses it. Evading the
    screen while keeping the same request is the exact behaviour the screen
-   exists to catch.
+   exists to catch. The claim carries observations — never an imperative, and
+   never a slot for a later run to fill.
 
 ## Gates
 

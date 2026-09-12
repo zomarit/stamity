@@ -36,7 +36,7 @@ gate decides — which findings earn a file, and when one stops earning it.
 - A learning consulted during work is cited by id in the output that used it. An
   uncited learning is indistinguishable from a guess the run made on its own.
 - A confidence change names the run that justified it. A band that moves with no
-  cited outcome is an opinion edit.
+  cited outcome is an opinion edit, and offering to make one is the same edit.
 - A merge names the ids it absorbed in the note that survives. Consolidation
   that drops them leaves an earlier citation pointing at nothing.
 - Consolidation is triggered by what a run can see: the cap refusal on capture,

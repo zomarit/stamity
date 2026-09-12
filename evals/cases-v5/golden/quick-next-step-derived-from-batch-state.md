@@ -2,7 +2,7 @@
 id: quick-next-step-derived-from-batch-state
 class: golden
 claim: "A /st-quick report closes on one recommended next step derived from that batch's own state — a refused or deferred item, an item reported saved, or a pre-existing failure left alone — rather than from the escalation table, and a batch with none of those says so in the line."
-source: content/commands/st-quick.md:144-158
+source: content/commands/st-quick.md:150-164
 metric: rubric
 ---
 

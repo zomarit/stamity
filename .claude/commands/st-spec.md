@@ -210,7 +210,10 @@ gate, `npm run test`, and returning its per-gate result; a
 criterion pointing at a test that does not exist is reported as a gap.
 
 The spawn is part of the census, not a step after it: the census dispatches `test-runner` in the
-turn it classifies, and does not hold the dispatch for the operator's go-ahead.
+turn it classifies, and does not hold the dispatch for the operator's go-ahead. Where the turn
+cannot make the call itself, the brief goes out in words in that same turn — the gate command and
+the criteria being confirmed — and the census reports the spawn as issued. Offering to dispatch,
+or asking whether to, is the held dispatch this paragraph refuses.
 
 **Inferred ADR:** when `create` or `extract` meets a decision baked into the
 code with no written record, it writes an ADR stub under `docs/adr/` carrying

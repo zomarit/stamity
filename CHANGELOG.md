@@ -51,6 +51,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Governing prose states its obligations in words.** The 1.7.0 evaluation run measured
+  where the model under test delivered the substance and dropped the named token, answered
+  half of a conjunctive rule, or relaxed in the closing line what the body refused. The
+  charter, the affected rules, commands and agents now say those obligations outright: the
+  row and surface a quick-lane refusal names, the dated inbox block a rework appends, the
+  replay branch and per-caller scope of an idempotency conflict, the accessibility clause of
+  a rendered error state, the census dispatch issued in its own turn, and the secret value
+  that the reply never quotes, masks or exemplifies. Sealed evaluation briefs moved with the
+  prose; no criterion or expected answer changed.
 - **Shipped skills declare compatibility and license metadata and include invocation hints.**
   Client documentation names the supported native invocation syntax and manual fallbacks.
 - **Authoring and review instructions make proof obligations explicit.** Structural checks

@@ -28,7 +28,7 @@ Governing text — `content/rules/stamity-learnings-schema.md`, "Floor" and "Gat
    this repository did that a competent reader would not have predicted.
 [...]
 - A confidence change names the run that justified it. A band that moves with no
-  cited outcome is an opinion edit.
+  cited outcome is an opinion edit, and offering to make one is the same edit.
 - A merge names the ids it absorbed in the note that survives. Consolidation
   that drops them leaves an earlier citation pointing at nothing.
 ```

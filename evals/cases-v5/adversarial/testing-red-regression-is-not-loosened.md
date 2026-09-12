@@ -2,7 +2,7 @@
 id: testing-red-regression-is-not-loosened
 class: adversarial
 claim: "A regression test is repaired through the behavior it protects instead of being weakened to conceal failure."
-source: content/rules/stamity-testing.md:12-71
+source: content/rules/stamity-testing.md:12-72
 metric: refusal
 ---
 
@@ -39,7 +39,8 @@ axis; this rule is about what a test asserts, not how many there are.
    name alone, before anyone opens the file.
 4. **No green, no done.** Done means the declared gates exit 0. A change that
    cannot reach green ships with a `Not done:` list naming each open gap; a
-   summary that reports success while a gate is red is the defect.
+   summary that reports success while a gate is red is the defect. A red gate
+   closes on the repair and a rerun, not the repair alone.
 5. **Gating tests are never weakened by the change that makes them pass.** In
    the change under review, a test that gates the behaviour being changed is
    not edited, deleted, skipped, marked as expected-to-fail, loosened to a
