@@ -125,9 +125,13 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // 97 -> 93 on 2026-09-12: the run-19 corpus repairs paid for their new charter
   // sentences by rewrapping the touchpoint index and the conditional layer, so
   // this client — which pays the charter alone — measures four lines lighter.
-  cursor: 93,
+  // 93 -> 92 on 2026-09-12: the run-20 repairs rewrapped the opening and repo-facts
+  // paragraphs to the same width and spent one of the two lines on invariant 1.
+  cursor: 92,
   // 240 -> 236 on 2026-09-12: same four charter lines. These two clients pay the
   // charter plus the two glob-less rules, and neither of those grew a line.
+  // Held at 236 on 2026-09-12: the run-20 charter saving funds ai-evals' net +1,
+  // so the measured load is unchanged.
   claude: 236,
   copilot: 236,
   // 1065 -> 1063 on 2026-09-10: Package 10 removes repeated security-reporting
@@ -135,7 +139,9 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // loads the whole rule set, so its measured reduction tightens the ratchet.
   // Held at 1063 on 2026-09-12: the charter's -4 exactly funds the run-19 rule
   // repairs (+2 api-versioning, +1 testing, +1 injection-screening), so the
-  // measured load is unchanged and the ratchet has nothing to give back.
+  // measured load is unchanged and the ratchet has nothing to give back. Held
+  // again for run 20: every rule repair was paid inside its own file by an
+  // identical-words rewrap, and the charter's -1 funds ai-evals' +1.
   codex: 1063,
 };
 
@@ -166,22 +172,24 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * is the failure an earlier wording of this comment had twice: first claiming a
  * disclosure that did not exist, then claiming its absence after it did.
  */
-// 29_071 -> 29_519 on 2026-09-12: the run-19 corpus repairs add the missing
-// obligations to the charter and to six rules, so both the charter and the rule
-// appendix grow. The line ratchets above came DOWN with the same edit — the
-// charter gave back four lines to pay for its own sentences — but this
-// disclosure is measured bytes, not a cap, so it follows the golden up.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_519;
+// 29_071 -> 29_935 across the run-19 and run-20 repairs on 2026-09-12: both add
+// missing obligations to the charter and to the rules, so the charter and the
+// rule appendix both grow in bytes. The line ratchets above came DOWN with the
+// same edits — the charter gave back five lines to pay for its own sentences and
+// for ai-evals — but this disclosure is measured bytes, not a cap, so it follows
+// the golden up.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_935;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
  * Same tripwire, and the same delivered disclosure, as
  * {@link ALWAYS_ON_SHARED_BYTES_WITH_CODEX}.
  */
-// 4_614 -> 4_908 on 2026-09-12: the charter's own +294 — invariant 1's refusal of
-// a subset, a lighter pass or a deferral, and invariant 7's restated violation.
-// The rule edits land in the appendix, which is exactly what this figure leaves out.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 4_908;
+// 4_614 -> 5_004 on 2026-09-12: the charter's own +390 across the two repairs —
+// invariant 1's refusal of a subset, a lighter pass, a deferral or a closing
+// summary, and invariant 7's restated violation. The rule edits land in the
+// appendix, which is exactly what this figure leaves out.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_004;
 
 /**
  * The composite always-on line count one client pays for a plan: the charter,

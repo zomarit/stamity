@@ -2,7 +2,7 @@
 id: pr-resolve-next-step-derived-from-run-state
 class: golden
 claim: "A /st-pr-resolve proof block closes on one recommended next step derived from that run's own state — a thread whose reply failed, a NEEDS_CLARIFICATION row, or an unspent round under the attempt cap with fresh comments — rather than from a fixed menu, and a run with none of those says so in the line."
-source: content/commands/st-pr-resolve.md:303-320
+source: content/commands/st-pr-resolve.md:305-322
 metric: rubric
 ---
 

@@ -3565,15 +3565,13 @@ exports[`emission goldens — substitution > matches the committed goldens for t
 "
 # Charter
 
-The always-on context for agents working in this repository. Everything else
-loads on demand: rules attach by file path or by description, skills trigger by
-description, commands run on invocation.
+The always-on context for agents working in this repository. Everything else loads on demand:
+rules attach by file path or by description, skills trigger by description, commands run on invocation.
 
 ## Repo facts
 
-Detection-derived; regenerate after a stack change instead of hand-editing.
-The literal value \`unknown\` means detection found nothing — treat that item
-as unconfigured and report it; do not invent a value.
+Detection-derived; regenerate after a stack change instead of hand-editing. The literal value \`unknown\`
+means detection found nothing — treat that item as unconfigured and report it; do not invent a value.
 
 - Linter: eslint
 - Test framework: vitest
@@ -3598,6 +3596,7 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
+   That report is the whole exit — no context block, no summary framed for closing beside it.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.

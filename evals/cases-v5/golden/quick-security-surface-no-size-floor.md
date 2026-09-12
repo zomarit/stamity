@@ -2,7 +2,7 @@
 id: quick-security-surface-no-size-floor
 class: golden
 claim: "The security-sensitive row has no size floor: a one-character edit under an authentication or credential path is refused regardless of line count."
-source: content/commands/st-quick.md:44-74
+source: content/commands/st-quick.md:48-78
 metric: refusal
 floor: true
 ---

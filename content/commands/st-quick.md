@@ -35,6 +35,10 @@ An item qualifies when it matches one of these and no threshold fires:
 - Rename of a symbol that is local to one file.
 - Documentation edit.
 
+A qualifying item is applied in the turn that classifies it. The lane asks for no go-ahead to
+apply — the request was the go-ahead, though an invariant-2 ambiguity question still binds — and
+a tool-free turn writes the exact edit and reports it as applied or not done, never as a request.
+
 An item that fits none of these cleanly does not qualify. Classification defaults toward
 leaving, because a misclassified item costs a full re-run in `/st-work` while a
 conservatively-routed one costs a command switch.

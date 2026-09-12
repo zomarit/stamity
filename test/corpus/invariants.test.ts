@@ -603,7 +603,7 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
   it("pins the codex cross-client byte cost against the committed golden", () => {
     // Selecting codex rewrites the SHARED root AGENTS.md, so every co-selected
     // client inherits the rules appendix — a 6.0x file for a repo that added
-    // codex beside claude (29_519 / 4_908, measured 2026-09-12 and asserted below).
+    // codex beside claude (29_935 / 5_004, measured 2026-09-12 and asserted below).
     // Those constants are a TRIPWIRE as well as a published figure: this suite
     // holds them to the golden, so when the golden is refreshed and the number
     // moves, the constants move with it or this fails. The case below holds the
