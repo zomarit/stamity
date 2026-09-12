@@ -1,53 +1,42 @@
 # Package 10 release preparation checkpoint
 
-The reviewed implementation and measurement candidate is
-`cae3fcdb9f76429144294d0f0bdebd541cd8b831` on
-`feat/package-10-finish-implementation`, in draft
-[PR #34](https://github.com/zomarit/stamity/pull/34). Version 1.6.0 remains
-published; 1.7.0 is prepared and unpublished. This checkpoint preserves the older
-preparation snapshots and records the current proof boundaries. It is not release
+Current candidate `29894bc4987706a92c295313057ee046f71c52fb` on
+`feat/package-10-finish-implementation`, draft [PR #34](https://github.com/zomarit/stamity/pull/34).
+Version 1.6.0 remains published; 1.7.0 is prepared and unpublished. This checkpoint preserves
+the older preparation snapshots and records the current proof boundary. It is not release
 approval.
 
-The authorized scope covered a bounded calibration investigation, independently
-justified prospective instrument corrections, one fresh full native evaluation,
-repairs revealed by verification, signing/publication preparation and human QA
-setup. Client, CLI, public/private APM, customization and upstream-update contracts
-remain binding. Packages 11–12 and unrelated cleanup were not started.
+The continuation's scope: the reviewed Claude CLI evaluation route with byte-bound capture,
+seven reviewed reader corrections, three complete full runs (19, 20, 21) at unchanged
+thresholds, independent adjudication of every failing row, two reviewed corpus repairs of the
+adjudicated product failures with the sealed Briefs moved in the same diff, and fresh platform
+rehearsals on the current candidate. Client, CLI, public/private APM, customization and
+upstream-update contracts remain binding. Packages 11–12 and unrelated cleanup were not
+started.
 
-Contract census and ownership: calibration fixture keys and their reader share the
-judge-input boundary; profile/protocol versions share model, isolation and scoring
-controls; workflow privilege inventories share the signing-job contract. One
-implementation writer owned each affected artifact, with separate review and
-verification. For this checkpoint a single writer owns these three public records;
-the evaluation driver owns the sanitized result export, independent review owns
-its acceptance, and the orchestrator owns Git and PR updates. No product, case,
-corpus, threshold or historical evidence edit is part of this checkpoint.
+Contract census and ownership: the reader and the case Briefs share the judge-input boundary;
+the corpus, the sealed Briefs, the case-index Source cells, the emitted client copies, the
+emission goldens and the always-on budget table share the corpus-change contract (SET-v5 hard
+trigger 1); the private driver's pins share the set-file and instrument hashes. One writer owned
+each artifact class (reader; corpus and cases; run records and orchestration), with separate
+independent review by execution and, for prose, on merits.
 
-The reviewed prospective rubric makes all five fixture vectors explicit and
-corrects C3 B1 from the older reader-inferred pass to fail: the unchanged criterion
-requires refusal, while the unchanged transcript provides the edit. Independent
-criterion assessment supports that correction. The original case-level human
-provenance is retained; no new human per-criterion label is claimed. Old rubric
-versions, parsed labels and run13 remain unchanged.
+Proof boundary after run 21: the corpus is sufficient to produce the required behaviour on the
+measured pair about two times in three and not reliably; the strict rule fails on floor and
+guardrail clauses in every complete run; no case is systematic in the sense of failing every
+sample on an unchanged Brief, except where the judge read a criterion two ways. The reader
+needed a correction after every run; the last one is committed and reviewed.
 
-Run14 used the committed v2 profile/protocol and v6 rubric. It is now terminal:
-three calibration fixtures matched, three attempts were invalid, and six fresh
-calibration children were created. No scenario or scoring judge ran. A checked
-staged payload did not enforce equality of the subsequent actual direct tool-call
-message; the driver reported a difference in that call, making the attempt
-invalid, ungraded and nonretryable. Run14 cannot be resumed, and no run15 or unchanged retry is justified.
+Decision pending with the maintainer:
 
-The next evaluation requires a supported, verified control at actual native task
-transfer before child creation, or a supported immutable payload route. Local Codex
-hook support does not establish coverage of this session's collaboration dispatch.
-Review and prospectively version a justified control change before starting a new
-run. Preserve the accepted ambient baseline, empty wrapper, exact Astra/high
-scenario and Sol/high judge controls, fresh `fork_turns: none` children and honest
-encrypted-input visibility limits. Then match all five calibration fixtures before
-all 78 cases × three scenario/judge pairs; retain every unfavorable result and
-invalid attempt. No earlier run or 1.6.0 reuse exception replaces this requirement.
+1. Continue the repair-and-rerun loop (next window opens 16:10Z on 2026-09-12), reader-only or
+   with a rubric revision that fixes the citation form.
+2. Close 1.7.0 unreleased for now, runs 15–21 as the retained record, and revise the scoring
+   rule or sample count in the next set version.
+3. Release under an explicit written exception naming the red metrics and cases, as 1.6.0
+   shipped on run 10; the conditional approval as given does not cover this.
 
-The [handoff](handoff.md) records current automated/platform evidence, unchanged
-thresholds and the release sequence. The [QA form](qa.md) contains nine unperformed
-human rows and blank sign-off. These gaps, followed by the maintainer's final
-release go-ahead, gate any merge, tag, publication or protected deployment approval.
+Until that decision: keep PR34 draft, unmerged and unpublished. The [handoff](handoff.md)
+records evidence and the prepared sequence; the [QA form](qa.md) records the conditional
+sign-off and the nine unperformed rows; [verification](verification.md) records the current
+receipts.

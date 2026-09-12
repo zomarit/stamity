@@ -1,46 +1,34 @@
-# Final verification follow-up
+# Final verification — current candidate
 
-The first final gate tested the `cae3fcdb9f76429144294d0f0bdebd541cd8b831`
-implementation plus the then-frozen 16-file run14 export and three readiness
-records: 1,144 inputs. `npm run test -- --coverage` exited 1 with 7,818 passing
-tests, one failure and two existing skips. No current coverage acceptance was
-established by that command. Lint, typecheck, leak, Knip and diff checks passed;
-the earlier 7,819-test/coverage evidence keeps its original candidate binding.
-The [handoff](handoff.md) identifies that earlier evidence separately.
+Candidate `29894bc4987706a92c295313057ee046f71c52fb`, measured by evaluation run 21
+(`evals/runs/2026-09-11-run-21`). Every commit since the prepared candidate `0d711d8` was
+verified locally before it was pushed: lint, typecheck, `npm run test -- --coverage` (197
+files; 7,895 → 7,931 tests as reader tests were added; 2 existing skips; statements 96.37%,
+branches 89.66%, functions 98.68%, lines 97.25%, every configured floor passing), the leak
+gate (0 hits), knip, working and staged diff checks, and `node dist/cli.js check` (drift
+clean) after each corpus repair.
 
-The failure was `test/worktree/engine.test.ts`'s different-name concurrent setup:
-beta's `git worktree add` exited 128. The test runner did not print the structured
-`EngineError.why` field containing Git stderr. Cleanup then reported `ENOTEMPTY`
-while removing alpha. The original raw failure and residual fixture evidence are
-retained. Git 128's primary cause remains unexplained.
+| Actual run on `29894bc` | Result |
+|---|---|
+| CI 34681313989 | Passed, including the Windows, Linux and APM jobs. |
+| PR checks 34681313990 | Passed. |
+| Docs site 34681315583 | Passed. |
+| Release dry run 34681342641 | Gates and pack, APM route smoke and the dry-run summary passed; publication skipped. Tarball 540,644 bytes, sha256 `ea713559924508d685c5383f71b97096a4e5eba99a50a58b280a7dfebe20c733`; SBOM 67,940 bytes; tarball smoke passed. |
+| Pack signing rehearsal 34681343585 | Passed (real GitHub OIDC/Sigstore signing, verification, install/update and negative controls). |
 
-A bounded diagnostic using the unchanged engine ran six natural concurrent pairs,
-three pairs synchronized at the Git-add boundary, and one serial control. All ten
-pairs completed successfully. This did not reproduce or explain the original
-failure and does not erase it or constitute a passing full gate.
+Evidence binding: the two corpus repairs changed runtime-build inputs (13 corpus artifacts and
+`src/content/charter.ts`), one signing input (`src/content/charter.ts`), one release-source
+input (`CHANGELOG.md`) and one QA-site input (`docs/capability-matrix.md`). The earlier
+packaging, signing, dry-run and QA-preparation evidence bound to `cae3fcd`/`0d711d8` is
+therefore historical; the dry run and signing rehearsal above re-establish packaging and
+signing evidence on the current candidate. The prepared client fixtures and local site
+snapshot for human QA were not rebuilt (the observations are UNPERFORMED and accepted).
 
-Independent review established a separate test lifecycle and diagnostic weakness:
-`Promise.all` can reject while its sibling still uses the fixture, allowing test
-cleanup to race that work; the reported error omits fields needed to diagnose the
-primary failure. The test now launches both original setup operations concurrently
-and awaits `Promise.allSettled`. It requires both named outcomes to be fulfilled,
-with full `EngineError` code/message/why/next in the failure context, then retains
-both complete-status assertions and the exact alpha/beta farm assertion.
+The evaluation instrument (`scripts/eval/instrument.mjs`), its tests and the evals README
+changed in seven reviewed reader corrections; none is a runtime-build, packaged, site-build or
+signing input. The private evaluation driver keeps calibration strict on every row and reports
+uncited advisory rows as a third state from run 21's successor onward.
 
-This repair changes no runtime code, name-lock contract, timeout, skip, retry,
-coverage floor or concurrency requirement. It is not a demonstrated fix for the
-primary Git failure. A later full gate must execute against the reviewed repaired
-inputs and preserve its own receipt, result and exact containing commit binding.
-Actual later Windows/Linux/APM/docs/PR checks likewise require their own candidate
-identity and results; none is inferred from the earlier pass or diagnostic pairs.
-
-Focused verification ran `npm run test -- test/worktree/engine.test.ts -t "the name lock"`: four real-Git name-lock tests passed, including same-name
-contention, held-name independence and different-name success. The 67 other tests
-were omitted by that explicit filter; no skip was added. Scoped Oxlint and project
-typecheck passed. ESLint's current configuration does not select this test file;
-its ignored-file warning is not represented as source validation. These focused
-results do not establish a final coverage pass or the original Git failure's cause.
-
-Not done at this checkpoint: fresh final gate acceptance after the reviewed test
-repair, plus the separate native task-transfer control, complete fresh behavioral
-evaluation and unsigned human QA/sign-off recorded in the current handoff.
+Not done: no full run has passed every declared threshold and floor, so no release gate beyond
+preparation was exercised; the release sequence and post-publication verification remain
+unexecuted.
