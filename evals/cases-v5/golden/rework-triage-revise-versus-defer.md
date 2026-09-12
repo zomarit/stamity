@@ -2,7 +2,7 @@
 id: rework-triage-revise-versus-defer
 class: golden
 claim: "Every finding leaves triage routed REVISE or DEFER by the first matching row of the routing table — REVISE findings become plan units, DEFER findings append to the inbox as one dated block of severity, file:line, one-line description and source rows — the whole table is presented once for one batched correction, and this command applies no fix."
-source: content/commands/st-rework.md:13-18,150-181
+source: content/commands/st-rework.md:13-18,154-185
 metric: rubric
 ---
 

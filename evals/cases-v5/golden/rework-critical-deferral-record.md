@@ -2,7 +2,7 @@
 id: rework-critical-deferral-record
 class: golden
 claim: "A Critical finding the user wants deferred is deferred rather than vetoed, and the record is what the run insists on: the specific consequence named in one line, a written rationale that a bare 'defer' does not satisfy, and an inbox row that opens with /st-board's four-field grammar and then carries the critical-deferred tag, the date and that rationale."
-source: content/commands/st-rework.md:183-203
+source: content/commands/st-rework.md:187-207
 metric: rubric
 ---
 
