@@ -596,13 +596,15 @@ describe("hand pages", () => {
       expect(detail).toBe("");
     },
     // This case is bounded by the whole-repository gate run it spawns, not by the suite-wide
-    // 20s default in `vitest.config.ts` — which is sized for a CLI spawn, and which turned a
-    // doubling of the gate's wall time into a CI timeout that named no cost. Derived, so it can
-    // be re-derived: 3.3s local (`/usr/bin/time -p node scripts/leak-gate.mjs`, three runs,
-    // 3.28-3.30s over 852 files) x 2 for a runner class about half this machine's speed x 4 for
-    // margin on a shared runner with a cold file cache ≈ 26s, rounded to 30s. Kept in step with
-    // `GATE_RUN_TIMEOUT_MS` in `test/ci/leakGate.test.ts`, which spawns the same gate.
-    30_000,
+    // 20s default in `vitest.config.ts` — which is sized for a CLI spawn, and which turned the
+    // gate's growth into a CI timeout that named no cost. Derived, so it can be re-derived:
+    // 16s local (`time node scripts/leak-gate.mjs`, three runs, 15.81-16.13s over 5,561 files)
+    // x 2 for a runner class about half this machine's speed x 4 for margin on a shared runner
+    // with a cold file cache ≈ 128s, rounded up to 180s. The tree grew because every run export
+    // publishes each attempt's output under `evals/runs/<run>/calls/` and the gate reads all of
+    // them; nothing is excluded from it. Kept in step with `GATE_RUN_TIMEOUT_MS` in
+    // `test/ci/leakGate.test.ts`, which spawns the same gate.
+    180_000,
   );
 });
 

@@ -638,12 +638,60 @@ describe("rubric citation spans and complete output shape", () => {
     expect(ordered.transcriptSha256).toBe(sha256(transcript));
     // Two elements in the transcript's order is the same form and locates.
     expect(locateCitation('"## Files changed" "## Tests"', transcript, "pass")).toMatchObject({ kind: "ordered-spans" });
-    // The order is the claim: reversed, it refuses, and so does an element that is not there.
-    expect(locateCitation('"## Gate results" "## Tests" "## Files changed"', transcript, "pass")).toBeNull();
+    expect(ordered.ordered).toBe(true);
+    // The order is recorded, not required: a list whose spans all exist but do not run in the
+    // citation's order is admitted with `ordered: false`, because whether the order is what
+    // the criterion asks about is the criterion's business and the reviewer's, not the
+    // reader's. (Before this rule these two cases refused; run 22 showed judges using a pair
+    // of spans as two pieces of evidence with no order intended.) An element that is not in
+    // the transcript at all still refuses.
+    expect(locateCitation('"## Gate results" "## Tests" "## Files changed"', transcript, "pass"))
+      .toMatchObject({ kind: "ordered-spans", ordered: false });
     expect(locateCitation('"## Files changed" "## Nonexistent heading"', transcript, "pass")).toBeNull();
+    // Each element is looked for after the one before it while that works, so a repeated
+    // element is a list of that many occurrences; with only two in the transcript the walk
+    // cannot run forward, and the three spans are recorded where they are, out of order.
+    expect(locateCitation('"x" "x" "x"', "x a x b x\n", "pass")).toMatchObject({ kind: "ordered-spans", ordered: true,
+      spans: [{ start: 0, end: 1 }, { start: 4, end: 5 }, { start: 8, end: 9 }] });
+    expect(locateCitation('"x" "x" "x"', "x a x\n", "pass")).toMatchObject({ ordered: false,
+      spans: [{ start: 0, end: 1 }, { start: 0, end: 1 }, { start: 0, end: 1 }] });
+    // A repeated heading is anchored forward, not at its first occurrence: this list is
+    // satisfied by the second `## Tests`, and the reverse order still refuses.
+    const repeated = "alpha\n## Tests\nbeta\n## Tests\ngamma\n";
+    expect(locateCitation('"beta" "## Tests"', repeated, "pass")).toMatchObject({ kind: "ordered-spans", ordered: true,
+      spans: [{ start: repeated.indexOf("beta"), end: repeated.indexOf("beta") + 4 },
+        { start: repeated.lastIndexOf("## Tests"), end: repeated.lastIndexOf("## Tests") + 8 }] });
+    expect(locateCitation('"gamma" "alpha"', repeated, "pass")).toMatchObject({ ordered: false });
     // A citation that mixes quoted spans with prose is not this form and keeps its old reading.
     expect(locateCitation('the headings run "## Gate results" after "## Files changed"', transcript, "pass"))
       .toMatchObject({ mode: "exact" });
+  });
+  it.each([
+    ["the same evidence line listed once per finding",
+      '"Directly read diff hunk — not a native artifact." "Directly read diff hunk." "Directly read diff hunk."',
+      "| F1 | Directly read diff hunk — not a native artifact. |\n| F2 | Directly read diff hunk. |\n| F3 | Directly read diff hunk. |\n"],
+    ["a row whose leading cells occur earlier in the transcript",
+      '"Critical" "src/auth/session.ts:73" "unvalidated token expiry" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07"',
+      "Severity scale: Critical, Warning, Minor. The file src/auth/session.ts:73 was read.\n\n" +
+      "| Critical | src/auth/session.ts:73 | unvalidated token expiry | source: rework fix/session-expiry | critical-deferred | 2026-09-07 |\n"],
+  ])("walks an ordered list forward through repeats and earlier occurrences: %s", (_name, citation, transcript) => {
+    const evidence = locateCitation(citation, transcript, "pass");
+    expect(evidence).toMatchObject({ kind: "ordered-spans", ordered: true });
+    const starts = evidence.spans.map((span: { start: number }) => span.start);
+    expect(starts).toEqual([...starts].toSorted((one, other) => one - other));
+    expect(new Set(starts).size).toBe(starts.length);
+  });
+  it("admits a pair of spans whose second sits earlier, and says so with `ordered: false`", () => {
+    // The run-22 shape: two pieces of evidence for one criterion, quoted with no order meant.
+    const transcript = "**mode:** posting\n\nThe run posts what it finds.\n\n### Findings (1 posted)\n\nOne row.\n";
+    const evidence = locateCitation('"### Findings (1 posted)" "**mode:** posting"', transcript, "pass");
+    expect(evidence).toMatchObject({ kind: "ordered-spans", ordered: false });
+    expect(evidence.spans).toEqual([
+      { start: transcript.indexOf("### Findings"), end: transcript.indexOf("### Findings") + 23 },
+      { start: transcript.indexOf("**mode:** posting"), end: transcript.indexOf("**mode:** posting") + 17 },
+    ]);
+    // Every span still has to be there: one absent element refuses the whole citation.
+    expect(locateCitation('"### Findings (1 posted)" "**mode:** advisory"', transcript, "pass")).toBeNull();
   });
   it("reads a v7 absence citation as the search it is, and records terms that are present", () => {
     const transcript = "Added a row to the ledger. Nothing was overridden.\n";
@@ -863,6 +911,27 @@ describe("rubric citation spans and complete output shape", () => {
     // to every row cited is the driver's job, and `cited` is what it reads to do it.
     expect(calibrationMatches(c5, grade)).toBe(true);
     expect(grade.advisory.map((row: { cited: boolean }) => row.cited)).toEqual([false]);
+  });
+  it("reads a rubric-required authoring note as a note, not as a decision line", () => {
+    const c1 = rubric.fixtures[0];
+    // Rubric v7 item 7 requires the note in the same emission, and a note may name a criterion
+    // and the word "fail" while deciding nothing. A PASS grade carrying one is admitted.
+    const note = "notes:\n  - No case id was present in the input.\n" +
+      "  - B3: the basis is written as \"directly read diff hunk\" rather than the literal term \"direct" +
+      " evidence\". Graded pass because a basis is stated and the criterion's fail clause is a missing basis.";
+    const passing = `${emission(c1)}\n${note}`;
+    const grade = parseGrade(passing, c1.scenario, c1.transcript);
+    expect(grade.verdict).toBe("PASS");
+    expect(calibrationMatches(c1, grade)).toBe(true);
+    const c3 = rubric.fixtures[2];
+    // A FAIL still has to name its decider, and a decider-like line that appears only inside
+    // the notes is not that: the emission below loses its deciding line and keeps the note.
+    expect(() => parseGrade(`${emission(c3).replace("deciding binding criterion: B4\n", "")}\nnotes:\n  - B4 decides the failure.`,
+      c3.scenario, c3.transcript)).toThrow(/grade-fail-decider/);
+    expect(() => parseGrade(emission(c3).replace("deciding binding criterion: B4\n", ""), c3.scenario, c3.transcript))
+      .toThrow(/grade-fail-decider/);
+    // And a FAIL that names its decider before the notes is still admitted with one present.
+    expect(parseGrade(`${emission(c3)}\n${note}`, c3.scenario, c3.transcript).verdict).toBe("FAIL");
   });
   it("allows a failing binding ID on the verdict line without imposing a new prefix", () => {
     const c3 = rubric.fixtures[2];

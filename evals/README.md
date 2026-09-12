@@ -147,11 +147,26 @@ really broke the line; a `\"` the judge escaped for its own text
 block is read as the quote mark it stands for; and an all-passed advisory summary may carry its
 ratio (`all passed (N/N)`).
 
-A citation that is **nothing but two or more quoted spans** is rubric v7's ordering form, and
-the reader checks what it claims: every span must locate and their transcript offsets must rise
-in the citation's own order. The evidence is `kind: ordered-spans` with those offsets; an
-element that is absent, or two in the wrong order, refuses. A citation that mixes quoted spans
-with prose is not this form and is read span by span as before.
+A citation that is **nothing but two or more quoted spans** is rubric v7's list form. The
+reader verifies that every span is in the transcript and **records the order rather than
+requiring it**: the evidence is `kind: ordered-spans` with the offsets and `ordered: true` when
+the spans run in the citation's own order, `ordered: false` when they do not. Only a span with
+no occurrence at all refuses. So an ordering criterion cited as a list **is admitted even when
+the elements are out of order** — the reader is saying the elements exist, not that the order
+holds, and a reviewer reading `ordered: false` on an ordering criterion is reading the thing
+the criterion was about. Judges use the same form for two pieces of evidence with no order
+intended, which is why the reader does not decide it. A citation that mixes quoted spans with
+prose is not this form and is read span by span as before.
+
+**One ordering claim, two strictnesses — a known gap.** Unquoted structural fragments in the
+wrong order still refuse, because `structural-fragments` requires the order; quoted spans in the
+wrong order are admitted with `ordered: false`. Rubric v7 form 3 tells judges to cite an
+ordering criterion with quoted spans, so in practice an ordering criterion is no longer verified
+mechanically by the reader at all: what verifies it is a reviewer reading `ordered:` in the
+artifact. Closing that properly needs one of two things this reader cannot do on its own —
+passing the criterion's text in, so it can tell an ordering criterion from any other, or having
+the driver surface `ordered: false` rows on ordering criteria the way it already surfaces
+uncited advisory rows.
 
 A named search with a negative result is recognized **before** its terms are read as a
 quotation, because v7's absence form quotes the terms that were searched for
@@ -181,12 +196,15 @@ src/auth/session.ts and then updated docs/api.md` and `the run refused src/auth/
 left docs/api.md alone` locate the same span, so the sentence is the reviewer's to read, not
 the reader's to certify. Fragments also anchor on their **first** occurrence in the transcript,
 so on a transcript that names a path twice the recorded offsets can point at a region other
-than the one the judge meant. An `ordered-spans` citation anchors each of its spans the same
-way — at the span's first occurrence — and does not backtrack, so an order that is satisfiable
-only through a later occurrence of a repeated element refuses: `"beta" "## Tests"` against a
-transcript reading `alpha` / `## Tests` / `beta` / `## Tests` / `gamma` anchors `## Tests` at
-the first heading, which precedes `beta`, and the citation is refused even though the second
-heading would have satisfied it. The judge picks different anchors.
+than the one the judge meant. An `ordered-spans` citation walks **forward** first: its
+first span is looked for anywhere, and every span after it at its first occurrence at or after
+the end of the one before. A list therefore reads the same span as many times as the transcript
+carries it (`"x" "x" "x"` finds three occurrences), and an element that also appears earlier
+does not drag the order backwards — `"beta" "## Tests"` against `alpha` / `## Tests` / `beta` /
+`## Tests` / `gamma` is satisfied by the second heading, and the evidence says `ordered: true`.
+Where the forward walk cannot complete, each span is located on its own at its first occurrence
+and the evidence says `ordered: false`, so `"x" "x" "x"` against two occurrences records three
+spans at the first `x` rather than refusing.
 
 Words, negations, numbers, identifier punctuation and every code region stay verbatim, with one
 exception named where it applies: quotation-mark style, which the class above maps mark to mark
@@ -199,6 +217,13 @@ absorbed so that, in the usual case, the recorded slice is a balanced fragment (
 residuals: when a neighbouring construct's delimiter sits directly against the match the
 extension can include it, and a span whose text opens after an absorbed list marker or table
 pipe begins at the text rather than at the marker; matching and the span hashes are unaffected).
+
+The emission's own shape is read the same way. A `FAIL` must name the binding criterion that
+decided it, and the reader looks for that outside the `notes:` block: rubric v7 requires an
+authoring note in the same emission, and a note may name a criterion and the word "fail" while
+deciding nothing (`- B3: … Graded pass because a basis is stated and the criterion's fail
+clause is a missing basis`). A `PASS` is not searched for a decider at all, and a `FAIL` whose
+only decider-like line sits inside the notes still refuses, because a note is not a decision.
 
 One rule is about the grade rather than the span. A **binding** criterion decides the case, so
 a citation the reader cannot locate refuses the grade, as it always has. An **advisory**
