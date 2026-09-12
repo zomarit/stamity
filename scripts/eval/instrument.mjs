@@ -275,10 +275,11 @@ const negativeResult = new RegExp(`\\b(none|absent|not found|no match|silent|doe
 // passively, and the judge's own line wrap may fall between the subject and the verb.
 const reportedSilence = /\btranscript\s+is\s+silent\b|\b(?:transcript|response|answer|reply)\b[^.]{0,120}?\b(?:is silent|silent on|silent about|(?:says|reports|mentions|names|states|records|acknowledges)\s+nothing|does not (?:mention|address|say)|never (?:mentions|addresses)|(?:is|are|was|were)\s+(?:never|not)\s+(?:mentioned|named|reported|addressed|stated|acknowledged|surfaced))\b/i
 
-function proseMatch(source, text) {
+function proseMatch(source, text, from = 0) {
   const wanted = proseView(text)
   if (!wanted.tokens.length) return null
   const at = source.tokens.findIndex((token, start) => token === wanted.tokens[0] &&
+    source.positions[start].start >= from &&
     wanted.tokens.every((part, offset) => source.tokens[start + offset] === part))
   if (at === -1) return null
   const positions = source.positions.slice(at, at + wanted.tokens.length)
@@ -669,32 +670,56 @@ function fragmentSpan(citation, transcript) {
   return { ...spanEvidence(transcript, spans[0].start, spans.at(-1).end, 'structural-fragments'), fragments: spans }
 }
 
-/** One quoted phrase, through the passes in order: copied exactly, then the strict prose
- *  view, then the normalized view, then an explicit elision. */
-function locatePhrase(phrase, transcript, source, normalized) {
-  const at = transcript.indexOf(phrase.text)
-  if (at !== -1) return spanEvidence(transcript, at, at + phrase.text.length, 'exact')
-  if (phrase.code) return null
-  const strict = proseMatch(source, phrase.text)
-  if (strict) return spanEvidence(transcript, strict.start, strict.end, 'prose-presentation', strict.changes)
-  const wanted = normalizedPhrase(phrase.text)
-  const found = wanted.text && locateNormalized(normalized, wanted)
-  if (found) return normalizedSpan(normalized, transcript, found).span
-  return elidedSpan(normalized, transcript, phrase.text)
+/** The first normalized character that starts at or after a transcript offset. */
+const normalizedFrom = (normalized, offset) => {
+  const at = normalized.starts.findIndex(start => start >= offset)
+  return at === -1 ? normalized.text.length : at
 }
 
-/** Rubric v7 form 3: a citation that is nothing but two or more quoted spans claims an order,
- *  so the reader checks the order. Every span has to locate and their starts have to rise in
- *  the citation's own sequence; one absent element, or two in the wrong order, refuses. A
- *  citation that mixes quoted spans with prose is not this form and keeps the older reading. */
+/** One quoted phrase, through the passes in order: copied exactly, then the strict prose
+ *  view, then the normalized view, then an explicit elision. `from` is a transcript offset
+ *  the span has to begin at or after, which is how an ordered list walks forward. */
+function locatePhrase(phrase, transcript, source, normalized, from = 0) {
+  const at = transcript.indexOf(phrase.text, from)
+  if (at !== -1) return spanEvidence(transcript, at, at + phrase.text.length, 'exact')
+  if (phrase.code) return null
+  const strict = proseMatch(source, phrase.text, from)
+  if (strict) return spanEvidence(transcript, strict.start, strict.end, 'prose-presentation', strict.changes)
+  const wanted = normalizedPhrase(phrase.text)
+  const found = wanted.text && locateNormalized(normalized, wanted, normalizedFrom(normalized, from))
+  if (found) return normalizedSpan(normalized, transcript, found).span
+  const elided = elidedSpan(normalized, transcript, phrase.text)
+  return elided && elided.start >= from ? elided : null
+}
+
+/** Rubric v7 form 3: a citation made only of quoted spans. The reader verifies that every one
+ *  of them is in the transcript, and records whether they run in the citation's order rather
+ *  than requiring it — whether the order is what the criterion is about is the criterion's
+ *  business, and the reviewer's. The forward-anchored walk is tried first, and when it
+ *  succeeds the evidence says `ordered: true`; otherwise each span is located on its own, at
+ *  its first occurrence, and the evidence says `ordered: false`. Only a span with no
+ *  occurrence at all refuses. A citation that mixes quoted spans with prose is not this form
+ *  and keeps the older reading, span by span. */
 function orderedSpans(citation, phrases, transcript, source, normalized) {
   let rest = citation
   for (const phrase of phrases) rest = rest.replace(citation.slice(phrase.start - 1, phrase.end + 1), ' ')
   if (rest.trim()) return null
-  const located = phrases.map(phrase => locatePhrase(phrase, transcript, source, normalized))
+  // Forward first: each element at its first occurrence at or after the end of the one before
+  // it, so a list may name the same span as many times as the transcript carries it and an
+  // element that also occurs earlier does not pull the order backwards.
+  const forward = []
+  let from = 0
+  for (const phrase of phrases) {
+    const evidence = locatePhrase(phrase, transcript, source, normalized, from)
+    if (!evidence) break
+    forward.push(evidence)
+    from = evidence.end
+  }
+  const ordered = forward.length === phrases.length
+  const located = ordered ? forward
+    : phrases.map(phrase => locatePhrase(phrase, transcript, source, normalized))
   if (located.some(evidence => !evidence)) return null
-  if (located.some((evidence, index) => index > 0 && evidence.start <= located[index - 1].start)) return null
-  return { kind: 'ordered-spans', offsetUnit: 'UTF-16-code-units',
+  return { kind: 'ordered-spans', ordered, offsetUnit: 'UTF-16-code-units',
     spans: located.map(evidence => ({ start: evidence.start, end: evidence.end })),
     start: located[0].start, end: located.at(-1).end,
     transcriptSha256: sha256(transcript), citationSha256: sha256(citation),
@@ -882,7 +907,13 @@ export function parseGrade(raw, scenario, transcript) {
   const ratios = group => [...suffix.matchAll(new RegExp(`\\b${group}(?:\\s+count)?\\s*:?\\s*(\\d+)\\/(\\d+)\\b`, 'gi'))]
   requireEvidence(ratios('binding').every(match => Number(match[1]) === binding.filter(row => row.verdict === 'pass').length &&
     Number(match[2]) === binding.length), 'grade-binding-summary', true)
-  const decisionLines = suffix.split('\n').filter(isDecision)
+  // Rubric v7 requires authoring notes in the same emission, after the verdict, and a note may
+  // name a criterion and the word "fail" while deciding nothing ("B3: … Graded pass because a
+  // basis is stated and the criterion's fail clause is a missing basis"). A note is not a
+  // decision line: a PASS is not searched for a decider at all, and a FAIL must name its
+  // decider outside the notes, so a decider-like line that only appears there does not count.
+  const beforeNotes = suffix.split(/^[ \t]*notes:/mi)[0]
+  const decisionLines = verdict === 'FAIL' ? beforeNotes.split('\n').filter(isDecision) : []
   const deciding = decisionLines.flatMap(line => {
     const decisions = summaryDecisions(line), statuses = summaryStatuses(line)
     requireEvidence([...line.matchAll(/\bB\d+\b/g)].every(match =>

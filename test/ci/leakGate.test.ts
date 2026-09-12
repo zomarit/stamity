@@ -51,17 +51,21 @@ function runGate(): GateResult {
  * saying nothing about what got slower or by how much.
  *
  * The basis, so the next person can re-derive it instead of guessing:
- *   local wall time   3.3s  — `/usr/bin/time -p node scripts/leak-gate.mjs`, three runs,
- *                             3.28-3.30s over 852 files, node start included
- *   CI ratio          2x    — the runner class is about half this machine's speed; the run that
- *                             failed had measured 11.98s locally and did not finish inside 20s
+ *   local wall time   16s   — `time node scripts/leak-gate.mjs`, three runs, 15.81-16.13s over
+ *                             5,561 files, node start included. It was 3.3s over 852 files when
+ *                             this budget was first derived; the tree grew because every run
+ *                             export publishes each attempt's output under `evals/runs/<run>/calls/`,
+ *                             and the gate reads all of them — by design, so nothing is excluded.
+ *   CI ratio          2x    — the runner class is about half this machine's speed
  *   margin            4x    — a shared runner with a cold file cache, not a second budget
- *   = 3.3 x 2 x 4 ≈ 26s, rounded to 30s
+ *   = 16 x 2 x 4 ≈ 128s, rounded up to 180s
  *
  * So a CI leg twice as slow as expected still REPORTS the gate's true cost, and only a gate that
- * has become roughly nine times its local wall time trips this — where a timeout is the finding.
+ * has become roughly eleven times its local wall time trips this — where a timeout is the
+ * finding. The 30s this replaced was derived against a tree six times smaller, and on the floor
+ * and Windows legs of 4b2d8d9 it turned the gate's growth into a timeout that named no cost.
  */
-const GATE_RUN_TIMEOUT_MS = 30_000;
+const GATE_RUN_TIMEOUT_MS = 180_000;
 
 describe("leak-gate against the repository as it stands", () => {
   it("passes, and says how many files it read", () => {
