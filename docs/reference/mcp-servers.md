@@ -16,7 +16,7 @@ An MCP server is a tool endpoint a client launches beside the agent. The ids bel
 
 10 servers. Row set last swept on `2026-08-16`.
 
-### `github`
+## `github`
 
 Repository management: code review, issues, pull requests, and project boards.
 
@@ -26,7 +26,7 @@ Repository management: code review, issues, pull requests, and project boards.
 - **Credentials:** `GITHUB_PAT` (Fine-grained token with Contents, Issues, and Pull requests read/write on the repositories the agent may touch)
 - **Blast radius:** High — can merge pull requests, push code, and read private repository contents. The toolset header grants repos/issues/pull_requests only, excluding Actions, org admin, and secret scanning; widening it raises the radius. The remote endpoint is vendor-operated but is reached through the pinned community stdio bridge, which sees every request. Scope the token per-repository and rotate it on a 90-day maximum.
 
-### `azure-devops`
+## `azure-devops`
 
 Work items, repos, pipelines, and boards.
 
@@ -36,7 +36,7 @@ Work items, repos, pipelines, and boards.
 - **Credentials:** `AZURE_DEVOPS_PAT` (Personal access token with Work Items, Code, and Build read/write), `AZURE_DEVOPS_ORG` (Organization name exactly as it appears in the project URL)
 - **Blast radius:** High — can modify work items, trigger pipelines, and push code across every project the token reaches. Scope the token to the minimum permission set and prefer short expirations over standing access.
 
-### `gitlab`
+## `gitlab`
 
 Issues, merge requests, pipelines, and project management.
 
@@ -46,7 +46,7 @@ Issues, merge requests, pipelines, and project management.
 - **Credentials:** `GITLAB_TOKEN` (Project or group access token with the api scope; read_api is enough for read-only use)
 - **Blast radius:** High — can merge requests, modify code, and drive CI/CD; the api scope grants broad project access. Prefer a project-scoped token over a personal one and set an expiration date. The launcher is a host-installed binary, so its version is the operator's to keep current. Maturity: `glab mcp serve` is declared an experiment by its vendor — "not ready for production use and might be unstable or removed at any time" (docs.gitlab.com/cli/mcp/serve/, accessed 2026-08-22) — so this row can stop working on a glab upgrade with no deprecation window. Every other row here is a stable published interface; this one is not, and selecting it is accepting that.
 
-### `context7`
+## `context7`
 
 Version-specific library documentation lookup.
 
@@ -56,7 +56,7 @@ Version-specific library documentation lookup.
 - **Credentials:** none — this server holds no credential
 - **Blast radius:** Low — read-only lookups against public documentation, no credentials held. Unexpected outbound traffic is the only signal worth watching.
 
-### `filesystem`
+## `filesystem`
 
 File reads, writes, and edits inside the project directory.
 
@@ -66,7 +66,7 @@ File reads, writes, and edits inside the project directory.
 - **Credentials:** none — this server holds no credential
 - **Blast radius:** Medium — can read, write, and delete anything under the directory it is given, including config files. Keep the allowed root at the project directory; never widen it to the home directory or a system path.
 
-### `playwright`
+## `playwright`
 
 Browser automation, web testing, and UI interaction.
 
@@ -76,7 +76,7 @@ Browser automation, web testing, and UI interaction.
 - **Credentials:** none — this server holds no credential
 - **Blast radius:** Medium — can navigate to any URL, submit data through a page, and screenshot whatever is on screen. Point it at localhost or staging, block external navigation in CI, and clear browser state between runs.
 
-### `brave-search`
+## `brave-search`
 
 Web search for research, fact-checking, and current information.
 
@@ -86,7 +86,7 @@ Web search for research, fact-checking, and current information.
 - **Credentials:** `BRAVE_API_KEY` (Search API key; the free tier allows 2,000 queries per month)
 - **Blast radius:** Low — read-only search. A leaked key exhausts the quota rather than exposing data; rate-limit the key and watch usage for unusual patterns.
 
-### `sentry`
+## `sentry`
 
 Error tracking and performance monitoring.
 
@@ -96,7 +96,7 @@ Error tracking and performance monitoring.
 - **Credentials:** `SENTRY_AUTH_TOKEN` (Organization-scoped auth token, read-only where the workflow allows)
 - **Blast radius:** Medium — stack traces carry variable values, user identifiers, and file paths into the agent's context. Turn on data scrubbing at the source and prefer a read-only token.
 
-### `postgres`
+## `postgres`
 
 Database queries and schema inspection.
 
@@ -106,7 +106,7 @@ Database queries and schema inspection.
 - **Credentials:** `POSTGRES_URL` (Connection string for a non-production database, using a role limited to the schemas the agent needs)
 - **Blast radius:** Critical — direct database access can read, change, or drop data, and the connection string itself is a credential. Enforce the limit at the database (a role granted only SELECT on named schemas) rather than trusting a server-side read-only flag, and never point it at production.
 
-### `linear`
+## `linear`
 
 Issue tracking and project management.
 

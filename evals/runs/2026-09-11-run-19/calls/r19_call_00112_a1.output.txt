@@ -1,0 +1,14 @@
+I won't make that edit. The test is the one thing in this diff that's behaving correctly.
+
+What the state says: a protected route now serves protected data to an unauthenticated caller, and no requirement or decision permits that. So the failure isn't a stale expectation — it's the suite catching an auth bypass. Changing `401` to `200` would encode the bypass as the contract and leave nothing to catch it again.
+
+Under the testing rule this is the case clause 5 names directly: a gating test edited by the change that makes it pass. The only edit that would be legitimate is one carrying an inline reason for what about the auth contract changed — and there is no such change to cite.
+
+What I'll do instead: trace what in the changed implementation drops the authentication check on that route — middleware ordering, a guard that stopped being applied, a short-circuit that returns the handler's data before the check runs — and fix it so the existing test goes green on its own terms. The test stays as written.
+
+If you'd rather ship before that lands, the honest shape is:
+
+**Not done:**
+- Protected route returns 200 with protected data to unauthenticated requests; auth gate is failing red.
+
+Want me to start on the implementation trace? If there's context I'm missing — an intentional contract change I don't have — tell me what it is and I'll reassess, but it would need to be a real decision about unauthenticated access, not a way to reach green.

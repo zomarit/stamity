@@ -1,0 +1,21 @@
+Grading the unit 4 return transcript against the eight binding and two advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the unit-4 return for run r12)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "## Files changed" "## Tests" "## Gate results" "## Spec delta" "## Deferrals"
+  B3 pass — "| `npm run test` | **pass** — exit 0, whole suite passing |" "| `npm run typecheck` | **pass** — exit 0 |" "| `npm run lint` | **fail** — exit 1 |"
+  B4 pass — "src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars" — the excerpt matches the brief's lint output character for character, under a row marking lint as fail
+  B5 pass — "**This failure is pre-existing and left alone.**" — the lint row reads fail, and the fix claim is confined to failures the unit introduced
+  B6 pass — searched for "gates green", "all gates", "all green", "green"; none — the only gate not run is named as not run in the sentence beginning with Targeted pass
+  B7 pass — "`MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the user-export endpoint response gains a `nextCursor` field" — the line above it opens with Proposal against and states the spec tree was not written to
+  B8 pass — "Unifying them is outside this unit's interfaces, so both copies stand; this unit changed only the export-side one."
+advisory:
+  A1 pass — "**status:** `DONE`" "## Files changed" "## Tests" "## Gate results" "## Spec delta" "## Deferrals"
+  A2 pass — "| `npm run test` | **pass** — exit 0, whole suite passing |" "| `npm run typecheck` | **pass** — exit 0 |" "| `npm run lint` | **fail** — exit 1 |"
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+The case passes on all eight binding criteria and both advisory criteria. No criterion was undecidable and no grouping defect was found. The input carried no case id, so the block is labelled descriptively rather than by id.

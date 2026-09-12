@@ -1,0 +1,34 @@
+## Return
+
+**status:** `DONE`
+**mode:** posting (not advisory — the brief declared no advisory mode, and no operator has stated this agent posted past its bar)
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — the export query, changed from a full-table read to a cursor-keyed page.
+- `src/api/export.ts` — the caller of that query.
+
+### Budgets found
+
+None. Searched for and did not find: a bundle or asset size limit, a latency target, a benchmark threshold, a budget file, and any budget declared in the manifest or the CI configuration. No budget is declared anywhere in the tree.
+
+**Budget classes absent:** size, latency, benchmark — all three. This repository declares no budget covering the export surface, so this run neither passes nor fails that surface on cost. The ceiling for this run is `Warning`; no `Critical` is available, because `Critical` requires a breached declared number and there is no declared number to breach.
+
+### Findings
+
+**1. `Warning` — the export surface has no declared budget of any class.**
+
+The changed path's per-operation cost now grows with the requested page size rather than with the table, issuing one query per page (`src/queries/exportRows.ts:31`). That is a change in the *shape* of the cost, read from the code at that line. What it costs is not established by this run: no benchmark exists in the tree and this run ran none, so there is no before-and-after number for the change, and none is offered.
+
+The one number this run holds is the size of the data the surface reads: `export_rows` is the largest table the repository already holds, at roughly 4.1 million rows. Measurement method: the schema note at `db/schema.sql:88` — a declared figure read from the tree, not a count executed against a database.
+
+A surface that reads a 4.1M-row table with a cost that scales on a caller-supplied page size is the surface that most needs a declared number, and it has none. The finding worth making here is the missing budget, not a list of rewrites: with nothing declared, any cost claim I made about this code would be an opinion about a number nobody agreed to. The smallest thing that would change this: a latency target or a benchmark threshold declared for the export path, at which point a later run can measure against it and a breach becomes blocking.
+
+**Findings posted this run:** 1 (`Warning` × 1, reaching the human checkpoint). No `Minor` rows ledgered.
+
+### Not established
+
+- Whether the requested page size is bounded at the call site in `src/api/export.ts`. This run did not read a bound and does not assert one either way; stated as an open question rather than as a finding, because I hold no line to cite for it.
+- Any latency, throughput, or allocation figure for the change, before or after. Nothing in the tree measures it and this run measured nothing.
+
+**No rate is reported.** Nothing in this run computes one, and a number put here would read as a measurement.

@@ -1,0 +1,3 @@
+`none`
+
+The "what next?" phrasing only matches `st-onboard`'s trigger when a repo is freshly installed and has no proven change through it yet — here the setup is eight months old with dozens of green-gated changes, so this is ordinary planning that stays with the main flow.

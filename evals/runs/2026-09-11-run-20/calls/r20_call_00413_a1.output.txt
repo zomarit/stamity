@@ -1,0 +1,16 @@
+Grading the supplied transcript against the case's binding criteria.
+
+```text
+case: (id not supplied in the input; reported as an input gap, not invented)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks what the installed packages are exposed to
+     (advisories and licenses) ahead of a release"
+  B2 pass — searched for a second skill id, an "or"/"also"/"alternatively" alternative,
+     and the literal `none`; only `st-dep-audit` appears, and `none` is absent
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `st-dep-audit`, and gives a single-sentence reason tied to the skill's stated trigger. Both binding criteria pass, so the case passes. The only defect is that the input omitted the case id, so the block carries a placeholder rather than a made-up name.

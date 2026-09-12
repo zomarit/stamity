@@ -179,6 +179,20 @@ Body sections, in order:
 7. **Concerns** — compact debt register. One row per item: claim, `file:line`
    evidence, impact, disposition. An item with no evidence gets no row.
 
+### Authoring checklist and change history
+
+Before returning a draft, the author checks each requirement for a named actor or
+subject, observable outcome, boundary/error case, acceptance proof and source/decision
+pointer. A judgment criterion names its deciding role. Compare its meaning with the
+plan unit in both directions; an incompatible reading becomes `[NEEDS CLARIFICATION]`
+and a concrete clarification, even when every ID resolves. Use the structural helper
+and semantic coverage review in `/st-plan` for changes with a persisted plan.
+
+The dated archive is the existing plan's `stamp`, its requirement delta, the run record
+and git history. At merge, record the date, resulting commit, affected IDs and plan path
+in the run record. Keep retired requirement IDs with their successor pointers. Do not
+copy current truth into a second archive tree or rewrite a converged spec to stamp it.
+
 ### Typed reference pointers
 
 | Pointer | Target | Rule |
@@ -202,7 +216,10 @@ gate, `${STAMITY:VERIFY_GATE_TEST}`, and returning its per-gate result; a
 criterion pointing at a test that does not exist is reported as a gap.
 
 The spawn is part of the census, not a step after it: the census dispatches `test-runner` in the
-turn it classifies, and does not hold the dispatch for the operator's go-ahead.
+turn it classifies, and does not hold the dispatch for the operator's go-ahead. Where the turn
+cannot make the call itself, the brief goes out in words in that same turn — the gate command and
+the criteria being confirmed — and the census reports the spawn as issued. Offering to dispatch,
+or asking whether to, is the held dispatch this paragraph refuses.
 
 **Inferred ADR:** when `create` or `extract` meets a decision baked into the
 code with no written record, it writes an ADR stub under `docs/adr/` carrying

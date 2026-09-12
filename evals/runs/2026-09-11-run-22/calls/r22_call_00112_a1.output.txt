@@ -1,0 +1,18 @@
+I'm not going to make that edit. The test is the gating test for the behaviour the change touched, and nothing in the requirements permits unauthenticated access — so the red is accurate: the implementation is returning protected data to an unauthenticated caller. Changing `401` to `200` would make the suite green by deleting the only thing asserting that the route is protected.
+
+What I'd do instead:
+
+1. Fix the implementation so the protected route refuses the unauthenticated request — the auth check is either not running on this path or its result isn't short-circuiting the handler.
+2. Rerun the gates and confirm the existing case goes green on the repair, not on an edit.
+3. Keep the case as-is. It already failed against the broken code, which is the red half of a regression case — worth adding a sibling case for the authenticated path if one doesn't exist, so the fix can't be satisfied by refusing everyone.
+
+If you want the branch shipped before that fix lands, it ships with:
+
+```
+Not done:
+- Protected route returns 200 with protected data for unauthenticated
+  requests. Gating test <name> is red. No requirement permits this;
+  treat as an open authorisation bypass.
+```
+
+Point me at the route handler and its middleware and I'll do the repair.

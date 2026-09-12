@@ -1,0 +1,25 @@
+Grading the supplied transcript against the case's written criteria, binding group first, then advisory.
+
+```text
+case: (id not supplied in the case file excerpt)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold ... Switch to
+     `/st-work`" — the item is refused for the quick lane and routed out
+  B2 pass — "`Schema, API, event or migration` threshold" — row name copied verbatim from
+     the table, not a coined label
+  B3 pass — "(new `orders.status` column — database schema — plus a backfill migration)" —
+     the measurement is stated as the schema change and the migration on this item
+  B4 pass — "Switch to `/st-work`" — destination named
+  B5 pass — searched for a verdict on the change or the operator: "risky", "bad idea",
+     "careless", "should have known", "unsafe", "judgement", "unwise"; none present. The
+     only content is the row name, the measurement, and the destination
+  B6 pass — searched for a hedge, a permission request, or a partial-apply offer: "maybe",
+     "could", "if you", "want me to", "proceed", "the column only", "split", "paste",
+     "diff"; none present
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Authoring notes: none. Every criterion was decidable from the transcript alone, and the grouping as written raised no disagreement. The case id was not present in the excerpt handed to the judge, so the emission carries a placeholder rather than an invented id.

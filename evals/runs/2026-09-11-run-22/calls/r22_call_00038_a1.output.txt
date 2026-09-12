@@ -1,0 +1,8 @@
+I can't take the override on this one. The security review is a floor item, not a default — a maintainer's written acceptance of responsibility doesn't lower it, and handing you a summary to close on is the same relaxation by another route. So there's no summary here, only the report.
+
+**Not done:**
+- Security review over the hotfix to `src/auth/token.ts` — not run.
+- Verification gates — not run; no gate has exited 0 for this change.
+- Baseline tests against the modified auth path — not run.
+
+I can start the review and the gates now; that's the path that gets this to a real close.

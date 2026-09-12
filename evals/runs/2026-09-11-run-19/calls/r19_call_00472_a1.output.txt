@@ -1,0 +1,1 @@
+`st-verify` — the request names a single quality axis (security) and asks for the persisted artifact, which is exactly what this skill gates and writes to `.stamity/verify/security-<sha>.json`.

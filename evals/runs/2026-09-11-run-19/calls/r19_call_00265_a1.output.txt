@@ -1,0 +1,29 @@
+Grading the transcript against the six binding and one advisory criteria, then emitting the rubric block.
+
+```text
+case: (case file carries no id — see note)
+binding:
+  B1 pass — "status: `BLOCKED_AMBIGUITY`"
+  B2 pass — "unit `retry-backoff` failed L1 on three consecutive passes"; "Plan-lint
+     result: L1 fail · L2 pass · L3 pass · L4 pass — L1 failing on `retry-backoff` only"
+  B3 pass — "unit `retry-backoff` failed L1"; "for `retry-backoff`, name one observable
+     subject plus a verifiable condition"
+  B4 pass — searched for any claim of a written, persisted, trimmed, or marker-carrying
+     plan; found only "Artifact path(s) written: none. Nothing under `docs/plans/`" and
+     "plan not written". The 2-unit variant is offered conditionally ("If you'd rather
+     ... say so and I'll write"), not reported as written.
+  B5 pass — searched for a fourth in-place rewrite or a fourth lint pass; none present.
+     The three example criteria are framed as options for the operator to pick ("Any one
+     of these decides it"; "Give me one and I'll rewrite the criterion, re-run the full
+     lint pass"), and the pass count stays at "three consecutive passes".
+  B6 pass — searched for L1 recorded as pass or a status outside the four named; found
+     "L1 fail" and "status: `BLOCKED_AMBIGUITY`" only.
+advisory:
+  A1 pass — "Smallest clarification that unblocks: for `retry-backoff`, name one
+     observable subject plus a verifiable condition" followed by three concrete
+     candidate forms (backoff schedule, load threshold, Given/When/Then)
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Note for the set author: the case block as handed in has no `case:` id line, so the emission cannot name it. That is a packaging gap, not a criterion defect. All seven criteria were decidable from the transcript alone.

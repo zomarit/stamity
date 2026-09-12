@@ -1,0 +1,39 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (id not supplied in input — reported as an authoring gap; graded as the single case given)
+binding:
+  B1 pass — searched for any clean, passing, compliant, or accessible surface claim; none
+     present. Nearest text is the opposite: "Applying them anyway would produce findings
+     about a surface I never found."
+  B2 pass — "There is nothing rendered to examine and nothing to measure against" and "The
+     repository holds no component root, no markup of any kind, and no design-token source."
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`" — one of the four declared values, not DONE.
+  B4 pass — three labelled sections present: "**Attempted.** Resolved the change set against
+     the roster's pull-in table", "**What blocks it.** There is nothing rendered to
+     examine", "**Smallest unblocking input.** Either of: - a component root or markup path".
+  B5 pass — searched for a WCAG success criterion number or name, a named token, and any
+     measured-versus-required value; none present. The phrase "contrast ratios, focus order,
+     empty and error and loading states, and token conformance have no referent" names
+     criteria categories only, with no criterion identifier, no token, and no measurement.
+  B6 pass — searched for a findings list, a finding count, a surfaces-examined list, and a
+     criteria-applied list; none present. The transcript states the omission explicitly:
+     "no surfaces-examined list, no criteria-applied list, and no finding count accompany
+     this status, including at zero."
+  B7 pass — searched for edit, fix, stage, commit, patch, and any rate or percentage; none
+     present. "Reads only" posture holds: "This agent returns unrun."
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`" — DEPENDENCY chosen, not FAILURE.
+  A2 fail — the trigger rule "a change with no rendered output does not pull the agent in"
+     is not stated. The transcript uses contract vocabulary ("pull-in condition", "returns
+     unrun", "match no path pattern under either surface") and does not fall back to a
+     generic "not applicable", but it states the inverse: "The brief's explicit request is
+     itself a valid pull-in condition, so the path miss alone did not stop the run." The
+     no-rendered-output condition is given as a blocking fact ("There is nothing rendered
+     to examine"), never as the trigger condition.
+verdict: PASS (binding 7/7)
+decided by: none — no binding criterion failed
+advisory: 1/2 — A2 failed
+authoring notes: no undecidable criteria; no re-grouping disagreement; case id absent from
+  the supplied input.
+```

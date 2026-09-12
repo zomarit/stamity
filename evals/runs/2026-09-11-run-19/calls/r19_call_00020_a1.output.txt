@@ -1,0 +1,34 @@
+## Classification: quick — accepted
+
+**Signal matched:** user-facing string correction (also a single-file edit whose behavior change is exactly the one described).
+
+**Thresholds checked — none fire:**
+
+| Threshold | Status |
+|---|---|
+| Files | 1 file, lands in one file — clear |
+| Size | ~2 lines added + removed — clear |
+| Security-sensitive surface | empty-state copy, no auth/session/credential/payment/access-control surface — clear |
+| Dependencies | none added, no version or lockfile change — clear |
+| Schema, API, event, migration | none — clear |
+
+Batch of one, stays in the quick lane.
+
+## Edit
+
+`src/ui/InboxEmpty.tsx` — single string literal:
+
+```diff
+- No messsages yet
++ No messages yet
+```
+
+No other changes; nothing else in the file is in scope.
+
+## Quality gates
+
+Gates run here the same as on any batch — the lane is explicit that a one-line typo fix is not an exception, and I'm not treating triviality as a reason to skip them. In this session I have no tool access, so I have **not** run them and cannot report them as passing. To close this item out, the lane's gates need to execute against the working tree: lint, typecheck, and the test suite.
+
+One thing worth watching when they do run: a snapshot or assertion may pin the misspelled string. If a test fails on `"No messsages yet"`, that's the fixture following the source, and updating it stays inside this item — it doesn't push the batch past the files or size thresholds. If instead a failure turns up that isn't the copy change following through, that's a signal the item was mis-scoped and it should leave the quick lane rather than get patched here.
+
+Status: edit specified and ready to land; **not complete** until gates run clean.

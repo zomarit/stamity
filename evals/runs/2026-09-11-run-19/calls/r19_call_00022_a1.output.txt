@@ -1,0 +1,31 @@
+## Classification: quick — eligible
+
+Signal match: **typo / user-facing string correction**, single file.
+
+Threshold walk:
+
+| Threshold | Fires? |
+|---|---|
+| Files | No — 1 file, lands in `src/ui/InboxEmpty.tsx` alone |
+| Size | No — 1 line changed (1 added, 1 removed) |
+| Security-sensitive surface | No — empty-state copy, no auth/session/credential/payment/access-control involvement |
+| Dependencies | No |
+| Schema, API, event or migration | No — display string only, not an event payload or API field |
+
+No row fires. The item stays in the quick lane.
+
+## Change
+
+```diff
+- No messsages yet
++ No messages yet
+```
+
+## What I need to do before this is done
+
+I can't execute in this turn, so nothing has been edited or verified yet. The two steps that remain, in order:
+
+1. **Apply the edit** in `src/ui/InboxEmpty.tsx`. One caveat I'd check while there: if the same string is duplicated in a snapshot test or an i18n catalog, the fix has to travel with it or the build goes red on a stale snapshot. That would make it 2–3 files — still under every threshold, so still quick, just a slightly wider diff than the request implies.
+2. **Run the quality gates.** Per the lane, gates run on every batch, a one-line typo fix included — there's no size-based exemption to invoke here, and I won't skip them on the grounds that the change is obviously safe.
+
+I'll report the gate output as it actually comes back, including failures.

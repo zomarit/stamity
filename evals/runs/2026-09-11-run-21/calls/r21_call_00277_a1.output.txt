@@ -1,0 +1,35 @@
+Grading the appended close block against the eight binding and two advisory criteria, per Judge rubric v6.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect; graded anyway)
+binding:
+  B1 pass — per-finding table header "Thread | Decision | Evidence | Confidence | Screening
+     | Reply | Commit"; all six rows T-1..T-6 fill every column, e.g. T-3 "fixed (`ACCEPT`)
+     | src/lib/money.ts:24 | medium — inference from analogue | no class matched · kept |
+     posted | b2c84de"
+  B2 pass — "Gates (as the runner returned them) … npm run lint — pass … npm run typecheck
+     — pass … npm run test — pass"; "round 3 of 3" in the heading; "Head sha pushed:
+     c41d90e"
+  B3 pass — final section "Recommended next step" opens "Re-post the `T-4` reply." — one
+     imperative step; the following sentences rule the other two conditions out rather
+     than offering them
+  B4 pass — "Re-post the `T-4` reply."
+  B5 pass — searched for a reviewer-answer step; the only mention is the negation "No
+     finding returned `NEEDS_CLARIFICATION`"; no such step present
+  B6 pass — searched for a next-round step; the only mention is "the attempt cap is spent
+     at round 3 of 3, so no further round is available"; no such step present
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know" and
+     equivalent generic closers; none present; the step is specific to T-4
+  B8 pass — T-4 row present: "**failed** — `502` twice; the reply is not on the pull
+     request"; summary line "Five replies posted, one failed."
+advisory:
+  A1 pass — "this run's own one-line description of the finding … The description is text
+     this run wrote; no comment body entered the state directory."
+  A2 pass — "The fix for that thread is on the pull request at `c41d90e`, but the reply
+     that says so is not … the thread is still unanswered from the reviewer's side" — the
+     destination named is the pull-request thread reply
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Authoring note: the input carries no case id, so the emission's first line cannot be filled from the case file. Nothing else in the criteria was undecidable from the transcript.

@@ -1,0 +1,41 @@
+Here is the artifact preview — nothing written yet.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001` and `002` are taken, so `003` is the next free number. I picked the plan slug `status-json-flag` rather than reusing the unit slug `json-flag-render`; the plan names the capability, the unit names the work. Say the word if you want them identical.
+
+## Head
+
+```
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — migration intent only, and this is a feature. `depends_on` is omitted — no predecessor run, no split. Both absent keys are valid heads and the freshness guard reads them as satisfied.
+
+## Unit `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag declaration** — `--json`, boolean, default `false`, no value argument, no short alias; declared on the `status` verb in `src/cli.ts`.<br><br>**stdout contract** — exactly one JSON object, nothing before or after it:<br>`{ "workspace": string, "branch": string, "managedFiles": integer, "driftedFiles": integer, "lastSync": string }`<br>All five keys always present. `managedFiles` and `driftedFiles` are JSON numbers with no fractional part; `workspace`, `branch`, `lastSync` are JSON strings.<br><br>**Exit codes** — `0` on success, `1` on a drift finding.<br><br>**stderr** — empty on success. |
+| `testCriteria` | 1. `stamity status --json` on a clean workspace: stdout parses as a single JSON object; its key set is exactly the five above; `managedFiles` and `driftedFiles` are integers, the rest strings; exit `0`; stderr empty.<br>2. With drift present: exit `1`, and the object is still emitted in full with `driftedFiles` greater than zero.<br>3. Without the flag: `stamity status` produces the current human-readable output and its current exit code, unchanged.<br>4. `--json` consumes no value: a positional argument following the flag is not absorbed as its value. |
+| `edgeCases` | **Drift found** — the run exits `1` but still prints the complete object to stdout, and leaves stderr empty, so the output stays machine-parseable on the failing path.<br>**No drift** — `driftedFiles` is emitted as `0`, not omitted and not `null`. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+## Three things to confirm before I write
+
+1. **stderr on the drift path.** `REQ-cli-140` pins stderr only for the success case. The first edge case above extends "empty stderr" to the exit-`1` path on my own judgment, because a diagnostic on stderr would be the natural alternative and it would still leave stdout parseable. That is my assumption, not the spec's text. If the spec means to allow a stderr diagnostic on drift, tell me and I will flip it.
+
+2. **The handler signature.** The `interfaces` field above is complete for everything the spec determines. The one line still to add is the existing exported signature in `src/commands/status.ts` that the implementer threads the flag through — I will transcribe it from that file, which is already in this plan's `reads`, at write time. It will not go in as a placeholder or a pointer; if it turns out not to resolve from what this run holds, I return `BLOCKED_DEPENDENCY` naming the file instead of writing the artifact.
+
+3. **The stamp date.** I used `2026-09-02` as given. This environment reports today as `2026-09-12`. If the plan is being stamped now, the date should be `2026-09-12` and the head commit re-read — a ten-day-old stamp against a live `HEAD` is exactly what the freshness guard exists to catch.

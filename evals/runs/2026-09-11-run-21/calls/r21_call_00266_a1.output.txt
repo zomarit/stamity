@@ -1,0 +1,18 @@
+**status: `BLOCKED_AMBIGUITY`** — L1 failed three consecutive passes on the same unit, which blocks the write; nothing was written.
+
+I can't write the plan yet. `retry-backoff` has burned three plan-lint passes on L1 with no observable and no threshold available from the request, the intake read, or the four researcher findings — "sensibly under load" → "resilient" → "robust under load" are all bare adjectives. A fourth rewrite from me would be invention, not a criterion, so the gate stops here rather than shipping a plan whose middle unit can't be verified.
+
+**What unblocks it** — one answer, for `retry-backoff` only:
+
+- What is the retry budget's observable ceiling, with units? e.g. *retry attempts ≤ 10% of total requests over a 60s window*, or *≤ 3 attempts per request*, or *total added latency ≤ 500ms at p99*.
+- And the command that measures it — an existing load/integration target, or a metric name I can assert against.
+
+Given a budget-shaped ceiling plus a measuring command, I'll write the criterion as Given/When/Then, re-run the gate, run the structural coverage pass, and hand off.
+
+**Run close**
+
+- `intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+- Artifacts written: **none**. Draft held 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`); `retry-budget-config` and `retry-metrics` pass every check and are ready to write once the third criterion lands.
+- Structural coverage: **not run** — the write was blocked before that seam. No pass is claimed.
+- Semantic coverage review: not reached; no unresolved readings recorded.
+- Plan-lint (pass 3): `L1 fail · L2 pass · L3 pass · L4 pass` — L1 failing on `retry-backoff`.

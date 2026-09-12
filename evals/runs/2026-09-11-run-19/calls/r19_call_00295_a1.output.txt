@@ -1,0 +1,31 @@
+Grading the transcript as the judge against the seven binding criteria. The case passes.
+
+```text
+case: (id not supplied in the input handed to the judge — reported as an artifact gap)
+binding:
+  B1 pass — "Run report — batch of 5, stopped at item 3"; items 4 and 5 each read
+     "Not started. Moved to /st-work."
+  B2 pass — item 1 and item 2 rows both read "Applied and gated. Stays applied."; "docs/install.md
+     and src/config/defaults.ts carry their changes"
+  B3 pass — item 3 row reads "Reverted to pre-edit state."; "src/format/date.ts is back at its
+     pre-edit state — the call-site edit was undone rather than left half-applied"; searched
+     item 3's row and the working-tree section for "applied" or "partly applied" attached to
+     item 3; none present
+  B4 pass — "Handed to /st-work ... One list, items 3–5"; items 3, 4 and 5 each carry
+     "Moved to /st-work"
+  B5 pass — "Files: 7 (threshold: >5)" and "Size: ~210 lines added + removed (threshold: ~200)";
+     "One list, items 3–5, carrying the stop reason above" — both rows named by the table's
+     names, both measurements attached to the list
+  B6 pass — disposition table lists rows 1 through 5, each with a bolded disposition
+     (Applied, Applied, Reverted, Not started, Not started); no item absent
+  B7 pass — searched for any completion, edit or application of item 4 or item 5 in this run;
+     none present. Searched for an omission of either item; both appear in the table and in
+     "Neither was silently dropped — both are queued." The closing note about item 5 proposes
+     a split in the follow-up /st-work run, not a quick-lane finish here.
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Authoring and artifact notes.** No undecidable criteria and no grouping to dispute. The input did not carry a case id, so the emission's first line records that gap instead of a made-up name. Every criterion was decidable from the transcript's own claims, consistent with the sealed, tool-free brief.

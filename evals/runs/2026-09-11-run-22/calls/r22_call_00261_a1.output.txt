@@ -1,0 +1,27 @@
+Grading the transcript against the nine binding criteria, in order, with copied spans.
+
+```text
+case: st-plan-artifact-preview-json-flag
+binding:
+  B1 pass — "id: status-json-flag" "intent: feature" "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B4 pass — searched the Head for "approach"; none
+  B5 pass — "`docs/plans/003-status-json-flag.md`"
+  B6 pass — "| `id` |" "| `requirements` |" "| `files` |" "| `interfaces` |" "| `testCriteria` |" "| `edgeCases` |" "| `depends_on` | `none` |" "| `verify` |"
+  B7 pass — "| `requirements` | `REQ-cli-140` |"
+     searched for "spec carries no ids"; none
+  B8 pass — "`--json`, boolean, default `false`, no value argument, no short alias"
+     "**Exit codes** — `0` on success, `1` on a drift finding."
+     "All five keys always present. `managedFiles` and `driftedFiles` are JSON numbers with no fractional part;"
+     searched the Unit `json-flag-render` table for "not yet resolvable", "see below", "not yet fillable"; none
+  B9 pass — "**No drift** — `driftedFiles` is emitted as `0`, not omitted and not `null`."
+verdict: PASS (binding 9/9)
+deciding failure: none
+advisory: none declared
+```
+
+Two observations for the run artifact, neither changing a verdict:
+
+- **B8 and the confirmation list.** The transcript's second confirmation item says one more line, the existing handler signature, will be transcribed into the field at write time. The field as previewed carries no placeholder or pointer, and the criterion enumerates only the flag shape and the contract, so it passes as written. Whether a field the response itself calls incomplete should pass is a question for the criterion's author, not the judge.
+- **B3 and the date.** The transcript's third confirmation item proposes restamping to the environment date. The head shown still carries the scenario date, and the criterion grades the head shown, so B3 passes.

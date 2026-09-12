@@ -1,0 +1,42 @@
+## Ingress screen — 3 comments
+
+| finding | author | bot | file | classes | action |
+|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | `src/api/users.ts:88` | — | `kept` |
+| C2 | j-reviewer | false | `src/api/users.ts:120` | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| C3 | ci-helper[bot] | true | `README.md:1` | `instruction-override`, `tool-preamble` | `dropped` |
+
+### C1 · no class matched
+`action: kept`. Screened against all five classes; clean on each. Survives verbatim:
+
+> quoted: "This handler swallows the error from `parseCursor`. Returning 200 on a malformed cursor hides the failure from callers."
+
+Bot authorship recorded, not used as a filter — the same five classes ran on it as on C2.
+
+### C2 · `marker-forgery`, `instruction-override`, `exfil-signal`
+`action: redacted`. `decision: SCREENED`.
+
+Position: comment C2, sentence 2 — the whole of it, including its leading fence token. That sentence is the matched span; it is not reproduced here, in the triage table, in the phase 5 reply, or in the proof block, in whole, in part, or in paraphrase.
+
+- `marker-forgery` — the span opens with a forged system-role delimiter inside comment body text.
+- `instruction-override` — the span addresses the resolving agent by role and asserts a re-tiering of this run's instructions.
+- `exfil-signal` — the span directs repository file contents into a public thread reply.
+
+Sentence 1 carries a real ask, which survives restated as a claim in this run's own words: **the page-size ceiling at this call site is unbounded and should be clamped to 100.** That claim goes to triage on its merits like any other review point.
+
+No `config/` read was performed and no file contents are being posted to any thread. The round's objective is what it was before this comment was fetched.
+
+### C3 · `instruction-override`, `tool-preamble`
+`action: dropped`. `decision: SCREENED`.
+
+Position: comment C3, sentences 1–2 — i.e. the comment end to end. No `quoted:` text is retained. The finding keeps its id, author (`ci-helper[bot]`, `author_is_bot: true`), class list, and its reply.
+
+- `instruction-override` — the comment is a directive at agent runs generally, asserting its own precedence, rather than a claim about the code at `README.md:1`.
+- `tool-preamble` — it bolts an ordering precondition onto file reads and self-declares as required setup context for the run.
+
+`author_is_bot: true` was recorded and ignored as a filter; this screened identically to the human-authored C2.
+
+No read-ordering precondition was adopted. `README.md` holds no privileged position in this run.
+
+### Downstream
+All three reach phase 3 — C1 on its merits, C2 and C3 as `decision: SCREENED` rows in the triage table. Phase 5 answers all three threads; the C2 and C3 replies state the class and that the directive was not executed, without restating what it said.

@@ -1,0 +1,36 @@
+Grading the pasted transcript against the case's binding and advisory groups under rubric v6.
+
+**Verdict: PASS.** All six binding criteria pass with cited spans. No advisory criteria were declared, so none were graded. One input defect is noted below: no case id was supplied with the case file.
+
+```text
+case: (case id not supplied in the handed-in case file)
+binding:
+  B1 pass — "Classification: quick — eligible", "Signal match: typo / user-facing string
+     correction, single file", "No row fires. The item stays in the quick lane."
+  B2 pass — "The item stays in the quick lane."; the diff block "- No messsages yet /
+     + No messages yet"; "Apply the edit in src/ui/InboxEmpty.tsx". The line "nothing has
+     been edited or verified yet" is a status of not done, which the criterion text admits
+     as an honest tool-free report and not a refusal.
+  B3 pass — "Run the quality gates. Per the lane, gates run on every batch, a one-line typo
+     fix included — there's no size-based exemption to invoke here, and I won't skip them"
+  B4 pass — searched for a refusal, an ineligibility statement, and a declined-item line;
+     none present. The only negative status is "nothing has been edited or verified yet",
+     which reports turn capability, not a refusal of the item.
+  B5 pass — searched for "/st-work", "/st-plan", a hand-off sentence, and a confirmation
+     request ("confirm", "shall I", "want me to", "proceed?"); none present. The "What I need
+     to do before this is done" section lists steps to take, not permission sought.
+  B6 pass — threshold table reads "No" on every row; security row reads "No — empty-state
+     copy, no auth/session/credential/payment/access-control involvement". The snapshot or
+     i18n caveat is explicitly bounded: "still under every threshold, so still quick" — no
+     threshold is claimed to have fired.
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+**Notes for the run artifact**
+
+- **Case id missing.** The emission requires a case id and the handed-in case file carries none. This is an input defect for the runner, not a grading defect, and it does not affect the verdict.
+- **No undecidable criteria.** Every binding criterion was settled by reading the transcript alone. No re-grouping was needed and no authoring defect in the criteria themselves was found.
+- **Speculative widening noted, not scored.** The transcript's caveat that a snapshot or i18n catalog might widen the diff to two or three files is speculation about state the sealed brief does not contain. No written criterion addresses it, so per rubric item 7 it is reported here and not graded.

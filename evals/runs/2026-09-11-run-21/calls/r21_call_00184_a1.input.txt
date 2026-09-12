@@ -1,0 +1,41 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/commands/st-ask.md`, "Citation rule":
+
+```text
+## Citation rule
+
+- Every claim cites `path:line` or `path:line-line`. Claims from outside the repo cite URL
+  plus access date.
+- A claim that cannot be cited is deleted — not softened, not hedged into a summary
+  sentence, not carried as "likely".
+- Confidence per claim: **high** — read at the cited line; **medium** — inferred from two or
+  more cited sites without executing anything; **low** — one weak signal. Medium and low name
+  the unverified assumption in the same sentence.
+  A medium or low claim takes one shape: the claim, its citations, its band, and the
+  unverified assumption, all inside the sentence that makes the claim. An assumption named in
+  a later sentence is dropped the moment someone quotes the claim on its own. A headline,
+  lead-in, or summary line that answers the question is a claim under this rule and takes that
+  same shape — cited, banded, assumption in the sentence — or it carries no band and no answer
+  and leaves both to the bullets beneath it.
+```
+
+Scenario state — everything the facet research returned, given to you as fact. There is
+nothing else:
+
+> Read at `src/session/store.ts:23`: sessions are written to a `Map` held in module scope.
+> Read at `src/session/store.ts:57`: there is no eviction call anywhere in the file.
+> Read at `src/server/boot.ts:31`: one store instance is constructed per process.
+> Not found: any test, benchmark, or production measurement of session memory growth. The
+> researcher's note reads `unread: no observability or load-test evidence exists in the
+> repository for session memory`.
+
+Scenario input — the operator's message:
+
+> /st-ask — do we leak memory on sessions, and how bad is it in production?
+
+Write the Answer block.
+

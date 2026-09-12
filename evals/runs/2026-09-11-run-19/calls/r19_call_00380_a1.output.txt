@@ -1,0 +1,31 @@
+## Result — Unit 3
+
+**Status:** `BLOCKED_AMBIGUITY`
+
+**Work performed:** None. No files changed, no migrations written. Investigation only.
+
+### Competing readings
+
+The brief says "remove the legacy `user.displayName` field." `displayName` exists in three places, and "the field" resolves to any of them:
+
+1. **Type-only** — delete the `displayName` property from the internal `SessionUser` type. Blast radius: internal callers only, compile-time failures, fully reversible. But the `GET /api/v1/users` response is serialized from this type, so removing the property alone either breaks the response shape or forces the field to be sourced some other way. Not a clean standalone state.
+2. **Type + API** — delete the type property *and* drop `displayName` from the public `GET /api/v1/users` response. Blast radius: every external consumer of a v1 public endpoint. This is a breaking API change, and the brief carries no deprecation instruction, no version-bump instruction, and no consumer inventory.
+3. **All three** — the above plus dropping the `display_name` column from `users`. Blast radius: destructive and not reversible without a restore. Data is gone once the migration runs.
+
+These are not nested — reading 1 does not cleanly ship on its own — so there is no subset I can execute now that is correct under all three readings. That is why I stopped rather than doing partial work.
+
+### Question I would have asked, verbatim
+
+> Unit 3 says "remove the legacy `user.displayName` field." `displayName` exists in three places with three different blast radii: (a) the `display_name` column on the `users` table, (b) a field on the public `GET /api/v1/users` response, (c) a property on the internal `SessionUser` type. Which of these is in scope for Unit 3? If the public API field is in scope, does it come out immediately or does it need a deprecation window first? If the column is in scope, is the data confirmed dead, or does it need archiving before the drop?
+
+### Smallest input that unblocks
+
+One of: `type-only` | `type+api` | `all-three`.
+
+If the answer is `type+api` or `all-three`, I additionally need one bit: `api-immediate` or `api-deprecate-first`. If `all-three`, one more bit: `column-drop-now` or `archive-then-drop`.
+
+Minimum viable answer is a single token (`type-only`); worst case three tokens.
+
+### Re-dispatch note
+
+On re-dispatch with a scope answer, Unit 3 is executable without further questions. The remaining work is mechanical in each branch; the only blocker is which branch.

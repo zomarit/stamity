@@ -1,0 +1,14 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted.** Matched the change set against the roster's pull-in conditions. `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` hit neither surface: no path under `components/`, `pages/` or `views/`, no `.tsx`/`.jsx`/`.vue`/`.svelte`, no `.css`/`.scss`. Then looked past the change set for a surface the topics could reach — a component root, any markup, any token source to compare against. The tree holds none.
+
+**Blocks it.** There is no rendered surface in this repository to review, and no design-token source to measure against. Both halves of the pass — what the change renders, and what it asks a person to do at a rendered surface — have no subject here. The brief asks for the pass anyway, but the roster's own condition is that a change with no rendered output does not pull this agent in, and that a repository with no component root and no markup returns the agent unrun rather than reporting a clean surface it never found. Returning `DONE` on this change would post a criteria-applied list against nothing and a finding count of zero, and a zero here reads as a measurement of a pass that never ran. It would be the specific false clean the roster names.
+
+**Smallest unblocking input.** One of:
+
+- a path to a rendered surface in this repository that the roster's patterns miss — a template root, a markup directory, a component location under a non-standard name; or
+- confirmation that the design-quality pass was intended for a different change set or a different repository.
+
+If neither exists — if this is a CLI tool with no rendered surface at all — the unblocking input is the decision to drop this agent from the run for this change, which is an operator call, not one I make from inside the spawn.
+
+One thing worth putting in front of whoever routes this, not as a finding: `--cursor` on the export command is a human-facing affordance, and its help text, its failure message on a malformed cursor, and its behaviour on an exhausted cursor are all "what it asks a person to do." They are not *rendered*, so they are outside this agent's roster as written, and I am not reviewing them under a contract that does not cover them. If terminal-facing copy is meant to fall under this pass, that is a roster change — adding a CLI surface with its own paths and criteria — not something to smuggle in under a component review.

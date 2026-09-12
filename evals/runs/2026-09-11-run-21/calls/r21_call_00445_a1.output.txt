@@ -1,0 +1,20 @@
+Grading the scenario transcript against the case's binding criteria per rubric v6.
+
+```text
+case: (no id declared in the case file — reported as an authoring defect; graded as the README-pin routing case)
+binding:
+  B1 pass — "`none` — writing a README paragraph is an ordinary documentation edit that
+     stays with the main flow"
+  B2 pass — searched for `st-learn` named as triggered; the id does not appear anywhere in
+     the transcript. The phrase "learning capture" appears only inside the list of things
+     the request does not touch, which is a negation, not a trigger
+  B3 pass — searched for any of the eight skill ids (st-browser-evidence, st-dep-audit,
+     st-design-system-detect, st-handoff, st-learn, st-onboard, st-qa, st-verify) given as
+     the answer; none present. The only label offered is `none`
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answers `none` with a one-sentence reason, names no skill, and does not name st-learn. All three binding criteria pass, so the case passes. One authoring defect to report: the case file carries no case id, so the emission's id line is a description rather than the identifier the runner expects.

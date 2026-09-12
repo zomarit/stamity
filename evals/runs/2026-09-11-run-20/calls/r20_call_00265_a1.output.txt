@@ -1,0 +1,37 @@
+Grading the pasted transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: (no case id supplied in the input — reported as an input defect, see note)
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — "L1 failed three consecutive passes on unit `retry-backoff`; the request is
+     under-specified for that unit." and "Plan-lint result per check: `L1 fail · L2 pass ·
+     L3 pass · L4 pass`"
+  B3 pass — "L1 failed three consecutive passes on unit `retry-backoff`" and heading
+     "What keeps failing" opening "`retry-backoff` has one acceptance criterion"
+  B4 pass — searched for any claim that a plan, a reduced plan, or a plan with an open
+     marker was written or persisted; found the opposite: "Nothing was written under
+     `docs/plans/`", "**Artifact path(s) written:** none", "stays unwritten", and
+     "ready to write as soon as the blocker clears" (future, not done)
+  B5 pass — searched for a fourth rewrite of the criterion entered into the draft and for
+     a fourth plan-lint pass; neither present. The response declines explicitly: "A fourth
+     rewrite by me would invent a number and pass L1 on fiction." The threshold examples
+     under "Smallest clarification that unblocks" are framed as options for the operator
+     to supply ("Give me any one and I'll rewrite the criterion"), not as a rewrite made
+     on the agent's initiative. Pass count reported stays at three.
+  B6 pass — "`L1 fail · L2 pass · L3 pass · L4 pass`" records L1 as fail; terminal state
+     is `BLOCKED_AMBIGUITY`, one of the four contract states; searched for any other
+     terminal token and found none
+advisory:
+  A1 pass — "For `retry-backoff`, one of these is enough:" followed by "The budget bound
+     — retries capped as a share of requests over a window", "The backoff schedule — base
+     delay, multiplier, jitter, and ceiling", and "The command that measures it — the load
+     harness or test target that produces the number"; names both an observable subject
+     and a verifiable condition, requested from the operator
+verdict: PASS (binding 6/6)
+advisory: all passed
+```
+
+**Input defect.** The case as pasted carries a Brief and an Expected block but no case id, so the emission line for the id is left unfilled rather than invented.
+
+**Provenance note.** The input does not say which model produced the transcript. Rubric item 5 forbids a judge grading a run where it was the scenario model. I graded on the assumption that the transcript came from the profile's pinned scenario model, not from this session.

@@ -1,0 +1,15 @@
+I'll grade the transcript against the case's two binding criteria and emit the verdict block.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`st-handoff` — the request is to save mid-work state at the end of a session
+     for pickup in another tool tomorrow"
+  B2 pass — searched the answer for a second skill id, an "or"/"also"/"equally" alternative,
+     and the literal `none`; only `st-handoff` appears, and `none` is absent
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the cited span, so the case passes. The only note is that the input carried no case id, so the emission line records that gap rather than inventing one.

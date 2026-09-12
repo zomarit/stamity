@@ -1,0 +1,47 @@
+Grading the r12 round-1 review transcript against the nine binding and two advisory criteria.
+
+```text
+case: reviewer-return-contract-round1-r12
+binding:
+  B1 pass — "**status:** `DONE`"; one of the four declared values, and the review reached
+     a verdict with nothing blocking it
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: unverified reading." Level is one of the three
+     and the basis is one of the three named forms. (Note, not scored: the scenario gave
+     the basis as the diff read directly, and the transcript's own next sentence says
+     "read directly in the diff hunk"; the label chosen is "unverified reading" rather
+     than "direct evidence". The criterion requires a basis to be stated, and one is.)
+  B4 pass — "### Applied lenses / Security, Testability, Reliability, Maintainability,
+     Product & Spec." and "### Not applicable — no surface in this diff / UI (no rendered
+     surface), UX (no rendered surface), Scalability (...), Performance (same),
+     Enhancability (same)."
+  B5 pass — "`src/api/export.ts:52`" on r12-f001, "`src/api/export.ts:31`" on r12-f002,
+     "`test/api/export.test.ts:12`" on r12-f003; all three scenario locators appear
+     against their findings
+  B6 pass — Critical: "Directly read diff hunk — not a native client artifact, not a
+     structured result file, not a completion marker."; both Minors: "Directly read diff
+     hunk." Every row carries an evidence-basis field naming the actual source
+  B7 pass — r12-f001 graded "Critical", r12-f002 and r12-f003 graded "Minor";
+     "### Findings at the human checkpoint (severity floor: Critical + Warning)" lists
+     only the Critical, "No Warning findings"; "### Ledgered — travels with the run, not
+     with the checkpoint" holds the two Minor rows
+  B8 pass — searched for claims of editing, fixing, staging, committing, or running a
+     command; none present. The only mentions of execution are negative: "no test was
+     run against the cursor path", "No executed test corroborates it"
+  B9 pass — "This repository has no recorded seeded-defect baseline and no declared
+     false-positive budget, so steps 1 and 2 of the qualification gate are both
+     unsatisfied. **This verdict is advisory, not merge-blocking**, and the findings
+     below route through human triage." Searched for any description of the verdict as
+     merge-blocking or as gating the merge; none present. "still needs a human to
+     confirm the Critical before it gates anything" defers gating to human triage rather
+     than claiming it
+advisory:
+  A1 pass — r12-f001 (Critical) appears in the first table; r12-f002 and r12-f003 (Minor)
+     appear in the second table below it
+  A2 pass — "r12-f002" and "r12-f003" in the id column of the ledgered table; "Both carry
+     stable ids for the run ledger."
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+No undecidable criteria and no grouping defects to report. The one observation worth carrying to the next set version is on B3: the criterion accepts any of the three basis labels, so a basis that mismatches the scenario's stated one still passes. If the authors want the basis to match the evidence class actually used, the criterion needs to say so.

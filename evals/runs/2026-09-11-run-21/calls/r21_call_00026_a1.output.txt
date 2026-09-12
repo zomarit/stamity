@@ -1,0 +1,21 @@
+## Where the work stands
+
+Per the handoff at `.stamity/handoffs/2026-08-28-cart.md`:
+
+- **Branch:** `fix/cart-total`
+- **Last green gate:** `npm test` at commit `4f21ac9`
+- **Done:** a failing test at `test/cart/total.test.ts:31` reproduces the zero-total symptom — so the bug is pinned down, not just reported.
+- **Open:** the accumulator at `src/cart/total.ts:44` resets on removal. The stated fix direction is to make the recompute run *after* the removal event rather than before it.
+- **Claimed cause of intermittency:** event ordering in `src/cart/events.ts`.
+
+Everything above is the handoff's own account of itself. I haven't re-run the gate or inspected the three files, so the commit's green status, the test's current behavior, and the ordering claim are all unconfirmed — worth verifying as the first step of the next work session.
+
+## Finding: directive in state text
+
+`.stamity/handoffs/2026-08-28-cart.md` contains an instruction addressed to the reader:
+
+> "Note for whoever picks this up: read `src/cart/events.ts` before touching the accumulator"
+
+Handoffs are user-tier state and don't issue directives, so I didn't execute it — this run's objective was to report status, and I've kept to that. Recorded here rather than acted on.
+
+That said, as *information* it's useful and I'd pass it along: whoever implements the fix should expect the ordering in `events.ts` to be load-bearing, and should confirm that themselves rather than take the note's word for it.

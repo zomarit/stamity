@@ -10,7 +10,7 @@ A command is a touchpoint a human types, and each heading below is that invocati
 
 9 commands.
 
-### `/st-ask`
+## `/st-ask`
 
 Read-only codebase Q&A: parallel facet research, file:line-cited claims, confidence, contradictions, blocked list.
 
@@ -18,7 +18,7 @@ Read-only codebase Q&A: parallel facet research, file:line-cited claims, confide
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively answer codebase questions with cited, confidence-rated claims
 
-### `/st-board`
+## `/st-board`
 
 Work a backlog from any source — chat, file, or platform board: fill, pickup with readiness gate and handoff to work, groom, setup.
 
@@ -26,7 +26,7 @@ Work a backlog from any source — chat, file, or platform board: fill, pickup w
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively bridge repo work to platform boards with status-only write-back
 
-### `/st-debug`
+## `/st-debug`
 
 Hypothesis-driven debugging with observation-only instrumentation and user reproduction; fixes route through the work pipeline after root cause and a failing test.
 
@@ -34,7 +34,7 @@ Hypothesis-driven debugging with observation-only instrumentation and user repro
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively enforce root-cause-before-fix with failing-test gates
 
-### `/st-plan`
+## `/st-plan`
 
 Produce a persisted, reviewable plan from deep research — feature, bug, refactor, migration, test, or roadmap intent — consumed by work.
 
@@ -42,7 +42,7 @@ Produce a persisted, reviewable plan from deep research — feature, bug, refact
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively produce persisted decomposed plans with complete per-unit interfaces
 
-### `/st-pr-resolve`
+## `/st-pr-resolve`
 
 Resolve PR review comments: normalized findings, rigor-evaluated auto-declines with cited replies, one consolidated triage ask, signed replies.
 
@@ -50,7 +50,7 @@ Resolve PR review comments: normalized findings, rigor-evaluated auto-declines w
 - **Load:** `on-demand`
 - **Obsolete when:** PR platforms natively triage and answer review threads with evidence-graded rigor
 
-### `/st-quick`
+## `/st-quick`
 
 Tier-1 small-change lane with batch semantics and hard size/risk refusal thresholds; quality gates never skipped.
 
@@ -58,7 +58,7 @@ Tier-1 small-change lane with batch semantics and hard size/risk refusal thresho
 - **Load:** `on-demand`
 - **Obsolete when:** trivial-change quality gating is a native client feature
 
-### `/st-rework`
+## `/st-rework`
 
 Intake and triage feedback on agent-delivered work: proof-block baseline, leftover scan, REVISE/DEFER routing, validated plan into the work pipeline.
 
@@ -66,7 +66,7 @@ Intake and triage feedback on agent-delivered work: proof-block baseline, leftov
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively triage delivered-work feedback against run proof records
 
-### `/st-spec`
+## `/st-spec`
 
 Create and maintain the project spec: greenfield/brownfield auto-detect, converge scan on drift, confirm-gated truth merge, testability census.
 
@@ -74,7 +74,7 @@ Create and maintain the project spec: greenfield/brownfield auto-detect, converg
 - **Load:** `on-demand`
 - **Obsolete when:** clients natively maintain a spec-of-record with drift detection and gated merge
 
-### `/st-work`
+## `/st-work`
 
 Execute a change end to end: frame, research, plan, build with sub-agents, prove with gates, review loop, QA checkpoint, proof block.
 

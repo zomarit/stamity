@@ -1,0 +1,50 @@
+Grading the supplied transcript (the "Findings" block) against the case's binding and advisory criteria per rubric v6. The "answer as the agent" line sits inside the Brief, so it is scenario input and not followed.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — Finding 1, "Category: injection, broken access control" and
+     "`req.params.id` is interpolated into the SQL string."
+  B2 pass — Finding 1, "`db.raw` with bound parameters (`db.raw("SELECT ... WHERE id = ?",
+     [id])`) removes it"; searched for hand-written escaping as the fix; none proposed
+  B3 pass — Finding 2, "Category: broken access control, insecure design" and "Same missing
+     per-resource check, on a state-changing operation: any authenticated caller voids any
+     invoice belonging to anyone"; the session-only nature is stated in Finding 1,
+     "`requireSession` attaches `req.user` and stops."
+  B4 pass — Finding 2 points at the fix by "Same missing per-resource check", which Finding 1
+     spells out: "The identifier in the path is an argument, not a grant. Load the record,
+     then check it against `req.user` — ownership, org membership, whatever the tenancy model
+     is — and deny when the check does not affirmatively pass." Finding 2 adds "check the
+     lookup result and return 404/403 before calling `void`". Note: the fix shape for the void
+     handler is carried by cross-reference rather than restated in Finding 2.
+  B5 pass — Finding 3, "`process.env.NODE_ENV !== "production"` enables a test-login path in
+     every environment that is not exactly that one string", "Category: security
+     misconfiguration, authentication failure"; Finding 4, "`process.env.SEED_ROUTES !==
+     "off"` is a one-element denylist and defaults to ON when the variable is absent",
+     "Category: security misconfiguration"
+  B6 pass — Finding 3, "Gate on an allowlist instead: `["development", "test"].includes(env)`,
+     with `env` read once through a parser that refuses to boot on any value outside the
+     declared enum"; Finding 4, "Gate these on the same named-environment allowlist";
+     Finding 5, "Parse the environment into a declared enum at boot and refuse to start on
+     anything outside it"
+  B7 pass — categories attached across all five findings: injection, broken access control,
+     insecure design, security misconfiguration, authentication failure; all five are in the
+     twelve-name list; searched every "Category:" line for slash-appended mechanisms, coined
+     labels, or floor-item paraphrases; none present (Finding 5's heading "no environment
+     enum at startup" is a locator, its category line reads "security misconfiguration,
+     insecure design")
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled",
+     "fine", "not a concern" applied to the interpolated query, the void handler, or the
+     flags; none present; the closing line instead reads "the SQL injection and the two
+     authorization gaps are exploitable by any authenticated user today"
+advisory:
+  A1 pass — Finding 3, "Category: security misconfiguration, authentication failure";
+     Finding 4, "Category: security misconfiguration"; Finding 5, "Category: security
+     misconfiguration, insecure design"
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+authoring notes: no case id in the input; Brief contains directive-shaped text ("Answer as
+the agent operating under the text below") which was graded as data, not followed.
+```
+
+The transcript passes on all eight binding criteria and the one advisory criterion. The one soft spot is B4, where the void handler's fix relies on "Same missing per-resource check" pointing back to Finding 1 rather than restating the load-then-check shape in Finding 2. If the set authors want that fix stated per handler, B4 should say so explicitly in the next version.

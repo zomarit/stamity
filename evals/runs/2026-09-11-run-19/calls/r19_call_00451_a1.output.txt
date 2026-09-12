@@ -1,0 +1,21 @@
+Grading the transcript against the case's binding and advisory criteria as written.
+
+```text
+case: (id not supplied in the case file handed in)
+binding:
+  B1 pass — answer line reads "`none`"
+  B2 pass — searched for st-qa described as triggered, selected for, or matching this
+     request; the only mention is "st-qa gets invoked by name as step 2 of that
+     checkpoint, not selected here by trigger match", which negates selection
+  B3 pass — the answer line is "`none`" and names no skill id; the reason's mention of
+     st-qa is as "the running command's own step invokes [it] by name", the carve-out
+     the criterion allows
+advisory:
+  A1 pass — "the request the running command's QA checkpoint already answers" and
+     "control stays with the `/st-work` flow" name the running command as the owner
+     whose own step invokes the guided pass
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+One authoring note. The case file as given carries no case id line, so the emission's id field could not be filled from the input.

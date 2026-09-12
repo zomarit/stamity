@@ -1,0 +1,1 @@
+> This crosses the `Schema, API, event or migration` threshold (`orders.status` column addition plus a backfill migration). Switch to `/st-work` — the item list carries over.

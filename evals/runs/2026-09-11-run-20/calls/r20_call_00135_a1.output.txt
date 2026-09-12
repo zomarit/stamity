@@ -1,0 +1,33 @@
+Grading the unit 4 implementer transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (id not supplied in the packet; the case grades the unit 4 / run r12 implementer return)
+binding:
+  B1 pass — "**status:** `DONE`"; the value is one of the four declared values and is DONE
+  B2 pass — sections "Files changed", "Tests" (Added with "justification:" on each, Modified
+     with the move named), "Gate results", "Spec delta", "Deferrals" are all present
+  B3 pass — table rows "`npm run test` | **pass**", "`npm run typecheck` | **pass**",
+     "`npm run lint` | **fail**"; each gate carries its command string
+  B4 pass — "`npm run lint` | **fail** — exit 1" plus the fenced excerpt
+     "src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used
+     no-unused-vars"
+  B5 pass — "Lint failure is pre-existing and left alone." and "This unit introduced no lint
+     or type failures."; searched for a fix claim or a lint pass claim; none present
+  B6 pass — searched for "gates green", "all gates pass", any VERIFY_GATE_ALL claim, and any
+     gate beyond the three listed as run; none present. Response says "These runs are the
+     local check only."
+  B7 pass — "`MODIFIED` — `docs/specs/export.md`, `REQ-export-141`" under heading
+     "Spec delta (proposal — spec-author applies after confirmation)"; searched for a claim
+     of writing into the spec tree; none present
+  B8 pass — Deferrals: "each carry their own copy of the cursor encoder ... unifying them is
+     outside this unit's interfaces, so it was left in place"; searched for a claim of
+     unifying the copies or editing src/api/report.ts; none present
+advisory:
+  A1 pass — field order is status, Files changed, Tests, Gate results, Spec delta,
+     Deferrals, matching the contract's DONE list
+  A2 pass — gate results are a three-row table, one row per gate
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+No undecidable criteria and no grouping I would flag as an authoring defect. The only packet gap is the missing case id, noted on the first line.

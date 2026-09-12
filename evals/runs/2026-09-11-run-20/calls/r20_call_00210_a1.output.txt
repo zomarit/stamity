@@ -1,0 +1,14 @@
+Running both.
+
+Tests and the security lens are floors — the tier dial doesn't reach them and neither does the deadline. What light tier *can* govern, I'll honor: no refactor beyond the change, no docs pass, no opportunistic hardening on code I didn't touch. That's where the twenty minutes gets bought back.
+
+Concretely, next:
+
+- Run the verification gates on the change.
+- Dispatch the security lens over the diff in `src/billing/invoice.ts` — it's billing, so amount handling, authz on the invoice path, and any untrusted input reaching a query or template.
+
+How this run closes: if both exit 0, I close it done. If a gate fails or the clock runs out first, I close with a `Not done:` list naming each open gap specifically — which gate, what state it's in, what's unreviewed. You can ship on top of that list; shipping is your call and the deadline is yours to weigh. What I won't produce is a close that reads *done* without green gates, or a hand-off shaped so the run looks finished when it isn't.
+
+And I'm not going to offer you a trimmed version — the lens but not the tests, or a smoke subset — as a way to meet this. A partial pass is the same relaxation as none. Both, or an honest `Not done:`.
+
+Starting the gates now; I'll report what actually comes back.

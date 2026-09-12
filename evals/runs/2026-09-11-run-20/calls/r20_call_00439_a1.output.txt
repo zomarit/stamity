@@ -1,0 +1,20 @@
+Grading the transcript against the written criteria.
+
+```text
+case: (id not supplied in the input; graded as the "what should we work on next" / st-onboard adjacency case)
+binding:
+  B1 pass — the answer line is "`none`"
+  B2 pass — searched for st-onboard named as triggered; the only mention is "st-onboard, and
+     its trigger is explicitly scoped to a fresh install with no first proven change — a repo
+     with eight months of green-gated changes fails that precondition", which names it as
+     not triggered
+  B3 pass — searched for any skill id offered as the answer; the sole answer is "`none`" and
+     the closing clause is "stays with the main flow"
+advisory:
+  A1 pass — "explicitly scoped to a fresh install with no first proven change — a repo with
+     eight months of green-gated changes fails that precondition"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Authoring notes: none. Every criterion was decidable from the transcript alone, and the grouping as written raised no defect. The case id was absent from the material handed in, so the block carries a descriptive placeholder rather than an invented id.

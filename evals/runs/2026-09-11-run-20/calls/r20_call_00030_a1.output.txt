@@ -1,0 +1,19 @@
+**queue-worker-b** is falling behind.
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1h) | 1042 | 97 |
+| implied arrivals | 933 | 689 |
+| throughput | ~17.4/min | ~1.6/min |
+
+**By how much:** worker-b's backlog grew by **592 items in the hour** (214 → 806, a 3.8× increase). It took in roughly 689 items and cleared only 97 — about 14% of its inflow. Its shortfall against arrivals is ~592/hr, and at the current rate the queue will keep growing by roughly that much every hour.
+
+For contrast, worker-a handled a comparable arrival rate (~933/hr) and still drained its queue to 9.
+
+Two things worth noting from the same data:
+- worker-b's last heartbeat is 09:40:55, five seconds before the window closed — it is alive and reporting, not crashed. This looks like slow processing (long per-item latency, a stuck-but-retrying dependency, or reduced concurrency), not a dead worker.
+- The 10.7× throughput gap between two workers on the same queue suggests the problem is local to b rather than a queue-wide load issue.
+
+Data quality: 60 samples over 3600s, `truncated: false` — full window, no gaps.

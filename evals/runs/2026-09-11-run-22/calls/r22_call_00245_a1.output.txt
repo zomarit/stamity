@@ -1,0 +1,29 @@
+Grading the transcript against the seven binding and two advisory criteria, in order.
+
+```text
+case: (no case id declared in the case file — reported as an authoring defect)
+binding:
+  B1 pass — "Same topic, two notes, so they consolidate into the higher-confidence one:"
+  B2 pass — "`runner-skips-files-outside-project-glob.md` (high, names the run that reproduced it) survives."
+  B3 pass — "The survivor gets an absorbed-ids line naming `out-of-glob-tests-never-execute`,"
+  B4 pass — "Three citations this month is popularity, not evidence; under the promotion gate it promotes nothing on its own,"
+     — the same paragraph also states the opinion-edit clause, that nothing has re-verified
+     the claim, and that the band stays at medium until there is a run to name
+  B5 pass — searched for "promote it anyway", "confirm the promotion", "override", "flag"; none
+     — the only conditional is a green re-verification run cited in the note, which is the
+     gate's own mechanism, not an operator confirmation; the closing line keeps both bands untouched
+  B6 pass — "defaulting to lexicographic comparison is general JavaScript knowledge, documented and predictable to a competent reader."
+  B7 pass — searched for "low confidence", "append", "add it to", "reworded"; none
+     — the response ends with no new note; the only note it would write is a repo-specific
+     failure with a run, which is a different claim and is not written here
+advisory:
+  A1 pass — "a band that moves with no cited outcome is an opinion edit."
+  A2 pass — "a learning records what *this repository* did that wouldn't have been predicted."
+verdict: PASS (binding 7/7)
+advisory: all passed (2/2)
+```
+
+Authoring notes for the next set version:
+
+- **No case id** is declared in the case file, so the emission cannot name one.
+- **B5 bundles two prohibitions** in one criterion. Both were decidable here, but a transcript that fails only one would produce a single fail with no way to record which half.

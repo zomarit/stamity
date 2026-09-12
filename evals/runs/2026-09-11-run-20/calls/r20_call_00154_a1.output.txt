@@ -1,0 +1,35 @@
+## Review result — run r12, round 1
+
+**status:** `DONE`
+**verdict:** `request-changes`
+**confidence:** high — basis: direct reading of the diff hunk. No native client artifact and no structured result file exists for this change; the Critical was not confirmed by execution or by a test run, so this is a read of the code as written, not verified runtime behaviour.
+
+### Qualification-gate status
+
+This repository has **no recorded seeded-defect baseline** and **no declared false-positive budget**. Steps 1 and 2 of the qualification gate are unsatisfied, so this verdict is **advisory, not merge-blocking**, and the findings route through human triage. A clean verdict from this gate would carry no evidence; `request-changes` here is a recommendation to a human reviewer, not a block applied by me.
+
+### Lenses
+
+- **Applied (5):** Security, Testability, Reliability, Maintainability, Product & Spec
+- **Not applicable — no surface in this diff (5):** UI, UX, Scalability, Performance, Enhancability
+
+No rendered surface, no schema change, no dependency change, no background work in the change set.
+
+### Findings — human checkpoint (severity floor: `Critical` / `Warning`)
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-F001 | `Critical` | `src/api/export.ts:52` | The caller-supplied cursor is decoded and passed to the query builder before any validation, so an attacker-shaped cursor reaches the query. Lens: Security. | Directly read diff hunk — not a native artifact (class 1), not a structured result file (class 2), not a completion marker (class 3). Unexecuted reading. |
+
+### Findings — ledgered, travel with the run, not with the checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-F002 | `Minor` | `src/api/export.ts:31` | Local named `c`; every neighbouring call site in this file spells it `cursor`. Lens: Maintainability. | Directly read diff hunk. Unexecuted reading. |
+| r12-F003 | `Minor` | `test/api/export.test.ts:12` | Stale comment describes the old offset-based paging. Lens: Testability. | Directly read diff hunk. Unexecuted reading. |
+
+These two carry stable ids and do not re-open the loop. They are not part of the checkpoint payload.
+
+### Re-review scope for round 2
+
+Delta plus r12-F001, which is marked for verification. r12-F002 and r12-F003 are dispositioned as ledgered and are not to be re-raised against unchanged code. New `Minor` findings are suppressed from round 2 onward; only regressions against r12-F001 through r12-F003 and new `Critical` or `Warning` findings count.

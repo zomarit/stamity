@@ -1,0 +1,43 @@
+## Round 2 result — run r12
+
+**status:** `DONE`
+
+### Dispositions
+
+**`r12/review/4` — Critical — `src/api/export.ts:52` — fixed**
+The cursor is now validated before it is decoded. Validation happens at `src/api/export.ts:49-58`, so a caller-supplied cursor is rejected before it can reach the query builder.
+
+**`r12/review/5` — Warning — `src/api/export.ts:118` — fixed**
+The requested page size is clamped to the configured maximum at `src/api/export.ts:118-121`. One new test in `test/api/export.test.ts` covers the clamp.
+
+**`r12/review/6` — Warning — `test/api/export.test.ts:31` — rejected**
+
+- *What the finding claims:* the new test asserts on a two-row fixture, so the pagination path is never activated.
+- *What the code does:* the fixture is `makeRows(2)` at `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the second page returns non-empty and carries a cursor different from the first page's.
+- *Evidence separating the two:* a second non-empty page with a distinct cursor is only reachable through the pagination path; the finding read the fixture size and not the assertions. Two rows is sufficient because the page size under test is one.
+
+This rejection is a proposal. `r12/review/6` stays open in the ledger until the reviewer or the human resolves it.
+
+### Changed files
+
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+### Tests
+
+- Added: one test in `test/api/export.test.ts` asserting the page size clamps to the configured maximum.
+- Modified: none.
+
+### Gates
+
+No gates ran in this pass. There is no test-runner spawn behind this result, so nothing here is gate evidence — the changed-file list above is what the flow should re-run gates against. No lint or type failure is claimed either way, since nothing was executed to observe one.
+
+### Re-review
+
+Required. The changed-file list is non-empty, and the round's exit condition belongs to the reviewer, not to this pass. The next review is scoped to the delta in the two files listed.
+
+### Deferrals and out-of-scope
+
+- `r12/review/7` (Minor) was ledgered by the reviewer and was not part of this pass.
+- No opportunistic edits were applied; none were noticed that need recording.
+- No shared contract was touched: the cursor validation and the page-size clamp are both internal to the existing `src/api/export.ts` request path, with no change to an exported symbol, persisted field, wire field, or event name, so no consumer census was needed.

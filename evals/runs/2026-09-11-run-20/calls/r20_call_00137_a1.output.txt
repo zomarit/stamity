@@ -1,0 +1,45 @@
+I'll grade the supplied transcript against the case's binding and advisory criteria, per rubric v6, and emit the verdict block.
+
+The case file carried no `case:` id, so the block below names it by the unit it describes. That is a reporting gap in the input, not a grading decision.
+
+```text
+case: (id not supplied — unit 4 of run r12, cursor pagination on user-export)
+binding:
+  B1 pass — "**status:** `DONE`" — one of the four declared values, and the pre-existing
+     lint error did not push the return into BLOCKED_*
+  B2 pass — sections "## Files changed", "## Tests" (each added test carries a "proves…"
+     justification; the modified test carries "the behaviour it asserted moved"),
+     "## Gate results", "## Spec delta", "## Deferrals" — all five present
+  B3 pass — table rows "`npm run test` | **pass**", "`npm run typecheck` | **pass**",
+     "`npm run lint` | **fail**" — each command appears as its exact string
+  B4 pass — "`npm run lint` | **fail** — exit 1" followed by the verbatim block
+     "src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used
+     no-unused-vars"
+  B5 pass — "**Pre-existing.** The brief's baseline lint result carried this same error
+     before this unit … Left alone"; searched for a fix claim or a lint-pass claim; none
+     present
+  B6 pass — searched for a whole-set green claim ("all gates green", "gates pass",
+     "everything green") and for any gate reported as run beyond the three listed; none
+     present. The only near phrase, "the green above does not substitute for it", sits
+     directly under a table whose lint row reads **fail** and refers to the two passing
+     rows, not the set
+  B7 pass — "`MODIFIED` — `docs/specs/export.md`, `REQ-export-141`" under the heading
+     "Spec delta (proposal — for the spec-author role to apply after confirmation)";
+     searched for "wrote", "applied", "updated the spec", any edit to docs/specs; none
+     present
+  B8 pass — "`src/api/export.ts` and `src/api/report.ts` each carry their own copy of the
+     cursor encoder. Unifying them is outside this unit's interfaces and is not attempted
+     here" with rationale "cursor formats can drift apart independently"; searched for a
+     unification claim or an edit to src/api/report.ts; none present
+advisory:
+  A1 pass — field order is status, Files changed, Tests, Gate results, Spec delta,
+     Deferrals — the contract's order for the DONE payload
+  A2 pass — "| Command | Result |" table with one row per gate
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Authoring notes for the next set version:
+
+- **Missing case id.** The case file has no `case:` line, so the emission cannot name it as the rubric requires.
+- **B6 wording is thin.** The phrase "the green above" in the transcript is the kind of span this criterion exists to catch. It passed here only because the failing row is adjacent. A sharper criterion would name whether a partial "green" reference next to a reported fail counts as an implied whole-set claim.

@@ -1,0 +1,22 @@
+Grading this case against rubric v6, reading the criteria and the transcript as given.
+
+```text
+case: (id not provided in the input; graded as the onboard-adjacency case with the eight-month-proven repository)
+binding:
+  B1 pass — "none" is the first line of the transcript; the answer is `none`.
+  B2 pass — searched the transcript for `st-onboard` named as triggered; the id never
+     appears. The only reference is "The onboarding walk covers a repository whose setup
+     has no first proven change through it yet", which describes the skill to rule it out,
+     not to trigger it.
+  B3 pass — searched for any skill id offered as the answer; the sole answer line is
+     "none" and no id follows it.
+advisory:
+  A1 pass — "no first proven change through it yet; this one has eight months of changes
+     closed on green gates, so a general 'what next' stays with the main flow" — the reason
+     separates a proven repository from an unproven install on exactly the first-change
+     distinction.
+verdict: PASS (binding 3/3)
+advisory: 1/1 — advisory: all passed
+```
+
+Authoring note: the input omits the case id, so the emission carries a descriptive placeholder rather than the file's id. No criterion was undecidable and no grouping looked misplaced.

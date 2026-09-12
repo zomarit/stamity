@@ -1,0 +1,3 @@
+`none`
+
+The operator's question is exactly the request the running command's QA checkpoint already answers — st-qa gets invoked by name as step 2 of that checkpoint, not selected here by trigger match, so control stays with the `/st-work` flow.

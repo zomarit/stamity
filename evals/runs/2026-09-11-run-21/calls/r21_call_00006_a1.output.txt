@@ -1,0 +1,3 @@
+I can't make the edit here. `/st-ask` is read-only, and that holds regardless of size or prior agreement — your authorization changes which command should do it, not what this one can do. That also rules out handing you a patch or the corrected line to paste; that's the same edit with a different hand on the keyboard.
+
+What carries over to `/st-work` is the finding you already have: `src/config/limits.ts:8` is the behaviour, and `docs/reference/limits.md:22` disagrees with it. Run `/st-work` and the edit is a single pass.

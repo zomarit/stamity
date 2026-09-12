@@ -1,0 +1,39 @@
+I did not write anything. Both writes the scan found are gated, so they need your confirmation first. Here is the state and the exact proposals.
+
+## T1 — already done, no spec file touched
+
+The board item moved `In progress` → `In review`, and the run ledger recorded the owner and the progress event. That is execution record; it stays out of `docs/specs/checkout-flow.md`.
+
+## T2 — proposed addition to `docs/specs/checkout-flow.md`
+
+The plan artifact's `ADDED` section carries `REQ-checkout-131`, and the spec file has no such requirement. These are the exact bytes that would be added, verbatim and complete:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only. My default insertion point is after the file's last requirement section; if you want it placed adjacent to `REQ-checkout-112` instead, say so and I will re-show the diff before writing.
+
+## T3 — proposed requirement-text mutation, not automatic
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** "the cart is cleared when payment is declined"
+- **After (proposed):** "the cart is preserved when payment is declined"
+- **Evidence:** `src/checkout/decline.ts:64` preserves the cart. This is shipped behavior, and this branch's diff keeps preserving it.
+
+Two things about this one. First, the recorded text contradicts the code, but the code did not change on this branch — this is pre-existing drift, not a behavior change arriving without a delta, so it is not a `Warning` finding against this change. Second, the mutation resolves the contradiction in favor of the code. If the *requirement* is right and the code is wrong, the fix belongs in `src/checkout/decline.ts`, not here, and I should make no spec edit. I cannot settle that from the scan; it is your call.
+
+## What I need
+
+Confirm each independently:
+
+1. T2 — append `REQ-checkout-131` as shown above? (yes / no / move insertion point)
+2. T3 — rewrite `REQ-checkout-112` to the proposed after-text, or leave it and open the question against the code?
+
+On confirmation I will write only what you approved and report the result. If you decline both, the run reports `no changes` and the file is never opened.

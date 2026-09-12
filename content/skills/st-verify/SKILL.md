@@ -1,4 +1,6 @@
 ---
+license: MIT
+compatibility: Requires a supported coding client, repository access, and the project verification tools.
 id: verify
 type: skill
 description: "Runs one content-quality axis as a gate — that axis's runnable checks plus its judgment calls for ui, ux, security, reliability, testability, scalability, performance, maintainability, enhancability or product-spec — and writes .stamity/verify/<axis>-<sha>.json. Triggers when one axis needs evidence before a review or a release, when a consumer finds no artifact for the current sha, or when someone asks how a change scores on a single quality axis."
@@ -18,14 +20,15 @@ evidence, and the run ends in exactly one artifact.
 2. Read that axis's reference, and only that one (Axis dispatch).
 3. Work the run contract in order, then write the artifact.
 
-An invocation with no axis does not run: ask which axis, offering the caller's
-evidence need as the default. A ten-axis sweep is ten runs and ten artifacts,
-not one merged pass.
+Planning flows may run `scripts/spec-plan-coverage.mjs` relative to this skill with plan/spec paths.
+Its read-only JSON checks structure, returns `semanticReview: required`, and creates no axis artifact.
+
+An invocation with no axis asks which axis, with the caller's evidence need
+as default. A ten-axis sweep is ten runs and artifacts, not one merged pass.
 
 ## Axis dispatch
 
-Ungated reference reads are this skill's largest token sink, so every row states
-the gate that opens it.
+Ungated reference reads are a token sink; every row states its read gate.
 
 | Axis | Reference | Read gate |
 |---|---|---|

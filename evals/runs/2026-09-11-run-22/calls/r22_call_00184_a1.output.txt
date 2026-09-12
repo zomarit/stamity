@@ -1,0 +1,14 @@
+## Answer
+
+Two questions were asked; one is answerable from the repository and one is not.
+
+- **Session entries accumulate for the life of the process**: sessions are written into a module-scope `Map` at `src/session/store.ts:23`, no eviction call appears anywhere in that file per `src/session/store.ts:57`, and exactly one store instance is constructed per process at `src/server/boot.ts:31` — **medium**, on the unverified assumption that no eviction, expiry, or delete path exists outside `src/session/store.ts` (nothing was read outside that file to rule one out) and that the write at line 23 is reached on a live request path rather than only from code that never executes.
+
+- **Production severity: no claim.** No test, benchmark, or production measurement of session memory growth was found, and the researcher recorded `unread: no observability or load-test evidence exists in the repository for session memory`. Growth rate, absolute footprint, time-to-OOM, and whether this has ever mattered on a real host are all uncited, so they are omitted rather than estimated.
+
+The structural reading above does not by itself establish a production problem: unbounded-in-principle growth and a leak that matters at your traffic and restart cadence are different claims, and only the first has citations.
+
+### What would close the gap
+
+- A repo-wide search for deletes or expiry against the store map, which would move the first bullet to **high** or refute it.
+- Heap or RSS measurement from a running process over a session-churn workload, which is the only thing that would let the production question be answered at all.

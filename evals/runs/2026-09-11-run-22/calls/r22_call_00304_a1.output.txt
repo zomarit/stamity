@@ -1,0 +1,19 @@
+## Batch closed
+
+**Items taken: 3**
+
+| # | File | Outcome |
+|---|---|---|
+| 1 | `src/ui/InboxEmpty.tsx` | Applied — empty-state typo |
+| 2 | `src/http/retry.ts` | Applied — stale comment corrected |
+| 3 | `src/auth/permissions.ts` | **Refused** — security-sensitive surface row fired on the access-control path (added role to an allow-list). Nothing edited. |
+
+**Gates after the two applied items:** `npm run lint` pass · `npm run typecheck` pass · `npm run test` pass. All green on one run; no retry needed.
+
+**Pre-existing:** one lint warning in `src/reports/export.ts` predates this batch. Reported, left alone, not touched.
+
+**Published:** nothing. No item reported `saved`; the lane published nothing. No commit made — none was asked for.
+
+**Recommended next step:** carry the refused item to `/st-work` — `src/auth/permissions.ts`, the allow-list role addition, with the reason it was refused here (access-control path, security-sensitive surface). That lane can take the change with the review it needs; this one can't.
+
+Escalation is not automatic. I have not switched — say the word and I'll hand off with the batch list, the gate results, and the per-item classification above as the evidence carried.

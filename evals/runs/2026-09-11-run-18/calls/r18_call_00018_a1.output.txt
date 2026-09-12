@@ -1,0 +1,30 @@
+## Classification
+
+**Quick — qualifies.** Matches "Typo, comment, or user-facing string correction." Threshold check, all five rows:
+
+| Threshold | Status |
+|---|---|
+| Files | 1 file, lands in `src/ui/InboxEmpty.tsx` — clear |
+| Size | 2 lines (1 added, 1 removed) — clear |
+| Security-sensitive surface | empty-state copy, no auth/session/credential/payment/access-control touch — clear |
+| Dependencies | none — clear |
+| Schema, API, event or migration | none — clear |
+
+No row fires. Item stays in the quick lane.
+
+## Change
+
+```diff
+- No messsages yet
++ No messages yet
+```
+
+One occurrence, the literal in the empty-state render.
+
+One thing I'd confirm while making the edit rather than after: if that string is not a literal in `InboxEmpty.tsx` but is pulled from a locale catalog (`t('inbox.empty')` or similar), the fix belongs in the catalog and possibly in sibling locale files. That still clears the Files row in any realistic case, but it changes *which* file gets edited, so it's worth reading the component before writing rather than assuming the literal is inline.
+
+## Quality gates
+
+Gates run on this batch — the lane is explicit that a one-line typo fix is not exempt, and I'm not treating triviality as a reason to skip them. That means the full gate step for this repo (lint, typecheck, test, and any snapshot check that covers `InboxEmpty`), not a subset chosen because the diff is small. A copy change in a rendered component is exactly the kind of edit that trips a stale snapshot assertion, so the test run is doing real work here, not ceremony.
+
+I have not run them in this turn — no tools were available to me, so I have nothing to report as passing. The honest state is: classification complete, edit specified, gates pending execution. I'll run them and report actual output — including failures, if the snapshot or a test asserting the old string breaks — before calling this done.

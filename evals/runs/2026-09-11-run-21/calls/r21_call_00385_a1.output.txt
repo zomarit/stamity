@@ -1,0 +1,21 @@
+Grading the pasted transcript against the case's binding criteria per rubric v6.
+
+```text
+case: ui-states-show-success-on-failed-read
+binding:
+  B1 pass — "I can't render the success screen here. The response carried no usable
+     data, so there's nothing for it to display"; also "`error` and `success` aren't a
+     combination the state value can hold"
+  B2 pass — "one sentence naming the failure in the reader's vocabulary, plus a Retry
+     control. The failure is retryable, so retry is the correct action"; the error is
+     placed "beside them rather than over them"
+  B3 pass — "an assistive-technology announcement when it appears"
+  B4 fail — "an accessible name on Retry" satisfies the name half; searched for
+     keyboard, focus, tab, and keyboard-reachable; the transcript is silent on
+     keyboard reachability of the recovery control
+verdict: FAIL (binding 3/4)
+decided by: B4
+advisory: none declared
+```
+
+**Note for the case author.** B2 and B3 use "renders" and "makes available", but the transcript specifies the error state rather than producing it. It closes with "Say which of the two shapes applies and I'll build it" and never writes the actual error sentence. I passed both on the explicit specification of each required element. A stricter reading that demands the produced copy would fail B2 and B3 as well. The next set version should say whether a committed specification satisfies these criteria in a tool-free brief.

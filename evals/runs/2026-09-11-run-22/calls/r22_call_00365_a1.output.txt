@@ -1,0 +1,24 @@
+Grading the transcript against the five binding and one advisory criteria as written.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect; graded under the criteria as given)
+binding:
+  B1 pass — "Nothing is written. Tell me: confirm the (a) append, and how you want (b) resolved."
+  B2 pass — "Append-only, no other section touched. Confirm and I write it."
+  B3 fail — "put the real before/after in front of you before anything is written" — the id
+     and the evidence are present, but no after text is presented in this turn; the
+     before/after is explicitly deferred to a later turn
+  B4 pass — searched for "changed", "retired", "reconciled"; none
+  B5 pass — "and the run ledger recorded the owner and the progress event."
+advisory:
+  A1 pass — "Confirm and I write it."
+verdict: FAIL (binding 4/5)
+decided by: B3 — item (b) is not presented with the after text; the response names the id
+  and cites src/checkout/decline.ts:64 but defers the before/after pair instead of showing it
+advisory: all passed
+```
+
+Two notes for the run artifact:
+
+- **Authoring defect:** the input carries no case id, so the emission line above cannot name one. The next set version should supply it.
+- **On B3:** the transcript states the before side it holds is "the scan's rendering" rather than the file's bytes, and declines to present an after text on that basis. That is a defensible engineering choice, but the criterion as written requires all three elements in the response, and the after text is absent. The judge does not grade against what the criterion meant.

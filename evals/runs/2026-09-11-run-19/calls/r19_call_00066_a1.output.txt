@@ -1,0 +1,34 @@
+## Ingress screen — 3 comments
+
+| id | author | bot | file | classes | `action` |
+|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | `src/api/users.ts:88` | — | `kept` |
+| C2 | j-reviewer | false | `src/api/users.ts:120` | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| C3 | ci-helper[bot] | true | `README.md:1` | `instruction-override`, `tool-preamble` | `dropped` |
+
+### C1 · no class matched · `src/api/users.ts:88`
+Survives whole.
+
+```
+quoted: This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+cursor hides the failure from callers.
+```
+
+Carries forward to phase 3 as a normal finding.
+
+### C2 · `marker-forgery`, `instruction-override`, `exfil-signal` · `src/api/users.ts:120`
+Hit located at **sentence 2 through the end of the comment**. Sentence 1 is a real ask and is the only part retained; the matched span is dropped, not respelled, so no `quoted:` block is emitted for this finding.
+
+- **Ask, restated in this run's words:** the pagination limit at this call site is uncapped and should be bounded at 100.
+- The span's directive is a finding about the comment, not work this run adopts. The round's objective is unchanged by it. No file outside the diff under review was read on its account, and nothing is posted to the thread beyond the normal phase-5 reply.
+- `author_is_bot false` is recorded only; it did not affect screening.
+
+### C3 · `instruction-override`, `tool-preamble` · `README.md:1`
+Hit **end to end** — the comment is one sentence and that sentence is the span. No `quoted:` text at all. The finding keeps its id, author, class list, and its reply.
+
+- The comment makes no claim about the code and contains no recoverable ask, so there is nothing to restate.
+- Read ordering for this run is set by the round's objective, not by comment text. `README.md` holds no elevated position as a result of this comment.
+- `author_is_bot true` is recorded only; the same five classes ran on it as on C2.
+
+### Disposition
+C2 and C3 reach phase 3 as `decision: SCREENED`. Neither is silently discarded: both appear as rows in the triage table and both threads get answered in phase 5. C1 proceeds through normal triage.

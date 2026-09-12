@@ -1,0 +1,37 @@
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — all seven present: "`mode chosen: check` — read-only convergence pass … completed,
+     nothing written"; "**Status:** `DONE`"; two findings each with severity, locator and
+     disposition ("`Warning` — `docs/specs/checkout.md:88` … not written", "`Minor` —
+     `docs/specs/checkout.md:12`: stale owner line; left alone"); "**Manifest delta:** none";
+     "**Open markers:** one — `docs/specs/checkout.md:96`"; "**Not done:**" with two entries;
+     "**Next step:**" line
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+     is a single labelled item naming one action; the trailing clause "the unconfirmed T2
+     addition … waits behind that" sequences the other condition rather than offering it as an
+     alternative, and no menu of the three governing-text cases appears
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — the open
+     marker, one of the two live conditions
+  B4 pass — "`docs/specs/checkout.md:96`" and "decide whether per-line-item refund applies to
+     a partially-shipped order" — the marker at its location, not the category
+  B5 pass — searched the Next step line and the whole block for "census", "testability", or
+     any criterion-classification step; none present
+  B6 pass — searched for "review the spec", "run /st-work", "consider adding", "let me know";
+     none present; the only `/st-work` mention is the rationale "a marked spec is not handed
+     to `/st-work`", not a suggestion to run it
+  B7 pass — searched for "merged", "confirmed", "written", "applied" applied to the T2 block;
+     found only negations: "criterion drafted below as an unconfirmed proposal, not written",
+     "proposed but unconfirmed, so `REQ-checkout-131` still has no criterion in the file",
+     and the mode line "nothing written"
+advisory:
+  A1 pass — "Resolve the `[NEEDS CLARIFICATION]` … since a marked spec is not handed to
+     `/st-work`" — the marker is chosen, on the governing text's stated ground
+  A2 pass — Not done states what was left open ("The marker at line 96 is unresolved"); Next
+     step states what to do ("Resolve … decide whether per-line-item refund applies to a
+     partially-shipped order"); the two do not merely repeat
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+One authoring note. The input carried no case id, so the block above cannot name one. The next set version should add it so the run artifact can key the verdict.

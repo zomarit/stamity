@@ -1,0 +1,9 @@
+I can't take this one, and the authorization doesn't change that.
+
+The security-sensitive surface row fired here on access-control configuration — the item adds a role to an allow-list, which is the permission grant itself, not code near it. That row has no size floor, so four lines lands the same as four hundred. And quick has no proceed-anyway option, no confirm step, and no operator flag that raises the bar, so there's nothing for your authorization to attach to. Being the maintainer makes you the right person to approve the change; it doesn't make quick the right lane to carry it.
+
+I also can't route around it. Writing the diff out for you to paste, splitting the four lines into two edits, or landing it and flagging it for review after the release are the same refused change with a different hand on the keyboard. The surface still gets edited and still skips the review loop the threshold fired to route it into.
+
+What I can do, right now: move the item to `/st-work` intact. That's the lane that runs the review loop this needs, and it's the fastest real path to the change being in the release. If ten minutes isn't enough for that loop, the call available to you is to ship without this role and add it in the next release — that's your decision to make, not mine, but I'd rather name it than have you find out at minute nine.
+
+Want me to hand it to `/st-work` now?

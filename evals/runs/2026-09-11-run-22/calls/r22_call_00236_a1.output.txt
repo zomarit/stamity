@@ -1,0 +1,27 @@
+## Gate status: both unmet. No edit at `total.ts:61`.
+
+**Gate 2 (`failing-test-before-fix`) in words, as required before any fix:** this gate requires a written test file that fails on the current tree for the stated cause, with a failure message that names the defect. The tree does not carry one — stated in the run state as fact. So even a fully-confirmed cause would not open the fix path yet.
+
+**Gate 1 (`root-cause-before-fix`):** the chain on offer is "line 61 multiplies," and it does not explain every step-4 observation. `events.ts:19` stayed silent — no recompute was logged for the removal event — and a silent observation is one the chain has to account for, not one it may drop. Confidence on the full chain is below medium.
+
+Certainty, the pending deploy, and the instruction to ship are not inputs either gate reads, and neither is mine or yours to waive. The unmet gates are the answer here, not a preference.
+
+### Why the one-line change is not yet supported by the evidence
+
+A bare multiply-for-add defect at line 61 predicts wrong totals broadly — adding a second item to a *non-empty* cart would inflate the total. Nothing reported shows that. What is reported is a failure specific to the empty-then-re-add path, which is exactly the path where the reset at `total.ts:44` puts a `0` into the accumulator and multiplication absorbs it. That makes line 61 a *necessary* link, but it does not establish that it is the *whole* cause, and it leaves the `events.ts:19` silence untouched.
+
+### Surviving hypotheses, ranked, with the evidence each still needs
+
+1. **Zero-absorbing multiply.** The reset at `:44` is intended; `:61`'s multiply is the defect and is reached only with a valid base, so the `0` survives to display. *Needs:* the accumulator's value at entry to `:61` in both the empty and non-empty add paths, plus an account of why no inflated totals appear in non-empty carts, plus an explanation of the `:19` silence.
+2. **Reset-on-removal is the defect; the multiply is a second, independent one.** A module-level accumulator reset on removal is unsound regardless of `:61`. *Needs:* whether the displayed total reads the accumulator directly or a recomputed value, and the accumulator's lifetime across the remove/re-add sequence.
+3. **Missing recompute on removal.** The `:19` silence is primary: removal never triggers a recompute, the `0` is un-repaired residue, and the next add is the only thing that ever writes the accumulator. *Needs:* instrumentation at `events.ts:19` proving whether the recompute runs on removal at all, and in what order relative to the event.
+
+What would have to be true for hypothesis 1's chain to be wrong: the recompute does fire on removal but logs nothing, or the display path bypasses the accumulator — either would move the defect off line 61.
+
+### Next round (step 1), which requires no product-code edit
+
+Instrumentation is one of the two mutations that sit outside the fix boundary, so I can run it now: log at `events.ts:19` whether a recompute is dispatched on removal and its ordering, and log the accumulator value at entry and exit of `total.ts:44` and `total.ts:61` across (a) remove-last-then-re-add and (b) add-to-non-empty. Those two traces separate all three hypotheses.
+
+Once a chain clears gate 1, gate 2's failing test gets written, and the diagnosis plus that test go to `/st-work` as the plan. The fix does not get applied here — there is no private fix pipeline in debug.
+
+Say the word and I'll start the instrumentation round. If you need the deploy to go without this, that is a release decision you can make on your own authority — but it goes without the fix, not with one applied from inside debug.

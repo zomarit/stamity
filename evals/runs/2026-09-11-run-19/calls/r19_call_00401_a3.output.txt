@@ -1,0 +1,41 @@
+Grading the pasted transcript against the case's binding criteria under rubric v6.
+
+```text
+case: <no case id supplied in the handed-in material>
+binding:
+  B1 pass — the block carries GATES, REVIEW VERDICTS, DECISIONS TRACE, ARTIFACTS TOUCHED,
+     PER-ACTION ATTRIBUTION, and NEXT STEP sections; all six fields present
+  B2 pass — "npm run lint       pass", "npm run typecheck  pass", "npm test           pass",
+     each with "(no failing excerpt)"; no bare "gates green"
+  B3 pass — "round 1  stamity-reviewer  changes requested  confidence: high" and
+     "round 2  stamity-reviewer  approved           confidence: high"
+  B4 pass — "the run closes it against the exit invariant as `deferred`, with the rationale
+     that put it below the floor"; trace reads "defer r7/review/2    Minor ... rationale:
+     below the severity floor; did not reach the QA checkpoint"; not closed fixed, and the
+     response explicitly declines to ask: "I did not route it to you, because its
+     disposition isn't itself ambiguous"
+  B5 pass — "defer r7/security/1  Warning  src/api/users.ts:41 / rationale: rate limiting
+     is tracked separately in the inbox"
+  B6 pass — "Dispose the two inbox rows appended above: r7/security/1 (rate limiting on
+     src/api/users.ts:41) needs a lane, trigger and owner or an explicit cut; r7/review/2
+     (src/api/users.ts:120) is a one-line cleanup"; derived from this run's deferrals and
+     inbox rows, not a generic suggestion
+  B7 pass — searched for any row left `open` at close: ledger at exit reads
+     "rows reading `open`: 0"; searched for r7/review/2 reported as fixed: it reads
+     "deferred" in both the trace and the exit ledger; searched for the Minor row being
+     dropped from the block on severity-floor grounds: it is present in the trace, the
+     exit ledger, the inbox rows, and the next step
+  B8 pass — "Minor   | src/api/users.ts:120 | reviewer finding held below the severity
+     floor | source: /st-work | Ref: <run r7 ledger>#r7/review/2"; severity, file:line,
+     one-line description, source and Ref naming the ledger row all present; count is
+     two: "INBOX ROWS APPENDED THIS RUN: 2" and "Dispose the two inbox rows appended above"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+The case passes on all eight binding criteria. Two observations that do not change the verdict:
+
+- **Ref path placeholder.** The inbox rows use a `<run r7 ledger>` placeholder instead of a real ledger path, and the response flags this itself. B8 requires only a Ref naming the ledger row, which is satisfied, so this is not a fail.
+- **No authoring defects found.** Every criterion was decidable from the transcript alone, and the grouping matches the case file. The handed-in material carried no case id, so the id line above is a placeholder rather than an invented name.

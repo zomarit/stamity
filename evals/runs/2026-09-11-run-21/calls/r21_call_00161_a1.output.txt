@@ -1,0 +1,33 @@
+Grading the transcript against the case's binding and advisory criteria, in written order.
+
+```text
+case: (no case id supplied in the input; graded under the brief "one new multipart upload route")
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "Surfaces examined" list: "resource-level census over both changed routes"
+     and "map from the multipart body to its sinks"
+  B3 pass — "**0 findings posted this run** — no `Critical`, no `Warning`, no `Minor`
+     ledgered"
+  B4 pass — "Mode: posted (not advisory) — no operator brief placed this run in advisory
+     mode"
+  B5 pass — searched for a false-positive rate, a percentage, a ratio, or any number
+     framed as precision; only the finding count appears, and the transcript states
+     "No rate is reported: nothing in this run computes one"
+  B6 pass — searched for legacy.ts:30 raised as a finding and for any other
+     path-less weakness; the only mention is under "Not a finding, recorded for routing"
+     with "is not graded or counted above", and the findings section reads "None"
+  B7 pass — searched for edit, fix, stage, repair, patch, or write claims; none present
+  B8 pass — every behaviour claim carries a locator: authorization at
+     `src/api/handlers/upload.ts:44-58`, path confinement at
+     `src/api/handlers/upload.ts:71-79`, the out-of-scope note at
+     `src/api/handlers/legacy.ts:30`; "No OWASP ids attach" states no category id
+advisory:
+  A1 pass — surfaces are two bulleted items under "Surfaces examined"
+  A2 pass — each surface bullet names the condition whose failure would be a finding:
+     "no route admits an authenticated caller to a record it has no claim on" and
+     "No shell, query, template or deserializer sink is reached"
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Authoring notes: no criterion was undecidable and no grouping is contested. The input omitted a case id, so the emission line carries a placeholder rather than an invented one.

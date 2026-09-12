@@ -152,51 +152,25 @@ function claudeSteps(): readonly string[] {
   ];
 }
 
-/**
- * Steps for Codex, read from {@link CODEX_COMMANDS_DIR}.
- *
- * That constant is `null` while the client documents no project-scoped command
- * directory — its prompts surface is per-user, not per-repo — so the row falls
- * back to the spelling that does work on this client: it reads
- * {@link SKILLS_PROJECTION_DIR} natively, so a plain-words request naming the
- * skill reaches a file that is actually on disk. The day the client documents a
- * command directory, that constant changes and this row follows it.
- */
+/** Codex discovers neutral skills and invokes them with $name. */
 function codexSteps(): readonly string[] {
   const open = "open a terminal in this repo and type: codex";
   if (CODEX_COMMANDS_DIR === null) {
     return [
       open,
-      `then ask in plain words: run the st-onboard workflow from ${SKILLS_PROJECTION_DIR}/`,
+      `then type: $st-onboard — the guided first change at ${SKILLS_PROJECTION_DIR}/st-onboard/SKILL.md`,
     ];
   }
   return [open, `then type: /st-onboard — installed in ${CODEX_COMMANDS_DIR}/`];
 }
 
-/**
- * Steps for Cursor, branched on {@link NATIVE_SKILL_DIRS} — the table the
- * adapters themselves read when deciding whether a client needs a native copy
- * of the skills projection.
- *
- * `cursor` is absent from that table, so `st-onboard` exists at
- * {@link SKILLS_PROJECTION_DIR} and nowhere else on this client. Its
- * `.cursor/skills/` root is NOT a second home for it: the client folded slash
- * commands into skills, so that directory receives the nine touchpoint COMMAND
- * bodies only. `st-onboard` is a SKILL, which means a `/st-onboard`
- * spelling here would name an invocation no emitted file answers — so the row
- * asks for the workflow by path instead, the same fallback {@link codexSteps}
- * takes. This client declares `readsAgentsSkillsDir: true`, so the path it
- * names is one the agent already reads.
- *
- * The day the projection gains a native cursor copy, that table changes and
- * this row follows it into the slash spelling.
- */
+/** Both neutral and native Cursor skill directories support /name invocation. */
 function cursorSteps(): readonly string[] {
   const open = "open this repo in Cursor and open the chat panel";
   const nativeSkills = NATIVE_SKILL_DIRS.cursor;
   const onboard =
     nativeSkills === undefined
-      ? `in the chat, ask in plain words: run the st-onboard workflow from ${SKILLS_PROJECTION_DIR}/`
+      ? `in the chat, type: /st-onboard, the guided first change at ${SKILLS_PROJECTION_DIR}/st-onboard/SKILL.md`
       : `in the chat, type: /st-onboard, the guided first change at ${nativeSkills}/st-onboard/SKILL.md`;
   return [open, ...commandSurfaceStep(CURSOR_COMMANDS_DIR, "/<id>"), onboard];
 }

@@ -1,0 +1,9 @@
+**Classification: refused — Security-sensitive surface.**
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — authorization role check).
+
+Switch to `/st-work` — the item list carries over.
+
+The one-character framing doesn't change the call: the security-sensitive row has no size floor, and a `=` vs `==` in a role check is exactly the shape of defect the row exists for — as written, the branch assigns `"admin"` to `user.role` and evaluates truthy for every user. That's the fix you've described, unchanged and intact, going into `/st-work` so it gets the review loop quick doesn't run. I won't write it out for you to paste, attach it as a diff, or split it — same refused change either way.
+
+Size threshold did not fire (1 line changed); it's the surface row alone.

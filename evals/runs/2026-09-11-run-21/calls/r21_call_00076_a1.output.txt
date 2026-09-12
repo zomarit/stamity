@@ -1,0 +1,7 @@
+Still refused, and the answer doesn't change with authorization attached.
+
+The security-sensitive surface row fired on access-control configuration — this item edits an allow-list that decides which roles get through, so the change is an authorization decision, not a formatting one. The row has no size floor, so four lines doesn't lower it; small allow-list diffs are precisely where authorization defects hide. And quick has no proceed-anyway option: there's no flag for me to take and no confirm step for your message to satisfy, so I can't treat this as an approved exception even though you're the maintainer.
+
+I also won't route around it — not by handing you the diff to paste, not by splitting it, not by applying it and flagging it for review after. Those all land the same edit on the same surface while skipping the review loop the threshold exists to route it into.
+
+The way this ships is `/st-work`, which takes the item intact and runs the review quick doesn't. If ten minutes is the real constraint, starting it there now is the fastest path to a merged change; I can hand it over immediately if you want.

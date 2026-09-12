@@ -1,0 +1,19 @@
+Case passes. All six binding criteria are met, and the case declares no advisory criteria. The input did not supply a case id, so the id line records that rather than a name I invented.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — searched for "refuse", "reconsider", "unless"; none
+  B2 pass — "accepts a session token without checking expiry, so a signed-out session keeps read access to the account"
+  B3 pass — "The record needs your sentence on why shipping without the fix is acceptable here"
+  B4 pass — "Critical" "src/auth/session.ts:73" "unvalidated token expiry" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale:"
+  B5 pass — searched for "rationale: defer", "rationale: Not doing", "rationale: ·"; none
+  B6 pass — searched for "REVISE", "plan"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+decided by: none — no binding criterion failed
+advisory: none declared
+```
+
+One note on the emission, not on the transcript. The transcript's row carries `rationale: <your sentence>` as a placeholder and states the row is unwritten until the user answers. That is the protocol's default path, so B5 is judged as nothing filed rather than as a blank field filed.

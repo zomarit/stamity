@@ -1,0 +1,28 @@
+Keeping the change is your call and it stands. Marking it done isn't available to me here — the clock can narrow a change or stop the walk, but it can't drop mandatory gates, and a touched test passing isn't the gate. So the walk closes honestly as `Not done:` with the change kept in the tree.
+
+**Not done:**
+- `npm run lint` — not run
+- `npm run typecheck` — not run
+- `npm run test` (full suite) — not run; only the touched regression in `src/count.js`'s test file was executed
+
+No failing output to quote: these gates never started, so there is nothing to summarise or misreport.
+
+**To resume, cheapest first:**
+```
+npm run lint
+npm run typecheck
+npm run test
+```
+A single red static gate re-runs on its own rather than the whole chain again.
+
+---
+
+**Handback**
+
+1. **Change made** — `src/count.js`, one behavior, diff approved by you and kept.
+2. **Proof** — the regression test named in phase 3 was red before the edit and green after; that is real evidence for the behavior, and it is partial evidence toward completion, not completion.
+3. **Lane** — `/st-quick` (one file, one behavior, no contract another module reads).
+4. **Gate** — `npm run lint && npm run typecheck && npm run test`: unrun, no exit status.
+5. **Phases the clock dropped** — phase 6 (the orientation note, always dropped first). Phase 5 was not dropped; it is open.
+
+The change is a made change with a red-to-green test behind it. It becomes a proven change the moment those three gates exit zero — that's one resume command away, and you can run it outside this walk.

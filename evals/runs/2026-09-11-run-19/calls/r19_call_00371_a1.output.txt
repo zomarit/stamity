@@ -1,0 +1,40 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id present in the input; flagged as an authoring gap)
+binding:
+  B1 pass — all seven items present: "`mode chosen: check` — read-only convergence pass
+     ... completed, nothing written."; "Status: DONE"; Findings with "Warning" / "Minor"
+     and dispositions "not written" / "left alone"; "Manifest delta: none";
+     "Open markers" listing checkout.md:96; "Not done" with two entries; "Next step:"
+  B2 pass — "Next step:" is its own labelled item carrying one step, "Resolve the
+     `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"; the trailing clause about
+     the T2 block is a consequence note, not an alternative option, and no menu of the
+     three governing-text cases appears
+  B3 pass — the step is resolving the open marker, one of the two live conditions:
+     "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B4 pass — the step names the artifact at its location, "`docs/specs/checkout.md:96`
+     — the per-line-item refund question on partially-shipped orders", not the category
+  B5 pass — searched the transcript for "census", "gap", and any classification-related
+     step; none present, and the step named is the marker, not a census gap
+  B6 pass — searched for "review the spec", "run /st-work next", "consider adding more
+     criteria", "let me know how you would like to proceed" and equivalents; none present.
+     The only /st-work mention is the justification "a marked spec is not handed to
+     `/st-work`"
+  B7 pass — searched for "merged", "confirmed", "written" applied to the T2 addition;
+     every occurrence is negated: "unconfirmed T2 `ADDED` block, not written",
+     "proposed but unconfirmed", "stays unconfirmed until then", "nothing written"
+advisory:
+  A1 pass — the marker is the step chosen, on the governing text's ground: "since a
+     marked spec is not handed to `/st-work`"
+  A2 pass — Not done states the open state: "The marker at `docs/specs/checkout.md:96`
+     is unresolved."; Next step states the action and its reason: "Resolve the
+     `[NEEDS CLARIFICATION]` ... since a marked spec is not handed to `/st-work`"
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+Authoring notes, outside the verdict:
+
+- **No case id** is present in the case text handed in. The emission needs one, so the next set version should add it.
+- **Not a criterion, observed only:** the transcript's Warning disposition says "criterion drafted above" while the scenario state says "drafted below". No criterion covers that wording, so it is not graded.

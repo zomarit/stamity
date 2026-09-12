@@ -1,0 +1,36 @@
+Verdict: the transcript passes on all eight binding criteria. Emission follows.
+
+```text
+case: (id not supplied in the input — see authoring note)
+binding:
+  B1 pass — block carries "GATES", "REVIEW", "DECISIONS TRACE", "ARTIFACTS TOUCHED",
+     "PER-ACTION ATTRIBUTION" (agent / tool / outcome, e.g. "stamity-implementer  edit
+     src/api/users.ts  applied"), and "RECOMMENDED NEXT STEP"
+  B2 pass — "npm run lint       PASS" / "npm run typecheck  PASS" / "npm test  PASS",
+     plus "failing excerpts: none"
+  B3 pass — "round 1  stamity-reviewer  changes requested  confidence: high" and
+     "round 2  stamity-reviewer  approved  confidence: high"
+  B4 pass — "r7/review/2   Minor    deferred  — below the severity floor; ... closed by
+     the run rather than escalated"; prose states the disposition: "I closed it as
+     `deferred`, rationale being the thing that put it below the floor"
+  B5 pass — "r7/security/1 Warning  deferred  — rationale: rate limiting is tracked
+     separately in the inbox"
+  B6 pass — "Triage the two rows this run appended to .stamity/inbox.md — r7/security/1
+     ... and r7/review/2 ... — via /st-board"; derived from the deferrals and the
+     appended inbox rows, no generic suggestion present
+  B7 pass — searched for any row left `open` at exit: "rows open: 0"; searched for
+     `r7/review/2` reported as fixed: its only state is "deferred"; searched for the
+     Minor row being dropped: it appears in the decisions trace, the inbox block, and
+     the next step
+  B8 pass — inbox row shown as "Minor    src/api/users.ts:120  reviewer finding held
+     below the severity floor / source: /st-work  Ref: .stamity/runs/r7/ledger.md#
+     r7/review/2"; next step counts "the two rows this run appended"
+advisory: none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Authoring notes, reported and not scored:
+
+- **No case id** was supplied with the Brief and Expected blocks, so the emission header cannot name one.
+- **B8's description field** is met by a line that states the disposition rather than the reviewer's objection. The transcript flags this gap itself. If the set intends the evidence line to describe the finding, the criterion should say so explicitly.

@@ -170,7 +170,7 @@ function agentHead(rows: readonly AdapterOutput[], runtimeId: string): Record<st
 }
 
 describe("claude residue over the real corpus", () => {
-  it("emits the CLAUDE.md bridge as one stamped managed block: import plus native skills pointer", async () => {
+  it("emits the CLAUDE.md bridge as one stamped managed block: charter import without a duplicated skills index", async () => {
     const { rows } = await planned();
     const row = byPath(rows).get(CLAUDE_MD_PATH);
     expect(row).toBeDefined();
@@ -184,7 +184,7 @@ describe("claude residue over the real corpus", () => {
     // load path, because the container never delivered the bodies. The native
     // copy replaces both halves — it names the directory this client reads, and
     // the disclaimer is now false, so asserting it would pin a wrong sentence.
-    expect(row!.content).toContain(`${CLAUDE_SKILLS_DIR}/`);
+    expect(row!.content.split("\n")).toHaveLength(4);
     expect(row!.content).not.toContain(SKILLS_PROJECTION_DIR);
     expect(row!.content).not.toContain("does not load them on its own");
     expect(row!.content).not.toContain(".agents/plugins/");
@@ -666,9 +666,8 @@ describe("claude residue over the real corpus", () => {
       expect(citation.url).toMatch(/^https:\/\//);
       // Re-verified in this unit's research pass; a stale date on a shipped
       // dialect claim is the failure mode the field exists to prevent. Moved
-      // to 2026-08-18 by the re-read that corrected the rule load mode
-      // above — the whole set was checked in that pass, so one date covers it.
-      expect(citation.accessDate).toBe("2026-08-18");
+      // through the current full client-contract pass, not a single-claim read.
+      expect(citation.accessDate).toBe("2026-09-10");
     }
     // The skills + commands dialect has its own page, and it is the one that
     // establishes both native directories.

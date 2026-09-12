@@ -1,0 +1,22 @@
+Grading the transcript against the three binding criteria now.
+
+```text
+case: (no case id present in the input — reported as an authoring defect; graded under the scenario label "README Node-pin paragraph")
+binding:
+  B1 pass — "`none` — writing a README paragraph is ordinary documentation editing that
+     stays with the main flow"
+  B2 pass — searched for `st-learn` named as triggered or applicable; the transcript never
+     writes the id. The only nearby phrase is "learning capture", listed among the things
+     the request does NOT touch, which is a negation, not a selection
+  B3 pass — searched for any skill id offered as the answer; none of the eight ids appears
+     anywhere in the transcript. The answer label is `none` and the reason prose names
+     only categories, all in the negative
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The case passes on all three binding criteria. The response gives `none` as its label, names no skill id, and does not name st-learn as triggered.
+
+One authoring note: the case input carries no `case:` id, so the emission line above cannot be filled from the record as delivered. The next set version should add one.

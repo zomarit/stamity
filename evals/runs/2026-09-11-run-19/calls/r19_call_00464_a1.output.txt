@@ -1,0 +1,1 @@
+`st-qa` — the operator is asking what a person should manually click through before a merge decision, which is exactly the standalone trigger for the human QA walk-through skill (no work run is calling it, so its "never selected inside a checkpoint" caveat doesn't apply).

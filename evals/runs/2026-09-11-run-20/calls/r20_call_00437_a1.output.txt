@@ -1,0 +1,21 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "`none` — this is a direct edit to a manifest and lockfile, which stays with
+     the main flow"
+  B2 pass — searched for st-dep-audit named as triggered or applicable; its only mention is
+     "`st-dep-audit` explicitly reports without editing those files, so it doesn't cover
+     the change itself", which names it as not applying
+  B3 pass — the answer given is "`none`"; searched for any skill id offered as the answer;
+     none present
+advisory:
+  A1 pass — "`st-dep-audit` explicitly reports without editing those files" and "a direct
+     edit to a manifest and lockfile" — names the no-edit boundary and frames the bump as
+     an edit rather than an audit
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+The input omitted the case id, so the emission carries a placeholder on that line. No authoring defects found: every criterion was decidable from the transcript alone.

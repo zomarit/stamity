@@ -1,0 +1,2750 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-10T22:38:05.471614+00:00",
+  "verifier": "Independent review_client_behavior agent; no product edits, staging, commits, pushes, workflow dispatches/reruns, approvals, merges or publications",
+  "result": "PASS: actual CI, PR checks, Docs build and non-publishing Release on the repaired candidate; no release approval or behavioral score inferred",
+  "candidate": {
+    "head": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+    "pullRequest": 34,
+    "pullRequestCheckout": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8",
+    "directReleaseCheckout": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+    "matchingTree": "0bdfe1515ec7793cb3d3fdcf5c92a3f92543dec0",
+    "base": "99c1094953346ef19a8aaab3ee0bd7d292c36ba6",
+    "priorFailedHead": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+    "priorPrCheckout": "e9a8b573c80adc7f9a3b1918450577c7e87630a5",
+    "priorMatchingTree": "b1d139a93ba160daf7cbbab68f2c11495e068c26"
+  },
+  "inputBinding": {
+    "recordedAt": "2026-09-10T22:29:41.757465+00:00",
+    "candidate": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+    "inputCount": 1075,
+    "inputSha256": "5ef6446414d8bc5c2787a40f6712bf9eb55ffef5a35369554536527085bca37d",
+    "inputInventorySha256": "dd43534dc3d532660e98e9733e15ab42bfbb08f48af99f245bb6861f5704e815",
+    "mismatches": [],
+    "command": "git cat-file --batch over every verified input at the pushed candidate"
+  },
+  "evidenceBindingReview": {
+    "recordedAt": "2026-09-10T22:31:39.433193+00:00",
+    "candidate": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+    "checks": [
+      {
+        "name": "render",
+        "fileCount": 54,
+        "mismatches": []
+      },
+      {
+        "name": "run12-inputs",
+        "fileCount": 196,
+        "mismatches": []
+      }
+    ],
+    "originalBindingPreserved": true,
+    "reviewedBindingSha256": "4f101180c853da9efaca160a7835b3abf5d10334dcd7dfe7ff8eed935f25e401",
+    "result": "PASS",
+    "boundary": "Run12 remains the original blocked request, not measured behavioral proof on the repaired candidate. No historical artifact was rewritten or reused as a score."
+  },
+  "collection": {
+    "method": "Read-only gh run view plus GitHub Actions job-log and git-commit APIs, with bounded polling; every completed non-skipped job log retained and hashed. Skipped jobs have no execution log.",
+    "runViewCommand": [
+      "gh",
+      "run",
+      "view",
+      "<run-id>",
+      "--repo",
+      "zomarit/stamity",
+      "--json",
+      "databaseId,name,headSha,headBranch,event,status,conclusion,createdAt,startedAt,updatedAt,url,jobs"
+    ],
+    "logCommand": [
+      "gh",
+      "api",
+      "repos/zomarit/stamity/actions/jobs/<job-id>/logs"
+    ],
+    "timestamps": "UTC; duration is elapsed startedAt to completedAt for jobs, startedAt to updatedAt for completed runs"
+  },
+  "currentRuns": [
+    {
+      "databaseId": 34537631703,
+      "name": "CI",
+      "headSha": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+      "headBranch": "feat/package-10-finish-implementation",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-09-10T22:28:38Z",
+      "startedAt": "2026-09-10T22:28:38Z",
+      "updatedAt": "2026-09-10T22:37:07Z",
+      "url": "https://github.com/zomarit/stamity/actions/runs/34537631703",
+      "observedAt": "2026-09-10T22:37:47.505509+00:00",
+      "rawSnapshotFile": "run-34537631703-20260910T223746304018Z.json",
+      "rawSnapshotSha256": "d428778cdfd66795651392691db39ddad6c03b7c9db4e639652892351f76be59",
+      "durationSeconds": 509.0,
+      "jobs": [
+        {
+          "databaseId": 103072826001,
+          "name": "dependency review (advisory)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:41Z",
+          "completedAt": "2026-09-10T22:28:47Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631703/job/103072826001",
+          "failedSteps": [],
+          "durationSeconds": 6.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Dependency review",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report review outcome",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 21295,
+            "sha256": "e9eee2f66651a837005fffa05cecab6e566efa9ca89aae77f37761683990e83c",
+            "retrievedAt": "2026-09-10T22:29:06.242500+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826001/logs"
+            ],
+            "file": "job-103072826001.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103072826153,
+          "name": "apm route (minimum, apm 0.29.1)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:41Z",
+          "completedAt": "2026-09-10T22:29:10Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631703/job/103072826153",
+          "failedSteps": [],
+          "durationSeconds": 29.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install apm-cli 0.29.1",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke (regression witness)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 20849,
+            "sha256": "897621079d54b2bb82850ef4975bfdafd1be60e3d69122c1a6ece31878486814",
+            "retrievedAt": "2026-09-10T22:29:58.334641+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826153/logs"
+            ],
+            "file": "job-103072826153.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103072826166,
+          "name": "check (lts, node 24)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:41Z",
+          "completedAt": "2026-09-10T22:31:52Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631703/job/103072826166",
+          "failedSteps": [],
+          "durationSeconds": 191.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pin line endings before checkout",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node 24",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Typecheck",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test with coverage floors",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Self-consistency (generate-and-diff)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Dogfood check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Leak gate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Unused code and dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tarball smoke (publish shape)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Node 24",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 119769,
+            "sha256": "5f813b8a8270a85b226be6a2838028bd5a4d3e0244ba60c953fa54dc96c45690",
+            "retrievedAt": "2026-09-10T22:32:47.455043+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826166/logs"
+            ],
+            "file": "job-103072826166.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103072826243,
+          "name": "apm route (regression-witness, apm 0.29.0)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:42Z",
+          "completedAt": "2026-09-10T22:29:18Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631703/job/103072826243",
+          "failedSteps": [],
+          "durationSeconds": 36.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install apm-cli 0.29.0",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "APM route smoke (regression witness)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 22815,
+            "sha256": "75c502cec30307cfee100cd5b9a551bdac057cdd6df9fd7d1ce4b94ce1ea0a7e",
+            "retrievedAt": "2026-09-10T22:29:58.313625+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826243/logs"
+            ],
+            "file": "job-103072826243.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103072826283,
+          "name": "check (floor, node 22.22.2)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:41Z",
+          "completedAt": "2026-09-10T22:32:18Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631703/job/103072826283",
+          "failedSteps": [],
+          "durationSeconds": 217.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pin line endings before checkout",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node 22.22.2",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Typecheck",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test with coverage floors",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Self-consistency (generate-and-diff)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Dogfood check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Leak gate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Unused code and dependencies",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Tarball smoke (publish shape)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node 22.22.2",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 121053,
+            "sha256": "ad7ff519c3029fd256c3c34e82f1af970e5193e32f79b1724a6352a2c8b5968e",
+            "retrievedAt": "2026-09-10T22:32:47.494307+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826283/logs"
+            ],
+            "file": "job-103072826283.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103072826294,
+          "name": "apm route (current, apm 0.30.0)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:41Z",
+          "completedAt": "2026-09-10T22:29:15Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631703/job/103072826294",
+          "failedSteps": [],
+          "durationSeconds": 34.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install apm-cli 0.30.0",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke (regression witness)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 20848,
+            "sha256": "c86ee5f2d057fd83cee3c9dc716cb924b79403553f86e488c8342c7885658451",
+            "retrievedAt": "2026-09-10T22:29:58.318674+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826294/logs"
+            ],
+            "file": "job-103072826294.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103072826315,
+          "name": "supply-chain currency (advisory)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:43Z",
+          "completedAt": "2026-09-10T22:28:57Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631703/job/103072826315",
+          "failedSteps": [],
+          "durationSeconds": 14.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Advisory and pin-currency check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 20383,
+            "sha256": "efdd0c3cef99c77bb9c32e43c45069afb89ac7f5672c1ed15913c592c90a46d5",
+            "retrievedAt": "2026-09-10T22:29:06.246876+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826315/logs"
+            ],
+            "file": "job-103072826315.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103072826612,
+          "name": "check (windows, node 24)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:42Z",
+          "completedAt": "2026-09-10T22:37:02Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631703/job/103072826612",
+          "failedSteps": [],
+          "durationSeconds": 500.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pin line endings before checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node 24",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Typecheck",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test with coverage floors",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Test",
+              "conclusion": "success"
+            },
+            {
+              "name": "Self-consistency (generate-and-diff)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Dogfood check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Leak gate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Unused code and dependencies",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Tarball smoke (publish shape)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Node 24",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 155284,
+            "sha256": "86f9d8d3dccd8744011e8909816be4910815ae3536554c1186cc873afcbef818",
+            "retrievedAt": "2026-09-10T22:37:47.504610+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826612/logs"
+            ],
+            "file": "job-103072826612.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103074977224,
+          "name": "all-ci-checks",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:37:04Z",
+          "completedAt": "2026-09-10T22:37:06Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631703/job/103074977224",
+          "failedSteps": [],
+          "durationSeconds": 2.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 2336,
+            "sha256": "5ee7b4ffe4333403b2bcc7575b173697909d2f094a3facef7027d90bf54cb72c",
+            "retrievedAt": "2026-09-10T22:37:47.236137+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103074977224/logs"
+            ],
+            "file": "job-103074977224.log"
+          },
+          "checkoutCommit": null
+        }
+      ]
+    },
+    {
+      "databaseId": 34537631663,
+      "name": "PR checks",
+      "headSha": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+      "headBranch": "feat/package-10-finish-implementation",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-09-10T22:28:38Z",
+      "startedAt": "2026-09-10T22:28:38Z",
+      "updatedAt": "2026-09-10T22:29:00Z",
+      "url": "https://github.com/zomarit/stamity/actions/runs/34537631663",
+      "observedAt": "2026-09-10T22:29:06.309427+00:00",
+      "rawSnapshotFile": "run-34537631663-20260910T222905447221Z.json",
+      "rawSnapshotSha256": "54ecc237ed2c872c329a7458f4d876c830c9c91a3b3abbb99a89bc68cf6a6d77",
+      "durationSeconds": 22.0,
+      "jobs": [
+        {
+          "databaseId": 103072825838,
+          "name": "PR title (conventional commit)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:41Z",
+          "completedAt": "2026-09-10T22:28:45Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631663/job/103072825838",
+          "failedSteps": [],
+          "durationSeconds": 4.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Title matches the conventional-commit subject shape",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 4110,
+            "sha256": "5bedcdef035b71ebb766d668b076ad43d876d485b37a7318c744d8b47ae01e98",
+            "retrievedAt": "2026-09-10T22:29:06.298627+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072825838/logs"
+            ],
+            "file": "job-103072825838.log"
+          },
+          "checkoutCommit": null
+        },
+        {
+          "databaseId": 103072826059,
+          "name": "DCO sign-off",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:41Z",
+          "completedAt": "2026-09-10T22:28:43Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631663/job/103072826059",
+          "failedSteps": [],
+          "durationSeconds": 2.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Every commit carries a Signed-off-by trailer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 6609,
+            "sha256": "fa6fe9d9564e3968fe9dc301f5a31bab96f85fe373dc1970cadba26a97093204",
+            "retrievedAt": "2026-09-10T22:29:06.304360+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826059/logs"
+            ],
+            "file": "job-103072826059.log"
+          },
+          "checkoutCommit": null
+        },
+        {
+          "databaseId": 103072826150,
+          "name": "dist size budget",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:41Z",
+          "completedAt": "2026-09-10T22:28:55Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631663/job/103072826150",
+          "failedSteps": [],
+          "durationSeconds": 14.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Size budget (logic and corpus halves)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 20018,
+            "sha256": "553f65e0bd1277a606a3c72c58f5398345cccdf3ead2fabbe8fe025e45652656",
+            "retrievedAt": "2026-09-10T22:29:06.308920+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072826150/logs"
+            ],
+            "file": "job-103072826150.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103072891592,
+          "name": "all-pr-checks",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:57Z",
+          "completedAt": "2026-09-10T22:29:00Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631663/job/103072891592",
+          "failedSteps": [],
+          "durationSeconds": 3.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 2274,
+            "sha256": "81574bfcf05eb84dae3cfab53ea6daf9727ad4a198dea1d41dd08b32847a3cad",
+            "retrievedAt": "2026-09-10T22:29:06.305721+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072891592/logs"
+            ],
+            "file": "job-103072891592.log"
+          },
+          "checkoutCommit": null
+        }
+      ]
+    },
+    {
+      "databaseId": 34537631620,
+      "name": "Docs site",
+      "headSha": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+      "headBranch": "feat/package-10-finish-implementation",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-09-10T22:28:38Z",
+      "startedAt": "2026-09-10T22:28:38Z",
+      "updatedAt": "2026-09-10T22:29:51Z",
+      "url": "https://github.com/zomarit/stamity/actions/runs/34537631620",
+      "observedAt": "2026-09-10T22:29:58.336606+00:00",
+      "rawSnapshotFile": "run-34537631620-20260910T222957451383Z.json",
+      "rawSnapshotSha256": "c8c786013093077d2f5ed22cdbefbfd2f4cad09e527ab4e5e08375b4283bec9a",
+      "durationSeconds": 73.0,
+      "jobs": [
+        {
+          "databaseId": 103072825510,
+          "name": "Build",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:42Z",
+          "completedAt": "2026-09-10T22:29:50Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631620/job/103072825510",
+          "failedSteps": [],
+          "durationSeconds": 68.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Serve llms.txt at the site root",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload the built site",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 21346,
+            "sha256": "9b1413b6e5c2dae2cd40aedce9d630ea38b2cbffb27c0509eb573cb22966bc86",
+            "retrievedAt": "2026-09-10T22:29:58.335448+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072825510/logs"
+            ],
+            "file": "job-103072825510.log"
+          },
+          "checkoutCommit": "5ba8ad80ba81e982e7550f7990a770c54f7dabd8"
+        },
+        {
+          "databaseId": 103073119250,
+          "name": "Deploy to GitHub Pages",
+          "status": "completed",
+          "conclusion": "skipped",
+          "startedAt": "2026-09-10T22:29:50Z",
+          "completedAt": "2026-09-10T22:29:50Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537631620/job/103073119250",
+          "failedSteps": [],
+          "durationSeconds": null,
+          "stepConclusions": [],
+          "log": null
+        }
+      ]
+    },
+    {
+      "databaseId": 34537639076,
+      "name": "Release",
+      "headSha": "713c057e113c0447ef0c2a2980d9cfc7ccea1379",
+      "headBranch": "feat/package-10-finish-implementation",
+      "event": "workflow_dispatch",
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-09-10T22:28:44Z",
+      "startedAt": "2026-09-10T22:28:44Z",
+      "updatedAt": "2026-09-10T22:32:33Z",
+      "url": "https://github.com/zomarit/stamity/actions/runs/34537639076",
+      "observedAt": "2026-09-10T22:32:47.540684+00:00",
+      "rawSnapshotFile": "run-34537639076-20260910T223246376794Z.json",
+      "rawSnapshotSha256": "e5256c6ef8ef2f0d8b484adcf931862e336a98d59ab76e17f1a68b8f4facb3f9",
+      "durationSeconds": 229.0,
+      "jobs": [
+        {
+          "databaseId": 103072854303,
+          "name": "apm route smoke",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:47Z",
+          "completedAt": "2026-09-10T22:29:19Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537639076/job/103072854303",
+          "failedSteps": [],
+          "durationSeconds": 32.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pre Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke (canonical ref)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 38245,
+            "sha256": "ebc308f7ee51d92593f13b3ed70f76c83013f1ed1e0c3032439393f945afd750",
+            "retrievedAt": "2026-09-10T22:29:58.407532+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072854303/logs"
+            ],
+            "file": "job-103072854303.log"
+          },
+          "checkoutCommit": "713c057e113c0447ef0c2a2980d9cfc7ccea1379"
+        },
+        {
+          "databaseId": 103072854575,
+          "name": "gates and pack",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:28:48Z",
+          "completedAt": "2026-09-10T22:32:27Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537639076/job/103072854575",
+          "failedSteps": [],
+          "durationSeconds": 219.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pre Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Resolve version",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify lockfile is in sync",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test",
+              "conclusion": "success"
+            },
+            {
+              "name": "Leak gate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Dogfood check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tarball smoke (publish shape)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pack tarball",
+              "conclusion": "success"
+            },
+            {
+              "name": "Generate SBOM (CycloneDX)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Compose release notes",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload release artifacts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 175899,
+            "sha256": "0786443eb84ed771c41ddc4c78c54cf56d96fd222784c1051878c5c299de30c4",
+            "retrievedAt": "2026-09-10T22:32:47.539827+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103072854575/logs"
+            ],
+            "file": "job-103072854575.log"
+          },
+          "checkoutCommit": "713c057e113c0447ef0c2a2980d9cfc7ccea1379"
+        },
+        {
+          "databaseId": 103073797918,
+          "name": "dry run summary",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:32:30Z",
+          "completedAt": "2026-09-10T22:32:33Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537639076/job/103073797918",
+          "failedSteps": [],
+          "durationSeconds": 3.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report what a real run would publish",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 4327,
+            "sha256": "91c7188a3ac1a18fdeb1593ece73a69098009d2b17d5aa28dda1adc32375151c",
+            "retrievedAt": "2026-09-10T22:32:47.261485+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103073797918/logs"
+            ],
+            "file": "job-103073797918.log"
+          },
+          "checkoutCommit": null
+        },
+        {
+          "databaseId": 103073799382,
+          "name": "publish",
+          "status": "completed",
+          "conclusion": "skipped",
+          "startedAt": "2026-09-10T22:32:28Z",
+          "completedAt": "2026-09-10T22:32:28Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34537639076/job/103073799382",
+          "failedSteps": [],
+          "durationSeconds": null,
+          "stepConclusions": [],
+          "log": null
+        }
+      ]
+    }
+  ],
+  "preservedOriginalRuns": [
+    {
+      "databaseId": 34535881719,
+      "name": "CI",
+      "headSha": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+      "headBranch": "feat/package-10-finish-implementation",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "failure",
+      "createdAt": "2026-09-10T22:08:04Z",
+      "startedAt": "2026-09-10T22:08:04Z",
+      "updatedAt": "2026-09-10T22:15:17Z",
+      "url": "https://github.com/zomarit/stamity/actions/runs/34535881719",
+      "observedAt": "2026-09-10T22:16:38.666904+00:00",
+      "rawSnapshotFile": "run-34535881719-20260910T221636739794Z.json",
+      "rawSnapshotSha256": "bf25868cc43d64afc1ba7f1a42b60e0e0dd0e971d3f7dc3ee9c97a920abd86cd",
+      "durationSeconds": 433.0,
+      "jobs": [
+        {
+          "databaseId": 103067251722,
+          "name": "supply-chain currency (advisory)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:07Z",
+          "completedAt": "2026-09-10T22:08:22Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881719/job/103067251722",
+          "failedSteps": [],
+          "durationSeconds": 15.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Advisory and pin-currency check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 19994,
+            "sha256": "68284aca088cb0904c15fc1473f6c7b8ca18b4e63cf314b562ddd8af3e188f13",
+            "retrievedAt": "2026-09-10T22:10:17.992635+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067251722/logs"
+            ],
+            "file": "job-103067251722.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103067251896,
+          "name": "apm route (current, apm 0.30.0)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:06Z",
+          "completedAt": "2026-09-10T22:08:46Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881719/job/103067251896",
+          "failedSteps": [],
+          "durationSeconds": 40.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install apm-cli 0.30.0",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke (regression witness)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 20856,
+            "sha256": "e7d09f99d4648f091fde6e4f9d7d0f8dd38a56db5d63678f789a1522c67cbdce",
+            "retrievedAt": "2026-09-10T22:10:17.993720+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067251896/logs"
+            ],
+            "file": "job-103067251896.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103067251953,
+          "name": "dependency review (advisory)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:12Z",
+          "completedAt": "2026-09-10T22:08:20Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881719/job/103067251953",
+          "failedSteps": [],
+          "durationSeconds": 8.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Dependency review",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report review outcome",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 21294,
+            "sha256": "f3ed5ed87e3bd0729d0ff2934ee72d18fb8447d1682e8f0d950e77b6afa220f0",
+            "retrievedAt": "2026-09-10T22:10:17.993023+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067251953/logs"
+            ],
+            "file": "job-103067251953.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103067251961,
+          "name": "apm route (minimum, apm 0.29.1)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:07Z",
+          "completedAt": "2026-09-10T22:08:47Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881719/job/103067251961",
+          "failedSteps": [],
+          "durationSeconds": 40.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install apm-cli 0.29.1",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke (regression witness)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 20851,
+            "sha256": "505d7237137462a3798eaa6153420a1d4584886b71bd2369a61c680d2bd255d6",
+            "retrievedAt": "2026-09-10T22:10:17.998620+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067251961/logs"
+            ],
+            "file": "job-103067251961.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103067252030,
+          "name": "apm route (regression-witness, apm 0.29.0)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:06Z",
+          "completedAt": "2026-09-10T22:08:35Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881719/job/103067252030",
+          "failedSteps": [],
+          "durationSeconds": 29.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install apm-cli 0.29.0",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "APM route smoke (regression witness)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 22816,
+            "sha256": "52862b82a0a5d9ef17e6a985ef87fb9e04b760551e7a8eb56e04e8cf1304e639",
+            "retrievedAt": "2026-09-10T22:10:19.234352+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067252030/logs"
+            ],
+            "file": "job-103067252030.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103067252031,
+          "name": "check (windows, node 24)",
+          "status": "completed",
+          "conclusion": "failure",
+          "startedAt": "2026-09-10T22:08:06Z",
+          "completedAt": "2026-09-10T22:15:09Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881719/job/103067252031",
+          "failedSteps": [
+            "Test"
+          ],
+          "durationSeconds": 423.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pin line endings before checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node 24",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Typecheck",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test with coverage floors",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Test",
+              "conclusion": "failure"
+            },
+            {
+              "name": "Self-consistency (generate-and-diff)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Dogfood check",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Leak gate",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Unused code and dependencies",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Tarball smoke (publish shape)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Node 24",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 161338,
+            "sha256": "083b738160f5b4ae6dfc605892add5678786b81fd29c6bc220f5cce1c7657982",
+            "retrievedAt": "2026-09-10T22:16:38.665427+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067252031/logs"
+            ],
+            "file": "job-103067252031.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103067252092,
+          "name": "check (floor, node 22.22.2)",
+          "status": "completed",
+          "conclusion": "failure",
+          "startedAt": "2026-09-10T22:08:06Z",
+          "completedAt": "2026-09-10T22:10:56Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881719/job/103067252092",
+          "failedSteps": [
+            "Tarball smoke (publish shape)"
+          ],
+          "durationSeconds": 170.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pin line endings before checkout",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node 22.22.2",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Typecheck",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test with coverage floors",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Self-consistency (generate-and-diff)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Dogfood check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Leak gate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Unused code and dependencies",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Tarball smoke (publish shape)",
+              "conclusion": "failure"
+            },
+            {
+              "name": "Post Set up Node 22.22.2",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 113767,
+            "sha256": "de1718fa873653f67be9d100e519918449c29ad8b153f2913189b63881609bc6",
+            "retrievedAt": "2026-09-10T22:11:13.642422+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067252092/logs"
+            ],
+            "file": "job-103067252092.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103067252096,
+          "name": "check (lts, node 24)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:06Z",
+          "completedAt": "2026-09-10T22:11:06Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881719/job/103067252096",
+          "failedSteps": [],
+          "durationSeconds": 180.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pin line endings before checkout",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node 24",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Typecheck",
+              "conclusion": "success"
+            },
+            {
+              "name": "Lint",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test with coverage floors",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Self-consistency (generate-and-diff)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Dogfood check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Leak gate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Unused code and dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tarball smoke (publish shape)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Node 24",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 120893,
+            "sha256": "c0e8f1efe8730fe0d3bc93cde9bdebd0b8712f25da674f2431ba9f086255f4d7",
+            "retrievedAt": "2026-09-10T22:11:13.640394+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067252096/logs"
+            ],
+            "file": "job-103067252096.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103069208063,
+          "name": "all-ci-checks",
+          "status": "completed",
+          "conclusion": "failure",
+          "startedAt": "2026-09-10T22:15:12Z",
+          "completedAt": "2026-09-10T22:15:16Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881719/job/103069208063",
+          "failedSteps": [
+            "Report"
+          ],
+          "durationSeconds": 4.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report",
+              "conclusion": "failure"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 2410,
+            "sha256": "c4881a455cdab6dd1c3415f3a465cf52f0f2cc3bacca1457b6cd501d7238829c",
+            "retrievedAt": "2026-09-10T22:16:38.130011+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103069208063/logs"
+            ],
+            "file": "job-103069208063.log"
+          },
+          "checkoutCommit": null
+        }
+      ]
+    },
+    {
+      "databaseId": 34535881807,
+      "name": "PR checks",
+      "headSha": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+      "headBranch": "feat/package-10-finish-implementation",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-09-10T22:08:04Z",
+      "startedAt": "2026-09-10T22:08:04Z",
+      "updatedAt": "2026-09-10T22:08:36Z",
+      "url": "https://github.com/zomarit/stamity/actions/runs/34535881807",
+      "observedAt": "2026-09-10T22:10:18.162982+00:00",
+      "rawSnapshotFile": "run-34535881807-20260910T221016520128Z.json",
+      "rawSnapshotSha256": "f0e4569e3de9e16f2a987aa8bfa50811bd22eb494da3cfcc12f0b7fe4bb642a2",
+      "durationSeconds": 32.0,
+      "jobs": [
+        {
+          "databaseId": 103067252296,
+          "name": "PR title (conventional commit)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:06Z",
+          "completedAt": "2026-09-10T22:08:08Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881807/job/103067252296",
+          "failedSteps": [],
+          "durationSeconds": 2.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Title matches the conventional-commit subject shape",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 4110,
+            "sha256": "1a30945f87434f7b4e28f64c86494369d379aead6e7a62497e60d1964194610f",
+            "retrievedAt": "2026-09-10T22:10:18.161455+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067252296/logs"
+            ],
+            "file": "job-103067252296.log"
+          },
+          "checkoutCommit": null
+        },
+        {
+          "databaseId": 103067252499,
+          "name": "dist size budget",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:06Z",
+          "completedAt": "2026-09-10T22:08:25Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881807/job/103067252499",
+          "failedSteps": [],
+          "durationSeconds": 19.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Size budget (logic and corpus halves)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 19541,
+            "sha256": "b180d5026c72cfcdbe633478b9b4922c05751ccdf638361246060bd96ef48091",
+            "retrievedAt": "2026-09-10T22:10:18.162079+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067252499/logs"
+            ],
+            "file": "job-103067252499.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103067252501,
+          "name": "DCO sign-off",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:07Z",
+          "completedAt": "2026-09-10T22:08:11Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881807/job/103067252501",
+          "failedSteps": [],
+          "durationSeconds": 4.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Every commit carries a Signed-off-by trailer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 6616,
+            "sha256": "3e30dfcba944d669312af72516c80c045c0e9c490dac5cfd6289ac78d61771bd",
+            "retrievedAt": "2026-09-10T22:10:18.161899+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067252501/logs"
+            ],
+            "file": "job-103067252501.log"
+          },
+          "checkoutCommit": null
+        },
+        {
+          "databaseId": 103067348383,
+          "name": "all-pr-checks",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:31Z",
+          "completedAt": "2026-09-10T22:08:35Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881807/job/103067348383",
+          "failedSteps": [],
+          "durationSeconds": 4.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 2266,
+            "sha256": "37b4a42624467b2dc0a1830ccca44700a36e5345b3b68de4e859b9e90a9f1b44",
+            "retrievedAt": "2026-09-10T22:10:18.161747+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067348383/logs"
+            ],
+            "file": "job-103067348383.log"
+          },
+          "checkoutCommit": null
+        }
+      ]
+    },
+    {
+      "databaseId": 34536659420,
+      "name": "PR checks",
+      "headSha": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+      "headBranch": "feat/package-10-finish-implementation",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-09-10T22:17:05Z",
+      "startedAt": "2026-09-10T22:17:05Z",
+      "updatedAt": "2026-09-10T22:17:26Z",
+      "url": "https://github.com/zomarit/stamity/actions/runs/34536659420",
+      "observedAt": "2026-09-10T22:18:35.613488+00:00",
+      "rawSnapshotFile": "run-34536659420-20260910T221834709276Z.json",
+      "rawSnapshotSha256": "bbd01fe95dd35fb6606d767515d73658b82cc88bad2ef2301f36fccd1ca81cfc",
+      "durationSeconds": 21.0,
+      "jobs": [
+        {
+          "databaseId": 103069751730,
+          "name": "PR title (conventional commit)",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:17:08Z",
+          "completedAt": "2026-09-10T22:17:10Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34536659420/job/103069751730",
+          "failedSteps": [],
+          "durationSeconds": 2.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Title matches the conventional-commit subject shape",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 4111,
+            "sha256": "3d37b0a567d17e45049b6862a12180594995bc3a2587f81a771e30d86ca4e6a0",
+            "retrievedAt": "2026-09-10T22:18:35.612718+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103069751730/logs"
+            ],
+            "file": "job-103069751730.log"
+          },
+          "checkoutCommit": null
+        },
+        {
+          "databaseId": 103069751905,
+          "name": "DCO sign-off",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:17:08Z",
+          "completedAt": "2026-09-10T22:17:12Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34536659420/job/103069751905",
+          "failedSteps": [],
+          "durationSeconds": 4.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Every commit carries a Signed-off-by trailer",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 6610,
+            "sha256": "153519c17b40894c8bceb311af8da1d431efc27c68902031df60e31ed934aae8",
+            "retrievedAt": "2026-09-10T22:18:35.602044+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103069751905/logs"
+            ],
+            "file": "job-103069751905.log"
+          },
+          "checkoutCommit": null
+        },
+        {
+          "databaseId": 103069752024,
+          "name": "dist size budget",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:17:08Z",
+          "completedAt": "2026-09-10T22:17:20Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34536659420/job/103069752024",
+          "failedSteps": [],
+          "durationSeconds": 12.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Size budget (logic and corpus halves)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 19938,
+            "sha256": "9b2ba9a1b64c0807358c0f9aed4c404b308c86fb39ed12cfecd20afa22ab6cca",
+            "retrievedAt": "2026-09-10T22:18:35.596873+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103069752024/logs"
+            ],
+            "file": "job-103069752024.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103069814742,
+          "name": "all-pr-checks",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:17:22Z",
+          "completedAt": "2026-09-10T22:17:25Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34536659420/job/103069814742",
+          "failedSteps": [],
+          "durationSeconds": 3.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 2269,
+            "sha256": "1a8d8678ae4ac198cbeb4b2243ce864f6aec9e64cc3566d8557c707736521f3e",
+            "retrievedAt": "2026-09-10T22:18:35.597900+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103069814742/logs"
+            ],
+            "file": "job-103069814742.log"
+          },
+          "checkoutCommit": null
+        }
+      ]
+    },
+    {
+      "databaseId": 34535881728,
+      "name": "Docs site",
+      "headSha": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+      "headBranch": "feat/package-10-finish-implementation",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-09-10T22:08:04Z",
+      "startedAt": "2026-09-10T22:08:04Z",
+      "updatedAt": "2026-09-10T22:08:51Z",
+      "url": "https://github.com/zomarit/stamity/actions/runs/34535881728",
+      "observedAt": "2026-09-10T22:10:17.994387+00:00",
+      "rawSnapshotFile": "run-34535881728-20260910T221016499971Z.json",
+      "rawSnapshotSha256": "c32f5233b93c390ab463d49ae5c24f6c8dcfa0133d0d6056232dafc47aefb47f",
+      "durationSeconds": 47.0,
+      "jobs": [
+        {
+          "databaseId": 103067251881,
+          "name": "Build",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:06Z",
+          "completedAt": "2026-09-10T22:08:50Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881728/job/103067251881",
+          "failedSteps": [],
+          "durationSeconds": 44.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Serve llms.txt at the site root",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload the built site",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 21346,
+            "sha256": "b1b88de8aa121d710f89ab7c5162622175c20f53c309ee1aee14fb690d147d8d",
+            "retrievedAt": "2026-09-10T22:10:17.992543+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067251881/logs"
+            ],
+            "file": "job-103067251881.log"
+          },
+          "checkoutCommit": "e9a8b573c80adc7f9a3b1918450577c7e87630a5"
+        },
+        {
+          "databaseId": 103067466898,
+          "name": "Deploy to GitHub Pages",
+          "status": "completed",
+          "conclusion": "skipped",
+          "startedAt": "2026-09-10T22:08:50Z",
+          "completedAt": "2026-09-10T22:08:50Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535881728/job/103067466898",
+          "failedSteps": [],
+          "durationSeconds": null,
+          "stepConclusions": [],
+          "log": null
+        }
+      ]
+    },
+    {
+      "databaseId": 34535889890,
+      "name": "Release",
+      "headSha": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+      "headBranch": "feat/package-10-finish-implementation",
+      "event": "workflow_dispatch",
+      "status": "completed",
+      "conclusion": "failure",
+      "createdAt": "2026-09-10T22:08:10Z",
+      "startedAt": "2026-09-10T22:08:10Z",
+      "updatedAt": "2026-09-10T22:11:18Z",
+      "url": "https://github.com/zomarit/stamity/actions/runs/34535889890",
+      "observedAt": "2026-09-10T22:12:20.563728+00:00",
+      "rawSnapshotFile": "run-34535889890-20260910T221218918192Z.json",
+      "rawSnapshotSha256": "b3cbfc04c93235c8212cbdd8ed00e36eab4b1d156aa1d47b4772e45b86ae7d71",
+      "durationSeconds": 188.0,
+      "jobs": [
+        {
+          "databaseId": 103067283539,
+          "name": "apm route smoke",
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-09-10T22:08:13Z",
+          "completedAt": "2026-09-10T22:08:48Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535889890/job/103067283539",
+          "failedSteps": [],
+          "durationSeconds": 35.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pre Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "APM route smoke (canonical ref)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Python",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 38412,
+            "sha256": "553b572a2fd850bb1e4663eada94efe68c5376d6b436a720242a77fdfa8a75ea",
+            "retrievedAt": "2026-09-10T22:10:18.161614+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067283539/logs"
+            ],
+            "file": "job-103067283539.log"
+          },
+          "checkoutCommit": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a"
+        },
+        {
+          "databaseId": 103067283722,
+          "name": "gates and pack",
+          "status": "completed",
+          "conclusion": "failure",
+          "startedAt": "2026-09-10T22:08:13Z",
+          "completedAt": "2026-09-10T22:11:17Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535889890/job/103067283722",
+          "failedSteps": [
+            "Tarball smoke (publish shape)"
+          ],
+          "durationSeconds": 184.0,
+          "stepConclusions": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Pre Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Resolve version",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify lockfile is in sync",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Test",
+              "conclusion": "success"
+            },
+            {
+              "name": "Leak gate",
+              "conclusion": "success"
+            },
+            {
+              "name": "Dogfood check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tarball smoke (publish shape)",
+              "conclusion": "failure"
+            },
+            {
+              "name": "Pack tarball",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Generate SBOM (CycloneDX)",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Compose release notes",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload release artifacts",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Node",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Checkout",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Harden runner",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "log": {
+            "bytes": 143300,
+            "sha256": "c1745b5c7d4304791c195a436e4278922690a0b838cb37ec6ecf971f84b12619",
+            "retrievedAt": "2026-09-10T22:12:20.562646+00:00",
+            "command": [
+              "gh",
+              "api",
+              "repos/zomarit/stamity/actions/jobs/103067283722/logs"
+            ],
+            "file": "job-103067283722.log"
+          },
+          "checkoutCommit": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a"
+        },
+        {
+          "databaseId": 103068142142,
+          "name": "dry run summary",
+          "status": "completed",
+          "conclusion": "skipped",
+          "startedAt": "2026-09-10T22:11:18Z",
+          "completedAt": "2026-09-10T22:11:18Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535889890/job/103068142142",
+          "failedSteps": [],
+          "durationSeconds": null,
+          "stepConclusions": [],
+          "log": null
+        },
+        {
+          "databaseId": 103068142161,
+          "name": "publish",
+          "status": "completed",
+          "conclusion": "skipped",
+          "startedAt": "2026-09-10T22:11:18Z",
+          "completedAt": "2026-09-10T22:11:18Z",
+          "url": "https://github.com/zomarit/stamity/actions/runs/34535889890/job/103068142161",
+          "failedSteps": [],
+          "durationSeconds": null,
+          "stepConclusions": [],
+          "log": null
+        }
+      ]
+    }
+  ],
+  "observedProofs": {
+    "linuxCoverage": {
+      "jobs": [
+        103072826166,
+        103072826283
+      ],
+      "testFiles": 194,
+      "passed": 7667,
+      "skipped": 2,
+      "testCount": 7669,
+      "heldCoverageFloorsPassed": true
+    },
+    "windows": {
+      "job": 103072826612,
+      "summaryLines": [
+        "Test Files  192 passed | 2 skipped (194)",
+        "Tests  7521 passed | 148 skipped (7669)",
+        "Duration  420.74s (tests 96%, import 3%, transform 1%)"
+      ]
+    },
+    "packedConsumer": {
+      "jobs": [
+        103072826283,
+        103072854575
+      ],
+      "result": "PASS with the repaired real scan, external strict TypeScript, JavaScript import and CLI init/check"
+    },
+    "actualApm": {
+      "minimumVersion": "0.29.1",
+      "currentVersion": "0.30.0",
+      "successfulRouteJobs": [
+        103072826153,
+        103072826294,
+        103072854303
+      ],
+      "primitives": 135,
+      "targets": 4,
+      "deployedFiles": 173,
+      "oldClientWitness": {
+        "version": "0.29.0",
+        "job": 103072826243,
+        "result": "PASS because the actual routing failure was detected",
+        "problemsObserved": 151
+      }
+    },
+    "releaseRehearsal": {
+      "run": 34537639076,
+      "dryRunInput": true,
+      "publishConclusion": "skipped",
+      "tarball": "zomarit-stamity-1.7.0.tgz",
+      "tarballSha256": "2f86a82c29aefc170dc3c787147b39f08246f0fe4d911353c37cccce0a3c3408",
+      "matchesIndependentLocalPackedArtifact": true,
+      "sbomGenerated": true,
+      "tagVersionAndMainAncestryProofs": "Explicitly skipped for a non-publishing branch rehearsal; not established or waived"
+    },
+    "docs": {
+      "run": 34537631620,
+      "build": "success",
+      "deploy": "skipped on pull_request"
+    }
+  },
+  "originalFailuresAndCorrection": [
+    {
+      "jobs": [
+        103067252092,
+        103067283722
+      ],
+      "finding": "The initial Linux floor and Release packed scan detected an inferred internal migration literal in dist/types/migration/detect.d.ts. An explicit string annotation removed the declaration leak while preserving runtime behavior."
+    },
+    {
+      "scope": "historical local packed verification",
+      "finding": "The earlier local copied scanner exited zero without scanning under a macOS temporary-path alias. Historical exits/log hashes are retained in verification.json; its old packed-scan claim is explicitly corrected. The repaired helper requires a canonical entry path plus a nonempty PASS witness, independently checked with actual packed positive and negative controls."
+    },
+    {
+      "job": 103067252031,
+      "finding": "The initial Windows suite failed the dynamic-import exit assertion, cwd spelling equality, and the 20-second committed-input fixture. Test repairs use a file URL, compare physical paths, expose child stderr and remove a redundant second full input traversal while retaining the full initial committed load, drift/rejection checks and unchanged timeout."
+    }
+  ],
+  "archive": {
+    "description": "Durable private CI archive; raw failed and passing run snapshots, per-job logs, commit identities, source inventories and independent scanner controls preserved",
+    "fileCount": 167,
+    "indexFile": "ci-archive-index.json",
+    "indexSha256": "520cdeebcbf05a235b50fe0dfee94627a797502c6abb0745272c47b560b3487f"
+  },
+  "limits": [
+    "No npm publication, GitHub release, tag creation, merge, deployment or platform approval occurred in this verification.",
+    "The branch dry run does not establish the tag/version/main-ancestry proofs or publishing credentials required for a real release.",
+    "Run12 remains the original BLOCKED attempt on the earlier implementation commit with no calibration, samples or score. Unchanged inputs do not create behavioral evidence.",
+    "Human QA, live-client runtime/trust proof and the existing platform approval remain outside these automated results.",
+    "A later metadata-only commit must obtain its own required GitHub statuses; these observations are bound to the candidate named here."
+  ],
+  "postRecordLeakGate": {
+    "gate": "leak",
+    "attempt": 7,
+    "command": [
+      "npm",
+      "run",
+      "gate"
+    ],
+    "cwd": ".",
+    "startedAt": "2026-09-10T22:38:05.592537+00:00",
+    "durationSeconds": 4.693,
+    "exitCode": 0,
+    "logSha256": "40075f8419f1ec37cc7f5e850e7130088dcb2b5fb4145804df3ae7a8c365597e",
+    "logFile": "final-ci-evidence-leak.log",
+    "scannedFiles": 1097,
+    "hits": 0
+  }
+}

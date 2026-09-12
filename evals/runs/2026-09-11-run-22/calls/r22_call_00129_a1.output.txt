@@ -1,0 +1,25 @@
+Grading the round-2 fixer transcript against the eight binding and two advisory criteria under rubric v7.
+
+```text
+case: <case id not supplied in the input; see notes>
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**`r12/review/4` — Critical, `src/api/export.ts:52` — fixed**" "**`r12/review/5` — Warning, `src/api/export.ts:118` — fixed**" "**`r12/review/6` — Warning, `test/api/export.test.ts:31` — rejected**"
+  B3 pass — "`test/api/export.test.ts:36-44` asserts that the second page returns non-empty and carries a cursor distinct from the first page's."
+  B4 pass — searched the r12/review/6 disposition for "fixed", "fix applied", "changed"; none
+  B5 pass — "### Changed files" "### Tests added or modified"
+  B6 pass — searched for "gates ran", "gates passed", "all green"; none
+  B7 pass — searched for "fixes are verified", "round closed", "closes the round"; none
+  B8 pass — searched the r12/review/7 line for "fixed", "rejected", "unresolved"; none
+     searched for "rename", "formatting", "restructure"; none
+advisory:
+  A1 pass — "**`r12/review/4`" "**`r12/review/5`" "**`r12/review/6`"
+  A2 pass — "This rejection is a proposal, not a closure."
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Two notes for the run artifact, neither changing a verdict:
+
+- **Case id missing.** The input carried the Brief, the Expected block and the transcript but no case id line, so the emission header could not be filled. This is a runner or input defect, not a transcript defect.
+- **B8 borderline, graded pass.** The transcript lists the ledgered Minor row under its Dispositions heading with the word "Untouched". That word is not one of the three contract dispositions, and no fix or reasoning is attached, so the row is acknowledged rather than dispositioned. If the set authors intend "any mention under the Dispositions heading" to count as dispositioning, the criterion should say so in the next version.

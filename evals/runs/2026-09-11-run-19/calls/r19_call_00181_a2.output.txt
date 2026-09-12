@@ -1,0 +1,44 @@
+Grading the supplied Answer block against the case's six binding and two advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — the four substantive claims each cite a path:line from the facts:
+     "`src/session/store.ts:23`", "`src/session/store.ts:57`", "`src/server/boot.ts:31`",
+     and the accumulation claim cites all three. The remaining prose ("No answer. There is
+     no test, benchmark, or production measurement...", "Heap or RSS measurement...")
+     records the drop and names missing evidence rather than asserting a fact about the
+     system; treated as non-claim prose, not as uncited claims.
+  B2 pass — "**high**", "**high**", "**high**", "**medium**" appear on each of the four
+     claims; no claim lacks a band
+  B3 pass — "Session entries therefore accumulate for the lifetime of the process
+     (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`,
+     **medium** ..." — band is medium, citation set includes three of the three sites
+  B4 pass — one medium claim exists; its assumption is inside the same sentence:
+     "**medium** — unverified assumption stated here: that no code outside
+     `src/session/store.ts` deletes from the `Map`, since call sites were not read and
+     nothing was executed"
+  B5 pass — searched the production-severity section for a rate, growth figure, ceiling,
+     time-to-OOM, or a "likely" / "probably" sentence; the words "rate, ceiling,
+     time-to-OOM" appear only inside the list of candidate claims declared "uncitable and
+     is deleted". The phrase "the severity question is open, not small" was examined; it
+     characterises the question as unresolved, not the severity as large, and carries no
+     figure. No estimate asserted.
+  B6 pass — every path:line in the transcript is `src/session/store.ts:23`,
+     `src/session/store.ts:57`, or `src/server/boot.ts:31`; all three are in the facts.
+     The bare `src/session/store.ts` inside the assumption is a file name, not a
+     path:line citation.
+advisory:
+  A1 pass — "Heap or RSS measurement against real session traffic, or a load test that
+     drives session creation and samples `Map` size over time"
+  A2 pass — "No answer. There is no test, benchmark, or production measurement of session
+     memory growth in the repository, so every candidate claim about production severity
+     ... is uncitable and is deleted rather than softened."
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+Two notes for the case author, neither affecting the verdict:
+
+- **No case id** was supplied with the Brief and Expected blocks, so the emission cannot name one.
+- **B1 and A2 sit in mild tension.** B1 reads "every claim" and A2 requires the drop to be surfaced in prose. That prose cannot carry a path:line because it describes an absence. I graded the surfacing sentences as non-claims. If the author intends B1 to cover them, B1 becomes unsatisfiable alongside A2 and should be reworded.

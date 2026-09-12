@@ -238,6 +238,44 @@ so an overlay can pass sync and still be flagged by `validate`. `stamity validat
 every half applied. That line is information and never moves the exit code, exactly as a shadowing
 line does not.
 
+## Client metadata and native limits
+
+Revalidated on 2026-09-10. Bundled skills declare `license: MIT` and their runtime
+prerequisites in `compatibility`. Both fields already pass through the existing skill
+projection. Optional `agents/openai.yaml` companions supply Codex display names and
+default prompts; overrides keep their own companion files. No tool connection or
+credential is implied by those UI fields.
+
+Claude command files remain in `.claude/commands/`. The current client explicitly
+supports them and preserves the same `/st-*` invocation as skills; moving these
+workflows adds no needed capability. Their names and the override path therefore
+remain stable.
+
+Cursor converts hook timeouts from milliseconds to native seconds and translates
+portable `hookSpecificOutput` decisions into its native output. Exit 2 denies;
+`failClosed` additionally denies hook errors and timeouts on supported events.
+An unsupported `ask` decision requires manual permission review.
+
+Copilot CLI/cloud repository hooks now register at `.github/hooks/stamity.json`.
+Tool-hook denial and errors block, but timeouts remain fail-open. Its session-start
+output does not inject the learning index: read `.stamity/learnings/` and active
+handoffs manually. Copilot cloud reads hook configuration from the default branch.
+
+Codex hooks use command strings and native `/hooks` trust review. An emitted digest
+is not native approval; `stamity check` detects generated-file drift. The Codex,
+Cursor and Copilot tool-call payloads do not identify the calling role, so the core
+role guard is telemetry there. Native sandbox and permission controls remain the
+enforcement boundary.
+
+Claude and Codex now both offer local memory, so the second-client reassessment
+trigger has fired. `st-learn` remains useful: versioned repository evidence travels
+across supported clients and machines, while these native memory stores are local.
+Reassess again if clients provide durable, repository-scoped, cross-vendor memory;
+retain existing learning evidence during that review.
+
+The dated [client contract evidence](../.github/client-contracts.md) links the official
+sources and records which guarantees the local fixtures exercise.
+
 ## Where to go next
 
 - [Getting started](getting-started.md) — install, what lands, and the first proven change.

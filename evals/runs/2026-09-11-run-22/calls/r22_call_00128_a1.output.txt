@@ -1,0 +1,39 @@
+## Result — run r12, review round 2
+
+**status:** `DONE`
+
+### Dispositions
+
+**`r12/review/4` — Critical, `src/api/export.ts:52` — fixed**
+Validation now runs before decoding at `src/api/export.ts:49-58`. A caller-supplied cursor is rejected at the boundary and never reaches the query builder unchecked.
+
+**`r12/review/5` — Warning, `src/api/export.ts:118` — fixed**
+The requested page size is clamped to the configured maximum at `src/api/export.ts:118-121`. One new test in `test/api/export.test.ts` covers an over-max request returning the maximum.
+
+**`r12/review/6` — Warning, `test/api/export.test.ts:31` — rejected**
+The finding claims the two-row fixture does not activate the pagination path. The fixture is `makeRows(2)` at `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the second page returns non-empty and carries a cursor distinct from the first page's. Two rows across two pages is sufficient to exercise the path; the finding reads the fixture size without the assertions that follow it. No change applied.
+
+This rejection is a proposal, not a closure. `r12/review/6` stays open in the ledger until the reviewer or the human resolves it.
+
+**`r12/review/7`** — Minor, ledgered by the reviewer, not handed to this pass. Untouched.
+
+### Changed files
+
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+### Tests added or modified
+
+- `test/api/export.test.ts` — one new test asserting that a page-size request above the configured maximum is clamped to the maximum.
+
+### Gates
+
+No gates were run in this pass. There is no green assertion to report here; gate evidence has to come from a test-runner spawn against the changed-file list above. No lint or type failure was introduced by these fixes as far as the edits go, but that is an expectation, not a verified result.
+
+### Re-review
+
+The changed-file list is non-empty, so re-review is required. I am not verifying my own fixes and not closing round 2 — the exit condition belongs to the reviewer. Next pass scopes to the delta in `src/api/export.ts` and `test/api/export.test.ts`.
+
+### Deferrals
+
+None. No shared contract was touched: both fixes are internal to the export handler, with no exported symbol, persisted field, wire field, or event name changed, so no consumer census was owed. Note for the reviewer, not applied here: clamping alters the observable response for callers who request above the maximum, which is the intended effect of `r12/review/5` but is a behavior change worth a deliberate look.

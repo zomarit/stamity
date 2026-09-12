@@ -1,0 +1,9 @@
+**(1) Merge — doing it.** `runner-skips-files-outside-project-glob.md` survives: it's the higher-confidence note and it's the one with a run cited. `out-of-glob-tests-never-execute.md` is deleted, and the surviving note records the absorbed id in its frontmatter so any earlier citation to `out-of-glob-tests-never-execute` still resolves to something. Nothing from the medium note changes the claim or the band — it's the same finding with no run behind it, so there's nothing to fold in beyond the id itself.
+
+**(2) Promotion — not doing it.** Three citations this month is popularity, not evidence; the schema is explicit that being consulted often promotes nothing on its own, and a band that moves with no cited outcome is an opinion edit. I'm also not going to offer it as an option you can approve, because the schema treats the offer as the same edit. `windows-path-separator-in-messages.md` stays at medium.
+
+What *would* move it: a run that exercises the path-separator behaviour and comes back green. If you want, I can note in the file that it has gone unverified since it was written — that's a fact about the note, not a change to its band — and it flags the note as a candidate for re-verification next time someone is in that code.
+
+**(3) New note — not writing it.** "`Array.prototype.sort` uses lexicographic comparison by default" is general JavaScript knowledge and restated documentation; it's the explicit non-learning case. A competent reader predicts it without this repo's help.
+
+There is a version of this that belongs in `.stamity/learnings/`: if some part of this repository got bitten by it in a way that isn't obvious — a sort that looks numeric but isn't, a comparator that exists for a non-obvious reason, a place where the default ordering silently produced wrong output — that's a finding about this repo and worth a note. Tell me which code prompted this and I'll check whether there's something like that to record.

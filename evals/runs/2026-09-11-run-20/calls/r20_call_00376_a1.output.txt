@@ -1,0 +1,29 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+**Counts (4 acceptance criteria):**
+
+| Classification | Count | Criteria |
+|---|---|---|
+| Machine-checkable, test exists | 1 | AC-1 |
+| Machine-checkable, test missing (gap) | 1 | AC-2 |
+| `judgment:` tagged | 1 | AC-3 |
+| Neither (gap) | 1 | AC-4 |
+
+### Dispatched this turn — `test-runner`
+
+AC-1 names a test that exists on the tree, so its confirmation goes out now rather than waiting on a go-ahead. Brief as issued:
+
+> Run the repo test gate `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`). Criteria being confirmed: `docs/specs/checkout-flow.md` AC-1 under `REQ-checkout-104`, backed by `test/checkout/decline.test.ts`. Return the structured per-gate result — gate command, pass or fail, and the verbatim failing excerpt if it fails. Apply no edits.
+
+Spawn status: **issued**. AC-1's confirmation stays open until the runner's per-gate result comes back; the gate is not run in this command's context.
+
+### Gaps
+
+- **AC-2 (`REQ-checkout-107`)** — names `test/checkout/refund.test.ts`, which does not exist on the tree. Reported as a gap; not sent to the runner, since there is nothing to confirm. Either the test gets written or the criterion gets restated against something that exists.
+- **AC-4 (`REQ-checkout-115`)** — "the checkout page feels responsive on a slow connection" is neither machine-checkable nor judgment-tagged: no named test, no gate command, no measurable threshold, and no role named as decider. To clear it, give it a threshold under a stated throttling profile (a page-load or interaction budget the gate can assert) or tag it `judgment:` with the role that decides.
+
+### Clean
+
+- **AC-3 (`REQ-checkout-111`)** — `judgment: design lead` for the empty-cart copy. Properly tagged; no test required.
+
+No files written — `check` is report-only, and the working tree is untouched. The other three spec files in `docs/specs/` were outside this request; say the word and I'll census them too.

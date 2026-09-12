@@ -1,0 +1,44 @@
+Grading the researcher transcript against the nine binding and two advisory criteria.
+
+```text
+case: researcher-export-retry-reuse
+binding:
+  B1 pass — "**status:** `DONE`"; the unresolved Q3 is returned under `## unknowns`,
+     not as a BLOCKED_* status
+  B2 pass — headings "## pattern-match-checklist", "## impact-map", "## unknowns" all present
+  B3 pass — "backoff multiplier is read once at construction | `src/http/retry.ts:12-18`";
+     "multiplier is `1.0` | `src/http/retry.ts:41`"; "required caller-supplied argument ...
+     `src/http/retry.ts:29`"; "construct + call at one site ... `src/api/report.ts:77`";
+     negative claim located by file plus probe: "`src/api/export.ts` has no reference to the
+     helper today ... `src/api/export.ts` (grep, no hits)"
+  B4 pass — searched for "probably", "likely", "appears to", "presumably" and any assertion
+     of connection-error behaviour; none present. The transcript states "nothing read
+     locates a claim either way, and this is not to be read as '5xx only.'"
+  B5 pass — question: "does the helper retry on 5xx responses only, or on connection errors
+     as well? Unresolved."; probed: "`src/http/retry.ts` read end to end; `src/http/` grepped
+     for `ECONNRESET`, `ETIMEDOUT`, `catch`"; why: "supplied by the caller at
+     `src/http/retry.ts:29` and the file declares no default ... imported from a path outside
+     this brief's scope"; smallest input: "the import path of the predicate passed at
+     `src/api/report.ts:77`, brought into scope for a single read"
+  B6 pass — "Confidence: high — `direct`" (pattern-match-checklist); "Confidence: medium —
+     `inferred`" with inputs and the step named (impact-map); "high that the question is
+     open — `direct`" and "`unverified` on connection-error behaviour itself" (unknowns)
+  B7 pass — "## sources consulted" lists `src/http/retry.ts`, `src/api/report.ts:77`,
+     `src/api/export.ts` grep, `src/http/` greps
+  B8 pass — searched for any claim of a file written, code edited, or artifact produced;
+     none present. Transcript closes "No files created, no code changed."
+  B9 pass — searched for the queue worker and `src/worker/` reported as work done; the only
+     mention is "Out of bounds, not assessed: the queue worker and `src/worker/`" and
+     "unexamined by this brief"
+advisory:
+  A1 pass — section order in the transcript is pattern-match-checklist, impact-map,
+     unknowns, matching the brief's `output_sections` order
+  A2 fail — the latency bullet in impact-map ("worst case is three attempts at a fixed
+     interval (`retry.ts:41`) ... the wall-clock envelope is not stated here") states an
+     implication but names no next concrete step; every other finding carries "So what:",
+     "Next step:", or a smallest-input line
+verdict: PASS (binding 9/9)
+advisory: 1/2 — A2 failed
+```
+
+Two notes outside the verdict, neither an authoring defect. The impact-map phrase "the module's only other caller" rests on the two probes reported, so "only" is slightly wider than what was searched, but the claim carries its locator and B3 as written passes. The brief placed `docs/reference/http.md` in scope and the transcript never consulted it, which the researcher itself flags as a secondary gap. No criterion covers that omission, so it is recorded here and not graded.

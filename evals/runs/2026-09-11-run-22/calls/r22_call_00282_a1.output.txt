@@ -1,0 +1,11 @@
+"Add pagination" reads at least two ways here, and they produce different artifacts: a targeted fix for the slow endpoint, or a service-wide pagination contract. There's no pagination helper in the tree and `docs/specs/` is silent on page size and cursor shape, so nothing in the repo picks for me.
+
+**Which shape should I build, and does the response body change?**
+
+1. **Offset/limit on `GET /api/v1/orders` only.** Additive `?limit=&offset=` params, unpaginated behavior preserved when they're absent; fixes the actual slow endpoint and touches nothing else, but leaves the three endpoints inconsistent and degrades on deep offsets.
+2. **Offset/limit on all three endpoints.** Same mechanism, one consistent contract across the service, but modifies two endpoints that aren't currently hurting and triples the surface under test.
+3. **Cursor pagination on all three, plus a shared helper and a `docs/specs/` entry.** Holds up at depth and on concurrent writes, but it's a new abstraction with no prior art in the tree and needs the cursor shape frozen into the spec before any client depends on it.
+
+Two sub-questions that ride along, answerable in one line: default page size if you have a number in mind (I'll use 50 otherwise), and whether responses may become an envelope like `{items, next}` — options 2 and 3 are hard to do well without that, and it breaks any client reading a bare array today. Option 1 can stay a bare array.
+
+**Default if no response: 1**, with a bare array, `limit` defaulting to 50 and capped at 500. It's the smallest reversible change that addresses the endpoint you're actually paying for, and it doesn't freeze a cursor format into the API before the spec says anything about one. Say the word and I'll start there.

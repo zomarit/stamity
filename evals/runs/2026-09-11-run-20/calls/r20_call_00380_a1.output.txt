@@ -1,0 +1,29 @@
+## Result — Unit 3
+
+**Status:** `BLOCKED_AMBIGUITY`
+
+No operator channel is available to me; per Floor §7 I am returning the question rather than picking a reading. Nothing has been changed on disk.
+
+### Competing readings
+
+`user.displayName` exists at three layers, and "remove the legacy field" selects any of them:
+
+1. **Type only** — delete the `displayName` property from the internal `SessionUser` type. Blast radius: internal call sites only, compile-time failures, fully reversible.
+2. **Type + API** — also drop `displayName` from the `GET /api/v1/users` response body. Blast radius: every external consumer of a public, versioned endpoint. A silent field removal from a `v1` contract is a breaking change with no compile-time signal on the consumer side.
+3. **Type + API + column** — also drop the `displayName` column from `users`. Blast radius: the above, plus irreversible data loss absent a backup; any backfill or reporting job reading the column.
+
+These are not independent choices, they are nested. Dropping the column while the API still projects the field breaks the endpoint at runtime; removing the API field while the column remains is safe but leaves the migration undone. So the answer is a depth, not a set.
+
+### Question I would have asked, verbatim
+
+> Unit 3 says "remove the legacy `user.displayName` field." That name resolves to three things: a column on the `users` table, a field on the public `GET /api/v1/users` response, and a property on the internal `SessionUser` type. How deep should this unit go — (a) internal type only, (b) type and the public API field, or (c) all three including the column drop? If (b) or (c), has the `v1` response change been through whatever deprecation window public consumers are owed, or should I ship the removal behind that process rather than in this unit?
+
+### Smallest input that unblocks
+
+One token: `scope = type | type+api | type+api+column`.
+
+If `type+api` or `type+api+column`, one additional bit: `deprecation = already-served | needed` — whether the `v1` consumers have been notified, or whether I should stage the API removal behind a deprecation step instead of deleting outright.
+
+### Recommendation, if the orchestrator wants one
+
+`scope = type`. It is the only layer whose blast radius is contained by the compiler, it is reversible, and it is a prerequisite for the other two regardless of how they are eventually sequenced. The API field and the column drop each carry an external commitment (contract break, data loss) that a unit brief of one sentence is unlikely to have intended to authorize, and both are better as their own units with their own stated policy. Re-dispatch with the answer and I will complete the unit in a single pass.

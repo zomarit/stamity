@@ -1,0 +1,14 @@
+**status:** `DONE`
+
+**Mode:** posted — not advisory. The brief says nothing about advisory mode, and no operator has stated this agent is posting past its bar.
+
+**Surfaces examined**
+
+- **Authentication and authorization** — resource-level census over both routes changed by this diff. Both require an authenticated session and check the caller's claim on the specific folder record written into (`src/api/handlers/upload.ts:44-58`). Identity, resource and check are tied together on both; no route in the change set authenticates without also authorizing the specific record it touches.
+- **Trust boundaries** — map from the multipart body to its sinks. One sink, the filesystem, reached through a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). No shell, no query, no template, no deserializer is reached from this boundary.
+
+Dependency manifests and lockfile are untouched by this diff, so no advisory axis ran.
+
+**Findings posted this run: 0.** Nothing reaches the human checkpoint; no `Minor` rows ledgered.
+
+**Out of scope, not a finding:** `src/api/handlers/legacy.ts:30` writes an unconfined path. That file is not in this change set, and this change neither introduces nor worsens the condition, so it is excluded here and carries no severity and no checkpoint claim from this run. A repository-wide sweep is the verify security axis — a separate invocation with its own artifact — and that is where this belongs if the operator wants it adjudicated.

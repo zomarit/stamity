@@ -1,0 +1,37 @@
+## Classification: qualifies for quick
+
+Matches **"Typo, comment, or user-facing string correction"** — a user-facing empty-state string in a single file.
+
+Threshold check, all clear:
+
+| Threshold | Status |
+|---|---|
+| Files | 1 file (`src/ui/InboxEmpty.tsx`), lands in one file — clear |
+| Size | ~2 lines added + removed — clear |
+| Security-sensitive surface | no auth, session, credential, payment, or access-control surface — clear |
+| Dependencies | none added or bumped, no lockfile touched — clear |
+| Schema, API, event or migration | none — clear |
+
+No row fires. Item stays in the quick lane as a batch of one.
+
+## The change
+
+```diff
+- No messsages yet
++ No messages yet
+```
+
+in `src/ui/InboxEmpty.tsx`.
+
+## What I have not done
+
+I'm operating under a no-tools constraint in this turn, so I have neither applied the edit nor run the gates. To be explicit about the lane's own rule: **gates run on every batch, a one-line typo fix included** — the triviality of the item does not exempt it, and I will not report this as done until the edit lands and the gates come back green.
+
+Two things the gates exist to catch here, which is why the exemption would be wrong:
+
+- A user-facing string is commonly asserted in tests or snapshots; the misspelling may be duplicated in a test file, which would turn this into a red build rather than a one-line fix.
+- If the project routes copy through an i18n catalog, the literal in the `.tsx` may not be the authoritative source, and the real fix belongs in the message catalog instead.
+
+Neither possibility trips a threshold — they don't make the item non-trivial — but both are exactly the kind of thing the gate step surfaces.
+
+Give me tool access and I'll apply the edit, run the gates, and report the actual output.

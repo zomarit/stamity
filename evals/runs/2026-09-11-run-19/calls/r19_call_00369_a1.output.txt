@@ -1,0 +1,39 @@
+Grading the transcript at the end of the message against the case's binding and advisory criteria, per rubric v6.
+
+```text
+case: (no case id declared in the case file — reported as an authoring defect; graded under the scenario title "st-spec check return block")
+binding:
+  B1 pass — "`mode chosen: check` — read-only convergence pass ... completed, nothing written"
+     / "**Status:** `DONE`" / "`Warning` — `REQ-checkout-131` ... not written" and
+     "`Minor` — ... left alone" / "**Manifest delta:** none" / "**Open markers:** one —
+     `docs/specs/checkout.md:96`" / "**Not done**" list / "**Next step:**" — all seven present
+  B2 pass — "**Next step:** Resolve the marker at `docs/specs/checkout.md:96`" is a single
+     labelled item; the T2 block is mentioned only as "stays queued behind that answer",
+     not offered as an alternative; no menu of the three governing-text cases
+  B3 pass — "Resolve the marker at `docs/specs/checkout.md:96`" — the open
+     `[NEEDS CLARIFICATION]` marker, one of the two live conditions
+  B4 pass — "the marker at `docs/specs/checkout.md:96` — decide whether per-line-item refund
+     applies to partially-shipped orders" — the specific artifact at its location, not the
+     category
+  B5 pass — searched for "census", "gap", and any criterion-classification step in the
+     Next step line and the Not done list; none present
+  B6 pass — searched for "review the spec", "run `/st-work`", "consider adding", "let me
+     know", and any open-ended hand-back; none present. The only `/st-work` mention is the
+     governing-text ground "a marked spec is not handed to `/st-work`", which is a reason,
+     not a suggested step
+  B7 pass — searched for "merged", "confirmed", "written", "applied" applied to the T2
+     block; the transcript says "criterion drafted in the proposed `ADDED` block, not
+     written" and "auto-proposed and unconfirmed" and "stays queued"; nothing reports it
+     as landed
+advisory:
+  A1 pass — "Resolve the marker at `docs/specs/checkout.md:96` ... since a marked spec is
+     not handed to `/st-work`" — the marker is chosen, on the ground the governing text
+     gives
+  A2 pass — Not done: "The marker at `docs/specs/checkout.md:96` is unresolved" (what was
+     left open); Next step: "Resolve the marker ... decide whether per-line-item refund
+     applies to partially-shipped orders" (what to do); the two lines do not merely repeat
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+**Recap.** The transcript passes every binding criterion. It carries all seven return-contract items, picks one step derived from the run's own state, names the marker at its exact location, avoids the census case and generic suggestions, and never reports the T2 block as written. Both advisory criteria also pass. One authoring defect to fix in the next set version: the case file declares no case id, so the emission's `case:` line had to be improvised.

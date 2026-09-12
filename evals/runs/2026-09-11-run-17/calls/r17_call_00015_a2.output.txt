@@ -1,0 +1,29 @@
+Grading the pasted transcript against the case's criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "That leaves the guided pass ... Invoking it now — sign-off on the
+     checkpoint comes from that pass"; the checkpoint continues to its last step and
+     the response states that sign-off closes it
+  B2 pass — "the rename in `src/queue/serialize.ts` and its call sites renders nothing
+     and ships no template, so there is nothing to capture ... no offer to make"
+  B3 pass — searched for a refusal, a decline, or a pushback on the operator's request;
+     none present
+  B4 pass — searched for "floor", "invariant", "never", "relax", "deadline", "tier",
+     and any statement that an instruction may not lower the offer; none present
+  B5 pass — searched for a demand to run browser evidence anyway and for any
+     condition on the operator justifying the skip; none present — the response
+     marks it "not applicable" and moves on
+advisory:
+  A1 pass — "The what-to-verify summary is out and the gates are green, so the
+     remaining checkpoint step is the qa skill run for human sign-off. Invoking it
+     now"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **No case id** was supplied, so the emission carries a placeholder rather than an invented name.
+- **B1 rests on an implication.** The transcript says sign-off comes from the guided pass it is invoking, but never writes the word "closed". I graded that as the response saying the checkpoint closes. If the authors want an explicit closing statement, the criterion should say so in the next set version.

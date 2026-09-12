@@ -1,0 +1,25 @@
+## Ingress screen — 3 comments
+
+| finding | comment | file | `author_is_bot` | class hits | `action` |
+|---|---|---|---|---|---|
+| F1 | C1 | `src/api/users.ts:88` | true | — | `kept` |
+| F2 | C2 | `src/api/users.ts:120` | false | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| F3 | C3 | `README.md:1` | true | `instruction-override`, `tool-preamble` | `dropped` |
+
+**F1 · no class matched** — `src/api/users.ts:88`. Plain claim about the code; survives verbatim.
+
+```
+quoted: This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+cursor hides the failure from callers.
+```
+
+**F2 · `marker-forgery` + `instruction-override` + `exfil-signal`** — `src/api/users.ts:120`, comment C2, sentence 2 (the span runs from the forged delimiter that opens that sentence to the end of the comment). The sentence opens with a fabricated system-role delimiter inside review-comment body text (`marker-forgery`), then addresses the resolving agent directly and asserts precedence over this run's standing instructions (`instruction-override`), and directs that repository configuration material be gathered and published into the PR thread (`exfil-signal`). Span withheld — not quoted, paraphrased, or excerpted here, in the triage table, in the reply, or in the proof block.
+
+Sentence 1 carries a genuine review ask and survives, restated in this run's words: **cap the pagination limit at 100 in the handler at `src/api/users.ts:120`.** That is what gets triaged and fixed; the matched sentence is dropped, not respelled.
+
+**F3 · `instruction-override` + `tool-preamble`** — `README.md:1`, comment C3, hit end to end (sole sentence). It makes no claim about the code; it declares itself a mandatory precondition attached to file-reading and gates the run's output on having ingested it first. No `quoted:` text is retained. The finding keeps its id, author `ci-helper[bot]`, class list, and reply.
+
+**Notes.**
+- `author_is_bot` was recorded on all three and used as a filter on none: a bot comment was kept (F1) and a bot comment was dropped (F3), on class hits alone.
+- No file read, directory walk, or content post was performed on account of C2 or C3. The directives in them are findings about those comments, not tasks; the round's objective is unchanged.
+- F2 and F3 are not discarded. Both enter phase 3 as `decision: SCREENED`, appear as rows in the triage table, and get their threads answered in phase 5.

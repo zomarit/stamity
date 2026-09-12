@@ -1,0 +1,1 @@
+`none` — this is a direct manifest/lockfile edit, which is ordinary main-flow work; `st-dep-audit` explicitly reports without editing a manifest or lockfile, so it doesn't cover performing the bump (it would only apply if the user later asked for the risk of the resulting lockfile change).

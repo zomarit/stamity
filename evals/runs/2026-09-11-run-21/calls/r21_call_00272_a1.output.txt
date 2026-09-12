@@ -1,0 +1,29 @@
+I'm not handing this off. The structural pass covers IDs and coverage; it does not certify meaning, and the semantic review at this seam finds a direct contradiction.
+
+**The conflict**
+
+- **REQ-CACHE-001** reads: refresh customer data promptly *while continuing to show the previous value* — stale-while-revalidate, the old value stays on screen throughout the refresh.
+- **U1**, which cites only REQ-CACHE-001, reads: *hide* the previous value until refresh completes — a loading state that blanks the old value.
+
+Both are coherent implementations of "refresh the data." They are not both satisfiable at once, and the acceptance criterion does not decide between them: it asserts only that a fresh value eventually appears, which is true in either reading. So the plan is structurally complete and semantically undecided, and an implementer holding no session history would pick one at random.
+
+**Clarification needed** (smallest decision that settles it):
+
+> During a refresh, must the previously cached customer value remain visible until the fresh value replaces it, or may the UI hide it and show a loading state?
+
+A secondary answer I need for the criterion to be testable: what latency bound makes a refresh "prompt" — a threshold with units, and the command that measures it. "Eventually appears" has no verifiable condition.
+
+Once you answer the first question, U1's description and its acceptance criterion get rewritten to match, and the lint pass re-runs before any write.
+
+---
+
+- **status: `BLOCKED_AMBIGUITY`** — REQ-CACHE-001 and unit U1 carry competing meanings on previous-value visibility during refresh; handoff blocked pending one user decision.
+- intent chosen: not re-derived this run — the run entered at the review seam on an existing artifact.
+- Artifact path(s) written: **none this run**; no unit count changes. The blocking finding precedes any write.
+- Structural coverage: **pass** (all IDs and dependencies resolve, no uncovered requirement, no duplicates). `semanticReview: required` stands. Unresolved semantic reading: **1** — REQ-CACHE-001 ↔ U1, stale-value-visible vs. hidden-during-refresh. Structural pass alone is not handoff approval.
+- Plan-lint: **L1 fail** (U1's criterion states no observable condition beyond "eventually appears" — no threshold, no units, no measuring command; the in-place rewrite is itself blocked behind the clarification above) · **L2 pass** · **L3 not verified** — U1's `edgeCases` field was not in what this run holds, so I am not claiming a result for it · **L4 pass** (U1 cites REQ-CACHE-001, which the spec carries).
+- `sub_agents_spawned: 0 · task_structure: sequential`.
+- Open questions carried: **2** (visibility during refresh; "promptly" threshold with units). Non-empty, so handoff is blocked.
+- Learnings written: **none** — this run met no qualifying failure.
+- **Next step:** answer the visibility question above. Open questions still carried make resolving them the next step; `/st-work` is not reachable until they close and L1 re-passes.
+- Follow-ups appended to `.stamity/inbox.md`: none — nothing was deliberately excluded from scope; the two items above are blocking, not deferred.

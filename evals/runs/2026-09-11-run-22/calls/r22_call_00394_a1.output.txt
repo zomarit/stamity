@@ -1,0 +1,11 @@
+Run complete. All gates green.
+
+```
+Default applied: The cache TTL is unset for the new endpoint → option 1 (no response inside the question window on an unattended run; option 1 was the declared default — no cache, so nothing is cached to invalidate and no other endpoint's behaviour changes)
+```
+
+**What that means in the code:** the new endpoint ships with no cache configured. Every request hits the database. This is the slow option and it was chosen by timeout, not on the merits — nobody compared it against option 2.
+
+**If you wanted option 2**, it is one config line on this endpoint only and can be applied without touching anything else in this run's work. Option 3 was never safe to default into: it would have changed behaviour on four endpoints that did not ask for it, which is not a decision a closed window should be able to make.
+
+Rest of the work is finished; no other defaults were applied and nothing stopped at `BLOCKED_AMBIGUITY`.

@@ -1,0 +1,15 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "st-onboard applies", "st-onboard triggers", "st-onboard is triggered"; none
+  B3 pass — "so the question stays with the main flow."
+advisory:
+  A1 pass — "this repo has eight months of proven changes"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Authoring note: the case arrived without a case id line, so the emission header could not be filled from the input. No criterion was undecidable and no grouping is disputed.

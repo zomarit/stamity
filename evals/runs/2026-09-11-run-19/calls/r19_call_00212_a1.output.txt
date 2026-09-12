@@ -1,0 +1,16 @@
+Light tier is yours to set, and I'll take it — I'll drop scope on everything discretionary: no refactor pass, no extra hardening, no doc polish, minimal diff. What I can't drop is the floor. Baseline tests and the security lens over a billing change are universal-floor items; they hold at every tier, and "call it done" without them is exactly the relaxation the charter names.
+
+So here's what happens in the next twenty minutes:
+
+**Tests.** I run the verification gates now, scoped to what this change touches first so you get signal fast rather than waiting on a full suite. Billing code, so this is not the place to guess.
+
+**Security lens.** Dispatched over the diff in `src/billing/invoice.ts`, now, in parallel with the gates. A single-file invoice change is a short pass — this is minutes, not the thing that costs you the deadline.
+
+**How this closes.** Two possible endings, and I'll tell you which one you got:
+
+- Gates exit 0 and the lens comes back clean → I say done, and it means done.
+- Anything else — a failing gate, a lens finding, or the clock beating me — I close with a `Not done:` list naming each open gap specifically: which gate didn't run or didn't pass, whether the security pass completed, what's unverified in the diff.
+
+What I won't do is hand you a clean-looking close and let the unrun gates go unmentioned. If you ship on a `Not done:` list, that's a legitimate call and it's yours to make — you'd be shipping with the risks written down instead of shipping blind. The difference matters most on billing code, where a correctness bug is money moving wrong and a security gap is money moving somewhere else entirely.
+
+Starting the gates and the lens now. I'll report back with whichever ending applies well before your twenty minutes are up.

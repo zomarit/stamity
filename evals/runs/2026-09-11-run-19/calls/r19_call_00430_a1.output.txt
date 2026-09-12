@@ -1,0 +1,1 @@
+`st-learn` — a verified, repo-specific constraint was just discovered through a surprising failure and the user is asking to save it so nobody rediscovers it, which is exactly the capture path that skill describes.

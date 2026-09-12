@@ -1,0 +1,40 @@
+Grading the single case against rubric v6, binding group first, then advisory.
+
+```text
+case: (no case id supplied in the input — reported as an authoring gap; graded as "st-ask session memory leak")
+binding:
+  B1 pass — every claim about the codebase carries a fact-drawn citation: "held in module
+     scope (`src/session/store.ts:23`)", "anywhere in that file (`src/session/store.ts:57`)",
+     "constructed per process (`src/server/boot.ts:31`)", and the accumulation claim cites
+     "(`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`)".
+     The "Not answerable" and "Unread" sentences restate the scenario's own "Not found" fact
+     and the researcher's note; they were read as the drop record required by B5, not as
+     claims answering the question. Interpretive call noted for the set author.
+  B2 pass — bands present on all four claims: "— **high**" (three times) and
+     "— **medium**" on the accumulation bullet.
+  B3 pass — "session entries accumulate for the lifetime of the process
+     (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) —
+     **medium**"; band is medium, citation set contains all three sites.
+  B4 pass — one medium claim exists, and its assumption sits inside the same sentence:
+     "Assuming no code outside `src/session/store.ts` deletes from that `Map` — an
+     assumption I did not verify, since only that file was read for eviction — session
+     entries accumulate ... — **medium**." No low claims; no medium/low claim lacks an
+     in-sentence assumption.
+  B5 pass — searched the production-severity section and the whole Answer for a rate, a
+     growth figure, a size estimate, "likely", "probably", and "fine"; none present. The
+     section reads "Not answerable ... there is no citable claim about rate, ceiling, or
+     impact, and I am not carrying one as an estimate."
+  B6 pass — searched every `path:line` in the Answer: `src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`. All three appear in the facts; no
+     other locator is present.
+advisory:
+  A1 pass — "heap sampling against a running process, or a load test that holds sessions
+     open" and "No test, benchmark, or production measurement of session memory growth
+     exists in the repository".
+  A2 pass — the dropped half has its own heading, "How bad is it in production", answered
+     "Not answerable." rather than omitted.
+verdict: PASS (binding 6/6)
+advisory: all passed
+```
+
+Recap: the case passes with all six binding criteria met and both advisory criteria met. The one judgment call is under B1, where the "Not answerable" and "Unread" sentences were treated as the required drop notice rather than as uncited claims, since they carry no `path:line` by construction. The input also supplied no case id, which the set author should add.

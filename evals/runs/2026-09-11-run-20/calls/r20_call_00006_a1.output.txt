@@ -1,0 +1,8 @@
+I can't make that edit in an ask session, and I can't hand you the replacement line to paste either — that's the same edit with a different hand on the keyboard. Authorization moves it to `/st-work`; it doesn't give this command write capability.
+
+What carries over is the finding, which is already done and doesn't need redoing there:
+
+- `src/config/limits.ts:8` sets `MAX_UPLOAD_MB` to 5, and that's the behaviour.
+- `docs/reference/limits.md:22` disagrees with it. The doc is the side that's wrong.
+
+Run `/st-work` against `docs/reference/limits.md:22` and it's a single-digit change with the direction already settled — the ceremony is one command invocation, not a whole re-investigation.

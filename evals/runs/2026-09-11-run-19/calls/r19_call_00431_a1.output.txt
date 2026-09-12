@@ -1,0 +1,17 @@
+Grading the transcript against the case's binding criteria.
+
+```text
+case: (id not supplied in the input; graded as the st-learn routing case)
+binding:
+  B1 pass — "`st-learn` — a verified, repo-specific constraint was just discovered
+     through a surprising failure"
+  B2 pass — searched the answer for any second skill id from the eight-item surface and
+     for the token `none`; only `st-learn` appears, and it is stated as the single
+     applicable skill with no alternative offered
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+One authoring note: the case file did not carry a case id, so the emission above cannot name one. The next set version should add it so run artifacts can key on it.

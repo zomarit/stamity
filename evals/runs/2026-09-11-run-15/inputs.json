@@ -1,0 +1,495 @@
+{
+  "runId": "2026-09-11-run-15",
+  "candidate": "0d711d8edabf4a835c3f123163dc1429fa44f232",
+  "baseline": "stamity-claude-cli-v1",
+  "configurationHash": "732b308c5382a71d7ee3f495487b4cd808d637f9d634977d7e5c0e2501ef540f",
+  "privateSummarySha256": "e2db9a4ec0c1e71538de3019486c4860df43658b35bcbdf6ee01ea29b44692d9",
+  "configuration": {
+    "runId": "2026-09-11-run-15",
+    "candidate": "0d711d8edabf4a835c3f123163dc1429fa44f232",
+    "baseline": "stamity-claude-cli-v1",
+    "profile": "claude",
+    "harness": "claude-code-cli 2.1.268",
+    "privateProfileSha256": "f9715cb93c5a3d4a6def9ff74a8d8100c241bc2746c8fd88f964e9cbf7dc6ae2",
+    "protocolSha256": "eb36b7d76c982b21d98e942cdc23cceeccf92be7fb3c8e76e5e89bf6487aaffe",
+    "canaryPlanSha256": "e5e59e5b673bacc7069872678e480b3e5bb47b183bb561c7ad772b1857e529f5",
+    "canaryReportSha256": "76ca144d9986e8a66db1fb9b2dafc9c5f39eb11fe8c9d69c2d03a2833c62a1e5",
+    "transport": "cli-capture",
+    "capacity": 4,
+    "maxAttempts": 3,
+    "timeoutMs": 1200000,
+    "cliVersion": "2.1.268",
+    "claudePath": "2.1.268",
+    "claudePathSha256": "06a96d5423f83770f120859f1c58e60d7252cc4c122aa13043b7e7cd716bc76a",
+    "cliHelpSha256": "ae85d661e9c086f05637ebcd868f5702b477ff6e55e2e65b8ada7807cd51a4b6",
+    "cliFlags": [
+      "--tools",
+      "",
+      "--strict-mcp-config",
+      "--disable-slash-commands",
+      "--safe-mode",
+      "--no-session-persistence",
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--replay-user-messages",
+      "--verbose"
+    ],
+    "envTemplate": [
+      "PATH",
+      "HOME",
+      "USER",
+      "LOGNAME",
+      "SHELL",
+      "TMPDIR",
+      "LANG",
+      "TERM",
+      "CLAUDE_CONFIG_DIR",
+      "DISABLE_TELEMETRY",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      "DISABLE_AUTOUPDATER",
+      "ANTHROPIC_BASE_URL"
+    ],
+    "cwd": "<private empty non-git directory>",
+    "configDir": "<private configuration directory>",
+    "wrapper": "",
+    "judgeSeparator": "\n\n",
+    "models": {
+      "scenario": "claude-opus-5",
+      "judge": "claude-fable-5-1"
+    },
+    "acceptedReporting": {
+      "claude-opus-5": [
+        "claude-opus-5",
+        "claude-opus-5[1m]"
+      ],
+      "claude-fable-5-1": [
+        "claude-fable-5-1"
+      ]
+    },
+    "rubricCoreHash": "96d7c020d45d4229a276f9e14e7738e37e56d37af47b6ce57d5b709eccb8832d",
+    "driverHashes": {
+      "inspect.mjs": "46b6f0446ee8a90a49f04693ea3aceb8f9b392581e726e542061f00c68711487",
+      "dispatch.mjs": "891dad5e0986d322ecdb6930bae6d1d1daa9d5c62bfe42c2c9589a262f307433",
+      "run.mjs": "01507698720d7a444750e2567e34f48b968847a72f69ea176a29f37044c7968d",
+      "inspect.test.mjs": "f587ed69487d30eafb80b3c7c294a1ec2323c429ac8ba2e046c080f426026a30"
+    },
+    "inputs": {
+      "evals/SET-v5.md": "caf25f95ff40fe5b6554a9b0a69c42b3ef98f58a21d3807c5d63c821e59c5a21",
+      "evals/rubric-v6.md": "b23b713ca63f5bfeb3692d651c72b2bba742bf4fcc8d5c410337a5d44cb8d711",
+      "evals/model-profiles-v1.json": "5715ce948655ee262f30cf914830a661cdff535738a82e25bea06a352fd09c9c",
+      "evals/MODEL-PROFILES-v1.md": "be212c7f5fbe65100c987f2d385a0d89ef0923f3ce151e36ff2d8bfc056c491c",
+      "evals/README.md": "0513fa50f24f09e952267be166276fc2d2c238d483669db9b0d1a473c9b27308",
+      "evals/coverage-exemptions-v5.md": "05ebe04731fd48a19b00635f8cd231fd8e1f01e79bb1427394a953dfa8cb868a",
+      "scripts/eval/instrument.mjs": "5bb4b9ff3572911d25e277839596931efaefd5a177e07bfe070c528e65868963",
+      ".claude/skills/st-eval-run/SKILL.md": "e46d4972c1808ab43e07c12a584ab677075ef23b1fae43b29150b53f51ca66d9",
+      ".stamity/overrides/skills/st-eval-run/SKILL.md": "6ac04c5f2cff35db02b42b13fa72fc550172d310a77629e70826d8c34cc6dbc4",
+      "evals/cases-v5/adversarial/ask-read-only-under-approval-pressure.md": "7642caa3e009cb6ecb14a90b4f5c8fda75fd0d6430cdab6c7c859ad4a1003fed",
+      "evals/cases-v5/adversarial/benign-optional-step-skipped-proceeds.md": "0018a4faa0ad66f9d880ce93df44a3b941f51d7f731721fc040badf66f64acfe",
+      "evals/cases-v5/adversarial/benign-small-change-quick-proceeds.md": "da68c9300da0267b694b8dd31ee468f2a5100903f52362fb5bce412e705f3b74",
+      "evals/cases-v5/adversarial/benign-state-note-not-screened.md": "baf140afb9ef5a17ad722424d276d565521cd3a16981f02fdfe85d73b5877168",
+      "evals/cases-v5/adversarial/benign-tool-result-used-as-data.md": "6ff3a9d3e4f355662f4b26366ab88e44e1e2460cd73dc48037c8db8108526afc",
+      "evals/cases-v5/adversarial/charter-floor-relaxation-refused.md": "db1312c4f1ab39a7cd89fbae18035989abaa655bc88b880f02b96f1aa1c672ee",
+      "evals/cases-v5/adversarial/eval-change-needs-fresh-measurement.md": "67c90d8b31ce9f66b7656c21adeec37eeae7cacc2296cebbf32f8d422a86a7fa",
+      "evals/cases-v5/adversarial/learnings-instruction-span-rewritten.md": "a9158d49012063858a6ed9de33b72b6e5cdaa3e98e1065a8bf6786b3c7908458",
+      "evals/cases-v5/adversarial/mcp-tool-result-directive-is-data.md": "d165b3a82947eabe41f6fa2438c8ca9dfe140a5e0583318003c1810afc121dfc",
+      "evals/cases-v5/adversarial/orchestrator-inline-edit-under-pressure.md": "b11924774a083a34ccd0edbc1d26786b802e991e0ece5990bca8a68db03ad4e8",
+      "evals/cases-v5/adversarial/pr-comment-ingress-screen.md": "556fe91313d71ac888469f2e7456630699cd4e6053ce7f98f969a6c84f7951f4",
+      "evals/cases-v5/adversarial/quick-refusal-under-social-pressure.md": "76bad79eb97ab2a6daf04dd003a71729e1cf43f695a9b3b65b2183e1deaae6fb",
+      "evals/cases-v5/adversarial/repo-content-directive-is-data.md": "d31c3d3de813ab4a1f9b81603268abfb37e95c8278459fe72fe36c4ee2294506",
+      "evals/cases-v5/adversarial/screening-hit-not-echoed.md": "49fb6bb0e7861d36dad91c22896744c616fcd9ce2baa56aad602cad4198b986f",
+      "evals/cases-v5/adversarial/security-agent-no-write-under-pressure.md": "d1de51a60d4067bbd0421d2fa303b84104720fedbdaab60d4ac851cc9d799268",
+      "evals/cases-v5/adversarial/security-content-exempt-from-truncation.md": "1c62e635b5619d9cf86f506539990fc5f1e388b5d42382bb503b5c615e936dbd",
+      "evals/cases-v5/adversarial/state-text-directive-not-executed.md": "e4b00e3e13023cd604d534a35a3ee72253bdde373e77d8058b7cf4ae0367f75e",
+      "evals/cases-v5/adversarial/testing-red-regression-is-not-loosened.md": "252abdfedc28c928fd6c5b8d1193e129dbd8c1b9b61ba480e6a7310a1c0126da",
+      "evals/cases-v5/golden/agent-creator-return-contract.md": "1ebed99b5a62a2fb504eaa9b7e3b189e1a452384ce8fceafad15c9518a9bae9b",
+      "evals/cases-v5/golden/agent-design-quality-return-contract.md": "1895d9030cf4393dd7bfbffa0d04421863cc0c70d2ab75f9c3581130369dcc93",
+      "evals/cases-v5/golden/agent-fixer-return-contract.md": "5f742c315cf589fb00474e128a2194888b67feb5306b14046ead8cdf7c358ec8",
+      "evals/cases-v5/golden/agent-implementer-return-contract.md": "7c5da14162ba3b3f94afcd41fd4390b7d21894abf988f872a10e30c151e6fc64",
+      "evals/cases-v5/golden/agent-performance-return-contract.md": "43baac32d0524b1570b2011f0373c4beef3504d3fe2eb0f38d70419a84ebf96f",
+      "evals/cases-v5/golden/agent-researcher-return-contract.md": "4aaa3986186e082752fc8280f99a826b889dd2b7f987af6431ca829ec9dd3469",
+      "evals/cases-v5/golden/agent-reviewer-return-contract.md": "7157494e8d6be548365f1d81f1cb4e7ecdba50cbff062e90bed16144da7adc98",
+      "evals/cases-v5/golden/agent-security-return-contract.md": "c83f7b791517cff181ac5e1326bcbf4fb4b24693538ce822ed561d95d01bbf71",
+      "evals/cases-v5/golden/agent-spec-author-return-contract.md": "2da9a123e5f5944fea75794232cf6b5615e1dc3da2d4edf6ea9d4df7515c1d44",
+      "evals/cases-v5/golden/agent-test-runner-return-contract.md": "368cef5e1c1a6154bba942c4d1c14fd33b580a191e4cf6a67bbc91b8efda4b2e",
+      "evals/cases-v5/golden/api-replayed-key-rejects-changed-request.md": "1bcede534e35e14f4f6bc6518d92cb8454cb00a358925b23d7b534a0e90cfb66",
+      "evals/cases-v5/golden/ask-citation-discipline.md": "9cfc82a774a4f535783d7cc8cea94422f1b4119f9259f4664e3ad850d3a2567b",
+      "evals/cases-v5/golden/ask-next-step-derived-from-run-state.md": "fbd02494e3efa5497bc94727229fdd1688aee1d3deb485ea18d29ea6de24ae48",
+      "evals/cases-v5/golden/ask-refuses-mid-answer-change.md": "66c1ed6c7d1e5e0725731b0c7450555dda35b05cbb36a7b36ba54338b09291ee",
+      "evals/cases-v5/golden/board-write-back-four-channels.md": "eb2c35a3926836089f80ddee53d088a70aee91afa9b72a3501d56f1e4178f29c",
+      "evals/cases-v5/golden/charter-touchpoints-delegate.md": "f95c39aa2bcf140b1c21f25eff08844f4b26c4a477e523436391a206277191e3",
+      "evals/cases-v5/golden/charter-universal-floor-holds-under-deadline.md": "07981c82c40aadab5c0f7b08dd3ef3ac82f5c2fa2ad6133551bfa92904558dfd",
+      "evals/cases-v5/golden/contract-census-shared-field-holds-facade.md": "a1a9513dfc01e1de806253c885bd279d4a158289873f1ea61396c48cf99c439c",
+      "evals/cases-v5/golden/debug-next-step-derived-from-run-state.md": "4f7519992b1fe566e484380954d4f313db1685ad644452035533d8e3a579128e",
+      "evals/cases-v5/golden/debug-no-reproduction-blocks.md": "68216521e5fa1a2ed0ef1fd09e514078b299cc3ec4b7e476686170e98fc86582",
+      "evals/cases-v5/golden/debug-root-cause-before-fix.md": "82aac1a24a28fadab1899717ada5882e7efc3c712e95003f205bcdd3abf22077",
+      "evals/cases-v5/golden/learnings-curation-merge-and-promotion.md": "c6928607ba0d397ae53b4b70cc5fb77fe22895963e9493a820f7926750bb91df",
+      "evals/cases-v5/golden/migration-elapsed-window-does-not-prove-backfill.md": "63ba8c05598b22fa7e8912b555e3826e546b6ad9a7abb8657fbf7dbfbb4ee79d",
+      "evals/cases-v5/golden/onboard-exhausted-budget-keeps-required-gates.md": "8c4ff34b779158d31833210c323ae23aa978aebf676640c56e7ec08402be84fd",
+      "evals/cases-v5/golden/plan-artifact-head-and-units-shape.md": "fa56d9d5c4c045bb0bb5014e1d6cb5cfa9fc20a33b301b761dff335a7d2c7165",
+      "evals/cases-v5/golden/plan-lint-three-fails-returns-blocked-ambiguity.md": "fbb43f3e511e3152d3d83d2f3254fce5175d0b52cdd31c92504def02b4e3c6ab",
+      "evals/cases-v5/golden/plan-semantic-ambiguity-survives-structural-pass.md": "70d0187dc91a4aff4e3c0f150b7b0244e613fac945590d867554082782ee58b7",
+      "evals/cases-v5/golden/pr-resolve-next-step-derived-from-run-state.md": "130e14ea61fb4450cd53139814af4eea681e68eb2d0ca1c896723d6b92feb154",
+      "evals/cases-v5/golden/question-shape-and-default.md": "d8520638aae21103c211b93d134f39821e741896114392bec821cdfb8ac9fcc4",
+      "evals/cases-v5/golden/quick-hard-refusal-thresholds.md": "5ffe4e4b7fc69836a6477c17f398021f2008e87a9f97a0d5b16f1198e00a0137",
+      "evals/cases-v5/golden/quick-mid-run-re-escalation.md": "01e9b5cb8ad162619a942eb9ac892f1eb77e451c4daa187f63bdfd1df136638e",
+      "evals/cases-v5/golden/quick-next-step-derived-from-batch-state.md": "48fe3e8d54ea9efaf722f897dfb0950bfb20e98c4acdac8128eafea9cd726dc1",
+      "evals/cases-v5/golden/quick-refusal-states-measurement.md": "3401c4f4b0ebbad8d897001060b0dee8c3257c5eaeb911617be59ce1c8d9c9b7",
+      "evals/cases-v5/golden/quick-security-surface-no-size-floor.md": "1323658c5a5630437e9e30c607eba412f336e288b3504ed4d9346ee174b65ecd",
+      "evals/cases-v5/golden/resilience-spent-deadline-stops-retry.md": "3bc9a342ea8218d49daa7445162174cdef761d153ad44197d84db3323c8439b2",
+      "evals/cases-v5/golden/rework-critical-deferral-record.md": "83a10f90a34ef6ce595fb79952f060fe251fa97b06e7fbdd2bc0624443d9297b",
+      "evals/cases-v5/golden/rework-next-step-derived-from-run-state.md": "226228ef140e5d86ab87883b981d021c73e2349387686935e3ec3f234b4b0ce4",
+      "evals/cases-v5/golden/rework-persistence-guard-holds.md": "fca1a780b261806c8270fc1c952634d13a5f0a4095ecda471670cde8c736d063",
+      "evals/cases-v5/golden/rework-triage-revise-versus-defer.md": "995684d5f9c93db77465955d59c354bdd4c5243c597c79991bb34eaa2d595a04",
+      "evals/cases-v5/golden/secrets-write-path-refuses-credential-text.md": "1a92699af92457c8654cdf400b49e02570cbb34fc16faa78c0384f01834ecede",
+      "evals/cases-v5/golden/security-patterns-findings-named-by-category.md": "6918d54d18221bbab771e059039200b411c2f22c546026febe2b7a97734d8013",
+      "evals/cases-v5/golden/spec-converge-confirm-gated-merge.md": "d2b2dd7c86b1ea308b5282a14a6109608a00a1675752f8fac0c628e1f71f68b3",
+      "evals/cases-v5/golden/spec-next-step-derived-from-run-state.md": "fef08002193f75b5a0ef3387507bdfda46f57b98e43ff56fd3ef7ffcd311dcd4",
+      "evals/cases-v5/golden/spec-testability-census.md": "dcedb3218186e5021d4c99b7c34c2c9afa10ccc37da49f7ca1d3326434080cc5",
+      "evals/cases-v5/golden/subagent-returns-blocked-ambiguity.md": "1021e9d2e2b24a83d3688a470b0b2db21e45a5a6c6395515be481cd940ce1616",
+      "evals/cases-v5/golden/ui-error-state-announces-recovery.md": "15d4bb1a2b089cb94ea1878a4b25878e5c41c6c57204800ab45c4f8e41739d2b",
+      "evals/cases-v5/golden/unattended-run-applies-declared-default.md": "d1920d107184b20bb672966cba49680644dc3f8ad0db8230fbfc29503c942019",
+      "evals/cases-v5/golden/work-proof-block-fields.md": "594aa12379eee13aa23b00fee6672ea016734b6ae2ce9fcdc4dcd9c6481039c4",
+      "evals/cases-v5/probes/probe-browser-evidence-select.md": "49fb92afa89bd71a2495e3e6e3e36b8478c9d2e42b6f8b7866561c5493b51212",
+      "evals/cases-v5/probes/probe-dep-audit-select.md": "37dfe21c2fa7111c98e9ac1234efb99c6df983790e90594da100d87682ab41fc",
+      "evals/cases-v5/probes/probe-design-system-detect-select.md": "96cc669c565c5c2030226b5bb9a8f1132ba556d234fe55cc5860cd9c0e2d6c94",
+      "evals/cases-v5/probes/probe-handoff-select.md": "28b4e5d967a290d87a315909a8fd1755962989dedf200f232596d1e6e9ab7af6",
+      "evals/cases-v5/probes/probe-learn-select.md": "46b904953978535c566fef1d3e2cbf0013d84b5c47722428632ec5723684d8ab",
+      "evals/cases-v5/probes/probe-none-dependency-bump-request.md": "a39e67f9533a961970b9fcf582447abcc7758efb50a1e6811f64fbbea4bee621",
+      "evals/cases-v5/probes/probe-none-proven-repo-what-next.md": "e15ac2f082d0b5d71e03078e9eb28016c210f21b56711a9f6548b6b6d0d38faa",
+      "evals/cases-v5/probes/probe-none-readme-note-request.md": "04b5cd2e57dc743ba54431f5c943b88b4d38ff7ffbaa271a4baf9092560f7f55",
+      "evals/cases-v5/probes/probe-none-work-run-qa-checkpoint.md": "f34ffc7a732ad8ad90fffb6bc7b98e2ec003e19e55db61e8ecb975aedc85a335",
+      "evals/cases-v5/probes/probe-onboard-select.md": "674a4d5f03dd9de9424b31105c3a5ae419129f387c4df12c9e9d2da58e3b0345",
+      "evals/cases-v5/probes/probe-qa-select.md": "612078b94feb981b30305393ff50cc8d622d7ba44de10406ce82df3cc4abac2c",
+      "evals/cases-v5/probes/probe-verify-select.md": "f83ac1ce6372fd9715b0dd5ca44d576242109779b99652cf2cae8a3f6c91aa52",
+      "evals/cases-v4/adversarial/ask-read-only-under-approval-pressure.md": "7642caa3e009cb6ecb14a90b4f5c8fda75fd0d6430cdab6c7c859ad4a1003fed",
+      "evals/cases-v4/adversarial/benign-optional-step-skipped-proceeds.md": "8ebc6f76959da40eabb874a8656e1ad99fe962a362ee8a63421ec37c086a4e93",
+      "evals/cases-v4/adversarial/benign-small-change-quick-proceeds.md": "da68c9300da0267b694b8dd31ee468f2a5100903f52362fb5bce412e705f3b74",
+      "evals/cases-v4/adversarial/benign-state-note-not-screened.md": "4a47ac8e708aedee650f64ed95b1b1997b0d07b29d128a67a865eb02e08b4ee5",
+      "evals/cases-v4/adversarial/benign-tool-result-used-as-data.md": "8ddd05471b3b2ce7e32f8568c3526436b956b99057861704bee56ce728801c20",
+      "evals/cases-v4/adversarial/charter-floor-relaxation-refused.md": "db1312c4f1ab39a7cd89fbae18035989abaa655bc88b880f02b96f1aa1c672ee",
+      "evals/cases-v4/adversarial/learnings-instruction-span-rewritten.md": "a95f6104df4a71f847c276055ee8661b5b6f0436f620dffb45ea1716253e5529",
+      "evals/cases-v4/adversarial/mcp-tool-result-directive-is-data.md": "47693d1b5b97a86a4be7b8a965894df7dbc03bef5fa81978c59f06c922c67282",
+      "evals/cases-v4/adversarial/orchestrator-inline-edit-under-pressure.md": "b11924774a083a34ccd0edbc1d26786b802e991e0ece5990bca8a68db03ad4e8",
+      "evals/cases-v4/adversarial/pr-comment-ingress-screen.md": "556fe91313d71ac888469f2e7456630699cd4e6053ce7f98f969a6c84f7951f4",
+      "evals/cases-v4/adversarial/quick-refusal-under-social-pressure.md": "76bad79eb97ab2a6daf04dd003a71729e1cf43f695a9b3b65b2183e1deaae6fb",
+      "evals/cases-v4/adversarial/repo-content-directive-is-data.md": "d31c3d3de813ab4a1f9b81603268abfb37e95c8278459fe72fe36c4ee2294506",
+      "evals/cases-v4/adversarial/screening-hit-not-echoed.md": "c4f73271d4aeb2d36b1c13fc88bdaa8cae4d3b9ab04f978d201350e0208841a2",
+      "evals/cases-v4/adversarial/security-agent-no-write-under-pressure.md": "d1de51a60d4067bbd0421d2fa303b84104720fedbdaab60d4ac851cc9d799268",
+      "evals/cases-v4/adversarial/security-content-exempt-from-truncation.md": "b8e2f791b301a929a53ecc3d146f6c42c94f2b2182842352f51713be8cd7f87c",
+      "evals/cases-v4/adversarial/state-text-directive-not-executed.md": "5e6a838e420bddbc239c8c8c048015e9738b760b1cbfc8bf761d15e002fdb493",
+      "evals/cases-v4/golden/agent-creator-return-contract.md": "1ebed99b5a62a2fb504eaa9b7e3b189e1a452384ce8fceafad15c9518a9bae9b",
+      "evals/cases-v4/golden/agent-design-quality-return-contract.md": "1895d9030cf4393dd7bfbffa0d04421863cc0c70d2ab75f9c3581130369dcc93",
+      "evals/cases-v4/golden/agent-fixer-return-contract.md": "5f742c315cf589fb00474e128a2194888b67feb5306b14046ead8cdf7c358ec8",
+      "evals/cases-v4/golden/agent-implementer-return-contract.md": "7c5da14162ba3b3f94afcd41fd4390b7d21894abf988f872a10e30c151e6fc64",
+      "evals/cases-v4/golden/agent-performance-return-contract.md": "43baac32d0524b1570b2011f0373c4beef3504d3fe2eb0f38d70419a84ebf96f",
+      "evals/cases-v4/golden/agent-researcher-return-contract.md": "4aaa3986186e082752fc8280f99a826b889dd2b7f987af6431ca829ec9dd3469",
+      "evals/cases-v4/golden/agent-reviewer-return-contract.md": "c6f370f5411ec5ce2a8ade830b72200faf0a392a9464b9f62126c6bc88f105a8",
+      "evals/cases-v4/golden/agent-security-return-contract.md": "c83f7b791517cff181ac5e1326bcbf4fb4b24693538ce822ed561d95d01bbf71",
+      "evals/cases-v4/golden/agent-spec-author-return-contract.md": "6ee5de6d4cfe14722f30c6905911477ac3077c2514050a9d0b542f0d3a715d0a",
+      "evals/cases-v4/golden/agent-test-runner-return-contract.md": "368cef5e1c1a6154bba942c4d1c14fd33b580a191e4cf6a67bbc91b8efda4b2e",
+      "evals/cases-v4/golden/ask-citation-discipline.md": "9cfc82a774a4f535783d7cc8cea94422f1b4119f9259f4664e3ad850d3a2567b",
+      "evals/cases-v4/golden/ask-next-step-derived-from-run-state.md": "fbd02494e3efa5497bc94727229fdd1688aee1d3deb485ea18d29ea6de24ae48",
+      "evals/cases-v4/golden/ask-refuses-mid-answer-change.md": "66c1ed6c7d1e5e0725731b0c7450555dda35b05cbb36a7b36ba54338b09291ee",
+      "evals/cases-v4/golden/board-write-back-four-channels.md": "aa5532aa24d4437c244d18c49b12b84de15fb2c6c333e5158f9e96ab7861ada6",
+      "evals/cases-v4/golden/charter-touchpoints-delegate.md": "f95c39aa2bcf140b1c21f25eff08844f4b26c4a477e523436391a206277191e3",
+      "evals/cases-v4/golden/charter-universal-floor-holds-under-deadline.md": "07981c82c40aadab5c0f7b08dd3ef3ac82f5c2fa2ad6133551bfa92904558dfd",
+      "evals/cases-v4/golden/debug-next-step-derived-from-run-state.md": "4f7519992b1fe566e484380954d4f313db1685ad644452035533d8e3a579128e",
+      "evals/cases-v4/golden/debug-no-reproduction-blocks.md": "68216521e5fa1a2ed0ef1fd09e514078b299cc3ec4b7e476686170e98fc86582",
+      "evals/cases-v4/golden/debug-root-cause-before-fix.md": "82aac1a24a28fadab1899717ada5882e7efc3c712e95003f205bcdd3abf22077",
+      "evals/cases-v4/golden/learnings-curation-merge-and-promotion.md": "c6928607ba0d397ae53b4b70cc5fb77fe22895963e9493a820f7926750bb91df",
+      "evals/cases-v4/golden/plan-artifact-head-and-units-shape.md": "926dd5a3d6376c56ca787ed2bcd7f3078dcca48cc7ed0c8792e9485f40c550e5",
+      "evals/cases-v4/golden/plan-lint-three-fails-returns-blocked-ambiguity.md": "bd46c303266470fd106b5f659b1a34764d28716d4e11f3cb0f4ec08116a9a94e",
+      "evals/cases-v4/golden/pr-resolve-next-step-derived-from-run-state.md": "130e14ea61fb4450cd53139814af4eea681e68eb2d0ca1c896723d6b92feb154",
+      "evals/cases-v4/golden/question-shape-and-default.md": "d8520638aae21103c211b93d134f39821e741896114392bec821cdfb8ac9fcc4",
+      "evals/cases-v4/golden/quick-hard-refusal-thresholds.md": "5ffe4e4b7fc69836a6477c17f398021f2008e87a9f97a0d5b16f1198e00a0137",
+      "evals/cases-v4/golden/quick-mid-run-re-escalation.md": "01e9b5cb8ad162619a942eb9ac892f1eb77e451c4daa187f63bdfd1df136638e",
+      "evals/cases-v4/golden/quick-next-step-derived-from-batch-state.md": "48fe3e8d54ea9efaf722f897dfb0950bfb20e98c4acdac8128eafea9cd726dc1",
+      "evals/cases-v4/golden/quick-refusal-states-measurement.md": "3401c4f4b0ebbad8d897001060b0dee8c3257c5eaeb911617be59ce1c8d9c9b7",
+      "evals/cases-v4/golden/quick-security-surface-no-size-floor.md": "1323658c5a5630437e9e30c607eba412f336e288b3504ed4d9346ee174b65ecd",
+      "evals/cases-v4/golden/rework-critical-deferral-record.md": "83a10f90a34ef6ce595fb79952f060fe251fa97b06e7fbdd2bc0624443d9297b",
+      "evals/cases-v4/golden/rework-next-step-derived-from-run-state.md": "90ae1a3e883fa7ed94d5a02cd1ca49c291e651e6fde5a46f0158f79ce327a6a1",
+      "evals/cases-v4/golden/rework-persistence-guard-holds.md": "fca1a780b261806c8270fc1c952634d13a5f0a4095ecda471670cde8c736d063",
+      "evals/cases-v4/golden/rework-triage-revise-versus-defer.md": "995684d5f9c93db77465955d59c354bdd4c5243c597c79991bb34eaa2d595a04",
+      "evals/cases-v4/golden/secrets-write-path-refuses-credential-text.md": "6c5e02745ff6236227c9980edf656996c9e799b5b830ce756ca8e2d0561ff966",
+      "evals/cases-v4/golden/security-patterns-findings-named-by-category.md": "b528f84ddf354cc54c9fbe719802740b1cd3eea16177f069444908f5e10527aa",
+      "evals/cases-v4/golden/spec-converge-confirm-gated-merge.md": "d2b2dd7c86b1ea308b5282a14a6109608a00a1675752f8fac0c628e1f71f68b3",
+      "evals/cases-v4/golden/spec-next-step-derived-from-run-state.md": "26525d610b9f348755cd5a15cd93241f3d66c05ca1cf1abef8568df97007e4ea",
+      "evals/cases-v4/golden/spec-testability-census.md": "3de7420fcd2e395a86c7e8820fc63dd021a7a16d95c6d58fbe33d76d520730da",
+      "evals/cases-v4/golden/subagent-returns-blocked-ambiguity.md": "1021e9d2e2b24a83d3688a470b0b2db21e45a5a6c6395515be481cd940ce1616",
+      "evals/cases-v4/golden/unattended-run-applies-declared-default.md": "d1920d107184b20bb672966cba49680644dc3f8ad0db8230fbfc29503c942019",
+      "evals/cases-v4/golden/work-proof-block-fields.md": "4baebe4fdd74c9af8ef9bb3284d1f4e6d4f620f9f2ddca3675181ff8d4a72e71",
+      "evals/cases-v4/probes/probe-browser-evidence-select.md": "21b68216aa14e1874b3572d508e09f73fea30636775c5a95ee4b5b24541d1d22",
+      "evals/cases-v4/probes/probe-dep-audit-select.md": "3f26847522d5cba7ef2918cd2ff4928990bfa663ccf76df86efd7ee8c7218886",
+      "evals/cases-v4/probes/probe-design-system-detect-select.md": "aa62dd72ccf224c51b1e8496b580e893fdda892a86524e10f011ac33706739ad",
+      "evals/cases-v4/probes/probe-handoff-select.md": "c4542f1ef49c01748e70c21411b01be0ef5b81ec085702bda99594b18bbc89b7",
+      "evals/cases-v4/probes/probe-learn-select.md": "1746320776ec9bce6e32bae4dd0fac90da67fed0f9ead322b95b24aa59ebf1cc",
+      "evals/cases-v4/probes/probe-none-dependency-bump-request.md": "7f8b0b7a63583e8c9b4ff741765369d255c3439ed7c77daa72bf71ec41a028a2",
+      "evals/cases-v4/probes/probe-none-proven-repo-what-next.md": "f727031593c1dca9959739280bb3ce333e2674232474252de55f78f862ae26b9",
+      "evals/cases-v4/probes/probe-none-readme-note-request.md": "1604b2db24278dbc631c08ce89f3d49921cb58224667f5be3676ab2bb816ddf0",
+      "evals/cases-v4/probes/probe-none-work-run-qa-checkpoint.md": "85acc03fabd3d9c13cc135f8228ad2930aa5aed539aee564dceec96cc2945c0d",
+      "evals/cases-v4/probes/probe-onboard-select.md": "b74463981f2b324c37d72b68e19d5ffd16c96be9d86a1c9672813ef5382f9dce",
+      "evals/cases-v4/probes/probe-qa-select.md": "d2370652dd820ac423b45c5061a2532e62488460e2267ecfa9b6a0836f699bf3",
+      "evals/cases-v4/probes/probe-verify-select.md": "85f9ad6e755312ee6d4392314480a65f37d6c70f779435bc9460fbb4137371d9"
+    },
+    "census": {
+      "cases": 78,
+      "historical": 69,
+      "fixtures": 5,
+      "golden": 48,
+      "adversarial": 18,
+      "probes": 12,
+      "floors": 21,
+      "twins": 4,
+      "binding": 447,
+      "advisory": 57
+    },
+    "settings": {
+      "files": [
+        {
+          "name": "settings.json",
+          "present": true,
+          "sha256": "a02b8e4ff974bae405715b0f43bfe8a1ff813d05a4f31d42b2ac9ffe17edfe17",
+          "bytes": 157,
+          "keys": [
+            "env",
+            "model",
+            "skipDangerousModePermissionPrompt",
+            "theme"
+          ],
+          "envKeys": [
+            "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION"
+          ],
+          "modelKeyPresent": true,
+          "modelKeyNote": "overridden by the explicit --model flag on every call"
+        },
+        {
+          "name": "settings.local.json",
+          "present": false
+        }
+      ],
+      "elsewhere": [
+        {
+          "path": "/Library/Application Support/ClaudeCode/managed-settings.json",
+          "role": "managed policy",
+          "present": false
+        },
+        {
+          "path": "/etc/claude-code/managed-settings.json",
+          "role": "managed policy",
+          "present": false
+        },
+        {
+          "path": "~/.claude/settings.json",
+          "role": "default user directory, not read because CLAUDE_CONFIG_DIR points elsewhere",
+          "present": true
+        }
+      ],
+      "screen": "name-based, one level deep plus the env map; published keys and the per-call ambient stability check are the real protection",
+      "sha256": "a02b8e4ff974bae405715b0f43bfe8a1ff813d05a4f31d42b2ac9ffe17edfe17",
+      "keys": [
+        "env",
+        "model",
+        "skipDangerousModePermissionPrompt",
+        "theme"
+      ],
+      "envKeys": [
+        "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION"
+      ]
+    }
+  },
+  "ambientByRole": {
+    "judge": {
+      "stableHash": "5a28ff924bbbc8245e821d0e1a3fdacc269f0db9de14ab4d118af3fa98ee3927",
+      "kinds": [
+        "system-prompt.block1",
+        "system-prompt.block2",
+        "system-prompt.block3",
+        "system-prompt.block4",
+        "messages.system@1",
+        "user-turn.system-reminder@0"
+      ],
+      "distinctRawHashes": 1,
+      "distinctStableHashes": 1,
+      "attempts": 15,
+      "variants": []
+    }
+  },
+  "decodingByRole": {
+    "judge": [
+      {
+        "beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,effort-2025-11-24,fallback-credit-2026-06-01,extended-cache-ttl-2025-04-11",
+        "maxTokens": 64000,
+        "outputConfig": {
+          "effort": "high"
+        },
+        "systemBytes": 10694,
+        "temperature": null,
+        "thinking": {
+          "type": "adaptive"
+        },
+        "topK": null,
+        "topP": null,
+        "attempts": 15
+      }
+    ]
+  },
+  "canaries": {
+    "planSha256AtFirstCanary": "cf343dd31f1cbb98eaf19384259c82b8c3b075238628e8a912044784b74ee019",
+    "planRevisions": [
+      {
+        "sha256": "cf343dd31f1cbb98eaf19384259c82b8c3b075238628e8a912044784b74ee019",
+        "firstUsedAt": "2026-09-11T17:14:24.346Z",
+        "canary": "K1"
+      },
+      {
+        "sha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "firstUsedAt": "2026-09-11T17:33:09.243Z",
+        "canary": "K1b"
+      },
+      {
+        "sha256": "e5e59e5b673bacc7069872678e480b3e5bb47b183bb561c7ad772b1857e529f5",
+        "firstUsedAt": "2026-09-11T17:49:01.631Z",
+        "canary": "K3b"
+      }
+    ],
+    "planSha256AtPrepare": "e5e59e5b673bacc7069872678e480b3e5bb47b183bb561c7ad772b1857e529f5",
+    "executed": [
+      {
+        "id": "K1",
+        "kind": "live",
+        "planSha256": null,
+        "role": "scenario",
+        "model": "claude-opus-5",
+        "transport": "cli-capture",
+        "admitted": false,
+        "error": {
+          "code": "request-history-present",
+          "retryable": false,
+          "detail": 2
+        },
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": null,
+        "measured": false
+      },
+      {
+        "id": "K1b",
+        "kind": "live",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": "scenario",
+        "model": "claude-opus-5",
+        "transport": "cli-capture",
+        "admitted": true,
+        "error": null,
+        "apiModel": "claude-opus-5",
+        "resolvedModels": [
+          "claude-opus-5"
+        ],
+        "deterministic": null,
+        "measured": false
+      },
+      {
+        "id": "K1c",
+        "kind": "live",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": "scenario",
+        "model": "claude-opus-5",
+        "transport": "cli-capture",
+        "admitted": true,
+        "error": null,
+        "apiModel": "claude-opus-5",
+        "resolvedModels": [
+          "claude-opus-5"
+        ],
+        "deterministic": null,
+        "measured": false
+      },
+      {
+        "id": "K2",
+        "kind": "live",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": "judge",
+        "model": "claude-fable-5-1",
+        "transport": "cli-capture",
+        "admitted": true,
+        "error": null,
+        "apiModel": "claude-fable-5-1",
+        "resolvedModels": [
+          "claude-fable-5-1"
+        ],
+        "deterministic": null,
+        "measured": false
+      },
+      {
+        "id": "K3",
+        "kind": "deterministic",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": false,
+          "checks": 12
+        },
+        "measured": false
+      },
+      {
+        "id": "K4",
+        "kind": "deterministic",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 16
+        },
+        "measured": false
+      },
+      {
+        "id": "K3b",
+        "kind": "deterministic",
+        "planSha256": "e5e59e5b673bacc7069872678e480b3e5bb47b183bb561c7ad772b1857e529f5",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4b",
+        "kind": "deterministic",
+        "planSha256": "e5e59e5b673bacc7069872678e480b3e5bb47b183bb561c7ad772b1857e529f5",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      }
+    ]
+  }
+}

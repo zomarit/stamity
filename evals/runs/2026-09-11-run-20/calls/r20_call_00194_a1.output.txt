@@ -1,0 +1,12 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of back off**
+
+`src/http/retry.ts:41` sets the backoff multiplier to `1.0`. Multiplying a delay by one leaves it unchanged, so the "exponential" backoff is flat — every attempt fires at the same interval as the first. That is the whole cause; there is no second bug layered underneath it.
+
+Two details that matter for the fix:
+
+- `src/http/retry.ts:12-18` — the retry loop reads the multiplier **once, at construction**, rather than per-attempt. So whatever value is set there is fixed for the life of the retrier. That's fine for a static multiplier, but it means any future per-call or per-host override won't take effect through this path without touching the loop as well.
+- `test/http/retry.test.ts:88` — the suite asserts that three attempts happen and asserts **nothing** about the interval between them. That is why this regressed silently and why it will regress again: the test passes identically whether the multiplier is `1.0` or anything else. A timing or delay-sequence assertion is the part of this change that actually protects you; the multiplier value alone is not covered by anything today.
+
+So the brief for `/st-work` is two items, not one: the multiplier at line 41, and an interval assertion at `test/http/retry.test.ts:88`. Worth deciding before you switch whether you also want a cap on the maximum delay — with a growing multiplier and the current attempt count, the last interval gets long, and nothing in `retry.ts:12-18` bounds it.

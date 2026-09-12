@@ -31,50 +31,13 @@
 // --experimental-strip-types, so this script re-execs itself once with the flag rather than
 // dying at the catalog import and reporting the breakage as "the probe could not run".
 //
-// Five sibling generators carry this same preamble. Extracting it to a shared scripts/ module
-// is the right shape and is deferred here: those five files belong to another change in flight,
-// and duplicating the block is preferable to a half-migrated pair of spellings.
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
+import { prepareNativeTypescriptCli } from './native-typescript.mjs'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const SELF = fileURLToPath(import.meta.url)
-
-// True only when this file is the process entrypoint (run as a CLI), false when imported. Both
-// the native-strip re-exec below and the main() invocation at the bottom are CLI-only concerns:
-// a test that imports `osvQueryBatch` on a Node without native type-stripping (one below the
-// declared floor) must NOT trigger the re-exec, which would call process.exit inside the vitest
-// worker. vitest transforms TypeScript itself, so the import needs no re-exec regardless of the
-// host Node.
-const IS_MAIN = process.argv[1] !== undefined && resolve(process.argv[1]) === SELF
-
-if (IS_MAIN && !process.features.typescript) {
-  // Re-exec once, never twice: a Node build that still cannot strip types with the flag on
-  // would otherwise respawn itself forever.
-  if (process.execArgv.includes('--experimental-strip-types')) {
-    console.error(
-      `advisory-check: ERROR - this Node build (${process.version}) cannot strip TypeScript ` +
-        'types, so the MCP catalog cannot be loaded. Run the probe on Node >=22.22.2.',
-    )
-    process.exit(2)
-  }
-  const child = spawnSync(
-    process.execPath,
-    // The caller's own execArgv is forwarded: a flag someone passed deliberately (`--import`,
-    // an inspector) must survive the re-exec, or the re-exec silently changes what runs.
-    [
-      ...process.execArgv,
-      '--experimental-strip-types',
-      '--disable-warning=ExperimentalWarning',
-      SELF,
-      ...process.argv.slice(2),
-    ],
-    { stdio: 'inherit' },
-  )
-  // A signalled child has no status; 2 is the honest "did not complete".
-  process.exit(child.status ?? 2)
-}
+const IS_MAIN = prepareNativeTypescriptCli(import.meta.url, { failureCode: 2, label: 'probe' })
 
 // The registry probes below run one at a time on purpose: this is a courtesy
 // scan against a public registry, and fanning ten concurrent requests at it to

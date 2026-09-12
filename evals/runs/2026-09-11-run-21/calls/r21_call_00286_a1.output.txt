@@ -1,0 +1,11 @@
+"Add pagination" reads at least three ways here, and they differ in blast radius enough that I don't want to guess: `/api/v1/orders` is the one with a real performance problem, but the other two list endpoints have the same unbounded-return shape, and there's no existing helper or spec to inherit a page size or cursor shape from.
+
+**Which scope should I build?**
+
+1. **`/api/v1/orders` only, opt-in.** Add `?limit`/`?offset`; no params means today's behavior, byte-for-byte. Fixes the actual slow endpoint, breaks no client, easy to revert — but leaves the other two unbounded and the helper unshared.
+2. **All three endpoints, opt-in, behind one shared helper.** Same query contract everywhere, one place to change later. More surface touched and three sets of response assertions to update, still no client-visible change by default.
+3. **All three, cursor-based, pagination always on with a hard cap.** Actually bounds worst-case memory and holds up under concurrent writes, which offset does not — but it's a breaking change for every current consumer and the cursor encoding becomes a compatibility commitment before `docs/specs/` has said anything about it.
+
+Sub-questions folded in, only if you pick 2 or 3: default page size and cap (I'd propose 50 / 200 absent a spec), and whether the count goes in an envelope or a header. Under option 1 I'll assume 50 / 200 and a `X-Total-Count` header, both trivially changeable while it's one endpoint.
+
+Default if no response: **1**. It's the smallest reversible step that addresses the endpoint you're actually paying for, and it doesn't lock in a cursor format ahead of the spec.

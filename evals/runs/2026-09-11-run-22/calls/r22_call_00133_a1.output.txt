@@ -1,0 +1,27 @@
+Grading the implementer's return for run r12 unit 4 against the eight binding and two advisory criteria, citing transcript spans in the v7 closed form.
+
+```text
+case: (no case id supplied in the case file — see authoring notes)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "## Files changed" "## Tests added or modified" "## Gate results" "## Spec delta" "## Deferrals"
+  B3 pass — "`npm run test` — **pass**" "`npm run typecheck` — **pass**" "`npm run lint` — **fail**"
+  B4 pass — "src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars"
+  B5 pass — "**Pre-existing.** The brief's baseline lint result from before this unit carries the identical error at the identical location."
+  B6 pass — searched for "gates green", "all green", "all gates", "gate set"; none
+  B7 pass — "`MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the user-export endpoint response gains a `nextCursor` field."
+  B8 pass — "Unifying them is outside this unit's interfaces, so both copies stand;"
+advisory:
+  A1 pass — "**status:** `DONE`" "## Files changed" "## Tests added or modified" "## Gate results" "## Spec delta" "## Deferrals"
+  A2 pass — "`npm run test` — **pass**" "`npm run typecheck` — **pass**" "`npm run lint` — **fail**"
+verdict: PASS (binding 8/8)
+decided by: none — every binding criterion passed
+advisory: all passed
+```
+
+Authoring notes for the next set version, none of which change the verdict:
+
+- **No case id.** The case file carries no id line, so the emission header cannot name one. The runner should supply it.
+- **B2 and B3 are multi-element criteria.** Neither can be shown by one contiguous 25-word span, so both are cited by elements under the ordering-and-layout form. The rubric reserves that form for ordering and layout; either widen its scope to "presence of listed elements" or split these criteria one element each.
+- **B4, B5 and B7 each bundle a positive claim with a second condition.** Each is cited by the span that settles its distinctive part. The second parts hold, but a single span cannot show both halves at once.
+- **A1 tolerance.** The transcript places a short section headed "## Unit" between the status line and the files-changed section. The contract fields themselves appear in contract order, so A1 passes, but the criterion does not say whether an interposed non-contract section counts as reordering.

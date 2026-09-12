@@ -155,10 +155,42 @@ describe("guarantee-honesty section", () => {
     });
   });
 
-  it("keeps the copilot row honest about never blocking", () => {
+  it("renders an injected nonblocking guarantee honestly in both tables", () => {
+    // 2026-09-10: all live client rows now declare a blocking exit, so they no
+    // longer exercise the public renderer's supported null guarantee. Supply
+    // a synthetic observation-only transport through that input seam; this
+    // fixture makes no claim about Cursor's current native hook behavior.
+    const notes = "Fixture transport observes hook failures without blocking the action.";
+    const page = renderCapabilityMatrixFrom({
+      ...LIVE_CAPABILITY_INPUTS,
+      guarantees: LIVE_CAPABILITY_INPUTS.guarantees.map((row) =>
+        row.tool === "cursor"
+          ? { ...row, failMode: "fail-open", blockingExitCode: null, notes }
+          : row,
+      ),
+    });
+    const guarantee = tableRows(section(page, "## Hook guarantee honesty"))
+      .find((row) => cells(row)[0] === "`cursor`");
+    const glance = tableRows(section(page, "## Coverage at a glance"))
+      .find((row) => cells(row)[0] === "`cursor`");
+
+    expect(cells(guarantee ?? "")).toEqual(["`cursor`", "`fail-open`", "never blocks", notes]);
+    expect(cells(glance ?? "")[4]).toBe("`fail-open` — never blocks");
+    // The live native contract remains blocking; rendering the supplied row
+    // must not mutate the shared inputs or silently fall back to their value.
+    expect(LIVE_CAPABILITY_INPUTS.guarantees.find((row) => row.tool === "cursor")?.blockingExitCode)
+      .toBe(2);
+  });
+
+  // TEST CHANGE: the current CLI/cloud contract denies preToolUse failures,
+  // while native timeouts and the identity-free core role guard remain weaker.
+  it("states Copilot denial and retains its timeout and role-identity limitations", () => {
     const copilot = rows.find((row) => cells(row)[0] === "`copilot`") ?? "";
-    expect(cells(copilot)[2]).toBe("never blocks");
-    expect(copilot).not.toContain("`2`");
+    expect(cells(copilot)[1]).toBe("`fail-closed`");
+    expect(cells(copilot)[2]).toBe("`2`");
+    expect(copilot).toContain("errors and JSON deny block");
+    expect(copilot).toContain("Timeouts always fail-open");
+    expect(copilot).toContain("identity-free core role guard is telemetry");
   });
 
   /**
@@ -365,12 +397,21 @@ describe("currency block — the named revisit triggers", () => {
     expect(triggerFor("Claude Code AGENTS.md support change").watch).toBe("claude");
   });
 
-  it("pins the deny-gate status to copilot's own declared cap", () => {
+  // TEST CHANGE: emitted CLI/cloud hooks and VS Code's Preview editor surface
+  // are distinct contracts; the old future-GA assertion conflated them.
+  it("distinguishes the emitted CLI/cloud deny gate from the editor revisit trigger", () => {
     const cap = factsFor("copilot").caps.find((row) => row.name === "deny-gate");
-    expect(cap?.value).toContain("Preview");
-    expect(cap?.value).toContain("GA");
-    expect(triggerFor("VS Code deny-gate GA").status).toContain("Preview");
-    expect(triggerFor("VS Code deny-gate GA").watch).toBe("copilot");
+    expect(cap?.value).toContain("Copilot CLI/cloud");
+    expect(cap?.value).toContain("preToolUse denies");
+    expect(factsFor("copilot").hooksConfigPath).toBe(".github/hooks/stamity.json");
+    const trigger = triggerFor("VS Code deny-gate GA");
+    expect(trigger.status).toContain("CLI/cloud preToolUse hooks are emitted now");
+    expect(trigger.status).toContain("timeout fail-open");
+    expect(trigger.status).toContain("https://code.visualstudio.com/docs/agent-customization/hooks");
+    expect(trigger.status).toContain("remain Preview");
+    expect(trigger.status).toContain("separate verification");
+    expect(trigger.action).toContain("editor-specific");
+    expect(trigger.watch).toBe("copilot");
   });
 
   it("leaves the trigger no client covers unwatched instead of dating it", () => {

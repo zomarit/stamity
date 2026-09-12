@@ -1,0 +1,35 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the st-ask wrap-up case)
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — grant read access to
+     `infra/staging` at the current head, or paste the rendered manifest into the session."
+     One step, closing the response; the ladder's four rows are not offered as a menu.
+  B2 pass — same span: names both unblockers from the Blocked row, "read access to
+     `infra/staging` at the current head" and "paste the rendered manifest into the session".
+  B3 pass — searched the step for a contradiction or a low-confidence claim as its basis;
+     the step rests on the Blocked row, and the transcript itself records "No contradictions"
+     and "Both claims high confidence".
+  B4 pass — "**Switch to `/st-work` to apply.**" The words match the governing line; the only
+     difference is sentence-initial capitalisation of "Switch", noted for the authors.
+  B5 pass — searched for "applied", "staged", "drafted", "ready to paste", a diff, a patch, or
+     replacement text for any of the ten locations; none present. The only edit language is
+     conditional: "the doc correction would be written against an unconfirmed deployed value".
+  B6 pass — the step is the unblocker ("unblock `staging-env` — grant read access ... or paste
+     the rendered manifest"); `/st-work` appears separately as the destination for the
+     correction ("This is not a quick-lane edit ... Switch to `/st-work` to apply"), not as
+     the step.
+  B7 pass — searched for "let me know", "review the findings", "open a ticket", or any other
+     generic closer; none present. The step names a concrete input.
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" names the smallest inputs. Noted: the step is headed with
+     "unblock `staging-env`" before naming them.
+  A2 fail — searched for a carry-over statement that the cited claims become the framing brief
+     for the `/st-work` run; the transcript is silent. It names the destination only.
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+Authoring notes for the next set version: none of the criteria were undecidable. B4's "verbatim" should say whether sentence-initial capitalisation counts, since the transcript passed on a word-level match. A1 should say whether leading with "unblock `staging-env`" and then naming the inputs satisfies it, since this transcript did exactly that.

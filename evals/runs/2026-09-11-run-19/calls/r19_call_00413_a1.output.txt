@@ -1,0 +1,17 @@
+Grading the transcript against the two binding criteria; the case declares no advisory criteria.
+
+```text
+case: (id not supplied in the input handed to the judge; reported as an emission gap, not a verdict defect)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the
+     installed dependency graph ahead of a release"
+  B2 pass — searched the answer for a second skill id (st-browser-evidence, st-design-system-
+     detect, st-handoff, st-learn, st-onboard, st-qa, st-verify), for the word `none`, and
+     for hedging joiners ("or", "also", "alternatively", "equally"); only `st-dep-audit`
+     appears, named once, with no alternative offered
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The answer names the one correct skill and gives a single reason tied to the skill's stated trigger. No authoring defects found in the criteria. The only gap is that the case id was not present in the material handed in, so the emission carries a placeholder rather than a name.

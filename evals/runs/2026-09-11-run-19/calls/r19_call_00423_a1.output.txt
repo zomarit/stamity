@@ -1,0 +1,16 @@
+Grading this case against the rubric as the judge.
+
+```text
+case: (no case id supplied in the input; reported as an emission defect, not a case defect)
+binding:
+  B1 pass — "`st-handoff` — the request is to save mid-work state because the session is
+     ending and work moves to another client tomorrow"
+  B2 pass — searched the answer for a second skill id, an "or" alternative, an "equally"
+     qualifier, and the literal `none`; only `st-handoff` appears, once, and the answer is
+     not `none`
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The response names one skill, st-handoff, with a reason tied to the prepare mode in its description. Both binding criteria pass and the case passes. The only irregularity is that the input did not carry a case id, so the block above cannot fill that field.

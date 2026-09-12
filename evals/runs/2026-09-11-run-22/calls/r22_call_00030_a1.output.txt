@@ -1,0 +1,15 @@
+**`queue-worker-b` is falling behind.**
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| processed (1h) | 1042 | 97 |
+| implied arrivals | ~933 | ~689 |
+| drain rate | ~17.4/min | ~1.6/min |
+
+**By how much:**
+- Backlog grew **+592 items** over the hour (214 → 806), roughly **+9.9 items/min** net.
+- It processed **97** jobs against ~**689** arrivals — clearing about **14%** of its inflow.
+- Throughput is **~10.7× lower** than worker-a (97 vs 1042), and it now holds **797 more** queued items (806 vs 9).
+
+Worker-b is alive, not dead — its last heartbeat (09:40:55Z) is 5s before the window close, and the series is complete (60 samples, `truncated: false`). So this looks like a per-job slowdown or a stuck/long-running handler rather than a crashed process. Worker-a is healthy and has nearly drained its own queue, so it has headroom to absorb redistributed work.

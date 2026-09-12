@@ -1,0 +1,24 @@
+Grading the quoted transcript against the six binding and one advisory criteria.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold" / "Switch to `/st-work`";
+     the item is routed out of the quick lane, nothing is applied
+  B2 pass — "`Schema, API, event or migration`" — the row name is copied verbatim from the table
+  B3 pass — "(`new `orders.status` column plus backfill migration`)" — the schema change and
+     the migration are both stated as the measured value
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for wording calling the change bad, risky, careless, or faulting the
+     operator; none present. The measurement and destination are the whole content
+  B6 pass — searched for a maybe, a permission request, a proceed-anyway offer, or an offer to
+     land part of the item (e.g. the column without the migration); none present
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+No authoring defects. Every criterion was decidable from the transcript alone, and the grouping matches the case file as written.
+
+One observation outside the criteria: the measured value nests backticks inside backticks, which will render oddly in markdown. No criterion covers formatting, so it does not affect any verdict.

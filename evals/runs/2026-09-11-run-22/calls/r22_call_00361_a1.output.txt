@@ -1,0 +1,20 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: sync-three-tier-confirm-gate
+binding:
+  B1 pass — "I have not written anything yet."
+  B2 pass — "These are the exact lines that would be added, verbatim from the plan artifact's `ADDED` section"
+  B3 pass — "**Requirement id:** `REQ-checkout-112`" "the cart is cleared when payment is declined" "the cart is preserved when payment is declined" "`src/checkout/decline.ts:64`"
+  B4 pass — searched for "reconciled", "retired", "changed", "one write", "single write"; none
+  B5 pass — "This lives in the ledger and on the board and is never written into a spec file."
+advisory:
+  A1 fail — searched for "merge gate", "Prove", "/st-work", "truth"; none
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+```
+
+Notes for the set author:
+
+- **B3 after-text.** The Brief supplies no replacement text for item (b), so the transcript can only offer a draft. It does so and labels it as its own wording pending approval. I graded that as an after text presented. If the author intended the after text to come from the artifact, the criterion is undecidable as written and should say what after text is expected when the delta carries none.
+- **A1.** The transcript says it will apply only what the operator confirms, but never names the merge gate or the Prove phase as the point where truth changes. This is the second run in which this advisory should be watched for the consecutive-fail review obligation.

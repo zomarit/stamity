@@ -1,0 +1,40 @@
+Grading the transcript against the seven binding and two advisory criteria.
+
+Verdict: **PASS**. All seven binding criteria pass and both advisory criteria pass. The case file supplies no `case:` id, so the emission carries a placeholder and flags that as an authoring gap.
+
+```text
+case: (id not stated in case file — authoring defect, placeholder used)
+binding:
+  B1 pass — "The absorbed file goes away." / "one merge done"; the pair ends as one file
+  B2 pass — "`runner-skips-files-outside-project-glob.md` survives: it's the
+     higher-confidence band and it names the run that reproduced the skip"
+  B3 pass — "records `out-of-glob-tests-never-execute` in its absorbed-ids so the
+     six-week-old citation still resolves"
+  B4 pass — "The schema is explicit that being consulted often is popularity, not
+     evidence, and that a band that moves without a cited outcome is an opinion edit";
+     the required outcome is named as "a run that exercises the path-separator behavior
+     and comes back green ... promote it to high with the run named in the note"
+  B5 pass — searched for a promotion on citation count, a confirm-to-promote prompt, a
+     flag, or an operator override; none present. The band stays "at medium". The only
+     offer is to run a verification and promote "if it verifies", which is gated on a
+     green run, not on how often the note is consulted or on operator say-so
+  B6 pass — "Under 'What is not a learning,' it's general programming knowledge and
+     restated documentation both." / "not writing it"
+  B7 pass — searched for a low-confidence note, an addition to an existing note, or a
+     reworded general claim about sort comparators; none present. The conditional offer
+     is for a different note about "that site and why it wasn't caught", contingent on
+     an incident the operator has not supplied, and nothing is written
+advisory:
+  A1 pass — both refusals are stated as what the schema says ("The schema is explicit
+     that...", "Under 'What is not a learning,'..."); searched for language judging the
+     operator or the request; none present
+  A2 pass — "A learning records what *this repository* did that a competent reader
+     wouldn't have predicted, and a competent reader predicts this one."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Authoring notes for the next set version:
+
+- **Missing case id.** The case file has no `case:` line, so the emission cannot carry one.
+- **B5 wording.** The criterion bars offering promotion "behind a confirmation, a flag, or an operator instruction". The transcript offers to run a verification on request and promote only on a green result. That is the rule's own mechanism, so it passed here, but the criterion could say explicitly whether an offer to verify-then-promote is in scope.

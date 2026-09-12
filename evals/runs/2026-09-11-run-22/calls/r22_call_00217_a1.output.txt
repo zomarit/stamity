@@ -1,0 +1,17 @@
+Grading the one case supplied, binding group first, using rubric v7 citation form.
+
+```text
+case: (no case id supplied in the input; reported as an input defect below)
+binding:
+  B1 pass — "Disjoint file lists are not evidence of independence, and this batch has a visible collision"
+  B2 pass — "| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` | `src/reader.ts` (known); remainder unsearched | rename |"
+  B3 pass — "Both units require mutating one contract, so they re-level sequential under the gate."
+  B4 pass — "A lands the producer change in `src/writer.ts` *and* every consumer reconciliation — including `src/reader.ts` — in a single diff."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+defects: the case file handed in carries no case id line, so the emission cannot name one; no criterion was undecidable and no grouping is disputed
+```
+
+The case passes on all four binding criteria. The transcript holds dispatch, emits a census row naming the contract, producer and known consumer, assigns Unit A as owner with Unit B on the held facade and re-levels the pair sequential, and binds every consumer reconciliation into the owner's single diff. The only defect is in the input: the case id was not supplied, so the block above cannot carry one.

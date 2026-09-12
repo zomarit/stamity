@@ -1,0 +1,76 @@
+`r7/review/2` still reads `open`, so the close can't write the record yet — a row still `open` at record time is a gate failure, not a note. It's Minor, so it doesn't go to the QA checkpoint, but not reaching the checkpoint isn't the same as not closing: the run closes it itself against the exit invariant. Its disposition isn't ambiguous — a Minor style/robustness observation at `src/api/users.ts:120` with all three gates green has no material cost or blast-radius split between dispositions — so the ambiguity floor doesn't fire and I don't stop to ask. Closing it as deferred on the rationale that put it below the floor, then the record.
+
+**Ledger rewrite in place**
+
+```
+r7/review/2 | Minor | stamity-reviewer | src/api/users.ts:120 | deferred |
+rationale: below the severity floor — no gate impact (lint/typecheck/test all
+pass) and no behavioural change; carried to the inbox rather than fixed inside
+this run's scope.
+```
+
+**Inbox append** — `.stamity/inbox.md`, same dated block as the security deferral:
+
+```
+## 2026-09-12 — /st-work r7
+- Warning | src/api/users.ts:41 | rate limiting absent on the users endpoint; tracked separately | source: /st-work | Ref: .stamity/ledger/r7.md#r7/security/1
+- Minor | src/api/users.ts:120 | reviewer finding held below the severity floor; no gate impact | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2
+```
+
+---
+
+## Proof block — run `r7`
+
+**Gates**
+
+| gate | command | result | failing excerpt |
+|---|---|---|---|
+| lint | `npm run lint` | pass | — |
+| typecheck | `npm run typecheck` | pass | — |
+| test | `npm test` | pass | — |
+
+**Review verdicts**
+
+| round | agent | verdict | confidence |
+|---|---|---|---|
+| 1 | `stamity-reviewer` | changes requested | high |
+| 2 | `stamity-reviewer` | approved | high |
+
+**Decisions trace**
+
+| id | decision | rationale |
+|---|---|---|
+| gates | proceed to review | all three gates green on first pass; no gate decision required |
+| `r7/review/1` | fixed | Warning, above the floor; reached the QA checkpoint and was resolved in `src/api/users.ts:88`; round 2 approved |
+| `r7/review/2` | deferred | Minor, below the severity floor; disposition unambiguous so the run closed it rather than asking; appended to inbox |
+| `r7/security/1` | deferred | Warning; rate limiting is tracked separately in the inbox, out of this run's scope |
+| ASK outcomes | none | no row's disposition split on cost or blast radius; the ambiguity floor did not fire |
+
+**Artifacts touched**
+
+| path | owning sub-agent |
+|---|---|
+| `src/api/users.ts` | `stamity-implementer` |
+| `test/api/users.test.ts` | `stamity-implementer` |
+| `.stamity/ledger/r7.md` | `/st-work` (close) |
+| `.stamity/inbox.md` | `/st-work` (close) |
+
+**Per-action attribution**
+
+| agent | tool | outcome |
+|---|---|---|
+| `stamity-implementer` | Edit | `src/api/users.ts` written |
+| `stamity-implementer` | Edit | `test/api/users.test.ts` written |
+| `/st-work` | Bash | `npm run lint`, `npm run typecheck`, `npm test` — all pass |
+| `stamity-reviewer` | Read | round 1 → changes requested (high); raised `r7/review/1`, `r7/review/2` |
+| `stamity-implementer` | Edit | `r7/review/1` fixed at `src/api/users.ts:88` |
+| `stamity-reviewer` | Read | round 2 → approved (high) |
+| `stamity-security` | Read | raised `r7/security/1` at `src/api/users.ts:41` |
+| `/st-work` | Edit | `r7/review/2` rewritten `open` → `deferred` |
+| `/st-work` | Edit | two rows appended to `.stamity/inbox.md` |
+
+**Exit invariant:** satisfied — `r7/review/1` fixed, `r7/review/2` deferred, `r7/security/1` deferred. No row reads `open`.
+
+**Recommended next step:** triage the two rows this run appended to `.stamity/inbox.md` — the Warning at `src/api/users.ts:41` (rate limiting on the users endpoint, `Ref: .stamity/ledger/r7.md#r7/security/1`) and the Minor at `src/api/users.ts:120` (`Ref: .stamity/ledger/r7.md#r7/review/2`) — via `/st-board`; each gains a `retired` field on its ledger row when it leaves the inbox fixed, cut, or scheduled. No acceptance criterion was left uncovered.
+
+**Not done:** `src/api/users.ts:41` rate limiting → inbox row, awaiting `/st-board` triage. `src/api/users.ts:120` Minor → inbox row, awaiting `/st-board` triage.

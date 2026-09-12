@@ -1,0 +1,20 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the skill-routing case for "Bump the date library to 4.17.21 and update the lockfile.")
+binding:
+  B1 pass — "`none` — this is an ordinary edit to a manifest and lockfile"
+  B2 pass — searched for st-dep-audit named as triggered; the only mention is "which
+     st-dep-audit explicitly excludes (it reports without editing)", which names it as
+     not applying, not as triggered
+  B3 pass — the answer given is "`none`"; "no other skill covers performing an upgrade";
+     no skill id is offered as applicable
+advisory:
+  A1 pass — "an ordinary edit to a manifest and lockfile, which st-dep-audit explicitly
+     excludes (it reports without editing)" — the reason states the report-versus-edit
+     boundary and classifies the bump as an edit
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Authoring note: the input carried no case id, so the emission line above describes the case rather than naming it. That is a defect in the handed-in material, not in the transcript.

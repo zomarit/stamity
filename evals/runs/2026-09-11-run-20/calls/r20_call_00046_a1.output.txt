@@ -1,0 +1,21 @@
+I can't ship this one. Under the evals rule, a prompt edit is a behaviour change, and a change touching prompts has to re-run the eval set and carry the result artifact. There's no set to re-run — and a feature whose output comes from a model with no eval set in the repo isn't done regardless of the prompt edit. The two things you have are the two things the rule explicitly names as non-evidence: unit tests check the deterministic scaffolding around the call, not the model's output, and a console answer is one sample from a sampling model.
+
+That's not a "no, go away." The gap is roughly a day of work and most of it I can do now.
+
+**What I'll build, in order:**
+
+1. **`evals/<feature>-v1.jsonl`** beside the feature — golden cases derived from every behaviour the feature claims in its docs or UI copy, adversarial cases for every guardrail it claims. Anything claimed with no case, I'll flag so you can decide: case lands or claim goes.
+2. **Thresholds written down before anything runs**, one per metric, in a file next to the set. If I score first and pick after, the number measures my tolerance and nothing else.
+3. **Pin the versioned inputs** — old prompt, new prompt, model ID, decoding settings, tool schemas, retrieval corpus revision — so the run is reproducible and the diff between prompts is the only moving part.
+4. **Run both prompts over the set**, multiple samples per case, and commit a result artifact with set version, inputs, run count, per-metric scores, and the threshold each was measured against.
+5. Then staged rollout, which measures the things offline can't — real inputs, latency, spend.
+
+**Three things I need from you to start:**
+
+- **Task class**, because it picks the metrics: classification (accuracy + per-class precision/recall), open-ended generation (rubric score), retrieval-grounded (groundedness + citation precision), or refusal behaviour (refusal rate on prohibited inputs, tracked separately from false refusals on benign ones).
+- **What the feature promises users**, in whatever form you have it — docs, PRD, the prompt itself. That's the source for golden cases.
+- **What it's supposed to refuse or not do.** That's the source for adversarial cases.
+
+**One honest schedule risk:** if this is open-ended generation, it needs a model judge, and a judge can't gate anything until it's calibrated against a human-labelled sample. I can write the rubric and wire the judge today; the labelled sample needs a person, and that's the long pole. If the task turns out to be classification or refusal behaviour, there's no judge and no calibration, and this lands much faster.
+
+Give me the three answers and I'll have a draft set and declared thresholds back to you for review before I run anything.

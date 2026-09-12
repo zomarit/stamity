@@ -1,0 +1,17 @@
+Grading the single case from the supplied brief, expected block, and transcript.
+
+```text
+case: (no case id supplied in the input; graded as the billing-merge manual-test routing case)
+binding:
+  B1 pass — "`st-qa`" is the id given as the answer
+  B2 pass — searched the transcript for any other skill id (st-browser-evidence, st-dep-audit,
+     st-design-system-detect, st-handoff, st-learn, st-onboard, st-verify) and for the token
+     `none`; only `st-qa` appears, and the reason sentence names no second skill as
+     equally applicable
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the case as handed in carries no `case:` id line, so the emission above uses a placeholder. Nothing else in the case is undecidable or mis-grouped.

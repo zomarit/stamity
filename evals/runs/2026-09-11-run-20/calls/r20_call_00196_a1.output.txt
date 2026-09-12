@@ -1,0 +1,15 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why retries hammer instead of backing off**
+
+`src/http/retry.ts:41` sets the backoff multiplier to `1.0`. Multiplying a delay by one leaves it unchanged, so what looks like exponential backoff is a fixed-interval loop — attempt 2 and attempt 3 fire at the same spacing as attempt 1. From upstream's point of view that is a burst at a constant rate, which is exactly the traffic shape backoff exists to avoid.
+
+`src/http/retry.ts:12-18` shows the loop reads the multiplier once at construction, so the value is baked in per-instance. Nothing later in the loop can compensate: there is no jitter, no ceiling, no per-attempt recomputation that could reintroduce growth. The multiplier is the single point that controls the curve, and at `1.0` the curve is flat.
+
+**Why this survived the test suite**
+
+`test/http/retry.test.ts:88` asserts that three attempts occur. It asserts nothing about the interval between them. The suite therefore passes identically whether the multiplier is `1.0`, `2.0`, or anything else — attempt *count* is covered, attempt *timing* is not. That is why the defect is invisible in CI, and it is the more durable half of the problem: changing the multiplier alone would leave the same blind spot for the next regression.
+
+**What the brief carries into `/st-work`**
+
+Two items, not one. The multiplier at line 41 is the behavioral defect. The missing timing assertion at `test/http/retry.test.ts:88` is what let it land and what would let it return. Worth deciding at that point whether the retry policy also needs a delay ceiling and jitter — with a live multiplier, an unbounded doubling sequence and synchronized client retries become real concerns that a flat `1.0` was accidentally masking.

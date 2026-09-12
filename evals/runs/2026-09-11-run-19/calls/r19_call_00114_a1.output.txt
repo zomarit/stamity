@@ -1,0 +1,31 @@
+**status:** `BLOCKED_FAILURE` — save refused, nothing written.
+
+## Strict gate errors (Critical)
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine prefixes (`stamity-`, `st-`) mark engine-owned files and cost the artifact the verified backup a user-lane overwrite otherwise takes. |
+
+Nothing was written to `.stamity/overrides/rules/st-migrations.md`. No `.bak` was taken — there was no file at that path to back up, and no write attempt reached the disk.
+
+## Strict gates that passed
+
+- `type: rule` agrees with the class directory `rules`.
+- No block-severity deny hit in the body.
+- No block-severity deny hit in any frontmatter string, including `description`.
+- `id` is a lowercase kebab slug and matches the intended filename (the disagreement is with the prefix rule, not with the filename).
+
+## Advisory findings attached to the assembled artifact (Minor)
+
+Reported because both classes of finding are reported whatever the outcome; these did not contribute to the refusal.
+
+- Neither `load:` nor `obsolete_when:` is declared. Both are required declarations — `load:` states the context cost, `obsolete_when:` names the retirement condition.
+- Body is 34 lines, under the rule class threshold of 100. No line-count advisory.
+- No filler-wordlist hits.
+
+## What a passing re-spawn needs
+
+- `id: migrations`, filed as `.stamity/overrides/rules/migrations.md` — the prefix drops, the slug and filename still agree, and the artifact keeps its user-lane backup on any future overwrite.
+- A `tags` key in the frontmatter.
+- `load:` set to one of `always`, `on-demand`, `reference`, and an `obsolete_when:` condition — clearing these also clears both Minor findings.

@@ -1,15 +1,15 @@
 # Eval model profiles v1
 
-This extends `SET-v4.md` with explicit model choices. The machine-readable source is
+This extends `SET-v6.md` with explicit model choices. The machine-readable source is
 [`model-profiles-v1.json`](model-profiles-v1.json), committed at the run's repository sha.
-The case roster, sealed briefs, expected criteria and thresholds remain those of `SET-v4`.
+The case roster, sealed briefs, expected criteria and thresholds remain those of `SET-v6`.
 No profile starts a model call or changes Stamity's product-level `models.pins` settings.
 
 | Profile | Model under test | Judge | Rubric |
 |---|---|---|---|
 | `claude` (default) | `claude-opus-5` | `claude-fable-5-1` | `rubric-v4.md` |
-| `codex-astra` | `gpt-6-astra` | `gpt-5.6-sol` | `rubric-v5.md` |
-| `codex-astra-judge` | `gpt-5.6-sol` | `gpt-6-astra` | `rubric-v5.md` |
+| `codex-astra` | `gpt-6-astra` | `gpt-5.6-sol` | `rubric-v7.md` |
+| `codex-astra-judge` | `gpt-5.6-sol` | `gpt-6-astra` | `rubric-v7.md` |
 
 Ask the runner to **run the full eval set with profile `codex-astra`** to measure Astra,
 or select `codex-astra-judge` to have Astra grade Sol. With no profile named, `claude`
@@ -30,14 +30,20 @@ The legacy scenario's reported `claude-opus-5[1m]` is the one accepted reporting
 suffix or substitution is implicitly accepted. Codex model reports must match the selected
 exact ID, including `gpt-6-astra` or `gpt-5.6-sol`, without normalization.
 
-Each case/sample uses a fresh scenario agent with no inherited conversation, previous case,
-Expected block, rubric or answer labels. For Codex, use `fork_turns: "none"` and the profile's
-explicit `model` and `reasoning_effort`; a follow-up on an existing agent is not fresh context.
-The scenario prompt contains only the sealed Brief plus the optional trailing attestation
-request. Do not prepend this profile document or model-role instructions to the Brief.
+Each case/sample uses a fresh scenario context with no inherited conversation, previous case,
+Expected block, rubric or answer labels. Native Codex agents use `fork_turns: "none"` and the
+profile's explicit `model` and `reasoning_effort`; a follow-up is not fresh context. Native
+dispatch additionally needs inspectable evidence that no ambient messages were injected.
+The manual `scripts/eval-run.mjs` harness can instead use stateless Responses API calls
+with the same selected pair and effort: one exact Brief or four exact judge content blocks,
+no instructions, conversation or previous response, and tools removed. This transport is a
+new harness/isolation baseline; its results never inherit native calibration or scores.
+The scenario prompt contains only the sealed Brief. The manual script appends no attestation
+request and records attestation as unavailable. Do not prepend this profile document or
+model-role instructions to the Brief.
 Model and reasoning selection belong to the dispatch controls, not the sealed prompt.
 
-The profiles declare tool-free scenarios, as `SET-v4` already does. If the harness can
+The profiles declare tool-free scenarios, as `SET-v6` already does. If the harness can
 remove tools and repository access, do so. If it exposes them despite the sealed Brief's
 instruction to use none, record that as instruction-only isolation and inspect the tool
 trace. Any scenario tool use or extra repository/context read invalidates that sample;
@@ -78,3 +84,6 @@ if the exact pin cannot be established, report the gap rather than passing the r
 Keep results and advisory-repeat tracking separate by the full model/rubric/harness/input
 configuration. A new profile starts a new baseline; cross-profile numbers may be shown as
 separate measurements, never pooled or presented as a regression against the Claude run.
+
+Current-case selection is v5. Retained rubric calibration witnesses still resolve
+against cases-v4, keeping their original Brief/Expected inputs and labels intact.

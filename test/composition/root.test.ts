@@ -237,6 +237,8 @@ describe("createEngine", () => {
       "permissions",
       "projection",
       "receipt",
+      // Author signing is now part of the reachable pack API.
+      "sign",
       "sigstoreVerifier",
       "trust",
       "verifyInstalled",

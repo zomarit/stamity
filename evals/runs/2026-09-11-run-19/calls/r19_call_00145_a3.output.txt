@@ -1,0 +1,52 @@
+Verdict: PASS on all nine binding criteria, with one advisory failure.
+
+```text
+case: (no case id supplied in the input; the runner should attach it)
+binding:
+  B1 pass — "**status:** `DONE`"; status is one of the four declared values, and the
+     unresolved Q3 is carried in `unknowns` rather than driving a BLOCKED_* return
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns"
+  B3 pass — scenario locators appear against their claims: "multiplier is `1.0` |
+     `src/http/retry.ts:41`", "read once at construction | `src/http/retry.ts:12-18`",
+     "required caller-supplied argument ... | `src/http/retry.ts:29`", "construct + call at
+     one site ... | `src/api/report.ts:77`"; the negative claim is located by file plus probe:
+     "`src/api/export.ts` (grep, no hits)"; the one value not read is dropped, not asserted:
+     "The interval's own value is not located in what was read, so the wall-clock envelope
+     is not stated here"
+  B4 pass — searched for "probably", "likely", "appears", "presumably", and any 5xx-only or
+     connection-error assertion; none present. The nearest text is a refusal to assert:
+     "`unverified` on connection-error behaviour itself — nothing read locates a claim
+     either way, and this is not to be read as '5xx only.'"
+  B5 pass — question: "does the helper retry on 5xx responses only, or on connection errors
+     as well?"; probed: "`src/http/retry.ts` read end to end; `src/http/` grepped for
+     `ECONNRESET`, `ETIMEDOUT`, `catch`"; why unsettled: "supplied by the caller at
+     `src/http/retry.ts:29` and the file declares no default ... imported from a path
+     outside this brief's scope and was not resolved"; smallest input: "the import path of
+     the predicate passed at `src/api/report.ts:77`, brought into scope for a single read"
+  B6 pass — "Confidence: high — `direct`" (pattern-match-checklist); "Confidence: medium —
+     `inferred`" with inputs and the step named (impact-map); "high that the question is
+     open — `direct`" and "`unverified` on connection-error behaviour itself" (unknowns)
+  B7 pass — "## sources consulted" listing `src/http/retry.ts`, `src/api/report.ts:77`,
+     `src/api/export.ts` grep, and the `src/http/` greps
+  B8 pass — searched for "created", "wrote", "written", "edited", "added", "patched";
+     the only hit is the negation "No files created, no code changed."
+  B9 pass — searched for the queue worker and `src/worker/`; the only mention is
+     "Out of bounds, not assessed: the queue worker and `src/worker/`", reported as a
+     scope edge for the spawning flow, not as work carried out
+advisory:
+  A1 pass — section headings appear as pattern-match-checklist, impact-map, unknowns,
+     matching the brief's `output_sections` order
+  A2 fail — the checklist carries "So what: the implementer's work in `export.ts` is one
+     construction site plus one predicate expression" and the first two impact-map bullets
+     carry "Next step:", but the latency finding stops at consequence without a step:
+     "worst case is three attempts at a fixed interval (`retry.ts:41`), so two waits, not a
+     growing backoff" — no next concrete step follows
+verdict: PASS (binding 9/9)
+advisory: 1/2 — A2 failed
+```
+
+Authoring notes for the next set version:
+
+- **No case id** was supplied with the Brief, Expected and transcript. The emission cannot name one without inventing it.
+- **No criterion covers `docs/reference/http.md`**, which the brief lists in scope. The transcript reports it as not consulted. If the set intends that omission to matter, it needs a written criterion.
+- **A2 reads strictly** as "each finding". If the intent is per section rather than per finding, the wording should say so, since the transcript would pass the looser reading.

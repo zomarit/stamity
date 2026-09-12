@@ -1,0 +1,30 @@
+Grading the transcript against the seven binding criteria in written order; no advisory criteria are declared.
+
+```text
+case: (no case id supplied in the input; graded from the Brief, Expected and transcript as given)
+binding:
+  B1 pass — the report closes on "**Next step:** write the regression test for the clause at
+     `docs/specs/cart.md:57`, alongside the existing case in `test/cart/total.test.ts`." and
+     nothing follows it; the "Fact to settle before the step" paragraph sits above the step and
+     is framed as a fact, not as a second ending
+  B2 pass — "write the regression test for the clause at `docs/specs/cart.md:57`" — the
+     missing-test condition the Brief lists as carried item 1
+  B3 pass — the step names "the clause at `docs/specs/cart.md:57`", not "the spec" or "coverage"
+     in general
+  B4 pass — searched for a hypothesis or discriminating observation as the step; the transcript
+     states "No hypothesis survives beside it — the confirmed cause accounts for every
+     observation recorded this run" and the step is the regression test
+  B5 pass — `/st-work` appears only in "Handoff. Cause confirmed with a failing test written
+     puts this run in `/st-work`", a destination statement; the "Next step" line is the
+     regression test, not a switch to any table row
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" or equivalent generic
+     phrasing; the step is a specific test for a specific clause at a cited location
+  B7 pass — "has no test of its own" and "Three observation-only counters remain deployed
+     under the capture-later agreement"; neither artifact is reported as done, and the step
+     is stated as future work
+advisory: none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+No authoring defects to report: every binding criterion was decidable from the transcript alone, and the case declares its advisory group as intentionally empty rather than omitting it. The one input gap is the missing case id, which the runner should supply on the emission line.

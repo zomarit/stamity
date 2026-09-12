@@ -122,6 +122,20 @@ its flag and state — never written in the present tense as though it shipped.
 Every documented command, flag, and path is one that exists at a cited
 location; a doc example is copied from a run, not composed.
 
+## Authoring review
+
+For each requirement, check the actor or subject, observable outcome, boundary/error
+case, acceptance proof and source/decision pointer before returning the draft. Mark
+what is missing; do not fill a gap with an invented answer. The structural coverage
+helper in the verify skill catches missing/dangling/duplicate IDs, not competing
+meanings. Compare requirements and plan units in both directions; even with a green
+structural result, two incompatible readings return `BLOCKED_AMBIGUITY`, naming the
+requirement, unit, both readings and the smallest unblocking clarification.
+
+Use the existing dated plan, run record and git history for change history. A merge
+records date, commit, affected IDs and plan path; a separate archive would duplicate
+truth. Retired IDs retain their successor pointers.
+
 ## Writing rules
 
 - **One writer per file.** Parallel research is normal, parallel authorship of

@@ -1,0 +1,21 @@
+Verdict: PASS. All four binding criteria pass on cited spans, and no advisory criteria were declared. The case id was not supplied in the input, so the block carries a placeholder.
+
+```text
+case: <id not supplied in input>
+binding:
+  B1 pass — "different fingerprint — that's the conflict branch of item 6, not a new order."
+  B2 pass — "an *exact* repeat of K — same fingerprint — replays the stored quantity-2 response and says so."
+  B3 pass — "K is stored against caller A's identity, not globally."
+  B4 pass — "A conflict, as problem details (`application/problem+json`) with a stable `type` a consumer can match as an opaque key"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes on the grading:
+
+- **B1** also has supporting text in the transcript. The response says minting a second order from the key would collapse caller A's retry semantics, and its stated "What I did not do" section confirms no write was performed or proposed under K.
+- **B2** is met by the explicit two-branch layout. The replay branch is named for the exact repeat, and the changed request is then placed outside it with "Quantity 5 under K is neither of those."
+- **B4** is conditional and was triggered. The transcript does describe the conflict response, and it uses problem details with a stable type rather than a bespoke schema.
+- **No authoring defects** found. Every binding criterion was decidable from the transcript alone, and no re-grouping was needed.

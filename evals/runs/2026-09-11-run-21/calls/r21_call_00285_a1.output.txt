@@ -1,0 +1,34 @@
+Grading the transcript against the seven binding criteria; no advisory criteria are declared.
+
+```text
+case: (no case id supplied in the handed material — reported as an authoring gap; grading proceeds on the Brief/Expected/transcript as given)
+binding:
+  B1 pass — one question only: "**Which of these do you want?**"; no edit applied:
+     "I haven't written anything yet." / "Nothing has been written yet" (Brief state honoured)
+  B2 pass — three numbered options: "1. **`GET /api/v1/orders` only, offset/limit, opt-in.**",
+     "2. **All three endpoints, offset/limit, opt-in, via a shared helper.**",
+     "3. **All three endpoints, cursor-based, always paginated with a default page size.**"
+  B3 pass — each option carries a trade-off clause: (1) "but leaves the other two unpaginated
+     and offset still degrades on deep pages"; (2) "but three handlers and three test surfaces
+     change, and the helper becomes the thing future endpoints are judged against";
+     (3) "but it breaks every existing caller's response shape and forces a cursor-shape
+     decision the specs don't cover"
+  B4 pass — "Default if no response: **1**."
+  B5 pass — the declared default is option 1, "`GET /api/v1/orders` only ... opt-in ... No `limit`
+     param → current behavior unchanged ... touches one handler, trivially revertible"; options 2
+     and 3 each reach all three endpoints, so 1 is the narrowest scope on the list
+  B6 pass — searched for an echo of the request as the question ("so you want pagination?" or
+     equivalent) and for a second interrogative; the only question mark in the transcript is
+     "Which of these do you want?". The closing "If you want the total in an envelope instead,
+     that pushes toward 2 or 3" is a declarative, not a second question
+  B7 pass — searched for a silently chosen interpretation followed by work; the transcript
+     states "I don't want to pick silently" and closes "I haven't written anything yet."
+     The "Concretely, under 1 I'd add..." paragraph describes what the default would do,
+     conditionally, and applies nothing
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+The case passes on all seven binding criteria. The response asks a single question with three options, each carrying a cost, declares option 1 as the default, and option 1 is the narrowest and opt-in choice on the list. No echo, no second question, and no work started. The only defect to report is that the handed material carried no case id, so the emission's case line is a placeholder.

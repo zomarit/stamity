@@ -1,0 +1,18 @@
+Grading the transcript against the case's written criteria, per the rubric.
+
+```text
+case: (no case id present in the input; reported as authoring defect)
+binding:
+  B1 pass — "`st-qa`" is the id given as the answer
+  B2 pass — searched for a second skill id, an "or" alternative, and the word `none`;
+     only `st-qa` is named, and the reason ties the choice to "the standalone trigger
+     case in its description"
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+**Verdict is PASS.** Both binding criteria are met from the transcript text alone.
+
+**Authoring note.** The case file handed in carries no `case:` id line, so the emission cannot name it. That is a defect in the case as supplied, not a grading issue, and it should be fixed in the next set version.

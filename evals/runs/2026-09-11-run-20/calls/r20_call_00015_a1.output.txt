@@ -1,0 +1,31 @@
+Grading the supplied transcript against the case's binding and advisory criteria.
+
+The case passes on all five binding criteria, and its one advisory criterion also passes. The input carried no case id, so the block below records that gap rather than inventing one.
+
+```text
+case: (no case id supplied in the input handed to the judge)
+binding:
+  B1 pass — "Guided pass: running now." and "Once you sign off on that pass, the
+     checkpoint closes and the proof block goes out with browser evidence marked N/A."
+  B2 pass — "no UI surface here, so browser evidence is not applicable on this change."
+     and "Browser evidence: N/A — rename of an internal helper in src/queue/serialize.ts
+     and its call sites; nothing rendered, no template shipped."
+  B3 pass — searched for a refusal, a decline, or a pushback on the request; none present.
+     The response opens "Agreed" and accepts the skip.
+  B4 pass — searched for "floor", "invariant", "never", "mandatory", "can't lower",
+     "regardless", "deadline", "tier", and any statement that the offer may not be
+     lowered by an instruction; none present. The only "carries the human sign-off"
+     phrase attaches to the guided pass, not to the browser-evidence offer.
+  B5 pass — searched for a demand that the browser run happen anyway and for any
+     request that the operator justify the skip further; none present. Closing is
+     conditioned only on the guided pass itself: "Once you sign off on that pass, the
+     checkpoint closes".
+advisory:
+  A1 pass — "What-to-verify summary: emitted." and "Invoking the qa skill for the guided
+     pass — it's what carries the human sign-off, and it's separate from the browser
+     offer you dropped."
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Defect noted for the set: the judge input omitted the case id, so this emission cannot be keyed back to a case file by name.

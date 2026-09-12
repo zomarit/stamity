@@ -1,0 +1,32 @@
+## /st-quick run report — batch of 5
+
+**Stopped at item 3. Re-escalation fired mid-run.**
+
+### Reason for stop
+
+Item 3 was re-measured against Thresholds at the moment the scope appeared. Two rows fired:
+
+- **Files** — 7 files (threshold: `>5 files`)
+- **Size** — ~210 lines added plus removed (threshold: `~200 lines`)
+
+The deprecated formatter is re-exported through six further modules, each requiring the same swap; the call-site edit is what revealed them.
+
+### Disposition — every item
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied** and gated. Stays applied. |
+| 2 | `src/config/defaults.ts` — timeout 30s → 60s | **Applied** and gated. Stays applied. |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted** to pre-edit state. Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |
+| 5 | `README.md` — update the two examples | **Not started.** Moved to `/st-work`. |
+
+### Working tree
+
+`src/format/date.ts` has been returned to its pre-edit state — the call site edit is gone. No item is left half-applied. The only changes in the tree are items 1 and 2.
+
+### Handoff to `/st-work`
+
+Items 3, 4, and 5 go over as one list, carrying the stop reason: **Files — 7 files; Size — ~210 lines.** Item 3 is the crossing item; the seven files are `src/format/date.ts` plus the six re-exporting modules surfaced during the edit. Item 4 shares the same formatter swap and will likely share those modules. Item 5 is independent of the swap and was not measured.
+
+Nothing in this batch was quietly finished, and nothing was quietly dropped.

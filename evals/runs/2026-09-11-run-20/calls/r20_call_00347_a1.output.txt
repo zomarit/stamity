@@ -1,0 +1,29 @@
+Grading the single case against its six binding criteria and the declared-empty advisory group. Verdict: PASS.
+
+```text
+case: rework-routing-five-findings
+binding:
+  B1 pass — routing table lists F1, F2, F3, F4, F5 each with a Route cell; "Each row matched
+     a specific scope; no catch-all was reached"; every finding lands as either a plan unit
+     (U1–U3) or an inbox row (two rows in the fenced block)
+  B2 pass — "| F1 | Critical | any | REVISE |", "| F2 | Warning | ... REQ-orders-109 |
+     REVISE |", "| F4 | Minor | single-line fix inside a diff file | REVISE |"
+  B3 pass — "| F3 | Warning | new file + new dependency | DEFER |", "| F5 | Minor |
+     cross-cutting (four modules) | DEFER |"
+  B4 pass — one table under "## Routing — 3 REVISE, 2 DEFER", presented once; "One batched
+     correction if you want any row moved — e.g. *"revise 3"* or *"defer 4"*"; searched for
+     a per-finding prompt; none present
+  B5 pass — "### REVISE — plan units for phase 6"; "These two append to `.stamity/inbox.md`
+     as a single dated block for this rework run"; both rows read
+     `<severity> · src/api/orders.ts:<line> · <description> · source: rework
+     feat/orders-idempotency`
+  B6 pass — searched for an applied edit, a diff, a staged change, or a written file for
+     F1–F5; none present. "Nothing is written yet." and "this command doesn't patch"; the
+     only write mentioned is conditional on the operator saying go
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No authoring defects observed. Every binding criterion was decidable from the transcript text alone, and the case file declares no advisory criteria, so none was invented.

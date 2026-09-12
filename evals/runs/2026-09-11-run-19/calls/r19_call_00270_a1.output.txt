@@ -1,0 +1,34 @@
+I'm not handing this off. The structural check passing is not handoff approval — the semantic coverage review fails on this plan, and a plan with an unresolved reading conflict can't go to `/st-work`.
+
+**The conflict**
+
+- **REQ-CACHE-001:** "Refresh customer data promptly while continuing to show the previous value."
+- **U1** (cites only REQ-CACHE-001): "Hide the previous value until refresh completes."
+
+These are contradictory instructions about the same interval. The acceptance criterion doesn't settle it — it asserts only that a fresh value eventually appears, which is true under either behavior, so the criterion passes against a plan that could be implemented two opposite ways.
+
+**The two readings**
+
+1. *Stale-while-revalidate:* the previous value stays on screen for the whole refresh and is swapped when the new value lands. Under this reading the requirement is authoritative and U1's behavior is wrong.
+2. *Hide-during-refresh:* "continuing to show the previous value" means only up to the moment a refresh begins, after which the field is blanked or shows a loading state. Under this reading U1 is authoritative and the requirement's wording is wrong.
+
+**Smallest clarification that decides it:** During an in-flight refresh, is the previous value visible or hidden? One binary answer determines which of the two artifacts gets rewritten; nothing else in the plan changes.
+
+I can't pick a side for you. Choosing reading 1 is the conservative inference from the requirement's own words, but U1 was written deliberately and by someone, and silently rewriting a unit to match a requirement is the same error as silently rewriting a requirement to match a unit.
+
+---
+
+**Return contract**
+
+- `status: BLOCKED_AMBIGUITY` — semantic coverage review found REQ-CACHE-001 and U1 specifying opposite behavior for the refresh interval; handoff blocked pending one clarification.
+- `intent chosen: none this run` — no drafting occurred; this run evaluated a persisted artifact and stopped at the semantic gate.
+- Artifact path(s) written: none. The persisted plan under review is unchanged; no new file written.
+- Structural coverage: **pass** — all IDs and dependencies resolve, no requirement uncovered. `semanticReview: required` is **unsatisfied**; the unresolved reading is REQ-CACHE-001 ↔ U1 above. Structural pass alone is not handoff approval.
+- Plan-lint: `L1 fail · L2 pass · L3 unrun · L4 pass`
+  - **L1 fail** — the criterion "a fresh value eventually appears" carries no threshold with units and no measuring command, and isn't Given/When/Then. Its in-place rewrite is itself blocked by the ambiguity above: the correct assertion depends on which refresh-interval behavior is intended. Resolving the clarification unblocks both.
+  - **L3 unrun** — I don't hold U1's `edgeCases` field; reporting it unrun rather than claiming a pass I haven't measured.
+- `sub_agents_spawned: 0 · task_structure: sequential`
+- Open questions carried: 1 — during an in-flight refresh, is the previous value visible or hidden? Non-empty, so handoff stays blocked.
+- Learnings written: `none` — this run met no qualifying failure.
+- Follow-ups appended to `.stamity/inbox.md`: none — nothing was deliberately deferred out of scope.
+- **Next step:** answer the visible-or-hidden question, chosen because an open question is still carried. I'll then correct whichever of REQ-CACHE-001 or U1 is wrong, rewrite the acceptance criterion to assert the decided behavior under L1, re-run the lint pass and the structural helper, and report L3 with the full artifact in hand.

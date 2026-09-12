@@ -1,0 +1,21 @@
+Grading the transcript against the case as written.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect; graded under the input's own label "known-hard adjacency")
+binding:
+  B1 pass — answer line reads "none"
+  B2 pass — searched for `st-onboard` named as triggered; the id does not appear, and the
+     only reference to onboarding is negative: "The onboarding walk covers a repository
+     whose setup has no first proven change through it yet; this one has eight months of
+     changes"
+  B3 pass — searched for any skill id offered as the answer; none present, the sole answer
+     token is "none"
+advisory:
+  A1 pass — "whose setup has no first proven change through it yet; this one has eight
+     months of changes closed on green gates, so a general 'what next' stays with the main
+     flow"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The case passes on all three binding criteria and the single advisory criterion also passes. One authoring defect to report: the case block carries no `case:` id, so the emission cannot cite one. The next set version should add it.

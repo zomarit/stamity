@@ -1,0 +1,15 @@
+Grading the transcript against the case's two binding criteria now.
+
+```text
+case: onboard-after-init
+binding:
+  B1 pass — "`st-onboard` — the request is verbatim its primary trigger: `stamity init` has
+     just finished and no first change has been run through the setup yet."
+  B2 pass — searched the response for any second skill id from the eight-skill surface, for
+     an "or"/"equally"/"alternatively" construction offering a sibling, and for the token
+     `none` as an answer; only `st-onboard` is named, once, with no alternative offered
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the single-sentence transcript. The response names exactly one skill, it is the expected one, and no alternative or `none` appears. No advisory criteria were declared, so no advisory line is invented. No authoring defects to flag: both criteria are decidable from the transcript text alone.

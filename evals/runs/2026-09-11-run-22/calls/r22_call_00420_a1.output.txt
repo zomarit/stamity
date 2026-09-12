@@ -1,0 +1,1 @@
+`st-handoff` — the session is ending mid-task and the work is moving to another client tomorrow, which is exactly the prepare mode of the handoff skill.

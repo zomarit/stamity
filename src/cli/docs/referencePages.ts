@@ -337,9 +337,10 @@ function invokedName(item: CatalogItem): string {
 /**
  * One artifact's block, opened by the blank line that separates it from the
  * previous one: the {@link invokedName} heading, the description as the prose
- * under it, and the three remaining projected fields as a short field list. A
- * list rather than a table because a `description` and an `obsolete_when` are
- * sentences — in a table they would wrap into unreadable cells.
+ * under it, and the three remaining projected fields as a short field list.
+ * These ungrouped entries use H2 directly beneath the page H1; H3 would skip
+ * a semantic level. The fields use a list because a `description` and an
+ * `obsolete_when` are sentences — in a table they would wrap into unreadable cells.
  */
 function artifactBlock(item: CatalogItem): string[] {
   const description = requireField(item, "description", item.description);
@@ -353,7 +354,7 @@ function artifactBlock(item: CatalogItem): string[] {
   }
   return [
     "",
-    `### ${tick(invokedName(item))}`,
+    `## ${tick(invokedName(item))}`,
     "",
     description,
     "",
@@ -481,7 +482,7 @@ function packBlock(pack: PackInventory): string[] {
   }
   return [
     "",
-    `### ${tick(manifest.name)}`,
+    `## ${tick(manifest.name)}`,
     "",
     description,
     "",
@@ -568,7 +569,7 @@ function credentialLine(server: McpServerMeta): string {
 function serverBlock(server: McpServerMeta): string[] {
   return [
     "",
-    `### ${tick(server.id)}`,
+    `## ${tick(server.id)}`,
     "",
     requireServerField(server.id, "description", server.description),
     "",

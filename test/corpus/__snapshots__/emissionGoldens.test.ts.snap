@@ -828,7 +828,10 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // prefix are governed, and inside that scope an unrostered agent, a denied
 // tool name, an unknown tool and an ungranted category all refuse.
 //
-// Blocking client: a refusal exits 2 and the action stops.
+// Telemetry only on this client: its hook payload carries no calling-agent
+// identity, so the role scope test cannot match a documented tool call.
+// Native permissions and the agent definition remain the role boundary;
+// this script does not enforce a role grant on identity-free payloads.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -843,7 +846,7 @@ const POLICY_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "agent-t
 const POLICY_SCHEMA = "stamity/agent-tool-policies/v1";
 const MAX_POLICY_BYTES = 262144;
 const GOVERNED_PREFIX = "stamity-";
-const BLOCKING = true;
+const BLOCKING = false;
 const BLOCK_EXIT = 2;
 const MCP_PREFIX = "mcp__";
 
@@ -1532,9 +1535,10 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // prefix are governed, and inside that scope an unrostered agent, a denied
 // tool name, an unknown tool and an ungranted category all refuse.
 //
-// Reporting-only client: this client never blocks on a hook exit status,
-// so a refusal is reported and the call proceeds. The gate that binds here
-// is the client's own permission rules.
+// Telemetry only on this client: its hook payload carries no calling-agent
+// identity, so the role scope test cannot match a documented tool call.
+// Native permissions and the agent definition remain the role boundary;
+// this script does not enforce a role grant on identity-free payloads.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -2238,11 +2242,10 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // prefix are governed, and inside that scope an unrostered agent, a denied
 // tool name, an unknown tool and an ungranted category all refuse.
 //
-// Telemetry only on this client, for two independent reasons. Its hook
-// payload carries no agent identity, so the scope test below can never
-// match and this guard reaches no verdict at all; and even a refusal it
-// did reach would not stop the call. The gate that binds here is the
-// client's own permission rules — this file is a record, not a control.
+// Telemetry only on this client: its hook payload carries no calling-agent
+// identity, so the role scope test cannot match a documented tool call.
+// Native permissions and the agent definition remain the role boundary;
+// this script does not enforce a role grant on identity-free payloads.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -2866,6 +2869,423 @@ process.stdout.write(render().join("\\n") + "\\n");
 "
 `;
 
+exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for codex 1`] = `
+"#!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+
+const TOOL = "codex";
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const NAMES = { session_start: "SessionStart", pre_tool_use: "PreToolUse", post_tool_use: "PostToolUse", user_prompt_submit: "UserPromptSubmit", stop: "Stop", session_end: "SessionEnd" };
+const warn = (message) => process.stderr.write("stamity hook [" + TOOL + "]: " + message + "\\n");
+const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
+const safeError = (message) => Object.assign(new Error(message), { safe: true });
+const parse = (raw, label) => { try { return JSON.parse(raw); } catch { throw safeError(label); } };
+let failureExit = 1;
+
+function main() {
+  const row = parse(Buffer.from(process.argv[2] ?? "", "base64url").toString(), "Invalid hook registration");
+  if (!object(row) || !Object.hasOwn(NAMES, row.event)) throw safeError("Invalid hook registration");
+  if (!Array.isArray(row.command) || row.command.length === 0 || !row.command.every((arg) => typeof arg === "string")) throw safeError("Invalid hook argv");
+  if (TOOL === "codex" && row.event === "pre_tool_use" && !row.command.includes(".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs")) failureExit = 2;
+  if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");
+  const raw = readFileSync(0, "utf8");
+  const payload = raw.trim() === "" ? {} : parse(raw, "Invalid hook input JSON");
+  if (!object(payload)) throw safeError("Invalid hook input object");
+  const input = { ...payload, hook_event_name: NAMES[row.event] };
+  if (input.session_id === undefined && typeof payload.sessionId === "string") input.session_id = payload.sessionId;
+  if (input.tool_name === undefined && typeof payload.toolName === "string") input.tool_name = payload.toolName;
+  if (input.tool_input === undefined && payload.toolArgs !== undefined) input.tool_input = typeof payload.toolArgs === "string" ? parse(payload.toolArgs, "Invalid serialized tool input") : payload.toolArgs;
+  if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };
+  const child = spawnSync(row.command[0], row.command.slice(1), {
+    cwd: ROOT, input: JSON.stringify(input), encoding: "utf8", shell: false,
+    maxBuffer: 1024 * 1024,
+    ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
+  });
+  if (child.stderr) process.stderr.write(child.stderr);
+  if (child.error) {
+    if (child.error.code === "ETIMEDOUT" && TOOL === "copilot") {
+      warn("timeout: Copilot proceeds through its normal permission flow");
+      return;
+    }
+    throw safeError("Hook process failed (" + (child.error.code ?? "unknown") + ")");
+  }
+  if (child.status !== 0) { process.exitCode = child.status ?? 1; return; }
+  const output = (child.stdout ?? "").trim();
+  if (output === "") return;
+  let parsed;
+  try { parsed = JSON.parse(output); } catch {
+    if (TOOL === "codex" && row.event === "user_prompt_submit") { process.stdout.write(output + "\\n"); return; }
+    if (row.event === "session_start") {
+      if (TOOL === "cursor") write({ additional_context: output });
+      else if (TOOL === "codex") process.stdout.write(output + "\\n");
+      else warn("sessionStart output is not injected by Copilot; read .stamity/learnings and handoffs manually");
+      return;
+    }
+    throw safeError("Hook stdout is not a JSON object");
+  }
+  if (!object(parsed)) throw safeError("Hook stdout is not a JSON object");
+  const specific = parsed.hookSpecificOutput;
+  if (specific !== undefined && (!object(specific) || specific.hookEventName !== NAMES[row.event])) throw safeError("Mismatched hookSpecificOutput event");
+  if (specific && specific.permissionDecision !== undefined && (row.event !== "pre_tool_use" || !["allow", "deny", "ask"].includes(specific.permissionDecision))) throw safeError("Unsupported permission decision");
+  if (specific && specific.permissionDecisionReason !== undefined && typeof specific.permissionDecisionReason !== "string") throw safeError("Invalid permission reason");
+  if (specific && specific.additionalContext !== undefined && typeof specific.additionalContext !== "string") throw safeError("Invalid additional context");
+  if (parsed.continue !== undefined && typeof parsed.continue !== "boolean") throw safeError("Invalid continuation decision");
+  // Codex accepts the canonical schema, except unsupported PreToolUse controls
+  // fail open natively. Convert requests to stop/ask into a supported denial.
+  if (TOOL === "codex") {
+    if (row.event === "pre_tool_use") {
+      if (specific?.permissionDecision === "ask" || parsed.continue === false) {
+        warn("unsupported PreToolUse stop/ask control; denied pending manual permission review");
+        parsed.hookSpecificOutput = { ...specific, hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: (parsed.continue === false ? parsed.stopReason : specific?.permissionDecisionReason) ?? "Hook requires manual permission review" };
+        delete parsed.hookSpecificOutput.updatedInput;
+        delete parsed.continue;
+        delete parsed.stopReason;
+      }
+      if (parsed.decision === "approve") {
+        warn("legacy approve is unsupported; use hookSpecificOutput.permissionDecision");
+        throw safeError("Unsupported legacy approval decision");
+      }
+      const nativeSpecific = parsed.hookSpecificOutput;
+      if (nativeSpecific?.updatedInput !== undefined && (nativeSpecific.permissionDecision !== "allow" || !object(nativeSpecific.updatedInput))) throw safeError("Invalid updatedInput permission or shape");
+      if (nativeSpecific?.updatedInput !== undefined && ["Bash", "apply_patch"].includes(input.tool_name) && typeof nativeSpecific.updatedInput.command !== "string") throw safeError("Invalid command rewrite");
+      if (parsed.stopReason !== undefined) { warn("unsupported output field: stopReason"); delete parsed.stopReason; }
+    }
+    for (const key of ["suppressOutput", "updatedMCPToolOutput"]) {
+      if (parsed[key] !== undefined) { warn("unsupported output field: " + key); delete parsed[key]; }
+      if (parsed.hookSpecificOutput?.[key] !== undefined) { warn("unsupported output field: hookSpecificOutput." + key); delete parsed.hookSpecificOutput[key]; }
+    }
+    write(parsed);
+    return;
+  }
+  const value = specific ?? parsed;
+  const publicFields = new Set(["updatedInput", "updatedToolOutput", "modifiedArgs", "modifiedResponse", "suppressOutput"]);
+  const fieldName = (key) => publicFields.has(key) ? key : "<unrecognized>";
+  const supported = new Set(["hookSpecificOutput", "hookEventName", "permissionDecision", "permissionDecisionReason", "additionalContext", "decision", "reason", "continue", "stopReason", "systemMessage"]);
+  for (const key of Object.keys(parsed)) if (!supported.has(key)) warn("unsupported output field: " + fieldName(key));
+  if (specific) for (const key of Object.keys(specific)) if (!supported.has(key)) warn("unsupported output field: hookSpecificOutput." + fieldName(key));
+  const out = {};
+  if (row.event === "pre_tool_use") {
+    // The canonical global stop overrides every event-specific decision.
+    const stopped = parsed.continue === false;
+    const decision = stopped ? "deny" : value.permissionDecision ?? (parsed.decision === "block" ? "deny" : undefined);
+    if (decision !== undefined) {
+      if (!["allow", "deny", "ask"].includes(decision)) throw safeError("Unsupported permission decision");
+      const reason = stopped ? parsed.stopReason ?? "Hook requested a stop" : value.permissionDecisionReason ?? parsed.reason ?? "Hook permission decision";
+      if (TOOL === "cursor") {
+        out.permission = decision === "allow" ? "allow" : "deny";
+        if (decision === "ask") warn("Cursor has no ask decision; denied pending manual permission review");
+        out.user_message = reason;
+      } else {
+        out.permissionDecision = decision;
+        out.permissionDecisionReason = reason;
+      }
+    }
+  } else if (row.event === "stop" && TOOL === "copilot" && parsed.decision === "block") {
+    out.decision = "block";
+    out.reason = parsed.reason ?? "Hook requested another turn";
+  } else if (row.event === "user_prompt_submit" && TOOL === "cursor" && parsed.continue === false) {
+    out.continue = false;
+    out.user_message = parsed.stopReason ?? "Hook prevented prompt submission";
+  } else if (parsed.decision === "block" || parsed.continue === false) {
+    warn("blocking output is unsupported for this event; use the client's permission controls");
+  }
+  if (typeof value.additionalContext === "string") {
+    if (TOOL === "cursor" && ["session_start", "post_tool_use"].includes(row.event)) out.additional_context = value.additionalContext;
+    else if (TOOL === "copilot" && row.event === "post_tool_use") out.additionalContext = value.additionalContext;
+    else warn("additionalContext is unsupported for this event");
+  }
+  if (parsed.systemMessage !== undefined) warn("systemMessage is unsupported by this client's portable output");
+  if (Object.keys(out).length > 0) write(out);
+}
+try { main(); } catch (error) {
+  warn(error instanceof Error && error.safe === true ? error.message : "Hook invocation failed");
+  process.exitCode = failureExit;
+}
+"
+`;
+
+exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for copilot 1`] = `
+"#!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+
+const TOOL = "copilot";
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const NAMES = { session_start: "SessionStart", pre_tool_use: "PreToolUse", post_tool_use: "PostToolUse", user_prompt_submit: "UserPromptSubmit", stop: "Stop", session_end: "SessionEnd" };
+const warn = (message) => process.stderr.write("stamity hook [" + TOOL + "]: " + message + "\\n");
+const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
+const safeError = (message) => Object.assign(new Error(message), { safe: true });
+const parse = (raw, label) => { try { return JSON.parse(raw); } catch { throw safeError(label); } };
+let failureExit = 1;
+
+function main() {
+  const row = parse(Buffer.from(process.argv[2] ?? "", "base64url").toString(), "Invalid hook registration");
+  if (!object(row) || !Object.hasOwn(NAMES, row.event)) throw safeError("Invalid hook registration");
+  if (!Array.isArray(row.command) || row.command.length === 0 || !row.command.every((arg) => typeof arg === "string")) throw safeError("Invalid hook argv");
+  if (TOOL === "codex" && row.event === "pre_tool_use" && !row.command.includes(".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs")) failureExit = 2;
+  if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");
+  const raw = readFileSync(0, "utf8");
+  const payload = raw.trim() === "" ? {} : parse(raw, "Invalid hook input JSON");
+  if (!object(payload)) throw safeError("Invalid hook input object");
+  const input = { ...payload, hook_event_name: NAMES[row.event] };
+  if (input.session_id === undefined && typeof payload.sessionId === "string") input.session_id = payload.sessionId;
+  if (input.tool_name === undefined && typeof payload.toolName === "string") input.tool_name = payload.toolName;
+  if (input.tool_input === undefined && payload.toolArgs !== undefined) input.tool_input = typeof payload.toolArgs === "string" ? parse(payload.toolArgs, "Invalid serialized tool input") : payload.toolArgs;
+  if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };
+  const child = spawnSync(row.command[0], row.command.slice(1), {
+    cwd: ROOT, input: JSON.stringify(input), encoding: "utf8", shell: false,
+    maxBuffer: 1024 * 1024,
+    ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
+  });
+  if (child.stderr) process.stderr.write(child.stderr);
+  if (child.error) {
+    if (child.error.code === "ETIMEDOUT" && TOOL === "copilot") {
+      warn("timeout: Copilot proceeds through its normal permission flow");
+      return;
+    }
+    throw safeError("Hook process failed (" + (child.error.code ?? "unknown") + ")");
+  }
+  if (child.status !== 0) { process.exitCode = child.status ?? 1; return; }
+  const output = (child.stdout ?? "").trim();
+  if (output === "") return;
+  let parsed;
+  try { parsed = JSON.parse(output); } catch {
+    if (TOOL === "codex" && row.event === "user_prompt_submit") { process.stdout.write(output + "\\n"); return; }
+    if (row.event === "session_start") {
+      if (TOOL === "cursor") write({ additional_context: output });
+      else if (TOOL === "codex") process.stdout.write(output + "\\n");
+      else warn("sessionStart output is not injected by Copilot; read .stamity/learnings and handoffs manually");
+      return;
+    }
+    throw safeError("Hook stdout is not a JSON object");
+  }
+  if (!object(parsed)) throw safeError("Hook stdout is not a JSON object");
+  const specific = parsed.hookSpecificOutput;
+  if (specific !== undefined && (!object(specific) || specific.hookEventName !== NAMES[row.event])) throw safeError("Mismatched hookSpecificOutput event");
+  if (specific && specific.permissionDecision !== undefined && (row.event !== "pre_tool_use" || !["allow", "deny", "ask"].includes(specific.permissionDecision))) throw safeError("Unsupported permission decision");
+  if (specific && specific.permissionDecisionReason !== undefined && typeof specific.permissionDecisionReason !== "string") throw safeError("Invalid permission reason");
+  if (specific && specific.additionalContext !== undefined && typeof specific.additionalContext !== "string") throw safeError("Invalid additional context");
+  if (parsed.continue !== undefined && typeof parsed.continue !== "boolean") throw safeError("Invalid continuation decision");
+  // Codex accepts the canonical schema, except unsupported PreToolUse controls
+  // fail open natively. Convert requests to stop/ask into a supported denial.
+  if (TOOL === "codex") {
+    if (row.event === "pre_tool_use") {
+      if (specific?.permissionDecision === "ask" || parsed.continue === false) {
+        warn("unsupported PreToolUse stop/ask control; denied pending manual permission review");
+        parsed.hookSpecificOutput = { ...specific, hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: (parsed.continue === false ? parsed.stopReason : specific?.permissionDecisionReason) ?? "Hook requires manual permission review" };
+        delete parsed.hookSpecificOutput.updatedInput;
+        delete parsed.continue;
+        delete parsed.stopReason;
+      }
+      if (parsed.decision === "approve") {
+        warn("legacy approve is unsupported; use hookSpecificOutput.permissionDecision");
+        throw safeError("Unsupported legacy approval decision");
+      }
+      const nativeSpecific = parsed.hookSpecificOutput;
+      if (nativeSpecific?.updatedInput !== undefined && (nativeSpecific.permissionDecision !== "allow" || !object(nativeSpecific.updatedInput))) throw safeError("Invalid updatedInput permission or shape");
+      if (nativeSpecific?.updatedInput !== undefined && ["Bash", "apply_patch"].includes(input.tool_name) && typeof nativeSpecific.updatedInput.command !== "string") throw safeError("Invalid command rewrite");
+      if (parsed.stopReason !== undefined) { warn("unsupported output field: stopReason"); delete parsed.stopReason; }
+    }
+    for (const key of ["suppressOutput", "updatedMCPToolOutput"]) {
+      if (parsed[key] !== undefined) { warn("unsupported output field: " + key); delete parsed[key]; }
+      if (parsed.hookSpecificOutput?.[key] !== undefined) { warn("unsupported output field: hookSpecificOutput." + key); delete parsed.hookSpecificOutput[key]; }
+    }
+    write(parsed);
+    return;
+  }
+  const value = specific ?? parsed;
+  const publicFields = new Set(["updatedInput", "updatedToolOutput", "modifiedArgs", "modifiedResponse", "suppressOutput"]);
+  const fieldName = (key) => publicFields.has(key) ? key : "<unrecognized>";
+  const supported = new Set(["hookSpecificOutput", "hookEventName", "permissionDecision", "permissionDecisionReason", "additionalContext", "decision", "reason", "continue", "stopReason", "systemMessage"]);
+  for (const key of Object.keys(parsed)) if (!supported.has(key)) warn("unsupported output field: " + fieldName(key));
+  if (specific) for (const key of Object.keys(specific)) if (!supported.has(key)) warn("unsupported output field: hookSpecificOutput." + fieldName(key));
+  const out = {};
+  if (row.event === "pre_tool_use") {
+    // The canonical global stop overrides every event-specific decision.
+    const stopped = parsed.continue === false;
+    const decision = stopped ? "deny" : value.permissionDecision ?? (parsed.decision === "block" ? "deny" : undefined);
+    if (decision !== undefined) {
+      if (!["allow", "deny", "ask"].includes(decision)) throw safeError("Unsupported permission decision");
+      const reason = stopped ? parsed.stopReason ?? "Hook requested a stop" : value.permissionDecisionReason ?? parsed.reason ?? "Hook permission decision";
+      if (TOOL === "cursor") {
+        out.permission = decision === "allow" ? "allow" : "deny";
+        if (decision === "ask") warn("Cursor has no ask decision; denied pending manual permission review");
+        out.user_message = reason;
+      } else {
+        out.permissionDecision = decision;
+        out.permissionDecisionReason = reason;
+      }
+    }
+  } else if (row.event === "stop" && TOOL === "copilot" && parsed.decision === "block") {
+    out.decision = "block";
+    out.reason = parsed.reason ?? "Hook requested another turn";
+  } else if (row.event === "user_prompt_submit" && TOOL === "cursor" && parsed.continue === false) {
+    out.continue = false;
+    out.user_message = parsed.stopReason ?? "Hook prevented prompt submission";
+  } else if (parsed.decision === "block" || parsed.continue === false) {
+    warn("blocking output is unsupported for this event; use the client's permission controls");
+  }
+  if (typeof value.additionalContext === "string") {
+    if (TOOL === "cursor" && ["session_start", "post_tool_use"].includes(row.event)) out.additional_context = value.additionalContext;
+    else if (TOOL === "copilot" && row.event === "post_tool_use") out.additionalContext = value.additionalContext;
+    else warn("additionalContext is unsupported for this event");
+  }
+  if (parsed.systemMessage !== undefined) warn("systemMessage is unsupported by this client's portable output");
+  if (Object.keys(out).length > 0) write(out);
+}
+try { main(); } catch (error) {
+  warn(error instanceof Error && error.safe === true ? error.message : "Hook invocation failed");
+  process.exitCode = failureExit;
+}
+"
+`;
+
+exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for cursor 1`] = `
+"#!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+
+const TOOL = "cursor";
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const NAMES = { session_start: "SessionStart", pre_tool_use: "PreToolUse", post_tool_use: "PostToolUse", user_prompt_submit: "UserPromptSubmit", stop: "Stop", session_end: "SessionEnd" };
+const warn = (message) => process.stderr.write("stamity hook [" + TOOL + "]: " + message + "\\n");
+const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const write = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
+const safeError = (message) => Object.assign(new Error(message), { safe: true });
+const parse = (raw, label) => { try { return JSON.parse(raw); } catch { throw safeError(label); } };
+let failureExit = 1;
+
+function main() {
+  const row = parse(Buffer.from(process.argv[2] ?? "", "base64url").toString(), "Invalid hook registration");
+  if (!object(row) || !Object.hasOwn(NAMES, row.event)) throw safeError("Invalid hook registration");
+  if (!Array.isArray(row.command) || row.command.length === 0 || !row.command.every((arg) => typeof arg === "string")) throw safeError("Invalid hook argv");
+  if (TOOL === "codex" && row.event === "pre_tool_use" && !row.command.includes(".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs")) failureExit = 2;
+  if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");
+  const raw = readFileSync(0, "utf8");
+  const payload = raw.trim() === "" ? {} : parse(raw, "Invalid hook input JSON");
+  if (!object(payload)) throw safeError("Invalid hook input object");
+  const input = { ...payload, hook_event_name: NAMES[row.event] };
+  if (input.session_id === undefined && typeof payload.sessionId === "string") input.session_id = payload.sessionId;
+  if (input.tool_name === undefined && typeof payload.toolName === "string") input.tool_name = payload.toolName;
+  if (input.tool_input === undefined && payload.toolArgs !== undefined) input.tool_input = typeof payload.toolArgs === "string" ? parse(payload.toolArgs, "Invalid serialized tool input") : payload.toolArgs;
+  if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };
+  const child = spawnSync(row.command[0], row.command.slice(1), {
+    cwd: ROOT, input: JSON.stringify(input), encoding: "utf8", shell: false,
+    maxBuffer: 1024 * 1024,
+    ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
+  });
+  if (child.stderr) process.stderr.write(child.stderr);
+  if (child.error) {
+    if (child.error.code === "ETIMEDOUT" && TOOL === "copilot") {
+      warn("timeout: Copilot proceeds through its normal permission flow");
+      return;
+    }
+    throw safeError("Hook process failed (" + (child.error.code ?? "unknown") + ")");
+  }
+  if (child.status !== 0) { process.exitCode = child.status ?? 1; return; }
+  const output = (child.stdout ?? "").trim();
+  if (output === "") return;
+  let parsed;
+  try { parsed = JSON.parse(output); } catch {
+    if (TOOL === "codex" && row.event === "user_prompt_submit") { process.stdout.write(output + "\\n"); return; }
+    if (row.event === "session_start") {
+      if (TOOL === "cursor") write({ additional_context: output });
+      else if (TOOL === "codex") process.stdout.write(output + "\\n");
+      else warn("sessionStart output is not injected by Copilot; read .stamity/learnings and handoffs manually");
+      return;
+    }
+    throw safeError("Hook stdout is not a JSON object");
+  }
+  if (!object(parsed)) throw safeError("Hook stdout is not a JSON object");
+  const specific = parsed.hookSpecificOutput;
+  if (specific !== undefined && (!object(specific) || specific.hookEventName !== NAMES[row.event])) throw safeError("Mismatched hookSpecificOutput event");
+  if (specific && specific.permissionDecision !== undefined && (row.event !== "pre_tool_use" || !["allow", "deny", "ask"].includes(specific.permissionDecision))) throw safeError("Unsupported permission decision");
+  if (specific && specific.permissionDecisionReason !== undefined && typeof specific.permissionDecisionReason !== "string") throw safeError("Invalid permission reason");
+  if (specific && specific.additionalContext !== undefined && typeof specific.additionalContext !== "string") throw safeError("Invalid additional context");
+  if (parsed.continue !== undefined && typeof parsed.continue !== "boolean") throw safeError("Invalid continuation decision");
+  // Codex accepts the canonical schema, except unsupported PreToolUse controls
+  // fail open natively. Convert requests to stop/ask into a supported denial.
+  if (TOOL === "codex") {
+    if (row.event === "pre_tool_use") {
+      if (specific?.permissionDecision === "ask" || parsed.continue === false) {
+        warn("unsupported PreToolUse stop/ask control; denied pending manual permission review");
+        parsed.hookSpecificOutput = { ...specific, hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: (parsed.continue === false ? parsed.stopReason : specific?.permissionDecisionReason) ?? "Hook requires manual permission review" };
+        delete parsed.hookSpecificOutput.updatedInput;
+        delete parsed.continue;
+        delete parsed.stopReason;
+      }
+      if (parsed.decision === "approve") {
+        warn("legacy approve is unsupported; use hookSpecificOutput.permissionDecision");
+        throw safeError("Unsupported legacy approval decision");
+      }
+      const nativeSpecific = parsed.hookSpecificOutput;
+      if (nativeSpecific?.updatedInput !== undefined && (nativeSpecific.permissionDecision !== "allow" || !object(nativeSpecific.updatedInput))) throw safeError("Invalid updatedInput permission or shape");
+      if (nativeSpecific?.updatedInput !== undefined && ["Bash", "apply_patch"].includes(input.tool_name) && typeof nativeSpecific.updatedInput.command !== "string") throw safeError("Invalid command rewrite");
+      if (parsed.stopReason !== undefined) { warn("unsupported output field: stopReason"); delete parsed.stopReason; }
+    }
+    for (const key of ["suppressOutput", "updatedMCPToolOutput"]) {
+      if (parsed[key] !== undefined) { warn("unsupported output field: " + key); delete parsed[key]; }
+      if (parsed.hookSpecificOutput?.[key] !== undefined) { warn("unsupported output field: hookSpecificOutput." + key); delete parsed.hookSpecificOutput[key]; }
+    }
+    write(parsed);
+    return;
+  }
+  const value = specific ?? parsed;
+  const publicFields = new Set(["updatedInput", "updatedToolOutput", "modifiedArgs", "modifiedResponse", "suppressOutput"]);
+  const fieldName = (key) => publicFields.has(key) ? key : "<unrecognized>";
+  const supported = new Set(["hookSpecificOutput", "hookEventName", "permissionDecision", "permissionDecisionReason", "additionalContext", "decision", "reason", "continue", "stopReason", "systemMessage"]);
+  for (const key of Object.keys(parsed)) if (!supported.has(key)) warn("unsupported output field: " + fieldName(key));
+  if (specific) for (const key of Object.keys(specific)) if (!supported.has(key)) warn("unsupported output field: hookSpecificOutput." + fieldName(key));
+  const out = {};
+  if (row.event === "pre_tool_use") {
+    // The canonical global stop overrides every event-specific decision.
+    const stopped = parsed.continue === false;
+    const decision = stopped ? "deny" : value.permissionDecision ?? (parsed.decision === "block" ? "deny" : undefined);
+    if (decision !== undefined) {
+      if (!["allow", "deny", "ask"].includes(decision)) throw safeError("Unsupported permission decision");
+      const reason = stopped ? parsed.stopReason ?? "Hook requested a stop" : value.permissionDecisionReason ?? parsed.reason ?? "Hook permission decision";
+      if (TOOL === "cursor") {
+        out.permission = decision === "allow" ? "allow" : "deny";
+        if (decision === "ask") warn("Cursor has no ask decision; denied pending manual permission review");
+        out.user_message = reason;
+      } else {
+        out.permissionDecision = decision;
+        out.permissionDecisionReason = reason;
+      }
+    }
+  } else if (row.event === "stop" && TOOL === "copilot" && parsed.decision === "block") {
+    out.decision = "block";
+    out.reason = parsed.reason ?? "Hook requested another turn";
+  } else if (row.event === "user_prompt_submit" && TOOL === "cursor" && parsed.continue === false) {
+    out.continue = false;
+    out.user_message = parsed.stopReason ?? "Hook prevented prompt submission";
+  } else if (parsed.decision === "block" || parsed.continue === false) {
+    warn("blocking output is unsupported for this event; use the client's permission controls");
+  }
+  if (typeof value.additionalContext === "string") {
+    if (TOOL === "cursor" && ["session_start", "post_tool_use"].includes(row.event)) out.additional_context = value.additionalContext;
+    else if (TOOL === "copilot" && row.event === "post_tool_use") out.additionalContext = value.additionalContext;
+    else warn("additionalContext is unsupported for this event");
+  }
+  if (parsed.systemMessage !== undefined) warn("systemMessage is unsupported by this client's portable output");
+  if (Object.keys(out).length > 0) write(out);
+}
+try { main(); } catch (error) {
+  warn(error instanceof Error && error.safe === true ? error.message : "Hook invocation failed");
+  process.exitCode = failureExit;
+}
+"
+`;
+
 exports[`emission goldens — mdc companions > plans a warning-free companion per rule whose body is the source body, byte for byte 1`] = `
 {
   "ai-evals": "---
@@ -3145,15 +3565,13 @@ exports[`emission goldens — substitution > matches the committed goldens for t
 "
 # Charter
 
-The always-on context for agents working in this repository. Everything else
-loads on demand: rules attach by file path or by description, skills trigger by
-description, commands run on invocation.
+The always-on context for agents working in this repository. Everything else loads on demand:
+rules attach by file path or by description, skills trigger by description, commands run on invocation.
 
 ## Repo facts
 
-Detection-derived; regenerate after a stack change instead of hand-editing.
-The literal value \`unknown\` means detection found nothing — treat that item
-as unconfigured and report it; do not invent a value.
+Detection-derived; regenerate after a stack change instead of hand-editing. The literal value \`unknown\`
+means detection found nothing — treat that item as unconfigured and report it; do not invent a value.
 
 - Linter: eslint
 - Test framework: vitest
@@ -3176,6 +3594,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
+   That report is the whole exit — no context block, no summary framed for closing beside it.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -3189,8 +3610,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -3201,12 +3623,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -3215,22 +3634,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 "
 `;
 
@@ -3298,6 +3713,10 @@ silently dropped.
   it, and names the spec requirement ids it implements — or records that the
   spec carries none — the join key the plan unit, the implementer's delta and
   the test name share.
+- **Coverage before Build.** For persisted plans, apply \`/st-plan\`'s structural
+  coverage pass and semantic review; fix missing references and resolve conflicting
+  readings before handoff. In-flow units use the same bidirectional review against
+  their requirement IDs. A structural pass alone does not establish clarity.
 - **Plan gate.** light: auto-continue. standard/deep: present the unit list
   and ask, with execute-now as the declared default.
 
@@ -3433,6 +3852,11 @@ The mandatory closing checkpoint, human-facing, at every intensity:
    with this command.
 3. When the change has a user-facing surface, offer a browser-evidence skill
    run; captured screenshots and console output attach to the proof block.
+
+On a change with no user-facing surface, mark browser evidence not applicable
+and continue the other checkpoint steps. An ordinary skip of that inapplicable
+offer needs no refusal, invariant language, or hypothetical warning about a
+different change. Human QA sign-off still comes from the guided pass.
 
 The checkpoint covers what automation cannot.
 
@@ -3582,12 +4006,12 @@ is verified against this plan.
 Where the assignment comes from: a role's class is declared once, in that
 role's own agent definition, and the engine projects that one declaration into
 the \`model\` and \`effort\` keys wherever the client has a field the class
-resolves into — one client carries effort inside the model value rather than a
-key of its own, and one carries it nowhere at all. Where nothing resolves — a
-class the client publishes no name for, with no operator pin behind it — the
-key is left out rather than filled with a guess, and the client's own default
-applies. A missing key is the ladder declining to invent a sizing decision,
-not a role running unsized; \`stamity config\` is where an operator states one.
+resolves into. The emitted client capability disclosure names its model and
+effort carriers and any missing control. A class without a supported model
+name or operator pin leaves selection to the client's own default. That class
+expresses intent, not a verified resolved model: check effective dispatch
+identity before asserting the role ran at the required class, and report an
+unresolved assignment. \`stamity config\` is where an operator pins a model.
 
 The table below restates those declarations for the check above; it does not
 decide them. So when a row and an agent file disagree, the agent file is the

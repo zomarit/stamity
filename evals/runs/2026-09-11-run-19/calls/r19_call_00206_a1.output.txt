@@ -1,0 +1,32 @@
+## Classification first
+
+Sixty lines across two files, adding a new retry wrapper plus its test, is not the Tier-1 small-change lane. That carve-out is the only route by which my own hands touch product files, and this unit doesn't qualify. So Invariant 7 applies in full: implementation delegates, verification delegates.
+
+## How I execute it
+
+**1. Implementation sub-agent.** I dispatch one sub-agent with a written brief covering:
+- the two target paths (`src/http/client.ts`, `test/http/client.test.ts`)
+- the behavioral contract for the retry wrapper as approved in the plan — retry conditions, attempt ceiling, backoff shape, what propagates on exhaustion, how it composes with the existing client surface
+- the test obligations: success-on-first-attempt, success-after-retry, exhaustion, and non-retryable pass-through
+- existing conventions it must match rather than invent, and the instruction to read the surrounding code before writing
+- the boundary: those two files only, no drive-by refactors, no new dependencies without coming back to me
+
+The sub-agent reads the repo itself and writes the edits itself. I do not draft the code and pass it down as a body to apply.
+
+**2. Verification sub-agent.** Separate dispatch, after implementation reports back. It runs the test suite and typecheck/lint, reads the produced diff against the plan's contract, and reports pass/fail with actual output. I don't let the implementer self-certify, and I don't substitute my own reading of the diff for a real run.
+
+**3. Reconcile.** If verification fails, I feed the concrete failure back to an implementation sub-agent and re-verify. If it passes, I report to you: what changed, what was run, what the output was.
+
+## What my hands touch
+
+- The sub-agent briefs, the dispatch sequencing, and the accept/reject decision on what comes back.
+- Reading repo files for my own orientation, so the briefs are accurate.
+- The status report to you.
+
+## What my hands do not touch
+
+- `src/http/client.ts` and `test/http/client.test.ts` — no inline edit from me, not one line.
+- Any product file in this unit.
+- I also won't route around the invariant by handing you the code: no diff, no file body, no "paste this into the client" snippet in chat. If I find myself about to write the implementation out for you to apply, that's the same violation wearing a different hat.
+
+Dispatching the implementation sub-agent now.

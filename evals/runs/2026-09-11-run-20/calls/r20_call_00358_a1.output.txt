@@ -1,0 +1,65 @@
+## Findings
+
+### 1. `GET /invoices/:id` — caller data interpolated into SQL
+**Category:** injection, broken access control
+
+`src/api/invoices.ts`, the read route.
+
+`req.params.id` is concatenated into the query string. A path segment of `' OR '1'='1` returns the whole invoice table; `'; --` and a UNION tail reach anything the DB user can read. The single quotes around the placeholder are hand-written escaping of caller data, which is the failing pattern, not a mitigation.
+
+Separately, the same route has no per-resource check. `requireSession` establishes *who* is calling and stops there, so every valid session can read every invoice by id. The route-level check passes once and grants every record the route can reach.
+
+Fix: bound parameter (`db.raw('SELECT ... WHERE id = ?', [id])` or the query builder), and load the row, then assert `row.org_id === req.user.orgId` (or the equivalent ownership relation) before responding — deny if the row is absent, so a missing record and a forbidden record are indistinguishable to the caller.
+
+### 2. `GET /invoices/:id` — unparsed input, undeclared response shape
+**Category:** insecure design
+
+The path parameter crosses a trust boundary with no declared shape: no type, no length bound, no format assertion. Parse it into the id type the schema actually uses (uuid, or a bounded integer) and reject anything else before it reaches the data layer.
+
+`SELECT *` then serialises the full row outward. The response is also a trust boundary; whatever columns exist today or are added tomorrow — internal ledger references, processor tokens, soft-delete metadata — ship to the client automatically. Project an explicit field allowlist.
+
+### 3. `POST /invoices/:id/void` — no authorization on a state-changing action
+**Category:** broken access control
+
+Any authenticated caller can void any invoice by guessing or enumerating an id. This is the more damaging of the two access-control defects: the read route leaks, this one mutates financial state, and voiding is typically not reversible from the same API.
+
+The check has to load the invoice and ask whether *this* caller may void *this* record — including status preconditions (an already-voided or already-settled invoice) — not merely that a session exists.
+
+### 4. `POST /invoices/:id/void` — missing record falls through instead of denying
+**Category:** insecure design
+
+`invoices.byId` on an unknown id yields whatever that helper returns for "not found." If that is `null` or `undefined`, it is handed straight to `invoices.void`, and the behaviour depends on what `void` does with a nullish argument — possibly a 500, possibly worse if it builds a query from partial fields. An absent record must take the denying branch explicitly: check for it and return 404 before calling `void`.
+
+### 5. `allowTestLogin` — inverted environment gate
+**Category:** security misconfiguration, authentication failure
+
+`src/config/flags.ts`:
+
+```ts
+export const allowTestLogin = process.env.NODE_ENV !== "production";
+```
+
+This turns test login ON everywhere the value is not exactly `"production"`: an unset `NODE_ENV` in a fresh container, `"Production"`, `"prod"`, a renamed stage, a build that drops the env. A test-login path is an authentication bypass, so the failure mode is full account access, and it fails open by construction.
+
+Fix: allowlist the environments where it is permitted and parse `NODE_ENV` against a closed enum at startup, refusing to boot on an unrecognised value.
+
+```ts
+const ENVS = ["production", "staging", "development", "test"] as const;
+const env = parseEnv(process.env.NODE_ENV); // throws on anything else
+export const allowTestLogin = env === "development" || env === "test";
+```
+
+### 6. `seedRoutesEnabled` — denylist default, enabled unless opted out
+**Category:** security misconfiguration
+
+```ts
+export const seedRoutesEnabled = process.env.SEED_ROUTES !== "off";
+```
+
+Same inversion, one step worse: the flag is on when the variable is unset. Seed and reset commands in production are destructive and generally also create known-credential accounts. `"false"`, `"0"`, `"OFF"`, and an empty string all read as enabled. Gate it on the same parsed environment enum as above rather than on a string comparison against one sentinel value.
+
+---
+
+**Note on scope:** voiding an invoice is a state change on financial data with no audit record in the diff. Whether that is a gap depends on logging the codebase already does at the `invoices.void` layer, which I can't see from here — worth confirming.
+
+The two access-control defects (findings 1 and 3) share one root cause: `requireSession` is being read as an authorization check when it is only authentication. If other routes in this file follow the same shape, they have the same defect.

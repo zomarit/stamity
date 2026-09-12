@@ -1,0 +1,15 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted:** Resolve the change set against the trigger roster to locate a rendered surface to examine. Change set is `db/migrations/add_export_cursor.sql` and `src/cli/export.ts`.
+
+**What blocks it:** No surface exists for this agent to read.
+
+- Neither changed path matches a roster surface. `.sql` and `src/cli/*.ts` fall under no row of either surface, and nothing in the change renders.
+- The repository holds no component root: no `components/`, `pages/`, or `views/` directory, and no `.tsx`, `.jsx`, `.vue`, or `.svelte` file.
+- The repository holds no style layer: no `.css` or `.scss` file, and no design-token source anywhere in the tree to compare against.
+
+The brief requests the pass, but the condition the roster names is unmet on both counts — a change with no rendered output, in a repository with no component root and no markup. The contract returns the agent unrun here rather than reporting a clean surface it never found, so this run posts no findings and no pass.
+
+**Smallest unblocking input:** a component root or markup surface in the tree, plus a token source to measure the style layer against. Absent that, this change is outside the agent's surface and the pass should be dropped from the run rather than re-spawned.
+
+No surfaces-examined list, no criteria-applied list, and no finding count accompany this return — including at zero. Nothing was examined, and a zero here would read as a pass that ran clean.

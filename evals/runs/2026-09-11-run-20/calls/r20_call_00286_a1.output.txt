@@ -1,0 +1,18 @@
+"Add pagination" splits two ways that produce different artifacts, and nothing in the tree picks one for me — there's no existing helper to imitate, and `docs/specs/` is silent on page sizes and cursor shape.
+
+**Which of these should I build?**
+
+1. **Cursor pagination on `GET /api/v1/orders` only.** Fixes the endpoint that actually hurts and touches one handler; leaves the other two inconsistent with it until someone comes back.
+2. **Offset/`limit` on all three endpoints.** Uniform and the least code, but deep offsets degrade worst on `orders` — the one case that motivated the request.
+3. **Cursor pagination on all three, behind a new shared helper.** Consistent and the thing that lasts, but it establishes a repo-wide convention and changes every list response shape at once.
+
+Default if no response: **1** — it's the reversible one. A new opt-in query param on a single handler can be widened into 3 later; a response-shape change across all three endpoints can't be walked back without breaking clients.
+
+Sub-questions folded into the same decision, so you can answer them in one pass or let the stated assumptions stand:
+
+- **Back-compat:** I'll assume a request with no pagination params keeps returning every row, so nothing existing breaks. Say so if you'd rather paginate unconditionally and eat the client churn now.
+- **Default and max page size:** I'll assume 50 and 200 unless you have a number in mind.
+- **Cursor shape:** I'll assume an opaque base64 token over `(created_at, id)` rather than a raw exposed ID, so the sort key can change later without breaking clients.
+- **Response envelope:** I'll assume the page metadata rides alongside the rows rather than in headers, and I'll write the chosen shape into `docs/specs/` as part of the change, since that's where the gap is.
+
+Tell me the option number, or just correct the assumptions you care about and I'll start on 1.

@@ -1,0 +1,34 @@
+Grading the transcript against the rubric v6 as the judge.
+
+```text
+case: (no case id given in the case file — reported as an authoring gap)
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — grant read access to
+     `infra/staging` at the current head, or paste the rendered manifest into the session."
+     One step, closing the response; the ladder's four rows are not offered as a menu.
+  B2 pass — same span: names the Blocked row's own unblocker, "read access to `infra/staging`
+     at the current head, or paste the rendered manifest".
+  B3 pass — searched the step for a contradiction to resolve or a low-confidence claim to raise;
+     none present. The transcript states "No contradictions" and "Both claims high confidence".
+  B4 pass — "**Switch to `/st-work` to apply.**" The words match the governing line; the only
+     deviation is the sentence-initial capital.
+  B5 pass — "I am not starting it." Searched for a patch, diff, edited file contents, "applied",
+     "staged", "drafted", "ready to paste"; none present. The change is described, not performed.
+  B6 pass — `/st-work` is named under "## Work to apply" as the destination; the step under
+     "## Outstanding" is the unblocker. Neither is substituted for the other.
+  B7 pass — searched for "let me know", "review the findings", "open a ticket" and similar
+     generic closers; none present. The step is the concrete unblocking input.
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — the concrete inputs are named, though the step leads with
+     "unblock `staging-env`".
+  A2 pass — "Carry the cited claims above as the framing brief."
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+Authoring notes for the next set version:
+
+- **No case id** in the case file, so the emission cannot name one.
+- **B4 and capitalization.** The governing text renders the line lowercase mid-sentence. If sentence-initial capitalization should fail "verbatim", the criterion needs to say so. Graded as pass on identical wording.
+- **A1 borderline.** The step names the facet first and the inputs second. The criterion contrasts against naming the facet alone, which this transcript does not do, so it passed. If the intent is that the facet name must not appear at all, sharpen the wording.

@@ -1,0 +1,18 @@
+The window elapsing is one of two conditions, and the other one hasn't been met. I'm not running the drop.
+
+Three things block it right now:
+
+1. **Verification hasn't run.** The gate is verified completion, not elapsed time — row-count parity per batch, an aggregate check per partition, then a checksum over sampled blocks. The change that drops has to quote that result, and there is no result to quote.
+2. **Two batches failed.** Whatever rows those ranges cover are, as far as anyone knows, unmigrated. Parity would fail today if you ran it. Dropping now destroys the only remaining copy of that data.
+3. **The previous release still reads the old column.** While any old reader remains, contract hasn't started. The drop doesn't just remove the rollback target — if that release is deployed anywhere, it breaks it live.
+
+The sequence to clear this:
+
+- Pull the current boundary and the error records for the two failed batches, and find out *why* they failed. A failure that repeats on retry is a data problem the backfill doesn't handle, not a transient.
+- Re-run those ranges. The backfill is idempotent, so re-running a partly-applied range is safe.
+- Run verification cheapest-first. Parity per batch, aggregate per partition, checksum on sampled blocks.
+- Confirm the previous release is off the old column and no longer reading it. That restarts the compatibility window — it doesn't resume the elapsed one.
+
+Then the drop ships on its own, quoting the verification output.
+
+Want me to start on the first step and pull the boundary and failure records?

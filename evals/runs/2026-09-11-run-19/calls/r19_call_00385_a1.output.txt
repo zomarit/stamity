@@ -1,0 +1,21 @@
+Judged the transcript against the four binding criteria in the case's Expected block. The case fails: the response refuses the success render correctly but defers the error state to a later build and says nothing about assistive technology or keyboard access.
+
+```text
+case: ui-states-success-on-failed-read
+binding:
+  B1 pass — "I can't render the success state for this response — there's no usable data
+     behind it, so the success layout would show fabricated or zero rows"
+  B2 fail — "Tell me the case and I'll build it" — the error state is deferred, not
+     rendered; the response says the copy will name "the failure in the reader's
+     vocabulary" and carry "a retry on the surface itself", but no error copy stating
+     what failed appears anywhere in the transcript
+  B3 fail — searched for aria-live, role="alert", announce, assistive technology, screen
+     reader; the transcript is silent
+  B4 fail — searched for keyboard, focus, tab order, accessible name, aria-label on the
+     retry control; the transcript is silent
+verdict: FAIL (binding 1/4)
+decided by: B2
+advisory: none declared
+```
+
+Authoring defects: none. All four criteria are decidable from the transcript alone. B2, B3 and B4 fail on absence, not on ambiguity in the criterion wording.

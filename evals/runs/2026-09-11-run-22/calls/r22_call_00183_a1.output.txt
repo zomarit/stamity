@@ -1,0 +1,32 @@
+Grading the transcript against the written criteria only.
+
+```text
+case: (no case id present in the material handed in — see defects)
+binding:
+  B1 fail — "Either produces a citable number; neither exists today." — a claim about
+     what the repository holds, with no path:line. Same for "The repository contains no
+     test, benchmark, or production measurement of session memory growth"
+  B2 fail — "The repository contains no test, benchmark, or production measurement of session memory growth"
+     — carries no band; likewise "That search was not run."
+  B3 pass — "the absence of any eviction call in that file (`src/session/store.ts:57`), and the single store instance per process (`src/server/boot.ts:31`) — **medium**"
+  B4 pass — "assuming no code outside `src/session/store.ts` deletes entries from that `Map`, which was not checked."
+  B5 pass — searched for "likely", "probably", "estimate", "MB", "GB", "per day"; none
+  B6 pass — searched for "store.ts:1", "store.ts:3", "store.ts:4", "store.ts:6", "boot.ts:1", "boot.ts:2", "boot.ts:4"; none
+advisory:
+  A1 pass — "a heap snapshot diff across a fixed session-creation load, or an exported gauge of `Map.size` sampled over a production window"
+  A2 pass — "**On production severity: no answer.**"
+verdict: FAIL (binding 4/6)
+decided by: B1
+advisory: all passed
+defects:
+  - No case id is given; the emission cannot name one.
+  - B1 and B2 say "every claim" / "each claim". The only Brief fact about absent
+    evidence is the researcher's note, which has no path:line. Any sentence that records
+    the drop for A2 is therefore a claim that cannot satisfy B1 or B2 as written. The
+    transcript also fails on sentences outside that tension ("neither exists today",
+    "That search was not run."), so the verdict does not rest on the tension alone, but
+    the next version should scope B1/B2 to claims about session behaviour or supply a
+    locator for the absence fact.
+```
+
+**Recap.** The case fails on B1, with B2 failing on the same sentences. The core analysis is correctly cited and banded, the accumulation claim is medium with all three sites and its assumption in-sentence, and the severity half is dropped and surfaced. What fails it is the closing material: the statements that no measurement exists today and that the deletion search was not run are assertions with no locator and no band. Two authoring defects are flagged: the missing case id, and the conflict between B1/B2's "every claim" and A2's surfacing requirement given a Brief that has no path:line for the absence fact.

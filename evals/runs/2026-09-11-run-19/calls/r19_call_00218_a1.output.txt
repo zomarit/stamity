@@ -1,0 +1,23 @@
+Holding the dispatch. Files being disjoint is the specific thing the census rule says doesn't settle it — `customerKey` is a persisted name, and a persisted name binds code that lives elsewhere by construction. Unit A renames it in `src/writer.ts`; Unit B reads it in `src/reader.ts`. That's one shared contract across two units, which is a collision regardless of the file lists.
+
+Dispatching both in parallel over a brownfield batch with no census is a protocol failure, so I'm reporting it rather than running it.
+
+The row as it stands, incomplete:
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` | persisted-name | `src/writer.ts` | `src/reader.ts` + **unsearched** | rename → `accountKey` |
+
+The consumer column is the problem. `src/reader.ts` is the one consumer we happen to know about; nobody has searched the repo for the quoted form of `customerKey`, and for a persisted name the likely readers sit outside both file lists — migrations, fixtures, recorded payloads, analytics or export queries, anything asserting the old key. A `clean` or even a scoped census here would be unevidenced.
+
+The failure mode if both run is the silent-wrong one, which is the Critical case: after A lands, the stored record has no `customerKey`, and `src/reader.ts` reads absent rather than erroring. No build break, no exception — just a wrong value downstream.
+
+Two ways forward.
+
+**Serialise** — the stated fallback. A lands the rename plus every consumer reconciliation in one diff; B is re-levelled after it and codes against `accountKey` as landed. Simplest, and correct without needing the facade machinery.
+
+**Census then facade-hold** — if the two need to overlap in time. Run the repo-wide search over both spellings first, then A takes ownership (its acceptance criteria require the rename) and lands under a hold: the persisted shape keeps `customerKey` alongside the new `accountKey`, with `customerKey` written as an explicit null once B's reads are guarded rather than dropped outright. B moves to guarded reads against the held shape. `customerKey` comes out in a later change, once the census shows zero unguarded readers.
+
+I'd recommend serialising. The parallelism buys one unit's worth of wall-clock here, and the hold plus its later removal change is more moving parts than that's worth for a two-unit batch.
+
+Tell me which you want. If it's either one, my next action is the repo-wide search over `customerKey` and `accountKey` — including non-code files — and I'll bring back the captured output as the census evidence before anything dispatches.

@@ -1,0 +1,84 @@
+Nothing written yet — here is the draft for your review.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001-worktree-lane.md` and `002-board-fill-source.md` are taken, so `003` is the next free number.
+
+## Head
+
+```
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is absent — it is migration-intent only, and this is a feature. `depends_on` is absent — this run has no predecessor plan and is not a split. Both are valid absences under the optional-key rule, and the freshness guard reads them as satisfied.
+
+One thing to confirm before I write: the run state I am holding says today is `2026-09-02` UTC, but the session date is `2026-09-12`. I have stamped `2026-09-02` per the run state. Say the word if the stamp should read `2026-09-12` instead.
+
+## Unit — `json-flag-render`
+
+**id** — `json-flag-render`
+
+**requirements** — `REQ-cli-140`
+
+**files** — `src/commands/status.ts`, `test/commands/status.test.ts`
+
+**interfaces**
+
+Flag declaration on the `status` verb:
+
+- name `--json`, boolean, default `false`
+- takes no value argument
+- no short alias
+
+Success payload — exactly one JSON object to stdout, no wrapping array, no trailing prose:
+
+```json
+{
+  "workspace": "<string>",
+  "branch": "<string>",
+  "managedFiles": 0,
+  "driftedFiles": 0,
+  "lastSync": "<string>"
+}
+```
+
+Key types: `workspace`, `branch`, `lastSync` are strings; `managedFiles` and `driftedFiles` are integers. Exactly these five keys, no others.
+
+Exit codes: `0` on success, `1` on a drift finding.
+
+Stream discipline: on success, stdout carries the object and stderr carries nothing.
+
+**testCriteria**
+
+- `stamity status --json` on a clean workspace writes stdout that parses as a single JSON object and exits `0`
+- the parsed object's key set is exactly `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync`
+- `workspace`, `branch`, `lastSync` are of type string; `managedFiles`, `driftedFiles` are integers (not strings, not floats)
+- a drift finding exits `1` and still writes one well-formed object to stdout
+- on success stderr is empty
+- `stamity status` without the flag produces its existing human-readable output unchanged
+- `--json` accepts no value argument, and the short alias `-j` is not registered
+
+**edgeCases**
+
+- *Drift present* — `driftedFiles > 0`: the object is still printed in full to stdout and the process exits `1`; the drift is signalled by the exit code and the count, not by suppressing or altering the payload.
+- *Empty workspace* — nothing managed: `managedFiles` and `driftedFiles` serialise as integer `0`, never `null` and never an omitted key.
+- *Never synced* — no sync has ever run: `lastSync` must still be a string per `REQ-cli-140`, so it serialises as `""`. `REQ-cli-140` does not name the never-synced value; the empty string is this plan's stated assumption, and it is worth a line in `docs/cli-reference.md` if you want it pinned in the spec instead.
+
+**depends_on** — `none`
+
+**verify** — `npm run test`
+
+## One gap to close before the write
+
+The `interfaces` field above is complete at the contract level — flag spec, payload schema, exit codes, stream discipline — all of it resolvable from `REQ-cli-140` without opening another document. What it does not yet carry inline is the concrete TypeScript surface it has to attach to: the exported handler signature in `src/commands/status.ts` and the option-registration shape in `src/cli.ts`.
+
+Both paths are already in this plan's `reads`, so this is not a `BLOCKED_DEPENDENCY` — it is a read I make before the write, and the verbatim signatures go into `interfaces` at that point. No placeholder goes into the file.
+
+Approve and I will pull those two signatures and write `docs/plans/003-status-json-flag.md`.

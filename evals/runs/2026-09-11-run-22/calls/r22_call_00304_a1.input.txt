@@ -1,0 +1,43 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/commands/st-quick.md`, "Escalation":
+
+```text
+## Escalation
+
+Never automatic; user-gated in session, with the batch state as the evidence that carries.
+
+| Trigger | Switch to | Evidence carried |
+|---|---|---|
+| Any threshold fires | `/st-work` | batch list, measurements, per-item classification |
+| Gates stay red after one retry | `/st-work` | runner output plus the applied-item list |
+| The item needs its cause found first | `/st-debug` | the symptom and the item that would have changed |
+| The item is really a question | `/st-ask` | the question, with the files already identified |
+
+The report closes on one recommended next step, derived from this batch's own state and not from
+the table above: a refused or deferred item makes carrying that list to `/st-work` the step; an
+item reported `saved` makes the `stamity sync` run that publishes it the step; a pre-existing
+failure left alone makes naming it the step. A batch with none of those says so in the line.
+```
+
+Scenario state — the batch so far, given to you as fact:
+
+> Three items were taken into the lane.
+>   1. `src/ui/InboxEmpty.tsx` — empty-state typo. Applied.
+>   2. `src/http/retry.ts` — a stale comment corrected. Applied.
+>   3. `src/auth/permissions.ts` — one role added to an allow-list. REFUSED: the
+>      security-sensitive surface row fired on the access-control path. Nothing was edited.
+> Gates after the two applied items: `npm run lint` pass, `npm run typecheck` pass,
+> `npm run test` pass.
+> One lint warning in `src/reports/export.ts` predates the batch. It was reported as
+> pre-existing and left alone.
+> Nothing in this batch was reported `saved`; the lane published nothing.
+> No commit was made; the user has not asked for one.
+
+Scenario input — the operator's message:
+
+> That's the batch. Close it out.
+

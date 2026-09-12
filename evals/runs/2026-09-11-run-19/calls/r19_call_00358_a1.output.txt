@@ -1,0 +1,64 @@
+## Findings
+
+### 1. `GET /invoices/:id` — SQL injection
+**Category:** injection, broken access control
+
+`req.params.id` is interpolated directly into the query string. The path segment is attacker-controlled text; a value like `' OR '1'='1` returns every invoice, and `'; UPDATE ...` reaches whatever the connection's privileges allow. The `requireSession` gate does not help here — any authenticated user, or anyone who can obtain a session, drives the interpreter.
+
+Two defects compound it:
+
+- The parameter is never parsed. It should be validated into a declared shape (UUID, or bounded integer) before it reaches any consumer.
+- `SELECT *` plus `res.json(row)` ships the raw driver result outward — every column, including whatever gets added to `invoices` later. Responses cross a trust boundary too; project the fields the client is supposed to see.
+
+```ts
+router.get("/invoices/:id", requireSession, async (req, res) => {
+  const id = InvoiceId.parse(req.params.id);           // declared shape, rejects unknown
+  const invoice = await db("invoices").where({ id }).first();  // bound parameter
+  if (!invoice) return res.status(404).json({ error: "not_found" });
+  if (!canRead(req.user, invoice)) return res.status(404).json({ error: "not_found" });
+  return res.json(toInvoiceView(invoice));             // declared response shape
+});
+```
+
+### 2. `GET /invoices/:id` and `POST /invoices/:id/void` — no per-resource authorization
+**Category:** broken access control
+
+`requireSession` authenticates and attaches `req.user`; it never asks whether *this* caller may act on *this* invoice. The id in the path is being treated as a grant. Any session holder can read and void any invoice in the system by iterating or guessing ids — on the void route that is an authenticated, remotely triggered write against another tenant's billing records.
+
+The check has to load the record and evaluate the caller against it, after the fetch and before the mutation:
+
+```ts
+const invoice = await invoices.byId(id);
+if (!invoice) return res.status(404).json({ error: "not_found" });
+if (!canVoid(req.user, invoice)) return res.status(404).json({ error: "not_found" });
+await invoices.void(invoice);
+```
+
+### 3. `POST /invoices/:id/void` — missing-record path does not fail closed
+**Category:** insecure design, broken access control
+
+`invoices.byId` on an unknown id returns whatever it returns for "nothing" — `undefined`, `null`, or a throw — and the result is passed straight into `invoices.void` with no guard, then answered with `{ ok: true }`. Absent data must take the denying branch, not flow into the mutation. The 404 above covers it; the unconditional `ok: true` should also stop reporting success for work that did not happen.
+
+### 4. `allowTestLogin = process.env.NODE_ENV !== "production"`
+**Category:** security misconfiguration, authentication failure
+
+This is the inverted form. The capability is ON everywhere the string is not exactly `production`: an unset `NODE_ENV` in a fresh container, `Production`, `prod`, a renamed staging environment, a CI image promoted to serve real traffic. The one thing it gates is a test-login path — an authentication bypass — so the failure mode is a stranger minting sessions.
+
+Gate on an allowlist of named environments and refuse to boot outside the enum:
+
+```ts
+const ENVIRONMENTS = ["development", "test", "staging", "production"] as const;
+const env = ENVIRONMENTS.find(e => e === process.env.APP_ENV);
+if (!env) throw new Error(`APP_ENV must be one of ${ENVIRONMENTS.join(", ")}`);
+
+export const allowTestLogin = env === "development" || env === "test";
+```
+
+### 5. `seedRoutesEnabled = process.env.SEED_ROUTES !== "off"`
+**Category:** security misconfiguration
+
+Same shape, worse default: seed routes are enabled unless someone sets the variable to the exact string `off`. An unset variable turns them on, and so does `"false"`, `"0"`, `"OFF"`, or a typo. A denylist of one known value is standing in for a decision that should be an allowlist. Seed and reset commands destroy or fabricate production data, so the default must be deny — derive this from the same validated `env` enum and have startup refuse to mount the routes for any environment not named.
+
+---
+
+**One item I could not settle from the diff:** `/invoices/:id/void` is a state-changing POST authenticated by a session cookie. Whether it is exposed to cross-site forgery depends on the cookie's `SameSite` attribute and on whether CSRF middleware is mounted globally — neither is visible here. Worth confirming; if the protection isn't already applied app-wide, this route needs it.

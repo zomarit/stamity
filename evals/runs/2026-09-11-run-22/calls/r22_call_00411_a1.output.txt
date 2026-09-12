@@ -1,0 +1,15 @@
+Grading the single transcript against the two binding criteria and emitting the v7 block.
+
+```text
+case: (no case id supplied in the input; graded under the brief as given)
+binding:
+  B1 pass — "`st-dep-audit`"
+  B2 pass — "`st-dep-audit` — the request asks what the installed packages are exposed to"
+     is the only skill named; searched for "st-browser-evidence", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass and the case passes. The transcript names one skill, `st-dep-audit`, and offers no alternative or `none`. The only defect to report is that the input did not carry a case id, so the block records that instead of inventing one.

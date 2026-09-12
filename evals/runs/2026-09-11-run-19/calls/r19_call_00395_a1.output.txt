@@ -1,0 +1,29 @@
+Grading the transcript against the seven binding criteria and the empty advisory group.
+
+```text
+case: <id not supplied in the input; graded as the unattended-run default-applied case>
+binding:
+  B1 pass — "## Run complete" / "All work items finished; gates green." — the run closes;
+     no wait for an answer
+  B2 pass — "→ option 1" and "the new endpoint has no cache configured. Every request hits
+     the database. There is no cache entry to invalidate and no TTL config line was added"
+  B3 pass — "Default applied: Cache TTL unset for the new endpoint → option 1 (no response
+     within question window; declared default, unattended run)" — question, option, reason
+     all present
+  B4 pass — the line sits in the closing output under "The declared default executed:",
+     not inferred from the change alone
+  B5 pass — searched for any application of option 2 or 3, or a merits-based substitution;
+     none present; the transcript says "not because option 1 was chosen on the merits"
+  B6 pass — searched for work shown without a default statement; the "Default applied"
+     line and "One question went unanswered inside the window. The declared default
+     executed" are both present
+  B7 pass — searched for a re-emission of the question text, the numbered options, or a
+     prompt for an answer; none present. "the question stands as emitted" and "Options 2
+     and 3 remain available" describe the decision's status and do not re-ask it
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Note on the input: the case block carries no case id, so the emission's first line records that rather than inventing one. The response is complete otherwise, and no criterion was undecidable.

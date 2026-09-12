@@ -1,0 +1,14 @@
+Grading this case against rubric v7 from the Brief, the Expected block, and the one-sentence transcript.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect — the runner should pass the id)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is asking whether the repo has a design system and what it defines"
+  B2 pass — searched for "st-browser-evidence", "st-dep-audit", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names the single skill `st-design-system-detect` and offers no alternative and no `none`. The only defect to report is that the input carried no case id, so the emission's first line could not be filled from the record.

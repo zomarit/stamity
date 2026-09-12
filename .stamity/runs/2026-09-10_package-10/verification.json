@@ -1,0 +1,1688 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-10T21:59:36.171857+00:00",
+  "verifier": "independent review_client_behavior agent; authored no product source or tracked generated-file edits",
+  "result": "PASS: independently repaired local gates; replacement CI/release and behavioral/human/platform proof remain open",
+  "packageVersion": "1.7.0",
+  "environment": {
+    "platform": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64",
+    "node": "v22.22.3",
+    "npm": "10.9.8"
+  },
+  "sourceBinding": {
+    "baselineHead": "99c1094953346ef19a8aaab3ee0bd7d292c36ba6",
+    "inputDefinition": "Sorted git tracked plus untracked-not-ignored files, including absent/symlink records; SHA-256 over compact JSON path/kind/bytes/sha256 inventory. Current run evidence directory excluded so concurrent evidence writes do not invalidate product binding. Ignored build/vendor outputs have separate artifact hashes.",
+    "excludedEvidencePrefix": ".stamity/runs/2026-09-10_package-10/",
+    "initial": {
+      "createdAt": "2026-09-10T21:36:12.382767+00:00",
+      "head": "99c1094953346ef19a8aaab3ee0bd7d292c36ba6",
+      "excludedEvidencePrefix": ".stamity/runs/2026-09-10_package-10/",
+      "fileCount": 1071,
+      "inputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47"
+    },
+    "builtCandidate": {
+      "createdAt": "2026-09-10T21:57:00.792106+00:00",
+      "head": "99c1094953346ef19a8aaab3ee0bd7d292c36ba6",
+      "excludedEvidencePrefix": ".stamity/runs/2026-09-10_package-10/",
+      "fileCount": 1071,
+      "inputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d"
+    },
+    "finalCandidate": {
+      "createdAt": "2026-09-10T21:57:00.792106+00:00",
+      "head": "99c1094953346ef19a8aaab3ee0bd7d292c36ba6",
+      "excludedEvidencePrefix": ".stamity/runs/2026-09-10_package-10/",
+      "fileCount": 1071,
+      "inputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d"
+    },
+    "afterGates": {
+      "createdAt": "2026-09-10T21:59:16.151630+00:00",
+      "head": "99c1094953346ef19a8aaab3ee0bd7d292c36ba6",
+      "excludedEvidencePrefix": ".stamity/runs/2026-09-10_package-10/",
+      "fileCount": 1071,
+      "inputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d"
+    },
+    "inputManifestPath": "/tmp/stamity-package10-verifier-53zp_wt0/release-source-ready.inputs.json",
+    "onlyDeltaAfterBuild": [],
+    "importantFileHashes": [
+      {
+        "path": "package.json",
+        "bytes": 2172,
+        "sha256": "25f76bd42e39489ca695e25af6b0bffda4cdebb15d71958aa8f8895754c879b8"
+      },
+      {
+        "path": "package-lock.json",
+        "bytes": 227577,
+        "sha256": "e7477ad082935613f95f08159cae33b17fccb948c2063ca97b5a2e814c9a80f5"
+      },
+      {
+        "path": "vitest.config.ts",
+        "bytes": 6977,
+        "sha256": "5759499b425dca4508d983fdde1478730bf6d40279fa1cc28b2dcb0b55e93365"
+      },
+      {
+        "path": "src/content/charter.ts",
+        "bytes": 13162,
+        "sha256": "9d785df1133c8bfd79d3b0c4bf5bc256926a5a660679245406bd2463c3c06628"
+      },
+      {
+        "path": "src/hooks/portableRunner.ts",
+        "bytes": 11274,
+        "sha256": "af7ff1584e71714ad46d20c33eb081b55ac53741a65dc38447bfcbe43c718712"
+      },
+      {
+        "path": "src/hooks/model.ts",
+        "bytes": 9424,
+        "sha256": "00c61dcb71a7260228d056f69e3ab46f461017d3ccc27640db1cc4f5465f24e2"
+      },
+      {
+        "path": "src/hooks/scripts.ts",
+        "bytes": 101535,
+        "sha256": "d91d27801652c868216d3740bad3fe42019fd91b1e238213ba1aa4b2ea47eaa0"
+      },
+      {
+        "path": "src/tools/translator.ts",
+        "bytes": 18343,
+        "sha256": "00afbb122835242bdb58420b0383f2694f6b9b76b68c25a2738e2dbf9ad39807"
+      },
+      {
+        "path": "src/emit/capabilityMatrix.ts",
+        "bytes": 32112,
+        "sha256": "4452101345f4f68d041c620a14003b58bf68a55d84793e53806284bc9cc2b750"
+      },
+      {
+        "path": "src/emit/hooksInfra.ts",
+        "bytes": 24025,
+        "sha256": "ab041f721eda22473e766c024bd893f75f25115b00eb62b2a22f213d27c104a9"
+      },
+      {
+        "path": "src/adapters/claude.ts",
+        "bytes": 42528,
+        "sha256": "8accf41dd3aa845515712130b9d791ea76f4d5f83780310c7c90482057c93ffc"
+      },
+      {
+        "path": "src/adapters/codex.ts",
+        "bytes": 50543,
+        "sha256": "2656de0a31ba8d5a19396404527d8d25ce7c31cce69a37484a5fdc92191f2848"
+      },
+      {
+        "path": "src/adapters/copilot.ts",
+        "bytes": 31685,
+        "sha256": "c9e520bbfdc624e5d4f40ac2b1c49a3e891e7f149a3fbc977aa88b9f17e58a11"
+      },
+      {
+        "path": "src/adapters/cursor.ts",
+        "bytes": 55905,
+        "sha256": "5b6b345958c6ff23bccfa68aa2b8525f0784202cd06c0ffb794329fc2f186b08"
+      },
+      {
+        "path": "src/index.ts",
+        "bytes": 3951,
+        "sha256": "1d721691da5afaff8922aec9f6ce51c25fe3421f9608a05f054b3aea8e064b52"
+      },
+      {
+        "path": "src/pack/sign.ts",
+        "bytes": 6539,
+        "sha256": "e29bd80e9903bc88d5e109e55768356977eda627cd4095505862ccaf14c9d856"
+      },
+      {
+        "path": "src/pack/trust.ts",
+        "bytes": 28320,
+        "sha256": "f686f4d9996c8de97cf45db02874e1ff2b2d16a422a110b749f2a733cc15771f"
+      },
+      {
+        "path": "tsdown.config.mjs",
+        "bytes": 16101,
+        "sha256": "ab715479fdab9c847cdda43df1845222a24384ff6281fe726dad5b1fbcefc08a"
+      },
+      {
+        "path": "tsconfig.declarations.json",
+        "bytes": 278,
+        "sha256": "72c7c3802c0281b5dbcb89f86dc0cf1b4170ec9f7b43f1ee247080c1082de5db"
+      },
+      {
+        "path": "scripts/tarball-smoke.mjs",
+        "bytes": 9566,
+        "sha256": "1a2fe4fc7eeb20c2bdf5aa4706fdabadb18c0b7ff7693d8c2fb2ce917ba89494"
+      },
+      {
+        "path": "scripts/eval-run.mjs",
+        "bytes": 1618,
+        "sha256": "36993770a36086dc6df82c5ca4a6e5b72ad569b37566169aed9e24f7022da979"
+      },
+      {
+        "path": "content/skills/st-verify/scripts/spec-plan-coverage.mjs",
+        "bytes": 9511,
+        "sha256": "05456cf3f41fb3c1366480179006c1ba1055b0519e8383c2682a91e789ca4ca8"
+      },
+      {
+        "path": "evals/SET-v5.md",
+        "bytes": 37249,
+        "sha256": "caf25f95ff40fe5b6554a9b0a69c42b3ef98f58a21d3807c5d63c821e59c5a21"
+      },
+      {
+        "path": "src/cli/docs/referencePages.ts",
+        "bytes": 31523,
+        "sha256": "53027c3f5fe1c4aef687ed61242d1f3028bd7654023f696d9ba8f88cc392f71d"
+      },
+      {
+        "path": "test/cli/docs/referencePages.test.ts",
+        "bytes": 30403,
+        "sha256": "adf66b09ae8f06aabeafe0ab096dbe100c9487e18b479aaf3e8eb11df2781ed7"
+      },
+      {
+        "path": "test/corpus/hookWiring.test.ts",
+        "bytes": 20096,
+        "sha256": "0bacce06872896cf8eed99c67f442b313670986cb26969199e7c56ca4ad96898"
+      },
+      {
+        "path": "test/hooks/model.test.ts",
+        "bytes": 9592,
+        "sha256": "e6d078698780f94fd020e37127e0ed13fc25e31e48992bcf0d73d0a33d30b0c7"
+      },
+      {
+        "path": "test/corpus/invariants.test.ts",
+        "bytes": 71305,
+        "sha256": "67831abe16706fedd54e5cf473e267e428a7142224f398dc727cec0074ec9c74"
+      },
+      {
+        "path": "test/emit/__snapshots__/crossClientGoldens.test.ts.snap",
+        "bytes": 208019,
+        "sha256": "76044bac3a537c5c4103feb5660a832a4d0c057751956b79d11806feb491c389"
+      },
+      {
+        "path": "test/corpus/__snapshots__/emissionGoldens.test.ts.snap",
+        "bytes": 208248,
+        "sha256": "1dd5b640c490a0763822967ae2de00d55c275f68d319d3d0991ebeabe08e1ce3"
+      },
+      {
+        "path": "docs/capability-matrix.md",
+        "bytes": 17059,
+        "sha256": "06aa0de45aeb5cd6b018ebd6aba423439688be0641766c8a4b043d2507fbdeb5"
+      },
+      {
+        "path": "docs/getting-started.md",
+        "bytes": 15321,
+        "sha256": "aed6df692b180120c1632e31e6a53bdaad8930fbb8f53a204997dd15740fb408"
+      },
+      {
+        "path": "docs/troubleshooting.md",
+        "bytes": 9002,
+        "sha256": "740ae3f5bdc87175a26d6a3614372b199489a92e7900e164a5a78530af68d32e"
+      },
+      {
+        "path": "website/docusaurus.config.ts",
+        "bytes": 17518,
+        "sha256": "7f51ce6e66e5004725d226103bad7011d2cf829cc4bb6b9bb32ee2620d67637c"
+      }
+    ]
+  },
+  "commands": [
+    {
+      "gate": "build",
+      "attempt": 1,
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:36:18.939358+00:00",
+      "durationSeconds": 0.902,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/build-1.log",
+      "logSha256": "a816769d99ec438932a79ebcbaee7035c50920f437018fcc26393b300cc3d8ed",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "lint",
+      "attempt": 1,
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:36:18.948119+00:00",
+      "durationSeconds": 1.284,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/lint-1.log",
+      "logSha256": "9e3210e0d06c1256b6a0e68ccd2110f3dba273346e52ea7b7092ec9b6b9ab2de",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "typecheck",
+      "attempt": 1,
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:36:18.960286+00:00",
+      "durationSeconds": 0.899,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/typecheck-1.log",
+      "logSha256": "6839e3dbc61b1490da5738d8819e13035ff0d6b3fe1ef7be4d08e92ce12f2952",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "coverage",
+      "attempt": 1,
+      "command": [
+        "npm",
+        "run",
+        "test",
+        "--",
+        "--coverage"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:36:31.228052+00:00",
+      "durationSeconds": 108.308,
+      "exitCode": 1,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/coverage-1.log",
+      "logSha256": "a6599f68afd1d6e15cf990b4ccdb2d252870a8177c646a7c063688662355b611",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded failed attempt"
+    },
+    {
+      "gate": "leak",
+      "attempt": 1,
+      "command": [
+        "npm",
+        "run",
+        "gate"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:36:31.228248+00:00",
+      "durationSeconds": 5.789,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/leak-1.log",
+      "logSha256": "339c3a3c0df59441931fc2e0b9076e22909965c206b228b7b1d64633967bc085",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "knip",
+      "attempt": 1,
+      "command": [
+        "npm",
+        "run",
+        "knip"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:36:31.231084+00:00",
+      "durationSeconds": 1.699,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/knip-1.log",
+      "logSha256": "af5c61c720eb77a28c0d9ebdf6a87dd6f6399485243c3f437a39b8cbe9039a65",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "size",
+      "attempt": 1,
+      "command": [
+        "node",
+        "scripts/size-budget.mjs"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:37:00.761649+00:00",
+      "durationSeconds": 0.252,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/size-1.log",
+      "logSha256": "86fe3ea4ad3dd3eeb30fde1de6a08bfe494b70eea49347045c3c286d604fc102",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "generator-plugins",
+      "attempt": 1,
+      "command": [
+        "node",
+        "scripts/generate-plugin-manifests.mjs",
+        "--check"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:37:00.769022+00:00",
+      "durationSeconds": 0.368,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/generator-plugins-1.log",
+      "logSha256": "09c488353f050f3091d1207d1753a357a873386629a2f8981bd01eb2df4f1298",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "generator-packs",
+      "attempt": 1,
+      "command": [
+        "node",
+        "scripts/generate-pack-manifests.mjs",
+        "--check"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:37:00.790089+00:00",
+      "durationSeconds": 0.337,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/generator-packs-1.log",
+      "logSha256": "03fd7f06c8dec9f7e5c80abbb2f8567fef9b341c5ef357e78ae585222a3a38f6",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "generator-apm",
+      "attempt": 1,
+      "command": [
+        "node",
+        "scripts/generate-apm-package.mjs",
+        "--check"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:37:00.813931+00:00",
+      "durationSeconds": 0.414,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/generator-apm-1.log",
+      "logSha256": "2030f7c9aa1842b7521bcb934013b8138a73d10264033b43beb1ff195810091d",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "generator-docs",
+      "attempt": 1,
+      "command": [
+        "python3",
+        "/tmp/stamity-package10-verifier-53zp_wt0/compare_generators.py"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:37:00.831412+00:00",
+      "durationSeconds": 0.875,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/generator-docs-1.log",
+      "logSha256": "199a3e20f18666df7cfdc935c1a2f223c73358799f4a99c3bf7f22f73f8e1412",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "dogfood",
+      "attempt": 1,
+      "command": [
+        "node",
+        "dist/cli.js",
+        "check"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:37:00.863729+00:00",
+      "durationSeconds": 0.54,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/dogfood-1.log",
+      "logSha256": "9450eafbfd70766b2d88eb5712ca7f1fa777c924bac809e7deff123168515206",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "packed-consumer",
+      "attempt": 1,
+      "command": [
+        "node",
+        "scripts/tarball-smoke.mjs"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:37:23.502861+00:00",
+      "durationSeconds": 15.248,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/packed-consumer-1.log",
+      "logSha256": "a09cf506b66224e549e742bebe52044496ede6f98f7dad6ce8b42d3d125a305c",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "website-typecheck",
+      "attempt": 1,
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "cwd": "website",
+      "startedAt": "2026-09-10T21:37:23.504275+00:00",
+      "durationSeconds": 0.518,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/website-typecheck-1.log",
+      "logSha256": "df385d190f1e0d75fecb26853f18d182854dd5dcb599004852c9153bea486412",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "website-build",
+      "attempt": 1,
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "cwd": "website",
+      "startedAt": "2026-09-10T21:37:31.447741+00:00",
+      "durationSeconds": 27.693,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/website-build-1.log",
+      "logSha256": "71e8ca06df5efa71a6ead13c6664d65beaefb7efdd193553303251d047f07651",
+      "sourceInputSha256": "25e938dbd88fca5c493eddd60f7a6220341b84b79a9059b2e1daf2897f2d4f47",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "build",
+      "attempt": 2,
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:18.153475+00:00",
+      "durationSeconds": 1.022,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/build-2.log",
+      "logSha256": "1bb99dbaf60e542309c6db82814f2be47bc1e065cceb3eeafdd125c5e4819457",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "lint",
+      "attempt": 2,
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:18.165163+00:00",
+      "durationSeconds": 1.378,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/lint-2.log",
+      "logSha256": "9e3210e0d06c1256b6a0e68ccd2110f3dba273346e52ea7b7092ec9b6b9ab2de",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "website-typecheck",
+      "attempt": 2,
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "cwd": "website",
+      "startedAt": "2026-09-10T21:44:18.177778+00:00",
+      "durationSeconds": 0.435,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/website-typecheck-2.log",
+      "logSha256": "df385d190f1e0d75fecb26853f18d182854dd5dcb599004852c9153bea486412",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "selected pass",
+      "appliesToFinalBecause": "Selected inputs for this unaffected gate remain byte-identical: pack/plugin/APM generation sources, package version and corpus did not change; website TypeScript/configuration inputs did not change. Reference Markdown hierarchy and its root renderer/tests changed, and all affected checks were rerun."
+    },
+    {
+      "gate": "typecheck",
+      "attempt": 2,
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:18.188453+00:00",
+      "durationSeconds": 1.04,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/typecheck-2.log",
+      "logSha256": "6839e3dbc61b1490da5738d8819e13035ff0d6b3fe1ef7be4d08e92ce12f2952",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "website-build",
+      "attempt": 2,
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "cwd": "website",
+      "startedAt": "2026-09-10T21:44:28.447197+00:00",
+      "durationSeconds": 6.038,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/website-build-2.log",
+      "logSha256": "ecf9e5db4237727df886bced865a096ddbd813f83592e5080de94c45e30e63d8",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "coverage",
+      "attempt": 2,
+      "command": [
+        "npm",
+        "run",
+        "test",
+        "--",
+        "--coverage"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:28.460161+00:00",
+      "durationSeconds": 104.839,
+      "exitCode": 1,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/coverage-2.log",
+      "logSha256": "0b665e7e6e8a209e7bdca2d13cbd7306f80e69ab7b9673ec1b54de6ca7d792c5",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded failed attempt"
+    },
+    {
+      "gate": "generator-docs",
+      "attempt": 2,
+      "command": [
+        "python3",
+        "/tmp/stamity-package10-verifier-53zp_wt0/compare_generators.py"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:28.470827+00:00",
+      "durationSeconds": 0.623,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/generator-docs-2.log",
+      "logSha256": "199a3e20f18666df7cfdc935c1a2f223c73358799f4a99c3bf7f22f73f8e1412",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "packed-consumer",
+      "attempt": 2,
+      "command": [
+        "node",
+        "scripts/tarball-smoke.mjs"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:41.253629+00:00",
+      "durationSeconds": 13.027,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/packed-consumer-2.log",
+      "logSha256": "a09cf506b66224e549e742bebe52044496ede6f98f7dad6ce8b42d3d125a305c",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "generator-plugins",
+      "attempt": 2,
+      "command": [
+        "node",
+        "scripts/generate-plugin-manifests.mjs",
+        "--check"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:41.282687+00:00",
+      "durationSeconds": 0.318,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/generator-plugins-2.log",
+      "logSha256": "09c488353f050f3091d1207d1753a357a873386629a2f8981bd01eb2df4f1298",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "selected pass",
+      "appliesToFinalBecause": "Selected inputs for this unaffected gate remain byte-identical: pack/plugin/APM generation sources, package version and corpus did not change; website TypeScript/configuration inputs did not change. Reference Markdown hierarchy and its root renderer/tests changed, and all affected checks were rerun."
+    },
+    {
+      "gate": "generator-apm",
+      "attempt": 2,
+      "command": [
+        "node",
+        "scripts/generate-apm-package.mjs",
+        "--check"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:41.290921+00:00",
+      "durationSeconds": 0.319,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/generator-apm-2.log",
+      "logSha256": "2030f7c9aa1842b7521bcb934013b8138a73d10264033b43beb1ff195810091d",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "selected pass",
+      "appliesToFinalBecause": "Selected inputs for this unaffected gate remain byte-identical: pack/plugin/APM generation sources, package version and corpus did not change; website TypeScript/configuration inputs did not change. Reference Markdown hierarchy and its root renderer/tests changed, and all affected checks were rerun."
+    },
+    {
+      "gate": "generator-packs",
+      "attempt": 2,
+      "command": [
+        "node",
+        "scripts/generate-pack-manifests.mjs",
+        "--check"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:53.402329+00:00",
+      "durationSeconds": 0.462,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/generator-packs-2.log",
+      "logSha256": "03fd7f06c8dec9f7e5c80abbb2f8567fef9b341c5ef357e78ae585222a3a38f6",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "selected pass",
+      "appliesToFinalBecause": "Selected inputs for this unaffected gate remain byte-identical: pack/plugin/APM generation sources, package version and corpus did not change; website TypeScript/configuration inputs did not change. Reference Markdown hierarchy and its root renderer/tests changed, and all affected checks were rerun."
+    },
+    {
+      "gate": "dogfood",
+      "attempt": 2,
+      "command": [
+        "node",
+        "dist/cli.js",
+        "check"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:53.465442+00:00",
+      "durationSeconds": 0.625,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/dogfood-2.log",
+      "logSha256": "fcb4e811665e3b86910e591aa8046644c30825476c1ead1dda0670be3a861df4",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "size",
+      "attempt": 2,
+      "command": [
+        "node",
+        "scripts/size-budget.mjs"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:53.482099+00:00",
+      "durationSeconds": 0.367,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/size-2.log",
+      "logSha256": "1f91399e4bbe258fd1fd2a394e9b5bed4212135e612ff75c5cbb3dc54f46d1ba",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "knip",
+      "attempt": 2,
+      "command": [
+        "npm",
+        "run",
+        "knip"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:44:53.532260+00:00",
+      "durationSeconds": 2.206,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/knip-2.log",
+      "logSha256": "af5c61c720eb77a28c0d9ebdf6a87dd6f6399485243c3f437a39b8cbe9039a65",
+      "sourceInputSha256": "b3f83220e47fe1b63b7170f5fc9f7c04ed68da8850d379480918507d46664af1",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "coverage",
+      "attempt": 3,
+      "command": [
+        "npm",
+        "run",
+        "test",
+        "--",
+        "--coverage"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:48:16.014777+00:00",
+      "durationSeconds": 105.97,
+      "exitCode": 1,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/coverage-3.log",
+      "logSha256": "0689d6d7f4acdbe5d727f0b160f2ce5dde75f6ea70868352fa11e41692f33066",
+      "sourceInputSha256": "2448fb17eda4c0f53d62a1f10779df86b0eb1388c317464414f1809de8296e26",
+      "status": "superseded failed attempt"
+    },
+    {
+      "gate": "lint",
+      "attempt": 3,
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:48:16.026011+00:00",
+      "durationSeconds": 2.24,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/lint-3.log",
+      "logSha256": "9e3210e0d06c1256b6a0e68ccd2110f3dba273346e52ea7b7092ec9b6b9ab2de",
+      "sourceInputSha256": "2448fb17eda4c0f53d62a1f10779df86b0eb1388c317464414f1809de8296e26",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "typecheck",
+      "attempt": 3,
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:48:16.040972+00:00",
+      "durationSeconds": 1.347,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/typecheck-3.log",
+      "logSha256": "6839e3dbc61b1490da5738d8819e13035ff0d6b3fe1ef7be4d08e92ce12f2952",
+      "sourceInputSha256": "2448fb17eda4c0f53d62a1f10779df86b0eb1388c317464414f1809de8296e26",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "knip",
+      "attempt": 3,
+      "command": [
+        "npm",
+        "run",
+        "knip"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:48:16.054855+00:00",
+      "durationSeconds": 2.542,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/knip-3.log",
+      "logSha256": "af5c61c720eb77a28c0d9ebdf6a87dd6f6399485243c3f437a39b8cbe9039a65",
+      "sourceInputSha256": "2448fb17eda4c0f53d62a1f10779df86b0eb1388c317464414f1809de8296e26",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "leak",
+      "attempt": 2,
+      "command": [
+        "npm",
+        "run",
+        "gate"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:49:35.410021+00:00",
+      "durationSeconds": 5.872,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/leak-2.log",
+      "logSha256": "e043595687582de0af0e3bf8933919904a5c11a67925d465688b162c701b006a",
+      "sourceInputSha256": "2448fb17eda4c0f53d62a1f10779df86b0eb1388c317464414f1809de8296e26",
+      "status": "superseded pass"
+    },
+    {
+      "gate": "build",
+      "attempt": 3,
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:00.900303+00:00",
+      "durationSeconds": 1.034,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/build-3.log",
+      "logSha256": "8b34a8cb2a2d657299137a11332e5ee96f9cebe4ff3644c51b4ff3337dc3879a",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "lint",
+      "attempt": 4,
+      "command": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:00.912310+00:00",
+      "durationSeconds": 1.405,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/lint-4.log",
+      "logSha256": "9e3210e0d06c1256b6a0e68ccd2110f3dba273346e52ea7b7092ec9b6b9ab2de",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "website-build",
+      "attempt": 3,
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "cwd": "website",
+      "startedAt": "2026-09-10T21:57:00.923032+00:00",
+      "durationSeconds": 4.566,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/website-build-3.log",
+      "logSha256": "86f1369fe6947125915db12004157390abb5bf926cb95c87536c2384c74c6276",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "typecheck",
+      "attempt": 4,
+      "command": [
+        "npm",
+        "run",
+        "typecheck"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:00.934678+00:00",
+      "durationSeconds": 1.005,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/typecheck-4.log",
+      "logSha256": "6839e3dbc61b1490da5738d8819e13035ff0d6b3fe1ef7be4d08e92ce12f2952",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "coverage",
+      "attempt": 4,
+      "command": [
+        "npm",
+        "run",
+        "test",
+        "--",
+        "--coverage"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:12.228323+00:00",
+      "durationSeconds": 110.409,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/coverage-4.log",
+      "logSha256": "87fa5d3f2784cea9120027a958f4be55e74a9141d1cbdca7eededb72324ed215",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "generator-docs",
+      "attempt": 3,
+      "command": [
+        "python3",
+        "/tmp/stamity-package10-verifier-53zp_wt0/compare_generators.py"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:12.236446+00:00",
+      "durationSeconds": 0.708,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/generator-docs-3.log",
+      "logSha256": "199a3e20f18666df7cfdc935c1a2f223c73358799f4a99c3bf7f22f73f8e1412",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "knip",
+      "attempt": 4,
+      "command": [
+        "npm",
+        "run",
+        "knip"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:12.236818+00:00",
+      "durationSeconds": 1.601,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/knip-4.log",
+      "logSha256": "af5c61c720eb77a28c0d9ebdf6a87dd6f6399485243c3f437a39b8cbe9039a65",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "packed-consumer",
+      "attempt": 3,
+      "command": [
+        "node",
+        "scripts/tarball-smoke.mjs"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:12.250486+00:00",
+      "durationSeconds": 14.728,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/packed-consumer-3.log",
+      "logSha256": "a09cf506b66224e549e742bebe52044496ede6f98f7dad6ce8b42d3d125a305c",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "size",
+      "attempt": 3,
+      "command": [
+        "node",
+        "scripts/size-budget.mjs"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:23.785058+00:00",
+      "durationSeconds": 0.133,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/size-3.log",
+      "logSha256": "1f91399e4bbe258fd1fd2a394e9b5bed4212135e612ff75c5cbb3dc54f46d1ba",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "leak",
+      "attempt": 3,
+      "command": [
+        "npm",
+        "run",
+        "gate"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:23.796965+00:00",
+      "durationSeconds": 5.286,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/leak-3.log",
+      "logSha256": "e043595687582de0af0e3bf8933919904a5c11a67925d465688b162c701b006a",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    },
+    {
+      "gate": "dogfood",
+      "attempt": 3,
+      "command": [
+        "node",
+        "dist/cli.js",
+        "check"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T21:57:23.807841+00:00",
+      "durationSeconds": 0.354,
+      "exitCode": 0,
+      "logPath": "/tmp/stamity-package10-verifier-53zp_wt0/dogfood-3.log",
+      "logSha256": "981c747205f98aa3c8afec08011088f7576e3ecdd3906309a75293d5f3ae388c",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "status": "selected pass"
+    }
+  ],
+  "coverage": {
+    "summary": [
+      "Test Files  194 passed (194)",
+      "Tests  7662 passed | 2 skipped (7664)",
+      "Duration  109.86s (tests 96%, import 3%, transform 1%)"
+    ],
+    "configuredThresholdsPassed": true,
+    "configSha256": "5759499b425dca4508d983fdde1478730bf6d40279fa1cc28b2dcb0b55e93365",
+    "summaryPath": "/Users/denismasatovic/Projects/zomarit/stamity/coverage/coverage-summary.json",
+    "summarySha256": "c41def94dc18c10fb5a5974e2aa4aa0ea2291f7b8a29b905c631b7a920864c44",
+    "globalReportOnlyTotal": {
+      "lines": {
+        "total": 12063,
+        "covered": 11732,
+        "skipped": 0,
+        "pct": 97.25
+      },
+      "statements": {
+        "total": 13833,
+        "covered": 13331,
+        "skipped": 0,
+        "pct": 96.37
+      },
+      "functions": {
+        "total": 2974,
+        "covered": 2935,
+        "skipped": 0,
+        "pct": 98.68
+      },
+      "branches": {
+        "total": 9131,
+        "covered": 8187,
+        "skipped": 0,
+        "pct": 89.66
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "skips": [
+      {
+        "file": "test/ci/apmInstall.test.ts",
+        "case": "installs this checkout into a consumer and deploys every class for every target",
+        "reason": "STAMITY_APM_BIN not set; actual APM route is a separate CI leg"
+      },
+      {
+        "file": "test/pack/sigstoreVerifier.test.ts",
+        "case": "refuses a forged bundle against the live Sigstore trust root",
+        "reason": "STAMITY_SIGSTORE_NETWORK_TEST not set; opt-in live trust-root case"
+      }
+    ],
+    "capabilityMatrix": {
+      "lines": {
+        "total": 106,
+        "covered": 106,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 43,
+        "covered": 43,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 121,
+        "covered": 119,
+        "skipped": 0,
+        "pct": 98.34
+      },
+      "branches": {
+        "total": 60,
+        "covered": 56,
+        "skipped": 0,
+        "pct": 93.33
+      }
+    }
+  },
+  "artifactBindings": {
+    "dist": {
+      "buildRoot": "/Users/denismasatovic/Projects/zomarit/stamity/dist",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "fileCount": 215,
+      "bytes": 1799425,
+      "buildSha256": "ca1bf3b9d22457400806672221d478e68f9dcfd7a134f2f9d9e69eaf0c8f0a04"
+    },
+    "website": {
+      "buildRoot": "/Users/denismasatovic/Projects/zomarit/stamity/website/build",
+      "sourceInputSha256": "b099abbc995aa6a93865824f12c581374ac22e09c24073afd7d2d3e8c6734d0d",
+      "fileCount": 134,
+      "bytes": 5203039,
+      "buildSha256": "b55042d36fe1ccde8e13bb4f73752eb4b929e1e7671a89a621351504453eafa6"
+    }
+  },
+  "budgets": {
+    "charter": {
+      "lines": 97,
+      "ceiling": 150
+    },
+    "measured": {
+      "cursor": 97,
+      "claude": 240,
+      "copilot": 240,
+      "codex": 1063
+    },
+    "ceilings": {
+      "cursor": 97,
+      "claude": 240,
+      "copilot": 240,
+      "codex": 1063
+    },
+    "sharedBytesFromGolden": [
+      4614,
+      29071
+    ],
+    "disclosedBytes": [
+      4614,
+      29071
+    ]
+  },
+  "integrationReview": {
+    "result": "approve; no open source findings",
+    "closedFindings": [
+      {
+        "id": "V-01",
+        "severity": "Warning",
+        "finding": "Three stale hookWiring contract consumers failed coverage attempt 1.",
+        "resolution": "Expected native guarantee/identity membership and telemetry banner corrected with independent expected sets and real guard-process cases; subsequent full suite passes."
+      },
+      {
+        "id": "V-02",
+        "severity": "Warning",
+        "finding": "Old extension-scope prose assertion failed coverage attempt 2.",
+        "resolution": "Current assertion pins Claude-only implemented integration, published Copilot subagentStop, required verdict/decision semantics and retained prose review ladder; ownership/exclusion/citation assertions retained."
+      },
+      {
+        "id": "V-03",
+        "severity": "Minor",
+        "finding": "Shared-byte invariant comment cited an obsolete byte count/ratio.",
+        "resolution": "Comment now names 29,071/4,614 and approximately 6.3x; executable invariant was unchanged."
+      },
+      {
+        "id": "V-04",
+        "severity": "Warning",
+        "finding": "Full attempt 3 passed every test but capabilityMatrix branch coverage was 54/60 (90%), below the unchanged 93% floor.",
+        "resolution": "A valid injected observation-only guarantee exercises both null blockingExitCode render arms and asserts exact output in both public tables, while retaining live inputs and all real-client assertions. The final complete coverage gate passes."
+      },
+      {
+        "id": "V-05",
+        "severity": "Warning",
+        "foundBy": "root browser scan",
+        "finding": "Generated reference pages skipped from H1 directly to H3.",
+        "resolution": "The shared artifact/pack/server producers now emit H2 entries. Six hierarchy regressions were added. Independent comparison across all six pages confirms only heading-depth bytes changed, preserving text, slug inputs and other content. Final browser scanning is root-owned."
+      }
+    ],
+    "additionalChecks": [
+      "Codex ceiling ratcheted down to 1063; independent direct source composition and golden values agree with published 29,071/4,614-byte disclosure. Other ceilings and charter cap retained.",
+      "Public client disclosures distinguish Copilot CLI/cloud native hooks from VS Code Preview, identity-free role telemetry from native command denial, and Codex instruction grants from sandbox filesystem enforcement.",
+      "Portable global continue:false and stopReason precedence repaired with actual child-process fixtures.",
+      "Existing lockfile version/resolved/integrity/libc fields preserved; version set to 1.7.0 with declaration graph added.",
+      "User-owned Claude settings and text outside managed AGENTS/CLAUDE blocks preserved.",
+      "Generated docs were rendered to temporary output and all 10 files byte-compared; no product or generated file was edited by this verifier."
+    ]
+  },
+  "notDone": [
+    "Actual Linux/Windows CI and the actual APM route are root-owned external evidence, not established by this Darwin run.",
+    "Browser checks and release dry_run rehearsal remain root-owned candidate-bound evidence.",
+    "Live-client hook trust/runtime behavior is not established by generated-process fixtures.",
+    "No admitted fresh model execution, judge calibration, affected/all-adversarial samples or fresh full release eval was run; deterministic fixtures do not substitute for the unavailable authorized API credential.",
+    "Human QA and the existing platform approval remain required before release."
+  ],
+  "referenceHeadingReview": [
+    {
+      "path": "docs/reference/agents.md",
+      "onlyHeadingPromotion": true,
+      "firstLevel": 1,
+      "headingCount": 11,
+      "noSkippedLevel": true,
+      "headingTextPreserved": true,
+      "sha256": "10f84d56eedd21676ee1210c23c31c2ded424d67b2096bed820744ca87c1e04e"
+    },
+    {
+      "path": "docs/reference/commands.md",
+      "onlyHeadingPromotion": true,
+      "firstLevel": 1,
+      "headingCount": 10,
+      "noSkippedLevel": true,
+      "headingTextPreserved": true,
+      "sha256": "e4d4bf50c924a55fba5f036f6fd4d2a6f3475e23920dc4b46f739000a1ba7836"
+    },
+    {
+      "path": "docs/reference/mcp-servers.md",
+      "onlyHeadingPromotion": true,
+      "firstLevel": 1,
+      "headingCount": 11,
+      "noSkippedLevel": true,
+      "headingTextPreserved": true,
+      "sha256": "09f5888ece845c21324806f5815b4d7662723375754252ddda6b69f98e60d742"
+    },
+    {
+      "path": "docs/reference/packs.md",
+      "onlyHeadingPromotion": true,
+      "firstLevel": 1,
+      "headingCount": 4,
+      "noSkippedLevel": true,
+      "headingTextPreserved": true,
+      "sha256": "cd004dadac944b33e0dda943b1b6967da2504dd60464b7c98af385c497d3f170"
+    },
+    {
+      "path": "docs/reference/rules.md",
+      "onlyHeadingPromotion": true,
+      "firstLevel": 1,
+      "headingCount": 13,
+      "noSkippedLevel": true,
+      "headingTextPreserved": true,
+      "sha256": "3016ff9d7c6b4078f799d5bb1305cfab26be871c1b70a6c3655a5eb46c24d17d"
+    },
+    {
+      "path": "docs/reference/skills.md",
+      "onlyHeadingPromotion": true,
+      "firstLevel": 1,
+      "headingCount": 9,
+      "noSkippedLevel": true,
+      "headingTextPreserved": true,
+      "sha256": "694c2826e71fd31089ea318e47e0123fa7b2af03974a85e03625efa3a0961c7b"
+    }
+  ],
+  "historicalCoverageSummaryPath": "/tmp/stamity-package10-verifier-53zp_wt0/coverage-3-summary.json",
+  "originalResult": "PASS: configured local gates and independent integration review; external proof gaps remain",
+  "packedScanCorrection": {
+    "recordedAt": "2026-09-10T22:22:48.197588+00:00",
+    "discoveredBy": "Actual Linux Node 22.22.2 CI run 34535881719 and non-publishing Release run 34535889890 at candidate 41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+    "finding": "A reserved migration marker leaked into dist/types/migration/detect.d.ts through an inferred literal type. Earlier local packed-consumer commands exited zero, but their copied scanner was never invoked because the macOS temporary-path alias disagreed with the scanner direct-entry check.",
+    "correction": "The historical packed-tree leak-scan PASS assertion and overall local-gate verdict are superseded. Original command exits, timestamps, and log hashes remain unchanged. The executed external TypeScript/JavaScript and CLI consumer stages remain observed; they did not establish a successful packed scan.",
+    "remediationStatus": "PASS for the combined six-file repair and configured local gates; replacement actual CI and non-publishing Release are pending"
+  },
+  "ciRemediationVerification": {
+    "recordedAt": "2026-09-10T22:27:05.319475+00:00",
+    "result": "PASS for the combined six-file repair and configured local gates; replacement actual CI and non-publishing Release are pending",
+    "baselineHead": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+    "sourceInputSha256": "5ef6446414d8bc5c2787a40f6712bf9eb55ffef5a35369554536527085bca37d",
+    "sourceFileCount": 1075,
+    "inputDefinition": ".stamity/runs/2026-09-10_package-10/ is excluded; otherwise the same tracked/untracked-not-ignored inventory definition as the historical verification record",
+    "beforeInventorySha256": "99715d29786545f22032e85a56dc60357ca9ca23a22279b25f5989671fcfdd36",
+    "afterInventorySha256": "dd43534dc3d532660e98e9733e15ab42bfbb08f48af99f245bb6861f5704e815",
+    "beforeAfterFilesIdentical": true,
+    "reviewedSources": [
+      {
+        "path": "scripts/tarball-smoke.mjs",
+        "kind": "file",
+        "bytes": 10389,
+        "sha256": "1ec42ca7efc1e161c48dfd3d3cfc94b8650f37ef2d02d056aa16c297dcfaa4df"
+      },
+      {
+        "path": "src/migration/detect.ts",
+        "kind": "file",
+        "bytes": 18548,
+        "sha256": "c9cc08cf775c315766c67df580eb6f5efb13f27a5bc51adb8494568743c6c7ed"
+      },
+      {
+        "path": "test/ci/tarballStaging.test.ts",
+        "kind": "file",
+        "bytes": 8401,
+        "sha256": "52b64c4ad30f93bf73cd4e38357978d0f1da2181d053ecd387f76a6cddc66a66"
+      },
+      {
+        "path": "test/evals/manualRunner.test.ts",
+        "kind": "file",
+        "bytes": 23226,
+        "sha256": "f74b0703a7937d45c8d73afc38add839ea9a14696540a1468a1207743587e493"
+      },
+      {
+        "path": "test/hooks/portableRunner.test.ts",
+        "kind": "file",
+        "bytes": 10848,
+        "sha256": "4b0f0cfa7197f60c873e7ec5013c18c60cf5ead29c917946059678d557c06a8f"
+      },
+      {
+        "path": "test/migration/detect.test.ts",
+        "kind": "file",
+        "bytes": 15373,
+        "sha256": "a07898f242b96eb88502016b0455a223edddbd1ff4f2f39336447f00a4123b3e"
+      }
+    ],
+    "review": [
+      "Explicit string annotation changes the internal migration declaration type while preserving the runtime marker and public entrypoint. No scanner rule or exemption changed.",
+      "The copied artifact scanner receives a canonical physical path, executes with --include-build, and must return both exit zero and a nonempty PASS summary. A symlinked actual packed artifact passes; a reconstructed former leaking declaration fails. Silent, failed, and zero-file scanners returning zero are refused.",
+      "Windows test repairs use a file URL for dynamic import and physical path equality for child cwd; exit assertions expose stderr. The full 196-input committed load, five calibration fixtures, rubric midrun drift, first-read working-tree mismatch and existing 20-second timeout remain. Only a redundant second full traversal was removed; no runner product source changed."
+    ],
+    "focusedTests": {
+      "command": [
+        "npx",
+        "vitest",
+        "run",
+        "test/migration/detect.test.ts",
+        "test/ci/tarballStaging.test.ts",
+        "test/evals/manualRunner.test.ts",
+        "test/hooks/portableRunner.test.ts"
+      ],
+      "startedAt": "2026-09-10T22:22:48.487562+00:00",
+      "durationSeconds": 3.246,
+      "exitCode": 0,
+      "logSha256": "8d3640cddcde34566f330a9a1077b7ed2585a113a77d114b7abfccb508bcd6e7",
+      "logFile": "ci-remediation-focused.log",
+      "archive": "durable private CI raw-evidence archive"
+    },
+    "focusedResult": {
+      "files": 4,
+      "passed": 101
+    },
+    "commands": [
+      {
+        "gate": "lint",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "lint"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:01.896087+00:00",
+        "durationSeconds": 1.514,
+        "exitCode": 0,
+        "logSha256": "9e3210e0d06c1256b6a0e68ccd2110f3dba273346e52ea7b7092ec9b6b9ab2de",
+        "logFile": "lint-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "typecheck",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:01.907499+00:00",
+        "durationSeconds": 0.937,
+        "exitCode": 0,
+        "logSha256": "6839e3dbc61b1490da5738d8819e13035ff0d6b3fe1ef7be4d08e92ce12f2952",
+        "logFile": "typecheck-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "coverage",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "test",
+          "--",
+          "--coverage"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:01.875097+00:00",
+        "durationSeconds": 105.948,
+        "exitCode": 0,
+        "logSha256": "5f5152cd414df26d8434b526aa184107a7a533806e22373924021c9fddf645ed",
+        "logFile": "coverage-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "build",
+        "attempt": 4,
+        "command": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:22:48.499575+00:00",
+        "durationSeconds": 0.643,
+        "exitCode": 0,
+        "logSha256": "da0c33fa7e09a0591082d2609d7d6ea41ad914ebc57cf0ea7ff2ea76e1cc901a",
+        "logFile": "build-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "leak",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "gate"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.551787+00:00",
+        "durationSeconds": 6.633,
+        "exitCode": 0,
+        "logSha256": "b3ee794b0aaf68c44a1fffedfc559ffabb666604d1e5ab889f36db6d7d4b40f4",
+        "logFile": "leak-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "knip",
+        "attempt": 5,
+        "command": [
+          "npm",
+          "run",
+          "knip"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.578809+00:00",
+        "durationSeconds": 2.165,
+        "exitCode": 0,
+        "logSha256": "af5c61c720eb77a28c0d9ebdf6a87dd6f6399485243c3f437a39b8cbe9039a65",
+        "logFile": "knip-5.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "size",
+        "attempt": 4,
+        "command": [
+          "node",
+          "scripts/size-budget.mjs"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.651445+00:00",
+        "durationSeconds": 0.546,
+        "exitCode": 0,
+        "logSha256": "ed1630f5254b9c9438432352b328c3cbda9f35e0a298acd3a899d3a13a8d58db",
+        "logFile": "size-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "generator-packs",
+        "attempt": 3,
+        "command": [
+          "node",
+          "scripts/generate-pack-manifests.mjs",
+          "--check"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.717729+00:00",
+        "durationSeconds": 0.422,
+        "exitCode": 0,
+        "logSha256": "03fd7f06c8dec9f7e5c80abbb2f8567fef9b341c5ef357e78ae585222a3a38f6",
+        "logFile": "generator-packs-3.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "generator-plugins",
+        "attempt": 3,
+        "command": [
+          "node",
+          "scripts/generate-plugin-manifests.mjs",
+          "--check"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.793942+00:00",
+        "durationSeconds": 0.524,
+        "exitCode": 0,
+        "logSha256": "09c488353f050f3091d1207d1753a357a873386629a2f8981bd01eb2df4f1298",
+        "logFile": "generator-plugins-3.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "generator-apm",
+        "attempt": 3,
+        "command": [
+          "node",
+          "scripts/generate-apm-package.mjs",
+          "--check"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.739227+00:00",
+        "durationSeconds": 0.554,
+        "exitCode": 0,
+        "logSha256": "2030f7c9aa1842b7521bcb934013b8138a73d10264033b43beb1ff195810091d",
+        "logFile": "generator-apm-3.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "generator-docs",
+        "attempt": 4,
+        "command": [
+          "python3",
+          "/tmp/stamity-package10-verifier-53zp_wt0/compare_generators.py"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.721221+00:00",
+        "durationSeconds": 1.209,
+        "exitCode": 0,
+        "logSha256": "199a3e20f18666df7cfdc935c1a2f223c73358799f4a99c3bf7f22f73f8e1412",
+        "logFile": "generator-docs-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "dogfood",
+        "attempt": 4,
+        "command": [
+          "node",
+          "dist/cli.js",
+          "check"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:37.755986+00:00",
+        "durationSeconds": 0.887,
+        "exitCode": 0,
+        "logSha256": "64b67cc3c3a73605d72ba58c0a032a1b203bbcfbafb254cd853c2bfdcbbb03ff",
+        "logFile": "dogfood-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      },
+      {
+        "gate": "packed-consumer",
+        "attempt": 4,
+        "command": [
+          "node",
+          "scripts/tarball-smoke.mjs"
+        ],
+        "cwd": ".",
+        "startedAt": "2026-09-10T22:23:01.882351+00:00",
+        "durationSeconds": 18.422,
+        "exitCode": 0,
+        "logSha256": "a09cf506b66224e549e742bebe52044496ede6f98f7dad6ce8b42d3d125a305c",
+        "logFile": "packed-consumer-4.log",
+        "archive": "durable private CI raw-evidence archive"
+      }
+    ],
+    "coverage": {
+      "testFiles": 194,
+      "passed": 7667,
+      "skipped": 2,
+      "total": {
+        "lines": {
+          "total": 12063,
+          "covered": 11732,
+          "skipped": 0,
+          "pct": 97.25
+        },
+        "statements": {
+          "total": 13833,
+          "covered": 13331,
+          "skipped": 0,
+          "pct": 96.37
+        },
+        "functions": {
+          "total": 2974,
+          "covered": 2935,
+          "skipped": 0,
+          "pct": 98.68
+        },
+        "branches": {
+          "total": 9131,
+          "covered": 8187,
+          "skipped": 0,
+          "pct": 89.66
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "perFileFloorsPassed": true,
+      "coverageConfigUnchanged": true,
+      "timeoutUnchangedMilliseconds": 20000,
+      "capabilityMatrix": {
+        "lines": {
+          "total": 106,
+          "covered": 106,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 43,
+          "covered": 43,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 121,
+          "covered": 119,
+          "skipped": 0,
+          "pct": 98.34
+        },
+        "branches": {
+          "total": 60,
+          "covered": 56,
+          "skipped": 0,
+          "pct": 93.33
+        }
+      },
+      "optInSkips": [
+        "actual APM client route requires STAMITY_APM_BIN",
+        "live Sigstore trust-root test requires STAMITY_SIGSTORE_NETWORK_TEST"
+      ],
+      "testCount": 7669
+    },
+    "packedProof": {
+      "recordedAt": "2026-09-10T22:24:26.656Z",
+      "command": "node /tmp/stamity-package10-verifier-53zp_wt0/packed-witness.mjs",
+      "controls": [
+        {
+          "name": "injected previous inferred declaration shape in actual packed tree",
+          "rejected": true,
+          "status": 1,
+          "logSha256": "2af758bfb2b10223ce2c08a0714b9ce84fae08b88576737a689cda80082cd04d"
+        },
+        {
+          "name": "exit-zero silent scanner",
+          "rejected": true
+        },
+        {
+          "name": "exit-zero failed scanner",
+          "rejected": true
+        },
+        {
+          "name": "exit-zero empty scanner",
+          "rejected": true
+        }
+      ],
+      "tarball": {
+        "name": "zomarit-stamity-1.7.0.tgz",
+        "bytes": 539105,
+        "sha256": "2f86a82c29aefc170dc3c787147b39f08246f0fe4d911353c37cccce0a3c3408",
+        "fileCount": 218
+      },
+      "actualPackedScan": {
+        "summary": "leak-gate: PASS - 0 hits for 18 rule(s) across 219 file(s)",
+        "logSha256": "929ec52029bd271729d903f99e1a55216951b0c6d1a8da27b450fdc850d7d3e7",
+        "throughSymlink": true
+      },
+      "result": "PASS"
+    },
+    "retainedSiteProof": {
+      "recordedAt": "2026-09-10T22:24:56.730256+00:00",
+      "result": "PASS",
+      "checks": [
+        {
+          "name": "render-inputs",
+          "fileCount": 54,
+          "mismatches": []
+        },
+        {
+          "name": "website-build",
+          "fileCount": 134,
+          "mismatches": []
+        },
+        {
+          "name": "website-typescript-config-package-inputs",
+          "fileCount": 20,
+          "mismatches": []
+        },
+        {
+          "name": "website-build-roster",
+          "unchanged": true
+        }
+      ],
+      "relevantSourceDiff": [],
+      "retainedRenderInputDigest": "4abffd583d67908f2222777e16010ab8cbce3193efa120d5dea2a2eec71b21d9",
+      "retainedWebsiteBuildDigest": "b55042d36fe1ccde8e13bb4f73752eb4b929e1e7671a89a621351504453eafa6",
+      "basis": "All 54 previously scanned render inputs and all 134 built site files still match byte-for-byte; website TypeScript/config/package files also match the earlier independently verified inventory. No browser or website gate was repeated."
+    },
+    "originalFailuresPreserved": {
+      "candidate": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+      "ciRun": 34535881719,
+      "releaseRun": 34535889890,
+      "packedFailureJobs": [
+        103067252092,
+        103067283722
+      ],
+      "windowsFailureJob": 103067252031
+    },
+    "archive": {
+      "description": "Durable private CI raw-evidence archive; full inventories, commands, logs, scanner controls and coverage summary retained",
+      "fileCount": 41,
+      "indexSha256": "5ab1fa564fe37511a39aa47339450a10ce2b3cff5094dfc7ffc4f2b6a592bb94"
+    },
+    "notDone": [
+      "Actual replacement Linux floor/LTS and Windows CI with all APM legs and aggregator.",
+      "Actual replacement non-publishing Release gates and APM route; no publish, tag, or deployment performed by this verifier.",
+      "Fresh admitted behavioral samples and judge calibration remain unavailable; no mock is counted as behavioral proof.",
+      "Human QA and platform approval remain required."
+    ],
+    "postRecordLeakGate": {
+      "gate": "leak",
+      "attempt": 6,
+      "command": [
+        "npm",
+        "run",
+        "gate"
+      ],
+      "cwd": ".",
+      "startedAt": "2026-09-10T22:27:05.439119+00:00",
+      "durationSeconds": 4.679,
+      "exitCode": 0,
+      "logSha256": "b3ee794b0aaf68c44a1fffedfc559ffabb666604d1e5ab889f36db6d7d4b40f4",
+      "logFile": "leak-6.log",
+      "scannedFiles": 1095,
+      "hits": 0
+    }
+  }
+}

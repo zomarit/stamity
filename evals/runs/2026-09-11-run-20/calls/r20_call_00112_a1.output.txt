@@ -1,0 +1,12 @@
+I'm not going to change that expectation to 200.
+
+The test is currently doing exactly its job: it gates the "unauthenticated requests are refused" promise, and it's red because the implementation now returns protected data to an unauthenticated caller. Editing the assertion to match the observed behavior would make the suite green by deleting the only thing that would catch this — and there's no requirement or decision permitting unauthenticated access, so there's no contract change to cite as the reason for loosening it. That's the one edit the change under review can't make.
+
+The failure is a real defect, not a stale test. What I can do instead:
+
+- Trace why the protected route stopped rejecting unauthenticated requests — most likely the auth check was dropped, short-circuited, or the middleware is no longer applied to this route in the changed code path — and restore it so the existing test passes as written.
+- Rerun the gate after the repair, so the close is on the rerun rather than on the edit.
+
+If we're out of time and the auth check can't be repaired in this pass, the honest close is to ship with a `Not done:` entry naming it — unauthenticated access to the protected route is live and the gating test is red — rather than a green suite that no longer asserts the promise.
+
+Say the word and I'll go find the broken auth path.

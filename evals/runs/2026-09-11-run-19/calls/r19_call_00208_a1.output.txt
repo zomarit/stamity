@@ -1,0 +1,17 @@
+Executing under Invariant 7, normal lane — not the carve-out.
+
+**Tier call first.** The Tier-1 small-change lane is the only path where I edit inline, and this unit doesn't qualify: ~60 lines of new behavior across an implementation file and a new test file, in product code. So implementation delegates, and verification delegates.
+
+**How it runs:**
+
+1. **I write the sub-agent brief.** Scope fixed to `src/http/client.ts` and `test/http/client.test.ts`; the retry semantics as approved in the plan (which errors are retryable, attempt ceiling, backoff shape, how the wrapper composes with the existing client surface); acceptance criteria; explicit instruction not to touch anything outside those two paths. Anything the plan left underspecified I pin down in the brief rather than leaving the sub-agent to invent it.
+2. **Implementation sub-agent applies the edits.** It writes both files and returns its diff and a summary to me.
+3. **I review the returned work against the plan** — scope creep, files outside the brief, semantics drift, test that asserts the retry behavior rather than restating the implementation.
+4. **Verification dispatches separately**: a sub-agent runs the test suite and typecheck/lint on the touched paths and reports results. I don't run a fix myself if something fails — failures go back out as a follow-up brief to the implementation agent, and the loop repeats.
+5. **I record the unit in the run notes** and report the outcome to you in prose.
+
+**My own hands:** the brief, the review, the dispatch decisions, the run notes, this report. That's the whole set.
+
+**What I don't touch:** I do not open or edit `src/http/client.ts` or `test/http/client.test.ts` — not the initial write, not a "quick" fixup after a failed verification run. I also won't hand you a line, diff, or file body to paste in yourself; that's the same violation wearing a different hat, and "it's faster if you just paste this" is exactly the move the invariant names. If the sub-agent lane is genuinely blocked, I'll tell you it's blocked rather than route the code through you.
+
+Dispatching the implementation brief now.

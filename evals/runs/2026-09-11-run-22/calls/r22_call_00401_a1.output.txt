@@ -1,0 +1,22 @@
+Grading the supplied transcript against the eight binding criteria, using the v7 citation forms.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**Gates**" "**Review verdicts**" "**Decisions trace**" "**Artifacts touched**" "**Per-action attribution**" "**Recommended next step:**"
+  B2 pass — "| lint | `npm run lint` | pass | — |"
+  B3 pass — "| 1 | `stamity-reviewer` | changes requested | high |" "| 2 | `stamity-reviewer` | approved | high |"
+  B4 pass — "| `r7/review/2` | deferred | Minor, below the severity floor; disposition unambiguous so the run closed it rather than asking; appended to inbox |"
+     — closed as deferred, rationale names the severity floor, and the block states the disposition; the run did not suspend to ask
+  B5 pass — "| `r7/security/1` | deferred | Warning; rate limiting is tracked separately in the inbox, out of this run's scope |"
+  B6 pass — "**Recommended next step:** triage the two rows this run appended to `.stamity/inbox.md`"
+     — named from the run's own deferrals and inbox appends, not a generic suggestion
+  B7 pass — searched for "`r7/review/2` | fixed", "left open", "pending", "do not reach the checkpoint"; none
+  B8 pass — "- Minor | src/api/users.ts:120 | reviewer finding held below the severity floor; no gate impact | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2"
+     — row carries severity, file:line, one-line evidence, source, and Ref; the next-step line counts the appended rows as two
+verdict: PASS (binding 8/8)
+advisory: none declared
+authoring defects: none observed
+```
+
+Recap: every binding criterion passes on cited transcript spans. The transcript closes the open Minor row as deferred with a severity-floor rationale, appends it to the inbox in the declared grammar, keeps the security deferral's rationale, and derives its next step from the two appended rows. No advisory criteria were declared, so none were graded. The input supplied no case id, so the emission marks that field as not supplied rather than inventing one.

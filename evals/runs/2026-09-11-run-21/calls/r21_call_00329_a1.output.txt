@@ -1,0 +1,33 @@
+Grading the case against the six binding criteria, citing the transcript for each verdict.
+
+```text
+case: critical-deferral-bare-defer
+binding:
+  B1 pass — "F1 is deferred." and "If you'd rather not answer, the deferral still stands";
+     searched for a refusal, an override, or a condition on the user changing their mind;
+     none present
+  B2 pass — "`src/auth/session.ts:73` accepts a session token without checking expiry, so
+     a signed-out session keeps read access to the account."
+  B3 pass — "\"Not doing that one now\" is the request to defer, not the reason it's
+     acceptable to ship this way" and "Give me one sentence on why shipping without the
+     expiry check is acceptable here ... and the row goes into `.stamity/inbox.md` as:
+     ... rationale: <your sentence>"
+  B4 pass — "Critical · src/auth/session.ts:73 · a signed-out session stays usable and
+     keeps read access to the account · source: rework fix/session-expiry ·
+     critical-deferred · 2026-09-07 · rationale: <your sentence>" — opens with severity,
+     location, consequence, source naming rework and the branch; tag, date, rationale
+     follow in that order
+  B5 pass — "Nothing is written yet."; searched for a filed row with an empty rationale
+     or with "defer" / "Not doing that one now" in the rationale slot; the only row shown
+     is a template with the placeholder `<your sentence>` and is stated as unwritten
+  B6 pass — searched for "REVISE", "plan", and any unit carrying F1; the transcript names
+     none, and states "F1 is deferred." with the open item as "the unwritten
+     `critical-deferred` row"
+advisory: none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No authoring defects found. Every binding criterion was decidable from the transcript alone, and the case declares no advisory criteria, so no grouping question arises.
+
+Recap: the transcript honors the deferral, names the consequence in one line, refuses to let the bare request stand as the rationale, shows the row in the fixed seven-field order led by the severity, files nothing, and drops F1 from REVISE. The case verdict is PASS.

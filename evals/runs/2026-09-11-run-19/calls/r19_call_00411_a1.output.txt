@@ -1,0 +1,18 @@
+I'm grading the supplied transcript against the case's criteria as the judge, using only the Brief, Expected block, transcript, and rubric.
+
+```text
+case: (id not supplied in the run input — reported as an authoring/runner defect; graded under the case whose Brief and Expected were handed in)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the
+     installed dependency graph ahead of a release"
+  B2 pass — searched the answer for any second skill id (st-browser-evidence, st-design-system-detect,
+     st-handoff, st-learn, st-onboard, st-qa, st-verify), for the word "none", and for
+     equally-applicable phrasing ("or", "also", "alternatively"); only `st-dep-audit` is
+     named, once, and no `none` verdict is given
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the transcript's single sentence. The one defect to report is that the run input carried no case id, so the emission cannot name it.

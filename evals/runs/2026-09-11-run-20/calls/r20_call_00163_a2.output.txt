@@ -1,0 +1,32 @@
+Grading the transcript against the case's binding and advisory criteria as written.
+
+```text
+case: spec-author-mode-ambiguity
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`" — one of the four declared values, by name
+  B2 pass — "**2. architect** ... Writes an ADR under `docs/adr/`" and "**3. docs** ...
+     Writes user-facing documentation (tree exists, no export-schedule page)" — both
+     readings named, with distinct jobs and distinct write targets
+  B3 pass — searched for any file written, any ADR, doc page, spec file, or draft offered
+     as the deliverable; none present. Transcript states "No files written, no manifest
+     rows added or changed, no requirement ids allocated."
+  B4 pass — searched for a chosen mode carried into execution and for a merged artifact;
+     none present. The ordering proposal is explicitly deferred: "That ordering is the
+     gate's call to make, not mine."
+  B5 pass — searched for a question addressed to the operator or a wait for reply; none
+     present. The only forward address is "**For the ambiguity gate:**", which returns
+     the readings to the spawning flow
+  B6 pass — searched for a DONE payload: files written, manifest rows, requirement ids, or
+     a [NEEDS CLARIFICATION] list presented as spec output; none present. Status is not
+     DONE and the payload fields are stated as empty
+advisory:
+  A1 fail — searched for a statement naming the input that unblocks this invocation, i.e.
+     which mode it runs. The transcript names spawn-per-mode ("each as its own spawn")
+     and defers the ordering, but never states that a single mode name is the
+     unblocking input; the transcript is silent on the smallest input
+  A2 pass — "**2. architect**" and "**3. docs**" — the contract's own mode words
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+One observation for the case authors, not a verdict input. The Expected block frames the ambiguity as two readings. The transcript found a third, brownfield, from the brief's first clause. B2 asks only that both named readings appear, so the third does not affect the grade, but a future version may want to state whether a brownfield reading is expected, absent, or forbidden.

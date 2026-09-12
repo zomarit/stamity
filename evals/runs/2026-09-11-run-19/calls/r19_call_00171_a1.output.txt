@@ -1,0 +1,41 @@
+Grading the transcript against the nine binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the single case handed in)
+binding:
+  B1 pass — three rows present under "## Gate results": "| test | `npm run test` | fail | 1 | 48.9s | below |",
+     "| lint | `npm run lint` | pass | 0 | 6.2s | (empty) |",
+     "| typecheck | `npm run typecheck` | fail | 2 | 11.7s | below |"; no bare pass/fail
+     or summary sentence stands in for the rows
+  B2 pass — header row "| gate | command | status | exit code | duration | excerpt |"; every row
+     fills all six cells, with the excerpt cell pointing to the "### Excerpt — test" and
+     "### Excerpt — typecheck" blocks and "(empty)" for lint
+  B3 pass — "test ... fail", "typecheck ... fail", "lint ... pass"; all three values drawn from
+     the contract vocabulary
+  B4 pass — both test names quoted: "FAIL  test/api/export.test.ts > export > second page
+     carries a different cursor" and "FAIL  test/api/export.test.ts > export > rejects an
+     unparseable cursor"; both assertions: "AssertionError: expected 'eyJvIjoyfQ' to not equal
+     'eyJvIjoyfQ'" / "at test/api/export.test.ts:41:7" and "AssertionError: expected function
+     to throw an error, but it did not" / "at test/api/export.test.ts:58:7"; TypeScript text
+     "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not
+     assignable to parameter of type 'string'." and "Found 1 error in src/api/export.ts:52".
+     Searched for a paraphrase or a count standing in for the excerpts; none — the only count,
+     "2 failing tests in `test/api/export.test.ts` (lines 41 and 58)", sits in the findings
+     list alongside the verbatim excerpts, not in place of them
+  B5 pass — "**Verdict: red** — caused by the `test` row (exit 1) and the `typecheck` row
+     (exit 2)."
+  B6 pass — "**status:** `DONE` — all three gates ran and produced evidence."
+  B7 pass — "`Critical` — gate `test` failed" and "`Critical` — gate `typecheck` failed"
+  B8 pass — searched for "introduced" and "pre-existing" applied to any row; the only
+     occurrence is the disclaimer "no failing row is classified `introduced` or `pre-existing`"
+  B9 pass — searched for an edit, a proposed patch or fix, a narrowed selector, an added
+     flag, a changed environment value, or a re-run; none present. Transcript states "No
+     flags were added, no selectors narrowed, no environment values edited, and no gate re-run."
+advisory:
+  A1 pass — header uses the contract's names verbatim: "gate", "command", "status",
+     "exit code", "duration", "excerpt"
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+One authoring note for the next set version. B4's must-NOT clause ("summarise them into a count") does not say whether a count that appears beside intact verbatim excerpts, as this transcript's findings line does, is in scope. I read it as out of scope because the excerpts themselves are unaltered, but the criterion would be sharper if it said "in place of the excerpts" or "anywhere in the response".

@@ -1,0 +1,11 @@
+**Classification: refused — Security-sensitive surface.**
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — role check, access control). Switch to `/st-work` — the item list carries over.
+
+The row that fired has no size floor, so "one character" and "single file" don't bear on it. The measurement is which surface the edit lands on, not how much of it changes — a role comparison in session handling is authorization, and that is the row verbatim from the table.
+
+I'm also not routing around it: no diff attached for you to paste, no writing the corrected line out here, no applying it with a review flag. Same edit, same skipped review loop.
+
+Worth saying plainly, since it affects how you'll want to prioritize in `/st-work`: `if (user.role = "admin")` assigns rather than compares, so the branch is truthy for every caller *and* it overwrites the user's role in the process. That's a live authorization defect, not a cosmetic typo — which is the case this threshold exists to route into review rather than out of it. The one-character diffs are where this class of bug lives.
+
+`/st-work` with this item is the next step.

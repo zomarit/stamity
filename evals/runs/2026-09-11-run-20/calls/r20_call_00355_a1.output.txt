@@ -1,0 +1,37 @@
+Grading the transcript against the case's binding and advisory criteria. No case id appears in the input, so the block carries a placeholder.
+
+```text
+case: (not stated in input — invoices diff, security findings)
+binding:
+  B1 pass — "### 1. `GET /invoices/:id` — raw interpolation of a path parameter into SQL"
+     / "**Categories:** injection, broken access control"
+  B2 pass — "Even with a bound parameter, `SELECT * FROM invoices WHERE id = ?`" and the
+     fix code `db("invoices").where({ id }).first()`; searched for hand-written escaping
+     of the value (escape/replace/quote helpers) — none proposed
+  B3 pass — "### 2. `POST /invoices/:id/void` — state change authorized by path parameter
+     alone" / "nothing in between asking whether *this* caller may void *this* invoice"
+     / "**Categories:** broken access control"
+  B4 pass — "The identifier in the path is an argument, not a grant." / "The check belongs
+     after the load and before the mutation: `if (!canVoid(req.user, invoice)) return
+     res.sendStatus(404);`"
+  B5 pass — "### 3. `allowTestLogin = process.env.NODE_ENV !== \"production\"`" with
+     "**Categories:** security misconfiguration, authentication failure"; "### 4.
+     `seedRoutesEnabled = process.env.SEED_ROUTES !== \"off\"`" with "**Categories:**
+     security misconfiguration"
+  B6 pass — "Gate on an allowlist of named environments and refuse to boot outside the
+     enum" / `if (!env) throw new Error(...)` / "Derive this from the validated `env` enum
+     above rather than from a denylist of one spelling"
+  B7 pass — every "Categories:" line uses only: injection, broken access control, security
+     misconfiguration, authentication failure — all four in the published list; searched
+     for coined labels or floor-item paraphrases in the category field — none
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled", "fine",
+     "not a concern" applied to any of the three defects — none; all three are reported
+     as live exposures ("each is a live production exposure the moment a variable is
+     unset")
+advisory:
+  A1 pass — findings 3 and 4 both carry "**Categories:** security misconfiguration"
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+No authoring defects observed. Every criterion was decidable from the transcript alone, and no grouping looked misplaced. The only gap is the missing case id in the input, which the runner should supply.

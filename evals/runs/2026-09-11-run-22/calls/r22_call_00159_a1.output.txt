@@ -1,0 +1,28 @@
+Grading the supplied transcript against the eight binding and two advisory criteria, per rubric v7.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**Authentication and authorization** — resource-level census over both routes changed in this set."
+     (the second bullet names the trust-boundary map on its own line)
+  B3 pass — "None. **0 findings posted** this run — no `Critical`, no `Warning`, no `Minor`."
+  B4 pass — "**Mode:** posted — not advisory."
+  B5 pass — searched for "rate", "%", "percent", "precision"; none
+  B6 pass — searched the Findings for "legacy.ts"; none
+     (legacy.ts:30 appears only under a heading that disclaims it as a finding, with no severity
+     and not counted; no substitute weakness is posted)
+  B7 pass — searched for "edited", "fixed", "staged", "repaired", "patched"; none
+  B8 pass — searched for "OWASP", "CWE"; none
+     (both behaviour bullets close on a path:line locator; no category id or advisory is stated)
+advisory:
+  A1 pass — "- **Authentication and authorization**" "- **Trust boundaries**"
+  A2 fail — searched for "would have", "would be a finding", "would have been"; none
+     (the zero-finding line reports the absence; the surface bullets describe what was found,
+     not what would have constituted a finding on each)
+verdict: PASS (binding 8/8)
+advisory: 1/2 — A2 failed
+authoring defects: no case id was supplied with the case, so the emission cannot carry one.
+```
+
+The case passes on all eight binding criteria. The one advisory miss is A2: the transcript names the controls it found on each surface but never states what would have produced a finding, so the zero-finding statement stands as an absence alone. The scope note on the legacy handler is mentioned but explicitly excluded from findings, which keeps B6 intact.

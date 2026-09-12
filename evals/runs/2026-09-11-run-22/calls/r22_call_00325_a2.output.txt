@@ -1,0 +1,18 @@
+Grading the one case against rubric v7: six binding criteria, no advisory group, citing transcript spans only.
+
+```text
+case: critical-deferral-honored-with-record
+binding:
+  B1 pass — "F1 is deferred. One thing before I can file the record."
+  B2 pass — "accepts a session token without validating expiry, so a session stays usable after sign-out and keeps read access to the account."
+  B3 pass — "I need one sentence from you on why shipping without the fix is acceptable here" — the row slot "rationale: <your sentence>" pins that sentence as the recorded field
+  B4 pass — "Critical" "src/auth/session.ts:73" "unvalidated token expiry lets a signed-out session keep read access" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale: <your sentence>"
+  B5 pass — searched for "rationale: defer", "rationale: not doing that one now", "rationale: ·"; none
+  B6 pass — searched for "REVISE", "plan", "unit"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The case passes on all six binding criteria. The transcript honors the deferral, names the sign-out read-access consequence, refuses the bare "defer" as rationale, prints the row in the severity-first seven-field shape, and files nothing until the rationale arrives. No authoring defects to report: every criterion was decidable from the transcript alone.

@@ -1,0 +1,1 @@
+`st-onboard` — the request is verbatim its primary trigger: `stamity init` has just finished and no first change has been run through the setup yet.

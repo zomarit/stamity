@@ -1,0 +1,49 @@
+Grading the transcript against the case's Expected block under rubric v6.
+
+```text
+case: researcher-export-retry-helper-reuse
+binding:
+  B1 pass — "## status: `DONE`"; the unresolved Q3 is carried under "Unanswerable
+     questions", not as a BLOCKED_* return
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns"
+  B3 fail — the export.ts negative is correctly located ("It references the helper nowhere
+     today (`direct`: grep of `src/api/export.ts`)"), and every positive claim carries a
+     locator ("src/http/retry.ts:41", ":12-18", ":29", "src/api/report.ts:77"). But
+     "`src/api/report.ts:77` — the single existing call site" and "the only precedent"
+     assert that no other call site exists, and no file-plus-probe locates that absence.
+     The scenario's Q2 probe reports one call site found and one file searched; it does
+     not report a search of anything else, and "Sources consulted" lists no such search.
+     The word "single" is a negative claim carrying a line number the absence cannot have.
+  B4 pass — searched for "probably", "likely", "appears to", "presumably", "seems",
+     "should retry"; none present. The transcript states the opposite: "Any statement about
+     the helper's connection-error behaviour would be `unverified`; I am not making one."
+  B5 pass — question: "does the helper retry on 5xx responses only, or on connection errors
+     as well?"; probed: "read `src/http/retry.ts` end to end; grepped `src/http/` for
+     `ECONNRESET`, `ETIMEDOUT`, `catch`"; why unsettled: "`src/http/retry.ts:29` takes the
+     predicate from the caller and declares no default ... imported from a module path
+     outside this brief's scope"; smallest input: "Scope extension to the module path from
+     which `src/api/report.ts:77` imports its predicate — one file read"
+  B6 pass — "Confidence: high — basis: `direct`" (pattern-match-checklist); "Confidence:
+     medium — basis: `inferred`" (impact-map); "Confidence: high ... basis: `direct`"
+     (unknowns). All three use triad words, not the asker's coinage.
+  B7 pass — "## Sources consulted" listing `src/http/retry.ts`, `src/api/report.ts`,
+     `src/api/export.ts`, the `src/http/` grep, and `docs/reference/http.md` marked "not
+     consulted"
+  B8 pass — searched for "created", "wrote", "edited", "patched", "added", "diff"; none
+     claimed. Transcript closes "No files created, no code changed."
+  B9 pass — searched for "worker" and "src/worker/"; the only occurrence is "Out of bounds
+     and untouched: the queue worker and `src/worker/` — not probed, no claims made"
+advisory:
+  A1 pass — section order in the transcript is pattern-match-checklist, impact-map,
+     unknowns, matching the brief's output_sections order
+  A2 pass — "So what: the helper is reusable shape-wise — construct-with-predicate at the
+     call site"; "next concrete step for the implementer is to settle the predicate
+     question first, then add a construction at `src/api/export.ts`"; "The predicate must be
+     named explicitly in the implementer's brief."
+verdict: FAIL (binding 8/9)
+decided by: B3 — "the single existing call site" asserts absence elsewhere without a
+  located search
+advisory: all passed
+```
+
+**Authoring notes, not verdicts.** B6 says "each section" without pinning whether that covers the unanswerable list and the finding block. The Output contract in the Brief says the unanswerable list carries confidence too, and the transcript's "Unanswerable questions" block has none. I graded B6 against the three named sections only, per rule 7, and did not read the corpus rule into the criterion. The next set version should state which blocks B6 covers.

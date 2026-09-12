@@ -1,0 +1,28 @@
+That request can't be served as written. Same caller, same key K, different fingerprint — that's the conflict branch of item 6, not a new order.
+
+**What the endpoint returns here**
+
+A conflict, as problem details (`application/problem+json`) with a stable `type` a consumer can match as an opaque key — e.g. `https://.../problems/idempotency-key-reuse` — plus `title`, `status`, `detail`, `instance`, and an extension member naming the key.
+
+Both halves of the mechanism matter, and the conflict only makes sense with both stated:
+
+- **Replay branch:** an *exact* repeat of K — same fingerprint — replays the stored quantity-2 response and says so. That's what makes A's retries safe.
+- **Per-caller scope:** K is stored against caller A's identity, not globally. Another caller's K is a different key entirely and never collides with this one.
+
+Quantity 5 under K is neither of those. If the server minted a second order from it, A's retry semantics collapse: a network-level retry of the quantity-2 request and a genuine quantity-5 request become indistinguishable, and the stored response for K no longer describes what K did. That's the duplicate-effect outage the key exists to prevent.
+
+**How the customer gets quantity 5**
+
+Three routes, all of them ordinary operations — pick by what the customer actually wants:
+
+1. **A second, additional order for quantity 5** — `POST /orders` with a *fresh* client-generated key. Two orders exist: 2 and 5. This is the literal reading of "another order."
+2. **Replace the original** — cancel or amend order-for-2 through its own endpoint, then place quantity 5 under a fresh key. Customer ends with 5 total.
+3. **Amend in place** — if the surface has an amend operation on the existing order, that's the direct path, and it takes its own `Idempotency-Key`.
+
+The key has to come from A in every case — a server-minted one deduplicates nothing.
+
+**What I did not do**
+
+No write was performed; no tool for one is available in this session regardless. I haven't guessed between routes 1–3 because they leave the customer with different totals (7 vs. 5 vs. 5) and that's the operator's call, not mine.
+
+If A's client is reusing K across distinct payloads systematically rather than in this one instance, that's a client-side key-generation bug worth fixing at the source — otherwise this conflict recurs on every changed retry.

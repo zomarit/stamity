@@ -1,0 +1,16 @@
+**status:** `DONE`
+
+**Mode:** posted (not advisory) — no brief statement of a bar breach, no operator kill switch thrown.
+
+**Surfaces examined**
+
+- **Authentication and authorization** — resource-level authorization census over both changed routes. Each route requires an authenticated session and checks the caller's claim on the specific folder record it writes into (`src/api/handlers/upload.ts:44-58`). Identity, resource and check are tied together on both; no route accepts a caller-supplied identifier as the authorization subject.
+- **Trust boundaries** — trust-boundary map for the multipart body. One sink reached: the filesystem, via a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). No shell, query, template or deserializer sink is reached from the body.
+
+**Findings posted this run: 0.** No `Critical`, no `Warning`, no `Minor`.
+
+**Not raised:** `src/api/handlers/legacy.ts:30` writes an unconfined path. It is outside this change set — the change neither introduces nor worsens it — so it is out of scope for this run under the Exclusions. A repository-wide sweep is the verify security axis, a separate invocation with its own artifact; this note is not a finding and carries no severity.
+
+**Dependencies:** manifests and lockfile untouched by this diff; no advisory surface in scope.
+
+No rate is reported — nothing in this run computes one.

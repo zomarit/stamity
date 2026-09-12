@@ -31,6 +31,11 @@ import { EngineError } from "../../../src/types/errors.ts";
 /**
  * The drift gate on the per-class reference pages.
  *
+ * 2026-09-10 accessibility repair: ungrouped artifact, pack and server entries
+ * move from H3 to H2 under their page H1. Exact-heading consumers below keep
+ * asserting the same invocation names, inventory sets and ordering; only the
+ * semantic level changes. Grouped headings in the sibling renderers stay intact.
+ *
  * Each page is a projection of artifact frontmatter, so an artifact added,
  * retired, re-tagged, or re-described has to show up as a byte diff. The
  * refusal cases run against seeded corpora on disk rather than the real one:
@@ -108,6 +113,22 @@ async function seed(
 }
 
 describe("renderReferencePages — drift gate", () => {
+  it.each(REFERENCE_PAGES)("keeps heading levels contiguous on $path", async ({ path }) => {
+    // 2026-09-10 browser evidence found H1 → H3 on the skills reference. Check
+    // every shared-renderer page so the same inaccessible jump cannot remain
+    // in another inventory or return when a page gains nested groups.
+    const page = (await live()).get(path) ?? "";
+    const headings = [...page.matchAll(/^(#{1,6}) /gm)].map((match) => match[1]?.length ?? 0);
+    expect(headings.length, `${path} has a title and inventory headings`).toBeGreaterThan(1);
+    expect(headings[0], `${path} starts with its page title`).toBe(1);
+    expect(headings.filter((level) => level === 1), `${path} has one page title`).toHaveLength(1);
+    for (let index = 1; index < headings.length; index += 1) {
+      expect(headings[index], `${path} heading ${String(index + 1)} skips a level`).toBeLessThanOrEqual(
+        (headings[index - 1] ?? 0) + 1,
+      );
+    }
+  });
+
   it("byte-matches every committed page", async () => {
     const pages = await live();
     expect([...pages.keys()]).toEqual(REFERENCE_PAGES.map((page) => page.path));
@@ -215,8 +236,8 @@ describe("frontmatter projection", () => {
         .map(invoked);
       const headings = page
         .split("\n")
-        .filter((line) => line.startsWith("### "))
-        .map((line) => line.slice(5, -1));
+        .filter((line) => line.startsWith("## "))
+        .map((line) => line.slice(4, -1));
       expect(headings, `${spec.path} artifact set`).toEqual(expected);
       expect(page).toContain(`${String(expected.length)} ${String(spec.covers)}s.`);
     }
@@ -255,8 +276,8 @@ describe("frontmatter projection", () => {
     // asserted across every page rather than only the one that showed it.
     const pages = await live();
     const commands = pages.get("docs/reference/commands.md") ?? "";
-    expect(commands).toContain("### `/st-work`");
-    expect(commands).toMatch(/^### `\/st-[a-z][a-z-]*`$/m);
+    expect(commands).toContain("## `/st-work`");
+    expect(commands).toMatch(/^## `\/st-[a-z][a-z-]*`$/m);
     for (const [path, bytes] of pages) {
       expect(bytes, `${path} shows the catalog-internal command id prefix`).not.toContain(
         COMMAND_ID_PREFIX,
@@ -286,8 +307,8 @@ describe("frontmatter projection", () => {
         packsRoot: fixture.packsRoot,
       });
       const skills = pages.get("docs/reference/skills.md") ?? "";
-      const headings = skills.split("\n").filter((line) => line.startsWith("### "));
-      expect(headings).toEqual(["### `st-probe`"]);
+      const headings = skills.split("\n").filter((line) => line.startsWith("## "));
+      expect(headings).toEqual(["## `st-probe`"]);
       expect(skills).not.toContain("st-st-probe");
     } finally {
       fixture.cleanup();
@@ -299,7 +320,7 @@ describe("pack inventory", () => {
   it("lists every first-party pack with its version and an install line the binary accepts", async () => {
     const packs = (await live()).get("docs/reference/packs.md") ?? "";
     for (const id of ["ops", "product-audit", "scaffold"]) {
-      expect(packs, `packs page omits ${id}`).toContain(`### \`${id}\``);
+      expect(packs, `packs page omits ${id}`).toContain(`## \`${id}\``);
       // Changed line (not a weakening): the page printed
       // `stamity add ./packs/<id>` for all three, and `add` REFUSES that — a
       // path-shaped spec never consults the catalog, so it resolves at the
@@ -428,8 +449,8 @@ describe("MCP catalog page", () => {
     const page = (await live()).get(MCP_PATH) ?? "";
     const headings = page
       .split("\n")
-      .filter((line) => line.startsWith("### "))
-      .map((line) => line.slice(5, -1));
+      .filter((line) => line.startsWith("## "))
+      .map((line) => line.slice(4, -1));
 
     expect(headings).toEqual(Object.keys(CURATED_MCP_SERVERS));
     expect(headings.length).toBeGreaterThan(1);
@@ -519,7 +540,7 @@ describe("MCP catalog page", () => {
 
   it("renders a well-formed probe row, so the cases above isolate one defect each", () => {
     const page = renderMcpPageFrom(probeWith(), "2026-01-01");
-    expect(page).toContain("### `probe`");
+    expect(page).toContain("## `probe`");
     expect(page).toContain("1 server. Row set last swept on `2026-01-01`.");
     expect(page).toContain("- **Runs as:** a local child process");
     expect(page).toContain("- **Published by:** the vendor of the service it fronts");
@@ -625,9 +646,9 @@ describe("refuse-to-render on a defective artifact", () => {
       // spelling now, and an agent with the frontmatter id `probe` is invoked as
       // `stamity-probe`. The claim — this artifact reached its class page — is
       // the same one, held to the spelling the page actually ships.
-      expect(agents).toContain("### `stamity-probe`");
+      expect(agents).toContain("## `stamity-probe`");
       expect(agents).toContain("1 agent.");
-      expect(pages.get("docs/reference/packs.md") ?? "").toContain("### `probe-pack`");
+      expect(pages.get("docs/reference/packs.md") ?? "").toContain("## `probe-pack`");
       // An empty class is a legitimate state, not a defect.
       expect(pages.get("docs/reference/rules.md") ?? "").toContain("No rules in the corpus.");
     } finally {
@@ -660,7 +681,7 @@ describe("scripts/generate-docs.mjs --page reference", () => {
 
   it("reads the real packs root by default", () => {
     expect(readFileSync(join(workspace, "docs/reference/packs.md"), "utf-8")).toContain(
-      "### `ops`",
+      "## `ops`",
     );
     expect(REAL_PACKS_ROOT.endsWith("packs")).toBe(true);
   });

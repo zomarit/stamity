@@ -61,6 +61,7 @@ import * as packManifest from "../pack/manifest.ts";
 import * as packInstall from "../pack/install.ts";
 import * as packPermissions from "../pack/permissions.ts";
 import * as packTrust from "../pack/trust.ts";
+import * as packSign from "../pack/sign.ts";
 import * as packSigstoreVerifier from "../pack/sigstoreVerifier.ts";
 import * as packOrgPolicy from "../pack/orgPolicy.ts";
 import * as packReceipt from "../pack/receipt.ts";
@@ -81,6 +82,7 @@ import * as worktreeMaterialize from "../worktree/materialize.ts";
 import * as worktreeSetup from "../worktree/setup.ts";
 import * as worktreeCleanup from "../worktree/cleanup.ts";
 import * as hooksModel from "../hooks/model.ts";
+import * as portableRunner from "../hooks/portableRunner.ts";
 import * as userHooks from "../hooks/userHooks.ts";
 import * as hookScripts from "../hooks/scripts.ts";
 import * as toolCategories from "../tools/categories.ts";
@@ -175,6 +177,7 @@ export interface EngineRegistry {
     readonly install: typeof packInstall;
     readonly permissions: typeof packPermissions;
     readonly trust: typeof packTrust;
+    readonly sign: typeof packSign;
     readonly sigstoreVerifier: typeof packSigstoreVerifier;
     readonly orgPolicy: typeof packOrgPolicy;
     readonly receipt: typeof packReceipt;
@@ -214,6 +217,7 @@ export interface EngineRegistry {
   };
   readonly hooks: {
     readonly model: typeof hooksModel;
+    readonly portableRunner: typeof portableRunner;
     readonly userHooks: typeof userHooks;
     readonly scripts: typeof hookScripts;
   };
@@ -315,6 +319,7 @@ export function createEngine(): EngineRegistry {
       install: packInstall,
       permissions: packPermissions,
       trust: packTrust,
+      sign: packSign,
       sigstoreVerifier: packSigstoreVerifier,
       orgPolicy: packOrgPolicy,
       receipt: packReceipt,
@@ -339,7 +344,7 @@ export function createEngine(): EngineRegistry {
       setup: worktreeSetup,
       cleanup: worktreeCleanup,
     },
-    hooks: { model: hooksModel, userHooks, scripts: hookScripts },
+    hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts },
     tools: { categories: toolCategories, allowlist, translator },
     detect: {
       repoAnalyzer,

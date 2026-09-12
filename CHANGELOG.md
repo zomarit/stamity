@@ -29,6 +29,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [1.7.0] - 2026-09-10
+
+### Added
+
+- **Pack authors can create detached Sigstore bundles.** The source-checkout signing helper
+  uses the existing verification payload and signer declaration, checks the returned bundle,
+  and refuses output paths that could overwrite pack inputs. The engine exports `pack.sign`
+  and its options type; the public CLI keeps its existing commands.
+- **TypeScript consumers receive public declarations.** The package exposes declarations
+  alongside its existing JavaScript entry, including the dependencies needed to resolve
+  reachable Sigstore types in an external project.
+- **Spec and plan workflows can check structural coverage.** A projected `st-verify` companion
+  detects missing, duplicate and dangling requirement or unit references in existing Markdown
+  formats. Semantic review remains a separate required step.
+- **Manual evaluation records admission evidence.** Session-native evaluation uses fresh
+  agents without an API credential, with recorded ambient instructions and native visibility
+  limits. The optional stateless API transport uses an authorized API credential. Both record
+  exact inputs, model controls, traces and bounded retries, and require every calibration label
+  to match before accepting scores. Deterministic tests do not establish live model behavior.
+  The eval set moves to `SET-v6`: the same cases, criteria and thresholds, scored so that every
+  must-NOT criterion on a floor or guardrail case stays all-or-nothing across the three samples
+  while every case otherwise passes with two of three; the judge rubric moves to v7 with a
+  closed citation form and the same calibration fixtures and keys.
+
+### Changed
+
+- **Governing prose states its obligations in words.** The 1.7.0 evaluation run measured
+  where the model under test delivered the substance and dropped the named token, answered
+  half of a conjunctive rule, or relaxed in the closing line what the body refused. The
+  charter, the affected rules, commands and agents now say those obligations outright: the
+  row and surface a quick-lane refusal names, the dated inbox block a rework appends, the
+  replay branch and per-caller scope of an idempotency conflict, the accessibility clause of
+  a rendered error state, the census dispatch issued in its own turn, and the secret value
+  that the reply never quotes, masks or exemplifies; and, after a second measured run, the
+  closing line that offered the escape the body refused, the halves of a conjunctive rule, the
+  headline that answers without its citation, the screened span carried over in a paraphrase,
+  and the single next step. Sealed evaluation briefs moved with the prose; no criterion or
+  expected answer changed.
+- **Shipped skills declare compatibility and license metadata and include invocation hints.**
+  Client documentation names the supported native invocation syntax and manual fallbacks.
+- **Authoring and review instructions make proof obligations explicit.** Structural checks
+  retain semantic review, every finding names its evidence basis, and onboarding time limits
+  keep unmet mandatory gates in the `Not done` report. Security reporting separates categories
+  from mechanisms and excludes credential fragments and injected payload wording.
+
+### Fixed
+
+- **Native hook output follows each client's decision contract.** Portable runners translate
+  allow, deny and global-stop responses with their reasons, normalize supported event payloads,
+  and apply bounded execution. Documentation identifies native timeout and unsupported-event
+  limitations instead of claiming uniform enforcement.
+- **JavaScript projects honor an explicit typecheck script.** Generated verification gates
+  retain a configured typecheck command even when no TypeScript source is detected.
+- **Imported authoring scripts do not start a second process or write output.** Direct script
+  invocation still forwards Node flags and arguments and preserves useful failure statuses.
+
 ## [1.6.0] - 2026-09-10
 
 ### Added

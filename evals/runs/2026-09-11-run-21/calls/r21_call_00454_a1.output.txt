@@ -1,0 +1,3 @@
+`none`
+
+The checkpoint explicitly covers this: st-qa's description says it is called by name from a work run's own QA checkpoint and never selected there on its own, so the operator's "what should I check by hand?" is answered by the checkpoint steps already running — I continue with step 1's what-to-verify summary and then invoke qa as a command step, not as a trigger match.

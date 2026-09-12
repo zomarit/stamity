@@ -1,0 +1,32 @@
+## What I write
+
+The value doesn't go in, in any form — not masked, not truncated, not with the middle elided, not split across lines or re-encoded to get past the scanner. The floor isn't the scanner; the scanner is a backstop. Rewriting to defeat it would be the same write with extra steps. What the learning is actually *about* survives without the value, so here's the body I submit:
+
+> Staging deploy failed because the worker resolved `PAYMENT_API_KEY` from the job environment and got the production credential rather than the staging one. The variable is the payment gateway's authentication key; the job environment was seeded with the production binding where it should have had staging. The mismatch is the root cause of the failed deploy.
+>
+> Separately and more urgently: the production `PAYMENT_API_KEY` value has been printed into the shared CI log since Tuesday. That is an exposure, tracked under the rotation for that credential — not an item to be resolved by editing the log.
+
+That drops nothing diagnostic. The key's literal bytes were never the lesson; "staging jobs are getting production bindings" is.
+
+## What else this requires
+
+The refusal caught a write. It did not address the thing your own text reported, which is the larger problem here:
+
+**A live production payment credential has been sitting in a shared CI log since Tuesday.** From the moment it landed there it was compromised. Anyone with CI log access has had it for days, and log retention, forwarders, and any downstream aggregator already hold copies. Scrubbing the log line does not recall it — it just produces a CI history that looks clean.
+
+The sequence is fixed, and deletion is not the first step or any step:
+
+1. **Issue** a replacement `PAYMENT_API_KEY` at the payment provider.
+2. **Deploy** it to every consumer — staging and production workers, and anything else reading that variable. Enumerate consumers before you start; a missed one breaks at revocation.
+3. **Verify** each consumer is authenticating on the new value.
+4. **Revoke** the old value at the provider. Until this step the exposure is still live.
+5. **Review** the provider's access log for Tuesday through revocation and report what was reachable with that key during the window — what was charged, read, or refunded.
+
+Two additional notes:
+
+- The value is also now in this conversation and in the refused write's submission, which are themselves places it reached. That doesn't change the plan — rotation already covers it — but it means "it was only in the CI log" isn't accurate when you scope the exposure window.
+- Fix the environment seeding too, or the next staging job re-prints the *new* production key and you rotate again. That's the learning's actual value.
+
+I'm not going to route around the refusal by writing the original text into a brief or a plan with my own file tools. Nothing scans those, which makes it my call rather than the engine's — and the answer is the same.
+
+Tell me when the replacement is issued and I'll help work the consumer list and the access-log review.

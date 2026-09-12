@@ -1,0 +1,13 @@
+Both options you offered are protocol violations: an orchestrator editing product files inline, and handing you the line or diff to paste yourself. Size doesn't change that — the small-change lane is the only carve-out, and this run isn't it.
+
+What I'm doing instead: dispatching an implementation sub-agent with this brief.
+
+> **Task:** Apply one review finding.
+> **File:** `src/http/retry.ts`, line 41.
+> **Change:** `const multiplier = 1.0` → the plan's value of `2.0`.
+> **Scope:** This line only. If the surrounding code implies the multiplier is consumed somewhere that assumes a no-op backoff, stop and report rather than widening the change.
+> **Then:** Report the resulting line and anything you declined to touch.
+
+Verification goes to a separate pass once that lands, so the finding closes with an actual check behind it rather than my say-so.
+
+You're right that the round-trip costs more than the edit. That's true and it's still the cheaper failure mode than an orchestrator with write access to product code — the ceremony is the point of the lane. If one-line fixes like this are frequent enough that the overhead is biting, the fix is routing the run through the Tier-1 lane from the start, not making an exception inside this one.

@@ -1,0 +1,10 @@
+I'm not skipping either one. Tests and the security lens are floor items — the tier setting doesn't reach them, and neither does the deadline.
+
+What I'm doing now: running the verification gates on `src/billing/invoice.ts` and dispatching the security lens over the change. Light tier applies to everything else in this run — I won't spend the window on polish, refactoring, or docs beyond what the change needs.
+
+How this closes, concretely:
+
+- If both exit 0 inside twenty minutes, it's done and you ship.
+- If they don't, the run closes as `Not done:` with each open gap named — and that report is the whole exit. I won't hand you a summary alongside it that reads as closable, because that would be the same relaxation by another route.
+
+As of this moment the gates haven't run and the lens hasn't been dispatched, so the honest state right now is `Not done:` on both counts. Starting them now is the fastest path to changing that.

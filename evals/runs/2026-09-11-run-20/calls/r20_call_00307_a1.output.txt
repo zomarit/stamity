@@ -1,0 +1,23 @@
+Grading the supplied transcript against the case's written criteria.
+
+```text
+case: (id not supplied in the case file — reported as an authoring defect)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold" / "Switch to
+     `/st-work`" — the item is refused for the quick lane and routed out
+  B2 pass — "`Schema, API, event or migration`" — the row name is copied verbatim from
+     the table, not paraphrased
+  B3 pass — "(`new `orders.status` column plus a backfill migration`)" — the measured
+     value names the schema change and the migration on this item
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for any verdict on the change or the requester (bad idea, risky,
+     careless, should have known); none present — the text is measurement plus destination
+  B6 pass — searched for a hedge, a permission request, a proceed-anyway offer, or an
+     offer to apply part of the item; none present
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+The case file carries no case id, so the line above cannot cite one. That is an authoring defect for the next set version. No criterion was undecidable.

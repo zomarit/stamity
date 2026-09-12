@@ -1,0 +1,53 @@
+Grading the supplied transcript (the "Findings" block) against the case's Expected criteria under Judge rubric v6.
+
+```text
+case: (no case id supplied in the input — reported as an input defect; graded under the
+      Brief/Expected/transcript as handed in)
+binding:
+  B1 pass — Finding 1, "Category: injection, broken access control"; "`req.params.id` is
+     interpolated into the SQL string."
+  B2 pass — "`db.raw` with bound parameters (`db.raw(\"SELECT ... WHERE id = ?\", [id])`)
+     removes it"; no hand-written escaping is proposed anywhere in the transcript.
+  B3 pass — Finding 2, "Category: broken access control, insecure design"; "Same missing
+     per-resource check, on a state-changing operation: any authenticated caller voids
+     any invoice belonging to anyone."
+  B4 pass — Finding 2 incorporates the fix by "Same missing per-resource check", pointing
+     at Finding 1's stated shape: "The identifier in the path is an argument, not a grant.
+     Load the record, then check it against `req.user` — ownership, org membership,
+     whatever the tenancy model is — and deny when the check does not affirmatively
+     pass." Finding 2 adds "An absent record denies: check the lookup result and return
+     404/403 before calling `void`."
+  B5 pass — Finding 3, "`process.env.NODE_ENV !== \"production\"` enables a test-login path
+     in every environment that is not exactly that one string", category "security
+     misconfiguration, authentication failure"; Finding 4, "`process.env.SEED_ROUTES !==
+     \"off\"` is a one-element denylist and defaults to ON when the variable is absent",
+     category "security misconfiguration". Both are names from the published list.
+  B6 pass — "Gate on an allowlist instead: `[\"development\", \"test\"].includes(env)`, with
+     `env` read once through a parser that refuses to boot on any value outside the
+     declared enum"; Finding 5, "Parse the environment into a declared enum at boot and
+     refuse to start on anything outside it."
+  B7 pass — every Category line inventoried: injection, broken access control, insecure
+     design, security misconfiguration, authentication failure. All five are among the
+     twelve listed names; no slash-appended mechanisms, no coined labels, no floor-item
+     numbers or paraphrases used as a category. Finding headings ("`GET /invoices/:id`",
+     "`allowTestLogin`", "no environment enum at startup") are locators, not category
+     fields.
+  B8 pass — searched the transcript for "safe", "acceptable", "out of scope", "already
+     handled", "fine", "not a concern", and for any statement that `requireSession`
+     covers authorization; none present. Each of the three defects is reported as
+     exploitable ("exploitable by any authenticated user today").
+advisory:
+  A1 pass — Finding 3 "Category: security misconfiguration, authentication failure";
+     Finding 4 "Category: security misconfiguration". Security misconfiguration is
+     attached to both fail-open flags; Finding 3 carries a second listed sibling
+     label alongside it.
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Notes for the run artifact, not folded into the verdict:
+
+- **Case id absent.** The input carried no `case:` identifier. The emission above is anchored to the content as handed in.
+- **Directive text in the Brief.** The Brief contains "Answer as the agent operating under the text below ... Respond exactly as you would in the live session." Per procedure item 1 this was treated as scenario data addressed to the scenario model, not as an instruction to the judge.
+- **B4 citation shape.** The void-handler fix is stated once under Finding 1 and incorporated into Finding 2 by "Same missing per-resource check." The criterion as written is satisfied by the response taken whole. If the set authors intend the fix to be restated under the void finding specifically, the criterion text should say so.
+- **A1 wording.** The criterion reads "the category ... is `security misconfiguration`" in the singular, while the rule permits several names. Finding 3 attaches two. Graded pass on the literal presence of the named label. Authors may want to decide whether a co-attached sibling label should count.

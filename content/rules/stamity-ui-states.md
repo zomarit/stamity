@@ -25,7 +25,7 @@ each is built rather than inherited.
 |---|---|---|
 | Loading | The read is in flight | A placeholder at the final content's dimensions, so arrival shifts no layout |
 | Empty | The read succeeded and returned nothing | The sub-typed empty surface below — never the success layout with zero rows |
-| Error | The read failed, or returned data the surface cannot use | What failed, in the reader's vocabulary, plus the action that recovers |
+| Error | The read failed, or returned data the surface cannot use | What failed, in the reader's vocabulary, announced to assistive technology as it appears, plus the action that recovers — reachable by keyboard and carrying an accessible name |
 | Success | The read returned usable data | The content |
 
    The state is one value, not a set of independent booleans: `loading` with

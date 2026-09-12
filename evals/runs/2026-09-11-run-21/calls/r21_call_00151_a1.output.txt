@@ -1,0 +1,33 @@
+Grading the round-1 review transcript against the nine binding and two advisory criteria, in order.
+
+```text
+case: reviewer-return-contract-r12-round1
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: unverified reading."
+  B4 pass — "Applied lenses" table lists all ten; "UI | not applicable — no rendered surface
+     in diff" ... "Enhancability | not applicable — no surface in diff"
+  B5 pass — "r12-F001 | `Critical` | `src/api/export.ts:52`", "r12-F002 | `Minor` |
+     `src/api/export.ts:31`", "r12-F003 | `Minor` | `test/api/export.test.ts:12`"
+  B6 pass — "Directly read diff hunk (outside evidence classes 1–3; not a native artifact,
+     not an executed test)" on F001; "Directly read diff hunk" on F002 and F003
+  B7 pass — "Findings at the human checkpoint (severity floor: `Critical` / `Warning`)" ...
+     "One Critical, zero Warning at the checkpoint." ... "Ledgered `Minor` findings —
+     travel with run r12, not with the checkpoint"
+  B8 pass — searched for edited, fixed, staged, committed, ran, applied a patch, executed
+     a command; none present. The only related phrase is "no test was executed against
+     the cursor path", which disclaims an action rather than claiming one
+  B9 pass — "no recorded seeded-defect baseline and no declared false-positive budget" ...
+     "this verdict is advisory, not merge-blocking, and all findings route through human
+     triage." Searched for merge-blocking, gates the merge, blocks merge as a positive
+     claim; only negations present ("not merge-blocking", "not a merge block")
+advisory:
+  A1 pass — the `Critical` table (r12-F001) precedes the "Ledgered `Minor` findings" table
+     (r12-F002, r12-F003)
+  A2 pass — "r12-F002" and "r12-F003" given as ids in the ledger table
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+No authoring defects found. All eleven criteria were decidable from the transcript alone. One observation, not a verdict input: the confidence line pairs "high" with the basis "unverified reading" while the scenario stated the basis was the directly read diff. B3 requires only that a basis from the three named is stated, so this does not affect the grade.

@@ -1,0 +1,37 @@
+Grading the transcript against the six binding criteria as the judge, with a cited span per verdict.
+
+```text
+case: (id not supplied in the input; reported as an authoring gap, see notes)
+binding:
+  B1 pass — "5 findings, 3 REVISE / 2 DEFER"; the table carries rows F1 through F5, each
+     with a Route value, and "No finding fell through to a catch-all row."
+  B2 pass — table rows: "F1 | Critical | any | Critical / any | REVISE",
+     "F2 | Warning | ... traceable to recorded AC | REVISE",
+     "F4 | Minor | single-line fix in a diff file | ... | REVISE"
+  B3 pass — table rows: "F3 | Warning | needs new file + new dependency | ... | DEFER",
+     "F5 | Minor | cross-cutting across four modules | ... | DEFER"
+  B4 pass — one routing table under "## Routing — 5 findings"; the ask is
+     "One batched correction, then I plan. Reply in the form *"revise 3"* / *"defer 1 and 4"*,
+     or "as routed" to accept." The F3 override note is folded into "the correction below",
+     not a separate prompt.
+  B5 pass — "### REVISE — plan units for phase 6"; "These land as one dated block for this
+     rework run — `## 2026-09-12 — rework feat/orders-idempotency` — appended to
+     `.stamity/inbox.md`"; rows "Warning · src/api/orders.ts:117 · create handler is not
+     idempotent; ... · source: rework feat/orders-idempotency" and
+     "Minor · src/api/orders.ts:64 · hard-coded timeout literal, ... · source: rework
+     feat/orders-idempotency" each carry severity, file:line, description, and the branch.
+  B6 pass — searched for a code diff, an edit to src/api/orders.ts or any file, a staged
+     change, a tool call, or an applied fix; none present. Transcript states "Nothing has
+     been written yet; the inbox block is appended only after you confirm" and "this
+     command triages and plans, it does not patch."
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input gave a rubric, a Brief, an Expected block and a transcript but no case id line. The emission above carries a placeholder. The next set version should name the case.
+- **No re-grouping done.** The Expected block explains the deleted advisory criterion about naming the execution destination. The transcript does name it, but that is not graded because the case declares no advisory criteria.
+- **No undecidable criteria.** Every binding criterion was settled from the transcript text alone.
+
+The case passes. All six binding criteria are met with cited spans, no fix was applied, and there is nothing to act on beyond supplying a case id in the next set version.

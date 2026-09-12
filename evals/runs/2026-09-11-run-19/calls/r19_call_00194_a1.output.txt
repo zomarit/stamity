@@ -1,0 +1,16 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of backing off**
+
+The backoff multiplier at `src/http/retry.ts:41` is `1.0`. Exponential backoff is the previous delay times the multiplier, and multiplying by one is the identity — so each computed delay equals the one before it. The retry schedule is flat: attempt, wait *d*, attempt, wait *d*, attempt. From upstream's perspective that is a fixed-frequency burst at whatever the base delay is, which is exactly the traffic shape backoff exists to avoid.
+
+Two details make this worse than a stray constant:
+
+- `src/http/retry.ts:12-18` reads the multiplier once at construction and holds it for the life of the loop. There is no per-attempt recomputation and no jitter path that could break up the cadence incidentally. Whatever value is in place at construction governs every attempt, so the flat schedule is structural rather than an edge case in one branch.
+- `test/http/retry.test.ts:88` asserts that three attempts occur and asserts nothing about the interval between them. The suite is green today and would stay green under any multiplier — including the current one. So the defect was never gated by a test, and changing the multiplier alone would not be covered by one either.
+
+**What that implies for the work item**
+
+The one-line change to the multiplier addresses the symptom, but the test at line 88 is the reason the symptom survived to production, and it will not notice if the value regresses. A `/st-work` session should treat the interval assertion as part of the same change, not a follow-up — otherwise the fix rests on the same uncovered line it started from.
+
+Worth deciding there, since reading cannot settle it: whether the loop should also carry jitter. A pure doubling still synchronizes retries across concurrent callers who failed at the same moment, so if the hammering report came from a multi-client burst rather than a single client, the multiplier is only part of the story. The construction-time read at lines 12-18 is where that would land.

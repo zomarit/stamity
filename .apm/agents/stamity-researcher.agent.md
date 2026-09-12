@@ -50,9 +50,11 @@ return duplicate evidence and disagree at the seams.
   indistinguishable from a dropped question.
 - Every claim carries `path:line`, a document section, or (at `+web`) a source name with
   its access date. A claim that cannot be located is dropped, not softened into prose.
-- Each section states confidence — high / medium / low — with its basis. The basis comes
-  from one closed triad, and this is where the triad is defined; every flow that asks a
-  researcher for a basis is asking for one of these three.
+- Each section states confidence — high / medium / low — with its basis. Both halves ride
+  together in every section the result carries, the unknowns and the unanswerable list
+  included: a basis word with no band beside it, or a band with no basis, is half a
+  statement. The basis comes from one closed triad, and this is where the triad is
+  defined; every flow that asks a researcher for a basis is asking for one of these three.
   - `direct` — read or measured at a cited location: a line of code, a gate result, a run's
     output, or a sampled observation with the sample stated.
   - `inferred` — assembled across two or more sources, or from an analogue. Every input

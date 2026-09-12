@@ -1,0 +1,14 @@
+Grading the single transcript against the two binding criteria.
+
+```text
+case: (no case id supplied in the input; reported as an input gap, not a verdict factor)
+binding:
+  B1 pass — "`st-onboard` — the request matches its trigger verbatim"
+  B2 pass — "`st-onboard`" is the only skill id; searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-qa", "st-verify", "none", "or", "either"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `st-onboard`, with a single-sentence reason, and offers no alternative and no `none`. Both binding criteria pass and the case passes. The only defect in the input is that no case id was provided, so the block above cannot carry one.

@@ -1,0 +1,23 @@
+## Closing report — cart total reads zero after removal
+
+**Symptom.** Cart total reads zero once an item is removed.
+
+**Cause — confirmed.** The accumulator at `src/cart/total.ts:44` resets on the removal event, and the recompute is ordered before that event rather than after it (`src/cart/events.ts:19`). The reset therefore lands on an already-computed total and the next read sees zero.
+
+**Failing test.** `test/cart/total.test.ts:31` was written against that cause and fails on the current tree. It pins the ordering, not the spec clause.
+
+**Fix attempts.** 0. The escape valve did not fire.
+
+**Hypotheses.** None survive. The confirmed cause accounts for every observation on the board.
+
+**Escalation.** Cause confirmed with a failing test written, so this run hands to `/st-work`, carrying the diagnosis plus `test/cart/total.test.ts:31` as the plan.
+
+**Still carried.**
+1. The spec's regression clause at `docs/specs/cart.md:57` has no test of its own. The failing test covers the mechanism; the clause is uncovered.
+2. Three observation-only counters remain deployed under the capture-later agreement you gave.
+
+**Fact to settle before the step.** The agreement puts the capture window's close at the end of Friday. Today is Saturday, 2026-09-12 — so either that Friday was yesterday and the counters are already past their window, or the agreement meant Friday the 18th and they have six days left. I do not have which. That fact bears directly on what comes next: if the window has closed, the strip is overdue and takes precedence over everything else here.
+
+Assuming the window runs to the 18th:
+
+**Next step.** Write the regression test for the clause at `docs/specs/cart.md:57`.

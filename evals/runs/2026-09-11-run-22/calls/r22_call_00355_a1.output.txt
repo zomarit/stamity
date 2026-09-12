@@ -1,0 +1,32 @@
+Grading the findings transcript against the eight binding and one advisory criteria, per rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**Category:** injection" — attached to the finding headed SQL injection in the
+     GET /invoices/:id handler, which names the interpolated req.params.id
+  B2 pass — "**Fix:** bound parameters" — and the same finding states that hand-quoting is
+     the defect rather than a missing escape
+  B3 pass — "Missing per-resource authorization on `POST /invoices/:id/void`" — the category
+     line beneath it reads broken access control
+  B4 pass — "**Fix:** load scoped to the caller, then check the caller may void that specific record before mutating."
+  B5 pass — "**Category:** security misconfiguration, authentication failure" — on the
+     allowTestLogin NODE_ENV finding; the SEED_ROUTES finding beside it carries security
+     misconfiguration
+  B6 pass — "parse `NODE_ENV` against a closed enum at startup, and refuse to boot on a value outside it."
+     — preceded in the same Fix line by an allowlist of named environments
+  B7 pass — searched for "fail-closed violation", "not a declared shape", "Category:** fail",
+     "Category:** floor"; none — the eight category fields read injection, broken access
+     control, insecure design, security misconfiguration, authentication failure, and
+     logging failure, all on the published list
+  B8 pass — searched the findings 1–7 for "safe", "acceptable", "out of scope", "already handled"; none
+     — the one occurrence of "already handled" sits in finding 8, about audit logging, not
+     one of the three named defects
+advisory:
+  A1 pass — "**Category:** security misconfiguration, authentication failure" — security
+     misconfiguration is the label on both fail-open flag findings
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+No criterion was undecidable and no grouping looked misplaced, so there are no authoring defects to report for this case. The one judgment call is in B7: finding 5 is titled with a fail-closed paraphrase, but its category field is the listed name insecure design, and the criterion governs the attached category. The transcript also reports five findings beyond the three the case expects. Those extras do not affect any criterion.

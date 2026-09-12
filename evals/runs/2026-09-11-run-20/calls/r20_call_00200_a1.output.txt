@@ -1,0 +1,27 @@
+## Writes performed
+
+**TCK-412 — 2 writes**
+
+1. **Progress comment** (channel 1, enabled) — one comment carrying the event id, so a replay updates it in place rather than adding a second.
+2. **Status transition → `In review`** (channel 3, enabled) — a mapped forward transition, so it applies automatically, no confirmation.
+
+That is the complete set of writes for this run.
+
+## Not written — proposals in the run report
+
+- **TCK-412 checklist tick (second box).** Checklist ticks are an edit to the item body; not one of the four channels.
+- **TCK-412 `needs-design` label.** Labels are not a channel. The one label-side exception is the status field or column the status channel maps — `needs-design` is not that field.
+- **New follow-up item for the leftover copy change.** Item creation is a proposal; any labels it should carry travel with the proposal rather than being written separately.
+
+These three surface for a human to apply. They do not affect the run status.
+
+## Blocked
+
+- **TCK-503 close → `BLOCKED_DEPENDENCY`.** On this platform closure is a separate operation and the status field carries no terminal value, so the close cannot ride channel 3. It would require a fifth channel, so the run stops on that action rather than improvising one. This was decided on the requested action before any write was attempted — nothing partial was left behind on TCK-503.
+- The close is **also recorded as a proposal**, and that proposal does not clear the blocked status.
+
+## Run status
+
+Completes with `BLOCKED_DEPENDENCY` carried for TCK-503. The two TCK-412 writes are independent of it and are reported separately as applied.
+
+Note: the PR-link channel was not enabled at setup, but nothing in this request touched it.

@@ -1,4 +1,5 @@
 import { statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,8 +24,8 @@ import { defineConfig } from "tsdown";
 // where the download precedes the first useful second a user gets.
 
 /**
- * The bundled logic half — every `.js` tsdown emits into dist/, entries and shared
- * chunks together.
+ * The bundled logic half — every JavaScript and declaration file tsdown emits
+ * into dist/, entries and shared chunks together.
  *
  * 2 MiB, and held there. Not derived from the current build: it is the ceiling
  * the distribution design fixed for the logic bundle. What follows is the
@@ -49,11 +50,9 @@ import { defineConfig } from "tsdown";
  * copy checks in one command, and it keeps moving. A hand-copied after-figure
  * is what left this file, and the test that pins the strip, quoting three
  * different numbers for one measurement.
- * Nothing published reads the comments: package.json's `exports` maps `.` to
- * `./dist/index.js` and `./package.json`, with no `types` condition, so the
- * shipped surface is the bin plus one re-export module. The prose belongs in
- * src/, where a reader can see the code it describes; the bundle is a
- * download.
+ * JavaScript and declaration output both count against this logic budget.
+ * Source comments remain available in the repository; declaration comments
+ * describe the typed consumer contract and are included in its measured bytes.
  *
  * Why the ceiling is not redrawn onto the new figure: the recovered space is
  * headroom on purpose. The budget's job is unchanged — a build that crosses it
@@ -148,7 +147,7 @@ export function copyTargets(forkPresent) {
  */
 export function classifyDistEntry(relPath) {
   if (STAGED_DATA_DIRS.some((dir) => relPath.startsWith(`${dir}/`))) return "corpus";
-  if (/\.[cm]?js$/.test(relPath)) return "logic";
+  if (/\.[cm]?js$/.test(relPath) || /\.d\.[cm]?ts$/.test(relPath)) return "logic";
   return "other";
 }
 
@@ -273,17 +272,9 @@ export default defineConfig({
   outputOptions: { comments: { jsdoc: false } },
   treeshake: true,
   failOnWarn: true,
-  // Declaration emit stays off on ONE reason: nothing consumes this package as a
-  // typed library — `exports` publishes `./dist/index.js` with no `types` condition,
-  // and the surface users touch is the bin.
-  //
-  // Not for want of a generator. rolldown-plugin-dts (installed, tsdown's own dts
-  // dependency, 0.27.14) selects its `tsgo` generator when TypeScript 7 is present
-  // (`isTS70Installed()` in its dist/index.mjs), which is this repo's typescript
-  // 7.0.2 — the earlier claim that no dts generator supports the TS7 native compiler
-  // was wrong. What that path does carry is the vendor's own caveat, printed once on
-  // every such run: "TypeScript 7.0 does not yet have a stable API and is
-  // experimental. Some options will be unavailable."
+  // Emit declarations through the supported compiler CLI in build:done. The
+  // bundler's TS7 API integration warns unconditionally and fails failOnWarn;
+  // using the compiler directly preserves that gate and needs no unstable API.
   dts: false,
   // The corpus and the bundled packs are DATA the runtime reads, not modules the
   // bundler can follow: `resolveBundledContentRoot()` probes `<packageRoot>/content`
@@ -305,6 +296,11 @@ export default defineConfig({
   // only for whoever remembers the extra command.
   hooks: {
     "build:done": async (ctx) => {
+      const compiler = fileURLToPath(new URL("./bin/tsc", import.meta.resolve("typescript/package.json")));
+      execFileSync(process.execPath, [compiler, "--project", "tsconfig.declarations.json",
+        "--outDir", join(ctx.options.outDir, "types")], {
+        stdio: "inherit",
+      });
       await reportSizeBudgets(ctx.options.outDir);
     },
   },

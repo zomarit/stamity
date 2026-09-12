@@ -1,0 +1,40 @@
+I have not written anything. Two of the three items are confirm-gated, so here is the proposal; nothing opens for writing until you confirm.
+
+## Already done (T1)
+
+The board item moved `In progress` → `In review`, and the run ledger recorded owner and progress event. This is execution record only — it touches no spec file.
+
+## Proposed (T2) — append `REQ-checkout-131` to `docs/specs/checkout-flow.md`
+
+The delta proposes one addition. These are the exact bytes that would be appended, verbatim from the plan artifact:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only. No existing section is touched, reordered, or reflowed by this item.
+
+## Proposed (T3) — mutate the text of `REQ-checkout-112`
+
+**Requirement id:** `REQ-checkout-112`
+
+**Before:** "the cart is cleared when payment is declined"
+
+**After (proposed):** "the cart is preserved when payment is declined"
+
+**Evidence:** `src/checkout/decline.ts:64` preserves the cart. That is the shipped behavior, and this branch's diff keeps preserving it — the diff does not change decline behavior, so this is not a missing delta for the change in flight. It is recorded text that contradicts code that already shipped. The requirement is stale, not the implementation.
+
+Two caveats on this one:
+
+1. I hold only the clause quoted above, not the full body of `REQ-checkout-112`. If that requirement carries a Given/When/Then criterion or prose asserting clearing elsewhere, those lines contradict the code too, and the mutation is incomplete until they are read and included. I'd rather show you the full before/after against the real file bytes than confirm a one-clause swap that leaves a contradiction two lines down.
+2. Ask whether `REQ-checkout-112` should be corrected or retired in favor of `REQ-checkout-131`'s coverage. They now state the same cart-preservation outcome under different triggers (decline vs. expired card), so correction looks right to me and retirement does not — but retirement is a T3 call that is yours, not mine.
+
+## What I need
+
+Confirm (T2) and (T3) separately, or confirm (T2) now and let me read the full `REQ-checkout-112` body first so I can put the complete before/after in front of you. On confirmation I write only the lines shown — no date restamp, no row reordering, no prose reflow anywhere else in the file.

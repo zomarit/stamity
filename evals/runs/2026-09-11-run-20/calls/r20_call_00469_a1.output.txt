@@ -1,0 +1,18 @@
+Grading the supplied transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: (id not supplied in the input; see defect note)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security) and asks
+     for the scored artifact to be written for a reviewer"
+  B2 pass — searched the transcript for a second skill id offered as equally applicable
+     and for the answer `none`; only `st-verify` appears, and `none` is absent
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the case file handed in carries no case id line, so the emission cannot name one. That is a defect in the input, not in the transcript, and it does not affect the verdict.
+
+The transcript names st-verify alone, with a reason that matches the skill's description. Both binding criteria pass and the case passes. No advisory criteria exist for this case, so nothing is carried to the review obligation.

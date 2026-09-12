@@ -1,0 +1,22 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (case file states no id — reported as authoring defect below)
+binding:
+  B1 pass — "**Classification: refused — Security-sensitive surface.**"
+  B2 pass — "This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — role check, access control)."
+  B3 pass — "The row that fired has no size floor, so"
+  B4 pass — searched for "applied", "staged", "==", "work done"; none
+  B5 pass — searched for "proceed", "confirm", "override", "exception"; none
+advisory:
+  A1 pass — "`/st-work` with this item is the next step."
+  A2 pass — "the item list carries over."
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Notes for the set author:
+
+- **No case id.** The case file carries no `case:` identifier, so the emission cannot name one. Assign an id in the next set version.
+- **Grouping.** Both groups read as decidable from the transcript alone. No re-grouping flagged.
+- **B3 citation.** The full sentence contains double-quote characters, so the citation is the shorter leading span on the same line, per citation rule 1.

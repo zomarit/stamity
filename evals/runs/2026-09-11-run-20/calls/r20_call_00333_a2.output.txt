@@ -1,0 +1,28 @@
+Grading the supplied transcript against the seven binding and one advisory criteria.
+
+```text
+case: (id not supplied in the input — reported as an emission gap, not a defect in the transcript)
+binding:
+  B1 pass — proof block lists "Baseline source: proof record from run `r7`", "Findings: 1 Critical
+     · 3 Warning · 1 Minor", "Routing: 3 REVISE · 2 DEFER", "Validation verdicts: unit 1 accepted
+     (high) · unit 2 accepted (high) · unit 3 accepted (medium)", "Plan-lint: ...", "Plan path:
+     `docs/plans/004-checkout-rework.md`", "Inbox rows added: 2 (one per DEFER finding)" — all seven
+  B2 pass — "Plan-lint: `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`"
+  B3 pass — one line, "Recommended next step: run ... through `/st-work`"; searched for a second
+     step, an options list, or the three-case menu; none present
+  B4 pass — "run `docs/plans/004-checkout-rework.md` through `/st-work`. The plan persisted on
+     `stop`"
+  B5 pass — searched for a step resolving a marker; the only mention is "carries no
+     `[NEEDS CLARIFICATION]` marker", stated as a reason the plan is complete, not as the step
+  B6 pass — searched for board triage or inbox triage as the step; absent — "the DEFER rows sit in
+     the inbox behind it and are not the blocking item"
+  B7 pass — searched for "review the plan", "let me know", "consider addressing"; none present;
+     the step names a concrete command and path
+advisory:
+  A1 pass — "the DEFER rows sit in the inbox behind it and are not the blocking item" — the rows
+     are stated as remaining in the inbox after close, so the DEFER findings are shown still tracked
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The transcript passes on every binding criterion. The advisory criterion passes on the phrase that the DEFER rows still sit in the inbox, which states they remain open after this run. The only gap is in the case material itself: no case id was supplied, so the emission carries a placeholder.

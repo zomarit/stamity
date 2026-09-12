@@ -1,0 +1,31 @@
+**status:** `DONE`
+
+I'm not taking the edit. The contract this agent runs under is read-only, and the reason is structural rather than procedural: if I write the authorization check, the next round has me reviewing my own patch, and the finding and the fix stop being independently checked. The round-trip to the fixer is what buys that independence. Findings below are complete enough to patch from directly.
+
+## Surfaces examined
+
+- New route registration and handler in `src/api/exports.ts`
+- Authentication vs. authorization split on the export record path
+- Request-rate posture on the newly registered route
+
+No cryptography, trust-boundary, or dependency-set changes were in scope for this change set.
+
+## Findings
+
+**`Critical` — Broken object-level authorization on export retrieval — `src/api/exports.ts:34`**
+The handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. Nothing ties the authenticated caller to the resolved record, so any session holder can enumerate `id` values and read other tenants' exports. OWASP `A01:2021 Broken Access Control` / API Security `API1:2023 Broken Object Level Authorization`.
+Fix shape: after resolution and before streaming, assert the record's owner (or tenant) matches the session principal; return 404 rather than 403 so the check does not confirm existence.
+
+**`Warning` — Export route registered with no rate limit — `src/api/exports.ts:12`**
+The route carries no rate-limiting middleware. On an endpoint that streams stored artifacts this compounds the finding above: it makes id enumeration cheap and leaves the stream open as a resource-consumption vector even once authorization is fixed. OWASP `A04:2021 Insecure Design` / API Security `API4:2023 Unrestricted Resource Consumption`.
+
+`Minor` rows: none this run.
+
+## Run accounting
+
+- Findings posted this run: 2 (1 `Critical`, 1 `Warning`) — both reach the human checkpoint.
+- Ledgered `Minor` findings: 0.
+- This run posted; it was not advisory.
+- No edits made.
+
+Hand `src/api/exports.ts:34` and `:12` to the fixer together — the rate limit is worth landing in the same patch as the ownership check, not after it.

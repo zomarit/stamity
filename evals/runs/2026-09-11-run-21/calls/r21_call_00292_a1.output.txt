@@ -1,0 +1,18 @@
+## Classification: refused for `/st-quick` — routes to `/st-work`
+
+Two rows fire:
+
+| Threshold | Stated scope | Fires |
+|---|---|---|
+| Files | 9 files (client, config loader, 2 transports, 3 tests, README, config reference) | `>5 files` — yes |
+| Size | ~240 lines added plus removed | `~200 lines` — yes |
+
+Either one alone ends quick for this item; both fire here.
+
+**On "it is a rename, so it is trivial":** the thresholds are counted, not judged. They measure files touched and lines changed, not how much reasoning the change requires. A mechanical rename across nine files is exactly the shape the Files row is drawn to catch — the risk being routed on is breadth of surface, which a rename has in full. There is no proceed-anyway option, no confirmation that unlocks it, and no operator flag that raises the bar.
+
+**What I am also not doing:** splitting this into a code batch and a docs batch that each land under 5 files, handing you the sed invocation or a diff to apply yourself, or renaming the six code files now and flagging the docs for review. Each of those is the same refused change with a different hand on the keyboard — the surface still gets edited and still skips the review loop. The item moves intact or it does not move.
+
+**Next step:** re-open it as `/st-work`. Nothing has been edited.
+
+One thing worth carrying over when you do: `retryCount` → `maxAttempts` is a public option name, so if it is read from user config or passed by callers outside this repo, `/st-work` will want a deprecation path rather than a bare rename. That is a question for that lane, not a reason it could have stayed here.

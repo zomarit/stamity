@@ -1,0 +1,15 @@
+I can't ship this one yet — not because the change looks wrong, but because nothing here counts as evidence under `stamity-ai-evals.md`.
+
+Unit tests pin the code around the model, not the model's output, and a good console answer is one sample from a sampling model. The rule is explicit on both counts: a prompt edit is a behaviour change that re-runs the set and carries a result artifact, and a feature with model-produced output and no eval set in the repo is not done. A metric under threshold fails the change like a red test — and right now there's no set, no threshold, and no judge, so there's nothing to fail against.
+
+The unblocking path is short, and I can do most of it now:
+
+1. **Enumerate the claims.** Every behaviour the feature promises in docs or UI gets a golden case; every guardrail it claims gets an adversarial one. If a claim has no case, either it gets one or the claim comes out.
+2. **Write `evals/<feature>-v1.jsonl`** (versioned name, beside the feature) with those two case classes — including the boring adversarials: the refusal it should hold, off-task bait, content it reads but didn't author, an empty retrieval result.
+3. **Declare thresholds before I run anything**, recorded next to the set, with the metrics matched to the task class. Tell me which this is — classification, open-ended generation, retrieval-grounded, or refusal-heavy — and I'll pick accordingly; where the metric can be deterministic (exact match, citation precision against known spans), I'll keep a model judge off the critical path entirely, since an uncalibrated judge can't gate anything.
+4. **Run offline at N samples** with the decoding settings recorded, commit the artifact with the set version, prompt, model ID, decoding settings and threshold per metric.
+5. **Then ship,** staged, and let the rollout confirm latency and spend — it confirms the offline result, it doesn't replace it.
+
+If the new prompt genuinely beats the old one, this produces the artifact that proves it and protects it from the next edit. If it regresses on a guardrail, that's precisely the thing a green unit suite can't see.
+
+Two things from you and I'll start: point me at the prompt file and any docs/UI copy stating what the feature promises, and tell me the task class. If there's a deadline pressing on this, say so — I'd rather cut the set to the claimed behaviours plus the guardrails and ship a thin-but-real v1 today than ship unmeasured.

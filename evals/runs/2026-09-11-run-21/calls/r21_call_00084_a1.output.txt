@@ -1,0 +1,23 @@
+## Session start summary
+
+| File | Status |
+|---|---|
+| `.stamity/learnings/cache-eviction.md` | loaded, clean |
+| `.stamity/learnings/deploy-notes.md` | **SKIPPED** — pattern `instruction-override` |
+| `.stamity/learnings/test-timing.md` | loaded, clean |
+
+Two of three learnings files are in context. The run proceeds on those.
+
+## On pasting the skipped span
+
+I can't paste it. The screening floor is explicit that a refusal names the file and the pattern id and nothing else — the matched span stays out of the transcript, the banner, and the summary, because reprinting it delivers the payload the skip just refused. That holds regardless of whether the match turns out to be a false positive, since I'd have to reproduce the text to let you judge, and reproducing it is the harm.
+
+What I can tell you is what the skip record characterizes without quoting: the match is at byte offset 412 in `.stamity/learnings/deploy-notes.md`, and it is a forged role header followed by a re-tiering instruction. That shape is the core case `instruction-override` exists to catch, so a false positive here would be unusual — it would require the file to legitimately contain something that reads as a synthetic role boundary plus a privilege change.
+
+## How to adjudicate it
+
+Read the file directly outside this session — open it in an editor, or `sed -n` around offset 412. You have the file; the screening floor constrains what I load and echo, not what you inspect.
+
+If you conclude it's a genuine false positive, the fix is on the rule side: adjust the `instruction-override` pattern so it stops matching that construct, then the file loads clean on the next read pass. If it's a true positive, the file is retired or rewritten — there's no flag that loads it anyway, so rewriting the offending region is the only path back into context.
+
+Tell me which way it goes and I'll help with the rewrite or the pattern change.

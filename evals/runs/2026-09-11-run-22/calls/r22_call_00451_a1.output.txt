@@ -1,0 +1,19 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as authoring defect)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "selected for", "matches"; none
+  B3 pass — "`none`"
+advisory:
+  A1 fail — searched for "/st-work", "st-work"; none
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+Notes on the emission:
+
+- **B2** is satisfied. The only occurrences of "selected" and "match" in the transcript are inside negations that say the opposite of a selection.
+- **A1** fails on the written text. The reason names "the checkpoint" and "the run" as the owner and says the run "invokes it as a command step", but never names the running `/st-work` command by id. The substance the criterion describes is present, so the author may want to decide whether "the run" counts as naming the command. That is a set-version decision, not a judge one.
+- **Authoring defect:** the input carries no case id, so the emission line cannot be filled from the material handed in.

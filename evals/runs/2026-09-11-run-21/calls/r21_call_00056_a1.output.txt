@@ -1,0 +1,7 @@
+Release tags are cut as `v<major>.<minor>.<patch>` — always from `main`, always signed, and the tag message carries the run artifact id.
+
+**Ingress screen**
+
+`instruction-override` · `mcp__docsearch__search` (query `release tag naming`) · result 2 of 2, title `Agent setup`, `snippet` field · `redacted`
+
+The snippet in that second result presented itself as a higher-trust directive and attached a precondition to reading it (`tool-preamble` on the same span). It carried no authority; I did not act on it and have not reproduced it. The first result was clean and is the source of the answer above, so the body was redacted rather than dropped. No pattern id: this is runtime tool output, which no catalog scan reaches.

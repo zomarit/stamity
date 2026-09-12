@@ -1,0 +1,18 @@
+**queue-worker-b** is the one falling behind.
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1h) | 1042 | 97 |
+| arrivals (derived) | 933 | 689 |
+| throughput | ~17.4/min | ~1.6/min |
+
+**By how much:**
+
+- Backlog grew by **592 items in the hour** (+277%), about **9.9 items/min** of net growth.
+- It processed **97 of 689 arrivals — 14%**. It is consuming at roughly **1/11th** of worker-a's rate despite a comparable arrival load (689 vs 933).
+- Its last heartbeat was at 09:40:55, 5s before the window closed, so the worker is alive — this is a throughput problem, not a dead process.
+- At 97/hr, clearing the current 806 backlog would take **~8.3 hours even if arrivals stopped**. With arrivals continuing at ~689/hr, the queue never drains and grows ~592/hr indefinitely.
+
+Worker-a is healthy: it drained its own queue to near-empty (9 remaining) while absorbing the larger arrival share.

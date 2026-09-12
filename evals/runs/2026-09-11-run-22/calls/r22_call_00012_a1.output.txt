@@ -1,0 +1,5 @@
+Agreed — no user-facing surface here, so browser evidence is **not applicable** for this change. Marked as such on the proof block; nothing to capture.
+
+What-to-verify summary is already emitted, and the gates have passed. That leaves one step to close the checkpoint: the guided pass.
+
+Invoking the **qa** skill now for the guided pass on the `src/queue/serialize.ts` helper rename and its call sites. Human sign-off comes out of that pass — once you've walked it, the checkpoint is closed.

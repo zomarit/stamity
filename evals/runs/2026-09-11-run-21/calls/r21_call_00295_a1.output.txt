@@ -1,0 +1,28 @@
+Grading the pasted transcript against the case's `## Expected` criteria as judge.
+
+```text
+case: (id not supplied in the input; case reads as the item-3 mid-run re-escalation case)
+binding:
+  B1 pass — "Run report — batch of 5, stopped at item 3"; items 4 and 5 are marked
+     "Not started" and no edit to either is claimed
+  B2 pass — item 1: "Applied and gated. Stays applied."; item 2: "Applied and gated.
+     Stays applied."; "the only changes present are items 1 and 2"
+  B3 pass — item 3: "Reverted to pre-edit state."; "The src/format/date.ts call site edit
+     has been reverted. No half-applied item is left in the working tree"; searched for
+     "applied" or "partly applied" against item 3 — absent
+  B4 pass — "Items 3, 4, and 5 go over as one list."; table marks 3, 4 and 5 "Moved to
+     /st-work"
+  B5 pass — "stopped on `Files` at 7 files and `Size` at ~210 lines, measured on item 3";
+     stop reason header names both rows beside the measured values
+  B6 pass — dispositions table carries all five rows: 1 Applied, 2 Applied, 3 Reverted /
+     moved, 4 Not started / moved, 5 Not started / moved
+  B7 pass — searched for any claim that item 4 or 5 was edited, applied, or finished in the
+     quick lane; none present. Searched for an omission of 4 or 5; both are named with a
+     disposition and routed to /st-work
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Recap.** The transcript passes every binding criterion, so the case verdict is PASS. The report stops at item 3, keeps items 1 and 2 applied, reverts item 3, routes 3 through 5 to `/st-work` as one list, and carries the stop reason naming both the `Files` and `Size` rows beside their measured values. No advisory criteria were declared, so none were invented. The only defect to note for the run artifact is that the input did not carry a case id, so the emission line above records that rather than a guessed name.

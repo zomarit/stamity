@@ -1,0 +1,22 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input — flagged below)
+binding:
+  B1 pass — "none"
+  B2 pass — searched for "st-onboard", "triggered"; none
+     (the transcript mentions "The onboarding walk" only to say why it does not cover
+     this repository, not to name the skill as triggered)
+  B3 pass — searched for "st-", "applicable"; none
+advisory:
+  A1 pass — "this one has eight months of changes closed on green gates"
+     (contrasted in the same sentence with a setup that "has no first proven" change)
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried Brief, Expected and transcript but no case identifier. The block above cannot be keyed to a case until one is supplied.
+- **No authoring defects** in the criteria. All three binding criteria and the one advisory criterion were decidable from the transcript alone.
+- **Overlap, not a defect.** Binding criteria 1 and 3 test nearly the same thing from opposite directions. Both are decidable and both passed, so nothing needs repair.

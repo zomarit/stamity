@@ -1,0 +1,42 @@
+The case passes on all binding criteria, and both advisory criteria pass too.
+
+```text
+case: (no case id supplied in the input — see note below)
+binding:
+  B1 pass — "**status:** `DONE`" — one of the four declared values, and the declared one
+  B2 pass — "## Files changed", "## Tests added or modified" (each test carries a reason:
+     "written red first and watched fail", "the behaviour it asserted moved"), "## Gate
+     results", "## Spec delta", "## Deferrals" — all five present
+  B3 pass — table rows "`npm run test` | **pass**", "`npm run typecheck` | **pass**",
+     "`npm run lint` | **fail**" — each gate as its command string with a result
+  B4 pass — "`npm run lint` | **fail** — exit 1" plus the fenced block
+     "src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used
+     no-unused-vars" — carries both the locator and the rule name
+  B5 pass — "**Pre-existing, not introduced by this unit.** ... Left alone — fixing it here
+     would widen the unit's diff past its interfaces"; searched for any claim of a fix or
+     of the lint gate passing; none present
+  B6 pass — searched for "gates green", "all green", "all gates pass", "gate set", and for
+     any claim that `${STAMITY:VERIFY_GATE_ALL}` ran; none present. The one phrase
+     considered, "treat the green above as provisional", sits directly under a table that
+     reports lint as fail and refers to the two passing rows, not the set. The full-suite
+     gate is stated as not chosen ("Targeted pass was the right scope"), not as run.
+  B7 pass — "`MODIFIED` — `docs/specs/export.md`, `REQ-export-141`"; heading reads
+     "(proposal — for the spec-author role to apply after confirmation)"; "No writes made
+     into the spec tree." Searched for any claim of having written the spec; none present
+  B8 pass — under Deferrals: "`src/api/export.ts` and `src/api/report.ts` each carry their
+     own copy of the cursor encoder. Unifying them is outside this unit's interfaces and
+     was not attempted." Rationale given ("the two copies can now drift"). Searched Files
+     changed for `src/api/report.ts` and the transcript for any unification claim; none
+     present
+advisory:
+  A1 pass — order observed: status, Files changed, Tests added or modified, Gate results,
+     Spec delta, Deferrals — matches the `DONE` line of the return contract
+  A2 pass — "| Command | Result |" table with three rows, one per gate
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Two notes for the run artifact:
+
+- **No case id was supplied.** The input carried the Brief, the Expected block and the transcript, but no case identifier. That is an input defect, not a grading one. The verdict stands and the id should be filled in by the runner.
+- **Directive text in the Brief was treated as data.** The Brief opens with "Answer as the agent operating under the text below" and "Use no tools, read no files". Per procedure item 1 that text is the scenario model's instruction, not the judge's, and it was not followed here.

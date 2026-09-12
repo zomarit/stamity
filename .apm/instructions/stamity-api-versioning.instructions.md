@@ -27,11 +27,10 @@ someone, and recoverable after it ships.
    version with a retirement window on the old one, not as a patch to the
    current one.
 3. **One versioning scheme per surface, written down.** A major version in the
-   path, or a date pinned by a request header — not both on one surface.
-   Consumers pin explicitly, and an unpinned request resolves to the oldest
-   supported version rather than the newest, because silently promoting an
-   unpinned consumer is how a change that broke nothing in review breaks
-   production.
+   path, or a date pinned by a request header — not both on one surface. Consumers
+   pin explicitly, and an unpinned request resolves to the oldest supported
+   version rather than the newest, because silently promoting an unpinned consumer
+   is how a change that broke nothing in review breaks production.
 4. **Retirement runs announce, sunset, remove.** *Announce*: every response
    from the deprecated element carries the `Deprecation` header (RFC 9745) and
    a link relation pointing at the migration note. *Sunset*: once the removal
@@ -53,6 +52,9 @@ someone, and recoverable after it ships.
    so; a repeat whose fingerprint differs is refused as a conflict, because it
    is a different request wearing the same key; a repeat that arrives while the
    first is in flight gets a retry-after answer rather than a second effect.
+   Explaining the conflict means naming the replay branch and the per-caller
+   scope beside it — one branch alone is half the mechanism. Describing the
+   conflict response names its shape: problem details with a stable `type`.
    Retention is stated in the spec and covers the consumer's retry budget. The
    key comes from the client — a server-minted key deduplicates nothing.
 7. **Breaking changes are caught by a diff, not by memory.** The contract is a

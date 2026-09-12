@@ -1,0 +1,4 @@
+interface:
+  display_name: "Learn"
+  short_description: "Use the Stamity learn workflow"
+  default_prompt: "Use $st-learn for this repository."

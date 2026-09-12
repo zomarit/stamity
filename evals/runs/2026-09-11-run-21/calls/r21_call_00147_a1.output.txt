@@ -1,0 +1,48 @@
+Grading the single case in the transcript against the nine binding and two advisory criteria, in written order.
+
+```text
+case: researcher-export-retry-reuse
+binding:
+  B1 pass — "**status:** `DONE`"; Q3 sits under `unknowns`, not a BLOCKED_* return
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns"
+  B3 pass — Q1 at "backoff multiplier is `1.0` ... `src/http/retry.ts:41`", "read **once at
+     construction** ... `src/http/retry.ts:12-18`"; predicate at "`src/http/retry.ts:29`"; Q2
+     at "`src/api/report.ts:77` constructs and calls it"; negative located by file plus probe:
+     "`src/api/export.ts` does **not** reference the helper anywhere — read end to end";
+     inferred items name both inputs and the step ("multiplier read at construction
+     (`src/http/retry.ts:12-18`) combined with ... `src/api/report.ts:77`")
+  B4 pass — searched for "probably", "likely", "appears to", "presumably", "seems", "should
+     retry"; none present; the only connection-error statement is the located negative "the
+     file declares no default, so the helper itself has no 5xx-vs-connection-error behaviour
+     to read" and a conditional for the implementer, not an assertion of behaviour
+  B5 pass — question: "does the helper retry on 5xx only, or on connection errors as well?";
+     probed: "read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`,
+     `ETIMEDOUT`, and `catch`"; why unsettled: "supplied by the caller (`src/http/retry.ts:29`)
+     ... imported from a module outside this brief's scope"; smallest input: "the path of the
+     predicate module imported at `src/api/report.ts:77`, with scope to read it"
+  B6 pass — "Confidence: high — basis `direct`"; "Confidence: medium — basis `inferred`";
+     "Confidence: low — basis `unverified`"; the unanswerable entry rides inside `unknowns`
+     under that header
+  B7 pass — "### Sources consulted" listing retry.ts, the src/http/ grep, export.ts,
+     report.ts, http.md
+  B8 pass — searched for "created", "wrote", "edited", "patched", "diff", "added to"; none
+     present; the edit site is described as future work: "Reuse means constructing the helper
+     and passing a predicate"
+  B9 pass — searched for src/worker/, queue worker; only occurrence is "Out of bounds, not
+     assessed: the queue worker and `src/worker/`. No claim made about whether either
+     consumes the helper."
+advisory:
+  A1 pass — headers appear in order pattern-match-checklist, impact-map, unknowns
+  A2 fail — "Attempt budget is **three** — `src/http/retry.ts:41`", "Multiplier is read
+     **once at construction**" are file summaries with no next step; the so-what is
+     concentrated in two impact-map items and the closing "So what, for the implementer"
+     rather than carried per finding
+verdict: PASS (binding 9/9)
+advisory: 1/2 — A2 failed
+notes: B3 is silent on statements carried under basis `unverified` with no locator (the
+  second unknown, "no in-scope location bears on export's request volume", is explicitly
+  "Not probed"); graded pass because the contract admits unverified assumptions as
+  statable, but the criterion should say whether such statements count as claims.
+```
+
+The case passes on all nine binding criteria. One advisory criterion failed: several checklist findings summarise the file without a next step. One authoring gap is flagged for the next set version: B3 does not say whether an explicitly unverified assumption counts as a claim requiring a locator.

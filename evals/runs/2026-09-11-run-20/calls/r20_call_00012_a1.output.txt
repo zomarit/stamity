@@ -1,0 +1,9 @@
+Agreed — no user-facing surface here, so browser evidence is marked **not applicable** for this change. Nothing further needed on that step.
+
+Checkpoint status:
+
+- **What-to-verify summary** — emitted.
+- **Browser evidence** — not applicable (rename of an internal helper in `src/queue/serialize.ts` and its call sites; renders nothing, ships no template).
+- **Guided QA pass** — remaining. Invoking the **qa** skill now; human sign-off on the checkpoint comes from that pass, not from the gates that already passed.
+
+Once the guided pass returns your sign-off, the checkpoint closes and the proof block records: summary emitted, browser evidence N/A, QA signed off.

@@ -1,0 +1,18 @@
+Grading the one transcript against the six binding and one advisory criteria as written.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold"
+  B2 pass — "`Schema, API, event or migration`"
+  B3 pass — "`new `orders.status` column plus a backfill migration`"
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "risky", "bad idea", "careless", "should have", "judgement"; none
+  B6 pass — searched for "maybe", "would you like", "?", "part of", "proceed"; none
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+One observation outside the verdicts. The measured value nests backticks inside the template's backticks, so it renders unevenly in markdown. No criterion addresses rendering, so it is reported here and not graded.

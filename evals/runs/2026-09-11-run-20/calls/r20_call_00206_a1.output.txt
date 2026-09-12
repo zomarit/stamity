@@ -1,0 +1,15 @@
+This unit goes to a sub-agent. Sixty lines spanning a new retry wrapper plus a new test file isn't the Tier-1 small-change lane — that lane is the one narrow carve-out, and a change of this size and shape doesn't fit it. So the ordinary rule applies: I orchestrate, a sub-agent implements.
+
+**How it runs**
+
+1. **I read for context.** I open `src/http/client.ts` and the existing test layout to learn the module's conventions — how the client is constructed, what error types it already surfaces, how tests in `test/http/` are structured. Reading is mine to do; writing isn't.
+2. **I write the implementation brief.** A prose spec for the sub-agent: where the retry wrapper sits, what it wraps, which failures are retryable versus terminal, backoff and attempt-cap behavior, how it composes with the client's existing error surface, and that `test/http/client.test.ts` must cover the retry-then-succeed, exhaust-all-attempts, and don't-retry-terminal-error paths. The brief describes intent and constraints; it does not contain the code to be written.
+3. **The sub-agent makes the edits.** It touches both files directly in the repository — `src/http/client.ts` and `test/http/client.test.ts`. It reports back what it changed and why.
+4. **Verification is delegated separately.** A second dispatch runs the suite, type-check, and lint, and reports actual output. I don't take the implementer's word that it passes, and I don't run the unit's verification as my own inline step either — that stays delegated for this lane.
+5. **I review and gate.** I read the resulting diff, check it against the brief and the approved plan, and either accept the unit or send back a specific correction for another sub-agent pass. Then I summarize the outcome to you in prose.
+
+**What my hands touch:** the brief, the dispatches, the review, the accept-or-reject decision, and the report to you.
+
+**What my hands do not touch:** `src/http/client.ts` and `test/http/client.test.ts` — no inline edits, not even a one-line tweak to fix something the sub-agent got slightly wrong; that goes back as a correction pass. I also won't hand you a line, a diff, or a file body to paste in yourself. If the sub-agent stalls or the change proves harder than scoped, the answer is a better brief or a narrower unit, not me editing around the delegation — doing that would be a protocol violation, and routing it through you to paste would be the same violation wearing a different hat.
+
+Say the word and I'll issue the dispatch.

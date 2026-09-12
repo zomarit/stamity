@@ -1,0 +1,20 @@
+## Batch closed
+
+**Applied (2)**
+- `src/ui/InboxEmpty.tsx` — empty-state typo corrected.
+- `src/http/retry.ts` — stale comment corrected.
+
+**Refused (1)**
+- `src/auth/permissions.ts` — adding one role to an allow-list. The security-sensitive surface row fired on the access-control path. Nothing was edited; the file is untouched.
+
+**Gates after the two applied items**
+- `npm run lint` — pass
+- `npm run typecheck` — pass
+- `npm run test` — pass
+
+**Pre-existing, left alone**
+- One lint warning in `src/reports/export.ts`. It predates this batch and was not touched.
+
+Nothing was reported `saved`; the lane published nothing. No commit was made.
+
+**Recommended next step:** carry item 3 to `/st-work` — the refused allow-list change in `src/auth/permissions.ts` is the only thing this batch left undone, and the access-control surface is exactly the kind of change that wants the fuller lane. The evidence that goes with it: the batch list, the surface-row classification that fired, and the fact that the file is unmodified. That switch is yours to make, not mine — say the word and I'll hand it over.

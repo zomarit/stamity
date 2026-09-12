@@ -1,0 +1,39 @@
+## Result — run r12, review round 2
+
+**status:** `DONE`
+
+### Dispositions
+
+**`r12/review/4` — Critical — `src/api/export.ts:52` — fixed**
+Validation now runs before decoding; the caller-supplied cursor is rejected at the boundary and never reaches the query builder unchecked. Change at `src/api/export.ts:49-58`.
+
+**`r12/review/5` — Warning — `src/api/export.ts:118` — fixed**
+The requested page size is clamped to the configured maximum before it reaches the query. Change at `src/api/export.ts:118-121`, with one new test in `test/api/export.test.ts` covering an over-maximum request.
+
+**`r12/review/6` — Warning — `test/api/export.test.ts:31` — rejected**
+- *What the finding claims:* the two-row fixture does not activate the pagination path.
+- *What the code does:* the fixture is `makeRows(2)` at `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the second page returns non-empty and carries a cursor different from the first page's.
+- *Evidence separating the two:* a second non-empty page with a distinct cursor cannot be produced unless the pagination path executes. The finding was read off the fixture size rather than the assertions; the page boundary here is the configured page size, not the row count.
+
+This rejection is a proposal, not a closure. `r12/review/6` stays open in the ledger until the reviewer or the human resolves it.
+
+**`r12/review/7` — Minor —** ledgered by the reviewer, not handed to this pass, not touched.
+
+### Changed files
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+### Tests added or modified
+- `test/api/export.test.ts` — one new test: page size above the configured maximum is clamped.
+
+### Gates
+**No gates were run in this pass.** I have no test, lint, or type evidence to report — gate evidence comes from the test-runner spawn, and none ran. The changed-file list above is what the flow should re-run gates against. No lint or type failure is claimed either way, including pre-existing ones, because nothing was executed to observe them.
+
+### Re-review
+Required. The changed-file list is non-empty, and the next review pass scopes to the delta in the two files above. This round is not closed by me.
+
+### Shared contracts
+No exported symbol, persisted field, wire field, or event name changed shape, so no consumer census was owed. The page-size clamp does change observable response behavior for callers who previously requested more than the maximum — worth the reviewer's eye, but it is the finding's intent, not a contract rename.
+
+### Deferrals and opportunistic edits
+None. Both fixes sat at the cause and inside the findings' lines; nothing outside them was renamed, reformatted, or swapped.

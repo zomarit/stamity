@@ -1,0 +1,68 @@
+## Gate results
+
+**Gate: `test`**
+
+| Field | Content |
+|---|---|
+| gate | `test` |
+| command | `npm run test` |
+| status | `fail` |
+| exit code | 1 |
+| duration | 48.9s |
+
+Excerpt (verbatim, complete — no truncation applied):
+
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+**Gate: `lint`**
+
+| Field | Content |
+|---|---|
+| gate | `lint` |
+| command | `npm run lint` |
+| status | `pass` |
+| exit code | 0 |
+| duration | 6.2s |
+| excerpt | *(empty)* |
+
+**Gate: `typecheck`**
+
+| Field | Content |
+|---|---|
+| gate | `typecheck` |
+| command | `npm run typecheck` |
+| status | `fail` |
+| exit code | 2 |
+| duration | 11.7s |
+
+Excerpt (verbatim, complete — no truncation applied):
+
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+**Verdict: `red`** — caused by the `test` row and the `typecheck` row.
+
+## Notes
+
+- **Baseline:** none supplied. No failing row is classified `introduced` or `pre-existing`; whether this change caused these failures is not established by this run.
+- **Redaction:** `eyJvIjoyfQ` is left verbatim. It is the pagination cursor under test in the assertion that failed (`second page carries a different cursor`) and decodes to `{"o":2}`; redacting it would destroy the diff the fixer needs and it carries no secret.
+- **Run fidelity:** all three gates ran under the default ten-minute budget with no added flags, no narrowed selectors, and no environment edits. No gate was re-run.
+
+## Return contract
+
+- **status:** `DONE` — the run produced its evidence; the red verdict is the finding, not a block.
+- **findings:**
+  - `Critical` — `test` failed: 2 tests in `test/api/export.test.ts` (lines 41 and 58).
+  - `Critical` — `typecheck` failed: TS2345 at `src/api/export.ts:52:17`.
+- No edits made, no patch proposed.

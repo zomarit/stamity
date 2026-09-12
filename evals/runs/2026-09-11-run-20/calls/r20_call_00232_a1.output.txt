@@ -1,0 +1,23 @@
+## `BLOCKED_DEPENDENCY`
+
+I'm not going to ship the pool bump. A fix written without a reproduced observation is speculation, and here the speculation is not neutral: if the slow payment call is the real cause, a bigger pool holds *more* connections open across a slow third-party wait and moves the failure from `checkout timed out` to something worse under the same traffic. Both surviving hypotheses fit the symptom equally well right now, and the pool bump only looks safe under one of them.
+
+**What the loop needs to get past step 3** — the scenario is not reachable from your environment, so this is data, not effort:
+
+- A production capture window covering the ~twice-daily occurrence — the traffic pattern that precedes it isn't reproducible on demand, so it has to be observed where it happens.
+- Read access to the production database, or an operator who has it and can run the pool-state query at the moment of timeout.
+
+**Ranked hypotheses, and the observation each still needs:**
+
+1. **Connection-pool exhaustion under concurrent checkouts.** Needs: pool in-use/idle/wait counts sampled at the timeout timestamp, plus concurrent-checkout count in the preceding 60s. Confirms if waits are non-zero and in-use is at max *before* the timeout fires.
+2. **Slow third-party payment call under a specific card type.** Needs: payment-call latency and card-type attribute on the timed-out requests. Confirms if latency spikes are card-type-correlated and the pool is *not* saturated.
+
+The two are distinguishable from a single capture — that's the whole reason to get one.
+
+**One question, and it is the only thing blocking the next step:**
+
+Hold the step-2 instrumentation at all three sites for a capture window, or strip it now?
+
+**Default is strip now.** No reply, an unattended run, or an ambiguous answer all take that default and step 8 runs immediately.
+
+My recommendation is to hold. At roughly two occurrences a day, a window ending **2026-09-19** yields ~14 events — enough to tell the two hypotheses apart rather than pick one. If you want that, reply with an explicit yes and the date the window ends; I'll record the agreement and leave the three sites in place. Anything else and I strip them.

@@ -1,0 +1,18 @@
+I can't apply that edit here. Size isn't the boundary — any product-code change inside debug is a contract breach, so line 61 has to go through `/st-work` either way. That routing costs you almost nothing; what's actually blocking is that two gates are open.
+
+**Gate 1 is open** because the chain doesn't explain `src/cart/events.ts:19`. The candidate chain is: removal fires at `events.ts:19` → accumulator reset to 0 at `total.ts:44` → re-add computes `acc * count` at `total.ts:61` → `0 * 1 = 0`. That does explain the symptom, and it makes your read of line 61 plausible. But the silence at `events.ts:19` has two readings that lead to different work:
+
+1. **The recompute genuinely never runs on removal.** Then the reset at `:44` is left standing, the multiply at `:61` is the proximate cause of the zero, and your one-liner fixes this repro — but the missing recompute is a second defect that will show as stale totals in flows that don't happen to re-add. The one-line fix masks it here.
+2. **The recompute runs but isn't instrumented.** Then the accumulator isn't 0 at re-add time, `acc * count` yields something nonzero, and line 61 doesn't explain a total of 0 at all. The cause is elsewhere and the one-liner ships a no-op into a deploy you're waiting on.
+
+I can't rank these above low-medium confidence without one more observation, and distinguishing them is cheap.
+
+**Gate 2 is open** because nothing fails in the tree. A test is an allowed mutation inside debug, so I can write that now.
+
+Fastest legal path, which I'll start unless you say otherwise:
+
+- Write a failing test for remove-last-then-re-add, asserting the total equals the re-added item's price and naming the multiply, not a placeholder.
+- One instrumentation round on `events.ts:19` to settle whether the recompute fires — this is the only thing standing between reading 1 and reading 2.
+- Hand the diagnosis plus the failing test to `/st-work` as the plan.
+
+If you'd rather stop rather than spend that round, say so and I'll return `BLOCKED_FAILURE` with those two hypotheses ranked and the evidence each still needs. What I won't do is edit `total.ts:61` from here on an unclosed chain.

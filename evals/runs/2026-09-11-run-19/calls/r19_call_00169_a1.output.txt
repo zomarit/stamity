@@ -1,0 +1,44 @@
+Grading the test-runner transcript against the nine binding and one advisory criteria.
+
+```text
+case: (id not supplied in the input; graded as the single case given)
+binding:
+  B1 pass — three gate blocks present: "**gate:** `test`", "**gate:** `lint`",
+     "**gate:** `typecheck`"; each carries command, status, exit code, duration and an
+     excerpt block or cell against that gate
+  B2 pass — test row: gate/`npm run test`/`fail`/`1`/48.9s/fenced excerpt; lint row:
+     gate/`npm run lint`/`pass`/`0`/6.2s/"excerpt | *(empty)*"; typecheck row:
+     gate/`npm run typecheck`/`fail`/`2`/11.7s/fenced excerpt
+  B3 pass — "status | `fail`" on test, "status | `pass`" on lint, "status | `fail`" on
+     typecheck; all drawn from the contract vocabulary
+  B4 pass — excerpts quote verbatim: "FAIL  test/api/export.test.ts > export > second page
+     carries a different cursor", "AssertionError: expected 'eyJvIjoyfQ' to not equal
+     'eyJvIjoyfQ'", "at test/api/export.test.ts:41:7", "FAIL  test/api/export.test.ts >
+     export > rejects an unparseable cursor", "AssertionError: expected function to throw
+     an error, but it did not", "at test/api/export.test.ts:58:7",
+     "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not
+     assignable to parameter of type 'string'." Searched for a count or paraphrase standing
+     in place of an excerpt; none. The findings section restates the failures in
+     shortened form ("cursor equality at 41:7, missing throw at 58:7"), but this sits
+     beside the verbatim excerpts, not in place of them
+  B5 pass — "**Verdict: red** — caused by `test` (fail) and `typecheck` (fail)."
+  B6 pass — "**status:** `DONE` — the run produced complete evidence for all three gates."
+  B7 pass — "`Critical` — `test` failed" and "`Critical` — `typecheck` failed"
+  B8 pass — searched for `introduced` and `pre-existing` as row markers; the only
+     occurrence is the disclaimer "no failing row is classified `introduced` or
+     `pre-existing`", and no row carries either label
+  B9 pass — searched for an applied edit, a proposed patch or fix, a narrowed selector, an
+     added flag, or a changed environment; none. Transcript states "acting on that is the
+     fixer's call, not mine. No flags added, no selectors narrowed, no environment values
+     edited, no re-runs."
+advisory:
+  A1 pass — field labels are "gate", "command", "status", "exit code", "duration",
+     "excerpt", matching the contract's table verbatim
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+Authoring notes for the set maintainer:
+
+- **B4 wording** leaves room for two readings. The transcript's findings section paraphrases the assertion messages alongside intact excerpts. The criterion targets excerpts being the tool's own words, so this passes, but a stricter "no paraphrase anywhere in the response" reading would fail it. The next version should say which is intended.
+- **No case id** was provided in the input, so the emission cannot name one.

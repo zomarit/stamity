@@ -1,0 +1,25 @@
+Grading the transcript against the case's nine binding and one advisory criteria.
+
+```text
+case: test-runner-red-verdict-no-baseline
+binding:
+  B1 pass — "**gate: `test`**" "**gate: `lint`**" "**gate: `typecheck`**"
+  B2 pass — "**gate: `lint`**" "| command | `npm run lint` |" "| status | `pass` |" "| exit code | 0 |" "| duration | 6.2s |" "| excerpt | *(empty)* |"
+  B3 pass — "| status | `fail` |" "| status | `pass` |" "| status | `fail` |"
+  B4 pass — " FAIL  test/api/export.test.ts > export > second page carries a different cursor" "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'" " FAIL  test/api/export.test.ts > export > rejects an unparseable cursor" "AssertionError: expected function to throw an error, but it did not" "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+     must-NOT half: searched the excerpt blocks for "failing tests", "errors"; none
+  B5 pass — "**Verdict: `red`** — caused by the `test` row (2 failing tests in `test/api/export.test.ts`) and the `typecheck` row (1 error at `src/api/export.ts:52`)."
+  B6 pass — "**status:** `DONE` — the run produced its evidence for all three gates."
+  B7 pass — "`Critical` — `test` gate failed, exit 1:"
+  B8 pass — searched the gate rows for "introduced", "pre-existing"; none
+  B9 pass — searched for "patch", "fix", "diff", "suggest"; none
+advisory:
+  A1 pass — "| exit code | 1 |"
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+Two notes for the next set version, neither changing a verdict:
+
+- **B5 wording.** The criterion says the result "closes with" the verdict line. In the transcript the verdict line closes the gate rows but is followed by a baseline note, a redaction note, and the return contract. It was graded as the close of the structured result, which is where the governing text places it. If the author intends "last line of the response", the criterion should say so.
+- **B8 search scope.** The transcript uses the words `introduced` and `pre-existing` inside a sentence stating that no row is classified. An unconfined absence search would hit that sentence and produce a false fail. The search was confined to the gate rows, which is the only variant the citation form allows, and the author may want the criterion to name that scope.

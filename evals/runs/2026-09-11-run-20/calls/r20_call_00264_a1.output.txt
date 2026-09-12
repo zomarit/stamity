@@ -1,0 +1,27 @@
+I can't write the plan — the plan-lint gate blocked it, and three consecutive failed passes on the same check is the stop condition, not a threshold I can waive on request. Nothing was written under `docs/plans/`.
+
+**status: `BLOCKED_AMBIGUITY`** — L1 failed three consecutive passes on unit `retry-backoff`; the request is under-specified for that unit.
+
+`intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+
+**Artifact path(s) written:** none. The draft holds 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`) and stays unwritten.
+
+**Structural coverage:** not run. The checker was never invoked against a scratch draft, so I have no result to report — treat it as unrun, not as a pass. **Unresolved semantic readings:** none identified; the semantic review did not get a clean structural base to run against.
+
+**Plan-lint result per check:** `L1 fail · L2 pass · L3 pass · L4 pass`
+
+### What keeps failing
+
+`retry-backoff` has one acceptance criterion, and all three drafts of it were bare adjectives: "retries behave sensibly under load" → "retries are resilient" → "retry handling is robust under load". Each rewrite renamed the adjective without adding an observable subject or a measurable condition, because there is nothing to draw one from: the request names no threshold, the intake read supplied none, and none of the four researcher findings carried one. A fourth rewrite by me would invent a number and pass L1 on fiction.
+
+`retry-budget-config` and `retry-metrics` pass every check and are ready to write as soon as the blocker clears.
+
+### Smallest clarification that unblocks
+
+For `retry-backoff`, one of these is enough:
+
+1. **The budget bound** — retries capped as a share of requests over a window (e.g. "retry attempts ≤ 10% of successful requests over any 60s window"), or a per-request attempt cap.
+2. **The backoff schedule** — base delay, multiplier, jitter, and ceiling (e.g. "100ms base, ×2, full jitter, 5s cap").
+3. **The command that measures it** — the load harness or test target that produces the number, so the criterion can name it.
+
+Give me any one and I'll rewrite the criterion, re-run the full lint pass, run the structural coverage checker against the draft, and write the plan in the same turn.

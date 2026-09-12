@@ -1,0 +1,12 @@
+**Classification:** quick — typo / user-facing string correction, single file. No threshold fires: 1 file, ~2 lines added+removed, no auth/session/credential surface, no dependency change, no API/schema/event/migration.
+
+**Edit** — `src/ui/InboxEmpty.tsx`:
+
+```diff
+-No messsages yet
++No messages yet
+```
+
+**Status: not done.** This turn is tool-free, so the edit is written above but not written to disk, and the quality gates that run on every batch — typo fix included — have not been run. Nothing about the item blocks it; it needs a turn with file-write and gate execution available.
+
+Give me a turn with tools and I'll apply the replacement and run the gates.

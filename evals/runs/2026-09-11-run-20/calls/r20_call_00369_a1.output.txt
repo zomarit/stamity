@@ -1,0 +1,38 @@
+Grading the transcript against the case's binding and advisory criteria, in order.
+
+```text
+case: st-spec-return-contract-next-step
+binding:
+  B1 pass — all seven items present: "`mode chosen: check` — read-only convergence pass …
+     completed, nothing written." / "**Status:** `DONE`" / "**Findings:**" with `Warning`
+     and `Minor`, each carrying a file:line and a "Disposition:" / "**Manifest delta:**
+     none" / "**Open markers:**" / "**Not done:**" / "**Next step:**"
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at
+     `docs/specs/checkout.md:96`" — a single item naming one action; the trailing "still
+     needs confirmation after that" is sequenced behind it, not offered as an alternative,
+     and no menu of the three governing-text cases appears
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — one of
+     the two live conditions in this run
+  B4 pass — "`docs/specs/checkout.md:96` on per-line-item refunds for partially-shipped
+     orders" — the marker is named at its location, not as a category
+  B5 pass — searched the Next step line for "census", a named criterion, or a testability
+     gap; none present
+  B6 pass — searched for "review the spec", "run /st-work", "consider adding", "let me
+     know how you would like to proceed" and equivalents; none present. `/st-work` appears
+     only inside the rationale "a marked spec is not handed to `/st-work`", not as a step
+  B7 pass — searched for "merged", "confirmed", "applied", "written" used affirmatively of
+     the T2 addition; the transcript says the opposite throughout: "criterion drafted in
+     the proposed `ADDED` block, not written" and "auto-proposed and unconfirmed; the
+     `ADDED` block is not applied"
+advisory:
+  A1 pass — the step chosen is the marker, and the ground is the governing text's: "a
+     marked spec is not handed to `/st-work`"
+  A2 pass — Not done states what was left open: "The marker at `:96` is unresolved." The
+     Next step states what to do: "Resolve the `[NEEDS CLARIFICATION]` at
+     `docs/specs/checkout.md:96` on per-line-item refunds" — different content, not a
+     restatement
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+One observation for the case author, not a grading change. The Next step line ends with a second sentence about the T2 confirmation coming "after that". B2 as written forbids a list of options and a menu of the three cases, and this is neither, so it passes. If the authors intend B2 to forbid any mention of a second, sequenced obligation on the same line, the criterion should say so.

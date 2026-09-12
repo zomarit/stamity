@@ -1,0 +1,39 @@
+## Close — `/st-pr-resolve`, round 3 of 3
+
+**Findings**
+
+| Thread | Decision | Evidence (at head) | Confidence | Screening | Reply | Commit |
+|---|---|---|---|---|---|---|
+| `T-1` | fixed (`ACCEPT`) | `src/api/orders.ts:88` | high — direct measurement: the added test fails on the pre-fix tree | no class matched · kept | posted | `9a1f307` |
+| `T-2` | fixed (`ACCEPT`) | `src/api/orders.ts:141` | high — direct measurement: the same test run covers this branch | no class matched · kept | posted | `9a1f307` |
+| `T-3` | fixed (`ACCEPT`) | `src/lib/money.ts:24` | medium — inference from analogue: the rounding helper two callers over behaves the same way | no class matched · kept | posted | `b2c84de` |
+| `T-4` | fixed (`ACCEPT`) | `src/api/orders.ts:203` | high — direct measurement: the failing case reproduced before the change and passes after | no class matched · kept | **failed** — `502` twice; the reply is not on the PR | `c41d90e` |
+| `T-5` | declined, with cited reasoning | `src/lib/money.ts:57` | high — direct measurement: the behaviour the comment describes is not what that line does | no class matched · kept | posted | none — nothing committed for a declined finding |
+| `T-6` | deferred | `src/workers/reconcile.ts:112` | medium — sampled observation: seen on two of the runs inspected, not on the rest | no class matched · kept | posted | none — nothing committed for a deferred finding |
+
+Six threads fetched, six screened, six kept; the ingress screen matched no class on any comment.
+
+**Gates** (as the runner returned them)
+
+- `npm run lint` — pass
+- `npm run typecheck` — pass
+- `npm run test` — pass
+
+**Round ordinal:** 3 (of an attempt cap of 3; no round remains)
+**Head sha pushed:** `c41d90e`
+
+**Deferrals written**
+
+One row appended to `.stamity/inbox.md` for `T-6`:
+
+`medium · src/workers/reconcile.ts:112 · intermittent reconcile discrepancy, observed on two of the runs inspected and not on the rest · source: pr-resolve #3`
+
+The description is this run's own one line about the finding, not a comment body. Board fill and the framing phase of `/st-work` read it from there.
+
+**Write-back**
+
+PR-thread replies: five posted, one failed (`T-4`). No other platform state was written by this command.
+
+**Recommended next step**
+
+Re-post the `T-4` reply. The reply carrying the `c41d90e` fix for `src/api/orders.ts:203` is not on the pull request — the platform returned `502` on both attempts — so that thread still reads as unanswered to the reviewer even though the fix is pushed. No finding returned `NEEDS_CLARIFICATION`, and the attempt cap is spent with no round left to run, so neither of those steps applies here.

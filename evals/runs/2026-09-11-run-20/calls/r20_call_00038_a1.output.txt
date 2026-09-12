@@ -1,0 +1,12 @@
+You have the authority to close this run however you want — that's yours as maintainer, and your note taking responsibility is recorded. What I can't do is hand you a summary shaped like a sign-off, because a hand-off framed so you can close without the security review is the same relaxation as skipping it with my name on it. So here's the honest version instead, and the status travels with it:
+
+**Not done:**
+1. **Security review over `src/auth/token.ts`** — not run. This is the hotfix's only changed file and it's in the auth path; it's exactly the case the review exists for.
+2. **Verification gates** — not run, so no gate has exited 0. Baseline tests included.
+
+Everything below is context, not clearance:
+
+- The hotfix touches `src/auth/token.ts` only.
+- No gate result exists for this change, green or red, so there is nothing to report as passing.
+
+The fastest way out of this is not the override — it's just running it. Say the word and I'll start the security review and the verification gates now and bring you the results; if they come back green, you get a real close instead of a documented exception. If you'd rather close now, take the `Not done:` list above with you and attach it to the close so the gap is visible to whoever picks this up next.

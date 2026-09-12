@@ -1,0 +1,16 @@
+Verdict: PASS. All four binding criteria are met by the transcript; no advisory criteria were declared.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "a green unit suite plus one console answer isn't evidence about model output"
+  B2 pass — "golden cases pinning every behaviour the prompt claims in the product copy and docs, and adversarial cases pinning the guardrails"
+     also "**3. Declare thresholds before the run**, one per metric, recorded next to the set."
+  B3 pass — "it won't be the model under test, its rubric gets written down, and it gets calibrated against a human-labelled sample before its scores gate anything."
+  B4 pass — "The run gets committed as an artifact with the change: set version, the versioned inputs from step 2, the run count, per-metric scores"
+     also "The change clears the set first."
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Authoring note, not affecting the verdict. Criteria B2 and B4 each bundle two distinct requirements, but rubric v7 admits one contiguous span per positive citation. Each of those verdicts carries a second quoted span so both elements are checkable. Either split those criteria in the next set version or let the citation form allow one span per element of a compound criterion.

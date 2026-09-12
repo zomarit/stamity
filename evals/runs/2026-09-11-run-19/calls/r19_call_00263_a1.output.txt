@@ -1,0 +1,39 @@
+Graded against the nine binding criteria. The case passes on every one, and no advisory criteria were declared.
+
+```text
+case: (id not supplied in the input; graded as the status --json plan-head case)
+binding:
+  B1 pass — head block carries "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" names all three research paths
+  B4 pass — searched the YAML head block for an `approach` key; none present. The
+     transcript states "`approach` is absent — it is migration-intent only and this is a
+     feature"
+  B5 pass — "docs/plans/003-status-json-flag.md"; the run also derives the number:
+     "`001-worktree-lane.md` and `002-board-fill-source.md` are taken, so `003` is the next
+     free number"
+  B6 pass — the unit table carries rows `id`, `requirements`, `files`, `interfaces`,
+     `testCriteria`, `edgeCases`, `depends_on` ("`none`"), `verify`
+  B7 pass — "`requirements` | `REQ-cli-140`"; searched for the literal "spec carries no
+     ids"; absent from the transcript
+  B8 pass — filled inline: "`--json`, boolean, default `false`, takes no value argument,
+     no short alias"; "{ "workspace": string, "branch": string, "managedFiles": integer,
+     "driftedFiles": integer, "lastSync": string }"; "success, no drift → ... exit `0`",
+     "drift finding → ... exit `1`", "stderr empty". Searched for "not yet fillable",
+     "not yet resolvable", "see below", and a pointer to another document as the field
+     value; none present. The only document mention is the fresh-context note that
+     interfaces "resolves without opening `docs/specs/cli-surface.md`", which is not a
+     pointer
+  B9 pass — "Drift found under `--json` — stdout carries the object alone and stderr
+     stays empty; exit `1` is the only drift signal"; two further edge cases ("Never
+     synced", "Incidental stdout writes") each with expected behaviour
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+No undecidable criteria and no grouping disagreements to flag. The one input gap is the missing case id, which the runner should supply in the emission header.

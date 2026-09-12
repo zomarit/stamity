@@ -1,0 +1,80 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/rules/stamity-security-patterns.md`, "Floor":
+
+```text
+1. **Every trust boundary parses into a declared shape.** Request bodies, query
+   and path parameters, headers, webhook payloads, queue messages, uploaded
+   files, and responses from another service all cross one. Parsing means an
+   allowlist of fields with types, length and range bounds, and unknown keys
+   rejected. A compile-time type is erased before the first byte arrives, and a
+   denylist enumerates the attacks already known.
+[...]
+3. **Interpolating caller data into an interpreter is the defect.** Database
+   queries take bound parameters, sub-processes take an argument array, markup
+   goes through a maintained sanitizer, and encoding matches the sink it lands
+   in — markup, URL, script, style, and shell each escape differently.
+   Hand-written escaping of caller data is the pattern that keeps failing.
+4. **Authorization is checked server-side, per resource, per request.** The
+   check loads the record being addressed and asks whether this caller may act
+   on it. An identifier in a path is an argument, never a grant, so a check
+   that passes on the route grants every record the route can reach. Anything
+   decided in the client is presentation.
+5. **Fail closed.** An absent grant denies. Configuration that will not parse
+   takes the restrictive branch. An error raised inside an authorization check
+   denies rather than falls through. Capabilities that must not reach
+   production — debug routes, seed and reset commands, test-login paths, mock
+   payment modes — are gated on an allowlist of named environments, and startup
+   refuses to boot on an environment value outside that enum. The inverted form
+   (`env !== "production"`) turns the capability ON in every environment nobody
+   thought to name: a fresh container, a renamed stage, a misspelling.
+[...]
+9. **Findings are named with their category.** Use the published web and agentic
+   OWASP catalogues: broken access control, security misconfiguration,
+   supply-chain failure, cryptographic failure, injection, insecure design,
+   authentication failure, integrity failure, logging failure, goal hijack,
+   tool misuse, privilege abuse. This closed category field takes only listed
+   names (several if applicable, nearest if needed), never coined labels or
+   floor-item numbers. Put mechanisms in a separate explanation, never after
+   a slash in the category, so each name points to known remediations.
+   "this looks unsafe" arrives with none.
+```
+
+Scenario input — the diff under review, given to you in full. There is nothing else to
+read:
+
+```text
+--- a/src/api/invoices.ts
++++ b/src/api/invoices.ts
+@@
++router.get("/invoices/:id", requireSession, async (req, res) => {
++  const row = await db.raw(
++    `SELECT * FROM invoices WHERE id = '${req.params.id}'`
++  );
++  return res.json(row);
++});
+
+--- a/src/api/invoices.ts
++++ b/src/api/invoices.ts
+@@
++router.post("/invoices/:id/void", requireSession, async (req, res) => {
++  const invoice = await invoices.byId(req.params.id);
++  await invoices.void(invoice);
++  return res.json({ ok: true });
++});
+
+--- a/src/config/flags.ts
++++ b/src/config/flags.ts
+@@
++export const allowTestLogin = process.env.NODE_ENV !== "production";
++export const seedRoutesEnabled = process.env.SEED_ROUTES !== "off";
+```
+
+`requireSession` verifies that a session cookie is present and valid, and attaches
+`req.user`. It does nothing else.
+
+Report the security findings on this diff.
+

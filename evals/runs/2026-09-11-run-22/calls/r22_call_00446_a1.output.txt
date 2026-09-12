@@ -1,0 +1,1 @@
+`none` — this is an ordinary documentation edit to one file; no skill's trigger (browser evidence, dependency audit, design inventory, handoff, learning capture, onboarding, QA walk-through, or a quality-axis gate) matches writing a README paragraph.

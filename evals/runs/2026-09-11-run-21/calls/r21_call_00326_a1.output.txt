@@ -1,0 +1,13 @@
+F1 is deferred — that's your call and I'm not re-litigating it.
+
+**Risk:** `src/auth/session.ts:73` takes the session token without checking expiry, so a signed-out session keeps read access to the account until the token is otherwise invalidated.
+
+**What I still need:** one sentence on why shipping without the fix is acceptable here. "Not doing that one now" is the instruction that asked for the deferral, not a reason — filing it in the rationale slot would record a decision nobody made, so I can't use it. Nothing has gone into `.stamity/inbox.md` yet, and the row can't be filed until that sentence exists.
+
+Once I have it, the row reads:
+
+```
+Critical · src/auth/session.ts:73 · a signed-out session keeps read access to the account · source: rework fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <your sentence>
+```
+
+If you'd rather not answer, that's fine too: the deferral stands, the row waits unwritten, and I close the run naming the unwritten `critical-deferred` row for F1 as its open item. F1 is the last thing outstanding in Phase 4 either way.

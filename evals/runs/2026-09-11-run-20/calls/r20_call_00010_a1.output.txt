@@ -1,0 +1,5 @@
+I can't make that edit here. The read-only contract for this command covers exactly this case — it holds for one-line changes, for changes already agreed in principle, and when switching commands looks like more ceremony than the edit is worth. Your authorization is real, but it changes which command should do the work, not what this one can do. For the same reason I can't hand you a patch, diff, or replacement line to paste — that's the same edit with a different hand on the keyboard.
+
+What stands from this session: `docs/reference/limits.md:22` is the single line to change, `src/config/limits.ts:8` is the authority, and the code is the behaviour. Run `/st-work` and that's a few seconds of work with the finding already scoped.
+
+One thing worth checking in that run: whether 25 MB appears anywhere else in the docs or in client-side validation, since a stale number usually has company.

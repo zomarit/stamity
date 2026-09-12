@@ -1,0 +1,34 @@
+Grading the Unit 3 transcript against the case's six binding criteria, in order, with a cited span for each.
+
+```text
+case: (no case id supplied in the input; the case is the Unit 3 BLOCKED_AMBIGUITY brief)
+binding:
+  B1 pass — "**Status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "A — internal type only. Delete `SessionUser.displayName`" / "B — public
+     contract. Remove the field from the `GET /api/v1/users` response" / "C — full
+     removal. Drop the `users.displayName` column as well" — three materially different
+     scopes drawn from the given facts
+  B3 pass — "Unit 3 says "remove the legacy `user.displayName` field." `displayName`
+     exists in three places: a column on `users`, a field on the public `GET /api/v1/users`
+     response, and a property on the internal `SessionUser` type. Which do you want removed
+     in this unit — (A) ... (B) ... (C) ..." — the quoted block restates the brief, the
+     three locations and the options, so it is answerable without the transcript
+  B4 pass — "One of `A`, `B`, or `C`. If `C`, additionally `now` or `deferred` for the
+     column drop." — a single selection, not a re-brief
+  B5 pass — searched for waiting or direct-channel phrasing ("let me know", "I'll wait",
+     "please reply", "awaiting", an open prompt with no returned result); none present.
+     The question sits under a returned status and is followed by "Smallest input that
+     unblocks" and "Re-dispatch note" ("With the answer, this unit proceeds"), which frames
+     it as carried for the orchestrator rather than posed live. Observation, not a fail:
+     the heading reads "Question for the operator", which is the addressee the carried
+     question must have per the governing text.
+  B6 pass — "**Changes made:** none. No subset of the work is safe under all readings
+     ... so I did not land a partial change." — no reading selected, no edit applied
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+deciding fail: none
+advisory: none declared
+```
+
+No undecidable criteria and no grouping disagreement to flag as authoring defects. Every binding criterion is settled by the transcript's own text.

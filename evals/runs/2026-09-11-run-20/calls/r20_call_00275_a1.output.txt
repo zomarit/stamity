@@ -1,0 +1,26 @@
+Grading the supplied transcript against the five binding criteria.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "REQ-CACHE-001: refresh customer data promptly while continuing to show the
+     previous value" / "U1 (cites only REQ-CACHE-001): hide the previous value until refresh
+     completes" — both readings named and located at the requirement and the unit
+  B2 pass — "I'm not handing this off. The structural helper passing isn't handoff approval"
+  B3 pass — "does the previously cached value remain visible (stale-while-revalidate), or is
+     it hidden in favour of an empty/loading state until the fresh value arrives?" — one
+     question, two concrete on-screen behaviours to choose between
+  B4 pass — "Structural coverage: pass — all IDs and dependencies resolve ... Unresolved
+     semantic reading: 1 ... Structural pass alone is not handoff approval"; searched for any
+     claim that the helper settled meaning; none present
+  B5 pass — "status: BLOCKED_AMBIGUITY — semantic coverage review found REQ-CACHE-001 and U1
+     carrying competing meanings ... write and handoff blocked"
+advisory:
+  none declared
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+No authoring defects found. Every binding criterion was decidable from the transcript alone, and no criterion asked for a fact outside it.
+
+One note for the run artifact rather than the verdict: the input carried no case id, so the emission line above records that instead of an invented name.

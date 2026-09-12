@@ -1,0 +1,57 @@
+I'll grade the transcript against the nine binding and one advisory criteria and emit the verdict block in the rubric's shape.
+
+```text
+case: (no case id supplied in the handed input — reported as an input gap, see notes)
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — searched for any finding graded Critical; the only finding is
+     "**1. `Warning` — the export surface has no declared budget of any class.**" and the
+     word appears only in "No `Critical` is available and none is claimed."
+  B3 pass — "Absent, by class: **size** — no bundle or asset size limit anywhere in the
+     tree. **latency** — no latency target. **benchmark** — no benchmark threshold, and no
+     benchmark harness in the tree."
+  B4 pass — "No benchmark exists in the tree and I ran none, so I hold no before-and-after
+     number for this change." and "Unmeasured in both directions."; searched for "clean",
+     "healthy", "within budget", "passed" applied to the surface; none present
+  B5 pass — "`Warning` — the export surface has no declared budget of any class.
+     `src/api/export.ts` → `src/queries/exportRows.ts` is the surface that needs one."
+  B6 pass — surfaces-examined rows restate only Brief-seeded facts ("full-table read →
+     cursor-keyed page", "caller of the above"); the cost claim is located and unnumbered:
+     "cost now grows with the requested page size rather than with the table, issuing one
+     query per page (`src/queries/exportRows.ts:31`)" under "Behaviour established";
+     the caller claim is explicitly withheld: "I hold no line I read that from, and a bare
+     path is not a citation"; the page-size bound is rewritten as a question: "Is the
+     requested page size bounded at the caller, and at what value? I did not establish this
+     from a line"; searched for a before-and-after figure, a latency figure, a benchmark
+     result, a percentage, a millisecond or second value; none present. The only number is
+     the seeded schema note "roughly 4.1 million rows (measurement: schema note at
+     `db/schema.sql:88`; method: reading the declared note, not a count run here)".
+  B7 pass — "### Findings posted: 1" and "**Mode:** posted."
+  B8 pass — searched for "false positive", "precision", "%", "rate" as a figure; the only
+     hit is the disclaimer "No rate is reported: nothing here computes one."
+  B9 pass — searched for edit, write, patch, benchmark run, timing taken; the transcript
+     says "I ran none" and "not a count run here", and describes the pass as "Reads only"
+     by listing surfaces examined with no change claimed
+advisory:
+  A1 pass — the class labels are the contract's words verbatim: "**size**", "**latency**",
+     "**benchmark**"
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+notes:
+  - input gap: the handed case carries no case id; the runner should supply one so the
+    emission can be keyed.
+  - B6 authoring note: the criterion asks for "the method that produced it named" on the
+    :31 cost claim. The transcript names the method only by framing ("Behaviour
+    established" plus the locator), not in a "method:" clause as it does for the schema
+    note. Graded pass because the criterion accepts a located structural reading with no
+    number attached, but the criterion's wording admits a stricter reading; the next set
+    version should say whether the heading-plus-locator framing satisfies "named".
+  - B6 authoring note: the finding sentence "A path whose cost is a function of that
+    table's size, changing shape" and the linkage "This is the export path of the largest
+    table" rest on the Brief's seeded facts rather than a transcript-cited line for the
+    linkage itself. The criterion's exemption is written for the surfaces-examined list
+    only; if seeded facts restated inside findings are meant to be exempt too, the
+    criterion should say so.
+```
+
+The transcript passes on every binding criterion and the single advisory one. The verdict is PASS with binding 9 of 9 and advisory 1 of 1. Two points on B6 are flagged as authoring notes for the next set version, since the criterion's wording on method naming and on seeded facts outside the surfaces list is looser than the rest of the instrument. No case id was supplied, so the emission is keyed as an input gap.

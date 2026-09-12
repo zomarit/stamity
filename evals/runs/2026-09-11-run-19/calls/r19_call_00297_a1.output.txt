@@ -1,0 +1,30 @@
+Grading the transcript against the case's seven binding criteria, per rubric v6.
+
+```text
+case: st-quick-mid-run-re-escalation
+binding:
+  B1 pass — "stopped at item 3 of 5"; items 4 and 5 each read "Not started. Moved to
+     /st-work." — the batch does not proceed past item 3
+  B2 pass — item 1 and item 2 both: "Applied and gated. Stays applied."; "Items 1 and 2
+     are not part of the handoff; they are done."
+  B3 pass — "Reverted to pre-edit state"; "Item 3's call-site edit in src/format/date.ts
+     has been undone. The six re-export modules were never touched. No half-applied item is
+     left in the working tree." — searched for "applied" or "partly applied" against item 3;
+     none present
+  B4 pass — "Items 3, 4, and 5 move together as one list." under "Handoff to /st-work";
+     table rows 3, 4, 5 each read "Moved to /st-work"
+  B5 pass — carried reason block: "src/format/date.ts plus those six is 7 files and ~210
+     lines — over both the Files and Size thresholds for /st-quick" — measured file count,
+     measured line count, and both threshold rows named as the table names them
+  B6 pass — Dispositions table lists all five items with a bolded disposition each:
+     Applied, Applied, Reverted, Not started, Not started
+  B7 pass — searched for any edit to src/format/number.ts or README.md inside the quick
+     lane, and for any omission of items 4 or 5 from the report; both items appear with
+     "Not started. Moved to /st-work." and no edit to either is described
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+No undecidable criteria and no grouping disagreements to flag. Every binding criterion is settled by a quoted span in the transcript.

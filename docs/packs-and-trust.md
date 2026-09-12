@@ -91,8 +91,7 @@ yours; the install will not decide it for you.
 **What gets signed.** Not the pack directory and not the bare hash: the aggregate content
 hash, lower-cased and length-framed as `64:<hex>` in UTF-8
 (`src/pack/trust.ts::sigstoreSignedPayload`). An author signing anything else produces a
-bundle this gate refuses. There is no signing helper in this package yet — producing the
-bundle is the author's step, against that serialization.
+bundle this gate refuses. The author helper below reuses that serialization directly.
 
 **Declaring a signer is mandatory.** `signing.signer` reads
 `"<oidc-issuer> <certificate-identity>"` — the OIDC issuer, one space, then the identity in
@@ -135,6 +134,67 @@ for a caller that injects a verifier which cannot judge.
 
 No first-party pack declares `signing` — each rests on its catalog pin — so today this is a
 path the ladder defines rather than one you will meet.
+
+## Signing a pack
+
+From a Stamity source checkout on Node >=22.22.2, prepare the pack's content and
+integrity map, then declare the exact OIDC issuer and certificate identity:
+
+```json
+{
+  "signing": {
+    "method": "sigstore",
+    "signer": "<oidc-issuer> <certificate-identity>",
+    "bundlePath": "pack.sigstore.json"
+  }
+}
+```
+
+That is the `signing` section of the existing `pack.json`, alongside its `name`,
+`version` and `integrity`; the [concrete GitHub Actions example](../.github/pack-signing-example.json)
+shows the issuer and identity forms. Replace its repository, workflow and tag with
+the authorized signing job's actual identity. The bundle sits outside the content
+directories and is excluded from its own integrity map.
+
+```sh
+npm ci --ignore-scripts
+node scripts/sign-pack.mjs /path/to/pack
+node dist/cli.js add /path/to/pack --dry-run
+node dist/cli.js add /path/to/pack
+```
+
+Build the CLI before these commands if this checkout has no `dist/`. The signing
+script uses the installed official Sigstore client and its GitHub Actions OIDC
+identity provider. In CI, prepare and validate content without `id-token: write`,
+then run signing in a separate protected job that grants it. Install dependencies
+before granting access to an external signing identity; run only reviewed signer
+code in that job. No token argument, stored signing key or credential file is
+needed. GitHub's per-run identity is process state; publish only the content,
+manifest and detached bundle, never environment dumps or signing logs containing
+provider requests.
+
+The script reuses `sigstoreSignedPayload` from the verifier, checks integrity before
+signing, verifies the returned bundle against the declared issuer and identity,
+rechecks inputs, and writes atomically. Unsafe bundle paths, wrong signers,
+malformed responses and changed content refuse without claiming success.
+
+To update, change content and its integrity map, set the new pack version and
+appropriate signing identity, sign again, and repeat `add`. A changed content hash
+cannot reuse the old signature. Local regression fixtures exercise real ephemeral
+cryptography and the production install/update path with the external identity
+service substituted. They do not establish Fulcio, transparency-log or live OIDC
+proof; authenticated sign → verify → install/update evidence remains a separately
+recorded release verification.
+
+The package also ships declarations for its existing JavaScript API. A TypeScript
+consumer installs the usual Node platform types and can import `createEngine`,
+`SetupManifest` and reachable types from `@zomarit/stamity`; authoring code can call
+`createEngine().pack.sign.signPack(...)`. The build uses the native compiler CLI,
+and declaration bytes count against the existing distribution budget. Two explicit
+type dependencies, `@sigstore/rekor-types` and `@types/make-fetch-happen`, complete
+Sigstore's published declaration graph; their Knip exceptions describe that
+transitive type use, not unused runtime functionality. The packed-consumer gate
+checks the graph with `skipLibCheck: false` outside this checkout.
 
 ## `--allow-untrusted`
 

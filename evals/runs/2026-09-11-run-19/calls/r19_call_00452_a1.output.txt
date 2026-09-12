@@ -1,0 +1,3 @@
+`none`
+
+The QA checkpoint is already the step that answers this question, and `st-qa` is invoked by name from the command rather than selected on its own here — so the request stays with the `/st-work` run.

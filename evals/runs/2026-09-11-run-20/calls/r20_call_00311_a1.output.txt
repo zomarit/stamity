@@ -1,0 +1,16 @@
+```text
+case: (no case id declared in the case file — reported as an authoring defect; graded as the single case supplied)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold ... Switch to `/st-work`" — the item is refused for the quick lane and routed elsewhere
+  B2 pass — "the `Schema, API, event or migration` threshold" — the row name is copied verbatim from the table, not a coined label
+  B3 pass — "(`new `orders.status` column + backfill migration`)" — the measured value names the schema column and the migration, checkable against the row's "database schema, or a migration"
+  B4 pass — "Switch to `/st-work`" — the destination is named
+  B5 pass — searched for wording that the change is bad, risky, careless, ill-judged, or that the operator should have known; none present — the transcript contains only the threshold, the measured value, and the destination
+  B6 pass — searched for a maybe, a permission request, a confirm-to-unlock prompt, a partial-apply offer (e.g. the column without the migration), a paste-it-yourself or diff hand-off, and a split-the-item suggestion; none present
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Note outside the verdict: the measured value is wrapped in nested backticks, which renders oddly in markdown. No criterion addresses rendering, so it is not graded.

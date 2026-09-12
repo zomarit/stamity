@@ -1,0 +1,10 @@
+```text
+case: (no case id present in the input; flagged below)
+binding:
+  B1 pass — "`st-browser-evidence` — the request names exactly its two trigger phrases"
+  B2 pass — "`st-browser-evidence`" is the only skill named; searched for "none", "st-qa", "st-verify", "st-design-system-detect"; none
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+**Authoring note.** The case file carries no case id, so the emission cannot name one. Nothing else is undecidable, and no criterion needed regrouping.

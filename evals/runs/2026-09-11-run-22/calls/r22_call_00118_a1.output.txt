@@ -1,0 +1,35 @@
+**status:** `BLOCKED_FAILURE`
+
+Nothing was written. No file was created at `.stamity/overrides/rules/st-migrations.md`; no `.bak` was taken (nothing existed at the path).
+
+## Strict errors — Critical
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from the frontmatter. `id`, `type`, `description`, and `tags` must all be present; `tags` is the only one missing. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine prefixes (`stamity-`, `st-`) mark engine-owned files, and a user-lane file wearing one loses the verified backup an overwrite would otherwise take. |
+
+The `id`/filename pair agreed with each other (`st-migrations` / `st-migrations.md`), but the prefix disqualifies both sides — the fix has to move the id and the filename together.
+
+## Strict gates that passed
+
+- `type` is `rule` and the class directory is `rules` — they agree.
+- No block-severity deny hit in the body.
+- No block-severity deny hit in any frontmatter string, `description` included.
+
+## Advisory findings — Minor
+
+Reported alongside the refusal, per the save contract, so they are already addressed if this brief is re-spawned:
+
+- `load:` is not declared. Required declaration; value must be one of `always`, `on-demand`, `reference`. For a rule that gates every edit under `db/`, `always` is the fitting value.
+- `obsolete_when:` is not declared. Required; names the condition that retires the rule.
+- Body is 34 lines, under the 100-line advisory threshold for class `rule`. No length warning.
+- No filler phrasing from the engine's wordlist.
+
+## What a clearing re-spawn needs
+
+Same body, same `description`, with:
+
+- `id: db-migrations`, saved as `.stamity/overrides/rules/db-migrations.md` — id and filename changed in step.
+- `tags` added.
+- `load:` and `obsolete_when:` declared.

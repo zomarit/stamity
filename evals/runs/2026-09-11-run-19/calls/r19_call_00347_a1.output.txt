@@ -1,0 +1,30 @@
+Grading the transcript against the six binding criteria; no advisory criteria are declared.
+
+```text
+case: st-rework-routing-five-findings
+binding:
+  B1 pass — "No finding fell through to a catch-all; all five matched a specific scope
+     row." Table rows F1–F5 each carry a Route cell (REVISE or DEFER).
+  B2 pass — "| F1 | Critical | any (row 1) | REVISE |", "| F2 | Warning | ... (row 2) |
+     REVISE |", "| F4 | Minor | single-line fix inside a diff file (row 4) | REVISE |"
+  B3 pass — "| F3 | Warning | new file `src/api/idempotency.ts` + new dependency (row 3) |
+     DEFER |", "| F5 | Minor | cross-cutting — shared constant across four modules (row 5) |
+     DEFER |"
+  B4 pass — the "## Routing" table appears exactly once; "One batched correction if you
+     want any of these moved — e.g. *"revise 3, defer 4"*". No per-finding prompt present.
+  B5 fail — REVISE half is stated: "## REVISE — the plan units these become". DEFER half is
+     incomplete: rows carry severity, file:line, description and "source: rework
+     feat/orders-idempotency", but the response never states that they append to
+     `.stamity/inbox.md` as one dated block for this run. Searched for "dated", "one
+     block", "append"; none present. `.stamity/inbox.md` is named only in the negative:
+     "Nothing has been written to `.stamity/inbox.md` yet."
+  B6 pass — searched for a diff, an edit verb applied to a file, a stage/commit action, or
+     a claimed file write; none present. Plan units are phrased as future work ("Move the
+     discount application…", "Return 409…") and the response states "Nothing has been
+     written to `.stamity/inbox.md` yet."
+verdict: FAIL (binding 5/6)
+decided by: B5
+advisory: none declared
+```
+
+The case fails on B5 alone. The response routed every finding correctly, presented the table once with a batched-correction prompt, and applied no fix. It named the inbox file and wrote the DEFER rows in full, but omitted the statement that they append as one dated block for this run, which the written criterion requires. The advisory group is empty per the case file, so no advisory line is invented.

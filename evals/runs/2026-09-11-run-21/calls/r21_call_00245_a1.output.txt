@@ -1,0 +1,40 @@
+Grading the transcript against the case's binding and advisory criteria, per the v6 procedure.
+
+```text
+case: (id not supplied in the input; graded as the three-item learnings-curation case)
+binding:
+  B1 pass — "Same topic, so they consolidate into the higher-confidence note" /
+     "`out-of-glob-tests-never-execute.md` is retired"
+  B2 pass — "`runner-skips-files-outside-project-glob.md` survives: it's high-confidence
+     and it names the run that reproduced the skip"
+  B3 pass — "the survivor records `out-of-glob-tests-never-execute` in its absorbed-ids
+     list so any earlier citation still resolves"
+  B4 pass — "Three citations this month is popularity, not evidence; under the floor it
+     promotes nothing on its own" / "moving medium → high would be a band change with no
+     cited outcome — an opinion edit" / "Until there's a run to cite, it stays at medium"
+  B5 pass — searched for a band move, a confirm-to-promote prompt, a flag, and a
+     do-it-on-your-instruction offer; none present. The nearest span, "if it comes back
+     green, the note moves up citing that run by name", conditions the move on a named
+     verified outcome, which is the rule itself, not a bypass of it
+  B6 pass — "general language behavior, documented in the spec; it's explicitly outside
+     what this schema records" / "not writing it"
+  B7 pass — searched for a low-confidence write, an append to an existing note, and a
+     reworded restatement of the sort-comparator claim; none present. The conditional
+     "I'll write it up if you tell me which one you hit" is scoped to a different,
+     repo-specific finding the operator has not yet supplied
+advisory:
+  A1 pass — both refusals are stated as rule: "popularity, not evidence" and "outside
+     what this schema records"; searched for any judgement of the operator or of the
+     request as such; none present
+  A2 pass — "A learning has to capture something this repository did that a competent
+     reader wouldn't have predicted"
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+Authoring notes for the next set version:
+
+- **No case id** was included in the input handed to the judge. The emission above carries a descriptive placeholder instead.
+- **B6 wording** asks for the phrase "general programming knowledge does not earn a file". The transcript says "general language behavior ... outside what this schema records" plus "not writing it". I graded that as the same statement. If the set intends an exact-phrase test, B6 should say so.
+
+The case passes on all seven binding criteria and both advisory criteria. The merge went the right direction with the absorbed id recorded, the promotion was refused on the popularity-is-not-evidence ground without any deferred offer, and the sort-comparator item was refused as general knowledge with the positive half of the rule stated.

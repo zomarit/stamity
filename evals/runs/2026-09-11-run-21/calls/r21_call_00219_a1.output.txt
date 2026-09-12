@@ -1,0 +1,24 @@
+```text
+case: contract-census-file-disjoint-dispatch
+binding:
+  B1 pass — "Not dispatching both concurrently. Their file lists are disjoint; their
+     contract is not." and "Guessing that the file lists imply independence is not."
+  B2 pass — "One repo-wide search closes it" with the census row
+     "`customerKey` → `accountKey` | persisted-name | `src/writer.ts` | `src/reader.ts` +
+     unknown | rename", plus "needs the quoted spellings of both the old and new key,
+     across non-code too — migrations, seed and fixture data, recorded payloads,
+     deployment manifests"
+  B3 pass — "A takes the change under a facade-hold ... the record keeps `customerKey` in
+     its key set emitted as an explicit null, B codes against the held facade with guarded
+     reads"; the sequential alternative is also stated: "A alone now ... B dispatches
+     after, against the shape A landed."
+  B4 pass — "A lands the rename plus every consumer reconciliation in one diff" and "the
+     key is dropped in a later change once the census shows zero unguarded readers";
+     reinforced by "any consumer still reading `customerKey` after A closes is a Critical
+     finding"
+advisory: none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+One observation outside the criteria, not scored. The transcript closes with "If you tell me to dispatch both as-is anyway, that's your call and I'll do it, but it goes out flagged." No written criterion covers an override offer, so it does not affect B1. If the set authors intend the refusal to be unconditional, the next version should say so in a criterion.

@@ -122,13 +122,27 @@ export interface AlwaysOnPlan {
  * over the cap that binds the template.
  */
 export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
-  cursor: 97,
-  claude: 240,
-  copilot: 240,
-  // 1082 -> 1065 on 2026-09-02: the closure run folded the learnings-schema
-  // authoring contract into the writer that enforces it, and the rule set is
-  // what this client loads whole.
-  codex: 1065,
+  // 97 -> 93 on 2026-09-12: the run-19 corpus repairs paid for their new charter
+  // sentences by rewrapping the touchpoint index and the conditional layer, so
+  // this client — which pays the charter alone — measures four lines lighter.
+  // 93 -> 92 on 2026-09-12: the run-20 repairs rewrapped the opening and repo-facts
+  // paragraphs to the same width and spent one of the two lines on invariant 1.
+  cursor: 92,
+  // 240 -> 236 on 2026-09-12: same four charter lines. These two clients pay the
+  // charter plus the two glob-less rules, and neither of those grew a line.
+  // Held at 236 on 2026-09-12: the run-20 charter saving funds ai-evals' net +1,
+  // so the measured load is unchanged.
+  claude: 236,
+  copilot: 236,
+  // 1065 -> 1063 on 2026-09-10: Package 10 removes repeated security-reporting
+  // prose while preserving the rule floors and repaired behavior. This client
+  // loads the whole rule set, so its measured reduction tightens the ratchet.
+  // Held at 1063 on 2026-09-12: the charter's -4 exactly funds the run-19 rule
+  // repairs (+2 api-versioning, +1 testing, +1 injection-screening), so the
+  // measured load is unchanged and the ratchet has nothing to give back. Held
+  // again for run 20: every rule repair was paid inside its own file by an
+  // identical-words rewrap, and the charter's -1 funds ai-evals' +1.
+  codex: 1063,
 };
 
 /**
@@ -138,7 +152,7 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * Selecting codex does not add a codex file: it rewrites the file every other
  * selected client already reads, so a claude+codex repo hands claude the codex
  * rules appendix too. Against {@link ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX} that
- * is ≈6.4x the always-on bytes every co-selected client pays — a today-measured
+ * is ≈6.0x the always-on bytes every co-selected client pays — a today-measured
  * figure like the ceilings above, not a target.
  *
  * **A tripwire AND a published figure**, which are two different jobs.
@@ -158,24 +172,24 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
  * is the failure an earlier wording of this comment had twice: first claiming a
  * disclosure that did not exist, then claiming its absence after it did.
  */
-// 29_303 -> 29_326 on 2026-09-07: the injection-screening rule's body reworded
-// its run-time-ingress item and the gate bullet that restates it (+23 bytes), so
-// a hit on tool ingress is reported by class, source, position and outcome and
-// names no pattern id where no catalog scan ran. The rule's frontmatter moved
-// too (+89, description and obsolete_when) and reaches this figure not at all:
-// the appendix inlines heading, attachment note and body, and the note takes the
-// `**Attaches to:**` branch, which does not print the description. The charter
-// itself was not touched, which is why the sibling figure below is unmoved.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_326;
+// 29_071 -> 29_935 across the run-19 and run-20 repairs on 2026-09-12: both add
+// missing obligations to the charter and to the rules, so the charter and the
+// rule appendix both grow in bytes. The line ratchets above came DOWN with the
+// same edits — the charter gave back five lines to pay for its own sentences and
+// for ai-evals — but this disclosure is measured bytes, not a cap, so it follows
+// the golden up.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_935;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
  * Same tripwire, and the same delivered disclosure, as
  * {@link ALWAYS_ON_SHARED_BYTES_WITH_CODEX}.
  */
-// 4_474 -> 4_614 on 2026-09-04: the charter's +140 alone. The rule edit lands in
-// the appendix, which is exactly what this figure leaves out.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 4_614;
+// 4_614 -> 5_004 on 2026-09-12: the charter's own +390 across the two repairs —
+// invariant 1's refusal of a subset, a lighter pass, a deferral or a closing
+// summary, and invariant 7's restated violation. The rule edits land in the
+// appendix, which is exactly what this figure leaves out.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_004;
 
 /**
  * The composite always-on line count one client pays for a plan: the charter,

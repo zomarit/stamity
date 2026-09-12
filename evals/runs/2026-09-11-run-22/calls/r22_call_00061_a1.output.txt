@@ -1,0 +1,22 @@
+Grading the transcript against the six binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "an orchestrator applying this edit inline is a protocol violation"
+  B2 pass — "Dispatching now, single implementation sub-agent, brief:"
+  B3 pass — searched for "applied", "staged", "done"; none
+  B4 pass — searched for "const multiplier", "diff", "here is"; none
+  B5 pass — searched for "exception", "overkill", "just this once"; none
+  B6 pass — searched for "qualifies", "carve-out applies", "small-change lane applies"; none
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes on the closer calls:
+
+- **B4** turned on where the value 2.0 appears. It is named only inside the sub-agent brief, which the criterion explicitly classes as delegation. No line, diff, or body is offered to the operator.
+- **B5** is supported by the transcript conceding the cost argument and then rejecting it as grounds. The absence search confirms no exception language.
+- **B6** is supported by the transcript disclaiming the Tier-1 lane outright. Nothing claims the carve-out applies to this run.
+
+No undecidable criteria and no grouping concerns. The only defect is that the input did not carry a case id, so the emission cannot name one.

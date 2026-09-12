@@ -1,78 +1,12 @@
 /**
- * Cursor residue planner — the per-client half of a Cursor setup, and nothing
- * else.
- *
- * The core emits the standards surface once: the root `AGENTS.md` charter
- * (native on Cursor — no entry file, no bridge rule), the vendor-neutral
- * `.agents/skills/` projection, the hook scripts and their policy document.
- * What is left over is genuinely Cursor-shaped and lives here:
- *
- * 1. **`.cursor/rules/*.mdc`** — the client's rule dialect, carrying the glob
- *    quirk documented at {@link buildMdcRule}.
- * 2. **`.cursor/agents/*.md`** — `description` / `model` / `readonly`
- *    frontmatter over the authored agent body.
- * 3. **`.cursor/hooks.json`** — the portable interchange rows renamed into
- *    Cursor's camelCase event taxonomy ({@link EVENT_RENAME}) and rendered as
- *    shell command strings, plus the two guard entries below.
- * 4. **`.cursor/hooks/subagent-guard.mjs` + `.cursor/hooks/mcp-guard.mjs`** —
- *    the two gates Cursor can enforce that no other surface covers: a spawn
- *    guard bound to the one event carrying agent identity, and an MCP
- *    allowlist bound to the one event carrying server identity.
- * 5. **`.cursor/mcp.json`** — the core's `cursor-json` MCP document, placed
- *    verbatim. This module renders no MCP content of its own.
- * 6. **`.cursor/skills/<id>/SKILL.md`** — the nine touchpoint command bodies,
- *    on the one project surface this client documents for an explicitly
- *    invoked body ({@link CURSOR_COMMANDS_DIR}).
- *
- * Guarantee honesty (`CLIENT_HOOK_GUARANTEES`): a Cursor hook is ADVISORY by
- * default — a rejecting hook is logged and the action proceeds — and blocks
- * only where the entry declares `failClosed: true`. The rows that declare it
- * are the rows that can mean it: the two guards above, whose events carry the
- * identity each judges, and any pre-tool-use row this repo or a pack authored.
- * Observational rows (session start, the tamper notice) do not, because
- * blocking on a notice would trade a real session for a log line — and neither
- * does the CORE pre-tool-use guard, which this client's identity-free tool-call
- * payload leaves as telemetry ({@link CORE_GUARD_REACHES_VERDICT}). What this
- * client does not get: the interchange's `timeoutMs`, which is dropped rather
- * than rescaled — the config dialect does carry a per-entry `timeout` in
- * SECONDS (cursor.com/docs/agent/hooks, accessed 2026-08-17), so the gap is a
- * conversion this emission does not yet make, not a field the client lacks.
- * And no way for a USER hook to request blocking — every wired user row is
- * advisory unless its event is the pre-tool-use gate. Both gaps are stated in
- * {@link cursorDialectFacts} rather than papered over.
- *
- * Deliberately NOT emitted, and each absence is a decision:
- *
- * - **A bridge rule / entry-file mirror.** `AGENTS.md` is native here, so a
- *   second copy would be a second source of truth for the same standards.
- * - **An environment descriptor.** The charter carries repo facts; a parallel
- *   machine-readable copy drifted from it in the predecessor design.
- * - **Any always-applied rule.** A rule activates in one of TWO sanctioned
- *   modes — glob-scoped, or agent-requested by description (content-classes
- *   SoT, class row 5; a maintainer ruling of 2026-08-16, which settled the
- *   contradiction with the rules-layer SoT's narrower "glob-conditional only"
- *   wording in favour of the two-mode reading and kept the shipped
- *   agent-requested rules). Neither mode is always-on: that layer IS the
- *   charter, so `alwaysApply: true` is never emitted and a rule declaring
- *   `scope: always` is refused by name instead of quietly becoming session
- *   noise.
- * - **A working-directory guard.** It mitigated a pre-3.0 Cursor path-escape
- *   class and is not carried in this version. Revisit trigger: a repeat of the
- *   symlink/working-directory escape class on a supported Cursor release, or a
- *   payload field that lets the guard bind without realpath probing every read.
- *
- * Platform facts are data ({@link cursorDialectFacts}, {@link EVENT_RENAME}),
- * each with a citation and an access date, because the capability matrix is
- * generated from this module rather than maintained beside it. Rows carrying
- * the earlier access dates were verified against those pages then and are
- * re-verified per release; a taxonomy the client renames upstream is a
- * currency finding on the next pass, not a silent no-op.
- *
- * Planning is pure: corpus reads are reads of context, nothing is written, and
- * two plans over one input are byte-identical (stable ordering, no clock in
- * the emitted bytes).
+ * Cursor residue: conditional MDC rules, agents, explicit command skills and hooks.
+ * Portable hook argv stays exec-form behind the native command-string launcher.
+ * timeoutMs converts to native seconds; failClosed gates authored tool hooks and
+ * adapter guards, while the identity-free core role guard remains telemetry.
+ * Current contracts: https://cursor.com/docs/hooks and /docs/skills (2026-09-10).
  */
 
+import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
 import {
   buildContentIndex,
   emittedIdFor,
@@ -327,7 +261,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
       // pre-tool-use guard as a blocking emission after that guard's body had
       // been regenerated as telemetry on this client.
       value:
-        "advisory by default; an entry declaring failClosed: true blocks on the exit-2 status. Emitted on " +
+        "Exit 2 denies; failClosed: true also denies hook errors and timeouts. Emitted on " +
         (CORE_GUARD_REACHES_VERDICT
           ? "the pre-tool-use gate and both guards"
           : "both guards and on any authored pre-tool-use row, but NOT on the core pre-tool-use guard: this client's tool-call payload names no calling agent, so that guard is emitted as telemetry and has no verdict to block on"),
@@ -335,7 +269,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
     {
       name: "hook timeout",
       value:
-        "the config dialect carries a per-entry timeout in SECONDS; the interchange states one in milliseconds and it is dropped rather than rescaled at emission, so a declared timeout does not reach this client",
+        "timeoutMs converts to native timeout seconds, rounded up; the portable runner also bounds the child to the requested milliseconds",
     },
     {
       name: "command surface",
@@ -347,12 +281,12 @@ export const cursorDialectFacts: AdapterDialectFacts = {
     {
       name: "user hook enforcement",
       value:
-        "advisory unless the hook declares the pre-tool-use event; the interchange schema carries no per-hook blocking request",
+        "explicit exit-2 denial applies on supported events; authored pre-tool-use rows also opt into failClosed for hook errors and timeouts. Session-start and session-end responses cannot block",
     },
     {
       name: "MCP tool surface",
       value:
-        "client-side lazy loading around a ~40-tool session budget, so a wide server selection can crowd out the rest",
+        "servers expose tools through mcp.json; the current contract documents no fixed per-session tool-count cap",
     },
     {
       name: "workdir guard",
@@ -360,23 +294,13 @@ export const cursorDialectFacts: AdapterDialectFacts = {
         "not emitted — mitigated a pre-3.0 path-escape class; revisit if that class recurs on a supported release",
     },
   ],
-  // Re-verified page by page on the per-release currency pass. The MCP row
-  // keeps the older date deliberately: the path and the `mcpServers` key were
-  // re-confirmed on 2026-08-17, but the ~40-tool session budget that row's cap
-  // rests on is no longer stated on that page, so the claim stands on the
-  // reading that produced it rather than on a date it cannot support.
-  //
-  // These dates move on the release currency pass, which is also when the
-  // generated matrix is re-rendered — so a mid-cycle re-read recorded in a
-  // code comment (the hooks and skills pages, 2026-08-22) sits AHEAD of the row
-  // it belongs to. The direction is the safe one: a row never claims a reading
-  // that did not happen, it only under-reports one that did.
+  // Revalidated against every cited page; unsupported historical caps are removed.
   citations: [
-    { url: "https://cursor.com/docs/context/rules", accessDate: "2026-08-17" },
-    { url: "https://cursor.com/docs/agent/subagents", accessDate: "2026-08-17" },
-    { url: "https://cursor.com/docs/agent/hooks", accessDate: "2026-08-17" },
-    { url: "https://cursor.com/docs/skills", accessDate: "2026-08-17" },
-    { url: "https://cursor.com/docs/mcp", accessDate: "2026-06-09" },
+    { url: "https://cursor.com/docs/context/rules", accessDate: "2026-09-10" },
+    { url: "https://cursor.com/docs/agent/subagents", accessDate: "2026-09-10" },
+    { url: "https://cursor.com/docs/hooks", accessDate: "2026-09-10" },
+    { url: "https://cursor.com/docs/skills", accessDate: "2026-09-10" },
+    { url: "https://cursor.com/docs/mcp", accessDate: "2026-09-10" },
   ],
 };
 
@@ -424,7 +348,8 @@ export const cursorResiduePlanner: ResiduePlanner = {
           classifySelection(item, allowlist) !== "drop",
       );
 
-    const rows: AdapterOutput[] = [];
+    const rows: AdapterOutput[] = [
+      { path: `.stamity/generated/hooks/cursor/${PORTABLE_RUNNER_FILE}`, content: buildPortableHookRunner("cursor"), owner: { adapter: "cursor", artifactId: "cursor-portable-hook", artifactType: "infra" } },];
 
     for (const rule of admitted("rule")) {
       rows.push({
@@ -806,6 +731,7 @@ export function buildCursorCommand(item: CatalogItem, name: string, body: string
 /** One `hooks.json` entry: a command line, optionally narrowed and blocking. */
 interface CursorHookEntry {
   command: string;
+  timeout?: number;
   matcher?: string;
   failClosed?: boolean;
 }
@@ -814,13 +740,9 @@ interface CursorHookEntry {
  * The `.cursor/hooks.json` document: portable interchange rows renamed into
  * the client's taxonomy, plus the two adapter-owned guards.
  *
- * Two dialect gaps are crossed here. The interchange carries exec-form argv
- * (never a shell line, so nothing at ingress can smuggle a shell operator);
- * this client's config takes one command STRING, so argv is joined with POSIX
- * quoting — a token needing quotes gets them, so a path with a space survives
- * as one argument instead of becoming two. And `timeoutMs` has no field here,
- * so it is dropped: a client that cannot honour a request proceeds without it,
- * and inventing a key would read as a guarantee that is not there.
+ * Native command strings launch the portable runner, which keeps the authored
+ * argv intact and translates supported hookSpecificOutput fields. timeoutMs is
+ * rounded up to native seconds; the child keeps its exact millisecond deadline.
  *
  * Order is fixed and total: event keys in canonical order, then the guard
  * events, and within an event the rows in the order the core planned them —
@@ -843,7 +765,8 @@ export function buildHooksJson(rows: readonly HookInterchange[]): string {
       // serialized key order, so `command, matcher?, failClosed?` stays fixed
       // and the emitted bytes are stable. Absent optionals are never written,
       // so an omitted key is absent rather than present-and-undefined.
-      const entry: CursorHookEntry = { command: shellCommand(row.command) };
+      const entry: CursorHookEntry = { command: portableHookCommand("cursor", row) };
+      if (row.timeoutMs !== undefined) entry.timeout = Math.ceil(row.timeoutMs / 1000);
       if (row.matcher !== undefined) entry.matcher = row.matcher;
       if (rowOptsIntoBlocking(event, row)) entry.failClosed = true;
       return entry;

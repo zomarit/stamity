@@ -76,18 +76,16 @@ const CLAUDE_TOOL_NAMES: CategoryToolNames = {
 };
 
 /**
- * PROVISIONAL. Codex custom agents are TOML files under `.codex/agents/`
- * whose documented keys are `name`, `description`, `developer_instructions`,
- * plus `config.toml` keys (`model`, `model_reasoning_effort`, `sandbox_mode`,
- * `mcp_servers`, `skills.config`) — there is no per-agent tool allowlist
- * (learn.chatgpt.com/docs/agent-configuration/subagents, accessed
- * 2026-08-13). `sandbox_mode` (`read-only` / `workspace-write`) is the
- * candidate native primitive.
+ * Codex custom agents are TOML files under `.codex/agents/`. The current
+ * contract documents no native per-agent `tools` key; `sandbox_mode` is the
+ * supported filesystem boundary (the dated source census is in
+ * .github/client-contracts.md, 2026-09-10).
  *
- * Until the adapter phase decides that mapping, the Claude comma-list dialect
- * is emitted as a placeholder and the coverage row is flagged
- * {@link AdapterAllowlistCoverage.provisional} so no reader mistakes it for a
- * verified grant. Refining it is an edit to this constant and that flag.
+ * The existing comma-list translator remains API-compatible and supplies the
+ * role-grant sentence in `developer_instructions`; it is not emitted as an
+ * undocumented native setting. The coverage row remains soft and
+ * {@link AdapterAllowlistCoverage.provisional}: instruction text does not
+ * independently enforce a tool grant.
  */
 const CODEX_TOOL_NAMES: CategoryToolNames = CLAUDE_TOOL_NAMES;
 
@@ -199,8 +197,8 @@ export function toCopilotToolsFrontmatter(categories: readonly ToolCategory[]): 
 }
 
 /**
- * Codex agent `tools` value in the Claude comma-list dialect — provisional,
- * see {@link CODEX_TOOL_NAMES}.
+ * Compatibility API for the Codex role-grant sentence in developer instructions.
+ * Returns the existing comma-list dialect; no native `tools` key is implied.
  */
 export function toCodexToolsFrontmatter(categories: readonly ToolCategory[]): string {
   return renderToolNames(categories, CODEX_TOOL_NAMES).join(", ");
@@ -286,10 +284,10 @@ export const ADAPTER_ALLOWLIST_COVERAGE: readonly AdapterAllowlistCoverage[] = [
     strength: "hard",
   },
   {
-    // learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-08-13)
+    // .github/client-contracts.md records the current official-source census.
     tool: "codex",
     mechanism:
-      "no documented per-agent tool allowlist in `.codex/agents/*.toml`; the comma-list dialect is emitted as a placeholder and `sandbox_mode` is the candidate native primitive",
+      "no documented native per-agent `tools` key in `.codex/agents/*.toml`; the role grant is developer-instruction prose, while `sandbox_mode` supplies the supported filesystem boundary",
     strength: "soft",
     provisional: true,
   },

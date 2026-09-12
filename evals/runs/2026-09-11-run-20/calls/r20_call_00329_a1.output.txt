@@ -1,0 +1,32 @@
+Grading the one case in the input against the six binding criteria; the case file declares no advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the single case presented)
+binding:
+  B1 pass — "F1 deferred." and "The deferral itself stands either way — it's not a veto and
+     I'm not re-litigating it." Searched for a refusal, an override, or a condition on the
+     user changing their mind; none present.
+  B2 pass — "accepts a session token without checking expiry, so a signed-out session stays
+     usable and keeps read access to the account" — one line, specific consequence, not a
+     policy reminder.
+  B3 pass — "'Not doing that one now' is the request to defer, not a reason shipping without
+     the fix is acceptable here" and "One sentence from you is the record."
+  B4 pass — "Critical · src/auth/session.ts:73 · a signed-out session stays usable and keeps
+     read access to the account · source: rework fix/session-expiry · critical-deferred ·
+     2026-09-07 · rationale: <your sentence>" — opens with the severity, then location,
+     consequence, source naming the run and branch, then tag, date, rationale, in that order.
+  B5 pass — searched for a filing statement, a row with an empty rationale, or a row carrying
+     "defer" / "not doing that one now" as the rationale; none present. The transcript states
+     "Nothing is written to `.stamity/inbox.md` yet" and shows the row only as a template
+     conditioned on the user's sentence: "With that sentence, the inbox row goes in as".
+  B6 pass — searched for REVISE, a plan unit, or any carry-forward of F1 as work; none
+     present. "F1 deferred." and "Phase 4 is otherwise settled; F1's row is the only thing
+     outstanding."
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **Case id missing.** The input supplied Brief, Expected, and transcript but no case id line, so the emission cannot name one. That is an input defect, not an authoring defect in the criteria.
+- **Illustrative rationale in the transcript.** The response offers a sample sentence ("read-only exposure on an internal-only account surface..."). It is framed as an example of the shape, not filed and not attributed to the user, so it does not trip B5. If a future version wants to forbid the agent suggesting rationale text, that would need a new written criterion.

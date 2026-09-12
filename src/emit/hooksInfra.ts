@@ -107,25 +107,8 @@ const POLICIES_PATH_FROM_SCRIPT = `../../${AGENT_TOOL_POLICIES_FILE}`;
  */
 const DEFAULT_USER_HOOKS_DIR = `${STATE_DIR}/hooks`;
 
-/**
- * Tools whose adapter has somewhere to WRITE hook configuration.
- *
- * Planning is keyed on selection, and selection is not the same question. A
- * tool with no hook config path receives the plan's scripts and interchange
- * rows, writes its per-tool script copies to disk, and then registers none of
- * them: the bytes land and nothing ever executes them, and a hook the repo
- * authored is validated, accepted, and dropped without a word.
- *
- * Copilot is the row that is absent. Its adapter declares
- * `hooksConfigPath: null` (`../adapters/copilot.ts`) and documents the omission
- * at length — agent hooks are Preview there — so this is a restatement of an
- * adapter fact, not a second opinion about it, and the suite re-derives it from
- * the adapters' own dialect facts so the two cannot drift.
- *
- * Engine modules cannot import the adapter layer (the architecture boundary
- * runs the other way), which is why the fact is restated here rather than read.
- */
-const HOOK_CONFIG_CAPABLE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["claude", "cursor", "codex"]);
+/** Every supported adapter now emits native hook configuration. */
+const HOOK_CONFIG_CAPABLE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(TOOLS);
 
 // ── Plan shape ───────────────────────────────────────────────────
 
@@ -174,7 +157,7 @@ export interface CoreHooksPlan {
    * file and its lane), roster and pack rows the document emitter would
    * sanitize away, every diagnostic a pack agent's grant resolution produced, a
    * document that outgrew the size the guard will parse, every selected tool
-   * that takes no hook configuration (see {@link HOOK_CONFIG_CAPABLE_TOOLS}),
+   * with unsupported native behavior documented by its adapter,
    * and the case no per-tool row can reach — accepted hook rows on a build that
    * selects no tool at all. Absence of the user hooks directory is a non-event,
    * not a warning.
@@ -466,31 +449,6 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     );
   }
 
-  // Named, not inferred. A tool with no hook config home still gets its script
-  // copies and its interchange rows, so the bytes land and nothing registers
-  // them — and an authored hook that passed every ingress check is dropped in
-  // silence. The row says which tool, how much, and what stops working.
-  //
-  // Iterated over the row map rather than over `tools`: the map was keyed from
-  // that same list above, so reading the rows out of it carries the count
-  // without an absent-key fallback that no input can reach.
-  for (const [tool, rows] of rowsByTool) {
-    if (HOOK_CONFIG_CAPABLE_TOOLS.has(tool)) continue;
-    const toolScripts = scripts.filter((script) => script.tool === tool);
-    const bytes = toolScripts.reduce(
-      (total, script) => total + Buffer.byteLength(script.content, "utf8"),
-      0,
-    );
-    const authored = rows.length - toolScripts.length;
-    warnings.push(
-      `hook wiring [${tool}]: this client takes no hook configuration, so the ${bytes} bytes of ` +
-        `generated hook scripts written for it are never executed` +
-        (authored > 0
-          ? `, and ${authored} accepted hook row(s) from this repo and its installed packs are dropped rather than wired`
-          : "") +
-        `. Nothing here is broken; the gate that binds on this client is its own permission rules.`,
-    );
-  }
 
   return {
     scripts,

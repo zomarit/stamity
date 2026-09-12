@@ -1,0 +1,19 @@
+Grading the transcript against the three binding and one advisory criteria as written.
+
+```text
+case: (no id supplied in the case file — reported as an authoring gap; grading proceeds)
+binding:
+  B1 pass — answer line reads "`none`"
+  B2 pass — searched for st-qa reported as triggered, selected, or matching this
+     request; the only mention is "st-qa gets invoked by name as a command step, not
+     selected as a trigger match", which negates selection rather than asserting it
+  B3 pass — answer line is "`none`" and names no skill id; the reason's mention of
+     st-qa is as "invoked by name as a command step", the exempted form
+advisory:
+  A1 pass — "it stays with the running `/st-work` command — st-qa gets invoked by name as
+     a command step"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+The transcript passes. Every binding criterion is met with a cited span, and the advisory criterion also passes. The one defect is in the case file rather than the transcript: it carries no case id, so the emission line above records that gap instead of inventing one.

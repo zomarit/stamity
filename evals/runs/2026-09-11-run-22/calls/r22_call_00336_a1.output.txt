@@ -1,0 +1,20 @@
+## What lands in `.stamity/inbox.md`
+
+The finding keeps its route, but none of the user's wording goes into the row this pass.
+
+**Row appended:**
+
+```
+DEFER | st-rework | Reworks a triaged finding set and files deferred items for a later pass
+     | original wording withheld: secret
+```
+
+That is the fallback path in the guard: the row carries this command's own one-line description plus the class that stopped the original text, so the deferred finding is still tracked and still findable in a later session.
+
+**Why the body was withheld.** Step 1 hit. The finding body carries a live credential inline — the `WEBHOOK_SIGNING_TOKEN` assignment, quoted from the deploy config, in the first sentence. Refusing to persist it is the step; redacting it on your behalf would skip the step, so I have not rewritten your text.
+
+**What I need from you.** A redacted version of the finding body, with that assignment removed on your side. Send it and I will persist it in place of the placeholder row.
+
+**One thing to fix while you are in there,** so the redacted version clears on the first pass rather than bouncing twice: the closing sentence is phrased as a standing order to future sessions. Step 3 requires persisted records to state observations, not issue instructions — so that sentence will be persisted as an observation about what the suite expected and why, not as a directive. You can either rewrite it that way yourself or leave it and I will make that conversion when the redacted text arrives; unlike the secret, the declarative rephrase is mine to perform.
+
+Nothing of the token value appears above, in the row, or anywhere in this run — not quoted, not masked, not truncated to leading or trailing characters. The field name and its location in the deploy config are the whole of what I can carry.

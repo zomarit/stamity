@@ -3,12 +3,13 @@ import { basename } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CLAUDE_MD_PATH, CLAUDE_SETTINGS_PATH } from "../../src/adapters/claude.ts";
 import { CODEX_AGENTS_MD_BUDGET_BYTES, CODEX_HOOKS_FILE } from "../../src/adapters/codex.ts";
-import { COPILOT_SETUP_STEPS_PATH } from "../../src/adapters/copilot.ts";
+import { COPILOT_HOOKS_PATH, COPILOT_SETUP_STEPS_PATH } from "../../src/adapters/copilot.ts";
 import { CURSOR_COMMANDS_DIR, CURSOR_HOOKS_CONFIG_PATH } from "../../src/adapters/cursor.ts";
 import { ADAPTER_REGISTRY } from "../../src/adapters/registry.ts";
 import { AGENTS_MD_FILE } from "../../src/emit/agentsMd.ts";
 import { AGENT_TOOL_POLICIES_PATH, HOOKS_GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
+import type { HookInterchange } from "../../src/hooks/model.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import type { SetupManifest } from "../../src/types/manifest.ts";
 import {
@@ -84,7 +85,7 @@ const CLIENT_RESIDUE: Readonly<Record<Tool, (path: string) => boolean>> = {
   claude: (path) => path.startsWith(".claude/"),
   cursor: (path) => path.startsWith(".cursor/"),
   copilot: (path) =>
-    [".github/instructions/", ".github/agents/", ".github/prompts/", ".vscode/"].some((prefix) =>
+    [".github/instructions/", ".github/agents/", ".github/prompts/", ".github/hooks/", ".vscode/"].some((prefix) =>
       path.startsWith(prefix),
     ) || path === COPILOT_SETUP_STEPS_PATH,
   codex: (path) => path.startsWith(".codex/"),
@@ -126,6 +127,15 @@ function readJson(tree: Readonly<Record<string, string>>, path: string): Record<
   return JSON.parse(raw) as Record<string, unknown>;
 }
 
+/** Decode actual native registration bytes without rebuilding them through the adapter. */
+function readPortableRegistration(command: string): HookInterchange {
+  const encoded = / ([A-Za-z0-9_-]+)$/.exec(command)?.[1];
+  expect(encoded, "native command must retain one encoded exec-form registration").toBeDefined();
+  const row = JSON.parse(Buffer.from(encoded ?? "", "base64url").toString("utf8")) as HookInterchange;
+  expect(row).toEqual(expect.objectContaining({ event: expect.any(String), command: expect.any(Array) }));
+  return row;
+}
+
 describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   let repo: GoldenRepo;
   let tree: Record<string, string>;
@@ -143,6 +153,22 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // goldens as a file review, so a later reader can attribute every moved line
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
+  //
+  //   - 2026-09-10, Package 10 integration. All five selections gain the eight
+  //     skill metadata companions and structural verify helper; their native
+  //     copies retain source bytes. Corpus digests move for the reviewed
+  //     authoring, onboarding and reporting changes. All ten Codex agent files
+  //     drop the unsupported tools key. No emitted path is removed.
+  //     Residue changes: Claude's bridge is only the managed import; Cursor
+  //     hooks carry encoded argv and timeout seconds; Codex uses native string
+  //     commands with commandWindows and runtime-managed trust; Copilot gains
+  //     its CLI/cloud hook config. Their portable runners join the tree while
+  //     full script bytes are goldened in the sibling suite. Core role guards
+  //     state the identity-free limitation. User seed bytes and each user's
+  //     complete argv/matcher/timeout registration still pass explicit checks.
+  //     Codex/shared AGENTS.md falls 29_326 -> 29_071 bytes; without Codex it
+  //     stays 4_614. The charter stays 97/150 lines and the Codex composite
+  //     ratchets 1065 -> 1063. Catalog/MCP/policy/pack identities are unchanged.
   //
   //   - 2026-09-09, the dev-group bump (vitest 4.1.10 -> 5.0.0 with its coverage
   //     provider, oxlint 1.81, tsdown 0.23, eslint 10.10, knip 6.34, memfs, tsx,
@@ -974,11 +1000,13 @@ describe("four-tool union", () => {
     const claudeMd = tree[CLAUDE_MD_PATH] ?? "";
     expect(claudeMd).toContain(`@${AGENTS_MD_FILE}`);
     expect(claudeMd).toContain("STAMITY:BEGIN");
-    // TEST CHANGE, justified: this client's skills moved to their native
-    // location, so the bridge now points a reader at that directory. Same
-    // assertion — the pointer names a directory the client actually reads —
-    // against the constant the emitter reads, so the two cannot drift apart.
-    expect(claudeMd).toContain(NATIVE_SKILL_DIRS.claude ?? "");
+    // TEST CHANGE: native skill discovery makes the extra bridge paragraph
+    // redundant. Keep exactly the managed import; native copies are proven above.
+    expect(claudeMd.trim().split("\n")).toEqual([
+      "<!-- STAMITY:BEGIN v1.0.0-golden -->",
+      `@${AGENTS_MD_FILE}`,
+      "<!-- STAMITY:END -->",
+    ]);
     expect(claudeMd).not.toContain(SKILLS_PROJECTION_DIR);
   });
 
@@ -1028,30 +1056,43 @@ describe("four-tool union", () => {
     expect(tree[COPILOT_SETUP_STEPS_PATH]).toBeDefined();
   });
 
-  it("digests every generated codex hook command against the script bytes on disk", () => {
+  // TEST CHANGE: Codex accepts string commands and manages /hooks trust itself;
+  // sha256 is unsupported native config. Ledger hashes still bind generated bytes.
+  it("registers native Codex commands whose generated scripts match their ledger hashes", () => {
     const hooks = readJson(tree, CODEX_HOOKS_FILE);
     const events = Object.keys(hooks["hooks"] as Record<string, unknown>);
     expect(events).toEqual(events.filter((event) => /^[A-Z][A-Za-z]+$/.test(event)));
 
     const entries = Object.values(hooks["hooks"] as Record<string, { hooks: unknown[] }[]>)
       .flat()
-      .flatMap((group) => group.hooks as { command: string[]; sha256?: string }[]);
-    const generated = entries.filter((entry) =>
-      (entry.command[1] ?? "").startsWith(`${HOOKS_GENERATED_DIR}/`),
+      .flatMap((group) => group.hooks as { command: string; commandWindows: string; sha256?: string }[]);
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) {
+      expect(entry.command).toEqual(expect.any(String));
+      expect(entry.commandWindows).toBe(entry.command);
+      expect(entry.sha256).toBeUndefined();
+      expect(entry.command).toContain(`${HOOKS_GENERATED_DIR}/codex/stamity-portable-hook.mjs`);
+    }
+    const registrations = entries.map((entry) => readPortableRegistration(entry.command));
+    const generated = registrations.filter((row) =>
+      (row.command[1] ?? "").startsWith(`${HOOKS_GENERATED_DIR}/`),
     );
     expect(generated.length).toBeGreaterThan(0);
-    for (const entry of generated) {
-      const scriptPath = entry.command[1] ?? "";
+    for (const scriptPath of [
+      `${HOOKS_GENERATED_DIR}/codex/stamity-portable-hook.mjs`,
+      ...generated.map((row) => row.command[1] ?? ""),
+    ]) {
       const bytes = tree[scriptPath];
       expect(bytes, `${scriptPath} is referenced by ${CODEX_HOOKS_FILE} but not emitted`).toBeDefined();
-      expect(entry.sha256).toBe(createHash("sha256").update(bytes ?? "", "utf8").digest("hex"));
+      const owner = repo.manifest.ledger.find((row) => row.adapter === "codex" && row.path === scriptPath);
+      expect(owner?.contentHash).toBe(createHash("sha256").update(bytes ?? "", "utf8").digest("hex"));
     }
 
-    // User hooks are the repository's own trust domain: wired verbatim, never
-    // digested by the engine (it did not author those bytes).
-    const user = entries.filter((entry) => (entry.command[1] ?? "").startsWith(".stamity/hooks/"));
-    expect(user.length).toBeGreaterThan(0);
-    for (const entry of user) expect(entry.sha256).toBeUndefined();
+    // Authored bytes stay in the user's trust domain; wrapping does not make
+    // their script an engine-owned artifact or lose any interchange field.
+    const user = registrations.filter((row) => (row.command[1] ?? "").startsWith(".stamity/hooks/"));
+    expect(user).toEqual([GOLDEN_USER_HOOK]);
+    expect(repo.manifest.ledger.some((row) => row.path === GOLDEN_USER_HOOK.command[1])).toBe(false);
   });
 
   it("keeps the root charter inside the codex AGENTS.md budget", () => {
@@ -1062,15 +1103,30 @@ describe("four-tool union", () => {
   it("carries the user hook into every client that takes a hook config, and no other", () => {
     const userCommand = GOLDEN_USER_HOOK.command[1] ?? "";
     expect(tree[CLAUDE_SETTINGS_PATH]).toContain(userCommand);
-    expect(tree[CURSOR_HOOKS_CONFIG_PATH]).toContain(userCommand);
-    expect(tree[CODEX_HOOKS_FILE]).toContain(userCommand);
-
-    // Copilot has no hook-config surface v1, so nothing it emits may claim one.
-    const copilotEmissions = emittedPaths(tree).filter(
-      (path) => path.startsWith(".github/") || path.startsWith(".vscode/"),
-    );
-    expect(copilotEmissions.length).toBeGreaterThan(0);
-    expect(copilotEmissions.filter((path) => (tree[path] ?? "").includes(userCommand))).toEqual([]);
+    // TEST CHANGE: all four now have native hook configs; three encode the
+    // original argv to keep it out of shell syntax. Assert the complete row
+    // and native timeout/matcher fields rather than searching encoded text.
+    for (const [path, event, timeoutKey] of [
+      [CURSOR_HOOKS_CONFIG_PATH, "preToolUse", "timeout"],
+      [COPILOT_HOOKS_PATH, "PreToolUse", "timeoutSec"],
+    ] as const) {
+      const hooks = readJson(tree, path)["hooks"] as Record<string, { command: string; matcher?: string; timeout?: number; timeoutSec?: number }[]>;
+      const user = (hooks[event] ?? []).filter(
+        (entry) => readPortableRegistration(entry.command).command[1] === userCommand,
+      );
+      expect(user, path).toHaveLength(1);
+      expect(readPortableRegistration(user[0]?.command ?? ""), path).toEqual(GOLDEN_USER_HOOK);
+      expect(user[0]?.matcher, path).toBe(GOLDEN_USER_HOOK.matcher);
+      expect(user[0]?.[timeoutKey], path).toBe(5);
+    }
+    const codex = readJson(tree, CODEX_HOOKS_FILE)["hooks"] as Record<string, { matcher?: string; hooks: { command: string; timeout?: number }[] }[]>;
+    const groups = codex["PreToolUse"] ?? [];
+    const userGroup = groups.filter((group) => group.matcher === GOLDEN_USER_HOOK.matcher);
+    expect(userGroup).toHaveLength(1);
+    expect(userGroup[0]?.hooks).toHaveLength(1);
+    const entry = userGroup[0]?.hooks[0];
+    expect(readPortableRegistration(entry?.command ?? "")).toEqual(GOLDEN_USER_HOOK);
+    expect(entry?.timeout).toBe(5);
   });
 });
 

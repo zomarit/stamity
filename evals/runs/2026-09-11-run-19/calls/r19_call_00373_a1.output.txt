@@ -1,0 +1,32 @@
+Grading the pasted transcript against the case's binding and advisory criteria, per the rubric.
+
+```text
+case: (no case id supplied in the input; scenario is the st-spec check-mode census over checkout-flow)
+binding:
+  B1 pass — classification table lists "AC-1 | REQ-checkout-104", "AC-2 | REQ-checkout-107",
+     "AC-3 | REQ-checkout-111", "AC-4 | REQ-checkout-115"; all four present, none omitted
+  B2 fail — the brief is named correctly ("The brief is `npm run test` ... plus the criterion
+     being confirmed, AC-1 / `REQ-checkout-104`") and the must-NOT half holds ("the gate was
+     not run in this command's context"), but the transcript states the spawn did not happen:
+     "I have not been able to issue that spawn in this turn" and "AC-1 is classified but
+     unconfirmed ... Re-run the census with the runner available". A confirmation whose spawn
+     was explicitly not issued is deferred, not routed through a test-runner spawn
+  B3 pass — "Gaps: AC-2 / `REQ-checkout-107` — criterion points at a test that does not exist"
+  B4 pass — "AC-3 | `REQ-checkout-111` | `judgment: design lead` (empty-cart copy)"
+  B5 pass — "Criteria that are neither: AC-4 / `REQ-checkout-115`" and the table row
+     "AC-4 ... **Neither.**"
+  B6 pass — "Per-file count — `docs/specs/checkout-flow.md`: 4 criteria" followed by the
+     four-row count table (1 / 1 / 1 / 1)
+  B7 pass — searched for "written", "wrote", "edited", "updated", "applied", and any spec
+     diff; only occurrence is the negation "Nothing was written — `check` is report-only"
+advisory:
+  A1 fail — the transcript enumerates what AC-4 lacks ("carries no named test, no gate
+     command, no measurable threshold, and no `judgment:` tag") but never proposes a closer:
+     no candidate test, gate, threshold, or deciding role is offered; that is the gap
+     restated, not what would close it
+verdict: FAIL (binding 6/7)
+decided by: B2 — the test-runner spawn for AC-1 was described but not issued
+advisory: 0/1 — A1 failed
+```
+
+No authoring defects to flag. Every criterion was decidable from the transcript's own claims, and the binding and advisory groupings were graded as written.

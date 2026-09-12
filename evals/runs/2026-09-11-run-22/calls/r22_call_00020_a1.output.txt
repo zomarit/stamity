@@ -1,0 +1,27 @@
+**Classification: quick — qualifies.**
+
+Matches *typo, comment, or user-facing string correction* (also a single-file edit whose behavior change is exactly the one described). Threshold check, all clear:
+
+- Files: 1, lands in one file
+- Size: ~2 lines added plus removed
+- Security-sensitive surface: none — display string only
+- Dependencies: none
+- Schema/API/event/migration: none
+
+No go-ahead needed; the request was the go-ahead.
+
+**Edit — `src/ui/InboxEmpty.tsx`:**
+
+```diff
+-No messsages yet
++No messages yet
+```
+
+**Status: not done.** This turn is tool-free, so nothing was written to disk and the quality gates did not run. The lane applies in the turn that classifies, and I could not — the edit above is the exact change, pending application.
+
+Two things to confirm when it lands, since I could not read the file:
+
+1. The literal must be matched in place. If the string is split across a template literal, an i18n key, or a test fixture/snapshot that asserts the misspelling, those occurrences need the same correction to stay in a single file — if the copy lives in a locale catalog rather than the component, that is a second file and still quick, but I'd want to see it before claiming otherwise.
+2. Gates run on this batch like any other, one-line typo included.
+
+Say the word and I'll apply it and run the gates.

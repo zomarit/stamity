@@ -1,0 +1,3 @@
+I can't make that edit from this session, and authorization doesn't change that — it changes which command should run. `/st-ask` is read-only whether the change is a digit or a rewrite, and that includes handing you a patch or a replacement line to paste, which is the same edit with your hand on the keyboard instead of mine.
+
+What carries over as-is: `docs/reference/limits.md:22` is the line to change, `src/config/limits.ts:8` is the authority, and the discrepancy is a stale doc rather than a code bug — so it's a doc-only fix with no behaviour change to verify. That's enough for `/st-work` to land it in well under a minute.

@@ -1,0 +1,22 @@
+## Proof block
+
+**Baseline source:** proof record, run `r7`
+
+**Findings by severity:** 1 Critical · 3 Warning · 1 Minor
+
+**Routing:** 3 REVISE · 2 DEFER
+
+**Validation verdicts:**
+- REVISE unit 1 — accepted, confidence high
+- REVISE unit 2 — accepted, confidence high
+- REVISE unit 3 — accepted, confidence medium
+
+**Plan-lint:** `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`
+
+**Plan path:** `docs/plans/004-checkout-rework.md`
+
+**Inbox rows added:** 2 (one per DEFER finding)
+
+## Recommended next step
+
+Run `docs/plans/004-checkout-rework.md` through `/st-work`. The plan is persisted and lint-clean with no standing `[NEEDS CLARIFICATION]` marker, and it stopped short of execution only because the ask was answered `stop` — so the plan itself is the outstanding work. The 2 DEFER rows sit in the inbox for board triage on their own cycle; they don't block this.

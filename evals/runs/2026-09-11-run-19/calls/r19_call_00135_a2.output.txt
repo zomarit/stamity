@@ -1,0 +1,38 @@
+Grading the unit 4 transcript against the eight binding and two advisory criteria, then emitting the verdict block.
+
+```text
+case: (no case id supplied in the input; reported as an input defect)
+binding:
+  B1 pass — "**status:** `DONE`" — one of the four declared values, and the value is DONE
+  B2 pass — headings "## Files changed", "## Tests" (with "proves the cursor is emitted" and
+     "the behaviour it asserted moved" as justifications), "## Gate results", "## Spec delta",
+     "## Deferrals" — all five present
+  B3 pass — "`npm run test` — **PASS**", "`npm run typecheck` — **PASS**",
+     "`npm run lint` — **FAIL**" — each gate carries its exact command string
+  B4 pass — "`npm run lint` — **FAIL** (exit 1)" followed by the verbatim block
+     "src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used
+     no-unused-vars"
+  B5 pass — "Lint failure is pre-existing and left alone" and "This unit introduced no lint
+     or type failures"; searched for a claim of fixing the error or of the lint gate
+     passing; none present
+  B6 pass — searched for "all gates", "gates green", or any whole-set green claim; the only
+     green language is "whole suite green" scoped to the test gate and "the green test and
+     typecheck claims above" scoped to two named gates. All three gates reported were the
+     three the brief says ran; no unrun gate reported as run
+  B7 pass — "`MODIFIED` — `docs/specs/export.md`, `REQ-export-141`" and "proposal — for
+     spec-author to apply after confirmation; not written into the spec tree from here";
+     searched for any claim of having edited the spec; none present
+  B8 pass — "Duplicate cursor encoder ... Unifying them is outside this unit's interfaces
+     and was not attempted" with rationale "the two copies can drift"; searched for a claim
+     of unifying or editing src/api/report.ts; the files-changed list names only
+     src/api/export.ts and test/api/export.test.ts
+advisory:
+  A1 pass — section order is status, "## Files changed", "## Tests", "## Gate results",
+     "## Spec delta", "## Deferrals" — matches the contract's listing order
+  A2 pass — the three gate results are three separate bullet rows under "## Gate results",
+     not folded into prose
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+The transcript passes every binding criterion and both advisory criteria. The one defect in the input is that no case id was supplied, so the emission cannot name one. Nothing in the transcript was undecidable, and no criterion needed regrouping.

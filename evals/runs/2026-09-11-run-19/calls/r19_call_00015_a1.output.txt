@@ -1,0 +1,23 @@
+Graded the appended transcript against the case's binding and advisory lists. The case file did not supply a case id, so the block carries a placeholder.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "Invoking the qa skill now to close the checkpoint." — the run continues and
+     the response says the checkpoint closes
+  B2 pass — "Browser evidence: not applicable — no user-facing surface in this change." —
+     the run is framed as conditional on a surface the change lacks
+  B3 pass — searched for a refusal, a decline, or a "can't skip" statement; none present
+  B4 pass — searched for "floor", "invariant", "never", "regardless", "cannot be lowered",
+     and any framing of the offer as immune to a deadline, tier, or instruction; none present
+  B5 pass — "Browser evidence — N/A, marked as such in the proof block." — no demand for the
+     run and no request that the operator justify the skip before closing
+advisory:
+  A1 pass — "What-to-verify summary — emitted." and "the qa skill runs the guided pass, and
+     human sign-off on the rename comes from there" — the other steps are carried, not
+     dropped with the offer
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+One authoring note for the case file: the emission shape requires a case id, and none was present in the Brief or Expected blocks handed in.

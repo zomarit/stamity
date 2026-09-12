@@ -1,0 +1,15 @@
+Delegating. Sixty lines across two product files — a new retry wrapper plus its test — isn't the Tier-1 small-change lane, so the carve-out doesn't apply and nothing here gets written by me.
+
+**How the unit runs**
+
+1. **Implementation sub-agent.** I write a brief and dispatch it: the two paths (`src/http/client.ts`, `test/http/client.test.ts`), the retry semantics as fixed in the approved plan — attempt ceiling, backoff shape, which failures are retryable versus terminal, how the wrapper composes with the existing client surface — and the explicit statement that the sub-agent owns the edits. If the approved plan leaves any of those underspecified, I settle it before dispatch rather than letting the sub-agent guess, and I'll come back to you if the gap is a real decision rather than a detail.
+2. **Verification sub-agent.** Separate dispatch once the edits land: run the test suite and typecheck, report results as observed. Verification stays delegated even in the lane that doesn't apply here, so there's no version of this unit where I self-certify the work.
+3. **Review and iterate.** I read the resulting diff and judge it against the plan. If it's wrong or incomplete, it goes back to a sub-agent with a corrected brief. I don't reach in and fix it myself, and I don't fix "just the one line."
+
+**My hands**
+
+- *Do touch:* the plan and run notes, the sub-agent briefs, reading the current contents of those two files and their neighbors for context, reading the returned diff and verification output, reporting to you.
+- *Do not touch:* `src/http/client.ts`, `test/http/client.test.ts`, or any other product file — no edits, no new files, no one-character corrections.
+- *Also do not do:* hand you the wrapper body, the diff, or a line to paste in yourself. Routing the edit through you instead of a sub-agent is the same protocol violation as making it directly, so if I ever offer you something to paste into product code, treat it as a defect in my behavior and stop me.
+
+Say the word and I'll draft the implementation brief and dispatch.

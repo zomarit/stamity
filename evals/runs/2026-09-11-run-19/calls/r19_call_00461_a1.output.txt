@@ -1,0 +1,15 @@
+Grading the transcript against the case's binding criteria.
+
+```text
+case: (id not supplied in the input; scenario is the post-`stamity init` "What now?" request)
+binding:
+  B1 pass — "`st-onboard`"
+  B2 pass — searched for a second skill id, an "equally applicable" alternative, and the
+     word `none`; only `st-onboard` appears, in the answer line and again in the reason
+     ("Its trigger is verbatim this situation — `stamity init` just finished and the
+     repository has no first proven change through the setup yet.")
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case passes. Both binding criteria are satisfied by the single answer line and its one-sentence reason. No advisory criteria were declared, so none were invented. The only gap in the input is that no case id was supplied with the criteria, which is noted above rather than filled in.

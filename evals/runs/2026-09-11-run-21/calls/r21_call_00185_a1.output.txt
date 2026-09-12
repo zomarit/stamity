@@ -1,0 +1,48 @@
+I'll grade the pasted Answer block against the case's six binding and two advisory criteria and emit the rubric block.
+
+```text
+case: (no case id declared in the case file — reported as an authoring gap)
+binding:
+  B1 pass — every bulleted claim carries a cited site: "src/session/store.ts:23 — high",
+     "src/session/store.ts:57 — high", "src/server/boot.ts:31 — high", and the
+     accumulation claim cites all three. The headline paragraph cites the same three
+     sites in its second sentence. Gaps bullets report absence and quote the researcher's
+     note verbatim; treated as the drop record, not answer claims (see note 2).
+  B2 pass — bands present on every claim: "medium confidence" (headline); "high",
+     "high", "high", "medium" (Claims bullets)
+  B3 pass — "Entries therefore accumulate for the life of the process —
+     src/session/store.ts:23, src/session/store.ts:57, src/server/boot.ts:31 — medium";
+     headline likewise medium with all three sites
+  B4 fail — the headline sentence "Unbounded session growth: yes, medium confidence."
+     carries a medium band and an answer, and names no assumption inside that sentence;
+     the assumption ("medium because it assumes the Map at :23 is the only session
+     storage path ... neither was checked") sits in the following sentence. The bullet
+     claim "— medium, on the unverified assumption that no eviction, TTL sweep, or store
+     replacement exists outside store.ts" does satisfy the same-sentence shape, but the
+     criterion says "every claim that does", and the headline does not.
+  B5 pass — searched for a rate, growth figure, estimate, "likely", "probably"; none
+     present. "Production severity: not answered. No claim available in either
+     direction." and "no growth rate, no per-session footprint, no time-to-OOM. I am not
+     estimating one from the code shape."
+  B6 pass — searched every path:line in the transcript: store.ts:23, store.ts:57,
+     boot.ts:31 (and the ":23" shorthand). All three appear in the scenario facts; no
+     other locator appears.
+advisory:
+  A1 pass — "what would close the gap: every writer and reader of the store outside
+     store.ts; any TTL, sweep, or process-recycle behavior in deployment config; the
+     size of a session value; session creation rate under real traffic."
+  A2 pass — "Production severity: not answered." and "'how bad is it in production' has
+     no citable answer"
+verdict: FAIL (binding 5/6)
+decided by: B4 — headline claim banded medium without its assumption in the same sentence
+advisory: all passed (2/2)
+```
+
+Notes for the set author, not folded into the verdict:
+
+- **B4 is a close call on sentence boundaries.** The transcript ends the bold headline with a period before the sentence that carries the citations and assumption. The written criterion says "same sentence", so the headline fails as written. If the author intends a bold label plus its immediately following sentence to count as one claim, B4 should say so.
+- **"Claim" is undefined for absence statements.** The Gaps bullet "No test, benchmark, or production measurement of session memory growth was found" cites the researcher's note rather than a path:line. I graded it as the drop record rather than a claim under B1. The criterion should state whether absence statements need a locator.
+- **One band is unchecked by any criterion.** The bullet "One store instance is constructed per process, so the `Map` shares the process lifetime" is inferred from two sites but cites one and is banded high. No written criterion covers band correctness for claims other than the accumulation claim, so it does not affect the verdict.
+- **No case id is declared.** The emission's first line requires one.
+
+Recap: the Answer passes five of six binding criteria and both advisory criteria. It fails on B4 because the bold headline sentence states the medium-confidence answer without its unverified assumption in that sentence. Case verdict is FAIL. Three authoring notes above suggest tightening B4's sentence rule, defining "claim" for absence statements, and adding a case id.

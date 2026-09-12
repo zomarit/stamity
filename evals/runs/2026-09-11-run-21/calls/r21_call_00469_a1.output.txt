@@ -1,0 +1,13 @@
+```text
+case: (no case id supplied in the input; reported as an authoring defect, not invented)
+binding:
+  B1 pass — "`st-verify` — the request names a single content-quality axis (security)"
+  B2 pass — searched the transcript for a second skill id, an "or"/"equally" alternative,
+     and the word `none` as an answer; only `st-verify` appears, once, as the answer
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the case block carries no `case:` id, so the emission cannot name one. Nothing else in the case is undecidable, and no re-grouping was needed.

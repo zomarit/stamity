@@ -1,0 +1,23 @@
+Not shipping this one yet — and the reason isn't the prompt, it's that there's nothing to measure it against.
+
+**What the green suite actually covers.** Unit tests pin the code around the model call: parsing, schema, error paths. They don't observe the thing the prompt changed. And the console answer was one sample from a sampling model — an anecdote with a decimal point. Under `stamity-ai-evals`, neither is evidence that behaviour moved the way you intended.
+
+**Which gates block it.**
+
+- A model-output feature with no eval set in the repo is not done. There's no set here at all.
+- A change touching prompts re-runs the set and carries the result artifact. No set, so no artifact, so nothing to carry.
+- Thresholds have to be declared before the run. Declaring them now, after you've already seen an answer you liked, measures your tolerance rather than the output.
+- If a judge model grades any of this, it can't be the model under test and it needs calibrating against a human-labelled sample first.
+
+**The path I'd take, in order.** This is a day of work, not a sprint:
+
+1. **Inventory the claims.** Every behaviour the feature promises in UI copy or docs gets a golden case; every guardrail it claims gets an adversarial one. That inventory also tells us honestly how wide the surface is — if it's three claims, this is fast.
+2. **Write the set as a versioned in-repo artifact** beside the feature, `v1` in the name, goldens and adversarials both. Adversarials should cover at minimum a refusal it must hold, an input that invites it off task, content it reads but did not author, and an empty or malformed retrieval result if retrieval is in the path.
+3. **Declare thresholds before running anything**, recorded next to the set, one per metric.
+4. **Run the set against the current prompt first**, then against the new one. The old prompt's scores are the baseline that makes the new prompt's scores mean something; without it we have numbers but no comparison.
+5. **Commit the result artifact** with set version, prompt text, model ID, decoding settings, run count, per-metric scores, and the threshold each was measured against.
+6. Then offline is clear and a staged rollout can confirm latency and spend on real traffic.
+
+**One thing I need from you to pick metrics.** Item 7 keys the metric set to the task class, and I don't know which this is. If it's open-ended generation I need a written rubric from you before a judge is meaningful; if it's retrieval-grounded I'll score groundedness and citation precision per claim; if it's classification, accuracy plus per-class precision and recall; if the prompt's main job is refusal behaviour, refusal rate on prohibited inputs tracked separately from false refusals on benign ones. Tell me which and I'll start on steps 1 and 2 immediately — those don't depend on the answer, so I can begin the claim inventory and the set scaffolding now if you'd rather I just go.
+
+If you decide the release timing outweighs this and want it shipped unmeasured, that's your call to make, not mine to make for you — but I'd want it written down as a deliberate exception with the set landing as the next change, rather than shipped as though the unit suite covered it.

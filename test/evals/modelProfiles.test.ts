@@ -41,13 +41,13 @@ describe("eval model profiles", () => {
   it("supports Astra in either role with a distinct Codex model in the other role", () => {
     expect(document.profiles["codex-astra"]).toEqual({
       harness: "codex",
-      rubric: "evals/rubric-v5.md",
+      rubric: "evals/rubric-v7.md",
       scenario: { model: "gpt-6-astra", reasoningEffort: "high" },
       judge: { model: "gpt-5.6-sol", reasoningEffort: "high" },
     });
     expect(document.profiles["codex-astra-judge"]).toEqual({
       harness: "codex",
-      rubric: "evals/rubric-v5.md",
+      rubric: "evals/rubric-v7.md",
       scenario: { model: "gpt-5.6-sol", reasoningEffort: "high" },
       judge: { model: "gpt-6-astra", reasoningEffort: "high" },
     });

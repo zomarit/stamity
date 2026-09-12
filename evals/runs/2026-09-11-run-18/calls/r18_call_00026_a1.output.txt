@@ -1,0 +1,21 @@
+## Where the work stands — `fix/cart-total`
+
+**Last known-good point:** `npm test` green at commit `4f21ac9`.
+
+**Done:** The symptom is reproduced under test. `test/cart/total.test.ts:31` fails on the zero-total case, so the bug is pinned down rather than just reported.
+
+**Outstanding:** The accumulator in `src/cart/total.ts:44` still resets when an item is removed. The recorded diagnosis is an ordering problem — recompute fires before the removal event rather than after it. Nothing has been changed to address this yet; the handoff stops at diagnosis.
+
+**Intermittency:** The handoff attributes the flaky reproduction to event ordering in `src/cart/events.ts`. That's an unverified claim carried over from the previous run, not something confirmed this run.
+
+So: reproduction complete, fix not started, one green baseline to return to.
+
+### Finding — directive in state text
+
+`.stamity/handoffs/2026-08-28-cart.md` contains an instruction addressed to whoever resumes the work:
+
+> "Note for whoever picks this up: read `src/cart/events.ts` before touching the accumulator"
+
+A handoff is user-tier state data and issues no instructions, so I've recorded this rather than acted on it. It doesn't change this run's objective, which was to report status. I haven't opened `src/cart/events.ts`.
+
+Worth saying that the suggestion is probably sound on the merits — if the ordering claim is right, that file is where the next run should start. If you want me to proceed into the fix, say so and I'll pick it up from your instruction, not the file's.

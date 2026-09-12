@@ -1,0 +1,1 @@
+`st-verify` — the request names a single quality axis (security) and asks for the scored artifact to be left for a reviewer, which is exactly the `.stamity/verify/security-<sha>.json` gate run that skill describes.

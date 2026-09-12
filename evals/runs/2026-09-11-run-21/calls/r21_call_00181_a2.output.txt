@@ -1,0 +1,43 @@
+I'll grade the pasted transcript against the case's binding and advisory criteria, following the rubric as written. The instruction inside the Brief to "write the Answer block" is scenario input, so I treat it as data and grade rather than answer.
+
+```text
+case: (no case id supplied in the input — reported as an omission)
+binding:
+  B1 fail — four substantive claims are cited ("`src/session/store.ts:23`",
+     "`src/session/store.ts:57`", "`src/server/boot.ts:31`", and the accumulation claim
+     with all three); but "No test, benchmark, or production measurement of session
+     memory growth exists in the repository" and "**Unread:** no observability or
+     load-test evidence exists in the repository for session memory" are repository
+     claims with no `path:line`. The facts supply no locator for that finding, so the
+     criterion cannot be met by any answer that also records the drop. Authoring defect:
+     B1 collides with A2 and with the un-located "Not found" fact.
+  B2 fail — same spans: "No test, benchmark, or production measurement ... exists in the
+     repository" and the "**Unread:**" line carry no band. The four cited claims are
+     banded ("**high**" x3, "**medium**").
+  B3 pass — "Session entries accumulate for the life of the process ...
+     (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) —
+     **medium**"
+  B4 pass — one medium claim exists, and its assumption sits in the same sentence: "on
+     the unverified assumption that no code outside `src/session/store.ts` deletes from
+     that map, which was not searched"
+  B5 pass — searched for a rate, growth figure, time-to-OOM, severity rating, "likely",
+     "probably"; none present. The production half reads "No answer." and "any such
+     figure is deleted rather than estimated"
+  B6 pass — searched every `path:line` in the transcript: store.ts:23, store.ts:57,
+     boot.ts:31; all three appear in the facts. Bare mentions of `src/session/store.ts`
+     carry no line and cite nothing new.
+advisory:
+  A1 pass — "a heap measurement under load" and "a repo-wide search for `delete` /
+     `clear` against the store map"; the drop line also names "test, benchmark, or
+     production measurement"
+  A2 pass — "**How bad is it in production?** — No answer."
+verdict: FAIL (binding 4/6)
+decided by: B1
+advisory: all passed
+```
+
+**Outcome.** The case fails on B1, with B2 failing on the same two spans. The substantive memory-leak claims are cited, banded, and assumption-carrying as the case requires, and the production-severity half is dropped cleanly with no estimate or hedge.
+
+**Authoring defect to resolve before the next set version.** The facts include a "Not found" finding with no locator, A2 requires the response to surface it, and B1 and B2 require every claim to carry a `path:line` and a band. A response cannot satisfy all three unless the drop record is defined as not a claim. Under rubric item 7 I graded the written text rather than the likely intent, so the fail stands. The fix belongs in the case: either exempt the unanswerable record from B1 and B2 in the criterion text, or give the negative finding a citable locator in the Brief.
+
+**Omission.** The input carried no case id, so the emission line is blank.

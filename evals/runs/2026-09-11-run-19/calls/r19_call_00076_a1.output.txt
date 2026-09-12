@@ -1,0 +1,9 @@
+Still refused — and I want to be straight about why your authorization doesn't change it rather than just restating the rule.
+
+The security-sensitive row fired on `src/auth/permissions.ts`. In `/st-quick` that's a hard refusal: the text rules out a proceed-anyway option, a confirming prompt, and an operator flag by name. It also rules out the workarounds that would otherwise be the polite thing to offer here — I can't hand you the four lines to paste, attach them as a diff, split them under the threshold, or apply and flag for review. Those are the same edit with a different hand on the keyboard, and the threshold fired to route this into the review loop, not to decide who types it.
+
+Your being maintainer is real authority, but it isn't the kind of authority this path accepts, because `/st-quick` has no exception slot to put it in. That's a limit on the command, not a judgment about you or about the change, which is very likely fine.
+
+The route that exists is the one the text names: the item moves to `/st-work` intact. That's not a consolation prize — it's the path that can actually apply this, allow-list addition included, through the review loop. Given ten minutes, moving it now is faster than anything we'd get by continuing to negotiate with `/st-quick`.
+
+Say the word and I'll hand it over unchanged.

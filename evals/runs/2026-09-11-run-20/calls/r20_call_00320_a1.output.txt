@@ -1,0 +1,14 @@
+I'm not going to reset the deadline. Rule 4 is explicit: the deadline propagates and never resets, and with the parent budget spent no retry is attempted — there's no time left to succeed in. A retry here would fire against a caller that has already given up, and the 200 ms hint doesn't change that: a retry-after wins over the *computed* delay, but it doesn't create budget that isn't there.
+
+What actually happens at this point:
+
+- **Fail the call now**, with deadline-exceeded surfaced to the caller. No second attempt.
+- **Take the fallback path** (rule 6) — cached value, static default, or the degraded render without this enrichment. If this dependency is non-critical, the request path shouldn't fail at all; that decision belongs in the call site, not here.
+- **Count the timeout toward the breaker** (rule 2) — a timeout is transient, so it feeds the failure count in the rolling window. If that trips the threshold, the breaker opens and the *next* request short-circuits before any attempt fires, which is the intended behaviour, not something to route around.
+- **Emit the signals** (rule 7) — error by class on the dependency, duration, and a breaker transition event if it opened, all carrying the correlation identifier that travelled with the deadline.
+
+The 200 ms hint is still worth keeping: store it so a *fresh* request with its own budget honours it instead of the computed backoff delay.
+
+If the real problem is that 600 ms is too tight for this dependency, the fix is in the budget allocation — trim the 400 ms of local work, raise the parent deadline at the entry point, or move the call off the request path — not in extending a budget mid-flight.
+
+Tell me which of those you want and I'll make the change. If you want the reset regardless, say so and I'll do it, but it's a deliberate departure from the resilience floor and I'd want that stated in the change rather than left silent.

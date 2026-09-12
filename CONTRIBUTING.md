@@ -180,19 +180,26 @@ need no edit at all.
 
 `content/` is model-executed prose: what it does is decided at execution by a model, so a diff
 review does not establish behaviour the way it does for `src/`. A change under `content/` re-runs
-the eval cases it affects — find them by the `source` field in `evals/cases-v4/**`, where every
+the eval cases it affects — find them by the `source` field in `evals/cases-v5/**`, where every
 case names the corpus path and line range its claim comes from, and move a case's `source` and
 its inlined brief in the same diff when the claim itself moves. An eval-coverage gate holds every
 content artifact's path to at least one case's `source` or to the written exemption list
-`evals/coverage-exemptions-v4.md`. A change of the model under test re-runs every adversarial
+`evals/coverage-exemptions-v5.md`. A change of the model under test re-runs every adversarial
 case at a zero-break bar, because guardrail behaviour is a property of the model-and-prose pair
 rather than of the prose alone. Thresholds, the run-artifact contract and the case index live in
-`evals/SET-v4.md`; runs are manual, in a harness session, on the operator's word.
+`evals/SET-v6.md`; runs are manual, in a harness session, on the operator's word.
 
 Select the model pair through `evals/MODEL-PROFILES-v1.md`: the original Claude profile
 remains the default, while `codex-astra` and `codex-astra-judge` support Astra in either
 role. Calibrate the selected judge/rubric and record the full profile; never pool results
 from different profiles into one baseline.
+
+The manual Codex transport is `node scripts/eval-run.mjs --run-id YYYY-MM-DD-run-N
+--profile codex-astra --trigger content --capacity 4` (one shell command). It runs all
+current cases with strict three-sample scoring after exact input/provider admission and
+all-fixture calibration. It requires committed inputs and an authorized `OPENAI_API_KEY`;
+an unavailable credential or control writes a blocked artifact and admits no scores.
+See `evals/README.md` for the transport's isolation limits and artifact layout.
 
 ## Commits
 

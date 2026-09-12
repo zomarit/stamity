@@ -1,0 +1,12 @@
+"Add pagination" reads at least two ways here, and the two axes it leaves open — which endpoints, and what page contract — differ materially in blast radius. Nothing is written yet, so one question before I start:
+
+**Which endpoints get paginated, and in what shape?**
+
+1. **Offset/limit on `/api/v1/orders` only.** Smallest change, fixes the endpoint that actually hurts, trivially reversible; weak under concurrent inserts and still scans deep pages.
+2. **Keyset cursor on `/api/v1/orders` only.** Stable under writes and fast at depth, but I'd be inventing a cursor encoding that `docs/specs/` doesn't describe, and that encoding is hard to change once a client holds one.
+3. **Offset/limit on all three, behind a shared helper.** One consistent contract across the service; changes the response shape of two endpoints nobody has complained about, so three clients need updating instead of one.
+4. **Keyset cursor on all three, behind a shared helper.** Best long-term shape, largest blast radius, and the most unspecified design committed all at once.
+
+Sub-question bundled into the same choice: should paginated responses be **opt-in** (no page params → current behavior, every row) or should an unrequested call start returning a default page? Opt-in is non-breaking; a default page size is a breaking change for every existing caller.
+
+Default if no response: **option 1, opt-in.** It is the lowest-blast-radius reversible move — one endpoint, one client contract, no cursor format locked in — and it leaves the door open to promote offset to keyset, or to extend to the other two endpoints, once there's a spec to point at. If you'd rather I pick the cursor shape myself and document it, say so and I'll take option 2 and write the encoding into `docs/specs/` as part of the change.

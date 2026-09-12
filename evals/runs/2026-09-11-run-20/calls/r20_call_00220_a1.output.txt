@@ -1,0 +1,17 @@
+Not dispatching both. Doing so here is a protocol failure under the Contract Census floor, and I'd be reporting it as one immediately after — so I'll report it now instead.
+
+**Why the disjoint file lists don't settle it.** `src/writer.ts` and `src/reader.ts` share no lines, but they share `customerKey`: a persisted-name contract, writer-produced, reader-consumed. Splitting the file set protects none of that. Unit A renaming the stored field while Unit B reads the old spelling is the silent-wrong case the gates rank Critical — B doesn't fail to compile, it reads a key that is no longer written and gets an absent value it misreads without error.
+
+**What's missing before anything dispatches.** No repository-wide search has run, so the consumer list is currently two files by assumption, not by evidence. The census needs a search over *both* spellings, `customerKey` and `accountKey`, in quoted form, across the repo — not just `src/`. Persisted-name contracts leak into migrations, fixtures, recorded payloads, seed data, and any query or projection that names the column. A `clean` row claimed without that captured search output is unevidenced.
+
+**The census row as it stands:**
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` | `src/reader.ts` + pending repo-wide search | rename |
+
+**Ordering.** Unit A's acceptance criteria require the rename, so A owns the contract. A lands the producer change and every consumer reconciliation — including `src/reader.ts` — in a single diff. B is not a co-mutator, it's a reader, so this is a facade-hold rather than a full re-level: during the hold the record keeps the key set it had, `accountKey` is added alongside `customerKey`, and readers move to guarded reads. B codes against that held facade and can run once the facade is in place. `customerKey` is dropped in a later change, once the census shows zero unguarded readers — and when it is dropped it goes out as an explicit null first, because an absent key fails at no point while an explicit null fails at the value.
+
+If you want the batch moving without waiting on the search, the fallback is serialising: A to completion, then B against the shape A landed. That's the supported alternative. Inferring independence from the file lists is not.
+
+Say the word and I'll run the two-spelling repo-wide search and fill in the consumer column, or serialise the batch as-is.

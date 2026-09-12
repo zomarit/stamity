@@ -245,7 +245,7 @@
 //
 // Exit codes: 0 ok, 1 render/write failure or drift under --check, 2 bad arguments.
 
-import { spawnSync } from 'node:child_process'
+import { prepareNativeTypescriptCli } from './native-typescript.mjs'
 import { readFile, readdir, rm, rmdir } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { join, posix, relative, resolve, sep } from 'node:path'
@@ -257,266 +257,13 @@ const SELF = fileURLToPath(import.meta.url)
 const ROOT = resolve(SELF, '..', '..')
 const USAGE = 'Usage: node scripts/generate-apm-package.mjs [--check] [--out-dir <dir>]'
 
-if (!process.features.typescript) {
-  // Re-exec once, never twice: a Node build that still cannot strip types with
-  // the flag on would otherwise respawn itself forever.
-  if (process.execArgv.includes('--experimental-strip-types')) {
-    console.error(
-      `This Node build (${process.version}) cannot strip TypeScript types, so the content ` +
-        'catalog cannot be loaded. Run the generator on Node >=22.22.2.',
-    )
-    process.exit(1)
-  }
-  const child = spawnSync(
-    process.execPath,
-    [
-      '--experimental-strip-types',
-      '--disable-warning=ExperimentalWarning',
-      SELF,
-      ...process.argv.slice(2),
-    ],
-    { stdio: 'inherit' },
-  )
-  // A signalled child has no status; 1 is the honest "did not complete".
-  process.exit(child.status ?? 1)
-}
-
-function usage(problem) {
-  console.error(`${problem}\n${USAGE}`)
-  process.exit(2)
-}
-
 function fail(message) {
   console.error(message)
   process.exit(1)
 }
 
-const args = process.argv.slice(2)
-let check = false
-let outDir = null
-for (let i = 0; i < args.length; i += 1) {
-  const arg = args[i]
-  if (arg === '--check') {
-    check = true
-  } else if (arg === '--out-dir') {
-    i += 1
-    if (i >= args.length) usage('--out-dir needs a path.')
-    outDir = args[i]
-  } else {
-    usage(`Unknown argument: ${arg}`)
-  }
-}
-
-// Publisher identity is resolved from package.json by the shared validator below.
-
-/** Repo-root manifest, and the root of the generated primitive tree. */
-const APM_MANIFEST = 'apm.yml'
-const APM_DIR = '.apm'
-
-/**
- * Content class -> its `.apm/` subdirectory. The four homes from this file's
- * header, stated once as data so the projection and the check read the same
- * table.
- */
-const APM_SUBDIR = {
-  rule: 'instructions',
-  skill: 'skills',
-  command: 'prompts',
-  agent: 'agents',
-}
-
-/** Content class -> the double extension APM discovers a primitive by. */
-const APM_SUFFIX = {
-  rule: '.instructions.md',
-  command: '.prompt.md',
-  agent: '.agent.md',
-}
-
-/** The one required file in a skill directory; the rest is projected verbatim. */
-const SKILL_FILE = 'SKILL.md'
-
-/**
- * `applyTo` for a rule that declares no globs.
- *
- * An instruction's `applyTo` is required, and the value that states "every
- * file" is the same `**` the Copilot instructions surface emits for a rule with
- * no glob scope (`../src/adapters/copilot.ts`). APM's other spelling for an
- * unconditional rule is to OMIT `applyTo` entirely, which folds the body into
- * the compiled `AGENTS.md` instead of a per-file rule directory — a different
- * deployment, not a different scope. The explicit `**` is chosen because it
- * satisfies the field's required-ness rather than testing how a parser treats
- * an absent required key, and because it keeps every rule in this package
- * deployed the same way.
- */
-const APPLY_TO_EVERY_FILE = '**'
-
-/** How a multi-glob `applyTo` is spelled: one comma-separated string. */
-const APPLY_TO_SEPARATOR = ','
-
-// ── package.json projection ──────────────────────────────────────
-
-const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8'))
-
-function requirePkg(field, value, predicate) {
-  if (!predicate(value)) {
-    fail(
-      `package.json declares no usable \`${field}\`, so the APM manifest would carry an empty ` +
-        'or absent value for it. Fix package.json and re-run.',
-    )
-  }
-  return value
-}
-
 const nonEmptyString = (value) => typeof value === 'string' && value.trim() !== ''
 
-const packageName = requirePkg('name', pkg.name, nonEmptyString)
-const version = requirePkg('version', pkg.version, nonEmptyString)
-const description = requirePkg('description', pkg.description, nonEmptyString)
-const license = requirePkg('license', pkg.license, nonEmptyString)
-
-let identity
-try {
-  identity = resolveDistributionIdentity(pkg)
-} catch (err) {
-  fail(err.message)
-}
-const { publisher: PUBLISHER } = identity
-
-/** The package id, unscoped — the same id every other published surface carries. */
-const packageId = packageName.replace(/^@[^/]+\//, '')
-
-// ── Corpus projection ────────────────────────────────────────────
-
-const { assertSafePath, buildContentIndex, COMMAND_ID_PREFIX, replacedClaimantOf, typeIdKey } = await import('../src/content/catalog.ts')
-const { composeFrontmatter } = await import('../src/content/frontmatter.ts')
-const { contentPrefixFor } = await import('../src/types/markers.ts')
-const { CONTENT_CLASSES } = await import('../src/types/content.ts')
-const { atomicWriteFile } = await import('../src/merge/atomicWrite.ts')
-const { stringify: stringifyYaml } = await import('yaml')
-
-const index = await buildContentIndex()
-
-// A reported collision is not an exportable package, even when duplicate bodies
-// happen to agree. Refuse before rendering or writing any generated output.
-if (index.collisions.length > 0) {
-  fail('APM content identity collisions:\n' + index.collisions.map((row) =>
-    `  - ${row.kind}: ${row.key} (${row.paths.join(', ')})`).join('\n'))
-}
-
-/** Package-authored winners only; consumer packs and overrides are not inputs. */
-const items = index.items.filter((item) =>
-  ['corpus', 'fork'].includes(item.origin ?? 'corpus') &&
-  index.byKey.get(typeIdKey(item.type, item.id)) === item,
-)
-
-const missingClasses = CONTENT_CLASSES.filter((type) => !items.some((item) => item.type === type))
-if (missingClasses.length > 0) {
-  fail(
-    `The corpus indexes no ${missingClasses.join(', ')} artifacts, so the APM package would ship ` +
-      'a primitive directory that is empty or absent. Run the generator from a source checkout ' +
-      'with the corpus intact.',
-  )
-}
-
-/**
- * Skills inherit the replaced bundled directory or keep their own directory.
- * Other emitted filename stems use the artifact's id with the catalog's command
- * namespacing removed and the filename prefix its class earns restored.
- * `../src/types/markers.ts` owns which prefix that is, so an APM consumer types
- * the same command name and addresses the same agent as every other client.
- */
-function emittedId(item) {
-  if (item.type === 'skill') {
-    const source = replacedClaimantOf(index, item) ?? item
-    const id = posix.basename(posix.dirname(source.relativePath))
-    assertSafePath(id, `skill ${JSON.stringify(item.id)} identity`)
-    return id
-  }
-  const bare =
-    item.type === 'command' && item.id.startsWith(COMMAND_ID_PREFIX)
-      ? item.id.slice(COMMAND_ID_PREFIX.length)
-      : item.id
-  const prefix = contentPrefixFor(item)
-  const emitted = bare.startsWith(prefix) ? bare : `${prefix}${bare}`
-  // The id reaches a path, so a separator or a traversal segment in it would
-  // write outside the primitive tree. The catalog already refuses both; this is
-  // the cheap restatement at the point where the string becomes a path.
-  if (emitted === '' || emitted.includes('/') || emitted.includes('\\') || emitted.includes('..')) {
-    fail(`The artifact id ${JSON.stringify(item.id)} does not spell a single path segment.`)
-  }
-  return emitted
-}
-
-/**
- * The rule's glob scope as one `applyTo` value: the declared globs, trimmed and
- * deduplicated in declaration order, comma-joined; `**` when it declares none.
- * The same derivation the Copilot instructions surface uses, because the two
- * formats share the field and a second reading of the same frontmatter is how
- * two surfaces come to disagree about one rule's scope.
- */
-function applyToOf(item) {
-  const declared = item.frontmatter['globs']
-  const raw =
-    typeof declared === 'string'
-      ? declared.split(',')
-      : Array.isArray(declared)
-        ? declared.filter((entry) => typeof entry === 'string')
-        : []
-  const globs = new Set()
-  for (const glob of raw) {
-    const value = glob.trim()
-    if (value !== '') globs.add(value)
-  }
-  return globs.size === 0 ? APPLY_TO_EVERY_FILE : [...globs].join(APPLY_TO_SEPARATOR)
-}
-
-/**
- * One primitive document: the translated head over the artifact's body.
- *
- * `composeFrontmatter` is the corpus's own composer, so the head is YAML the
- * same writer produced everywhere else — a description carrying `: ` or a glob
- * carrying `*` is quoted by the serialiser rather than by a rule spelled here.
- * The body is passed through byte-for-byte, blank line after the fence
- * included, which is what makes the projection a copy rather than a re-render.
- */
-function primitive(head, item) {
-  return composeFrontmatter(head, item.body)
-}
-
-/**
- * The head for one artifact, per the four-class table in this file's header.
- * Ordered as `composeFrontmatter` emits it (`description` leads); key order is
- * part of the output bytes and `--check` byte-diffs them, so it is settled by
- * one composer rather than per class here.
- */
-function headFor(item, id) {
-  switch (item.type) {
-    case 'rule':
-      return { description: item.description, applyTo: applyToOf(item) }
-    case 'skill':
-    case 'agent':
-      // A skill's `name` MUST equal its directory name or APM refuses the
-      // package naming both; the directory is the identity and the frontmatter
-      // restates it. An agent's `name` defaults to the filename stem, and the
-      // stem is this same id, so stating it is a restatement there too.
-      return { name: id, description: item.description }
-    default:
-      return { description: item.description }
-  }
-}
-
-/** Repo-relative POSIX path, so a Windows run emits the same bytes as a POSIX one. */
-function repoRelative(absPath) {
-  return relative(ROOT, absPath).split(sep).join('/')
-}
-
-/**
- * Every regular file under `dir`, as POSIX paths relative to it, depth-first
- * with codepoint-ordered siblings so the walk is identical on every platform.
- * A skill ships its `references/` subtree, and those files are progressive-
- * disclosure material the skill's own body links by path — projecting the
- * `SKILL.md` alone would ship a document whose links resolve to nothing.
- */
 async function walkRegularFiles(dir, prefix) {
   const entries = (await readdir(dir, { withFileTypes: true })).toSorted((a, b) =>
     a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
@@ -531,108 +278,6 @@ async function walkRegularFiles(dir, prefix) {
   return nested.flat()
 }
 
-/** Every file this package ships, as repo-relative POSIX path -> bytes. */
-async function renderPackage() {
-  const rendered = new Map()
-  const portablePaths = new Set()
-
-  const add = (relPath, bytes) => {
-    assertSafePath(relPath, 'APM projection')
-    // The package must also install on case-insensitive Windows/macOS volumes.
-    const portablePath = relPath.toLowerCase()
-    if (portablePaths.has(portablePath)) {
-      fail(
-        `Two content artifacts project onto ${relPath}. A primitive path is an identity in an ` +
-          'APM package, so the second would silently replace the first.',
-      )
-    }
-    portablePaths.add(portablePath)
-    rendered.set(relPath, Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes, 'utf8'))
-  }
-
-  await Promise.all(
-    items.map(async (item) => {
-      const id = emittedId(item)
-      const dir = posix.join(APM_DIR, APM_SUBDIR[item.type])
-
-      if (item.type !== 'skill') {
-        add(posix.join(dir, `${id}${APM_SUFFIX[item.type]}`), primitive(headFor(item, id), item))
-        return
-      }
-
-      // Identity follows the replaced bundled skill; companion files always
-      // come from the winning skill's own source directory.
-      const sourceRoot = resolve(item.filePath, '..')
-      const files = (await walkRegularFiles(sourceRoot, '')).filter((path) =>
-        !['SKILL.customize.md', 'SKILL.customize.yaml'].includes(path),
-      )
-      if (!files.includes(SKILL_FILE)) {
-        fail(`Skill ${JSON.stringify(item.id)} has no ${SKILL_FILE} at ${repoRelative(sourceRoot)}.`)
-      }
-      // Independent reads over one skill's own tree, so they run together.
-      const projected = await Promise.all(
-        files.map(async (relPath) => {
-          // Validate before join can normalize anything and before reading a
-          // companion. A POSIX filename containing a backslash is unsafe on Windows.
-          assertSafePath(relPath, `skill ${JSON.stringify(item.id)} companion`)
-          return [
-            posix.join(dir, id, relPath),
-            relPath === SKILL_FILE
-              ? primitive(headFor(item, id), item)
-              : await readFile(join(sourceRoot, ...relPath.split('/'))),
-          ]
-        }),
-      )
-      for (const [target, bytes] of projected) add(target, bytes)
-    }),
-  )
-
-  // ── The manifest ─────────────────────────────────────────────
-  //
-  // Written in the order it is read: identity first, then the optional strings
-  // the parser takes verbatim, then the reserved `type`. Every field this
-  // repository can verify and no field it cannot — see WHAT apm.yml CARRIES in
-  // this file's header for each omission and the evidence behind it.
-  const manifest = new Map([
-    ['name', packageId],
-    ['version', version],
-    ['description', description],
-    ['author', PUBLISHER],
-    ['license', license],
-    ['type', 'hybrid'],
-  ])
-  add(APM_MANIFEST, `${stringifyYaml(manifest, { lineWidth: 0 })}`)
-
-  // Sorted here rather than trusted from the walk: the emission order is part
-  // of the drift report a reader acts on, and a directory read that comes back
-  // in a different order on another filesystem must not reshuffle it.
-  return new Map([...rendered].toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
-}
-
-const rendered = await renderPackage()
-
-// ── Write / check ────────────────────────────────────────────────
-
-const base = outDir === null ? ROOT : resolve(outDir)
-
-/** Every file currently under `<base>/.apm`, as repo-relative POSIX paths. */
-async function committedTree() {
-  try {
-    const files = await walkRegularFiles(join(base, APM_DIR), '')
-    return files.map((relPath) => posix.join(APM_DIR, relPath))
-  } catch (err) {
-    if (err.code === 'ENOENT') return []
-    throw err
-  }
-}
-
-/**
- * Remove every directory under `<base>/.apm` that holds nothing, deepest
- * first. A retired skill leaves its directory behind when its files go, and an
- * empty `st-<id>/` in a skills tree is a skill APM discovers as broken —
- * `SKILL.md` is the one required file — rather than a skill that is simply
- * gone. Returns the directories it removed, repo-relative.
- */
 async function pruneEmptyDirectories(dir, relPath) {
   let entries
   try {
@@ -655,7 +300,6 @@ async function pruneEmptyDirectories(dir, relPath) {
   return removed
 }
 
-/** First line that differs, as a one-line summary a reader can act on. */
 function firstDifference(expected, actual) {
   const want = expected.toString('utf8').split('\n')
   const have = actual.toString('utf8').split('\n')
@@ -671,64 +315,403 @@ function firstDifference(expected, actual) {
   return 'files differ in bytes (including binary content)'
 }
 
-if (check) {
-  // Independent reads, so they run together and every drifted file is reported
-  // in one run rather than one per invocation.
-  const compared = await Promise.all(
-    [...rendered].map(async ([relPath, bytes]) => {
-      try {
-        const committed = await readFile(resolve(base, relPath))
-        return committed.equals(bytes) ? null : `${relPath}: ${firstDifference(bytes, committed)}`
-      } catch (err) {
-        return `${relPath}: not readable (${err.code ?? err.message})`
-      }
-    }),
-  )
-  const drift = compared.filter((line) => line !== null)
-  // An unexpected primitive is drift of the other sign: the file set follows
-  // the corpus, so a retired artifact leaves a file that regeneration would
-  // never rewrite and no byte-diff over the rendered set would ever read.
-  for (const relPath of await committedTree()) {
-    if (!rendered.has(relPath)) drift.push(`${relPath}: not a primitive this corpus projects`)
+if (prepareNativeTypescriptCli(import.meta.url)) {
+  function usage(problem) {
+    console.error(`${problem}\n${USAGE}`)
+    process.exit(2)
   }
-  if (drift.length > 0) {
+
+
+  const args = process.argv.slice(2)
+  let check = false
+  let outDir = null
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (arg === '--check') {
+      check = true
+    } else if (arg === '--out-dir') {
+      i += 1
+      if (i >= args.length) usage('--out-dir needs a path.')
+      outDir = args[i]
+    } else {
+      usage(`Unknown argument: ${arg}`)
+    }
+  }
+
+  // Publisher identity is resolved from package.json by the shared validator below.
+
+  /** Repo-root manifest, and the root of the generated primitive tree. */
+  const APM_MANIFEST = 'apm.yml'
+  const APM_DIR = '.apm'
+
+  /**
+   * Content class -> its `.apm/` subdirectory. The four homes from this file's
+   * header, stated once as data so the projection and the check read the same
+   * table.
+   */
+  const APM_SUBDIR = {
+    rule: 'instructions',
+    skill: 'skills',
+    command: 'prompts',
+    agent: 'agents',
+  }
+
+  /** Content class -> the double extension APM discovers a primitive by. */
+  const APM_SUFFIX = {
+    rule: '.instructions.md',
+    command: '.prompt.md',
+    agent: '.agent.md',
+  }
+
+  /** The one required file in a skill directory; the rest is projected verbatim. */
+  const SKILL_FILE = 'SKILL.md'
+
+  /**
+   * `applyTo` for a rule that declares no globs.
+   *
+   * An instruction's `applyTo` is required, and the value that states "every
+   * file" is the same `**` the Copilot instructions surface emits for a rule with
+   * no glob scope (`../src/adapters/copilot.ts`). APM's other spelling for an
+   * unconditional rule is to OMIT `applyTo` entirely, which folds the body into
+   * the compiled `AGENTS.md` instead of a per-file rule directory — a different
+   * deployment, not a different scope. The explicit `**` is chosen because it
+   * satisfies the field's required-ness rather than testing how a parser treats
+   * an absent required key, and because it keeps every rule in this package
+   * deployed the same way.
+   */
+  const APPLY_TO_EVERY_FILE = '**'
+
+  /** How a multi-glob `applyTo` is spelled: one comma-separated string. */
+  const APPLY_TO_SEPARATOR = ','
+
+  // ── package.json projection ──────────────────────────────────────
+
+  const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8'))
+
+  function requirePkg(field, value, predicate) {
+    if (!predicate(value)) {
+      fail(
+        `package.json declares no usable \`${field}\`, so the APM manifest would carry an empty ` +
+          'or absent value for it. Fix package.json and re-run.',
+      )
+    }
+    return value
+  }
+
+
+  const packageName = requirePkg('name', pkg.name, nonEmptyString)
+  const version = requirePkg('version', pkg.version, nonEmptyString)
+  const description = requirePkg('description', pkg.description, nonEmptyString)
+  const license = requirePkg('license', pkg.license, nonEmptyString)
+
+  let identity
+  try {
+    identity = resolveDistributionIdentity(pkg)
+  } catch (err) {
+    fail(err.message)
+  }
+  const { publisher: PUBLISHER } = identity
+
+  /** The package id, unscoped — the same id every other published surface carries. */
+  const packageId = packageName.replace(/^@[^/]+\//, '')
+
+  // ── Corpus projection ────────────────────────────────────────────
+
+  const { assertSafePath, buildContentIndex, COMMAND_ID_PREFIX, replacedClaimantOf, typeIdKey } = await import('../src/content/catalog.ts')
+  const { composeFrontmatter } = await import('../src/content/frontmatter.ts')
+  const { contentPrefixFor } = await import('../src/types/markers.ts')
+  const { CONTENT_CLASSES } = await import('../src/types/content.ts')
+  const { atomicWriteFile } = await import('../src/merge/atomicWrite.ts')
+  const { stringify: stringifyYaml } = await import('yaml')
+
+  const index = await buildContentIndex()
+
+  // A reported collision is not an exportable package, even when duplicate bodies
+  // happen to agree. Refuse before rendering or writing any generated output.
+  if (index.collisions.length > 0) {
+    fail('APM content identity collisions:\n' + index.collisions.map((row) =>
+      `  - ${row.kind}: ${row.key} (${row.paths.join(', ')})`).join('\n'))
+  }
+
+  /** Package-authored winners only; consumer packs and overrides are not inputs. */
+  const items = index.items.filter((item) =>
+    ['corpus', 'fork'].includes(item.origin ?? 'corpus') &&
+    index.byKey.get(typeIdKey(item.type, item.id)) === item,
+  )
+
+  const missingClasses = CONTENT_CLASSES.filter((type) => !items.some((item) => item.type === type))
+  if (missingClasses.length > 0) {
     fail(
-      `APM package out of sync:\n${drift.toSorted().map((line) => `  - ${line}`).join('\n')}\n` +
-        'Regenerate: node scripts/generate-apm-package.mjs',
+      `The corpus indexes no ${missingClasses.join(', ')} artifacts, so the APM package would ship ` +
+        'a primitive directory that is empty or absent. Run the generator from a source checkout ' +
+        'with the corpus intact.',
     )
   }
-  const summary = CONTENT_CLASSES.map(
-    (type) => `${String(items.filter((item) => item.type === type).length)} ${type}`,
-  ).join(', ')
-  console.log(
-    `Verified the APM package at ${packageId}@${version} — ${String(rendered.size)} file(s) ` +
-      `(${summary}).`,
-  )
-} else {
-  // Stale primitives go FIRST, so a rename lands as one file rather than as the
-  // new one beside the old.
-  const stale = (await committedTree()).filter((relPath) => !rendered.has(relPath))
-  let emptied = []
-  try {
-    // Distinct paths, so the unlinks are independent; the directory sweep runs
-    // after all of them, because a directory is empty only once its last file
-    // has gone.
-    await Promise.all(stale.map((relPath) => rm(resolve(base, relPath))))
-    emptied = await pruneEmptyDirectories(join(base, APM_DIR), APM_DIR)
-  } catch (err) {
-    fail(err instanceof Error ? err.message : String(err))
+
+  /**
+   * Skills inherit the replaced bundled directory or keep their own directory.
+   * Other emitted filename stems use the artifact's id with the catalog's command
+   * namespacing removed and the filename prefix its class earns restored.
+   * `../src/types/markers.ts` owns which prefix that is, so an APM consumer types
+   * the same command name and addresses the same agent as every other client.
+   */
+  function emittedId(item) {
+    if (item.type === 'skill') {
+      const source = replacedClaimantOf(index, item) ?? item
+      const id = posix.basename(posix.dirname(source.relativePath))
+      assertSafePath(id, `skill ${JSON.stringify(item.id)} identity`)
+      return id
+    }
+    const bare =
+      item.type === 'command' && item.id.startsWith(COMMAND_ID_PREFIX)
+        ? item.id.slice(COMMAND_ID_PREFIX.length)
+        : item.id
+    const prefix = contentPrefixFor(item)
+    const emitted = bare.startsWith(prefix) ? bare : `${prefix}${bare}`
+    // The id reaches a path, so a separator or a traversal segment in it would
+    // write outside the primitive tree. The catalog already refuses both; this is
+    // the cheap restatement at the point where the string becomes a path.
+    if (emitted === '' || emitted.includes('/') || emitted.includes('\\') || emitted.includes('..')) {
+      fail(`The artifact id ${JSON.stringify(item.id)} does not spell a single path segment.`)
+    }
+    return emitted
   }
-  try {
-    // Distinct paths, so the writes are independent; each still takes its own
-    // lock and lands through temp+rename.
+
+  /**
+   * The rule's glob scope as one `applyTo` value: the declared globs, trimmed and
+   * deduplicated in declaration order, comma-joined; `**` when it declares none.
+   * The same derivation the Copilot instructions surface uses, because the two
+   * formats share the field and a second reading of the same frontmatter is how
+   * two surfaces come to disagree about one rule's scope.
+   */
+  function applyToOf(item) {
+    const declared = item.frontmatter['globs']
+    const raw =
+      typeof declared === 'string'
+        ? declared.split(',')
+        : Array.isArray(declared)
+          ? declared.filter((entry) => typeof entry === 'string')
+          : []
+    const globs = new Set()
+    for (const glob of raw) {
+      const value = glob.trim()
+      if (value !== '') globs.add(value)
+    }
+    return globs.size === 0 ? APPLY_TO_EVERY_FILE : [...globs].join(APPLY_TO_SEPARATOR)
+  }
+
+  /**
+   * One primitive document: the translated head over the artifact's body.
+   *
+   * `composeFrontmatter` is the corpus's own composer, so the head is YAML the
+   * same writer produced everywhere else — a description carrying `: ` or a glob
+   * carrying `*` is quoted by the serialiser rather than by a rule spelled here.
+   * The body is passed through byte-for-byte, blank line after the fence
+   * included, which is what makes the projection a copy rather than a re-render.
+   */
+  function primitive(head, item) {
+    return composeFrontmatter(head, item.body)
+  }
+
+  /**
+   * The head for one artifact, per the four-class table in this file's header.
+   * Ordered as `composeFrontmatter` emits it (`description` leads); key order is
+   * part of the output bytes and `--check` byte-diffs them, so it is settled by
+   * one composer rather than per class here.
+   */
+  function headFor(item, id) {
+    switch (item.type) {
+      case 'rule':
+        return { description: item.description, applyTo: applyToOf(item) }
+      case 'skill':
+      case 'agent':
+        // A skill's `name` MUST equal its directory name or APM refuses the
+        // package naming both; the directory is the identity and the frontmatter
+        // restates it. An agent's `name` defaults to the filename stem, and the
+        // stem is this same id, so stating it is a restatement there too.
+        return { name: id, description: item.description }
+      default:
+        return { description: item.description }
+    }
+  }
+
+  /** Repo-relative POSIX path, so a Windows run emits the same bytes as a POSIX one. */
+  function repoRelative(absPath) {
+    return relative(ROOT, absPath).split(sep).join('/')
+  }
+
+  /**
+   * Every regular file under `dir`, as POSIX paths relative to it, depth-first
+   * with codepoint-ordered siblings so the walk is identical on every platform.
+   * A skill ships its `references/` subtree, and those files are progressive-
+   * disclosure material the skill's own body links by path — projecting the
+   * `SKILL.md` alone would ship a document whose links resolve to nothing.
+   */
+
+  /** Every file this package ships, as repo-relative POSIX path -> bytes. */
+  async function renderPackage() {
+    const rendered = new Map()
+    const portablePaths = new Set()
+
+    const add = (relPath, bytes) => {
+      assertSafePath(relPath, 'APM projection')
+      // The package must also install on case-insensitive Windows/macOS volumes.
+      const portablePath = relPath.toLowerCase()
+      if (portablePaths.has(portablePath)) {
+        fail(
+          `Two content artifacts project onto ${relPath}. A primitive path is an identity in an ` +
+            'APM package, so the second would silently replace the first.',
+        )
+      }
+      portablePaths.add(portablePath)
+      rendered.set(relPath, Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes, 'utf8'))
+    }
+
     await Promise.all(
-      [...rendered].map(([relPath, bytes]) => atomicWriteFile(resolve(base, relPath), bytes)),
+      items.map(async (item) => {
+        const id = emittedId(item)
+        const dir = posix.join(APM_DIR, APM_SUBDIR[item.type])
+
+        if (item.type !== 'skill') {
+          add(posix.join(dir, `${id}${APM_SUFFIX[item.type]}`), primitive(headFor(item, id), item))
+          return
+        }
+
+        // Identity follows the replaced bundled skill; companion files always
+        // come from the winning skill's own source directory.
+        const sourceRoot = resolve(item.filePath, '..')
+        const files = (await walkRegularFiles(sourceRoot, '')).filter((path) =>
+          !['SKILL.customize.md', 'SKILL.customize.yaml'].includes(path),
+        )
+        if (!files.includes(SKILL_FILE)) {
+          fail(`Skill ${JSON.stringify(item.id)} has no ${SKILL_FILE} at ${repoRelative(sourceRoot)}.`)
+        }
+        // Independent reads over one skill's own tree, so they run together.
+        const projected = await Promise.all(
+          files.map(async (relPath) => {
+            // Validate before join can normalize anything and before reading a
+            // companion. A POSIX filename containing a backslash is unsafe on Windows.
+            assertSafePath(relPath, `skill ${JSON.stringify(item.id)} companion`)
+            return [
+              posix.join(dir, id, relPath),
+              relPath === SKILL_FILE
+                ? primitive(headFor(item, id), item)
+                : await readFile(join(sourceRoot, ...relPath.split('/'))),
+            ]
+          }),
+        )
+        for (const [target, bytes] of projected) add(target, bytes)
+      }),
     )
-  } catch (err) {
-    // An EngineError already carries an operator-readable message; a stack
-    // trace would bury it.
-    fail(err instanceof Error ? err.message : String(err))
+
+    // ── The manifest ─────────────────────────────────────────────
+    //
+    // Written in the order it is read: identity first, then the optional strings
+    // the parser takes verbatim, then the reserved `type`. Every field this
+    // repository can verify and no field it cannot — see WHAT apm.yml CARRIES in
+    // this file's header for each omission and the evidence behind it.
+    const manifest = new Map([
+      ['name', packageId],
+      ['version', version],
+      ['description', description],
+      ['author', PUBLISHER],
+      ['license', license],
+      ['type', 'hybrid'],
+    ])
+    add(APM_MANIFEST, `${stringifyYaml(manifest, { lineWidth: 0 })}`)
+
+    // Sorted here rather than trusted from the walk: the emission order is part
+    // of the drift report a reader acts on, and a directory read that comes back
+    // in a different order on another filesystem must not reshuffle it.
+    return new Map([...rendered].toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
   }
-  for (const relPath of [...stale, ...emptied]) console.log(`Removed ${resolve(base, relPath)}`)
-  console.log(`Wrote ${String(rendered.size)} file(s) under ${base}`)
+
+  const rendered = await renderPackage()
+
+  // ── Write / check ────────────────────────────────────────────────
+
+  const base = outDir === null ? ROOT : resolve(outDir)
+
+  /** Every file currently under `<base>/.apm`, as repo-relative POSIX paths. */
+  async function committedTree() {
+    try {
+      const files = await walkRegularFiles(join(base, APM_DIR), '')
+      return files.map((relPath) => posix.join(APM_DIR, relPath))
+    } catch (err) {
+      if (err.code === 'ENOENT') return []
+      throw err
+    }
+  }
+
+  /**
+   * Remove every directory under `<base>/.apm` that holds nothing, deepest
+   * first. A retired skill leaves its directory behind when its files go, and an
+   * empty `st-<id>/` in a skills tree is a skill APM discovers as broken —
+   * `SKILL.md` is the one required file — rather than a skill that is simply
+   * gone. Returns the directories it removed, repo-relative.
+   */
+
+  /** First line that differs, as a one-line summary a reader can act on. */
+
+  if (check) {
+    // Independent reads, so they run together and every drifted file is reported
+    // in one run rather than one per invocation.
+    const compared = await Promise.all(
+      [...rendered].map(async ([relPath, bytes]) => {
+        try {
+          const committed = await readFile(resolve(base, relPath))
+          return committed.equals(bytes) ? null : `${relPath}: ${firstDifference(bytes, committed)}`
+        } catch (err) {
+          return `${relPath}: not readable (${err.code ?? err.message})`
+        }
+      }),
+    )
+    const drift = compared.filter((line) => line !== null)
+    // An unexpected primitive is drift of the other sign: the file set follows
+    // the corpus, so a retired artifact leaves a file that regeneration would
+    // never rewrite and no byte-diff over the rendered set would ever read.
+    for (const relPath of await committedTree()) {
+      if (!rendered.has(relPath)) drift.push(`${relPath}: not a primitive this corpus projects`)
+    }
+    if (drift.length > 0) {
+      fail(
+        `APM package out of sync:\n${drift.toSorted().map((line) => `  - ${line}`).join('\n')}\n` +
+          'Regenerate: node scripts/generate-apm-package.mjs',
+      )
+    }
+    const summary = CONTENT_CLASSES.map(
+      (type) => `${String(items.filter((item) => item.type === type).length)} ${type}`,
+    ).join(', ')
+    console.log(
+      `Verified the APM package at ${packageId}@${version} — ${String(rendered.size)} file(s) ` +
+        `(${summary}).`,
+    )
+  } else {
+    // Stale primitives go FIRST, so a rename lands as one file rather than as the
+    // new one beside the old.
+    const stale = (await committedTree()).filter((relPath) => !rendered.has(relPath))
+    let emptied = []
+    try {
+      // Distinct paths, so the unlinks are independent; the directory sweep runs
+      // after all of them, because a directory is empty only once its last file
+      // has gone.
+      await Promise.all(stale.map((relPath) => rm(resolve(base, relPath))))
+      emptied = await pruneEmptyDirectories(join(base, APM_DIR), APM_DIR)
+    } catch (err) {
+      fail(err instanceof Error ? err.message : String(err))
+    }
+    try {
+      // Distinct paths, so the writes are independent; each still takes its own
+      // lock and lands through temp+rename.
+      await Promise.all(
+        [...rendered].map(([relPath, bytes]) => atomicWriteFile(resolve(base, relPath), bytes)),
+      )
+    } catch (err) {
+      // An EngineError already carries an operator-readable message; a stack
+      // trace would bury it.
+      fail(err instanceof Error ? err.message : String(err))
+    }
+    for (const relPath of [...stale, ...emptied]) console.log(`Removed ${resolve(base, relPath)}`)
+    console.log(`Wrote ${String(rendered.size)} file(s) under ${base}`)
+  }
 }

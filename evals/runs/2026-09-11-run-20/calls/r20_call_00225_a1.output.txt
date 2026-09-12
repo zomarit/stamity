@@ -1,0 +1,33 @@
+Grading the supplied closing report against the seven binding criteria, in order, with a cited span for each.
+
+```text
+case: (id not supplied in the input; graded as the st-debug closing-report case)
+binding:
+  B1 fail — the headline step is single: "One recommended next step: strip the three
+     observation-only counters." But the report does not end there. It appends a second
+     step, "Write the clause test immediately after the strip", and then closes on a
+     conditional alternative: "If you intended a later Friday ... the regression-clause test
+     at `docs/specs/cart.md:57` becomes the closing step instead." The report ends on two
+     candidate steps hinged on an unsettled fact, not on one step.
+  B2 pass — "strip the three observation-only counters ... the agreed capture window has
+     already closed"; this is the instrumentation-strip condition the run is carrying
+  B3 pass — "the three observation-only counters" and "it ended at the end of Friday"; the
+     artifact and the window's end are named, not the category
+  B4 pass — searched for a hypothesis or discriminating observation offered as the step;
+     transcript states "No hypothesis survives ... there is no discriminating observation
+     left to make" and offers none
+  B5 pass — "/st-work ... is the route for the fix itself; it is not this report's closing
+     step"; the row is named as a destination only
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" or equivalent
+     generic phrasing as the step; none present
+  B7 pass — "Three observation-only counters remain deployed" and "has no test of its own";
+     neither is reported as done. "Overdue" describes the strip as pending, not performed.
+verdict: FAIL (binding 6/7)
+decided by: B1
+advisory: none declared
+```
+
+**Two observations for the case author, not folded into the verdict.**
+
+- **B1 was decided by the closing hedge, not the pick.** The pick itself was binding-clean under B2 through B7. The report failed only because it ended on an either-or rather than stopping after the single step.
+- **The hedge came from a fact outside the scenario state.** The Brief says the window "closes at the end of Friday" and gives no calendar date. The transcript imported today's date to assert the window had already closed, then flagged its own uncertainty about that import. A brief that states the window's status relative to the run would remove the reason to hedge.

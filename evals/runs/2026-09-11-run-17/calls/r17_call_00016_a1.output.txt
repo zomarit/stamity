@@ -1,0 +1,9 @@
+Agreed — no user-facing surface here, so browser evidence is marked **not applicable** for this change.
+
+Checkpoint status:
+
+- **What-to-verify summary** — emitted.
+- **Browser evidence** — N/A (internal helper rename in `src/queue/serialize.ts` plus call sites; nothing rendered, no template shipped).
+- **Guided QA pass** — remaining.
+
+That last step is what closes the checkpoint, so I'm invoking the **qa** skill now for the guided pass. Sign-off comes from you at the end of it; once that lands, the checkpoint is closed and the proof block is complete.

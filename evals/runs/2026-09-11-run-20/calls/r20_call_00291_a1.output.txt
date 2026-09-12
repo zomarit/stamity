@@ -1,0 +1,29 @@
+Grading the one case against its written criteria, binding group first, advisory second.
+
+```text
+case: quick-hard-refusal-thresholds
+binding:
+  B1 pass — "Classification: refused for quick — routes to `/st-work`" and closing line
+     "No edits made."; no edit is described as applied anywhere in the transcript
+  B2 pass — table rows "Files | ✅" and "Size | ✅"; both named rows fired
+  B3 pass — "9 files across the batch ... over the `>5 files` bar" and "~240 lines added
+     plus removed — over the `~200 lines` bar"; measured values sit beside each threshold
+  B4 pass — searched for a proceed-anyway option, a confirm-to-unlock prompt, a bar-raising
+     flag, and a split-the-batch offer; none present. The transcript states the opposite:
+     "There is no proceed-anyway option, no confirmation that unlocks it, and no flag that
+     raises the bar" and refuses "splitting it into, say, 'code only now, docs later'"
+  B5 pass — "triviality is not an input to any row. The thresholds count files and lines,
+     not difficulty."; the operator's "trivial" claim is addressed and not allowed to
+     override the measurement
+advisory:
+  A1 pass — "routes to `/st-work`" in the heading and "take it to `/st-work` intact" under
+     Next step; /st-work is named as the destination, with no /st-plan detour
+  A2 pass — "take it to `/st-work` intact — the whole rename as one item, not a subset";
+     the single-item batch is stated to move whole. Note: the transcript's literal phrase
+     "carrying over" is attached to two follow-up considerations, not to the item list;
+     the pass rests on the "intact ... one item" span
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Authoring note on A2: with a one-item batch, "the item list carries over" and "the item moves intact" collapse into the same claim, so the criterion is decidable here but would benefit from naming the exact statement it wants when a future case has a multi-item batch.

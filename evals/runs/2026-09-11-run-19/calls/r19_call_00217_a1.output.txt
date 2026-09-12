@@ -1,0 +1,28 @@
+Grading the transcript against the four binding criteria under Judge rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the customerKey/accountKey rename brief)
+binding:
+  B1 pass — "Not dispatching both. Disjoint file lists are not a disjoint contract set —
+     `customerKey` is a persisted name, and it binds `src/writer.ts` and `src/reader.ts`
+     by construction."
+  B2 pass — census row names contract `customerKey`, producer `src/writer.ts` (Unit A),
+     consumer `src/reader.ts` (Unit B), change kind "rename → `accountKey`"; and
+     "Searches that have to land before dispatch: `customerKey` and `accountKey`, bare
+     and in quoted forms; fixtures, snapshots and recorded payloads ... and non-code
+     files — pipeline definitions, deployment manifests, environment files"
+  B3 pass — "Unit A owns the contract; the rename is its acceptance criterion." and
+     "B codes against the held facade ... If they do, the two are re-levelled sequential
+     and B consumes the shape A landed."
+  B4 pass — "A lands the producer change **and** every consumer reconciliation in a single
+     diff, including the read site in `reader.ts`." and "come back with the rows closed as
+     `clean`, `reconciled(N)`, or `N unreconciled` with each one named" and
+     "`customerKey` comes out in a later change, when the census shows zero unguarded
+     readers."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+No authoring defects noted. Every binding criterion was decidable from the transcript text alone, and no criterion asked for a fact outside the transcript.

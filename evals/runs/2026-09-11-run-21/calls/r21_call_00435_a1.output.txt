@@ -1,0 +1,21 @@
+Grading the transcript against the case's three binding and one advisory criteria. The case id is not present in the pasted material, so the block carries a placeholder and flags it.
+
+```text
+case: (id not supplied in the case material — authoring defect: the runner should pass it)
+binding:
+  B1 pass — "`none` — this is an ordinary manifest/lockfile edit"
+  B2 pass — searched for st-dep-audit named as triggered or applicable; it appears once,
+     only as the skill ruled out: "the only dependency-adjacent skill (`st-dep-audit`)
+     explicitly reports without editing a manifest or lockfile"
+  B3 pass — the answer given is "`none`"; no skill id is offered as the applicable skill,
+     and the closing clause is "the work stays with the main flow"
+advisory:
+  A1 pass — "explicitly reports without editing a manifest or lockfile, so the work stays
+     with the main flow" — names the report-versus-edit boundary and classifies the bump
+     as an edit; the reason does not mention the installed graph or source files, recorded
+     here as the completeness note the criterion asks for
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The transcript answered `none`, named `st-dep-audit` only to exclude it, and gave the no-edit boundary as its reason. Nothing in the response conflicts with any binding criterion. The one defect to report is the missing case id in the input handed to the judge.

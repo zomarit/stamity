@@ -1,0 +1,29 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: <id not supplied in the input>
+binding:
+  B1 pass — table header "Thread | Decision | Evidence | Confidence | Screening | Reply | Commit"
+     with all six rows T-1 through T-6 populated in every column
+  B2 pass — "Gates, as the runner returned them: npm run lint pass · npm run typecheck pass ·
+     npm run test pass"; "Round 3 of 3 · head sha c41d90e"
+  B3 pass — "Recommended next step: re-post the T-4 reply." — one step, stated singly; the
+     following sentences rule out the other two conditions rather than offering them
+  B4 pass — "re-post the `T-4` reply"
+  B5 pass — searched for a step asking for a reviewer's answer; the only mention is "no finding
+     returned NEEDS_CLARIFICATION", which negates the condition rather than acting on it
+  B6 pass — searched for a next-round step; the transcript says "The attempt cap is spent —
+     round 3 of 3 — so no further round is available"
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know", and any
+     open-ended offer; none present
+  B8 pass — T-4 row present with Reply "**failed** — 502 twice; the reply is not on the pull
+     request"; not marked posted, not dropped
+advisory:
+  A1 pass — "carrying this run's own one-line description — source: pr-resolve #3"
+  A2 pass — "the reply failed twice on 502 and is not on the pull request, so the reviewer has
+     no record of the resolution" — the pull request is named as where the reply belongs
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Authoring notes: no undecidable criteria and no grouping I would dispute. The input did not carry a case id, so the block records that field as unsupplied rather than inventing one. A2 is the thinnest verdict: the destination is named as "the pull request" rather than as the thread reply channel, and a stricter reading could fail it. I passed it on the cited span.

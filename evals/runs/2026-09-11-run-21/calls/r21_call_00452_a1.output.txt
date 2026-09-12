@@ -1,0 +1,3 @@
+`none`
+
+The request lands inside the `/st-work` QA checkpoint, which explicitly answers "what should I check by hand?" itself — st-qa is invoked by name as step 2 of that checkpoint, and its own description says it is never selected there on its own.

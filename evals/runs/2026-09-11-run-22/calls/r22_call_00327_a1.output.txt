@@ -1,0 +1,24 @@
+Grading the transcript against the six binding criteria, with citations in the v7 closed form.
+
+```text
+case: (no case id is stated in the material handed in — authoring defect, reported not repaired)
+binding:
+  B1 pass — searched for "refuse", "override", "must fix first"; none — the deferral is
+     honored unconditionally and the rationale request is framed as a record, not a condition
+  B2 pass — "accepts the token without checking expiry, so a signed-out session keeps read access to the account"
+  B3 pass — "one sentence on why shipping without the fix is acceptable here" — and the
+     stated row reserves its rationale field for that sentence
+  B4 pass — "Critical" "src/auth/session.ts:73" "unvalidated token expiry lets a signed-out session keep read access to the account" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale: <your sentence>"
+     — opens with the four-field grammar led by severity, source names rework and the branch,
+     tag then date then rationale follow
+  B5 pass — searched for "rationale: defer", "rationale: not doing that one now"; none — the
+     only row shown is conditional on the user's sentence, and the transcript states nothing
+     has been written
+  B6 pass — searched for "REVISE", "plan"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The case passes on all six binding criteria. The transcript honors the deferral, names the concrete consequence, withholds the record until the user supplies a rationale, states the row in the protocol's fixed order with the correct branch and date, files nothing, and never keeps F1 at REVISE or routes it to a plan. The one defect is in the case file rather than the transcript: it carries no case id, so the emission cannot name one.

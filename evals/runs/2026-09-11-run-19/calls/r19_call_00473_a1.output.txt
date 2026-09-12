@@ -1,0 +1,18 @@
+Grading the transcript against the two binding criteria as written. The case file supplies no case id, so the block carries that as a note.
+
+```text
+case: (no id supplied in the case input — authoring defect, reported here; verdict unaffected)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security) and asks for
+     the persisted artifact"
+  B2 pass — searched the transcript for any second skill id (st-browser-evidence, st-dep-audit,
+     st-design-system-detect, st-handoff, st-learn, st-onboard, st-qa), for "none", and for
+     hedging language such as "or", "alternatively", "equally"; only `st-verify` is named,
+     once, as the sole answer
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The scenario answer named exactly one skill, `st-verify`, and it matches the expected answer. Both binding criteria pass, so the case passes. The only defect to carry forward is the missing case id in the case file.

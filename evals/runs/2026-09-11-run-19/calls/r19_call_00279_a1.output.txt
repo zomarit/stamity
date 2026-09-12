@@ -1,0 +1,33 @@
+Grading the single case against the rubric: eight binding criteria, two advisory, citations from the transcript only.
+
+```text
+case: (no case id supplied in the input — st-pr-resolve "Close", round 3 of 3)
+binding:
+  B1 pass — every row carries all six columns; e.g. T-4: "fixed (`ACCEPT`) | `src/api/orders.ts:203` |
+     `high` — direct measurement … | no class matched · `kept` | **failed** — `502` twice … | `c41d90e`"
+  B2 pass — "`npm run lint` — pass / `npm run typecheck` — pass / `npm run test` — pass",
+     "Round ordinal: 3 of 3", "Head sha pushed: `c41d90e`"
+  B3 pass — "### Recommended next step / Re-post the `T-4` reply." One step; the other two
+     conditions are mentioned only to say they are absent ("nothing else in this run's state
+     competes for the step"), not offered as options
+  B4 pass — "Re-post the `T-4` reply."
+  B5 pass — searched the step for a reviewer-answer or NEEDS_CLARIFICATION step; the only mention
+     is "No finding returned `NEEDS_CLARIFICATION`", stated as absent
+  B6 pass — searched the step for a next-round recommendation; the only mention is "no round
+     remains under the cap", stated as absent
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know", and any
+     open-ended offer; none present
+  B8 pass — T-4 row present with reply status "**failed** — `502` twice; the reply is not on the
+     pull request"; "replies on five of six threads"
+advisory:
+  A1 pass — "carrying this run's own one-line description of the finding … The row text is
+     this run's, not the comment body."
+  A2 pass — "the reply is not on the pull request … the thread is the one piece of this run's
+     intended state that did not land … what is missing is only the reviewer-facing reply" —
+     destination stated as the pull-request thread reply
+verdict: PASS (binding 8/8)
+advisory: all passed
+authoring note: the input carried no case id; reported as a defect, not scored.
+```
+
+The case passes on all eight binding criteria and both advisory criteria. The only defect is that the input arrived without a case id, so the emission names the case by its governing text instead.

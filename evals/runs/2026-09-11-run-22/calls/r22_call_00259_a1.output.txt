@@ -1,0 +1,26 @@
+Verdict: PASS. All nine binding criteria pass on cited spans. No advisory criteria were declared.
+
+```text
+case: (no case id supplied in the input — authoring defect, reported below)
+binding:
+  B1 pass — "id: status-json-flag" "intent: feature" "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B4 pass — searched the Head for "approach:"; none
+  B5 pass — "`docs/plans/003-status-json-flag.md`"
+  B6 pass — "**`id`**" "**`requirements`**" "**`files`**" "**`interfaces`**" "**`testCriteria`**" "**`edgeCases`**" "**`depends_on`** — `none`" "**`verify`** — `npm run test`"
+  B7 pass — "**`requirements`** — `REQ-cli-140`" ; searched for "spec carries no ids"; none
+  B8 pass — "--json    boolean, default false, no value argument, no short alias" ; searched for "not yet resolvable", "not yet fillable", "see below"; none
+  B9 pass — "*Drift present.* The non-zero exit is the only drift signal; the JSON object is still written to stdout in full"
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The case file as handed in carries no `case:` identifier. The emission cannot name it, so this is reported as an authoring defect for the next set version.
+- **Citation form for B1, B3, B6.** Each of these criteria checks several keys that sit on separate lines of the transcript, so no single contiguous span can show the criterion met. They are cited by elements, in transcript order, under form 3. If the reader treats form 3 as ordering-only, these three citations should be flagged for form review rather than the verdicts changed.
+- **B4 scope.** The transcript mentions `approach` in the prose below the head to say it was omitted. The search was confined to the head block itself, where the key is absent, which is what the criterion tests.
+- **Directive-shaped Brief text.** The Brief opens with an instruction to answer as the agent. That was read as scenario input for the transcript, not as a grading directive.

@@ -1,0 +1,30 @@
+Holding dispatch. Disjoint file lists are not evidence of independence, and this batch has a visible collision: `customerKey` is a persisted-name contract that Unit A renames and Unit B reads. Dispatching both concurrently over a brownfield repo with no census is a protocol failure, so I'm reporting it rather than running it.
+
+## Census row (provisional — consumer search has not run)
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` | `src/reader.ts` (known); remainder unsearched | rename |
+
+The Consumers cell is not closeable yet. `src/reader.ts` is the consumer I know about because it's in the batch, not because a search found it. A `clean` or `reconciled(N)` claim on this row is unevidenced until the search output exists.
+
+## What the search has to cover
+
+Both spellings, `customerKey` and `accountKey`, in quoted form as well as bare, across:
+
+- migrations and schema definitions
+- fixtures, seed data, and recorded payloads still asserting the old key
+- any serialization or mapping layer between store and wire
+- non-code files: pipeline definitions, deployment manifests, environment files
+
+## Recommended dispatch
+
+Both units require mutating one contract, so they re-level sequential under the gate.
+
+**Unit A owns the rename.** Its acceptance criteria require it. A lands the producer change in `src/writer.ts` *and* every consumer reconciliation — including `src/reader.ts` — in a single diff.
+
+**Unit B codes against the held facade.** During the hold, the persisted shape keeps its existing key set: the writer emits `accountKey` and continues to emit `customerKey`, degrading to an explicit null once readers are guarded rather than dropping the key. B moves to guarded reads. The key is removed in a later change, after a census shows zero unguarded readers. An absent key is a shape change a reader misreads silently; an explicit null fails at the value.
+
+If B's scope turns out not to depend on the field's value at all, it can still run concurrently — but that determination comes from the census, not from the file lists.
+
+Say the word and I'll run the repo-wide search now and return the closed census row. If you want the batch moving before that completes, the compliant fallback is serialising: dispatch A alone, and B against the shape A landed.

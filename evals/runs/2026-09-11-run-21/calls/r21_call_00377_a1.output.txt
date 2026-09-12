@@ -1,0 +1,33 @@
+Verdict: the case passes. All seven binding criteria pass and the single advisory criterion passes.
+
+```text
+case: (no case id supplied in the input; graded as the checkout-flow testability census case)
+binding:
+  B1 pass — table rows "AC-1 | REQ-checkout-104", "AC-2 | REQ-checkout-107",
+     "AC-3 | REQ-checkout-111", "AC-4 | REQ-checkout-115"; all four classified
+  B2 pass — "Brief to `test-runner`" / "Gate command: `npm run test`" /
+     "Criteria being confirmed: AC-1 under `REQ-checkout-104`"; searched for any claim
+     of running the gate in this context, found the opposite: "no gate run in this
+     context" and "I can't execute the spawn from this turn, so the brief goes out in
+     words here"
+  B3 pass — "**Gap** — test does not exist on the tree" and "`test/checkout/refund.test.ts`
+     is referenced but absent"
+  B4 pass — "`judgment: design lead` (empty-cart copy)" / "Classified; decider named"
+  B5 pass — AC-4 row "**Neither**", and the section "Criteria that are neither
+     machine-checkable nor judgment-tagged: AC-4 / `REQ-checkout-115`"
+  B6 pass — "**Per-file counts:** 4 criteria — 2 machine-checkable (1 confirmed-by-spawn,
+     1 gap), 1 judgment-tagged, 1 neither"
+  B7 pass — searched for "written", "edited", "updated", "applied", and any spec change;
+     found only "nothing written" and "Apply no edits" in the brief
+advisory:
+  A1 pass — "Needs either a threshold and the harness that measures it (e.g. a named perf
+     test with a stated budget under a stated network profile) or a `judgment:` tag naming
+     the role that decides"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Two observations, neither affecting the verdict:
+
+- **Authoring note.** The input carries no case id, so the emission line above is descriptive rather than the declared id. The next set version should name it.
+- **Transcript wrinkle, not a criterion.** The per-file count labels AC-1 "confirmed-by-spawn" while the status line says "spawn issued, result pending". B6 asks only that per-file counts be reported, so this does not bear on the grade. I am not adding a criterion for it.

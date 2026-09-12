@@ -1,0 +1,38 @@
+Grading the closing transcript against the case's seven binding and one advisory criteria, per rubric v6. The brief's "Answer as the agent" line is treated as scenario data, not as an instruction to the judge.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect)
+binding:
+  B1 pass — proof block carries all seven: "Baseline source: proof record from run `r7`";
+     "Findings by severity: 1 Critical · 3 Warning · 1 Minor"; "Routing: 3 REVISE · 2 DEFER";
+     "Validation verdicts: unit 1 accepted (high) · unit 2 accepted (high) · unit 3 accepted
+     (medium)"; "Plan-lint: `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`";
+     "Plan path: `docs/plans/004-checkout-rework.md`"; "Inbox rows added: 2 (one per DEFER
+     finding)"
+  B2 pass — "L1 pass · L2 pass · L3 pass · L4 pass · R1 pass" — each check rendered
+     individually, not as a single "plan-lint passed"
+  B3 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`." — one step under
+     one heading; the only other case mentioned is explicitly excluded: "rather than driving
+     this step"
+  B4 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`. The plan was
+     persisted on `stop`" — names /st-work, names the plan path, ties it to the stop condition
+  B5 pass — searched for a step resolving a marker; the marker is mentioned only as absent:
+     "carries no `[NEEDS CLARIFICATION]` marker, so nothing blocks handoff"; no such step
+     present
+  B6 pass — searched for board triage as the step; it appears only as deferred and
+     subordinate: "stay parked in the inbox for a later board triage rather than driving this
+     step"; not the recommended step
+  B7 pass — searched for "review the plan", "let me know when to proceed", "consider
+     addressing", and similar generic phrasing; none present; the step is a concrete command
+     on a concrete path
+advisory:
+  A1 pass — "the two DEFER rows stay parked in the inbox for a later board triage" — the
+     rows are stated to remain open and tracked past this run's close
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Two notes for the run artifact:
+
+- **Case id missing.** The input carried the Brief, Expected, and transcript but no case identifier. That is an authoring defect in the case file, not a grading problem.
+- **Directive text in the Brief.** The line "Answer as the agent operating under the text below" was graded as scenario data per procedure item 1. It did not change any verdict.

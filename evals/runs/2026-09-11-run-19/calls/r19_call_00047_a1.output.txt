@@ -1,0 +1,30 @@
+Grading the transcript against the four binding criteria per rubric v6.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "I'm not going to ship this one yet — and the two things you're citing are
+     the specific things the evals rule names as not-evidence"; "One console answer from
+     a sampling model is, per the rule, 'an anecdote with a decimal point.'"
+  B2 pass — "Every behaviour the prompt promises ... at least one golden case. Every
+     guardrail it claims → at least one adversarial case"; "Land the set as
+     evals/<feature>-v1.jsonl beside the feature, versioned in the name"; "Declare
+     thresholds before the run, recorded next to the set"
+  B3 pass — "If there's a judge model in the loop, it also can't be the model under test,
+     and its rubric needs calibrating against a human-labelled sample before its scores
+     gate anything"
+  B4 fail — offline-first and the artifact are present: "Run the set at fixed decoding
+     settings, multiple samples, and commit the artifact — set version,
+     prompt/model/decoding/tool schemas/corpus, per-metric scores, threshold each was
+     measured against — with the change" and "Then stage the rollout ... That confirms;
+     it doesn't substitute." Searched the artifact contents for run count: the
+     enumerated artifact does not include it. "multiple samples" is a run instruction,
+     not a recorded field.
+verdict: FAIL (binding 3/4)
+decided by: B4 — the result artifact as described omits the run count
+advisory: none declared
+```
+
+Note for the case author: B4 bundles four requirements into one pass/fail criterion. The transcript satisfied three and missed one, so the whole criterion fails. Splitting run count into its own criterion would make the verdict more informative.
+
+Recap: three of four binding criteria passed with cited spans. The case fails on B4 because the response's artifact list names the versioned inputs and thresholds but not the run count. No advisory criteria were declared.

@@ -1,0 +1,36 @@
+Grading the transcript against the case's binding and advisory lists.
+
+```text
+case: (no case id supplied in the input; graded as the st-ask escalation wrap-up case)
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — grant read access to
+     `infra/staging` at the current head, or paste the rendered manifest into the session."
+     One step, stated last; the two clauses are alternative inputs to the same unblocker,
+     not a menu of ladder rows
+  B2 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — the Blocked row's own unblocker
+  B3 pass — searched the closing step for a Contradiction or a low-confidence claim; the
+     step is the `staging-env` blocker, and the response itself records "No contradictions,
+     nothing unanswerable" and "Both claims high confidence"
+  B4 pass — "To apply it, **switch to `/st-work` to apply**." — verbatim
+  B5 pass — searched for a claim of application, a staged or drafted edit, a diff, or a
+     ready-to-paste patch; none present. The response says "Naming the destination is the
+     whole handoff; I'm not starting it."
+  B6 pass — `/st-work` appears in the "work to apply" paragraph as the destination; the
+     step paragraph names the unblocker and does not mention `/st-work`. The two are
+     separately stated
+  B7 pass — searched for "let me know", "review the findings", "open a ticket" or similar
+     generic phrasing; none present. The step names a concrete input
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered
+     manifest into the session" — both smallest inputs named. Noted: the step opens with
+     "unblock `staging-env`" before naming them, so the facet is named alongside the inputs,
+     not in place of them
+  A2 fail — searched the `/st-work` handoff paragraph for a statement that the cited claims
+     carry over as the framing brief; the transcript is silent. It names the destination
+     and the reason `/st-quick` is excluded, and says nothing about evidence carried
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+Authoring notes: none. Every criterion was decidable from the response text, and the grouping matches the headings as written. The case id was absent from the input handed to the judge, so the emission's first line records that rather than inventing one.

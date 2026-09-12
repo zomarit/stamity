@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria; no advisory criteria are declared.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect; verdict unaffected)
+binding:
+  B1 pass — "`st-qa`" — the answer names st-qa
+  B2 pass — searched the transcript for a second skill id, an "or", "alternatively", or
+     "equally" construction, and for `none`; only st-qa appears, and `none` is absent
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript answered `st-qa` and named no other skill, so both binding criteria pass and the case passes. The only defect is that the case file carries no case id, which should be added in the next set version.

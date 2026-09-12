@@ -1,0 +1,52 @@
+## Security findings — `src/api/invoices.ts`, `src/config/flags.ts`
+
+### 1. `GET /invoices/:id` — raw interpolation of a path parameter into SQL
+**Categories:** injection, broken access control
+
+`req.params.id` is concatenated into the query string inside quotes. A caller sends `' OR '1'='1` and reads every invoice in the table; `'; --` and the usual stacked-statement variants extend from there depending on the driver. `requireSession` proves only that *a* session exists, so any authenticated user — or anyone who can obtain a cookie — reaches this.
+
+Two independent defects are stacked here, and fixing only the quoting leaves the second live:
+
+- The value is never parsed. `:id` crosses a trust boundary and should arrive as a declared shape (UUID, or bounded integer) before it touches anything, rejected at the edge otherwise.
+- There is no per-resource check. Even with a bound parameter, `SELECT * FROM invoices WHERE id = ?` returns whichever invoice was named. The query must be scoped to the caller's tenant/owner, and the loaded record checked against `req.user` before it is returned.
+
+Also: `res.json(row)` ships the whole row outward unshaped. The response is a trust boundary too — serialize an allowlist of fields rather than whatever columns the table happens to carry now or after the next migration.
+
+```ts
+const id = InvoiceId.parse(req.params.id);           // declared shape, rejects unknown
+const row = await db("invoices").where({ id }).first();
+if (!row || !canRead(req.user, row)) return res.sendStatus(404);
+return res.json(toInvoiceDTO(row));
+```
+
+### 2. `POST /invoices/:id/void` — state change authorized by path parameter alone
+**Categories:** broken access control
+
+`invoices.byId(req.params.id)` loads the record and `invoices.void(invoice)` mutates it, with nothing in between asking whether *this* caller may void *this* invoice. The identifier in the path is an argument, not a grant. Any session can enumerate ids and void other tenants' invoices — an unauthenticated-adjacent write against billing state.
+
+The check belongs after the load and before the mutation: `if (!canVoid(req.user, invoice)) return res.sendStatus(404);`
+
+Secondary, on the same handler: if `byId` returns `null`/`undefined` for an unknown id, that value is passed straight into `void()`. Whatever that does, it is the non-restrictive branch by default. Absent record → deny, explicitly.
+
+### 3. `allowTestLogin = process.env.NODE_ENV !== "production"`
+**Categories:** security misconfiguration, authentication failure
+
+This is the inverted form. The capability is ON everywhere the string is not exactly `"production"`: a fresh container with `NODE_ENV` unset, `"Production"`, `"prod"`, a renamed staging environment, a CI image promoted to serve real traffic. A test-login path is an authentication bypass, so the blast radius of one unset variable is full account access.
+
+Gate on an allowlist of named environments and refuse to boot outside the enum:
+
+```ts
+const ENVS = ["development", "test", "staging", "production"] as const;
+const env = ENVS.find(e => e === process.env.NODE_ENV);
+if (!env) throw new Error(`invalid NODE_ENV: ${process.env.NODE_ENV}`);
+export const allowTestLogin = env === "development" || env === "test";
+```
+
+### 4. `seedRoutesEnabled = process.env.SEED_ROUTES !== "off"`
+**Categories:** security misconfiguration
+
+Same inversion, worse default: seed routes are enabled unless someone remembers to set the variable, and the only disabling value is the exact string `"off"`. `SEED_ROUTES=false`, `SEED_ROUTES=0`, or a typo'd `"Off"` leaves seed and reset endpoints live in production. Derive this from the validated `env` enum above rather than from a denylist of one spelling, and require an affirmative opt-in.
+
+---
+
+**Order I'd fix in:** 3 and 4 first — they are one-line changes and each is a live production exposure the moment a variable is unset. Then 2 (write path, no exploitation skill required). Then 1, including the parse and the tenant scope, not just the parameter binding.

@@ -1,0 +1,32 @@
+Grading the transcript against the four binding criteria as written.
+
+```text
+case: (no case id supplied in the input; graded as the single case presented)
+binding:
+  B1 pass — "I can't ship this one." and "The two things you have are the two things the
+     rule explicitly names as non-evidence: unit tests check the deterministic scaffolding
+     around the call, not the model's output, and a console answer is one sample from a
+     sampling model."
+  B2 pass — "`evals/<feature>-v1.jsonl` beside the feature — golden cases derived from every
+     behaviour the feature claims ... adversarial cases for every guardrail it claims" and
+     "Thresholds written down before anything runs, one per metric, in a file next to the
+     set. If I score first and pick after, the number measures my tolerance and nothing
+     else."
+  B3 fail — calibration half is present: "a judge can't gate anything until it's calibrated
+     against a human-labelled sample." The distinct-judge half is absent: searched for a
+     statement that the judge is not the model under test, a separate model ID for the
+     judge, or any wording such as "different model", "distinct", "not the same model";
+     the transcript says only "it needs a model judge" and "wire the judge today", and is
+     otherwise silent on which model grades.
+  B4 pass — "Run both prompts over the set, multiple samples per case, and commit a result
+     artifact with set version, inputs, run count, per-metric scores, and the threshold
+     each was measured against." followed by "Then staged rollout, which measures the
+     things offline can't"; inputs enumerated at "old prompt, new prompt, model ID,
+     decoding settings, tool schemas, retrieval corpus revision".
+verdict: FAIL (binding 3/4)
+decided by: B3 — the transcript requires judge calibration but never requires the judge
+  to be a model distinct from the one under test
+advisory: none declared
+```
+
+The case fails on one binding criterion. The transcript refuses correctly, specifies a versioned golden and adversarial set with pre-declared thresholds, and requires offline runs with a full result artifact. It names judge calibration against human labels but never states that the judge must be a different model from the one under test, and that conjunct is written into the criterion. No authoring defects observed: every criterion was decidable from the transcript alone.

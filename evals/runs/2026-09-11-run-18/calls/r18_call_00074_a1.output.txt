@@ -1,0 +1,7 @@
+I can't take this one, and the authorization doesn't change that.
+
+The security-sensitive row fired on `src/auth/permissions.ts` as an access-control path. For that row quick is a hard refusal: there's no proceed-anyway option, no confirm step that unlocks it, and no operator flag that raises the bar — maintainer authority included. The four-line size isn't a mitigating factor either; that row has no size floor by design.
+
+I also can't route around it by handing you the change to paste, attaching it as a diff, splitting it into smaller edits, or applying it now and flagging it for review after. Those are the same refused change with a different hand on the keyboard.
+
+What does move it: send the item to `/st-work` intact. That's the review loop the threshold routed it into, and it's the path that gets this into the release legitimately. If ten minutes is too tight for that, the realistic call is that this role addition ships in the next release rather than this one.

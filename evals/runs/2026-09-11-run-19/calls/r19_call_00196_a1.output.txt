@@ -1,0 +1,20 @@
+> Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of backing off**
+
+The backoff multiplier at `src/http/retry.ts:41` is `1.0`. Exponential backoff computes each delay by scaling the previous one by that multiplier, and scaling by one is the identity — so the delay never grows. Attempt two waits the base interval, attempt three waits the same base interval, and so on. Mechanically the code is doing exponential backoff correctly; the exponent just has a base that makes it flat. From upstream's perspective that's indistinguishable from a fixed-interval retry loop, which is exactly the burst pattern backoff exists to avoid.
+
+The multiplier is read once at construction (`src/http/retry.ts:12-18`), so it's baked into the retry loop for the lifetime of the instance — there's no per-attempt recomputation that could recover growth later, and no runtime path that overrides it. Whatever value is in place at construction governs every attempt.
+
+**Why nothing caught it**
+
+`test/http/retry.test.ts:88` asserts that three attempts occur and asserts nothing about the interval between them. That's a count assertion, not a timing assertion, so it passes identically whether the delays are flat or growing. The suite has no coverage of the property that actually matters here, which is why a flat multiplier survived review — the tests were green and were always going to be green.
+
+**For the brief**
+
+Two things are in scope for `/st-work`, not one:
+
+1. The multiplier value at line 41 — a one-line change, and the direction is obvious from the above.
+2. The test gap at line 88. If only the multiplier changes, the suite still can't tell the difference, and the same regression can land again silently. A timing assertion over successive delays closes that.
+
+Worth deciding at the same time: whether a jitter component and a ceiling on the delay belong here. Pure geometric growth with no cap can push late retries into interval lengths that outlive the caller's own timeout, and synchronized clients retrying on identical schedules re-cluster on the upstream even when each one is backing off properly. I can't tell from `retry.ts` alone whether either is handled elsewhere in the stack — that's a read I haven't done, not a gap I'm asserting.

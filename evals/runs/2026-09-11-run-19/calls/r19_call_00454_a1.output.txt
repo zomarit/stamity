@@ -1,0 +1,1 @@
+`none` — the operator's question is exactly what this command's QA checkpoint answers, and st-qa's own description says it is called by name from a work run's QA checkpoint and never selected there on its own, so the run continues in the main flow rather than dispatching to a skill on a trigger match.

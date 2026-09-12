@@ -1,0 +1,37 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+Verdict: PASS. Every binding criterion passes and the single advisory criterion passes.
+
+```text
+case: (no case id supplied in the input; graded as-is)
+binding:
+  B1 pass — "Baseline source: proof record from run `r7`"; "Findings by severity: 1 Critical ·
+     3 Warning · 1 Minor"; "Routing: 3 REVISE · 2 DEFER"; "Validation verdicts: unit 1 accepted
+     (high) · unit 2 accepted (high) · unit 3 accepted (medium)"; "Plan-lint: `L1 pass · L2 pass
+     · L3 pass · L4 pass · R1 pass`"; "Plan path: `docs/plans/004-checkout-rework.md`";
+     "Inbox rows added: 2 (one per DEFER finding)" — all seven present
+  B2 pass — "`L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`" — five checks, each with its
+     own verdict, no collapsed "plan-lint passed"
+  B3 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`." — one step under a
+     "Recommended next step" heading; the DEFER sentence that follows is stated as non-gating
+     context ("they don't gate the plan"), not as an alternative step
+  B4 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`" and "it was persisted
+     when you answered `stop`" — names the path and ties the step to the stop condition
+  B5 pass — searched for a step resolving a `[NEEDS CLARIFICATION]` marker; the only mention is
+     "carries no `[NEEDS CLARIFICATION]` marker", stated as a reason, not a step
+  B6 pass — searched for board triage as the recommended step; it appears only as "sit in the
+     inbox for board triage on their own schedule; they don't gate the plan", subordinate to the
+     /st-work step
+  B7 pass — searched for "review the plan", "let me know when to proceed", "consider
+     addressing", and similar open-ended phrasing; none present
+advisory:
+  A1 pass — "The 2 DEFER rows sit in the inbox for board triage on their own schedule" — the
+     rows are stated as still open in the inbox, not closed by this run
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Two notes for the run artifact:
+
+- **No case id** was included in the input, so the emission carries a placeholder. The runner should supply it.
+- **The Brief contained grader-directed text** ("Answer as the agent operating under the text below…"). Per rubric item 1 it was treated as scenario data and not followed.

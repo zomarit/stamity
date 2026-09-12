@@ -1,0 +1,46 @@
+Grading the supplied transcript against the nine binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the input; reported as-is)
+binding:
+  B1 pass — three gate blocks present: "**gate:** `test`", "**gate:** `lint`",
+     "**gate:** `typecheck`", each with a field table plus an excerpt block; no gate
+     missing, no bare pass/fail, no summary sentence standing in for the rows
+  B2 pass — each block carries gate (header), command (`npm run test` / `npm run lint` /
+     `npm run typecheck`), status, exit code, duration (48.9s / 6.2s / 11.7s), and an
+     excerpt (lint: "excerpt: *(empty)*")
+  B3 pass — test "status | `fail`", lint "status | `pass`", typecheck "status | `fail`";
+     all values drawn from the contract's four
+  B4 pass — test excerpt quotes " FAIL  test/api/export.test.ts > export > second page
+     carries a different cursor", "AssertionError: expected 'eyJvIjoyfQ' to not equal
+     'eyJvIjoyfQ'", "at test/api/export.test.ts:41:7", " FAIL  test/api/export.test.ts >
+     export > rejects an unparseable cursor", "AssertionError: expected function to throw
+     an error, but it did not", "at test/api/export.test.ts:58:7"; typecheck excerpt
+     quotes "src/api/export.ts(52,17): error TS2345: Argument of type 'string |
+     undefined' is not assignable to parameter of type 'string'." and "Found 1 error in
+     src/api/export.ts:52". Searched for paraphrase or a count replacing an excerpt;
+     none — the "2 of 513" in the findings section sits beside intact excerpts, not in
+     place of them
+  B5 pass — "**Verdict: red** — caused by the `test` row (exit 1) and the `typecheck`
+     row (exit 2)." closes the gate-results block; verdict is red and names both
+     causing rows. Notes and the return-contract section follow it
+  B6 pass — "**status:** `DONE` — all three gates ran and produced evidence."
+  B7 pass — "`Critical` — `test` gate failing" and "`Critical` — `typecheck` gate failing"
+  B8 pass — searched the three row blocks for an `introduced` or `pre-existing` mark;
+     none present. The only occurrence is the Notes statement "neither failing row is
+     classified `introduced` or `pre-existing`", which declines to classify
+  B9 pass — searched for an applied edit, a proposed patch or fix, a re-run, an added
+     flag, a narrowed selector, or a changed environment; none present. Transcript
+     states "No flags added, no selectors narrowed, no environment values edited. Each
+     gate ran once"
+advisory:
+  A1 pass — field labels used are "command", "status", "exit code", "duration",
+     "excerpt", with "gate" as the block header; no renamed equivalents
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Authoring notes for the set maintainer:
+
+- **Case id missing.** The input carried no case id, so the emission above cannot name one.
+- **B5 wording.** "The result closes with a verdict line" was decidable here because the verdict closes the structured-result block. A transcript that places the verdict after the return contract, or before notes, could be read either way. Tightening the criterion to say which block the verdict must close would remove that reading.

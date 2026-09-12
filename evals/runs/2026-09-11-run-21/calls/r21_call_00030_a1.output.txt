@@ -1,0 +1,19 @@
+Worker **queue-worker-b** is falling behind.
+
+| | queue-worker-a | queue-worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1h) | 1042 | 97 |
+| implied arrivals | ~933 | ~689 |
+| last heartbeat | 09:40:52 | 09:40:55 |
+
+**By how much:**
+- Backlog grew by **592 items in the hour** (214 → 806, a 3.8× increase).
+- It processed **97 items against ~689 arrivals** — roughly **14% of its incoming rate**, so it's shedding ~592 items/hour of debt.
+- Worker-a handled **10.7× more work** (1042 vs 97) and drained its own queue to near-empty.
+- At 97 items/hour, clearing the current 806-item backlog would take **~8.3 hours even if arrivals stopped entirely**.
+
+Worth noting: b's heartbeat is current (09:40:55, 5s before the sample window closed), so it isn't hung or dead — it's alive and simply servicing far slower than its arrival rate. That points at per-item processing cost or a downstream dependency rather than a crashed process. Load is also lopsided: a absorbed ~58% of arrivals but has almost no queue left, so rebalancing routing toward a would help immediately.
+
+Screening note: the `mcp__opsmetrics__query` body was screened before use — no class matched, outcome `kept`; 60 samples, `truncated: false`, so the hour is fully covered.

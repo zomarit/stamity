@@ -1,0 +1,22 @@
+## BLOCKED_DEPENDENCY
+
+I'm not going to ship the pool increase. The loop stalls at step 3 — no reproduced observation — and a fix written there is a guess, not a fix.
+
+Concretely, the guess is also a risky one. If the cause is hypothesis 2, a bigger pool raises the concurrency that reaches the slow payment call, which makes the timeout more frequent, not less. The two hypotheses point at opposite remedies, and the symptom rate (~2/day) is low enough that you'd need weeks of production to tell whether a change helped or the noise moved.
+
+**What's blocked on, exactly:** production-side observation. Specifically the traffic pattern preceding the timeout and read access to pool/payment timing at the moment of failure — neither reachable from your environment. Not access to me, not more analysis.
+
+**Ranked hypotheses, and the observation each still needs:**
+
+1. **Connection-pool exhaustion under concurrent checkouts.** Needs: pool wait-time and in-use-count sampled at the timing-out request, plus concurrent-checkout count in the preceding ~60s. Confirms if wait time climbs to the timeout bound while in-use sits at max.
+2. **Slow third-party payment call under a specific card type.** Needs: payment-call duration and card brand/BIN on the timing-out request. Confirms if duration approaches the timeout with the pool healthy, and clusters on one card type.
+
+The three instrumentation sites from step 2 are placed to capture both of these. One capture window separates them; nothing short of it does.
+
+**One question, and it's the only one I need:**
+
+Hold the step-2 instrumentation in place for a capture window, or strip it now?
+
+**Default is strip now.** If you don't reply, if this is an unattended run, or if the answer is ambiguous, I run step 8 and remove all three sites immediately. Only an explicit yes holds them — and if you say yes, I'll name the window's end date in that reply (I'd propose **2026-09-26**, ~14 days, which at the observed rate should catch roughly 25–30 occurrences) and record the agreement with the sites left in place.
+
+If you want the pool bumped anyway as a deliberate operational bet rather than a diagnosis, say so and I'll do it — but I'll write it up as a mitigation of unknown effect, not a fix, and I'd still want the capture window running underneath it.

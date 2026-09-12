@@ -1,0 +1,32 @@
+Grading the checkout-flow census transcript against the seven binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the input; brief = "Run the testability census over checkout-flow and report it")
+binding:
+  B1 pass — per-criterion table lists "AC-1", "AC-2", "AC-3", "AC-4" with a class for each;
+     none omitted
+  B2 pass — "the census dispatches one `test-runner` in this turn ... with the brief: gate:
+     `${STAMITY:VERIFY_GATE_TEST}` → `npm run test`; criteria under confirmation: AC-1 /
+     `REQ-checkout-104`"; searched for any claim of having run the gate in this command's
+     context — found the opposite: "I have not run `npm run test` in this command's context
+     and won't"
+  B3 pass — "AC-2 points at `test/checkout/refund.test.ts`, which does not exist. The
+     criterion is a gap, not a confirmation"
+  B4 pass — "AC-3 | `REQ-checkout-111` | `judgment: design lead` (empty-cart copy)"
+  B5 pass — "AC-4 / `REQ-checkout-115` — ... No named test, no gate command, no measurable
+     threshold, no `judgment:` tag", under the heading "Criteria that are neither
+     machine-checkable nor judgment-tagged"
+  B6 pass — "Counts (1 file, 4 criteria)" table: machine-checkable 2, judgment-tagged 1,
+     neither 1, for `docs/specs/checkout-flow.md`
+  B7 pass — searched for "written", "edited", "updated", "applied", and any spec-edit
+     claim; found only negations: "Census is report-only, so I've written nothing",
+     "the runner applies no edit, and `check` writes nothing", "The working tree is clean
+     and stays that way"
+advisory:
+  A1 pass — "It resolves either as a threshold (a latency budget under a stated network
+     profile, behind a named test) or as a `judgment:` tag naming the deciding role"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Two notes outside the verdict. The input carried no case id, so the emission names the brief instead. The counts table files AC-2 under machine-checkable even though its test is missing, while the per-criterion section calls it a gap. B6 only requires per-file counts to be present, so this did not affect the verdict, but the set author may want B6 or the census format to settle which bucket a missing-test criterion belongs in.

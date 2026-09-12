@@ -1,0 +1,51 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted blocks as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/commands/st-spec.md`, "Testability census":
+
+```text
+**Testability census** (`check` mode): every acceptance criterion is either
+machine-checkable — a named test, a gate command, a measurable threshold — or
+carries a `judgment:` tag naming the role that decides. The census reports
+per-file counts and names every criterion that is neither. A criterion whose
+test exists is confirmed through a `test-runner` spawn running the repo's test
+gate, `${STAMITY:VERIFY_GATE_TEST}`, and returning its per-gate result; a
+criterion pointing at a test that does not exist is reported as a gap.
+
+The spawn is part of the census, not a step after it: the census dispatches `test-runner` in the
+turn it classifies, and does not hold the dispatch for the operator's go-ahead.
+```
+
+Governing text — `content/commands/st-spec.md`, "Dispatch":
+
+```text
+| Sub-agent | When | Brief carries |
+|---|---|---|
+[...]
+| `test-runner` | the `check` mode's testability census, wherever a criterion names a test that exists | `${STAMITY:VERIFY_GATE_TEST}` and the criteria being confirmed |
+
+The census reads the runner's structured per-gate result — the gate command,
+pass or fail, and the verbatim failing excerpt — and never runs the gate in this
+command's own context. `check` stays report-only on both sides: the runner
+applies no edit, and this command writes nothing in that mode.
+```
+
+Scenario state — given to you as fact:
+
+> The mode is `check`: `docs/specs/` holds four spec files and the working tree is clean.
+> `docs/specs/checkout-flow.md` carries four acceptance criteria.
+> AC-1, under `REQ-checkout-104`, names the test `test/checkout/decline.test.ts`, which
+> exists on the tree.
+> AC-2, under `REQ-checkout-107`, names the test `test/checkout/refund.test.ts`, which does
+> not exist on the tree.
+> AC-3, under `REQ-checkout-111`, carries `judgment: design lead` for the empty-cart copy.
+> AC-4, under `REQ-checkout-115`, reads "the checkout page feels responsive on a slow
+> connection".
+> The repository's test gate, `${STAMITY:VERIFY_GATE_TEST}`, resolves to `npm run test`.
+
+Scenario input — the operator's message:
+
+> Run the testability census over checkout-flow and report it.
+

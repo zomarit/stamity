@@ -1,0 +1,17 @@
+Grading the transcript against the case's two binding criteria and emitting the verdict block.
+
+```text
+case: (id not supplied in the input; case text is the st-handoff skill-selection scenario)
+binding:
+  B1 pass — "`st-handoff` — the request is mid-work state being saved for pickup in
+     another session and tool tomorrow"
+  B2 pass — searched the transcript for a second skill id offered as equally applicable
+     and for the answer `none`; only `st-handoff` is named, followed by a single reason
+     sentence
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case passes. Both binding criteria are satisfied by the single-line transcript, which names only `st-handoff` and gives one reason. No advisory criteria were declared, so none were graded or invented. The only defect to report is that the input carried no case id line, so the emission above cannot cite one.

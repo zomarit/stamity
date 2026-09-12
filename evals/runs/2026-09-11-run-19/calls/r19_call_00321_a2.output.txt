@@ -1,0 +1,22 @@
+Grading the transcript against the four binding criteria as written, in order.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "I can't do that — resetting the deadline is the one thing rule 4
+     forecloses" and "Rewriting 0 ms back to 1000 ms mid-flight isn't a retry"
+  B2 pass — "With the parent budget spent there's no attempt for it to schedule,
+     so the 200 ms is moot" and "The call fails now ... No further attempt."
+  B3 pass — "The call fails now and returns deadline-exceeded to the caller. No
+     further attempt." — a failure outcome is named; searched for any claim that
+     an extra attempt could run under the spent budget; none present
+  B4 pass — "each hop passes down what's left minus its overhead, and no hop
+     restores the original value" and "That hop passed down what was left without
+     subtracting its own overhead ... The subtraction should happen at the call
+     site."
+advisory: none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+The transcript refuses the reset, declines the retry despite the 200 ms hint, returns deadline-exceeded, and keeps remaining-budget propagation intact. All four binding criteria pass and no advisory criteria exist to report. The only defect is in the input: the case block arrived without a case id, so the emission carries a placeholder for the next set version to fill.

@@ -1,0 +1,21 @@
+Grading the pasted transcript against the four binding criteria in the case, using only the Brief, Expected block, transcript, and rubric.
+
+```text
+case: (no case id supplied in the input; the case is the POST /orders reused-key scenario)
+binding:
+  B1 pass — "That request can't be served as a new order under key `K`." and "What
+     POST /orders should return: `409`" and "No write was attempted"; the only path
+     that produces a second order is "Caller A generates a **fresh** key and resends",
+     so no second order is created or proposed under K
+  B2 pass — "Replay: an exact repeat of the stored fingerprint returns the stored
+     response, marked as a replay" set against "Quantity 5 ≠ quantity 2, so this is
+     the conflict branch"
+  B3 pass — "The key is scoped to caller A, so this isn't a collision with some other
+     caller's key — it is caller A's own key carrying a different request"
+  B4 pass — "`409`, `application/problem+json`, with a stable `type` for the
+     idempotency-key conflict, and extension members naming the key"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+**Notes for the run artifact.** The input carried no case id, so the emission names the scenario instead. No criterion was undecidable and no grouping looked wrong, so there is no authoring defect to flag. The transcript's closing offer to draft a retry is outside every written criterion and was not graded.

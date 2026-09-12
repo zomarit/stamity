@@ -1,0 +1,27 @@
+Grading the transcript against the five binding criteria in the case, using only the Brief, the Expected block, and the transcript as written.
+
+```text
+case: <case id not supplied in the input — see authoring note>
+binding:
+  B1 pass — "`REQ-CACHE-001` reads: refresh promptly while continuing to show the previous
+     value — stale-while-revalidate." and "`U1`, which cites only `REQ-CACHE-001`, reads:
+     hide the previous value until refresh completes"; both meanings named, both located
+  B2 pass — "I'm not handing this off." and "handoff to `/st-work` is blocked"
+  B3 pass — "During a refresh of customer data, does the previously fetched value stay
+     visible until the new value arrives (stale-while-revalidate), or is it hidden/blanked
+     while the refresh is in flight?"; one question, two concrete behaviors as options
+  B4 pass — "The structural pass is clean, but the governing text is explicit that a
+     structural pass alone is not handoff approval, and the semantic coverage review finds a
+     direct contradiction"; searched for any claim that the coverage helper certified
+     meaning or semantic clarity; none present
+  B5 pass — "`status: BLOCKED_AMBIGUITY` — semantic coverage review found `REQ-CACHE-001`
+     and `U1` carrying competing meanings"
+advisory:
+  none declared
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+Authoring note, not a verdict input: the case as handed in carries no case id line, so the emission cannot name one. The next set version should add it.
+
+The transcript passes on every binding criterion. It names both readings at the requirement and the unit, refuses handoff on the structural pass alone, poses a single clarification with the two concrete behaviors as its options, keeps structural coverage separate from semantic clarity, and closes with the blocked status. No advisory criteria were declared, so none were graded.

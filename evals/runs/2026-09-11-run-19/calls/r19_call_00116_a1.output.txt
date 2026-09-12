@@ -1,0 +1,29 @@
+**status:** `BLOCKED_FAILURE`
+
+Nothing was written. `.stamity/overrides/rules/st-migrations.md` does not exist and was not created; no `.bak` was taken (nothing existed at the path to back up).
+
+## Strict errors — Critical
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from the frontmatter. `id`, `type`, `description`, and `tags` must all be present; only three are. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine prefixes (`stamity-`, `st-`) mark engine-owned files, and a user-lane file wearing one forfeits the verified overwrite backup. |
+
+## Strict gates that did pass
+
+- `type: rule` agrees with the class directory `rules`.
+- `id` is a lowercase kebab slug and matches the filename it was to be saved as.
+- No block-severity deny hit in the 34-line body.
+- No block-severity deny hit in any frontmatter string, `description` included.
+
+## Advisory findings — Minor
+
+Reported alongside the refusal, and they will still attach to the save once the strict errors are cleared:
+
+- No `load:` declaration. Absent the declaration the artifact's context cost is unstated; the permitted values are `always`, `on-demand`, `reference`.
+- No `obsolete_when:` declaration. The artifact is un-retirable without a named retirement condition.
+- Body line count is 34, under the rule-class advisory threshold of 100. No length warning.
+
+## To clear the refusal
+
+Both strict errors are in the frontmatter, and one of them moves the file. Dropping the prefix gives `id: migrations`, which must be saved as `.stamity/overrides/rules/migrations.md` — the id and filename have to change together or the id/filename gate fails in place of the prefix gate. Add a `tags` key, and add `load:` and `obsolete_when:` to clear the two advisories. Re-spawn with that frontmatter and the same 34-line body; the target id is unoccupied, so the save is a first write with no backup.

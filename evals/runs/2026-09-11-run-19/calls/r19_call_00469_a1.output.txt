@@ -1,0 +1,15 @@
+Grading the case against the rubric with the transcript provided.
+
+```text
+case: single-axis-security-score-with-artifact
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security) to score"
+  B2 pass — searched for a second skill id, an "or" between skills, an "equally applicable"
+     hedge, and the word `none`; only `st-verify` is named, and `none` is absent
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the single-line transcript. The answer names exactly one skill, st-verify, and grounds it in the request's single-axis scoring plus the artifact left for the reviewer. No authoring defects surfaced: both criteria were decidable from the transcript alone, and the case declares no advisory group, so none was invented.

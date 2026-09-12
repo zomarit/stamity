@@ -1,0 +1,40 @@
+Grading the supplied transcript against the seven binding and one advisory criteria, in written order.
+
+```text
+case: (no case id supplied with the input — recorded as an artifact gap, verdict emitted
+       against the criteria as given)
+binding:
+  B1 pass — proof block carries all seven items: "Baseline source: proof record from run
+     r7"; "Findings by severity: 1 Critical · 3 Warning · 1 Minor"; "Routing: 3 REVISE ·
+     2 DEFER"; "Validation verdicts: unit 1 accepted (high) · unit 2 accepted (high) ·
+     unit 3 accepted (medium)"; "Plan-lint: L1 pass · L2 pass · L3 pass · L4 pass · R1
+     pass"; "Plan path: docs/plans/004-checkout-rework.md"; "Inbox rows added: 2 (one per
+     DEFER finding)"
+  B2 pass — "L1 pass · L2 pass · L3 pass · L4 pass · R1 pass" — each check rendered with
+     its own verdict; searched for a collapsed "plan-lint passed" form, none present
+  B3 pass — "## Recommended next step" opens with one imperative, "Run
+     docs/plans/004-checkout-rework.md through /st-work."; board triage is mentioned only
+     to be excluded ("not the step here"), so no menu or option list is offered
+  B4 pass — "Run docs/plans/004-checkout-rework.md through /st-work. The plan is
+     persisted" — step is /st-work, path named, and it is tied to the persisted-on-stop
+     condition: "answered stop, which left execution as the open edge of this run"
+  B5 pass — searched for the marker being named as the step; the only mention is
+     "carries no [NEEDS CLARIFICATION] marker, so nothing blocks handoff", which
+     excludes it rather than recommends it
+  B6 pass — searched for board triage as the recommended step; the transcript names it
+     only to rule it out: "they're board triage whenever the board next sits, not the
+     step here"
+  B7 pass — searched for "review the plan", "let me know", "consider addressing", and any
+     other non-specific closer; none present, the step is concrete and path-bound
+advisory:
+  A1 pass — "The 2 DEFER rows are parked in the inbox and don't displace that — they're
+     board triage whenever the board next sits" — rows are stated as still open and
+     awaiting triage, not closed by this run
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Defects to report alongside the verdict:
+
+- **Missing case id.** The input carried no case id, so the emission cannot be keyed into the run artifact without one.
+- **No re-grouping or rewriting was needed.** All eight criteria were decidable from the transcript text alone.

@@ -1,0 +1,30 @@
+Grading the pasted transcript against the four binding criteria, per rubric v6.
+
+One caveat first. The rubric bars the judge from grading its own output, and the pasted transcript was not labeled with its producing model. I cannot verify it was not mine. If it was, this emission should be redone by a different judge.
+
+```text
+case: (no id supplied in the case block)
+binding:
+  B1 pass — "it's a different request wearing the same key, and it's refused as a
+     conflict"; searched for a proposal to create a second order under K and found
+     only the opposite: "Treating it as a new order would be the one outcome the key
+     exists to prevent" and "No write was performed"
+  B2 pass — "had the fingerprint matched, K would replay the stored quantity-2
+     response and say it was a replay" set against "the same key with a different
+     fingerprint — quantity 5"
+  B3 pass — "K is scoped to caller A, not globally. Another caller's K is a separate
+     key with its own fingerprint and its own stored response"
+  B4 fail — the transcript describes the conflict response ("it's refused as a
+     conflict", "the refusal") but never names its shape; searched for
+     "problem details", "problem+json", RFC 9457, and a stable `type` and found
+     none. No unrelated schema appears either. The written criterion requires
+     problem details once the conflict response is described, and the transcript
+     is silent on that.
+advisory:
+  none declared
+verdict: FAIL (binding 3/4)
+decided by: B4
+advisory: none declared
+```
+
+Authoring note for the next set version. B4's trigger, "if it describes the conflict response", is ambiguous between describing the response's semantics and describing its body. I graded on the plainer reading, where saying the request is refused as a conflict counts as describing the response. If the author intended the body-shape reading, the criterion should say so, since under that reading the transcript never triggers it and B4 would pass.

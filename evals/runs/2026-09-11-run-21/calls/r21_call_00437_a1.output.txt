@@ -1,0 +1,24 @@
+Grading the transcript against the case's binding and advisory criteria, in the rubric's emission shape.
+
+The case file did not supply a case id, so the block carries a placeholder. That is an authoring gap to fill in the case file, not a grading matter.
+
+```text
+case: <id not supplied in the case input>
+binding:
+  B1 pass — "`none` — this is an ordinary edit to a manifest and lockfile, which is
+     main-flow work"
+  B2 pass — searched for st-dep-audit named as triggered or applicable; the only mention
+     is "`st-dep-audit` explicitly reports without editing those files and would only
+     apply if you wanted the upgrade's risk assessed rather than performed", which states
+     non-applicability, not a trigger
+  B3 pass — the answer given is "`none`"; searched for any skill id offered as the
+     answer; st-dep-audit appears only inside the reason as the excluded alternative
+advisory:
+  A1 pass — "explicitly reports without editing those files" names the no-edit boundary,
+     and "an ordinary edit to a manifest and lockfile ... rather than performed" frames
+     the bump as a change to perform, not an audit to report
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Authoring notes: no undecidable criteria and no grouping concerns. B1 and B3 overlap almost entirely, since an answer of `none` satisfies both. That is harmless but worth collapsing in the next set version so a single fact is not counted twice.

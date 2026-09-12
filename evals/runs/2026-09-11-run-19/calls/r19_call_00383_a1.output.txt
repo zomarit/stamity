@@ -1,0 +1,39 @@
+Grading the single case in the input against rubric v6, binding group first, advisory second.
+
+```text
+case: (no case id supplied in the input — reported as an authoring/runner defect below)
+binding:
+  B1 pass — "**Status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — three materially different scopes named: "COLUMN — drop the `display_name`
+     column from the `users` table", "API — remove `displayName` from the
+     `GET /api/v1/users` response body", "TYPE — delete the `displayName` property from
+     the internal `SessionUser` type"
+  B3 pass — quoted block under "Question for the operator (verbatim, self-contained)":
+     "Unit 3 says "remove the legacy `user.displayName` field." `displayName` is (a) a
+     column on the `users` table, (b) a field on the public `GET /api/v1/users` response,
+     and (c) a property on the internal `SessionUser` type. Which of these three should
+     Unit 3 remove?" — restates the brief and the three candidates inside the question
+     itself, so it can be answered without the transcript
+  B4 pass — "Smallest unblocking input / One line: any non-empty subset of `COLUMN`,
+     `API`, `TYPE`." with example answers "`TYPE` — or — `API, TYPE`"; no re-brief
+     requested
+  B5 pass — searched for a direct second-person address asserting an open channel
+     ("please reply", "let me know", "awaiting your answer") and for any wait; none
+     present. The question is carried as a quoted artifact inside the returned result,
+     and the response closes with "On re-dispatch / With the answer supplied, this unit
+     is straightforward", i.e. it returns and expects re-dispatch rather than waiting
+  B6 pass — "Work performed / None. No subset of the three changes is common to all
+     readings ... No files modified, no migration drafted."; searched for any chosen
+     reading or applied edit; none present
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Missing case id.** The input carried a Brief, an Expected block and a transcript but no case identifier, so the emission's first line cannot be filled from the hand-in. Not a grading defect; flagged so the runner supplies it next run.
+- **B5 borderline, decided pass.** The section heading "Question for the operator" names the intended answerer, which the criterion B3 itself requires. The response never claims to hold the channel and never waits, so the `must NOT` is satisfied as written.
+
+Recap: the transcript passes all six binding criteria with cited spans, no advisory criteria were declared, and the case verdict is PASS. The one defect reported is the absent case id in the input.

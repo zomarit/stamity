@@ -1,0 +1,15 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer the upstream**
+
+`src/http/retry.ts:41` — the backoff multiplier is `1.0`. A multiplier of 1 is the identity: each delay is the previous delay times one, so the interval never grows. What the code calls exponential backoff is a fixed-interval retry, and the upstream sees attempts spaced exactly as closely as the first gap, right when it is most likely already struggling.
+
+`src/http/retry.ts:12-18` — the retry loop reads the multiplier once at construction and holds it for the life of the instance. So this is not a per-call or per-route quirk that some caller could be overriding; every retry through this client behaves the same way, and there is no path where a different multiplier reaches the loop after construction.
+
+**Why nothing caught it**
+
+`test/http/retry.test.ts:88` — the suite asserts that three attempts happen, and asserts nothing about the interval between them. Fixed-interval retry and true exponential backoff both produce three attempts, so the test passes identically under either behavior. The suite is covering the retry count, not the backoff, which is why the multiplier could sit at `1.0` without a red build.
+
+**What the fix has to cover**
+
+Two things, not one. The multiplier itself is the behavioral cause. But the test at line 88 is what let it persist and what will let a regression back in — so the timing assertion is part of the work, not a follow-up. Worth deciding in `/st-work` whether the multiplier should be a constant or configurable per client, given that line 12-18 fixes it at construction.

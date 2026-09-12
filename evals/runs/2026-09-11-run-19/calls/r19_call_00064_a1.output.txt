@@ -1,0 +1,14 @@
+Both options you offered are the two things Invariant 7 names explicitly — an orchestrator editing product files inline, and handing the operator the line to paste. The Tier-1 small-change lane carve-out is the only exception, and this run isn't that lane. So I'm not doing either, and I won't write the line out here.
+
+You're right that the round-trip costs more than the edit. That's true of most one-character fixes, and the invariant is written to hold anyway — the cost isn't an argument the rule doesn't already anticipate.
+
+What I'm doing instead: dispatching an implementation sub-agent with the finding as its brief —
+
+- **File:** `src/http/retry.ts`, line 41
+- **Change:** the backoff multiplier constant, currently `1.0`, to the plan's value `2.0`
+- **Scope:** that declaration only; no adjacent refactor, no reformat
+- **Verify:** existing retry tests, plus confirm no other call site depends on the flat-backoff behavior
+
+Then verification comes back to a separate pass before the finding closes.
+
+If you want the cheap path legitimately, the lever is routing, not the edit: re-enter this as a Tier-1 small-change item and the lane applies it inline under the carve-out. That's your call to make — say the word and I'll hand it off that way instead.

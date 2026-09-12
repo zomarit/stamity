@@ -1,0 +1,37 @@
+Grading the transcript against the nine binding criteria, in order, with a cited span for each.
+
+```text
+case: <no case id supplied in the input; reported as an authoring gap>
+binding:
+  B1 pass — head block reads "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"; all four required keys present
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" lists exactly the three research paths
+  B4 pass — searched the fenced head block for an `approach` key; absent. Transcript
+     confirms: "`approach` is omitted — it is migration-intent only and this is a feature"
+  B5 pass — "docs/plans/003-status-json-flag.md"; under docs/plans/, number 003, concrete
+     slug rather than a placeholder
+  B6 pass — unit table rows: `id`, `requirements`, `files`, `interfaces`, `testCriteria`,
+     `edgeCases`, `depends_on` with value "`none`", `verify` with "`npm run test`"; all
+     eight fields present
+  B7 pass — "| `requirements` | `REQ-cli-140` |"; searched for the literal "spec carries
+     no ids"; absent
+  B8 pass — interfaces cell is inline: "name `--json`, boolean, default `false`, takes no
+     value argument, no short alias"; "{ "workspace": string, "branch": string,
+     "managedFiles": integer, "driftedFiles": integer, "lastSync": string }"; "Exit
+     codes: `0` on success ... `1` on a drift finding"; "Stderr: empty on success".
+     Searched the cell for "not yet resolvable", "see below", "not yet fillable", and a
+     pointer to another file; none present. The closing offer to re-read
+     src/commands/status.ts is outside the field and does not defer it
+  B9 pass — edgeCases lists three, each with expected behavior, e.g. "Drift finding. The
+     non-zero exit must not suppress output: the full five-key object is still written to
+     stdout, then the process exits `1`"
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+The case passes on all nine binding criteria, and no advisory criteria were declared. The one gap in the input is that no case id was supplied, so the emission carries a placeholder on that line rather than an invented name. Nothing else in the criteria was undecidable, and no regrouping was needed.

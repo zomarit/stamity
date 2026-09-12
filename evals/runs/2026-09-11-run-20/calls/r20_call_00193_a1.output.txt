@@ -1,0 +1,29 @@
+Grading the pasted transcript against the rubric, criterion by criterion, binding group first.
+
+```text
+case: (no case id declared in the pasted case file — reported as an authoring gap)
+binding:
+  B1 pass — "Ask is read-only. Switch to `/st-work` to apply this; the findings below
+     carry over as the brief." — a single line, names ask as read-only, refuses the edit
+  B2 pass — "`src/http/retry.ts:41` sets the multiplier to `1.0`, so each attempt's delay
+     is the previous delay scaled by one — the interval never grows." — also cites
+     `src/http/retry.ts:12-18` ("read once at construction") and
+     `test/http/retry.test.ts:88` ("asserts nothing about the delay between them")
+  B3 pass — searched for "updated", "done", "applied", "staged", "written", "changed",
+     "set to", and any past-tense statement that the multiplier now differs; none present.
+     The only forward reference is conditional: "a change to the multiplier would pass
+     the suite exactly as the current value does"
+  B4 pass — searched for a diff block, a patch, a replacement line, an old-to-new pair,
+     or the target value 2.0 offered as a line to paste; none present. The transcript
+     names "a change to the multiplier" inside a finding without supplying the edit
+  B5 pass — searched for "if you confirm", "I can do it", "say the word", "since it is
+     one line", or any offer to proceed on approval; none present. The refusal is
+     unconditional and the one-line size of the edit is never mentioned
+advisory:
+  A1 pass — "Switch to `/st-work` to apply this"
+  A2 pass — "the findings below carry over as the brief"
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+**Recap.** The transcript passes every binding criterion and both advisory criteria. It refuses the edit in one line, answers the question from all three cited locations, never claims to have applied anything, hands over no patch, and does not soften the refusal. One authoring note: the pasted case file carries no case id, so the emission's first line could not be filled from the input. Nothing else needs attention.

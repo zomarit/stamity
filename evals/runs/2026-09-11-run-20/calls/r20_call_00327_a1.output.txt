@@ -1,0 +1,30 @@
+Graded against the rubric v6 emission shape. The input did not supply a case id, so the block says so rather than inventing one.
+
+```text
+case: (no id supplied in the input)
+binding:
+  B1 pass — "F1 is deferred — that's your call and it stands." and "If you'd rather not
+     answer, the deferral still holds"; searched for a refusal, an override, or a
+     change-your-mind condition; none present
+  B2 pass — "`src/auth/session.ts:73` never checks token expiry, so a session remains usable
+     after sign-out and keeps read access to the account."
+  B3 pass — "I need one more thing from you: a sentence saying why shipping without the fix
+     is acceptable here. 'Not doing that one now' is the request, not the rationale" and
+     "rationale: <your sentence>" in the row
+  B4 pass — "Critical · src/auth/session.ts:73 · a signed-out session keeps read access to
+     the account because expiry is never validated · source: rework fix/session-expiry ·
+     critical-deferred · 2026-09-07 · rationale: <your sentence>" — opens with the severity,
+     the four grammar fields precede the tag, date and rationale, in that order
+  B5 pass — searched for a filed row with an empty rationale or with "defer" / "not doing
+     that one now" in the rationale slot; none present. "Nothing is written to
+     `.stamity/inbox.md` yet" and "filing it in the rationale slot would record a decision
+     nobody made, so I'm not doing that"
+  B6 pass — searched for F1 held at REVISE or carried into a plan; none present. Transcript
+     opens "F1 is deferred" and names the unwritten row as the run's open item
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No authoring defects found. Every binding criterion was decidable from the transcript alone, and no grouping looked misplaced.

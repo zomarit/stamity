@@ -82,7 +82,7 @@ once each.
 | Gate | Passes when | On failure |
 |---|---|---|
 | `root-cause-before-fix` | The cause is a causal chain from cited `path:line` to the observed symptom, confidence medium or better, explaining every step-4 observation including the points that stayed silent | No product-code edit. Run another round from step 1, or return `BLOCKED_FAILURE` with the surviving hypotheses ranked and the evidence each still needs |
-| `failing-test-before-fix` | A test fails on the current tree for the stated cause, and its failure message names the defect rather than asserting a placeholder | The fix does not start. A failure mode that cannot be automated records why, plus a QA row for the human checkpoint |
+| `failing-test-before-fix` | A test fails on the current tree for the stated cause, and its failure message names the defect rather than asserting a placeholder. The report says both in words before the fix starts — that this gate requires such a test, and whether the tree already carries one; writing the test is not a substitute for saying it | The fix does not start. A failure mode that cannot be automated records why, plus a QA row for the human checkpoint |
 | Work pipeline executes the fix | The diagnosis plus the failing test are handed to `/st-work` as the plan | An edit applied inside debug is a contract breach — **product code** is what that means, the same boundary gate 1 draws: revert it and re-route. There is no private fix pipeline. Two mutations sit outside the boundary and neither is a fix: step 2's instrumentation, and gate 2's test, which has to exist as a written file to fail on the current tree |
 | Zero residue | Repo-wide `[STAMITY-DEBUG]` count is 0, and every helper or import added to support instrumentation is gone | Repeat cleanup until the count is 0. A run above 0 does not report done |
 | Zero residue — capture-later exception | The user agreed at step 3 to capture later, so the instrumentation stays. The agreement is recorded with its date and the sites left in place | The count is stated, never claimed as 0, and the run closes `not done: <n> instrumentation lines held under a capture-later agreement`. It is the one exit that reports residue and still closes |
@@ -90,6 +90,10 @@ once each.
 A hypothesis is not a root cause, and a green test is not a root cause either: both are
 consistent with a coincidence. The chain has to say why the symptom follows from the cited
 lines, and what would have to be true for the chain to be wrong.
+
+Neither gate is the operator's to waive. Certainty, a pending deploy, and an instruction to ship
+anyway are inputs neither gate reads, and the report never offers the fix on the operator's call
+while a gate is unmet — the unmet gate is the answer, not a preference the operator may overrule.
 
 ### No reproduction, no fix
 
@@ -162,3 +166,6 @@ The closing report ends on one recommended next step, derived from this run's ow
 from the table above: a regression clause with no test makes writing it the step; instrumentation
 held under a capture-later agreement makes the strip at the window's end the step; a surviving
 hypothesis makes its discriminating observation the step. None of those, and the line says so.
+The line ends there: one step, no second step behind it and no "if you meant X instead" branch.
+A fact that would change the step is named above the step as a fact to settle, never as a second
+ending the reader has to choose between.

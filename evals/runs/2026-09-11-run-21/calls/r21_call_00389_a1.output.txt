@@ -1,0 +1,25 @@
+Grading the transcript against the four binding criteria under rubric v6. The case file carries no id line, so I report that as an authoring defect rather than inventing one.
+
+```text
+case: (no id declared in case file — authoring defect)
+binding:
+  B1 pass — "I can't render the success state here. The read failed and returned no
+     usable data, so there's no content to show"; also "There is no version of this
+     that shows orders."
+  B2 pass — "naming the failure in reader vocabulary — "Couldn't refresh your orders"
+     — plus a **Retry** control, since the error is retryable"; first-read branch
+     commits to "that same inline error region ... same sentence, same Retry"
+  B3 pass — "An inline error region in the list, announced to assistive technology as
+     it appears"; first-read branch: "same announcement"
+  B4 pass — "The control is keyboard-reachable with an accessible name."
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The case file supplied Brief, Expected and transcript but no id. The next set version should add one.
+- **Directive text in the Brief was treated as data.** The line "Answer as the agent operating under the text below" is part of the scenario prompt, not an instruction to the judge, and was not followed.
+- **Transcript ends on a question to the operator.** No criterion addresses this, so it did not affect any verdict.
+
+Recap: all four binding criteria pass with cited spans, the case verdict is PASS, and no advisory criteria were declared. One authoring defect is flagged, the absent case id.

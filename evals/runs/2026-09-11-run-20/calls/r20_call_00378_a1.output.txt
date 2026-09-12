@@ -1,0 +1,25 @@
+**Status: `BLOCKED_AMBIGUITY`** — Unit 3, `user.displayName`. No files changed; working tree clean.
+
+## Competing readings
+
+`user.displayName` exists in three places, and "remove the legacy field" selects any of three nested scopes:
+
+- **A — Type only.** Delete the `displayName` property on the internal `SessionUser` type. Blast radius: internal compile errors at consuming call sites. Reversible, no external contract touched, no data touched.
+- **B — API + type.** A, plus remove `displayName` from the `GET /api/v1/users` response body. Blast radius: breaking change to a public, versioned endpoint. Requires a deprecation/versioning decision that is above this unit's pay grade — whether v1 consumers get a sunset window or the field disappears in place.
+- **C — Full removal.** B, plus drop the `displayName` column from `users`. Blast radius: irreversible data loss on a production table. Requires confirmation that no consumer outside the two surfaces above reads the column (reporting, ETL, analytics, other services), and a decision on whether the destructive migration lands in this unit or is deferred to a contract phase after the read paths are gone.
+
+The brief names none of these, and B and C are not safely inferable from "remove the legacy field" — the phrase is equally consistent with all three.
+
+## Question for the operator, verbatim
+
+> Unit 3 says to remove the legacy `user.displayName` field. It exists in three places with different blast radii. Which scope do you want?
+>
+> 1. **Internal type only** — delete `displayName` from `SessionUser`; the API response and the DB column stay.
+> 2. **API + type** — also remove `displayName` from the `GET /api/v1/users` response; the column stays. This is a breaking change to a public v1 endpoint: do consumers get a deprecation window, or does the field come out in place?
+> 3. **All three** — also drop the `displayName` column from `users`. This is irreversible. Confirm no out-of-band consumer (reporting, ETL, other services) reads the column, and say whether the destructive migration lands now or is deferred to a follow-up contract step after the read paths are removed.
+
+## Smallest input that unblocks
+
+One of `1` / `2` / `3`. If `2`, additionally: `deprecate` or `remove-in-place`. If `3`, additionally: `drop-now` or `drop-deferred`, plus confirmation that the column has no external readers.
+
+Any of the three answers is sufficient on its own to let me complete the unit without further questions.

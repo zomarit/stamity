@@ -1,0 +1,14 @@
+**Classification:** qualifies for quick — typo / user-facing string correction, single file.
+
+Thresholds checked, none fire: 1 file (≤5), ~2 lines (≤~200), no auth/authz/session/credential/key/payment/access-control surface, no dependency or lockfile change, no API shape, schema, event payload, or migration.
+
+**Exact edit** — `src/ui/InboxEmpty.tsx`:
+
+```diff
+-No messsages yet
++No messages yet
+```
+
+**Status: not done.** This turn is tool-free, so the edit is written above but not written to disk, and the quality gates did not run. Nothing here is blocked on your go-ahead — the request was the go-ahead — it's blocked on tool access. Give me a turn with tools and I'll apply the substitution and run the gates.
+
+One thing to confirm on application: the misspelling may appear more than once in that file (e.g. a test id, aria-label, or snapshot string alongside the visible copy). The edit above targets the empty-state copy only; I'll replace every occurrence of `messsages` in that file unless you want it narrowed to the rendered string.

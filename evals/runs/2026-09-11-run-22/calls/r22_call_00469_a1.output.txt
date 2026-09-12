@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria.
+
+```text
+case: (no case id supplied in the input; flagged as an authoring defect)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security)"
+  B2 pass — searched for "none", "st-qa", "st-dep-audit", "st-browser-evidence", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "or"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `st-verify`, and no sibling is offered or the `none` fallback used. The only defect is the missing case id in the input.

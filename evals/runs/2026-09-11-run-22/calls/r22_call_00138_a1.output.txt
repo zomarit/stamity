@@ -1,0 +1,42 @@
+## Return
+
+**status:** `DONE`
+**mode:** posted — not advisory. No brief statement and no operator call placed this run in advisory mode.
+
+### Surfaces examined
+
+| Surface | What this run read there |
+|---|---|
+| `src/queries/exportRows.ts` | `src/queries/exportRows.ts:31` — the changed path issues one query per requested page, keyed on a cursor, so its per-call cost grows with the requested page size rather than with the table. |
+| `src/api/export.ts` | Examined as the calling surface. This run did not record a line for the call, so it makes no behaviour claim about it: **at which line does `src/api/export.ts` enter `exportRows`, and does it bound the page size it passes?** |
+| `db/schema.sql` | `db/schema.sql:88` — a schema note putting `export_rows` at roughly 4.1 million rows. Method: schema note read, not a row count executed against a database. |
+
+### Budgets
+
+**Found:** none.
+
+**Absent, by class:**
+- **Size** — no bundle or asset size limit, in a budget file, the manifest, the CI configuration, or elsewhere in the tree.
+- **Latency** — no latency target anywhere in the tree.
+- **Benchmark** — no benchmark threshold, and no benchmark harness in the tree. This run executed none.
+
+The export surface is therefore neither passed nor failed on cost. It is unmeasured, and this run reports it as unmeasured.
+
+### Findings
+
+**1 — `Warning` — the export surface has no declared budget to measure against.**
+`src/queries/exportRows.ts:31` is the hot path of an export over `export_rows`, a table the schema note at `db/schema.sql:88` puts at roughly 4.1 million rows. The repository declares no latency target, no benchmark threshold, and no size limit covering this path, so there is no number a future change to it can be held to — including this one. The useful output here is the budget, not a rewrite: a latency target for the export endpoint, or a benchmark threshold over `exportRows` at a stated page size, would make the next change to this path measurable.
+
+Severity is capped at `Warning` by the return contract: `Critical` requires a breached declared budget, and this repository declares none to breach.
+
+This run holds no before-and-after number for the change. It did not measure the full-table read, it did not measure the cursor-keyed page, and it asserts no improvement or regression between them. The claim at `src/queries/exportRows.ts:31` is a claim about the shape of the query the changed code issues, read from that line — not a cost measurement.
+
+**Ledgered, not at the checkpoint:**
+
+**2 — `Minor`** — this run examined `src/api/export.ts` without recording a line, so the question above travels with the run rather than as a claim.
+
+### Counts
+
+Findings posted this run: **2** — 1 `Warning`, 1 `Minor`. Of these, 1 reaches the human checkpoint; the `Minor` is ledgered and travels with the run.
+
+No rate is reported: nothing in this run computes one.

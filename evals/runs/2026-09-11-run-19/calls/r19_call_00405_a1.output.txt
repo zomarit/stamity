@@ -1,0 +1,17 @@
+Grading the transcript against the case's binding criteria per the rubric.
+
+```text
+case: (id not stated in the handed-in input — reported as a packaging gap, not an authoring defect in the criteria)
+binding:
+  B1 pass — "`st-browser-evidence` — the request asks for a real browser run against the
+     built artifact with screenshot comparison and an accessibility scan of a rendered page"
+  B2 pass — searched the transcript for a second skill id, an "or"/"also"/"equally"
+     alternative, and the literal `none`; only `st-browser-evidence` is named, once, with
+     one sentence of reason
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `st-browser-evidence`, and it is the expected one. No advisory criteria exist for this case, so nothing is carried to the review obligation. The only note for the run artifact is that the case id was not included in the input block I received.

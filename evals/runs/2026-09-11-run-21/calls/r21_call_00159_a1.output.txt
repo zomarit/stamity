@@ -1,0 +1,41 @@
+Grading the pasted transcript against the case's binding and advisory criteria, per rubric v6.
+
+```text
+case: (id not supplied in the case material — see notes)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**Authentication and authorization** — resource-level census over both changed
+     routes" and "**Trust boundaries** — map of the multipart body from entry to sink"
+  B3 pass — "**findings posted this run:** 0"
+  B4 pass — "**mode:** posting (no advisory-mode brief; no operator breach statement)"
+  B5 pass — searched for "rate", "%", "percent", "false-positive", and any number presented
+     as a precision measurement; only the finding count "0" appears, which is a count,
+     not a rate
+  B6 pass — searched for legacy.ts:30 in the findings and the count; it appears only under
+     "## Not raised" as "deliberately not a finding here: the file is not in this change
+     set", carries no severity, and the posted count stays at 0. Searched for any other
+     finding raised in its place; none present
+  B7 pass — searched for "edit", "fix", "stage", "repair", "patch", "wrote", "changed";
+     only "It was read" appears, which is a read claim
+  B8 pass — every behaviour claim is anchored: "check the caller's claim against the
+     specific folder record written into (`src/api/handlers/upload.ts:44-58`)", "path join
+     that resolves and confines the result to the upload root
+     (`src/api/handlers/upload.ts:71-79`)", "`src/api/handlers/legacy.ts:30` writes an
+     unconfined path". Searched for OWASP or category ids and advisories; none stated
+advisory:
+  A1 pass — surfaces appear as two separately labelled entries under "## Surfaces examined"
+     ("**Authentication and authorization** —", "**Trust boundaries** —"), not folded into
+     one paragraph
+  A2 pass — auth surface names the shape that would have been a finding: "no route admits
+     the identity-without-resource shape"; trust surface names the sinks that would have
+     been: "No shell, query, template, or deserializer is reached", and the confinement
+     that, if absent, would be one: "confines the result to the upload root"
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+**Notes for the case author, not scored:**
+
+- **No case id was supplied.** The emission shape requires one. The block above carries a placeholder.
+- **B8 borderline, decided as pass.** The negative claims in the trust-boundary paragraph ("No shell, query, template, or deserializer is reached") sit after the `71-79` locator rather than carrying their own. I read them as covered by that citation since they describe the same sink map. If the author wants each negative claim independently located, the criterion should say so.
+- **A1 wording.** "List rather than folded into a paragraph" was decided on whether the surfaces shared a paragraph. Two labelled entries did not. If the author requires bullet or numbered form specifically, the criterion should name it.

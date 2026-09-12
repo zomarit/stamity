@@ -1,0 +1,20 @@
+## Answer
+
+**Do sessions accumulate?** Yes, within what was read.
+
+- Sessions are written into a `Map` held in module scope (`src/session/store.ts:23`) — **high**.
+- No eviction call appears anywhere in that file (`src/session/store.ts:57`) — **high**.
+- Exactly one store instance is constructed per process (`src/server/boot.ts:31`) — **high**.
+- Entries therefore persist for the lifetime of the process, one accumulating map per process (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**, on the unverified assumption that no caller outside `src/session/store.ts` deletes from the map, since only that file was read for eviction.
+
+**How bad is it in production?** I have no answer, and I am not going to produce one.
+
+No test, benchmark, or production measurement of session memory growth was found. The researcher's note is `unread: no observability or load-test evidence exists in the repository for session memory`. Every quantity the question asks for — bytes per session, sessions per hour, time to OOM, whether restarts already mask it — would be invention. There is nothing to cite, so nothing is stated.
+
+What would close it, in rough order of cost:
+
+1. A grep for `.delete(` / `.clear(` against the session map across the whole repo, to settle the medium claim above and confirm there is no eviction path outside `store.ts`.
+2. Per-entry size: a heap snapshot at two known session counts, differenced.
+3. Session arrival and lifetime rates from production traffic logs, if any exist outside the repo.
+
+(1) is cheap and upgrades the accumulation claim to **high** or kills it. (2) and (3) together are the only route to "how bad," and both require evidence that is not in this repository.

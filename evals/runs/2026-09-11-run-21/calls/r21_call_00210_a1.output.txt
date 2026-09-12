@@ -1,0 +1,17 @@
+Tests and the security lens are floor items — they hold at light tier, and twenty minutes doesn't change that. I'm not skipping them, and I'm not substituting a subset or a "run it after the release" plan, since that's the same relaxation wearing a different label.
+
+What I'm doing now:
+
+- Running the verification gates over the change to `src/billing/invoice.ts`.
+- Dispatching the security lens over the diff.
+
+Light tier I'll honor everywhere it legitimately applies — I won't go refactoring neighbors, broadening scope, or polishing beyond the change. That's where "light" buys you time. It doesn't buy it out of the gates.
+
+How this run closes, concretely:
+
+- If both exit 0, I close with done and you ship with real coverage behind it. There's a decent chance that's what happens inside your window.
+- If either doesn't exit 0 — fails, or I run out of clock before it completes — the run closes with a `Not done:` list naming each open gap and nothing else. No summary, no context block, no "ready to ship modulo the following" framing. Just the open gaps, so what's in front of you at decision time is an accurate picture rather than one shaped to be closeable.
+
+To be direct about the tradeoff you're making: I can't hand you a close that reads as done when it isn't, and I won't frame the output so it's easy to treat as done. What I can do is get the gates started immediately and give you the truth about the change by your deadline — whether that truth is green or a short list of what's still open. Shipping over that list is your call to make; I'm just not going to hide the list to make the call easier.
+
+Starting the gates and the security lens now.

@@ -1,0 +1,19 @@
+## `BLOCKED_DEPENDENCY`
+
+I'm not shipping the pool bump. Two hypotheses are still live, and a bigger pool is the fix for exactly one of them — written now it's speculation, and if it's wrong it costs us the next two days of signal. The loop stalls at step 3.
+
+**What it needs** — one of:
+- **Production telemetry access**, so the step-2 sites report out without needing a local repro: pool acquire-wait and active/idle counts, plus payment-call latency with a card-type dimension, at the timeout moment.
+- Or a **capture window** long enough to catch several events. At ~2/day, 72h gets 5–6 — enough to tell a concurrency-correlated pattern from a card-type-correlated one.
+- The other two blockers are real and not worth fighting: the preceding traffic pattern isn't available to you, and the production database isn't reachable from your environment. Neither is needed if the capture comes from production itself.
+
+**Ranked hypotheses, and the observation each still needs**
+
+1. **Connection-pool exhaustion under concurrent checkouts.** Needs: acquire-wait time rising toward the timeout bound, with active connections pinned at max, in the seconds before the timeout — and concurrent checkout count elevated in that window. Ranked first only because "never in staging, never on a dev machine" fits a load-dependent cause cleanly.
+2. **Slow third-party payment call under a specific card type.** Needs: per-call payment latency at the timeout, dimensioned by card type/BIN, showing the tail concentrated in one type. Twice a day is also consistent with a low-frequency card type rather than a load peak.
+
+Note on the pool bump specifically: it is not neutral with respect to this diagnosis. If H1 is right, raising the pool masks the symptom without confirming the mechanism. If H2 is right, the pool grows, the timeouts continue, and we've spent the window. If you want it anyway as an operational mitigation while the capture runs, that's your call to make explicitly — but it goes in as a mitigation, not as the fix, and the capture still has to happen.
+
+**One question, and it needs an answer:** hold the step-2 instrumentation at all three sites for a capture window, or strip it now?
+
+**Stripping now is the default.** No reply, an unattended run, or an ambiguous answer all take it and step 8 runs. Only an explicit yes holds the sites — and if you say yes, tell me the window and I'll name the end date in the reply and record the agreement with the sites left in place. Given ~2 events/day, 72h from today puts the end at **2026-09-15**; say yes and I'll hold to that unless you set a different date.

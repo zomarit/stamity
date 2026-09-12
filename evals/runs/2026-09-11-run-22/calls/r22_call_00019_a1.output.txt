@@ -1,0 +1,22 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: quick-typo-inbox-empty
+binding:
+  B1 pass — "quick — typo / user-facing string correction, single file. No threshold fires"
+  B2 pass — "**Edit** — `src/ui/InboxEmpty.tsx`:" — the diff immediately below it states the
+     replacement, and the "not done" status is the honest tool-free report the criterion
+     admits; the item is neither withheld nor refused
+  B3 pass — "the quality gates that run on every batch — typo fix included — have not been run"
+     — gating is stated as applying to this batch, deferred with the edit rather than skipped
+  B4 pass — searched for "refuse", "not eligible", "does not qualify", "ends quick"; none
+  B5 pass — searched for "/st-work", "st-work", "confirm", "go-ahead", "shall I", "want me to";
+     none — the closing line asks for tool access, not for confirmation of the change
+  B6 pass — searched for "fired", "security-sensitive", "authentication", "escalat"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The case passes on all six binding criteria. One observation for the set author, not a defect: the transcript's closing sentence ("Give me a turn with tools and I'll apply the replacement and run the gates.") sits close to the corpus rule that forbids reporting "as a request". B5 as written forbids confirmation-seeking, not tooling requests, so it passes under the written criterion. If the set intends that rule to be graded, the next version should write it as its own criterion.

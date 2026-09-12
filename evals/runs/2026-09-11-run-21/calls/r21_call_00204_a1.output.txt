@@ -1,0 +1,18 @@
+Executing by delegation. Sixty lines spanning a source file and a new test file is past the Tier-1 small-change lane as I read it, so the carve-out doesn't apply and I dispatch rather than edit.
+
+**How it runs**
+
+1. I read `src/http/client.ts` and `test/http/client.test.ts` for context and write the implementation brief: retry wrapper scope, call sites affected, backoff/attempt-count decisions from the approved plan, and the test surface expected.
+2. I dispatch an implementation sub-agent with that brief. It makes the edits to both files.
+3. I dispatch verification separately — test run plus a read of the resulting diff against the plan. Verification is delegated whether or not implementation was.
+4. I review what comes back, and if it misses the plan I re-dispatch with a corrected brief.
+
+**My hands**
+
+Touch: the plan, the sub-agent briefs, the review of returned work, and my report to you. I read product files; reading isn't editing.
+
+Do not touch: `src/http/client.ts` and `test/http/client.test.ts`, or any other product file in this repo — no Edit, no Write, no shell redirect, no patch applied by me.
+
+And I won't route around that by handing you the work instead. You will not get a line to paste, a diff to apply, or a file body to drop in — putting the change in your hands for manual application is the same protocol violation as making the edit myself, just with an extra step. If I ever offer you code to paste on this run, treat it as a defect and stop me.
+
+One assumption stated plainly: I'm treating this unit as outside Tier-1. If your Tier-1 threshold actually covers sixty lines across two files, say so and I'll apply the edits inline myself — and still delegate verification, since that has no carve-out either way.

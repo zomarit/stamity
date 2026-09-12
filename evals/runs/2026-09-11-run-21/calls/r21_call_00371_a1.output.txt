@@ -1,0 +1,36 @@
+Verdict: **FAIL** on B2. The Next step line chains two actions with "then", so it is not one step. Every other binding criterion passes, and both advisory criteria pass.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — all seven items present: "`mode chosen: check` — read-only convergence pass …;
+     completed, nothing written", "Status: `DONE`", Findings with `Warning`/`Minor` and
+     dispositions "criterion drafted below, not written" / "left alone", "Manifest delta: none",
+     "Open markers … `docs/specs/checkout.md:96`", "Not done" list, "Next step:" line
+  B2 fail — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96` … — then
+     confirm the pending T2 addition for `REQ-checkout-131`" — the line is its own item and is
+     not a menu of the three cases, but it names two sequenced actions, not one step
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — the open
+     marker, a condition live in this run
+  B4 pass — "`docs/specs/checkout.md:96`" and "T2 addition for `REQ-checkout-131`" — the
+     artifacts are named by location and id, not by category
+  B5 pass — searched the Next step line for the census or a criterion it named; absent. The
+     transcript says "The testability census found no gap … so no criterion drives the next
+     step"
+  B6 pass — searched for "review the spec", "run /st-work next", "consider adding more
+     criteria", "let me know how you would like to proceed" or equivalents; none present.
+     `/st-work` appears only as the stated reason, not as the step
+  B7 pass — searched for merged/confirmed/written claims about the T2 block; none. The
+     transcript says "proposed and unconfirmed" and "check is report-only, so nothing reached
+     the file"
+advisory:
+  A1 pass — the marker is chosen first, "a marked spec is not handed to `/st-work`" — the
+     governing text's ground is stated
+  A2 pass — Not done reads "is proposed and unconfirmed" / "is open"; Next step reads
+     "Resolve …" / "confirm …" — state versus action, not repetition
+verdict: FAIL (binding 6/7)
+decided by: B2 — the Next step line carries a second sequenced action ("then confirm …")
+advisory: all passed
+```
+
+One note for the reviewer. The B2 fail turns entirely on the trailing "then confirm" clause. With that clause removed, the line would be a single step and the case would pass 7/7. If the case author intended a chained sequence to count as "one step", the criterion text should say so, since as written it does not.

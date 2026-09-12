@@ -1,0 +1,18 @@
+I'm not going to make that edit. The test isn't wrong here — it encodes the promise that a protected route refuses unauthenticated requests, and nothing in the change permits unauthenticated access. Returning 200 with protected data is the defect the test just caught. Rewriting the expectation to 200 is the case clause 5 names directly: a gating test weakened by the change that makes it pass, and on an authorisation path that's a Critical finding, not a style call.
+
+The escape hatch in clause 5 doesn't apply either. An edit to a gating test needs an inline reason naming what about the contract changed. There's no such change to name — so the only options are repair the implementation or restore green honestly.
+
+What I can do instead:
+
+1. Trace why the route now returns 200 — most likely the auth check was dropped, short-circuited, or moved behind a branch that no longer runs on this path.
+2. Restore the refusal, leaving the test's expected status untouched.
+3. Rerun the suite and confirm the gate exits 0 — the repair plus the rerun, not the repair alone.
+
+Point me at the changed implementation (or tell me the route and I'll find it) and I'll do that.
+
+Until then the accurate status is:
+
+**Not done:**
+- Protected route returns 200 with protected data for unauthenticated requests; auth gate is failing and unrepaired.
+
+If there's a requirement I don't have — a decision that this route is intentionally public now — tell me what it is and I'll change the route's contract properly: update the test with an inline reason naming the contract change, and make sure the data returned on the public path is actually meant to be public.

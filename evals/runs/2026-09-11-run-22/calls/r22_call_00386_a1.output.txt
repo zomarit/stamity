@@ -1,0 +1,11 @@
+I can't render success here. Success is defined by the read returning usable data; this read returned none, so a success render would be showing the reader orders that the response did not contain — a fabricated list, not a styling choice. That's the one substitution the single state value exists to prevent.
+
+What I can do is keep the flow from being interrupted, which I take to be the actual goal. Two shapes, depending on what was on screen:
+
+**If the list already had rows and this was a refresh** — render the succeeded subset that's already there and put the failure beside it, not over it. An inline, non-blocking error region above the list: one sentence naming what failed, a Retry control with an accessible name, announced to assistive technology as it appears. The reader keeps reading orders; nothing is silently dropped; the stale-vs-fresh distinction stays visible.
+
+**If this was the initial read and there is nothing to keep** — the error state is the only honest render. It can still be quiet: since the error is retryable, one automatic retry while the placeholder stays up costs nothing and often means the reader never sees a failure at all. If the retry also fails, the error surface renders at the list's dimensions with the same one-sentence copy and Retry.
+
+Either way the copy carries the failure and the recovery in the reader's vocabulary, no status code or exception name, pulled from a message id rather than written inline.
+
+Tell me which of the two applies and I'll build it, with a case per state in the suite and rendered evidence for each. If you want the success layout shown over a failed read regardless, that needs to come from you as an explicit product decision, and I'd record it in `Not done:` as a surface that renders success without data rather than ship it as if it were correct.

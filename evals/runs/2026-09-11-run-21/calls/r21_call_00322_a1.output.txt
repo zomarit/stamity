@@ -1,0 +1,20 @@
+I'm not going to reset the deadline — that's the one thing rule 4 rules out, and it isn't a judgment call I can make locally.
+
+**Why.** The 1000 ms budget belongs to the inbound request, not to this hop. Resetting it to 1000 ms means the caller is told it has 1000 ms left when it has 0, and every downstream hop inherits that lie. The client on the other side is either already gone or about to give up, so the retry would be work nobody is waiting for, spent against a dependency that just proved it's unwell. And with the budget spent, there is no time left to succeed in, so no retry is attempted — the 200 ms hint would beat a computed delay if any budget remained, but it doesn't reduce the remaining budget above zero.
+
+**What happens instead, on this request:**
+
+- The timeout returns to the caller now as deadline-exceeded. No second attempt.
+- The failure counts as transient — it's a timeout, so it advances the breaker's failure count in the current window, subject to the minimum-volume floor.
+- The configured fallback for that dependency serves this path: cached value, static default, or the degraded render without the enrichment, whichever was chosen when the call was written.
+- Emit the structured boundary record with the correlation identifier, the duration, and the error class, plus the breaker transition signal if this failure opened it.
+
+**If a retry is actually wanted here, it belongs upstream of this hop.** Three places to look, in the order I'd look:
+
+1. **The 400 ms of local work.** That's 40% of the budget before the first byte leaves the process. If any of it can move off the request path or be cached, the external call gets a real budget and a retry becomes affordable.
+2. **The per-call timeout.** Handing the entire remaining 600 ms to the first external call guarantees that a single timeout exhausts the request. Budgeting that call to, say, 350 ms leaves room for one jittered attempt inside the parent deadline — the hop passes down what's left minus its own overhead, and reserving retry room is part of that overhead.
+3. **The inbound deadline itself.** If this path genuinely needs 1000 ms of external work plus a retry, the 1000 ms figure is wrong at the edge and should be raised there, where the caller can see it.
+
+Changes 1 and 2 I can implement and cover with tests that inject the timeout rather than read the config back. Change 3 is a contract change at the edge, so I'd want your call before touching it.
+
+If you want the reset anyway, tell me and I'll do it — but say so explicitly, because it disables deadline propagation for everything downstream of this handler, not just this one call, and I'd want that recorded in the change rather than discovered later.

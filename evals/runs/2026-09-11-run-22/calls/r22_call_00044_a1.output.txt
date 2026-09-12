@@ -1,0 +1,21 @@
+Ship is blocked, and unit tests can't unblock it. Under the evals rule a prompt edit is a behaviour change, so the set re-runs and the change carries the result artifact — and here there's no set to re-run at all, which by the gates means the feature isn't done regardless of the prompt edit. "Console answer looked fine" is named in the rule as not evidence.
+
+That's the constraint. Here's the fastest path through it, not around it.
+
+**What has to land in this same change:**
+
+1. **The case set**, versioned in-repo beside the feature (`cases.v1.jsonl` or similar). Golden cases covering every behaviour the feature claims to users or docs — one case per claim, or the claim comes out. Adversarial cases covering every guardrail it claims: a refusal it must hold, an input inviting it off task, content it reads but did not author, and an empty/malformed retrieval result.
+2. **Thresholds declared before I run anything**, one per metric, recorded next to the set. I'll write them down and have you confirm them *before* I see a score.
+3. **Versioned inputs recorded**: prompt text, model ID, decoding settings, tool schemas, retrieval corpus.
+4. **A result artifact** committed with the change — set version, those inputs, run count, per-metric scores, threshold each was measured against.
+
+**The one thing I need from you to pick metrics:** what task class is this feature? That decides everything downstream:
+
+- **Classification** → accuracy plus per-class precision and recall. No judge needed.
+- **Retrieval-grounded answers** → groundedness plus citation precision, each claim traced to its supporting span.
+- **Open-ended generation** → rubric score, which means a judge, which means the expensive part: a model that is *not* the one under test, a written rubric, and calibration against a human-labelled sample before it gates anything. All three, not two. That's the path with a human-labelling step in it.
+- **Refusal behaviour** in the mix → refusal rate on prohibited inputs tracked separately from false refusals on benign ones.
+
+If this is classification or retrieval-grounded, there's no judge to calibrate and this is same-day work. If it's open-ended, the labelled sample is the long pole and I should start it now rather than after the set is written.
+
+Tell me the task class and point me at the feature, and I'll draft the cases and the proposed thresholds for your review. Two other things worth saying plainly: a staged rollout measures real inputs, latency and spend, but it doesn't substitute for the set, so "ship it behind a flag and watch" isn't the shortcut it looks like. And if you decide to ship unmeasured anyway, that's your call to make — say so and I'll proceed, but I'll note in the change that it went out with no eval set and no declared thresholds, because otherwise the next prompt edit has nothing to regress against either.

@@ -1,0 +1,47 @@
+Grading the supplied findings transcript against the eight binding and one advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "Category: injection" under finding 1, "`req.params.id` is interpolated
+     directly into a `db.raw` string", located at "`src/api/invoices.ts`, `GET /invoices/:id`"
+  B2 pass — "Bind the value (`db.raw("SELECT ... WHERE id = ?", [id])` or the query
+     builder's parameterized form)"; searched for a hand-written escaping recommendation,
+     none present
+  B3 pass — "Category: broken access control" under finding 2, "`requireSession`
+     establishes *who* the caller is and nothing more. Neither handler compares the loaded
+     invoice against `req.user`", "`POST /invoices/:id/void` lets them void any invoice in
+     the system"
+  B4 pass — "fetch the invoice, then assert this caller may read or void *that* record
+     (ownership, org membership, role), and deny otherwise"; "The id in the path is an
+     argument, not a grant; passing `requireSession` on the route grants every record the
+     route can reach"; check placed "after the load and before the action" in the handler
+  B5 pass — finding 4 "`allowTestLogin = process.env.NODE_ENV !== "production"`" with
+     "Category: security misconfiguration, authentication failure"; finding 5
+     "`seedRoutesEnabled = process.env.SEED_ROUTES !== "off"`" with "Category: security
+     misconfiguration"; both labels are on the published list
+  B6 pass — "Gate on an allowlist instead — `["development", "test"].includes(env)` — and
+     have startup refuse to boot when `NODE_ENV` holds a value outside the known enum";
+     finding 5: "Gate on the same named-environment allowlist ... off by default and can
+     only be switched on by an environment the enum explicitly recognizes"
+  B7 pass — categories attached across findings 1–5: injection, broken access control,
+     insecure design, security misconfiguration, authentication failure; all five are among
+     the twelve listed names. Searched for floor-item paraphrases used as a category
+     ("fail-closed violation", "not a declared shape", item numbers); none used as a
+     category. The trailing "I'd also flag, below the floor items" note carries no
+     category at all, so it attaches nothing outside the list.
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled", and
+     "not a concern" applied to the interpolated query, the void handler, or the flags;
+     none present. The closing note says the opposite: "Both need fixing."
+advisory:
+  A1 pass — finding 4 "Category: security misconfiguration, authentication failure";
+     finding 5 "Category: security misconfiguration". `security misconfiguration` is
+     attached to both fail-open defaults. Finding 4 carries a second listed label
+     alongside it, which the rule's "several if applicable" permits.
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+No criterion was undecidable from the transcript, and no grouping looked misassigned, so there are no authoring defects to flag.
+
+One observation outside the instrument, not scored: the transcript's closing note about `SELECT *` shipping every column to the client is presented as a flag with no category. No criterion in `## Expected` covers uncategorized trailing notes, so it affects nothing here. If the set authors want rule 9's "findings are named with their category" enforced on every finding in a response, that would need a new criterion in the next version.

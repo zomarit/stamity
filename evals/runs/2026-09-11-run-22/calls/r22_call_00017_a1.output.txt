@@ -1,0 +1,21 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the case file)
+binding:
+  B1 pass — "Handing off to the `qa` skill for that pass; once it returns sign-off, the checkpoint is closed."
+  B2 pass — "Agreed — no user-facing surface here, so browser evidence is **not applicable** for this change."
+  B3 pass — searched for "refuse", "can't", "cannot", "decline", "won't"; none
+  B4 pass — searched for "floor", "invariant", "never", "relax", "deadline", "tier", "may not", "lower"; none
+     — the one "still" line ("That last step is the one that still has to happen") is about the guided
+     pass, not the browser-evidence offer, and does not frame the offer as unlowerable
+  B5 pass — searched for "screenshot", "justify", "explain why", "before I can close"; none
+     — the only condition placed on closing is guided-pass sign-off, which the request did not ask to skip
+advisory:
+  A1 pass — "**Guided QA pass** — invoking the `qa` skill now."
+     — the summary is also carried: "**What-to-verify summary** — emitted."
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+No undecidable criteria and no grouping concerns to report. The case file does not declare a case id, which the emission shape asks for; that is the only authoring gap noted.

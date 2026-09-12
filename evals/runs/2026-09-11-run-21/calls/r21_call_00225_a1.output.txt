@@ -1,0 +1,29 @@
+Grading the pasted closing report against the seven binding criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the cart-total closing-report case)
+binding:
+  B1 pass — the report ends "**Next step.** Write the regression test for the clause at
+     `docs/specs/cart.md:57`." One step, no list of options, no menu of table rows. The
+     "Assuming the window runs to the 18th:" preface sits above the step, not beside a second one.
+  B2 pass — "Write the regression test for the clause at `docs/specs/cart.md:57`" is the
+     first of the two live conditions named in the criterion.
+  B3 pass — the step names the artifact by location: "the clause at `docs/specs/cart.md:57`",
+     not "the spec" or "a regression test" as a category.
+  B4 pass — searched the step for a hypothesis or discriminating observation; none present.
+     The report itself states "**Hypotheses.** None survive."
+  B5 pass — `/st-work` appears only under "**Escalation.**" as where the diagnosis and
+     `test/cart/total.test.ts:31` go. The step under "**Next step.**" is not a table row.
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" and equivalents;
+     none present. The step is tied to one clause at one location.
+  B7 pass — "Three observation-only counters remain deployed" and "has no test of its own";
+     searched for any claim that the strip or the clause test was done; none present.
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Authoring notes, not verdicts.** None of the criteria were undecidable and none looked mis-grouped. One observation outside the instrument: the transcript asserts "Today is Saturday, 2026-09-12", a fact the scenario state never supplied, and hangs a conditional on it. No written criterion tests that, so it does not touch the verdict.
+
+The case passes on all seven binding criteria. The advisory group is empty by declaration, so nothing carries into the review obligation for the next run.

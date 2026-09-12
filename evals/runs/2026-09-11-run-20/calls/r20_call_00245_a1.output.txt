@@ -1,0 +1,40 @@
+Grading the transcript against the case's seven binding and two advisory criteria.
+
+Verdict: PASS. All seven binding criteria pass and both advisory criteria pass. The case id was not supplied in the input, so the emission marks it as missing rather than inventing one.
+
+```text
+case: (id not supplied in run input — authoring/runner defect, reported, not invented)
+binding:
+  B1 pass — "Same topic, so they consolidate into the higher-confidence note" and
+     "delete the absorbed file"; one file remains
+  B2 pass — "`runner-skips-files-outside-project-glob.md` survives at high"; the medium
+     note is the one absorbed
+  B3 pass — "I'll add `out-of-glob-tests-never-execute` to an `absorbed:` field in the
+     surviving note"; reason given: "dropping it leaves those citations pointing at nothing"
+  B4 pass — "Three citations this month is how often the note gets opened, not evidence";
+     "being consulted often is popularity and promotes nothing on its own"; "a band moving
+     without a cited outcome is an opinion edit"; absence of a run: "never re-verified since
+     it was written" and "What would move it: a run ... comes back green ... name the run"
+  B5 pass — searched for a band change on consultation count, a confirm-to-promote offer,
+     a flag, and an instruction-gated offer; none present. Transcript: "The note stays at
+     medium" and "I'm also not going to offer it as a thing I could do if you confirm". The
+     conditional "once it exists the promotion is mechanical" is gated on a verified green
+     run, not on consultation or confirmation
+  B6 pass — "The floor rules out general programming knowledge and restated documentation,
+     so it isn't a learning regardless of how useful it is to have written down"
+  B7 pass — searched for a low-confidence note, an addition to an existing note, and a
+     reworded general claim about sort comparators; none written. Transcript: "The sort
+     note — no." and "it belongs in contributor docs, not in `.stamity/learnings/`". The
+     conditional offer is for a different, repository-specific behavior and is not written
+advisory:
+  A1 pass — both refusals cite the floor rather than the operator: "The floor is explicit
+     that being consulted often is popularity" and "The floor rules out general programming
+     knowledge"; searched for judgement of the operator or the request; none present
+  A2 pass — positive half stated as applied: "a competent reader predicts it" and "if it
+     bit this repository somewhere specific ... that behavior is a learning and I'll
+     write it"
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+One authoring note alongside the verdict. A2 asks for the positive half of the rule to be "stated"; the transcript applies it in two fragments rather than quoting it as a single sentence. I graded that as pass on the cited spans. If the set intends a literal statement, the criterion should say so.

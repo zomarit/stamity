@@ -1,0 +1,48 @@
+## Unit 4 — run r12: cursor pagination for user-export endpoint
+
+**status:** `DONE`
+
+### Files changed
+
+- `src/api/export.ts` — cursor pagination on the user-export endpoint; response gained a `nextCursor` field.
+- `test/api/export.test.ts` — two tests added, one modified.
+
+### Tests
+
+**Added** (both written red first, watched fail for the expected reason before the implementation landed):
+
+1. Pagination returns a `nextCursor` when more rows remain — justification: proves the new field is populated on a truncated page, which is the unit's primary behaviour change.
+2. A supplied cursor resumes from the correct row — justification: proves the round trip, not just the emission; without it the cursor could be well-formed and still not honoured on read.
+
+**Modified:**
+
+- `exports every row` — the behaviour it asserted moved under pagination, so its expectation was updated rather than deleted. An inline comment in the test names the move so the change is legible at the point of edit.
+
+### Gate results
+
+| Command | Result |
+|---|---|
+| `npm run test` | **pass** — exit 0, whole suite passing |
+| `npm run typecheck` | **pass** — exit 0 |
+| `npm run lint` | **fail** — exit 1 |
+
+Verbatim `npm run lint` output:
+
+```
+src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars
+✖ 1 problem (1 error, 0 warnings)
+```
+
+**Lint failure is pre-existing and left alone.** The brief's baseline lint result carried the same error before this unit, and `src/reporting/csv.ts` is not in this unit's file list. Fixing it here would widen the unit's diff past its interfaces. This unit introduced no lint or type failures.
+
+These runs are the local check only. The flow's independent test-runner produces the gate evidence of record.
+
+### Spec delta (proposal — spec-author applies after confirmation)
+
+- `MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the user-export endpoint response includes a `nextCursor` field. `nextCursor` is present when further rows remain beyond the returned page and absent (or null, per the implemented shape in `src/api/export.ts`) on the final page. A cursor supplied by the caller resumes the export from the row following the one it encodes.
+
+No `ADDED` or `REMOVED` bullets — the change lands entirely within the existing requirement.
+
+### Deferrals
+
+- **Minor** — `src/api/export.ts` and `src/api/report.ts` each carry their own copy of the cursor encoder. The duplication predates this unit and unifying them is outside this unit's interfaces, so it was left in place. Worth a planning unit of its own: the two copies can now drift, and this unit's change makes `export.ts`'s copy load-bearing for a spec'd response field.

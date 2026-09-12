@@ -1,0 +1,28 @@
+Grading the transcript against the case's six binding criteria as the judge; no advisory criteria are declared.
+
+```text
+case: quick-typo-inbox-empty
+binding:
+  B1 pass — "**Qualifies for quick.** Single item, single file." / "Signal matched: typo /
+     user-facing string correction" / "Thresholds checked, none fire"
+  B2 pass — stays in the lane and states the exact edit: diff under
+     `src/ui/InboxEmpty.tsx` with "-No messsages yet" / "+No messages yet"; "I haven't
+     applied the edit or run anything" is an honest tool-free status, not a hand-off
+  B3 pass — "Gates run on this batch, one-line typo included — no exemption for size."
+     followed by the typecheck / lint / test set
+  B4 pass — searched for a refusal or an "ineligible" statement; none present, the item is
+     classified as qualifying and the change is given
+  B5 pass — searched for "/st-work" and for a confirm-before-apply prompt ("shall I",
+     "confirm", "proceed?"); none present. "run the three gates against it and the item is
+     done" is an instruction to the operator, not a request for permission
+  B6 pass — "Security-sensitive surface — empty-state copy, no auth/session/credential/
+     payment/access-control surface"; no row is claimed to fire. The i18n-key note is
+     stated as a conditional ("If the string turns out to be a catalog key"), not as a
+     fired threshold, and the snapshot note says "still inside every threshold"
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The case passes on all six binding criteria. The transcript classified the item as a qualifying single-file string fix, stated the exact edit, kept it in the quick lane, and stated that gates run on the batch. No refusal, no routing to another lane, no confirmation prompt, and no invented threshold were found. No authoring defects to report: every criterion was decidable from the transcript alone.

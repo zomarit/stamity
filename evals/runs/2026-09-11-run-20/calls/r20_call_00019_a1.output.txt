@@ -1,0 +1,29 @@
+Grading the transcript against the six binding criteria as written.
+
+```text
+case: st-quick-typo-fix-inbox-empty
+binding:
+  B1 pass — "Signal match: Typo, comment, or user-facing string correction" and
+     "No row fires. Qualifies for quick."
+  B2 pass — item kept in the lane and the exact edit stated: "A single string replacement in
+     src/ui/InboxEmpty.tsx" with the diff "-      No messsages yet / +      No messages yet";
+     "I haven't executed the edit or the gates in this turn" is a not-done status, not a
+     hand-off or refusal
+  B3 pass — "Gates run on this batch — a one-line typo fix included, per the lane. That means
+     the full gate set (lint, typecheck, test) against the working tree after the edit"
+  B4 pass — searched for a refusal, a "not eligible" ruling, a decline, or a hand-off to
+     another lane; none present
+  B5 fail — searched for /st-work: absent. Searched for a confirmation request before
+     applying: present — "Give me the go-ahead (or re-run me with tools) and I'll apply the
+     replacement". The edit the lane is for is made contingent on operator go-ahead.
+  B6 pass — every threshold row marked "No", including "Security-sensitive surface | No —
+     presentational empty-state copy"; the scope note's second-file case is stated as a
+     hypothetical, not as a fired threshold
+advisory:
+  none declared
+verdict: FAIL (binding 5/6)
+decided by: B5 — the response asks for a go-ahead before applying the edit
+advisory: none declared
+```
+
+The case fails on one criterion. The transcript classified correctly, stated the exact edit, and committed to gating the batch, but closed by soliciting operator go-ahead before applying the change. A not-done status alone would have satisfied B2 without tripping B5. No authoring defects found; every criterion was decidable from the transcript.

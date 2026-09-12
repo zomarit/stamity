@@ -10,9 +10,10 @@ import type { Tool } from "../types/core.ts";
  * and never enter this list — the ones a consumer outside the declaring adapter
  * reads are carried by {@link CLIENT_EXTENSION_EVENTS}, which is scoped to
  * exactly that and says so. Second, the interchange schema is one client's
- * shape — PascalCase event names, exit-0/2 semantics, structured stdout —
- * because the others either copy it verbatim or reach it by a mechanical
- * rename, so emission needs no second schema.
+ * shape — PascalCase event names, exit-0/2 semantics, structured stdout.
+ * Adapters translate those inputs and decisions into each native contract,
+ * including differing failure behavior and unsupported output fields, while
+ * preserving this shared authoring schema.
  *
  * Guarantee strength is data here, not prose in a doc page: what a generated
  * setup actually enforces per client and what its documentation claims render
@@ -20,7 +21,8 @@ import type { Tool } from "../types/core.ts";
  */
 
 /**
- * The six-intent core: the only lifecycle set enforceable on every client.
+ * The six-intent core: lifecycle events present on every client. Blocking and
+ * context injection remain event- and client-specific.
  * Canonical ids are snake_case; the wire names live in
  * {@link CLAUDE_EVENT_NAMES}.
  */
@@ -64,7 +66,7 @@ export function isCanonicalHookEvent(v: string): v is CanonicalHookEvent {
  * How strongly a client honours a hook that rejects the pending action.
  *
  * - `fail-closed`        — a rejecting hook blocks the action.
- * - `opt-in-fail-closed` — advisory unless the hook declares it wants to block.
+ * - `opt-in-fail-closed` — explicit denial blocks; opting in also denies hook errors/timeouts.
  * - `fail-open`          — the action proceeds regardless; the hook observes.
  */
 export type HookFailMode = "fail-closed" | "fail-open" | "opt-in-fail-closed";
@@ -84,9 +86,8 @@ export interface ClientHookGuarantee {
  * rendered table reads as a ladder.
  *
  * A portable gate documents per-client strength; it never claims uniform
- * enforcement. That honesty is the point of the table: a hook written once is
- * a gate on two of these clients, an opt-in gate on a third, and telemetry on
- * the fourth.
+ * enforcement. Each row's notes qualify event support, timeout handling and
+ * the absence of calling-agent identity in tool-call payloads.
  */
 export const CLIENT_HOOK_GUARANTEES: readonly ClientHookGuarantee[] = [
   {
@@ -101,21 +102,21 @@ export const CLIENT_HOOK_GUARANTEES: readonly ClientHookGuarantee[] = [
     failMode: "fail-closed",
     blockingExitCode: 2,
     notes:
-      "Adopts the interchange shape verbatim, exit-2 blocking included; emission is a config-dialect transform, not a semantic one.",
+      "Exit-2 denies supported tool calls after native /hooks trust. PreToolUse carries no agent identity, so the core role guard is telemetry; hosted tools and specialized paths may bypass hooks.",
+  },
+  {
+    tool: "copilot",
+    failMode: "fail-closed",
+    blockingExitCode: 2,
+    notes:
+      "preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. Copilot sessionStart does not inject the learning index: read .stamity/learnings and handoffs manually.",
   },
   {
     tool: "cursor",
     failMode: "opt-in-fail-closed",
     blockingExitCode: 2,
     notes:
-      "Advisory by default — a rejecting hook is logged and the action proceeds. Blocking requires opting the hook into fail-closed where it is declared.",
-  },
-  {
-    tool: "copilot",
-    failMode: "fail-open",
-    blockingExitCode: null,
-    notes:
-      "Never blocks: a hook that rejects, errors, or times out is reported and the action proceeds, so treat a hook here as telemetry and put the gate in a permission rule.",
+      "Exit 2 denies the action. failClosed opts supported events into denial on hook errors and timeouts; the identity-free core role guard remains telemetry.",
   },
 ];
 
@@ -157,11 +158,12 @@ export interface ClientExtensionEvent {
  * read it — the claude review gate derives its event pair from these rows — so
  * the table's job is shared vocabulary, not a census.
  *
- * Within that scope one tool holds every row today, which is a fact about the
- * clients rather than an incompleteness: no other target client publishes a
- * configuration-change, task-completion or subagent-stop event, so a row for
- * one would be a promise nothing keeps. It is not a claim that the other
- * clients fire no extension events at all — see the cursor pointer above.
+ * Within that scope the shared work-review gate is currently wired only for
+ * Claude. Other clients publish additional lifecycle events, including
+ * Copilot's subagentStop; event availability alone does not establish the
+ * verdict payload and decision behavior this review gate requires. Those
+ * adapters retain the prompt-carried review ladder until that integration is
+ * implemented and verified. This table does not claim those events are absent.
  */
 export const CLIENT_EXTENSION_EVENTS: readonly ClientExtensionEvent[] = [
   {

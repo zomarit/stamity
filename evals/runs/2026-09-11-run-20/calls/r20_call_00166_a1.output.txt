@@ -1,0 +1,32 @@
+## Result
+
+**status:** `BLOCKED_AMBIGUITY`
+**severity:** `Critical` (the brief cannot be executed under any single mode)
+
+### Competing readings
+
+The brief names three deliverables, and each falls under a different mode. One mode per invocation, so no one of these can be written without the other two being either dropped or written on the wrong evidence rule.
+
+| Reading | Clause | Mode | Would write | Evidence rule it would impose |
+|---|---|---|---|---|
+| 1 | "Write up the new export-scheduling behaviour" | brownfield | spec files for the touched surface under `docs/specs/` | every claim about existing behaviour carries `file:line` |
+| 2 | "Record why we chose a cron trigger over a queue consumer" | architect | ADR under `docs/adr/` | decision recorded as observed, with alternatives the code rules out |
+| 3 | "produce the page an operator reads to configure it" | docs | user-facing export-schedule page | documented behaviour exists in the current tree, at a cited path |
+
+### Ruled out, not competing
+
+`greenfield` does not apply to reading 1. "New" here is new-to-the-record, not unbuilt: the cron trigger is landed and running at `src/schedule/cron.ts:18-44`. Writing it as greenfield would let stated intent stand in for landed behaviour, which is exactly the unverified-prose path the contract names.
+
+### What is not blocked
+
+No reading is missing its input — this is an ambiguity block, not a dependency one. All three have evidence available now:
+
+- Reading 1 and 2 read from `src/schedule/cron.ts:18-44`.
+- Reading 2's target tree `docs/adr/` exists and holds eleven records; the next id is allocable against that set, and no ADR currently records this choice.
+- Reading 3's user-facing docs tree exists and carries no export-schedule page, so the page is a create, not an edit.
+
+Readings 2 and 3 also depend on reading 1's cited surface if the flow wants the ADR and the operator page to cite spec requirement ids rather than source lines directly.
+
+### Handoff
+
+Returning to the spawning flow for the ambiguity gate and re-spawn. Three spawns, one mode each, resolve the brief with nothing dropped. I have not written any file and have allocated no requirement ids.

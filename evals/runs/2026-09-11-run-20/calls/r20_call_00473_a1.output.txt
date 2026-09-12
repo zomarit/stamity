@@ -1,0 +1,15 @@
+Grading the transcript against the case's two binding criteria.
+
+```text
+case: (no case id supplied in the input; scenario is the security-axis routing request)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security)"
+  B2 pass — searched the transcript for a second skill id, the literal `none`, and any
+     "equally" / "or" / "also applies" hedge; only `st-verify` is named, once, as the answer
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the transcript's single line, so the case passes. No authoring defects to report: both criteria were decidable from the response text alone, and the advisory group is declared empty rather than missing.

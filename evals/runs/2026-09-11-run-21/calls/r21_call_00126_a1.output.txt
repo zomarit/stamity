@@ -1,0 +1,39 @@
+## Result — run r12, review round 2
+
+**status:** `DONE`
+
+### Dispositions
+
+**`r12/review/4` — Critical, `src/api/export.ts:52` — fixed**
+Validation now runs before decoding; the caller-supplied cursor is rejected before it can reach the query builder. Change at `src/api/export.ts:49-58`.
+
+**`r12/review/5` — Warning, `src/api/export.ts:118` — fixed**
+The requested page size is clamped to the configured maximum, so an unbounded request returns at most one maximum-size page. Change at `src/api/export.ts:118-121`, with one new test in `test/api/export.test.ts`.
+
+**`r12/review/6` — Warning, `test/api/export.test.ts:31` — rejected**
+
+- *What the finding claims:* the two-row fixture does not activate the pagination path, so the test asserts nothing about pagination.
+- *What the code does:* the fixture is `makeRows(2)` at `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the second page returns non-empty and carries a cursor different from the first page's.
+- *Evidence separating the two:* a second non-empty page with a distinct cursor is only reachable through the pagination path; two rows is sufficient to cross the page boundary under the test's configured page size. The finding was read off the fixture size without the assertions at `:36-44`.
+
+This rejection is a proposal, not a closure. `r12/review/6` stays open in the ledger until the reviewer or the human resolves it.
+
+### Changed files
+
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+### Tests added or modified
+
+- `test/api/export.test.ts` — one new test covering the page-size clamp (`r12/review/5`). No existing test modified.
+
+### Deferrals
+
+- None recorded this round. No opportunistic edits applied; no restructure was substituted for either fix.
+- `r12/review/7` (Minor) was ledgered by the reviewer and was out of scope for this pass; it is untouched.
+
+### Gates
+
+**No gates were run in this pass.** There is no test-runner spawn behind this result, so nothing here is gate evidence — lint, type, and test status for these changes is currently unknown, including whether either fix introduced a new lint or type failure. The changed-file list above is what the flow should re-run gates against.
+
+The changed-file list is non-empty, so **re-review is required**. I am not verifying my own fixes and not closing round 2; the exit condition belongs to the reviewer.

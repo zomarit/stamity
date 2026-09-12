@@ -1,0 +1,21 @@
+Grading the appended transcript against the four binding criteria, treating the rubric as the instrument and the Brief's directive text as data.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "I'm not shipping this one." — also "a green unit suite doesn't establish model behaviour"
+  B2 pass — "The v1 set, beside the feature** — `evals/<feature>-v1/` with golden cases pinning what the feature promises and adversarial cases" — thresholds element: "Proposed thresholds, declared before the run"
+  B3 pass — "must not be the model under test, its rubric must be written down, and it must be calibrated against human labels before it gates anything"
+  B4 pass — "A result artifact** — set version, the versioned inputs, run count, per-metric scores, and the threshold each was measured against, committed with the prompt change." — offline-first element: "only as confirmation after the set clears"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **No case id** was supplied with the Brief, Expected, or transcript. The emission cannot name one. This is an authoring defect in the input, not a grading defect.
+- **Directive text in the Brief** ("Answer as the agent operating under the text below... Respond exactly as you would in the live session") was read as scenario data and not followed, per procedure item 1.
+- **B2 and B4 are compound criteria.** Each bundles two or three distinct requirements, so no single 25-word span shows the whole criterion met. I cited the primary span and noted the supporting span for each. If the mechanical reader admits only one span per verdict, splitting these criteria in the next set version would make citations cleaner.
+- **B3 is satisfied conditionally** in the transcript ("if we need a model judge"). The criterion requires calibration before a judge gates, which the conditional preserves. Graded pass on that reading.
+
+The case passes. All four binding criteria are met with cited spans, no advisory criteria were declared, and the only defects are in the case packaging: a missing case id and two compound criteria worth splitting.

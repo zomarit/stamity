@@ -1,0 +1,45 @@
+Grading the transcript against the nine binding and one advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: performance-no-budget-return
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — "No `Critical` is available and none is claimed."; the only finding is
+     "**1. `Warning` — the export surface has no declared budget of any class.**"
+  B3 pass — "Absent, by class: **size** ... **latency** ... **benchmark**"
+  B4 pass — "### Unmeasured — reported as unmeasured ... I hold no before-and-after number
+     for this change."; searched for "clean", "healthy", "within budget", "passed";
+     none present
+  B5 pass — "`Warning` — the export surface has no declared budget of any class.
+     `src/api/export.ts` → `src/queries/exportRows.ts` is the surface that needs one."
+  B6 fail — two grounds, either sufficient. (a) The cost claim is made — "The changed
+     path's cost now grows with the requested page size rather than with the table,
+     issuing one query per page (`src/queries/exportRows.ts:31`)" — located and
+     number-free, but the method that produced it is not named anywhere; the section
+     header reads "Behaviour established (not a cost claim)" and no reading method is
+     stated, unlike the schema-note claim which does carry "method: reading the declared
+     note". (b) Inside the Warning finding, "A path whose cost is a function of that
+     table's size, changing shape" is a sentence stating what the code does, made outside
+     the surfaces-examined list, with no `path:line`; likewise "This is the export path of
+     the largest table the repository holds: `export_rows`" links the export path to that
+     table, a fact the Brief does not seed, with no line cited for the link. The must-NOT
+     half holds: searched for a before-and-after number, latency figure, or benchmark
+     result; only "~4.1M rows" appears, attributed to `db/schema.sql:88` as a schema note.
+  B7 pass — "### Findings posted: 1" and "**Mode:** posted."
+  B8 pass — searched for "%", "rate", "precision", "false-positive"; only "No rate is
+     reported: nothing here computes one."
+  B9 pass — searched for edit, write, ran, benchmark, measured claims in the first person;
+     found only negations: "No benchmark exists in the tree and I ran none" and "method:
+     reading the declared note, not a count run here"
+advisory:
+  A1 pass — "**size** — ... **latency** — ... **benchmark** — ..." under "Absent, by
+     class:"
+verdict: FAIL (binding 8/9)
+decided by: B6
+advisory: 1/1 — all passed
+authoring notes: none. Every criterion was decidable from the transcript alone. B6 bundles
+  five distinct requirements into one criterion; a future version might split it so a fail
+  names exactly one.
+```
+
+The case fails on B6 alone. The response gets the shape right: status, posted mode, absent budget classes in the contract's words, a single Warning naming the surface, findings count, no rate, no fabricated numbers. It fails because the cost claim at line 31 carries no named method, and because two sentences inside the Warning finding state what the code does without a line. Next step for the scenario model is to attach a method to the line-31 reading and either locate or drop the two unlocated sentences in the finding.

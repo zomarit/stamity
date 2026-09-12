@@ -9,6 +9,7 @@ import {
   COPILOT_DIALECT_FACTS,
   COPILOT_SETUP_STEPS_PATH,
   buildAgentFile,
+  buildCopilotHooksJson,
   buildInstructionsFile,
   buildPromptFile,
   buildSetupSteps,
@@ -910,7 +911,7 @@ describe("copilot-setup-steps.yml", () => {
 // ── Hooks: received, deliberately not emitted ────────────────────
 
 describe("hooks", () => {
-  it("emits no hook config row although the core plans interchange rows for this client", async () => {
+  it("registers core hooks on the native repository surface", async () => {
     const ctx = ctxOf();
     const core = await buildCoreEmissionPlan(ctx);
 
@@ -920,21 +921,34 @@ describe("hooks", () => {
     const hookish = pathsOf(plan).filter(
       (path) => path.includes("hooks") || path.endsWith("settings.json"),
     );
-    expect(hookish).toEqual([]);
+    expect(hookish).toContain(".github/hooks/stamity.json");
+    const native = JSON.parse(rowAt(plan, ".github/hooks/stamity.json").content);
+    expect(native.version).toBe(1);
+    expect(native.hooks.PreToolUse).toHaveLength(1);
   });
 
-  it("records the fail-open honesty in the dialect facts, sourced from CLIENT_HOOK_GUARANTEES", () => {
-    const guarantee = CLIENT_HOOK_GUARANTEES.find((row) => row.tool === "copilot");
-    expect(guarantee?.failMode).toBe("fail-open");
-    expect(guarantee?.blockingExitCode).toBeNull();
+  it("uses documented PascalCase aliases so portable tool matchers keep their meaning", () => {
+    const native = JSON.parse(buildCopilotHooksJson([
+      { event: "pre_tool_use", matcher: "Bash|Edit", command: ["node", "policy.mjs"], timeoutMs: 1100 },
+      { event: "stop", command: ["node", "stop.mjs"] },
+    ]));
+    expect(native.hooks.PreToolUse[0]).toMatchObject({ matcher: "Bash|Edit", timeoutSec: 2, cwd: "." });
+    expect(native.hooks.Stop).toHaveLength(1);
+    expect(native.hooks).not.toHaveProperty("preToolUse");
+  });
 
-    expect(COPILOT_DIALECT_FACTS.hooksConfigPath).toBeNull();
+  it("records timeout fail-open honesty in the dialect facts, sourced from CLIENT_HOOK_GUARANTEES", () => {
+    const guarantee = CLIENT_HOOK_GUARANTEES.find((row) => row.tool === "copilot");
+    expect(guarantee?.failMode).toBe("fail-closed");
+    expect(guarantee?.blockingExitCode).toBe(2);
+
+    expect(COPILOT_DIALECT_FACTS.hooksConfigPath).toBe(".github/hooks/stamity.json");
     const cap = COPILOT_DIALECT_FACTS.caps.find((row) => row.name === "hook-enforcement");
     expect(cap?.value).toContain("fail-open");
-    expect(cap?.value).toContain("blocking exit code: none");
-    // The Preview deny-gate is disclosed rather than silently emitted.
+    expect(cap?.value).toContain("Timeouts always fail-open");
+    // Runtime timeout behavior qualifies the native deny guarantee.
     expect(COPILOT_DIALECT_FACTS.caps.find((row) => row.name === "deny-gate")?.value).toContain(
-      "Preview",
+      "timeouts fail-open",
     );
   });
 
@@ -949,7 +963,7 @@ describe("hooks", () => {
     // to split the constant rather than re-stamp the rest, so one date covers
     // the list and it is no older than the last recorded pass.
     const dates = new Set(COPILOT_DIALECT_FACTS.citations.map((citation) => citation.accessDate));
-    expect(dates.size).toBe(1);
+    expect(dates.has("2026-09-10")).toBe(true);
     expect([...dates][0]! >= "2026-08-17").toBe(true);
 
     // Every surface this adapter emits for has a page behind it.

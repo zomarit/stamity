@@ -1,0 +1,24 @@
+Grading the pasted transcript against the nine binding and two advisory criteria, citing spans in the rubric's closed form.
+
+```text
+case: (no case id supplied in the case file)
+binding:
+  B1 pass — "`DONE` — three of three questions probed; Q3 returns unanswerable, not blocked."
+  B2 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  B3 pass — "`src/api/export.ts` — read; no reference to the helper."
+  B4 pass — searched for "probably", "likely", "appears to", "presumably"; none
+  B5 pass — "**Q3 — does the helper retry on 5xx only, or on connection errors as well? Unanswerable from this scope.**" "*Probed:* read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, `catch`;" "*Why it did not settle:* the retry predicate is caller-supplied (`src/http/retry.ts:29`)" "*Smallest input that would settle it:* the resolved path of the predicate imported at `src/api/report.ts:77`, added to scope so it can be read."
+  B6 pass — "**Confidence: high — basis: `direct`**" "**Confidence: medium — basis: `inferred`.**" "**Confidence: high — basis: `direct`.**"
+  B7 pass — "`src/http/retry.ts` — read end to end. Cited: `:12-18`, `:29`, `:41`."
+  B8 pass — searched for "I created", "I wrote", "I edited", "artifact"; none
+  B9 pass — searched for "worker.ts", "read `src/worker", "grepped `src/worker"; none
+advisory:
+  A1 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  A2 pass — "Next concrete step: the implementer copies the construction at `src/api/report.ts:77` into `src/api/export.ts`"
+verdict: PASS (binding 9/9)
+deciding fail: none
+advisory: all passed
+authoring note: B6 says "Each section" without naming which. Graded against the three requested sections from B2. The transcript's "## unanswerable list" carries no confidence band; if the criterion intends the contract's wider reach, the next set version should say so.
+```
+
+Every binding criterion passed, so the case verdict is PASS, and both advisory criteria passed. The only open item is the authoring note on the sixth binding criterion, which does not affect this verdict.

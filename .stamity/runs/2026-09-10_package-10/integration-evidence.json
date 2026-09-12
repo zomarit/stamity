@@ -1,0 +1,1793 @@
+{
+  "status": "integration-focused-gates-pass; independent-full-verification-pending",
+  "baseline": "99c1094953346ef19a8aaab3ee0bd7d292c36ba6",
+  "candidateVersion": "1.7.0",
+  "commands": [
+    {
+      "command": "node scripts/generate-capability-matrix.mjs",
+      "exitCode": 0,
+      "seconds": 0.165
+    },
+    {
+      "command": "node scripts/generate-docs.mjs",
+      "exitCode": 0,
+      "seconds": 0.289
+    },
+    {
+      "command": "node scripts/generate-pack-manifests.mjs",
+      "exitCode": 0,
+      "seconds": 0.117
+    },
+    {
+      "command": "node scripts/generate-plugin-manifests.mjs",
+      "exitCode": 0,
+      "seconds": 0.149
+    },
+    {
+      "command": "node scripts/generate-apm-package.mjs",
+      "exitCode": 0,
+      "seconds": 0.248
+    },
+    {
+      "command": "npm run build",
+      "exitCode": 0,
+      "seconds": 0.659
+    },
+    {
+      "command": "node dist/cli.js sync",
+      "exitCode": 0,
+      "seconds": 0.655
+    },
+    {
+      "command": "node scripts/generate-capability-matrix.mjs",
+      "exitCode": 0,
+      "seconds": 0.172
+    },
+    {
+      "command": "node scripts/generate-docs.mjs",
+      "exitCode": 0,
+      "seconds": 0.306
+    },
+    {
+      "command": "node scripts/generate-pack-manifests.mjs --check",
+      "exitCode": 0,
+      "seconds": 0.12
+    },
+    {
+      "command": "node scripts/generate-plugin-manifests.mjs --check",
+      "exitCode": 0,
+      "seconds": 0.135
+    },
+    {
+      "command": "node scripts/generate-apm-package.mjs --check",
+      "exitCode": 0,
+      "seconds": 0.141
+    }
+  ],
+  "context": {
+    "charter": {
+      "lines": 97,
+      "ceiling": 150
+    },
+    "clients": {
+      "cursor": {
+        "lines": 97,
+        "ceiling": 97
+      },
+      "claude": {
+        "lines": 240,
+        "ceiling": 240
+      },
+      "copilot": {
+        "lines": 240,
+        "ceiling": 240
+      },
+      "codex": {
+        "lines": 1063,
+        "ceiling": 1063
+      }
+    },
+    "sharedBytes": {
+      "withoutCodex": {
+        "baseline": 4614,
+        "current": 4614
+      },
+      "withCodex": {
+        "baseline": 29326,
+        "current": 29071,
+        "delta": -255
+      }
+    }
+  },
+  "dependencyPreservation": {
+    "existingDeclarations": "unchanged",
+    "existingLockedVersionsResolvedIntegrity": "unchanged",
+    "existingLibcMetadata": "preserved; 38 npm-omitted fields restored",
+    "newDeclarationGraphEntries": 24
+  },
+  "preservation": {
+    "manifest": "only generatedBy/updatedAt/ledger changed",
+    "claudeSettings": "byte-identical",
+    "AGENTSAndCLAUDEOutsideManagedBlocks": "byte-identical",
+    "skillCompanions": "8 metadata companions plus structural helper match source bytes in both APM and CLI projections"
+  },
+  "completedFocusedTests": [
+    {
+      "command": "npx vitest run test/emit/syncDriftProof.e2e.test.ts test/cli/commands/clean.test.ts test/cli/commands/init.test.ts test/cli/commands/initApply.test.ts test/cli/commands/sync.test.ts test/cli/commands/syncEngine.test.ts test/cli/commands/syncMcpOwnership.test.ts test/ci/apmPackage.test.ts test/ci/apmDownstream.test.ts test/ci/pluginManifests.test.ts test/cli/docs/cliReference.test.ts test/cli/docs/configReference.test.ts test/cli/docs/referencePages.test.ts test/cli/docs/llmsIndex.test.ts test/ci/docsRoster.test.ts",
+      "files": 15,
+      "testsPassed": 455,
+      "exitCode": 0
+    },
+    {
+      "command": "npx vitest run test/corpus/emissionGoldens.test.ts test/emit/crossClientGoldens.test.ts test/corpus/invariants.test.ts test/emit/capabilityMatrix.test.ts test/hooks/portableRunner.test.ts test/ci/apmPackage.test.ts test/ci/pluginManifests.test.ts test/cli/docs/cliReference.test.ts test/cli/docs/configReference.test.ts test/cli/docs/referencePages.test.ts test/cli/docs/llmsIndex.test.ts test/docsPages.test.ts",
+      "files": 12,
+      "testsPassed": 425,
+      "exitCode": 0
+    }
+  ],
+  "initialRed": {
+    "filesFailed": 5,
+    "filesPassed": 5,
+    "testsFailed": 31,
+    "testsPassed": 319,
+    "reason": "Stale generated outputs and old native-hook assertions; repaired at their contract seam before snapshot refresh."
+  },
+  "preSnapshotRefresh": {
+    "filesFailed": 2,
+    "filesPassed": 1,
+    "testsFailed": 14,
+    "testsPassed": 105,
+    "reason": "All remaining failures were stale snapshot comparisons; three new portable-runner snapshots were auto-created by Vitest."
+  },
+  "finalChecks": {
+    "lint": "npm run lint: exit 0",
+    "typecheck": "npm run typecheck: exit 0",
+    "build": "npm run build: exit 0",
+    "sync": "0 created, 0 updated, 67 unchanged, 0 skipped",
+    "dogfood": "node dist/cli.js check: exit 0, drift clean",
+    "generation": "all generator checks exit 0; repeat byte comparison unchanged",
+    "diffCheck": "git diff --check: exit 0",
+    "sizeBytes": {
+      "logic": 1261336,
+      "logicCeiling": 2097152,
+      "corpus": 538084,
+      "corpusCeiling": 1572864
+    },
+    "leakGate": "node scripts/leak-gate.mjs: exit 0; 1085 files scanned, zero hits across 18 rules"
+  },
+  "snapshotRefresh": {
+    "command": "npx vitest run test/corpus/emissionGoldens.test.ts test/emit/crossClientGoldens.test.ts --update",
+    "exitCode": 0,
+    "files": 2,
+    "testsPassed": 75,
+    "updatedSnapshots": 14,
+    "newPortableRunnerSnapshots": 3,
+    "removedEmittedPaths": 0
+  },
+  "generatedPaths": [
+    {
+      "path": ".apm/agents/stamity-reviewer.agent.md",
+      "disposition": "updated",
+      "beforeSha256": "0dcb37697c5be22d77aa8973df65b8b73a1e734c29202636105dcc31aa078b79",
+      "sha256": "04214d9d2ee838804c484e5eb0b7ebe97ab26b58be0595f9735bcf4391333e6e"
+    },
+    {
+      "path": ".apm/agents/stamity-spec-author.agent.md",
+      "disposition": "updated",
+      "beforeSha256": "38144a8aeea904a67c54ba7b2b9ebc8615e98491c3572a5618ba6dcdff009d2b",
+      "sha256": "bee3695c2314eeac24e69cc662a4aff0eba2a93cb199667c93dcd43abc97f13f"
+    },
+    {
+      "path": ".apm/instructions/stamity-injection-screening.instructions.md",
+      "disposition": "updated",
+      "beforeSha256": "fc4810721dc1370ed5f3faa1399eadc2a938d71815807c2dd9a4914c1b720d66",
+      "sha256": "2e66e84dca5cddf82684c671a75ae98e3a43d2f11f02199bf3f8c0be5f3ac141"
+    },
+    {
+      "path": ".apm/instructions/stamity-secrets.instructions.md",
+      "disposition": "updated",
+      "beforeSha256": "70eaeab62d655b507701dfed4e830e181d471eea6b3337c3c7d3b98734566f6f",
+      "sha256": "22e453322b58e10f127395f2c23d953ed3d1b40afc11aae2087a1cbca56dc51d"
+    },
+    {
+      "path": ".apm/instructions/stamity-security-patterns.instructions.md",
+      "disposition": "updated",
+      "beforeSha256": "b61528308080b0819dd8ae6ca1cc8c17ad67cabbfc84f4c74eb66e6731dd7935",
+      "sha256": "a8d4d48e991eeba6dab9d3245efc7409240588def63a97925d1ef2df417f6a99"
+    },
+    {
+      "path": ".apm/prompts/st-board.prompt.md",
+      "disposition": "updated",
+      "beforeSha256": "6ec7a7ea80e773b2d242520fde73718e82f378fa3e0d0e3f4b38e4a8dc9e8bfe",
+      "sha256": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75"
+    },
+    {
+      "path": ".apm/prompts/st-plan.prompt.md",
+      "disposition": "updated",
+      "beforeSha256": "001068d955e6d25ac6cef41d00a026adccbc93401736f5fa0b3d667bb4cbd87f",
+      "sha256": "40bb89201abb889996da972cac3e084fe6ff5976461a88440f2e57723f8c8a17"
+    },
+    {
+      "path": ".apm/prompts/st-rework.prompt.md",
+      "disposition": "updated",
+      "beforeSha256": "95df910685376125fc1c2b404bbafe9ef1a635424771a7da7355eceadb4d1aa8",
+      "sha256": "844b82bafd88dc29b6a09ae26ff8a426a1149a062fdd29508d6821fcc312ba47"
+    },
+    {
+      "path": ".apm/prompts/st-spec.prompt.md",
+      "disposition": "updated",
+      "beforeSha256": "a44756ade3051714a3d76a0cfc82550ae3462c7879acb2376c48d1c8287bbab9",
+      "sha256": "7f517712fbae5a7c972d3b0ef48a0ac260c19b5267c1b10d1a365918f5dbba6e"
+    },
+    {
+      "path": ".apm/prompts/st-work.prompt.md",
+      "disposition": "updated",
+      "beforeSha256": "ce91aa26e772d9b8c65e9bce8a288676a2111f22ce92be42ab9543a566c5763c",
+      "sha256": "89e3867554dcf541b286db3efb8474ef5019beca2b576aea40a45d5333ca6b6e"
+    },
+    {
+      "path": ".apm/skills/st-browser-evidence/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760"
+    },
+    {
+      "path": ".apm/skills/st-dep-audit/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "03b9f0b720a98145fda8584c40f0a54f56ae18c213ca7d42e9801dcac5c0abde"
+    },
+    {
+      "path": ".apm/skills/st-design-system-detect/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "91065c090283437485a15f7575527d1b64972caf0432026f5ede3b7621a24573"
+    },
+    {
+      "path": ".apm/skills/st-handoff/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "fc1585c3bab1d2332600c62df9beda798b887427cc568b0d075984ea919956dc"
+    },
+    {
+      "path": ".apm/skills/st-learn/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5"
+    },
+    {
+      "path": ".apm/skills/st-onboard/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "d4c945cd6b3745c62b6a09f4dd23c87e104d384a1bd74d9a08941ab1f2e67615",
+      "sha256": "fb3eca5b2dfe73d85412ca5064d2bef2f7d7b756362b9ef2dd84bcb2261e118a"
+    },
+    {
+      "path": ".apm/skills/st-onboard/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351"
+    },
+    {
+      "path": ".apm/skills/st-qa/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1"
+    },
+    {
+      "path": ".apm/skills/st-verify/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "5a5a4e655d6d4102cf1807b5692adadc5bd8fcd4f1763757fd13250490b19ea5",
+      "sha256": "0c1cca7f26d30f9e32adc67688c09bfc5ffc617535a64c277a6884f1200c2025"
+    },
+    {
+      "path": ".apm/skills/st-verify/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13"
+    },
+    {
+      "path": ".apm/skills/st-verify/references/product-spec.md",
+      "disposition": "updated",
+      "beforeSha256": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd",
+      "sha256": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c"
+    },
+    {
+      "path": ".apm/skills/st-verify/scripts/spec-plan-coverage.mjs",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "05456cf3f41fb3c1366480179006c1ba1055b0519e8383c2682a91e789ca4ca8"
+    },
+    {
+      "path": ".claude-plugin/marketplace.json",
+      "disposition": "updated",
+      "beforeSha256": "0c005ad328fbdf552808311312068db226e08be475ee9ad3f4610ae4c61d30f1",
+      "sha256": "6412d98035a8d8f2f123a95a9c34c0de7e0838220ca1b7c4a070baa40737f814"
+    },
+    {
+      "path": ".claude-plugin/plugin.json",
+      "disposition": "updated",
+      "beforeSha256": "6e8126272904466f7043a497ee2388a2b3675a33737acfda5262222cacf414ec",
+      "sha256": "6a9d760324ff51199936be75198c1b447d0e6d2f61bf0dd1e45e56415227ca50"
+    },
+    {
+      "path": ".claude/agents/stamity-reviewer.md",
+      "disposition": "updated",
+      "beforeSha256": "b3c408c9dd30ebb25309c5367f8d96ec2ba47a2fef284d73674ea92f31912c62",
+      "sha256": "ddcc0744acc5f9a13d5d722803ae9d17604f34f1a709b4f5c5f8a6c03a59ca36"
+    },
+    {
+      "path": ".claude/agents/stamity-spec-author.md",
+      "disposition": "updated",
+      "beforeSha256": "8e7942d51c0a2e0f782c28a4c9483c4fb23ad45acedaeb3089eda6bf9c4fd8a6",
+      "sha256": "2f7153c2d405e4bfe6f86229a94eb861aee6e56dac582b43dd782848eeac0ba2"
+    },
+    {
+      "path": ".claude/commands/st-board.md",
+      "disposition": "updated",
+      "beforeSha256": "6ec7a7ea80e773b2d242520fde73718e82f378fa3e0d0e3f4b38e4a8dc9e8bfe",
+      "sha256": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75"
+    },
+    {
+      "path": ".claude/commands/st-plan.md",
+      "disposition": "updated",
+      "beforeSha256": "a0f005ab6ff00604f67a32f675b6f62de90cbfc28de2dabd50325f9c172adbc5",
+      "sha256": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0"
+    },
+    {
+      "path": ".claude/commands/st-rework.md",
+      "disposition": "updated",
+      "beforeSha256": "8e60b63c44e4d0085e940f7a537b5095da7c0eaf1508cc82fe92bf1688aacc78",
+      "sha256": "a7e268718849ad65776000fe4e6c5cd11de6e0a8719d34187962df12537ee0ec"
+    },
+    {
+      "path": ".claude/commands/st-spec.md",
+      "disposition": "updated",
+      "beforeSha256": "93b53a5e6e4ea139e355ab6bfa5397ca3bef28db7d13e4aa7ef1c99c92a074ff",
+      "sha256": "42bde1267b1b5999b95f585bbe809eeb877612feba0748cc30c5179d3e06996e"
+    },
+    {
+      "path": ".claude/commands/st-work.md",
+      "disposition": "updated",
+      "beforeSha256": "5b5abfe897a2919853cc436d650fb7aea3273473bda943722f05a4a121d0be83",
+      "sha256": "c5b4131751dc860346523c4c5d11dcfd820a9711bb749404be73fcb8949d3d47"
+    },
+    {
+      "path": ".claude/rules/stamity-injection-screening.md",
+      "disposition": "updated",
+      "beforeSha256": "f1054cb32a001f5294a80862acfc3ba9e7bd5f4e701cf8e5177970335b7fea46",
+      "sha256": "49e0dae094800f9cca655f783783a41d0d32cf0117b114987d49ff728e8d2a3c"
+    },
+    {
+      "path": ".claude/rules/stamity-secrets.md",
+      "disposition": "updated",
+      "beforeSha256": "6ad54255c641460292f79b100fb11b0e50dac6420dc3b7f9f0a3ea2114a1cb54",
+      "sha256": "074b2f82a2f1711dcc68772ff149eeb3a48487e6170690fb9746715caeb3c2d3"
+    },
+    {
+      "path": ".claude/rules/stamity-security-patterns.md",
+      "disposition": "updated",
+      "beforeSha256": "dfe1a5580a47442cefc0785276aca664c43c09d2ff14ec5256986471ee1f9790",
+      "sha256": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056"
+    },
+    {
+      "path": ".claude/skills/st-browser-evidence/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3",
+      "sha256": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7"
+    },
+    {
+      "path": ".claude/skills/st-browser-evidence/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760"
+    },
+    {
+      "path": ".claude/skills/st-dep-audit/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3",
+      "sha256": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836"
+    },
+    {
+      "path": ".claude/skills/st-dep-audit/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "03b9f0b720a98145fda8584c40f0a54f56ae18c213ca7d42e9801dcac5c0abde"
+    },
+    {
+      "path": ".claude/skills/st-design-system-detect/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52",
+      "sha256": "797494d53ab3a5cfb0f866ed14c7cf4002a8fb4a943004f425b57ae845e3a000"
+    },
+    {
+      "path": ".claude/skills/st-design-system-detect/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "91065c090283437485a15f7575527d1b64972caf0432026f5ede3b7621a24573"
+    },
+    {
+      "path": ".claude/skills/st-eval-run/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "706d9cf486eca54a796afff96e4741a953bd22a336051a1a662f5df4b80a52c1",
+      "sha256": "911b3b2a726969bb8ba20c776b90c9970e7862a00795400e5858eea149a51f98"
+    },
+    {
+      "path": ".claude/skills/st-handoff/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "be6f50612f6e7e0ce007b1ce6f8c27f5e98fafba1498a3c0b6dffa1198fd310c",
+      "sha256": "ae2dae8e15f9c758bf6090b9df2aa7f18c1169db55b12fe3341aca899b2da55c"
+    },
+    {
+      "path": ".claude/skills/st-handoff/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "fc1585c3bab1d2332600c62df9beda798b887427cc568b0d075984ea919956dc"
+    },
+    {
+      "path": ".claude/skills/st-learn/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5",
+      "sha256": "975b9010dcfcbb6e059ab4965638754fef59c79cae3a4c7e6a3b8e975ffaca40"
+    },
+    {
+      "path": ".claude/skills/st-learn/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "15a01aa4b19843baaeb6203dbdbc5f4998c20616ebdf39af11198ecf71df57b5"
+    },
+    {
+      "path": ".claude/skills/st-onboard/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "3310ef9e87b0298992c5cf7297d5c5816b3b96124fd21f9190763fe75fcf9c42",
+      "sha256": "05cd57d34a4c06e727447a55430fc621e9c67af9fc69cc2d893a01f63d003a3a"
+    },
+    {
+      "path": ".claude/skills/st-onboard/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351"
+    },
+    {
+      "path": ".claude/skills/st-qa/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "86fbfb7e78f660c4b92626de46828c0da7fb4ea3a602cdcdeaadee23cbdfb183",
+      "sha256": "51f67edfc524cb33a165af3703173e1213db97cd32f0e5378633161efafcbb15"
+    },
+    {
+      "path": ".claude/skills/st-qa/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1"
+    },
+    {
+      "path": ".claude/skills/st-verify/SKILL.md",
+      "disposition": "updated",
+      "beforeSha256": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb",
+      "sha256": "e8790ff06d9bff6122ab340f6645e5356f50207fc9363344c54a01d80ce661ee"
+    },
+    {
+      "path": ".claude/skills/st-verify/agents/openai.yaml",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13"
+    },
+    {
+      "path": ".claude/skills/st-verify/references/product-spec.md",
+      "disposition": "updated",
+      "beforeSha256": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd",
+      "sha256": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c"
+    },
+    {
+      "path": ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs",
+      "disposition": "created",
+      "beforeSha256": null,
+      "sha256": "05456cf3f41fb3c1366480179006c1ba1055b0519e8383c2682a91e789ca4ca8"
+    },
+    {
+      "path": ".cursor-plugin/plugin.json",
+      "disposition": "updated",
+      "beforeSha256": "8d7e278e4e550aaa82380864beb0f666e8a0bb2e58eeaccc977953f044d6db05",
+      "sha256": "4fde09d882b012515d1dcccd730fafd77cf81d2daf4e61fe98e25dd3299886bc"
+    },
+    {
+      "path": ".stamity/manifest.json",
+      "disposition": "updated",
+      "beforeSha256": "f773b53a8de87b56ecf9d4ebe489ef5238de24b19e4a1804d7c465805a81dd3d",
+      "sha256": "e06df630d4004d5e1cdbf96fb017a47168454852e7885342a643822ae4d85832"
+    },
+    {
+      "path": "AGENTS.md",
+      "disposition": "updated",
+      "beforeSha256": "b6a0a84338034f54954c3a2943fa8c190c64aa58ac757903b7847acc5398fa06",
+      "sha256": "0f8e119ccac09f9f10c79079a5170ddf26d9521f1db52ba1a0740bacb829fde1"
+    },
+    {
+      "path": "CLAUDE.md",
+      "disposition": "updated",
+      "beforeSha256": "bdb5fed37c0aafd7707207f9e1128f76a72179aed437e5ca286f4d6851bf2f1b",
+      "sha256": "1bdd3a3f166706c02b6fb955a8fab0229b281c543fe817d71eea9dbfc21f1b72"
+    },
+    {
+      "path": "apm.yml",
+      "disposition": "updated",
+      "beforeSha256": "1bc353fc3b3d26896f63e14c3961e04dc78702c97ea45ecfafd5834997313870",
+      "sha256": "f5fd162ccf2b1ac5c1451dd2c96f8e677a4a1e01bde162a59af127107837336e"
+    },
+    {
+      "path": "docs/capability-matrix.md",
+      "disposition": "updated",
+      "beforeSha256": "b3a8c033fdc3ca2497cab3b8c42008d16fcb7966add5da50e6eb15022ae1ceee",
+      "sha256": "06aa0de45aeb5cd6b018ebd6aba423439688be0641766c8a4b043d2507fbdeb5"
+    },
+    {
+      "path": "plugin.json",
+      "disposition": "updated",
+      "beforeSha256": "12dbffc08f96249a5ce1d261b2cb1fc0310c08a4d4f9a9bb0b95be6baaaa8351",
+      "sha256": "caff7dd3fbeca032671ffbf23a5e75cba6d5cb4193bf582f445e4ed8a2519436"
+    },
+    {
+      "path": "test/corpus/__snapshots__/emissionGoldens.test.ts.snap",
+      "disposition": "updated",
+      "beforeSha256": "ed0c5fcc1320f92f8de7c0ed09b67703839c733feb9f0ffbc82d5749dc0d4a8c",
+      "sha256": "1dd5b640c490a0763822967ae2de00d55c275f68d319d3d0991ebeabe08e1ce3"
+    },
+    {
+      "path": "test/emit/__snapshots__/crossClientGoldens.test.ts.snap",
+      "disposition": "updated",
+      "beforeSha256": "d1020bb4d2df5e2720f4206240648d9a37752aefa87d699cf66360d7373f20a5",
+      "sha256": "76044bac3a537c5c4103feb5660a832a4d0c057751956b79d11806feb491c389"
+    },
+    {
+      "path": "docs/reference/agents.md",
+      "sha256": "10f84d56eedd21676ee1210c23c31c2ded424d67b2096bed820744ca87c1e04e",
+      "disposition": "updated by reference-doc generator for semantic heading hierarchy; only H3 to H2 changed"
+    },
+    {
+      "path": "docs/reference/commands.md",
+      "sha256": "e4d4bf50c924a55fba5f036f6fd4d2a6f3475e23920dc4b46f739000a1ba7836",
+      "disposition": "updated by reference-doc generator for semantic heading hierarchy; only H3 to H2 changed"
+    },
+    {
+      "path": "docs/reference/mcp-servers.md",
+      "sha256": "09f5888ece845c21324806f5815b4d7662723375754252ddda6b69f98e60d742",
+      "disposition": "updated by reference-doc generator for semantic heading hierarchy; only H3 to H2 changed"
+    },
+    {
+      "path": "docs/reference/packs.md",
+      "sha256": "cd004dadac944b33e0dda943b1b6967da2504dd60464b7c98af385c497d3f170",
+      "disposition": "updated by reference-doc generator for semantic heading hierarchy; only H3 to H2 changed"
+    },
+    {
+      "path": "docs/reference/rules.md",
+      "sha256": "3016ff9d7c6b4078f799d5bb1305cfab26be871c1b70a6c3655a5eb46c24d17d",
+      "disposition": "updated by reference-doc generator for semantic heading hierarchy; only H3 to H2 changed"
+    },
+    {
+      "path": "docs/reference/skills.md",
+      "sha256": "694c2826e71fd31089ea318e47e0123fa7b2af03974a85e03625efa3a0961c7b",
+      "disposition": "updated by reference-doc generator for semantic heading hierarchy; only H3 to H2 changed"
+    }
+  ],
+  "unchangedGeneratedPaths": [
+    ".apm/agents/stamity-creator.agent.md",
+    ".apm/agents/stamity-design-quality.agent.md",
+    ".apm/agents/stamity-fixer.agent.md",
+    ".apm/agents/stamity-implementer.agent.md",
+    ".apm/agents/stamity-performance.agent.md",
+    ".apm/agents/stamity-researcher.agent.md",
+    ".apm/agents/stamity-security.agent.md",
+    ".apm/agents/stamity-test-runner.agent.md",
+    ".apm/instructions/stamity-ai-evals.instructions.md",
+    ".apm/instructions/stamity-api-versioning.instructions.md",
+    ".apm/instructions/stamity-contract-census.instructions.md",
+    ".apm/instructions/stamity-learnings-schema.instructions.md",
+    ".apm/instructions/stamity-migrations.instructions.md",
+    ".apm/instructions/stamity-question-protocol.instructions.md",
+    ".apm/instructions/stamity-resilience.instructions.md",
+    ".apm/instructions/stamity-testing.instructions.md",
+    ".apm/instructions/stamity-ui-states.instructions.md",
+    ".apm/prompts/st-ask.prompt.md",
+    ".apm/prompts/st-debug.prompt.md",
+    ".apm/prompts/st-pr-resolve.prompt.md",
+    ".apm/prompts/st-quick.prompt.md",
+    ".apm/skills/st-browser-evidence/SKILL.md",
+    ".apm/skills/st-dep-audit/SKILL.md",
+    ".apm/skills/st-design-system-detect/SKILL.md",
+    ".apm/skills/st-handoff/SKILL.md",
+    ".apm/skills/st-learn/SKILL.md",
+    ".apm/skills/st-qa/SKILL.md",
+    ".apm/skills/st-verify/references/enhancability.md",
+    ".apm/skills/st-verify/references/maintainability.md",
+    ".apm/skills/st-verify/references/performance.md",
+    ".apm/skills/st-verify/references/reliability.md",
+    ".apm/skills/st-verify/references/scalability.md",
+    ".apm/skills/st-verify/references/security.md",
+    ".apm/skills/st-verify/references/testability.md",
+    ".apm/skills/st-verify/references/ui.md",
+    ".apm/skills/st-verify/references/ux.md",
+    ".claude/agents/stamity-creator.md",
+    ".claude/agents/stamity-design-quality.md",
+    ".claude/agents/stamity-fixer.md",
+    ".claude/agents/stamity-implementer.md",
+    ".claude/agents/stamity-performance.md",
+    ".claude/agents/stamity-researcher.md",
+    ".claude/agents/stamity-security.md",
+    ".claude/agents/stamity-test-runner.md",
+    ".claude/commands/st-ask.md",
+    ".claude/commands/st-debug.md",
+    ".claude/commands/st-pr-resolve.md",
+    ".claude/commands/st-quick.md",
+    ".claude/rules/stamity-ai-evals.md",
+    ".claude/rules/stamity-api-versioning.md",
+    ".claude/rules/stamity-contract-census.md",
+    ".claude/rules/stamity-learnings-schema.md",
+    ".claude/rules/stamity-migrations.md",
+    ".claude/rules/stamity-question-protocol.md",
+    ".claude/rules/stamity-resilience.md",
+    ".claude/rules/stamity-testing.md",
+    ".claude/rules/stamity-ui-states.md",
+    ".claude/settings.json",
+    ".claude/skills/st-verify/references/enhancability.md",
+    ".claude/skills/st-verify/references/maintainability.md",
+    ".claude/skills/st-verify/references/performance.md",
+    ".claude/skills/st-verify/references/reliability.md",
+    ".claude/skills/st-verify/references/scalability.md",
+    ".claude/skills/st-verify/references/security.md",
+    ".claude/skills/st-verify/references/testability.md",
+    ".claude/skills/st-verify/references/ui.md",
+    ".claude/skills/st-verify/references/ux.md",
+    ".stamity/generated/agent-tool-policies.json",
+    ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs",
+    ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs",
+    ".stamity/generated/hooks/claude/stamity-review-gate.mjs",
+    ".stamity/generated/hooks/claude/stamity-session-start.mjs",
+    "docs/cli-reference.md",
+    "docs/configuration.md",
+    "docs/reference/agents.md",
+    "docs/reference/commands.md",
+    "docs/reference/mcp-servers.md",
+    "docs/reference/packs.md",
+    "docs/reference/rules.md",
+    "docs/reference/skills.md",
+    "llms.txt",
+    "src/pack/catalogPins.ts"
+  ],
+  "goldenTreeDelta": [
+    {
+      "selection": "all-four",
+      "addedPaths": [
+        ".agents/skills/st-browser-evidence/agents/openai.yaml",
+        ".agents/skills/st-dep-audit/agents/openai.yaml",
+        ".agents/skills/st-design-system-detect/agents/openai.yaml",
+        ".agents/skills/st-handoff/agents/openai.yaml",
+        ".agents/skills/st-learn/agents/openai.yaml",
+        ".agents/skills/st-onboard/agents/openai.yaml",
+        ".agents/skills/st-qa/agents/openai.yaml",
+        ".agents/skills/st-verify/agents/openai.yaml",
+        ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs",
+        ".claude/skills/st-browser-evidence/agents/openai.yaml",
+        ".claude/skills/st-dep-audit/agents/openai.yaml",
+        ".claude/skills/st-design-system-detect/agents/openai.yaml",
+        ".claude/skills/st-handoff/agents/openai.yaml",
+        ".claude/skills/st-learn/agents/openai.yaml",
+        ".claude/skills/st-onboard/agents/openai.yaml",
+        ".claude/skills/st-qa/agents/openai.yaml",
+        ".claude/skills/st-verify/agents/openai.yaml",
+        ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs",
+        ".github/hooks/stamity.json",
+        ".stamity/generated/hooks/codex/stamity-portable-hook.mjs",
+        ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs",
+        ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs"
+      ],
+      "removedPaths": [],
+      "changedPaths": [
+        {
+          "path": ".agents/skills/st-browser-evidence/SKILL.md",
+          "before": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+          "after": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes"
+        },
+        {
+          "path": ".agents/skills/st-dep-audit/SKILL.md",
+          "before": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
+          "after": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836 6461 bytes"
+        },
+        {
+          "path": ".agents/skills/st-design-system-detect/SKILL.md",
+          "before": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+          "after": "797494d53ab3a5cfb0f866ed14c7cf4002a8fb4a943004f425b57ae845e3a000 6961 bytes"
+        },
+        {
+          "path": ".agents/skills/st-handoff/SKILL.md",
+          "before": "be6f50612f6e7e0ce007b1ce6f8c27f5e98fafba1498a3c0b6dffa1198fd310c 11589 bytes",
+          "after": "ae2dae8e15f9c758bf6090b9df2aa7f18c1169db55b12fe3341aca899b2da55c 11708 bytes"
+        },
+        {
+          "path": ".agents/skills/st-learn/SKILL.md",
+          "before": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+          "after": "975b9010dcfcbb6e059ab4965638754fef59c79cae3a4c7e6a3b8e975ffaca40 6008 bytes"
+        },
+        {
+          "path": ".agents/skills/st-onboard/SKILL.md",
+          "before": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+          "after": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes"
+        },
+        {
+          "path": ".agents/skills/st-qa/SKILL.md",
+          "before": "86fbfb7e78f660c4b92626de46828c0da7fb4ea3a602cdcdeaadee23cbdfb183 5920 bytes",
+          "after": "51f67edfc524cb33a165af3703173e1213db97cd32f0e5378633161efafcbb15 6039 bytes"
+        },
+        {
+          "path": ".agents/skills/st-verify/SKILL.md",
+          "before": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+          "after": "e8790ff06d9bff6122ab340f6645e5356f50207fc9363344c54a01d80ce661ee 6921 bytes"
+        },
+        {
+          "path": ".agents/skills/st-verify/references/product-spec.md",
+          "before": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+          "after": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes"
+        },
+        {
+          "path": ".claude/agents/stamity-reviewer.md",
+          "before": "b3c408c9dd30ebb25309c5367f8d96ec2ba47a2fef284d73674ea92f31912c62 10284 bytes",
+          "after": "ddcc0744acc5f9a13d5d722803ae9d17604f34f1a709b4f5c5f8a6c03a59ca36 10541 bytes"
+        },
+        {
+          "path": ".claude/agents/stamity-spec-author.md",
+          "before": "8e7942d51c0a2e0f782c28a4c9483c4fb23ad45acedaeb3089eda6bf9c4fd8a6 8277 bytes",
+          "after": "2f7153c2d405e4bfe6f86229a94eb861aee6e56dac582b43dd782848eeac0ba2 9099 bytes"
+        },
+        {
+          "path": ".claude/commands/st-board.md",
+          "before": "6ec7a7ea80e773b2d242520fde73718e82f378fa3e0d0e3f4b38e4a8dc9e8bfe 21195 bytes",
+          "after": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75 21562 bytes"
+        },
+        {
+          "path": ".claude/commands/st-plan.md",
+          "before": "a0f005ab6ff00604f67a32f675b6f62de90cbfc28de2dabd50325f9c172adbc5 23385 bytes",
+          "after": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0 25104 bytes"
+        },
+        {
+          "path": ".claude/commands/st-rework.md",
+          "before": "c7d30ee39f9a730f1f695c974c320482baa623c0dd1b412839b9b7bcd6c0d627 17724 bytes",
+          "after": "25c7a49eb26047335fc5979470a87410dd87368d898aa7895b2fb88523473e61 17903 bytes"
+        },
+        {
+          "path": ".claude/commands/st-spec.md",
+          "before": "6c126b5d120b079a6a2380a06a49b67e10bd640d6eafb143373048b753d2c179 15789 bytes",
+          "after": "262627f969d9f85c4d231400e272aaf10459ff1f61bba36afc916d2f37cab0cc 16687 bytes"
+        },
+        {
+          "path": ".claude/commands/st-work.md",
+          "before": "3ac608aadc96a783c51815edabdec2178e9eaebd8a8ae52b2980405ed6e0f769 22883 bytes",
+          "after": "2654178d97b2b2de0a87018247d4e75beae89968df04a7888f712fda246c3e49 23493 bytes"
+        },
+        {
+          "path": ".claude/rules/stamity-injection-screening.md",
+          "before": "f1054cb32a001f5294a80862acfc3ba9e7bd5f4e701cf8e5177970335b7fea46 7407 bytes",
+          "after": "49e0dae094800f9cca655f783783a41d0d32cf0117b114987d49ff728e8d2a3c 7144 bytes"
+        },
+        {
+          "path": ".claude/rules/stamity-secrets.md",
+          "before": "6ad54255c641460292f79b100fb11b0e50dac6420dc3b7f9f0a3ea2114a1cb54 6306 bytes",
+          "after": "074b2f82a2f1711dcc68772ff149eeb3a48487e6170690fb9746715caeb3c2d3 6251 bytes"
+        },
+        {
+          "path": ".claude/rules/stamity-security-patterns.md",
+          "before": "dfe1a5580a47442cefc0785276aca664c43c09d2ff14ec5256986471ee1f9790 6298 bytes",
+          "after": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes"
+        },
+        {
+          "path": ".claude/skills/st-browser-evidence/SKILL.md",
+          "before": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+          "after": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes"
+        },
+        {
+          "path": ".claude/skills/st-dep-audit/SKILL.md",
+          "before": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
+          "after": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836 6461 bytes"
+        },
+        {
+          "path": ".claude/skills/st-design-system-detect/SKILL.md",
+          "before": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+          "after": "797494d53ab3a5cfb0f866ed14c7cf4002a8fb4a943004f425b57ae845e3a000 6961 bytes"
+        },
+        {
+          "path": ".claude/skills/st-handoff/SKILL.md",
+          "before": "be6f50612f6e7e0ce007b1ce6f8c27f5e98fafba1498a3c0b6dffa1198fd310c 11589 bytes",
+          "after": "ae2dae8e15f9c758bf6090b9df2aa7f18c1169db55b12fe3341aca899b2da55c 11708 bytes"
+        },
+        {
+          "path": ".claude/skills/st-learn/SKILL.md",
+          "before": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+          "after": "975b9010dcfcbb6e059ab4965638754fef59c79cae3a4c7e6a3b8e975ffaca40 6008 bytes"
+        },
+        {
+          "path": ".claude/skills/st-onboard/SKILL.md",
+          "before": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+          "after": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes"
+        },
+        {
+          "path": ".claude/skills/st-qa/SKILL.md",
+          "before": "86fbfb7e78f660c4b92626de46828c0da7fb4ea3a602cdcdeaadee23cbdfb183 5920 bytes",
+          "after": "51f67edfc524cb33a165af3703173e1213db97cd32f0e5378633161efafcbb15 6039 bytes"
+        },
+        {
+          "path": ".claude/skills/st-verify/SKILL.md",
+          "before": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+          "after": "e8790ff06d9bff6122ab340f6645e5356f50207fc9363344c54a01d80ce661ee 6921 bytes"
+        },
+        {
+          "path": ".claude/skills/st-verify/references/product-spec.md",
+          "before": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+          "after": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-creator.toml",
+          "before": "196035326c629127cfad44fea2c981380faef79d26d299dbc9536ee8c7b38598 14299 bytes",
+          "after": "883c8054637429fc3605f2b012b9cc589031d92b2b1c4b17977e266125abb1be 14456 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-design-quality.toml",
+          "before": "9140bd9bf822cb2b2aa446b0afce405e5a6630b7c1234d7ed8051f2775c89a06 8314 bytes",
+          "after": "77121897c46c11635f9c94ee9fdeae777b5d712b9f058befd477404d4b5f16f5 8465 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-fixer.toml",
+          "before": "0d4aaba1dbc60fc18f5b3a4293c2ea4b3138846e738c34f77edab1cb94f09f7f 6588 bytes",
+          "after": "6afabd264fb2f9807bd548b998af2572ce5441550679b724d5ce2c30678697a8 6754 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-implementer.toml",
+          "before": "a1083ba39193fa2eaad86dd85472a0f5a985cd049c1108c04c4a5aa232359a70 5948 bytes",
+          "after": "8305bc24c5fc440a885957b83bb25f34f0fcb4dac0ee2d1730c98c4091782826 6114 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-performance.toml",
+          "before": "9940ef34a92f46c00c3069863714efdedbfcb3ca7c3ed937701b878b9c27446f 8609 bytes",
+          "after": "a5ec9b910a338c5a4c8363b1a22fd69ac06154e7837228d4841a56a6d0a70645 8760 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-researcher.toml",
+          "before": "1a8e48161f2be750207a9278e558ad4c4c003406e308718ef306fc1225aeee8a 7814 bytes",
+          "after": "10095eb040dc93b9994ba8aaef9467e548485fce68a2daf98e8d68da0c7f4e08 7974 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-reviewer.toml",
+          "before": "dd4dcfd9b704a522bed0734e59f1def75010a1256cf2fa9f24dbf669759d54e1 10733 bytes",
+          "after": "de9e9273214c236ae7d77e1251933b88de3556142488e895d02b2708c9b86a0a 11141 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-security.toml",
+          "before": "b706029cf5b3b730c252cb398759af6790d660bae9a7e462217a945030d808de 8004 bytes",
+          "after": "53c03a86293aa45a6db3cc45738da2907fadb2246a7bfa5874117176d80ef8b3 8155 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-spec-author.toml",
+          "before": "6f1687ff4a678f0241d80c594f27a00df4d0d757d68f54b9194d2a6e66090430 8735 bytes",
+          "after": "a5ff44abdcf42b6c4b2afae218e0d454764649a61605a17c57403bb69b118981 9714 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-test-runner.toml",
+          "before": "0068453bff3c647a4180e9704c44d586d543f03edf456fdaaaa433c3bfa2d890 6135 bytes",
+          "after": "00cda976e28d5c10b0383d0251f965a7931491917f85e11322edcf6150d822c0 6295 bytes"
+        },
+        {
+          "path": ".codex/hooks.json",
+          "before": "3e1d0fa81c480bcf0dcc8f94dcf204c36983eb5be718605b3363469708ffd1f0 1770 bytes",
+          "after": "e188d870f2c5c55a55555f9f2225373f951ed064303bcc945125d27b2c2bdb95 5801 bytes"
+        },
+        {
+          "path": ".cursor/agents/stamity-reviewer.md",
+          "before": "901e37a54db2b0371fd45e8f8359ada9e427b8b5902767531f7db8e7ae24d6cc 10214 bytes",
+          "after": "ddced5aca291933bce33b1d4a4e4f3ba942a58873521d8f3fdfd7a2ea393692b 10471 bytes"
+        },
+        {
+          "path": ".cursor/agents/stamity-spec-author.md",
+          "before": "2b93c6c39aa69de52abec08b49be6e769f43f1dfc6b9c8806368929d4345a74a 8162 bytes",
+          "after": "245f711445727e5e4dd826cbb540302bfa83b33d981b2bb275c90cb874e19e50 8984 bytes"
+        },
+        {
+          "path": ".cursor/hooks.json",
+          "before": "94a0b9af7ddd482f70d942f0ffa1da52bf2fdc4ca46127bf26ccd1204097f8a7 794 bytes",
+          "after": "3ceba1f2fe379e34feabb81487644b8fa23dee528a6b8ec402e9bbc722dc003f 1411 bytes"
+        },
+        {
+          "path": ".cursor/rules/stamity-injection-screening.mdc",
+          "before": "27c8dd913355a236f70a18aa41ca529d502fec4fd80a4033fb5978ccb98ae74e 7422 bytes",
+          "after": "778104dc8064261ae6d636b555e4d77a5923bd45b9b2f7e770f5266ef548f170 7159 bytes"
+        },
+        {
+          "path": ".cursor/rules/stamity-secrets.mdc",
+          "before": "16ca82af86c313b6eac87e5a38fe00f32873f2e9d5aa9c4a2ab0afe80a02b9ed 6309 bytes",
+          "after": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes"
+        },
+        {
+          "path": ".cursor/rules/stamity-security-patterns.mdc",
+          "before": "3d235ec738014730178f5e60a027ecfa030c277a92a7f949cb15b58e532794d0 6301 bytes",
+          "after": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-board/SKILL.md",
+          "before": "9f469ccaa578b0c51ad697c1eda032d01f22f28e0d3ef94baa7b374f3442af6f 21241 bytes",
+          "after": "9939e09d56c9b78965f009713e1112190c8f261646aa1c071030041871a15f3a 21608 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-plan/SKILL.md",
+          "before": "4a64c14008779e8b2e7b74cf449e2d55b2e2081080707f72ae330c1791ae1e29 23428 bytes",
+          "after": "3a43bcfb1eefcfba347e68b2368caf69dce689107cc8ec57e019a156f2d096a7 25147 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-rework/SKILL.md",
+          "before": "24aae93e7526f2712992bbc81304cf29c8b09b931b2919c6bdabae5f195e9582 17771 bytes",
+          "after": "30759b1641ca29417a1cdbbbc4defdd1e471858d5da7e7ab9ed637d6ba6426ad 17950 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-spec/SKILL.md",
+          "before": "3a207681a02833f16a54faf154216e547a56089bb02f55701a66ecf105bfdb9e 15834 bytes",
+          "after": "7c340aca38f99ef18a1cbcf3c466ee4253b8e7fd1e02b8e66d3ea0524e501a84 16732 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-work/SKILL.md",
+          "before": "af827c85b9f0e67183388d08c0567b7c21d696e81aae261dca1d13c446739d58 22928 bytes",
+          "after": "7abd93dc140c86f087897aa48645670ebe70829fbad1452ad29b274c20b8f6fe 23538 bytes"
+        },
+        {
+          "path": ".github/agents/stamity-reviewer.agent.md",
+          "before": "fa4d2e9e72f3a444693f7ab4a9b24ef4c3f883a05ab90a465e6c95607bb16148 10273 bytes",
+          "after": "1fc059b3a505f2d37b31fa9364ee48e4f6c1c092e64a46dc58c11b57d786d470 10530 bytes"
+        },
+        {
+          "path": ".github/agents/stamity-spec-author.agent.md",
+          "before": "e21cd70749e2d5c8d0abbf3bf86d5cfce7c39783cda63d71065deb2da0beda1e 8247 bytes",
+          "after": "1ef533101c6744e24f1b0eef290ad3aa1c8078b6a883f8ff37f3b09b1ebfa4a7 9069 bytes"
+        },
+        {
+          "path": ".github/instructions/stamity-injection-screening.instructions.md",
+          "before": "3b36f9cec1df55f2c3341b3b579eca34e186707fac0e67f295bb0b9f2912f27d 7407 bytes",
+          "after": "13fa1368cb3e9b5bbea4012f58316ed86932e5412bc2b06bb80e8f7f5569103d 7144 bytes"
+        },
+        {
+          "path": ".github/instructions/stamity-secrets.instructions.md",
+          "before": "3d42a7154c286133f8c703568bf0c35ea990e8ab659776004e1be3a490c55028 6294 bytes",
+          "after": "195f69bcccd0283ff1f519a1fed86dbc697757d5c802d530120da36967166f7f 6239 bytes"
+        },
+        {
+          "path": ".github/instructions/stamity-security-patterns.instructions.md",
+          "before": "dd3f987e6fdd24940e1084f1141826d5a4df9c232785e7a52f91dad599fa2513 6286 bytes",
+          "after": "11561e6ba340b435e0ff84de345595602c0fb7ec2adfb73cfe46874c79e01919 6349 bytes"
+        },
+        {
+          "path": ".github/prompts/st-board.prompt.md",
+          "before": "6ec7a7ea80e773b2d242520fde73718e82f378fa3e0d0e3f4b38e4a8dc9e8bfe 21195 bytes",
+          "after": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75 21562 bytes"
+        },
+        {
+          "path": ".github/prompts/st-plan.prompt.md",
+          "before": "a0f005ab6ff00604f67a32f675b6f62de90cbfc28de2dabd50325f9c172adbc5 23385 bytes",
+          "after": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0 25104 bytes"
+        },
+        {
+          "path": ".github/prompts/st-rework.prompt.md",
+          "before": "c7d30ee39f9a730f1f695c974c320482baa623c0dd1b412839b9b7bcd6c0d627 17724 bytes",
+          "after": "25c7a49eb26047335fc5979470a87410dd87368d898aa7895b2fb88523473e61 17903 bytes"
+        },
+        {
+          "path": ".github/prompts/st-spec.prompt.md",
+          "before": "6c126b5d120b079a6a2380a06a49b67e10bd640d6eafb143373048b753d2c179 15789 bytes",
+          "after": "262627f969d9f85c4d231400e272aaf10459ff1f61bba36afc916d2f37cab0cc 16687 bytes"
+        },
+        {
+          "path": ".github/prompts/st-work.prompt.md",
+          "before": "3ac608aadc96a783c51815edabdec2178e9eaebd8a8ae52b2980405ed6e0f769 22883 bytes",
+          "after": "2654178d97b2b2de0a87018247d4e75beae89968df04a7888f712fda246c3e49 23493 bytes"
+        },
+        {
+          "path": ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs",
+          "before": "7e9b7de0cd0bcc81aa93f6b512cbb607ec9759b6d629c138b9e3a2ca8d3e7db0 7029 bytes",
+          "after": "0d5d1688b099bb1e4234c4c2f0deaf94d4ce779e4b96a0aa34b40d57774be6cc 7264 bytes"
+        },
+        {
+          "path": ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs",
+          "before": "cf90804ad48df9a913ced9fdc9cafdc0bdf03a8f486f8814e4df47033079aea5 7161 bytes",
+          "after": "0d5d1688b099bb1e4234c4c2f0deaf94d4ce779e4b96a0aa34b40d57774be6cc 7264 bytes"
+        },
+        {
+          "path": ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs",
+          "before": "9e4a7f7bcad9fbebe9c003705dd2a5c74f38569a403d998dde353171544e77d8 7332 bytes",
+          "after": "0d5d1688b099bb1e4234c4c2f0deaf94d4ce779e4b96a0aa34b40d57774be6cc 7264 bytes"
+        },
+        {
+          "path": ".stamity/manifest.json",
+          "before": "1d6cf48d99aebb43c063056d9003a132e94df2117a0e91e5f3978e743dbde4a1 54488 bytes",
+          "after": "88812dd0f88c7d6a9ba131dbc6068823b3793596c1b3f780f1b417ef54103b18 64803 bytes"
+        },
+        {
+          "path": "AGENTS.md",
+          "before": "80f7d9cd5bd8555757d0b2cbd0633734de64e8a811957c88e5ea78244a9e88ba 29326 bytes",
+          "after": "7af7423a54ae96de9e814df7671e9f96591925340a4dd6dad130301d2d4d0412 29071 bytes"
+        },
+        {
+          "path": "CLAUDE.md",
+          "before": "f5bb9ab771f54ed41eaa7ce3aefc96044f33f76184b50a05a1b91b69132c3540 308 bytes",
+          "after": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes"
+        }
+      ]
+    },
+    {
+      "selection": "claude",
+      "addedPaths": [
+        ".claude/skills/st-browser-evidence/agents/openai.yaml",
+        ".claude/skills/st-dep-audit/agents/openai.yaml",
+        ".claude/skills/st-design-system-detect/agents/openai.yaml",
+        ".claude/skills/st-handoff/agents/openai.yaml",
+        ".claude/skills/st-learn/agents/openai.yaml",
+        ".claude/skills/st-onboard/agents/openai.yaml",
+        ".claude/skills/st-qa/agents/openai.yaml",
+        ".claude/skills/st-verify/agents/openai.yaml",
+        ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs"
+      ],
+      "removedPaths": [],
+      "changedPaths": [
+        {
+          "path": ".claude/agents/stamity-reviewer.md",
+          "before": "b3c408c9dd30ebb25309c5367f8d96ec2ba47a2fef284d73674ea92f31912c62 10284 bytes",
+          "after": "ddcc0744acc5f9a13d5d722803ae9d17604f34f1a709b4f5c5f8a6c03a59ca36 10541 bytes"
+        },
+        {
+          "path": ".claude/agents/stamity-spec-author.md",
+          "before": "8e7942d51c0a2e0f782c28a4c9483c4fb23ad45acedaeb3089eda6bf9c4fd8a6 8277 bytes",
+          "after": "2f7153c2d405e4bfe6f86229a94eb861aee6e56dac582b43dd782848eeac0ba2 9099 bytes"
+        },
+        {
+          "path": ".claude/commands/st-board.md",
+          "before": "6ec7a7ea80e773b2d242520fde73718e82f378fa3e0d0e3f4b38e4a8dc9e8bfe 21195 bytes",
+          "after": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75 21562 bytes"
+        },
+        {
+          "path": ".claude/commands/st-plan.md",
+          "before": "a0f005ab6ff00604f67a32f675b6f62de90cbfc28de2dabd50325f9c172adbc5 23385 bytes",
+          "after": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0 25104 bytes"
+        },
+        {
+          "path": ".claude/commands/st-rework.md",
+          "before": "c7d30ee39f9a730f1f695c974c320482baa623c0dd1b412839b9b7bcd6c0d627 17724 bytes",
+          "after": "25c7a49eb26047335fc5979470a87410dd87368d898aa7895b2fb88523473e61 17903 bytes"
+        },
+        {
+          "path": ".claude/commands/st-spec.md",
+          "before": "6c126b5d120b079a6a2380a06a49b67e10bd640d6eafb143373048b753d2c179 15789 bytes",
+          "after": "262627f969d9f85c4d231400e272aaf10459ff1f61bba36afc916d2f37cab0cc 16687 bytes"
+        },
+        {
+          "path": ".claude/commands/st-work.md",
+          "before": "3ac608aadc96a783c51815edabdec2178e9eaebd8a8ae52b2980405ed6e0f769 22883 bytes",
+          "after": "2654178d97b2b2de0a87018247d4e75beae89968df04a7888f712fda246c3e49 23493 bytes"
+        },
+        {
+          "path": ".claude/rules/stamity-injection-screening.md",
+          "before": "f1054cb32a001f5294a80862acfc3ba9e7bd5f4e701cf8e5177970335b7fea46 7407 bytes",
+          "after": "49e0dae094800f9cca655f783783a41d0d32cf0117b114987d49ff728e8d2a3c 7144 bytes"
+        },
+        {
+          "path": ".claude/rules/stamity-secrets.md",
+          "before": "6ad54255c641460292f79b100fb11b0e50dac6420dc3b7f9f0a3ea2114a1cb54 6306 bytes",
+          "after": "074b2f82a2f1711dcc68772ff149eeb3a48487e6170690fb9746715caeb3c2d3 6251 bytes"
+        },
+        {
+          "path": ".claude/rules/stamity-security-patterns.md",
+          "before": "dfe1a5580a47442cefc0785276aca664c43c09d2ff14ec5256986471ee1f9790 6298 bytes",
+          "after": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes"
+        },
+        {
+          "path": ".claude/skills/st-browser-evidence/SKILL.md",
+          "before": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+          "after": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes"
+        },
+        {
+          "path": ".claude/skills/st-dep-audit/SKILL.md",
+          "before": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
+          "after": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836 6461 bytes"
+        },
+        {
+          "path": ".claude/skills/st-design-system-detect/SKILL.md",
+          "before": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+          "after": "797494d53ab3a5cfb0f866ed14c7cf4002a8fb4a943004f425b57ae845e3a000 6961 bytes"
+        },
+        {
+          "path": ".claude/skills/st-handoff/SKILL.md",
+          "before": "be6f50612f6e7e0ce007b1ce6f8c27f5e98fafba1498a3c0b6dffa1198fd310c 11589 bytes",
+          "after": "ae2dae8e15f9c758bf6090b9df2aa7f18c1169db55b12fe3341aca899b2da55c 11708 bytes"
+        },
+        {
+          "path": ".claude/skills/st-learn/SKILL.md",
+          "before": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+          "after": "975b9010dcfcbb6e059ab4965638754fef59c79cae3a4c7e6a3b8e975ffaca40 6008 bytes"
+        },
+        {
+          "path": ".claude/skills/st-onboard/SKILL.md",
+          "before": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+          "after": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes"
+        },
+        {
+          "path": ".claude/skills/st-qa/SKILL.md",
+          "before": "86fbfb7e78f660c4b92626de46828c0da7fb4ea3a602cdcdeaadee23cbdfb183 5920 bytes",
+          "after": "51f67edfc524cb33a165af3703173e1213db97cd32f0e5378633161efafcbb15 6039 bytes"
+        },
+        {
+          "path": ".claude/skills/st-verify/SKILL.md",
+          "before": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+          "after": "e8790ff06d9bff6122ab340f6645e5356f50207fc9363344c54a01d80ce661ee 6921 bytes"
+        },
+        {
+          "path": ".claude/skills/st-verify/references/product-spec.md",
+          "before": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+          "after": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes"
+        },
+        {
+          "path": ".stamity/manifest.json",
+          "before": "75036851cb6b74dccdd53c860bc6a337c01720bcb1b61b8ee893de2b13a057ed 16080 bytes",
+          "after": "e400668221f92d59a9ffd3732a506eba85193aa84fa6df72b4b14f6e213b668f 18390 bytes"
+        },
+        {
+          "path": "CLAUDE.md",
+          "before": "f5bb9ab771f54ed41eaa7ce3aefc96044f33f76184b50a05a1b91b69132c3540 308 bytes",
+          "after": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes"
+        }
+      ]
+    },
+    {
+      "selection": "codex",
+      "addedPaths": [
+        ".agents/skills/st-browser-evidence/agents/openai.yaml",
+        ".agents/skills/st-dep-audit/agents/openai.yaml",
+        ".agents/skills/st-design-system-detect/agents/openai.yaml",
+        ".agents/skills/st-handoff/agents/openai.yaml",
+        ".agents/skills/st-learn/agents/openai.yaml",
+        ".agents/skills/st-onboard/agents/openai.yaml",
+        ".agents/skills/st-qa/agents/openai.yaml",
+        ".agents/skills/st-verify/agents/openai.yaml",
+        ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs",
+        ".stamity/generated/hooks/codex/stamity-portable-hook.mjs"
+      ],
+      "removedPaths": [],
+      "changedPaths": [
+        {
+          "path": ".agents/skills/st-browser-evidence/SKILL.md",
+          "before": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+          "after": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes"
+        },
+        {
+          "path": ".agents/skills/st-dep-audit/SKILL.md",
+          "before": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
+          "after": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836 6461 bytes"
+        },
+        {
+          "path": ".agents/skills/st-design-system-detect/SKILL.md",
+          "before": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+          "after": "797494d53ab3a5cfb0f866ed14c7cf4002a8fb4a943004f425b57ae845e3a000 6961 bytes"
+        },
+        {
+          "path": ".agents/skills/st-handoff/SKILL.md",
+          "before": "be6f50612f6e7e0ce007b1ce6f8c27f5e98fafba1498a3c0b6dffa1198fd310c 11589 bytes",
+          "after": "ae2dae8e15f9c758bf6090b9df2aa7f18c1169db55b12fe3341aca899b2da55c 11708 bytes"
+        },
+        {
+          "path": ".agents/skills/st-learn/SKILL.md",
+          "before": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+          "after": "975b9010dcfcbb6e059ab4965638754fef59c79cae3a4c7e6a3b8e975ffaca40 6008 bytes"
+        },
+        {
+          "path": ".agents/skills/st-onboard/SKILL.md",
+          "before": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+          "after": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes"
+        },
+        {
+          "path": ".agents/skills/st-qa/SKILL.md",
+          "before": "86fbfb7e78f660c4b92626de46828c0da7fb4ea3a602cdcdeaadee23cbdfb183 5920 bytes",
+          "after": "51f67edfc524cb33a165af3703173e1213db97cd32f0e5378633161efafcbb15 6039 bytes"
+        },
+        {
+          "path": ".agents/skills/st-verify/SKILL.md",
+          "before": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+          "after": "e8790ff06d9bff6122ab340f6645e5356f50207fc9363344c54a01d80ce661ee 6921 bytes"
+        },
+        {
+          "path": ".agents/skills/st-verify/references/product-spec.md",
+          "before": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+          "after": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-creator.toml",
+          "before": "196035326c629127cfad44fea2c981380faef79d26d299dbc9536ee8c7b38598 14299 bytes",
+          "after": "883c8054637429fc3605f2b012b9cc589031d92b2b1c4b17977e266125abb1be 14456 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-design-quality.toml",
+          "before": "9140bd9bf822cb2b2aa446b0afce405e5a6630b7c1234d7ed8051f2775c89a06 8314 bytes",
+          "after": "77121897c46c11635f9c94ee9fdeae777b5d712b9f058befd477404d4b5f16f5 8465 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-fixer.toml",
+          "before": "0d4aaba1dbc60fc18f5b3a4293c2ea4b3138846e738c34f77edab1cb94f09f7f 6588 bytes",
+          "after": "6afabd264fb2f9807bd548b998af2572ce5441550679b724d5ce2c30678697a8 6754 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-implementer.toml",
+          "before": "a1083ba39193fa2eaad86dd85472a0f5a985cd049c1108c04c4a5aa232359a70 5948 bytes",
+          "after": "8305bc24c5fc440a885957b83bb25f34f0fcb4dac0ee2d1730c98c4091782826 6114 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-performance.toml",
+          "before": "9940ef34a92f46c00c3069863714efdedbfcb3ca7c3ed937701b878b9c27446f 8609 bytes",
+          "after": "a5ec9b910a338c5a4c8363b1a22fd69ac06154e7837228d4841a56a6d0a70645 8760 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-researcher.toml",
+          "before": "1a8e48161f2be750207a9278e558ad4c4c003406e308718ef306fc1225aeee8a 7814 bytes",
+          "after": "10095eb040dc93b9994ba8aaef9467e548485fce68a2daf98e8d68da0c7f4e08 7974 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-reviewer.toml",
+          "before": "dd4dcfd9b704a522bed0734e59f1def75010a1256cf2fa9f24dbf669759d54e1 10733 bytes",
+          "after": "de9e9273214c236ae7d77e1251933b88de3556142488e895d02b2708c9b86a0a 11141 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-security.toml",
+          "before": "b706029cf5b3b730c252cb398759af6790d660bae9a7e462217a945030d808de 8004 bytes",
+          "after": "53c03a86293aa45a6db3cc45738da2907fadb2246a7bfa5874117176d80ef8b3 8155 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-spec-author.toml",
+          "before": "6f1687ff4a678f0241d80c594f27a00df4d0d757d68f54b9194d2a6e66090430 8735 bytes",
+          "after": "a5ff44abdcf42b6c4b2afae218e0d454764649a61605a17c57403bb69b118981 9714 bytes"
+        },
+        {
+          "path": ".codex/agents/stamity-test-runner.toml",
+          "before": "0068453bff3c647a4180e9704c44d586d543f03edf456fdaaaa433c3bfa2d890 6135 bytes",
+          "after": "00cda976e28d5c10b0383d0251f965a7931491917f85e11322edcf6150d822c0 6295 bytes"
+        },
+        {
+          "path": ".codex/hooks.json",
+          "before": "3e1d0fa81c480bcf0dcc8f94dcf204c36983eb5be718605b3363469708ffd1f0 1770 bytes",
+          "after": "e188d870f2c5c55a55555f9f2225373f951ed064303bcc945125d27b2c2bdb95 5801 bytes"
+        },
+        {
+          "path": ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs",
+          "before": "7e9b7de0cd0bcc81aa93f6b512cbb607ec9759b6d629c138b9e3a2ca8d3e7db0 7029 bytes",
+          "after": "0d5d1688b099bb1e4234c4c2f0deaf94d4ce779e4b96a0aa34b40d57774be6cc 7264 bytes"
+        },
+        {
+          "path": ".stamity/manifest.json",
+          "before": "15d4df970fab7722a5ac1d991a90ac854401545abb1f083cabd3cabb3f2f0a73 10810 bytes",
+          "after": "63a688733c24b63703afc3aecb06a145bce86d405c18f6da09482aa8ddafc97c 13386 bytes"
+        },
+        {
+          "path": "AGENTS.md",
+          "before": "80f7d9cd5bd8555757d0b2cbd0633734de64e8a811957c88e5ea78244a9e88ba 29326 bytes",
+          "after": "7af7423a54ae96de9e814df7671e9f96591925340a4dd6dad130301d2d4d0412 29071 bytes"
+        }
+      ]
+    },
+    {
+      "selection": "copilot",
+      "addedPaths": [
+        ".agents/skills/st-browser-evidence/agents/openai.yaml",
+        ".agents/skills/st-dep-audit/agents/openai.yaml",
+        ".agents/skills/st-design-system-detect/agents/openai.yaml",
+        ".agents/skills/st-handoff/agents/openai.yaml",
+        ".agents/skills/st-learn/agents/openai.yaml",
+        ".agents/skills/st-onboard/agents/openai.yaml",
+        ".agents/skills/st-qa/agents/openai.yaml",
+        ".agents/skills/st-verify/agents/openai.yaml",
+        ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs",
+        ".github/hooks/stamity.json",
+        ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs"
+      ],
+      "removedPaths": [],
+      "changedPaths": [
+        {
+          "path": ".agents/skills/st-browser-evidence/SKILL.md",
+          "before": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+          "after": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes"
+        },
+        {
+          "path": ".agents/skills/st-dep-audit/SKILL.md",
+          "before": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
+          "after": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836 6461 bytes"
+        },
+        {
+          "path": ".agents/skills/st-design-system-detect/SKILL.md",
+          "before": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+          "after": "797494d53ab3a5cfb0f866ed14c7cf4002a8fb4a943004f425b57ae845e3a000 6961 bytes"
+        },
+        {
+          "path": ".agents/skills/st-handoff/SKILL.md",
+          "before": "be6f50612f6e7e0ce007b1ce6f8c27f5e98fafba1498a3c0b6dffa1198fd310c 11589 bytes",
+          "after": "ae2dae8e15f9c758bf6090b9df2aa7f18c1169db55b12fe3341aca899b2da55c 11708 bytes"
+        },
+        {
+          "path": ".agents/skills/st-learn/SKILL.md",
+          "before": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+          "after": "975b9010dcfcbb6e059ab4965638754fef59c79cae3a4c7e6a3b8e975ffaca40 6008 bytes"
+        },
+        {
+          "path": ".agents/skills/st-onboard/SKILL.md",
+          "before": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+          "after": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes"
+        },
+        {
+          "path": ".agents/skills/st-qa/SKILL.md",
+          "before": "86fbfb7e78f660c4b92626de46828c0da7fb4ea3a602cdcdeaadee23cbdfb183 5920 bytes",
+          "after": "51f67edfc524cb33a165af3703173e1213db97cd32f0e5378633161efafcbb15 6039 bytes"
+        },
+        {
+          "path": ".agents/skills/st-verify/SKILL.md",
+          "before": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+          "after": "e8790ff06d9bff6122ab340f6645e5356f50207fc9363344c54a01d80ce661ee 6921 bytes"
+        },
+        {
+          "path": ".agents/skills/st-verify/references/product-spec.md",
+          "before": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+          "after": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes"
+        },
+        {
+          "path": ".github/agents/stamity-reviewer.agent.md",
+          "before": "fa4d2e9e72f3a444693f7ab4a9b24ef4c3f883a05ab90a465e6c95607bb16148 10273 bytes",
+          "after": "1fc059b3a505f2d37b31fa9364ee48e4f6c1c092e64a46dc58c11b57d786d470 10530 bytes"
+        },
+        {
+          "path": ".github/agents/stamity-spec-author.agent.md",
+          "before": "e21cd70749e2d5c8d0abbf3bf86d5cfce7c39783cda63d71065deb2da0beda1e 8247 bytes",
+          "after": "1ef533101c6744e24f1b0eef290ad3aa1c8078b6a883f8ff37f3b09b1ebfa4a7 9069 bytes"
+        },
+        {
+          "path": ".github/instructions/stamity-injection-screening.instructions.md",
+          "before": "3b36f9cec1df55f2c3341b3b579eca34e186707fac0e67f295bb0b9f2912f27d 7407 bytes",
+          "after": "13fa1368cb3e9b5bbea4012f58316ed86932e5412bc2b06bb80e8f7f5569103d 7144 bytes"
+        },
+        {
+          "path": ".github/instructions/stamity-secrets.instructions.md",
+          "before": "3d42a7154c286133f8c703568bf0c35ea990e8ab659776004e1be3a490c55028 6294 bytes",
+          "after": "195f69bcccd0283ff1f519a1fed86dbc697757d5c802d530120da36967166f7f 6239 bytes"
+        },
+        {
+          "path": ".github/instructions/stamity-security-patterns.instructions.md",
+          "before": "dd3f987e6fdd24940e1084f1141826d5a4df9c232785e7a52f91dad599fa2513 6286 bytes",
+          "after": "11561e6ba340b435e0ff84de345595602c0fb7ec2adfb73cfe46874c79e01919 6349 bytes"
+        },
+        {
+          "path": ".github/prompts/st-board.prompt.md",
+          "before": "6ec7a7ea80e773b2d242520fde73718e82f378fa3e0d0e3f4b38e4a8dc9e8bfe 21195 bytes",
+          "after": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75 21562 bytes"
+        },
+        {
+          "path": ".github/prompts/st-plan.prompt.md",
+          "before": "a0f005ab6ff00604f67a32f675b6f62de90cbfc28de2dabd50325f9c172adbc5 23385 bytes",
+          "after": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0 25104 bytes"
+        },
+        {
+          "path": ".github/prompts/st-rework.prompt.md",
+          "before": "c7d30ee39f9a730f1f695c974c320482baa623c0dd1b412839b9b7bcd6c0d627 17724 bytes",
+          "after": "25c7a49eb26047335fc5979470a87410dd87368d898aa7895b2fb88523473e61 17903 bytes"
+        },
+        {
+          "path": ".github/prompts/st-spec.prompt.md",
+          "before": "6c126b5d120b079a6a2380a06a49b67e10bd640d6eafb143373048b753d2c179 15789 bytes",
+          "after": "262627f969d9f85c4d231400e272aaf10459ff1f61bba36afc916d2f37cab0cc 16687 bytes"
+        },
+        {
+          "path": ".github/prompts/st-work.prompt.md",
+          "before": "3ac608aadc96a783c51815edabdec2178e9eaebd8a8ae52b2980405ed6e0f769 22883 bytes",
+          "after": "2654178d97b2b2de0a87018247d4e75beae89968df04a7888f712fda246c3e49 23493 bytes"
+        },
+        {
+          "path": ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs",
+          "before": "cf90804ad48df9a913ced9fdc9cafdc0bdf03a8f486f8814e4df47033079aea5 7161 bytes",
+          "after": "0d5d1688b099bb1e4234c4c2f0deaf94d4ce779e4b96a0aa34b40d57774be6cc 7264 bytes"
+        },
+        {
+          "path": ".stamity/manifest.json",
+          "before": "3a6bc283dc0dbbdec498a140efc2c2f7d17bd6288de3c31d0d1d7a741d9d012f 16240 bytes",
+          "after": "85b813c7a4769668fd81964f1a64b3a533410e945dbf3f29a2b8804f1dc60e3b 19081 bytes"
+        }
+      ]
+    },
+    {
+      "selection": "cursor",
+      "addedPaths": [
+        ".agents/skills/st-browser-evidence/agents/openai.yaml",
+        ".agents/skills/st-dep-audit/agents/openai.yaml",
+        ".agents/skills/st-design-system-detect/agents/openai.yaml",
+        ".agents/skills/st-handoff/agents/openai.yaml",
+        ".agents/skills/st-learn/agents/openai.yaml",
+        ".agents/skills/st-onboard/agents/openai.yaml",
+        ".agents/skills/st-qa/agents/openai.yaml",
+        ".agents/skills/st-verify/agents/openai.yaml",
+        ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs",
+        ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs"
+      ],
+      "removedPaths": [],
+      "changedPaths": [
+        {
+          "path": ".agents/skills/st-browser-evidence/SKILL.md",
+          "before": "988de6c1baa653ec785be3f542c9beb9087b7c2db189e01cc3a9f575e221c6b3 7224 bytes",
+          "after": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes"
+        },
+        {
+          "path": ".agents/skills/st-dep-audit/SKILL.md",
+          "before": "02d552885e67f73f7e94c45ed48ae788f1d5bcf43889de77b333cc33125097e3 6342 bytes",
+          "after": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836 6461 bytes"
+        },
+        {
+          "path": ".agents/skills/st-design-system-detect/SKILL.md",
+          "before": "c61b2a919fdf1dc96b1a675a3ed7f5050e8c88896779f352bfc9efddc7d78f52 6842 bytes",
+          "after": "797494d53ab3a5cfb0f866ed14c7cf4002a8fb4a943004f425b57ae845e3a000 6961 bytes"
+        },
+        {
+          "path": ".agents/skills/st-handoff/SKILL.md",
+          "before": "be6f50612f6e7e0ce007b1ce6f8c27f5e98fafba1498a3c0b6dffa1198fd310c 11589 bytes",
+          "after": "ae2dae8e15f9c758bf6090b9df2aa7f18c1169db55b12fe3341aca899b2da55c 11708 bytes"
+        },
+        {
+          "path": ".agents/skills/st-learn/SKILL.md",
+          "before": "031cc7bb4db58aedefdf11285e7edf250699f58a8390f3efe2f75ffc6a8facc5 5889 bytes",
+          "after": "975b9010dcfcbb6e059ab4965638754fef59c79cae3a4c7e6a3b8e975ffaca40 6008 bytes"
+        },
+        {
+          "path": ".agents/skills/st-onboard/SKILL.md",
+          "before": "48bd40b1f2cd7e2c8583adf98bef7b99e996cfb4471f8247ac4a85797c878bc0 9029 bytes",
+          "after": "24a2fcb782114164a9dea265fdae3a22e05ae9636d8c7aefc4626867775aee72 9384 bytes"
+        },
+        {
+          "path": ".agents/skills/st-qa/SKILL.md",
+          "before": "86fbfb7e78f660c4b92626de46828c0da7fb4ea3a602cdcdeaadee23cbdfb183 5920 bytes",
+          "after": "51f67edfc524cb33a165af3703173e1213db97cd32f0e5378633161efafcbb15 6039 bytes"
+        },
+        {
+          "path": ".agents/skills/st-verify/SKILL.md",
+          "before": "640ca6f783652654f0b82cbb7dec2c223299ccbf4333cc9f1647da7e0fbffceb 6653 bytes",
+          "after": "e8790ff06d9bff6122ab340f6645e5356f50207fc9363344c54a01d80ce661ee 6921 bytes"
+        },
+        {
+          "path": ".agents/skills/st-verify/references/product-spec.md",
+          "before": "8718ff82dbd39f925e7598e4c90d943c048c045e4c20214b5973fca359e172dd 3079 bytes",
+          "after": "187ef7d6874e4b7dcc8b429fed68f61556ae79494cfaea6b14b43b0bf24ccc9c 3298 bytes"
+        },
+        {
+          "path": ".cursor/agents/stamity-reviewer.md",
+          "before": "901e37a54db2b0371fd45e8f8359ada9e427b8b5902767531f7db8e7ae24d6cc 10214 bytes",
+          "after": "ddced5aca291933bce33b1d4a4e4f3ba942a58873521d8f3fdfd7a2ea393692b 10471 bytes"
+        },
+        {
+          "path": ".cursor/agents/stamity-spec-author.md",
+          "before": "2b93c6c39aa69de52abec08b49be6e769f43f1dfc6b9c8806368929d4345a74a 8162 bytes",
+          "after": "245f711445727e5e4dd826cbb540302bfa83b33d981b2bb275c90cb874e19e50 8984 bytes"
+        },
+        {
+          "path": ".cursor/hooks.json",
+          "before": "94a0b9af7ddd482f70d942f0ffa1da52bf2fdc4ca46127bf26ccd1204097f8a7 794 bytes",
+          "after": "3ceba1f2fe379e34feabb81487644b8fa23dee528a6b8ec402e9bbc722dc003f 1411 bytes"
+        },
+        {
+          "path": ".cursor/rules/stamity-injection-screening.mdc",
+          "before": "27c8dd913355a236f70a18aa41ca529d502fec4fd80a4033fb5978ccb98ae74e 7422 bytes",
+          "after": "778104dc8064261ae6d636b555e4d77a5923bd45b9b2f7e770f5266ef548f170 7159 bytes"
+        },
+        {
+          "path": ".cursor/rules/stamity-secrets.mdc",
+          "before": "16ca82af86c313b6eac87e5a38fe00f32873f2e9d5aa9c4a2ab0afe80a02b9ed 6309 bytes",
+          "after": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes"
+        },
+        {
+          "path": ".cursor/rules/stamity-security-patterns.mdc",
+          "before": "3d235ec738014730178f5e60a027ecfa030c277a92a7f949cb15b58e532794d0 6301 bytes",
+          "after": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-board/SKILL.md",
+          "before": "9f469ccaa578b0c51ad697c1eda032d01f22f28e0d3ef94baa7b374f3442af6f 21241 bytes",
+          "after": "9939e09d56c9b78965f009713e1112190c8f261646aa1c071030041871a15f3a 21608 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-plan/SKILL.md",
+          "before": "4a64c14008779e8b2e7b74cf449e2d55b2e2081080707f72ae330c1791ae1e29 23428 bytes",
+          "after": "3a43bcfb1eefcfba347e68b2368caf69dce689107cc8ec57e019a156f2d096a7 25147 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-rework/SKILL.md",
+          "before": "24aae93e7526f2712992bbc81304cf29c8b09b931b2919c6bdabae5f195e9582 17771 bytes",
+          "after": "30759b1641ca29417a1cdbbbc4defdd1e471858d5da7e7ab9ed637d6ba6426ad 17950 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-spec/SKILL.md",
+          "before": "3a207681a02833f16a54faf154216e547a56089bb02f55701a66ecf105bfdb9e 15834 bytes",
+          "after": "7c340aca38f99ef18a1cbcf3c466ee4253b8e7fd1e02b8e66d3ea0524e501a84 16732 bytes"
+        },
+        {
+          "path": ".cursor/skills/st-work/SKILL.md",
+          "before": "af827c85b9f0e67183388d08c0567b7c21d696e81aae261dca1d13c446739d58 22928 bytes",
+          "after": "7abd93dc140c86f087897aa48645670ebe70829fbad1452ad29b274c20b8f6fe 23538 bytes"
+        },
+        {
+          "path": ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs",
+          "before": "9e4a7f7bcad9fbebe9c003705dd2a5c74f38569a403d998dde353171544e77d8 7332 bytes",
+          "after": "0d5d1688b099bb1e4234c4c2f0deaf94d4ce779e4b96a0aa34b40d57774be6cc 7264 bytes"
+        },
+        {
+          "path": ".stamity/manifest.json",
+          "before": "eda749b3a1004483755e9143908fe8785a7ba1cb40de56435276aa9e3fffbabc 16089 bytes",
+          "after": "8a086f23a1a69e5569926a7a03e30176cdd707d3f5bff26c6438cbdcdcb34839 18677 bytes"
+        }
+      ]
+    }
+  ],
+  "notDone": [
+    "Independent integration review and full required tests with coverage, leak, Knip and packed-consumer/site verification.",
+    "Actual Linux/Windows CI and changed-policy non-publishing release rehearsal.",
+    "Fresh full admitted release evaluation, current human QA and existing platform approval.",
+    "No commit, PR, tag, release or authenticated signing proof is established by this integration record."
+  ],
+  "postVerificationRepair": {
+    "trigger": "Independent coverage found three stale hookWiring consumer assertions; extended current-reader census found related stale disclosures.",
+    "changedInputs": [
+      {
+        "path": "test/corpus/hookWiring.test.ts",
+        "sha256": "0bacce06872896cf8eed99c67f442b313670986cb26969199e7c56ca4ad96898"
+      },
+      {
+        "path": "test/emit/hooksInfra.test.ts",
+        "sha256": "db03abb08ee22d9252cadce368d63bd853e66ff69532b72e78270969b454bc57"
+      },
+      {
+        "path": "test/tools/translator.test.ts",
+        "sha256": "bd35107af69a7e68520b1bb5ddccc03d06b3b4161944875c0ceb194657adf775"
+      },
+      {
+        "path": "test/cli/engine/emission.test.ts",
+        "sha256": "f6a59c76ae6326096dba6385b16f06dfa43a35c24ca0a689d73b2866a16e8d59"
+      },
+      {
+        "path": "src/tools/translator.ts",
+        "sha256": "00afbb122835242bdb58420b0383f2694f6b9b76b68c25a2738e2dbf9ad39807"
+      },
+      {
+        "path": "src/hooks/scripts.ts",
+        "sha256": "d91d27801652c868216d3740bad3fe42019fd91b1e238213ba1aa4b2ea47eaa0"
+      },
+      {
+        "path": "src/hooks/model.ts",
+        "sha256": "00c61dcb71a7260228d056f69e3ab46f461017d3ccc27640db1cc4f5465f24e2"
+      },
+      {
+        "path": "docs/troubleshooting.md",
+        "sha256": "740ae3f5bdc87175a26d6a3614372b199489a92e7900e164a5a78530af68d32e"
+      },
+      {
+        "path": "docs/getting-started.md",
+        "sha256": "aed6df692b180120c1632e31e6a53bdaad8930fbb8f53a204997dd15740fb408"
+      },
+      {
+        "path": "docs/capability-matrix.md",
+        "sha256": "06aa0de45aeb5cd6b018ebd6aba423439688be0641766c8a4b043d2507fbdeb5"
+      }
+    ],
+    "behavior": "No runtime helper, native hook wiring, identityBearing default, translator return value, coverage floor or historical input/result changed.",
+    "testChange": "Pinned current guarantee ladder/identity membership; retained denial and error/timeout assertions; real-process telemetry coverage on Cursor/Codex/Copilot with synthetic role-bearing and documented identity-free inputs.",
+    "focusedCommand": "npx vitest run test/corpus/hookWiring.test.ts test/hooks/portableRunner.test.ts test/emit/hooksInfra.test.ts test/tools/translator.test.ts test/emit/capabilityMatrix.test.ts test/docsPages.test.ts test/corpus/emissionGoldens.test.ts test/emit/crossClientGoldens.test.ts",
+    "testFiles": 8,
+    "testsPassed": 269,
+    "exitCode": 0,
+    "lint": "npm run lint: exit 0",
+    "typecheck": "npm run typecheck: exit 0",
+    "build": "npm run build: exit 0",
+    "freshBuiltDogfood": "node dist/cli.js check: exit 0, drift clean",
+    "generators": "Capability/reference generators and pack/plugin/APM checks exit 0; only capability prose changes generated bytes.",
+    "readerCensus": "Searched src/test/content/docs/scripts/.github current readers for retired guarantee/identity/placeholder claims; final search found zero matches. Historical plans/specs, results and recorded refresh ledgers were retained.",
+    "sourceFreeze": "Explicitly delivered to orchestrator and independent verifier before the next full coverage run."
+  },
+  "secondVerificationRepair": {
+    "trigger": "Independent full coverage attempt 2: 7654 passed, 1 stale extension-scope assertion failed, 2 existing skips.",
+    "changedPaths": [
+      {
+        "path": "test/hooks/model.test.ts",
+        "sha256": "e6d078698780f94fd020e37127e0ed13fc25e31e48992bcf0d73d0a33d30b0c7"
+      },
+      {
+        "path": "test/corpus/invariants.test.ts",
+        "sha256": "67831abe16706fedd54e5cf473e267e428a7142224f398dc727cec0074ec9c74"
+      }
+    ],
+    "contract": "Preserves exact Claude shared-table ownership, Cursor event exclusions, citation checks, and all measurement assertions. Replaces retired prose pin with explicit Claude gate boundary, Copilot subagentStop availability, required verdict/decision integration, and retained prompt review ladder.",
+    "measurementComment": "29_071 / 4_614 approximately 6.3x, measured 2026-09-10; numeric assertions unchanged.",
+    "command": "npx vitest run test/hooks/model.test.ts test/corpus/invariants.test.ts && npm run lint && npm run typecheck",
+    "exitCode": 0,
+    "testFilesPassed": 2,
+    "testsPassed": 81,
+    "diffCheck": "git diff --check: exit 0",
+    "readerCensus": "No stale current extension-scope or byte-ratio wording remains in current source/test/docs surfaces. Dated 29_303 golden history is preserved.",
+    "sourceFreeze": "Test-only delta frozen and communicated to root and independent verifier; product/generated/website bytes unchanged. Full coverage must rerun after prior red."
+  },
+  "referenceHeadingRepair": {
+    "trigger": "Real browser axe heading-order finding on skills reference, H1 to H3. Original failed browser evidence preserved by orchestrator.",
+    "producer": "src/cli/docs/referencePages.ts: artifactBlock, packBlock, serverBlock emit ungrouped H2 entries beneath H1; sibling grouped renderers unchanged.",
+    "changedPaths": [
+      {
+        "path": "src/cli/docs/referencePages.ts",
+        "sha256": "53027c3f5fe1c4aef687ed61242d1f3028bd7654023f696d9ba8f88cc392f71d"
+      },
+      {
+        "path": "test/cli/docs/referencePages.test.ts",
+        "sha256": "adf66b09ae8f06aabeafe0ab096dbe100c9487e18b479aaf3e8eb11df2781ed7"
+      },
+      {
+        "path": "docs/reference/agents.md",
+        "sha256": "10f84d56eedd21676ee1210c23c31c2ded424d67b2096bed820744ca87c1e04e"
+      },
+      {
+        "path": "docs/reference/commands.md",
+        "sha256": "e4d4bf50c924a55fba5f036f6fd4d2a6f3475e23920dc4b46f739000a1ba7836"
+      },
+      {
+        "path": "docs/reference/mcp-servers.md",
+        "sha256": "09f5888ece845c21324806f5815b4d7662723375754252ddda6b69f98e60d742"
+      },
+      {
+        "path": "docs/reference/packs.md",
+        "sha256": "cd004dadac944b33e0dda943b1b6967da2504dd60464b7c98af385c497d3f170"
+      },
+      {
+        "path": "docs/reference/rules.md",
+        "sha256": "3016ff9d7c6b4078f799d5bb1305cfab26be871c1b70a6c3655a5eb46c24d17d"
+      },
+      {
+        "path": "docs/reference/skills.md",
+        "sha256": "694c2826e71fd31089ea318e47e0123fa7b2af03974a85e03625efa3a0961c7b"
+      }
+    ],
+    "redCommand": "npx vitest run test/cli/docs/referencePages.test.ts -t 'keeps heading levels contiguous'",
+    "redResult": "exit 1: all six reference pages fail heading level check against old producer",
+    "redLog": "/tmp/stamity-package10-reference-headings-red.log",
+    "greenCommand": "npx vitest run test/cli/docs/referencePages.test.ts test/cli/docs/cliReference.test.ts test/cli/docs/configReference.test.ts test/cli/docs/llmsIndex.test.ts test/ci/docsRoster.test.ts test/ci/docsSite.test.ts test/docsPages.test.ts && npm run lint && npm run typecheck",
+    "greenResult": "exit 0: 7 files, 206 tests; configured lint/typecheck pass",
+    "regeneration": "node scripts/generate-docs.mjs; second generation to temporary output verifies all nine documentation/index files byte-identical",
+    "generatedPreservation": [
+      {
+        "path": "docs/reference/agents.md",
+        "itemHeadingsChanged": 10,
+        "sha256": "10f84d56eedd21676ee1210c23c31c2ded424d67b2096bed820744ca87c1e04e",
+        "onlyChange": "H3 item headings to H2; identical text/slug inputs and other bytes"
+      },
+      {
+        "path": "docs/reference/commands.md",
+        "itemHeadingsChanged": 9,
+        "sha256": "e4d4bf50c924a55fba5f036f6fd4d2a6f3475e23920dc4b46f739000a1ba7836",
+        "onlyChange": "H3 item headings to H2; identical text/slug inputs and other bytes"
+      },
+      {
+        "path": "docs/reference/mcp-servers.md",
+        "itemHeadingsChanged": 10,
+        "sha256": "09f5888ece845c21324806f5815b4d7662723375754252ddda6b69f98e60d742",
+        "onlyChange": "H3 item headings to H2; identical text/slug inputs and other bytes"
+      },
+      {
+        "path": "docs/reference/packs.md",
+        "itemHeadingsChanged": 3,
+        "sha256": "cd004dadac944b33e0dda943b1b6967da2504dd60464b7c98af385c497d3f170",
+        "onlyChange": "H3 item headings to H2; identical text/slug inputs and other bytes"
+      },
+      {
+        "path": "docs/reference/rules.md",
+        "itemHeadingsChanged": 12,
+        "sha256": "3016ff9d7c6b4078f799d5bb1305cfab26be871c1b70a6c3655a5eb46c24d17d",
+        "onlyChange": "H3 item headings to H2; identical text/slug inputs and other bytes"
+      },
+      {
+        "path": "docs/reference/skills.md",
+        "itemHeadingsChanged": 8,
+        "sha256": "694c2826e71fd31089ea318e47e0123fa7b2af03974a85e03625efa3a0961c7b",
+        "onlyChange": "H3 item headings to H2; identical text/slug inputs and other bytes"
+      }
+    ],
+    "readerCensus": "Exact heading consumers reconciled only in referencePages.test.ts; sidebar/index and sibling grouped renderers consume unchanged page registry/paths and retain their headings. No current H3 consumers remain for these ungrouped reference entries.",
+    "sourceFreeze": "Eight paths frozen and sent to root/verifier; full coverage and refreshed browser evidence pending. No corpus or dogfood changes."
+  },
+  "matrixGuaranteeFixtureRepair": {
+    "trigger": "Independent full coverage attempt3 passed 7655 tests but capabilityMatrix branches54/60=90% failed its held93% floor after all live clients became blocking.",
+    "changedPaths": [
+      {
+        "path": "test/emit/capabilityMatrix.test.ts",
+        "sha256": "0c199cac1ded65c1b7fc3f20c10af7b28cf1d0d6074f9660a14647e7dcc8577f"
+      }
+    ],
+    "fixture": "Public renderCapabilityMatrixFrom input overrides only a synthetic Cursor guarantee to fail-open/null; exact guarantee row and glance enforcement cell independently assert never blocks; original live input remains blocking exit2. All existing live assertions retained.",
+    "command": "npx vitest run test/emit/capabilityMatrix.test.ts && npm run lint && npm run typecheck",
+    "exitCode": 0,
+    "testsPassed": 45,
+    "isolatedCoverageCommand": "npx vitest run test/emit/capabilityMatrix.test.ts --coverage --coverage.include=src/emit/capabilityMatrix.ts --coverage.reportsDirectory=/tmp/stamity-package10-matrix-fixture-coverage",
+    "isolatedCoverageResult": "exit1: 45 tests pass; 55/60 branches=91.66%, statements97.52%, functions100%, lines100%. This narrower suite omits a branch exercised by the wider suite; it does not close the full gate.",
+    "isolatedCoverageLog": "/tmp/stamity-package10-matrix-fixture-coverage.log",
+    "sourceFreeze": "Test-only delta frozen and delivered to root/verifier. No production, generated or coverage configuration changes; independent full held coverage gate pending.",
+    "familyCoverageCommand": "npx vitest run test/emit/capabilityMatrix.test.ts test/emit/coverageGaps.test.ts --coverage --coverage.include=src/emit/capabilityMatrix.ts --coverage.reportsDirectory=/tmp/stamity-package10-matrix-fixture-family-coverage",
+    "familyCoverageResult": "exit0: 2 files, 56 tests; branches56/60=93.33%, statements119/121=98.34%, functions43/43=100%, lines106/106=100%. All held per-file floors pass; full suite remains independent-verifier proof.",
+    "familyCoverageLog": "/tmp/stamity-package10-matrix-fixture-family-coverage.log"
+  },
+  "finalScopeAudit": {
+    "mode": "read-only; no product, generated or test changes",
+    "readSet": "Authorized Package10A-E scope, current plan/spec, dated client evidence, authoring/behavior evidence, signing/distribution evidence and independent U1/U2/U3/U4 reviews.",
+    "result": "No concrete missing implementation or current contract disclosure found.",
+    "proposalDispositions": [
+      "Useful authored license/compatibility values implemented.",
+      "Codex skill companions implemented.",
+      "Existing compatible Claude command delivery retained with dated official-source rationale.",
+      "Structural reverse coverage and independent semantic-ambiguity workflow implemented.",
+      "Authoring-time requirement checklist implemented.",
+      "Existing dated plan stamps, run records and git history explicitly serve change archive."
+    ],
+    "nativeMemory": "Second-client trigger adjudicated; preserve portable repository-versioned learnings.",
+    "remainingProofs": "Fresh admitted live eval/calibration and affected behavior, final full/site/browser gates, actual CI and non-publishing rehearsal, candidate binding, human QA and platform approval remain separately recorded controls.",
+    "privacy": "Both integration records contain zero confidential repository/ledger identifier matches. Leak gate exits0 with0 hits across1085 files and all18 rules.",
+    "scopeBoundary": "No later-package measurement, final audit or cleanup performed."
+  },
+  "ciDeclarationAndPackedScanRepair": {
+    "failedCandidate": "41cf1aa68d4d06448c03f4571d8fe72c95117e8a",
+    "ciRun": "34535881719",
+    "ciJob": "103067252092",
+    "trigger": "Linux floor tarball scan found an internal predecessor-prefix literal in the new migration declaration output.",
+    "census": "Runtime prefix has one production reader, migration/carry.ts, using startsWith/slice. It is absent from src/index.ts and no public literal type depends on it. Only tarball-smoke copies the leak scanner into an installed artifact; its shared isMain consumer preserves standalone direct invocation and enables inert helper imports.",
+    "causes": [
+      "Type inference copied an internal migration marker into a public declaration file.",
+      "macOS temporary directory alias made the copied scanner direct-entry guard compare different path spellings, exit0 and scan nothing; the old smoke trusted exit0 alone."
+    ],
+    "fix": "Explicit string declaration preserves runtime prefix. Smoke canonicalizes temporary and installed paths, launches the real copied scanner with include-build, requires its nonempty successful scan summary, and preserves nonzero failures. Existing shared isMain makes script import inert. No leak policy/allowlist/configuration or public runtime API changed.",
+    "changedPaths": [
+      {
+        "path": "src/migration/detect.ts",
+        "sha256": "c9cc08cf775c315766c67df580eb6f5efb13f27a5bc51adb8494568743c6c7ed"
+      },
+      {
+        "path": "test/migration/detect.test.ts",
+        "sha256": "a07898f242b96eb88502016b0455a223edddbd1ff4f2f39336447f00a4123b3e"
+      },
+      {
+        "path": "scripts/tarball-smoke.mjs",
+        "sha256": "1ec42ca7efc1e161c48dfd3d3cfc94b8650f37ef2d02d056aa16c297dcfaa4df"
+      },
+      {
+        "path": "test/ci/tarballStaging.test.ts",
+        "sha256": "52b64c4ad30f93bf73cd4e38357978d0f1da2181d053ecd387f76a6cddc66a66"
+      }
+    ],
+    "redProofs": [
+      {
+        "log": "/tmp/stamity-package10-ci-declaration-repro.log",
+        "result": "Old full tarball smoke falsely exits0 on macOS with the leaking declaration present."
+      },
+      {
+        "log": "/tmp/stamity-package10-packed-declaration-red.log",
+        "result": "Direct real scanner over the same freshly packed/extracted artifact exits1 on migration declaration."
+      },
+      {
+        "log": "/tmp/stamity-package10-declaration-smoke-regressions-red.log",
+        "result": "3 failed,29 passed: emitted declaration literal, symlinked scanner skipped, silent zero exit accepted."
+      }
+    ],
+    "focusedCommand": "npx vitest run test/migration/detect.test.ts test/migration/carry.test.ts test/ci/tarballStaging.test.ts test/ci/nativeTypescript.test.ts test/composition/root.test.ts && npm run lint && npm run typecheck && npm run build",
+    "focusedResult": "exit0:5 files100 tests; lint/typecheck/build pass.",
+    "regressionCoverage": "Production declaration emitter; unchanged runtime prefix and migration carry fixtures; actual scanner rejects leaked declaration through symlink and accepts clean declaration plus narrow runtime exemption through symlink; silent/failed/empty scanner outputs with exit0 refuse.",
+    "packedCommand": "node scripts/tarball-smoke.mjs",
+    "packedResult": "exit0:actual packed scan witness, external strict TypeScript consumer, JavaScript imports, init/check all pass.",
+    "packedLog": "/tmp/stamity-package10-declaration-packed-green.log",
+    "otherChecks": [
+      "source leak gate:0hits across1095files/all18rules",
+      "npm run knip:exit0",
+      "node dist/cli.js check:exit0,driftclean",
+      "importing tarball-smoke prints only explicit import-completion witness",
+      "git diff --check:exit0"
+    ],
+    "sizeBytes": {
+      "logic": 1261336,
+      "corpus": 538084
+    },
+    "sourceFreeze": "These four files frozen and delivered to root/verifier for independent full verification and new candidate CI. Separate Windows test writer remains independent; no changes to its files."
+  }
+}

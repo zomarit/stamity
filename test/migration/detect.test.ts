@@ -1,9 +1,12 @@
-import { chmod, mkdir } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { chmod, mkdir, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   detectPredecessorState,
   hasPredecessorMarker,
   PREDECESSOR_MARKED_FILE_CANDIDATES,
+  PREDECESSOR_CONTENT_PREFIX,
   type PredecessorState,
 } from "../../src/migration/detect.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -19,6 +22,21 @@ import { useTempDir } from "../support/tempDir.ts";
  * exactly that reason, and the fixtures below are why the allowlist exists.
  */
 const getRepo = useTempDir("migration-detect");
+
+it("publishes a string type without copying the migration prefix into declarations", async () => {
+  // 2026-09-11: the new declaration build inferred this internal constant's
+  // literal type, leaking a reserved marker into the packed type tree. Emit
+  // with the production configuration so this checks consumer bytes, while
+  // the unchanged runtime value still drives the migration fixtures below.
+  const output = getRepo().path("declarations");
+  const compiler = fileURLToPath(new URL("../../node_modules/typescript/bin/tsc", import.meta.url));
+  const config = fileURLToPath(new URL("../../tsconfig.declarations.json", import.meta.url));
+  execFileSync(process.execPath, [compiler, "--project", config, "--outDir", output]);
+  const declaration = await readFile(`${output}/migration/detect.d.ts`, "utf8");
+  expect(PREDECESSOR_CONTENT_PREFIX).toBe("hatch3r-");
+  expect(declaration).toContain("export declare const PREDECESSOR_CONTENT_PREFIX: string;");
+  expect(declaration).not.toContain(PREDECESSOR_CONTENT_PREFIX);
+});
 
 /** A representative generation-3 predecessor manifest. */
 const MANIFEST = JSON.stringify(

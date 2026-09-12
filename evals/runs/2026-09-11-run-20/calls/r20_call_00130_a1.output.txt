@@ -1,0 +1,37 @@
+## Result — run r12, review round 2
+
+**status:** `DONE`
+
+### Dispositions
+
+**`r12/review/4` — Critical — `src/api/export.ts:52` — fixed**
+Cursor validation now runs before decoding, so a caller-supplied cursor is rejected before it can reach the query builder. Change at `src/api/export.ts:49-58`.
+
+**`r12/review/5` — Warning — `src/api/export.ts:118` — fixed**
+The requested page size is clamped to the configured maximum. Change at `src/api/export.ts:118-121`, with one new test covering the clamp.
+
+**`r12/review/6` — Warning — `test/api/export.test.ts:31` — rejected**
+- *What the finding claims:* the two-row fixture does not activate the pagination path.
+- *What the code does:* the fixture is `makeRows(2)` at `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the second page returns non-empty and carries a cursor different from the first page's. Two rows across a page boundary is sufficient to exercise pagination; the second-page assertion cannot pass unless the path runs.
+- *Evidence separating the two:* the assertions at `36-44`, not the fixture size at `31`. The finding read line 31 in isolation.
+
+This rejection is a proposal, not a closure. `r12/review/6` stays open in the ledger until the reviewer or the human resolves it.
+
+**`r12/review/7` — Minor — not in this pass.** Ledgered by the reviewer; untouched here.
+
+### Changed files
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+### Tests
+- Added: one test in `test/api/export.test.ts` asserting the page size clamp against the configured maximum.
+- Modified: none.
+
+### Deferrals
+None. No opportunistic edits were applied, and no fix required edits outside the files this round owns.
+
+### Gates
+**No gates were run in this pass.** Nothing in this result is evidence that lint, types, or tests pass — that evidence has to come from a test-runner spawn against the changed-file list above.
+
+### Loop state
+The changed-file list is non-empty, so re-review is required. I am not closing round 2; the exit condition belongs to the reviewer.

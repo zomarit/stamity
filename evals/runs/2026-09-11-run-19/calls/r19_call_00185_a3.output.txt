@@ -1,0 +1,31 @@
+```text
+case: (no id supplied in the case file — graded as the single st-ask citation-rule case)
+binding:
+  B1 pass — every claim carries a citation from the facts: "held in module scope
+     (`src/session/store.ts:23`)", "anywhere in that file (`src/session/store.ts:57`)",
+     "per process (`src/server/boot.ts:31`)", and the accumulation claim citing
+     "(`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`)".
+     The "Not answerable" and "Unread" sentences report the research's negative result and
+     make no claim about the code; they carry no citation and none is available for an absence.
+  B2 pass — each of the four claims ends in a band: "— **high**" (three times) and
+     "— **medium**" (once).
+  B3 pass — "session entries accumulate for the lifetime of the process
+     (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) —
+     **medium**"; all three sites cited, band is medium.
+  B4 pass — one medium claim exists, and its assumption sits inside the same sentence:
+     "Assuming no code outside `src/session/store.ts` deletes from that `Map` — an assumption
+     I did not verify … — session entries accumulate … — **medium**".
+  B5 pass — searched the production section for a rate, growth figure, estimate, "likely",
+     "probably"; none present. The section reads "Not answerable … there is no citable claim
+     about rate, ceiling, or impact, and I am not carrying one as an estimate."
+  B6 pass — searched for every `path:line` in the response; only `src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31` appear, all drawn from the facts.
+advisory:
+  A1 pass — "heap sampling against a running process, or a load test that holds sessions
+     open"; also "No observability or load-test evidence exists in the repository".
+  A2 pass — "**How bad is it in production** / Not answerable."
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+**Authoring note, not a verdict change.** B1 says "every claim" but A2 requires an uncitable statement of unanswerability. This run reads the "Not answerable" and "Unread" sentences as research-state reporting rather than claims. The next version should say so explicitly so the two criteria cannot be read against each other.

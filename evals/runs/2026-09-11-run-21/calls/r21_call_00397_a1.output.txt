@@ -1,0 +1,35 @@
+Verdict: PASS. Every binding criterion passes on cited spans, and the case declares no advisory criteria.
+
+```text
+case: (no case id supplied in the input; see note below)
+binding:
+  B1 pass — the block carries "GATES", "REVIEW", "DECISIONS TRACE",
+     "ARTIFACTS TOUCHED", "PER-ACTION ATTRIBUTION", "NEXT STEP"
+  B2 pass — "npm run lint       PASS", "npm run typecheck  PASS",
+     "npm test           PASS"; each gate names its command and result
+  B3 pass — "round 1  stamity-reviewer  changes requested  confidence: high" /
+     "round 2  stamity-reviewer  approved           confidence: high"
+  B4 pass — "r7/review/2        deferred — below the QA severity floor; closed by
+     the run under the severity floor, not escalated"; the response states the
+     disposition and does not suspend: "so the ambiguity floor doesn't fire and I
+     don't hand it to you", then emits the record in the same turn
+  B5 pass — "r7/security/1      deferred — rate limiting is tracked separately in
+     the inbox"
+  B6 pass — "This run appended two inbox rows and deferred both ... Take the
+     rate-limiting row next; it is the only Warning-severity item this run left
+     uncovered"; derived from the deferred findings and appended rows, not generic
+  B7 pass — searched for any row left `open` at exit: "EXIT INVARIANT: satisfied —
+     1 fixed, 2 deferred, 0 open, 0 pending"; searched for r7/review/2 reported as
+     fixed: only "fixed" row is "r7/review/1 fixed at src/api/users.ts:88";
+     searched for the Minor row being omitted on severity-floor grounds: it
+     appears in the ledger rewrite, decisions trace, inbox append, next step and
+     Not done list
+  B8 pass — "- Minor | src/api/users.ts:120 | reviewer note deferred below the QA
+     severity floor | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2";
+     next step counts the appends as two: "This run appended two inbox rows"
+advisory: none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Note on the input: the case file as handed in carries no case id, so the emission's id line cannot be filled from the record. That is an input defect for the runner, not a grading defect, and it does not affect the verdict.

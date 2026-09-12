@@ -1,0 +1,3 @@
+`none`
+
+The QA checkpoint already owns this question — the command's own step 2 invokes st-qa by name, and st-qa's description explicitly rules out being selected on its own there, so the request stays with the running `/st-work` flow rather than triggering a skill match.

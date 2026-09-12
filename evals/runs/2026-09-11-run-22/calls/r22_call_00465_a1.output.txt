@@ -1,0 +1,12 @@
+```text
+case: <not supplied in the input — routing case: pre-merge manual click-through, expected st-qa>
+binding:
+  B1 pass — "`st-qa`"
+  B2 pass — "`st-qa`" is the only skill named; searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-verify", "none", "equally", "or "; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Note for the run artifact: the input carried no case id line, so the id above is a descriptor rather than a file id. Not a grading defect, but the emission cannot be keyed to a case file until the runner supplies one.

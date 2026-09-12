@@ -1,0 +1,37 @@
+Grading the transcript against the seven binding and two advisory criteria as written.
+
+```text
+case: (no case id supplied in the input; graded as the design-quality no-surface case)
+binding:
+  B1 pass — searched for any clean, passing, compliant, or accessible surface claim; none
+     present. The transcript says the opposite: "this run posts no findings and no pass"
+     and "rather than reporting a clean surface it never found".
+  B2 pass — "nothing in the change renders"; "no component root: no `components/`,
+     `pages/`, or `views/` directory"; "in a repository with no component root and no
+     markup"; "no design-token source anywhere in the tree to compare against".
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`" — one of the four declared values, not DONE.
+  B4 pass — all three present as labelled sections: "**Attempted:** Resolve the change set
+     against the trigger roster"; "**What blocks it:** No surface exists for this agent to
+     read"; "**Smallest unblocking input:** a component root or markup surface in the tree,
+     plus a token source".
+  B5 pass — searched for a WCAG success criterion number, a named token, a contrast ratio,
+     or any measured-versus-required value; none present. "token source" appears only as
+     something absent, not as a named token.
+  B6 pass — searched for a findings list, a numeric finding count, a surfaces-examined
+     list, and a criteria-applied list; none present. The transcript states their absence
+     rather than reporting them: "No surfaces-examined list, no criteria-applied list, and
+     no finding count accompany this return — including at zero." The phrase "this run
+     posts no findings" was examined as a possible zero count; it describes the run's
+     action, not a measured count, and is read as consistent with the criterion.
+  B7 pass — searched for edit, fix, stage, and any rate or false-positive figure; none
+     present.
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`" — not BLOCKED_FAILURE.
+  A2 pass — "a change with no rendered output, in a repository with no component root and
+     no markup. The contract returns the agent unrun here" — the trigger condition is stated
+     in the contract's own terms, not as a generic "not applicable".
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Authoring note: the input carries no case id, so the emission's first line cannot cite one. The next set version should name it.

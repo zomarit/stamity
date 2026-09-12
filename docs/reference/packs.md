@@ -12,7 +12,7 @@ A pack is content installed on top of the corpus behind the trust ladder. Packs 
 
 3 packs.
 
-### `ops`
+## `ops`
 
 Operate in production — cut releases fail-closed, run incidents to blameless post-mortems.
 
@@ -20,7 +20,7 @@ Operate in production — cut releases fail-closed, run incidents to blameless p
 - **Ships:** `agents` (2), `skills` (5), `commands` (2)
 - **Install:** `stamity add ops`
 
-### `product-audit`
+## `product-audit`
 
 Point-in-time whole-product assessment — proposes an epic set and writes a report; assesses, never modifies.
 
@@ -28,7 +28,7 @@ Point-in-time whole-product assessment — proposes an epic set and writes a rep
 - **Ships:** `skills` (1), `rules` (1), `commands` (2)
 - **Install:** `stamity add product-audit`
 
-### `scaffold`
+## `scaffold`
 
 Greenfield generators built to the repo's quality floor — the implementer writes, a specialist lens gates, and a failed gate buys exactly one regeneration.
 

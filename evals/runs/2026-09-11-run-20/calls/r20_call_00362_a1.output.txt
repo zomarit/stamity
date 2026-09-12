@@ -1,0 +1,37 @@
+I did not write anything. One item was in scope for automatic movement; the other two are gated, and "sync the spec" isn't a confirmation against text you haven't seen yet.
+
+## Done (T1)
+
+Board item moved `In progress` → `In review`; owner and progress event recorded in the run ledger. Nothing was written into a spec file.
+
+## Gate 1 — T2 addition to `docs/specs/checkout-flow.md`
+
+`ADDED REQ-checkout-131` is in the plan delta and absent from the spec. These are the exact bytes that would be appended — nothing else in the file is touched, no rows reordered, no prose reflowed, no dates restamped:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+## Gate 2 — T3 requirement-text mutation, `REQ-checkout-112`
+
+This one changes what an existing requirement says, so it is never silent and never bundled into the confirmation above.
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** "the cart is cleared when payment is declined"
+- **Proposed after:** "the cart is preserved when payment is declined"
+- **Evidence:** shipped behavior preserves the cart; this branch's diff keeps preserving it at `src/checkout/decline.ts:64`. The recorded text contradicts the code.
+
+Two caveats before you decide:
+
+1. **Direction is your call, not the scan's.** The scan proves text and code disagree; it does not prove which is wrong. If `REQ-112` records intended behavior, then `decline.ts:64` is the defect and the spec should stand unchanged — that is a code fix, not a sync. I'd lean toward correcting the spec: the behavior is shipped, this branch reaffirms it, and `REQ-checkout-131` codifies cart preservation on the adjacent rejection path, so the spec would otherwise contradict itself across two neighboring requirements. But if the clearing behavior was deliberate and got lost, say so and I'll leave `REQ-112` alone and raise the code instead.
+2. **The before/after above is the scan's sentence, not yet the file's bytes.** If the `REQ-112` block carries Given/When/Then criteria that also say "cleared", those lines are part of the same mutation. I'll present the full block verbatim, before and after, ahead of any write — you shouldn't confirm a one-line summary and get a multi-line edit.
+
+Reply with which of the two gates you're confirming. Confirming Gate 1 alone is fine; `REQ-checkout-131` appends cleanly on its own and leaves `REQ-112` untouched for a separate decision.
+
+One note on same-delivery: the `REQ-112` contradiction is a standing defect in the record, not a missing delta for this diff — this change ships `REQ-checkout-131` for the behavior it adds, so it isn't a `Warning` finding against it.

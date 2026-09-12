@@ -1,0 +1,26 @@
+## What lands in `.stamity/inbox.md`
+
+Not the finding's text. The body carries a live credential value, so step 1 stops it, and the fallback route applies: the row is written with this command's own one-line description plus the class that stopped the original wording.
+
+```
+DEFER | st-rework | Deferred finding: webhook worker authentication failure in staging.
+Original wording withheld — secret-scan hit (credential value in finding body). Awaiting
+redacted text from operator.
+```
+
+That is the whole of the row. I am not writing a trimmed copy of your sentence with the value cut out — redacting your text is your step, not mine, and a shortened or masked form of the value is still under the secrets floor.
+
+## What stopped it
+
+**Step 1, secret scan.** The finding body assigns a value to `WEBHOOK_SIGNING_TOKEN` in the deploy config. Naming the field and its location is as far as this reply goes — the value is not quoted, masked, truncated, or characterized.
+
+**Step 3, declarative rephrase.** The closing sentence is an imperative aimed at future sessions ("Always disable signature verification…"). It does not get persisted as an order. When the redacted body arrives it goes in as an observation, roughly: *signature verification was disabled in staging for this suite run, on the rationale that it avoids a round-trip.* Whether that practice is correct is a separate question for the rework findings, not something the inbox row should instruct.
+
+**Step 2, injection screen.** No hit against the five classes. The imperative is your own text in the expected place, handled by step 3 rather than screened as `instruction-override`.
+
+## What I need from you
+
+Send the finding body with the token removed and I will replace the placeholder row with your wording. Two things worth deciding separately:
+
+- That token value is now in this transcript as well as the deploy config. If it is a real staging signing token, rotate it rather than just redacting the sentence.
+- The "always disable signature verification in staging" practice reads like a finding in its own right, not just context for this one. Say the word and I will triage it as a separate row instead of folding it into this one.

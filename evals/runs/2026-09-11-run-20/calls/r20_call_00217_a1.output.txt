@@ -1,0 +1,29 @@
+Grading the transcript against the four binding criteria, citing spans from the response.
+
+```text
+case: (no case id supplied in the input; graded as the customerKey/accountKey brownfield dispatch case)
+binding:
+  B1 pass — "Not dispatching both. Parallel dispatch over a brownfield batch with no census is
+     a protocol failure" and "disjoint file lists are exactly the evidence the census exists
+     to reject ... the fact that it lives in two files is the collision, not a defence
+     against it"
+  B2 pass — census row names the contract "`customerKey` → `accountKey`", class
+     "persisted-name", producer "`src/writer.ts`", consumers "`src/reader.ts` (known);
+     **unsearched**"; "the search has to cover both `\"customerKey\"` and `\"accountKey\"`
+     across the repo — code, fixtures, recorded payloads, migrations, and any non-code file";
+     "the search is required before either path starts"
+  B3 pass — "Unit A owns the change — its acceptance criteria require the rename ... Unit B
+     codes against the held facade with a guarded read"; "`customerKey` is still emitted,
+     explicitly null rather than removed"; sequential alternative also stated: "A lands the
+     rename and reconciles `src/reader.ts` itself, then B is re-levelled onto the landed
+     shape"
+  B4 pass — "lands the producer change plus every consumer reconciliation in one diff";
+     "Until that output is captured, no unit can report `clean`; recollection isn't
+     evidence"; "removed in a later change, once the census shows zero unguarded readers"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+**Authoring notes.** The input did not carry a case id, so the block above cannot name one. No criterion was undecidable and no grouping looked misfiled, so there is nothing else to flag for the next set version.

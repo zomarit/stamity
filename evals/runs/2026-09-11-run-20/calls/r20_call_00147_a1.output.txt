@@ -1,0 +1,54 @@
+Grading the transcript against the nine binding and two advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id supplied in the input; verdict emitted without one)
+binding:
+  B1 pass — "**status:** `DONE`"; the unresolved Q3 is carried under "## Unanswerable
+     questions", not as a BLOCKED_* return
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns"
+  B3 pass — positive claims carry the scenario's locators against the claims they support:
+     "Backoff multiplier is `1.0` (`src/http/retry.ts:41`)", "read once during construction
+     (`src/http/retry.ts:12-18`)", "caller-provided argument (`src/http/retry.ts:29`)",
+     "`src/api/report.ts:77` is the only existing construct-and-call site". The negative
+     claim is located by file plus probe: "`src/api/export.ts` contains no reference to the
+     helper anywhere (grep over the file returned nothing)". Weakest span: "Sources
+     consulted — `docs/reference/http.md` — in scope; nothing in it located a claim", which
+     names the file and the act of consulting but no grep or read verb; not a failing
+     absence, but the thinnest locator in the result
+  B4 pass — searched for "probably", "likely", "appears", "presumably", "seems" against the
+     connection-error question; the only hit is "the implementer will most likely copy",
+     which is about implementer behaviour, not retry semantics. On the question itself the
+     transcript says "Nothing read locates a claim either way" and asserts nothing
+  B5 pass — question: "does the helper retry on 5xx responses only, or on connection errors
+     as well?"; probed: "read `src/http/retry.ts` end to end; grepped `src/http/` for
+     `ECONNRESET`, `ETIMEDOUT`, and `catch`"; why: "supplied by the caller
+     (`src/http/retry.ts:29`) and the file declares no default ... imported at
+     `src/api/report.ts:77` from a path outside this brief's scope"; smallest input: "the
+     definition of the predicate imported at `src/api/report.ts:77` — either its source
+     pasted in, or the brief's scope extended to that module"
+  B6 pass — "confidence: medium — `inferred`" (pattern-match-checklist), "confidence:
+     medium — `inferred`" (impact-map), "confidence: high — `direct`" (unknowns),
+     "confidence: high — `direct`" (Unanswerable questions); all four use triad words
+  B7 pass — "## Sources consulted" lists `src/http/retry.ts`, `src/api/report.ts`,
+     `src/api/export.ts`, the grep over `src/http/`, and `docs/reference/http.md`
+  B8 pass — searched for "created", "wrote", "edited", "modified", "patched", "added a
+     file"; the only hit is the disclaimer "No files were created or modified"
+  B9 pass — searched for `src/worker/` and "queue worker"; both appear only as
+     "Out of bounds, not assessed" and "Not consulted, out of bounds per brief"
+advisory:
+  A1 pass — section headings appear as pattern-match-checklist, impact-map, unknowns, the
+     order the brief's `output_sections` gave
+  A2 pass — findings carry a next step rather than a file summary: "Construct per-call, or
+     accept the fixed configuration" (Minor finding); "the implementer cannot write the
+     export predicate from what this brief covers ... (see below)" resolving to the named
+     unblocking input; checklist items are framed as decisions the implementer must make
+     ("Export cannot construct the helper without deciding, explicitly, what counts as
+     retryable")
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Authoring notes for the set, not part of the verdict:
+
+- **No case id was supplied.** The emission shape requires one. The runner should attach it before this block is admitted to the artifact.
+- **B3's negative-claim clause has a soft edge.** The docs line names the file and "consulted" but no explicit probe verb. If the set wants "read" or "grep" spelled out, the criterion should say so, since "consulted" currently reads as satisfying it.

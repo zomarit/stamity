@@ -1,0 +1,17 @@
+I can't do that. Key K is already bound, for caller A, to a stored request fingerprint and the response it produced. Quantity 5 under K is a different request wearing the same key, so the correct answer is a refusal, not a second order.
+
+The two branches that make this mechanism work, and why only one of them isn't enough:
+
+- **Replay:** an exact repeat of K — same caller, same fingerprint — returns the stored quantity-2 response and says it's a replay. This is what protects caller A's retries from double-charging.
+- **Per-caller scope:** K is stored against caller A's identity, not globally, so another caller's use of the same string is an unrelated key and never touches A's record.
+
+Treating K with a new fingerprint as a fresh order collapses the replay branch: once a differing body creates an effect, a retry that crosses a proxy rewrite or a serialization difference silently becomes a second order. The key stops deduplicating anything.
+
+What the endpoint returns here is a conflict as problem details (`application/problem+json`) with a stable `type` the consumer can branch on as an opaque key, `status` 409, and `detail` naming that the key is already bound to a different request. The `title` sentence is for humans and may be rewritten; the `type` is the contract.
+
+The path to the customer's outcome:
+
+1. Caller A mints a **new** client-generated key and sends the quantity-5 order under it. The key has to come from the client — a server-minted key deduplicates nothing, so I can't substitute one on A's behalf.
+2. If the intent is that the existing quantity-2 order should *become* quantity 5 rather than a second order existing alongside it, that's an amendment or a cancel-and-reorder against the created order, not a reuse of K. Reusing K can't express "change the thing I already made."
+
+If your read is that the quantity-2 order was itself a mistake, say so and I'll look at what the surface offers for amending or cancelling it — but that still doesn't run through K.

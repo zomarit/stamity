@@ -1,0 +1,30 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+**Mode:** `check` (report-only — nothing written, gate not run in this context).
+
+**Per-file counts:** 1 file, 4 acceptance criteria — 2 machine-checkable by form, 1 `judgment:`-tagged, 1 neither. Of the machine-checkable pair, 1 is confirmable and 1 is a gap.
+
+| Criterion | Requirement | Classification | Status |
+|---|---|---|---|
+| AC-1 | `REQ-checkout-104` | named test `test/checkout/decline.test.ts` | exists — confirmation dispatched |
+| AC-2 | `REQ-checkout-107` | named test `test/checkout/refund.test.ts` | **gap** — test does not exist on the tree |
+| AC-3 | `REQ-checkout-111` | `judgment: design lead` (empty-cart copy) | classified, no spawn |
+| AC-4 | `REQ-checkout-115` | neither | **reported** — see below |
+
+**Criteria that are neither machine-checkable nor judgment-tagged:**
+
+- **AC-4** (`REQ-checkout-115`) — "the checkout page feels responsive on a slow connection." No named test, no gate command, no measurable threshold, no `judgment:` tag. "Feels responsive" needs either a threshold and a connection profile (e.g. a p95 interaction latency bound under a named throttle) or a `judgment:` tag naming the deciding role.
+
+**Gaps:**
+
+- **AC-2** (`REQ-checkout-107`) points at `test/checkout/refund.test.ts`, which is not on the tree. Reported as a gap; it is not sent to the runner.
+
+## Spawn — issued
+
+`test-runner` dispatched this turn. Brief:
+
+- **Gate command:** `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`)
+- **Criteria being confirmed:** AC-1 under `REQ-checkout-104` in `docs/specs/checkout-flow.md`, backed by `test/checkout/decline.test.ts`.
+- **Constraints:** apply no edit; return the structured per-gate result — gate command, pass or fail, and the verbatim failing excerpt if it fails.
+
+The census will read that per-gate result when it returns and fold AC-1's confirmed/failed status into this report. AC-2's gap, AC-3's judgment tag, and AC-4's classification stand independently of the runner's outcome.

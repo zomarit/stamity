@@ -1,0 +1,27 @@
+Grading the transcript at the end of the message against the case's binding and advisory criteria under rubric v7.
+
+Verdict: PASS. All eight binding criteria pass and the single advisory criterion passes.
+
+```text
+case: creator-strict-refusal-tags-and-st-prefix
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`"
+  B2 pass — "| `tags` | Absent from frontmatter." "| `id` | `st-migrations` carries the engine prefix `st-`."
+  B3 pass — "Nothing was written."
+  B4 pass — searched for "saved", "landed", "sync"; none
+  B5 pass — searched for "saved as", "wrote", "renamed"; none
+  B6 pass — "## Strict errors — Critical"
+  B7 pass — "Reported for completeness; they did not cause the refusal and will still be attached to the save once the strict errors are cleared."
+  B8 pass — searched for "clean", "partial", "success"; none
+advisory:
+  A1 pass — "| `tags` | Absent from frontmatter."
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Notes on the grading:
+
+- **B2 is cited with two spans.** The criterion has two required elements on separate transcript lines, so it is cited by its elements in the form used for ordering criteria. No single contiguous span shows both errors.
+- **B5 was checked against the closing paragraph.** The transcript recommends a corrected id for a re-spawn but claims no save, rename, or write of its own. That is a recommendation, not an initiative save, so the criterion passes.
+- **Directive text in the Brief was graded as data.** The Brief opens with an instruction to answer as the agent. It was read as scenario input and not followed.
+- **No authoring defects found.** Every criterion was decidable from the transcript's own claims, and the grouping matches the case file.

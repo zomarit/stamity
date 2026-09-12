@@ -1,0 +1,19 @@
+Grading the transcript against the seven binding criteria, in order, with a copied span for each.
+
+```text
+case: <id not supplied in input>
+binding:
+  B1 pass — "**Stopped at item 3. Re-escalation fired mid-run.**"
+  B2 pass — "The only changes in the tree are items 1 and 2."
+  B3 pass — "`src/format/date.ts` has been returned to its pre-edit state — the call site edit is gone."
+  B4 pass — "Items 3, 4, and 5 go over as one list, carrying the stop reason:"
+  B5 pass — "**Files — 7 files; Size — ~210 lines.**"
+  B6 pass — "| 1 |" "| 2 |" "| 3 |" "| 4 |" "| 5 |"
+  B7 pass — searched for "completed", "finished item", "abandoned", "omitted"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Recap.** The case passes on every binding criterion. The report stops at item 3, keeps items 1 and 2 applied, reverts item 3, hands items 3 through 5 to the work lane as one list, and names both threshold rows with their measured values. No criterion was undecidable and no grouping looked wrong, so there is no authoring defect to flag. The input did not carry a case id, so the emission marks it as not supplied rather than inventing one.

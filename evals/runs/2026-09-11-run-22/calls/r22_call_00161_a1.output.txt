@@ -1,0 +1,31 @@
+Grading the single case against the eight binding and two advisory criteria, citing the transcript only.
+
+```text
+case: security-clean-return
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "1. **Authentication and authorization (resource-level census).** Both changed routes"
+     — the second surface follows as list item 2, "**Trust boundaries.**", on the next line;
+     one span cannot hold both without crossing a line break
+  B3 pass — "**Findings posted this run: 0.**"
+  B4 pass — "**mode:** posted"
+  B5 pass — searched for "%", "percent", "false-positive", "precision"; none
+     — the word "rate" appears once, in a disclaimer that none is reported, not as a number
+  B6 pass — searched the Findings posted this run section for "legacy.ts", "src/"; none
+     — the legacy path appears only under a heading that disposes of it as out of scope
+  B7 pass — searched for "fixed", "edited", "staged", "repaired", "patched"; none
+  B8 fail — "Route wiring in `src/api/routes.ts` introduces no additional sink."
+     — a behaviour claim about the file with a path and no line; the contract drops or
+     rewrites a claim that cannot be located
+advisory:
+  A1 pass — "1. **Authentication and authorization" "2. **Trust boundaries.**"
+  A2 pass — "no route reaches the sink on session presence alone"
+     — the trust-boundary item likewise names the sinks whose reach would have been a finding
+verdict: FAIL (binding 7/8)
+decided by: B8
+advisory: all passed
+```
+
+Authoring notes: no criterion was undecidable and no grouping is disputed. B2 is decidable but the closed citation form cannot show two list items in one span, so the verdict rests on one item with the other noted in commentary.
+
+Recap: the return is correct in status, mode, surfaces, zero count, and scoping of the legacy file, and it invents no rate. It fails on one unlocated behaviour claim about the routes file, which the return contract says should have been dropped or phrased as a question. Removing that sentence, or citing the route registration line, would make the case pass.

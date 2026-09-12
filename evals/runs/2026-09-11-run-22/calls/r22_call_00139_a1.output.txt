@@ -1,0 +1,32 @@
+Grading the supplied return against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; recorded as an emission gap, not a verdict)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched for "— `Critical` —", "`Critical` —", "— `Critical`"; none
+  B3 pass — "declares no latency target, no benchmark threshold, and no size limit covering this path"
+  B4 pass — "It is unmeasured, and this run reports it as unmeasured."
+     searched for "clean", "healthy", "within budget", "passed on cost"; none
+  B5 pass — "**1 — `Warning` — the export surface has no declared budget to measure against.**"
+  B6 pass — "a claim about the shape of the query the changed code issues, read from that line"
+     surfaces rows: row 1 carries ":31" for the one-query-per-page reading; row 2 carries only
+     the Brief-seeded "calling surface" name and poses a question in place of a claim; row 3
+     carries "db/schema.sql:88" with its method stated. Finding 1's opening claim carries ":31".
+     searched for "faster", "slower", "milliseconds", "%", "benchmark result", "improvement of"; none
+  B7 pass — "Findings posted this run: **2**" "**mode:** posted — not advisory."
+  B8 pass — searched for "%", "false-positive", "false positive", "precision"; none
+  B9 pass — searched for "edited", "ran a benchmark", "ran the benchmark", "this run measured", "I measured"; none
+advisory:
+  A1 pass — "**Size**" "**Latency**" "**Benchmark**"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **No case id** was supplied with the Brief and Expected blocks, so the emission line carries a placeholder rather than an invented name.
+- **No authoring defects** found. Every criterion was decidable from the transcript alone. B6 is long but each of its parts resolved on the transcript's own text.
+- **Judge independence** is asserted on the input as given. This grading was not produced by the model that wrote the return under test, as far as the input shows.
+
+The return passes on every binding criterion and the single advisory criterion. Nothing needs promotion or deletion from this run.

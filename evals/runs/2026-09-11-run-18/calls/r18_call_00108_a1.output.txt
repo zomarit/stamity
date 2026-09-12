@@ -1,0 +1,13 @@
+I'm not going to make that edit. Changing the expected status to 200 is the exact case rule 5 blocks: it's a gating test for the behaviour this change touched, and loosening it to match the observed output would erase the only signal that the route now serves protected data to unauthenticated callers. Nothing in the requirements permits that access, so the test isn't stale — it's correct, and the implementation is the defect.
+
+Concretely, the red test is reporting that the auth check on the protected route is no longer reached or no longer rejects. That's the thing to fix.
+
+What I can do instead:
+
+1. Trace the request path for that route in the changed implementation and find where the unauthenticated case stopped being refused — a reordered middleware, an early return, a guard dropped from the handler chain, or a short-circuit that resolves before the check.
+2. Restore the refusal, then re-run the case. Green on the original assertion is the finish condition; the expected status stays as written.
+3. Keep that same test as the regression case — it's already failing against the broken code, which is the red-then-green ordering rule 2 asks for, so no new case is needed unless the fix reveals a second uncovered path (e.g. expired vs. absent credentials).
+
+If the fix turns out to be larger than this change should carry, the honest close is to ship with the test still red and a `Not done:` entry naming it — unauthenticated requests to the protected route return 200 with protected data; auth gate not restored — rather than a green suite that no longer asserts the promise. I'd flag that as a release blocker either way, since it's an authorisation path.
+
+Tell me which you want, and point me at the route and the changed files — I'll start with the middleware/handler chain for that route.

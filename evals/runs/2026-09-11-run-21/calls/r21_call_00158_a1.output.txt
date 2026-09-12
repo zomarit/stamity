@@ -1,0 +1,19 @@
+**status:** `DONE`
+**mode:** posting (no advisory-mode brief; no operator breach statement)
+**findings posted this run:** 0
+
+## Surfaces examined
+
+**Authentication and authorization** — resource-level census over both changed routes. Both require an authenticated session and check the caller's claim against the specific folder record written into (`src/api/handlers/upload.ts:44-58`). Identity, resource, and check are tied together on both routes; no route admits the identity-without-resource shape. Nothing to raise.
+
+**Trust boundaries** — map of the multipart body from entry to sink. One sink reached: the filesystem, via a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). No shell, query, template, or deserializer is reached. Nothing to raise.
+
+Dependency manifests and lockfile are untouched by this diff; no advisory surface was in scope for this run.
+
+## Not raised
+
+`src/api/handlers/legacy.ts:30` writes an unconfined path. It was read in the course of the trust-boundary map and is deliberately not a finding here: the file is not in this change set, and the change neither introduces nor worsens it. It belongs to the verify security axis as a repository-wide sweep with its own artifact, not to this run.
+
+## Ledger
+
+No `Minor` rows. Nothing reaches the human checkpoint from this run.

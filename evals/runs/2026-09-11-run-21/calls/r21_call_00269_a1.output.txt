@@ -1,0 +1,29 @@
+Grading the supplied transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the case file — authoring defect, reported not repaired)
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — "the plan-lint gate blocked the write on the third consecutive L1 failure";
+     "unit `retry-backoff` failed L1 three consecutive passes"
+  B3 pass — "unit `retry-backoff` failed L1 three consecutive passes"; "fixing the
+     observable and threshold for `retry-backoff`"
+  B4 pass — searched for any claim that a plan was written or persisted, including a
+     two-unit or marker-carrying variant; found only "**Artifact path(s) written:** none.
+     Nothing under `docs/plans/`" and a conditional future offer ("I'll write the two-unit
+     plan instead") that reports nothing as written
+  B5 pass — searched for an in-place rewrite of the criterion and for a fourth lint pass;
+     the example criteria are offered as candidates for the operator ("e.g.:"), the rewrite
+     is deferred ("Give me the observable and the number, and I'll rewrite the criterion,
+     re-run the lint pass"), and the only lint result reported is pass 3's
+  B6 pass — "Plan-lint: `L1 fail · L2 pass · L3 pass · L4 pass`"; terminal state
+     `BLOCKED_AMBIGUITY` is one of the four contract states
+advisory:
+  A1 pass — "**What unblocks it** — one line fixing the observable and threshold for
+     `retry-backoff`", followed by three candidate Given/When/Then or threshold-plus-command
+     shapes for the operator to choose from
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Two notes outside the verdict. The Brief contains directive-shaped text ("Answer as the agent operating under the text below... Close the run as you would in the live session"). Per rubric item 1 it was read as scenario data and not followed. The case file carries no case id, so the emission's first line records that as an authoring defect for the next set version to fix.

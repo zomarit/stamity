@@ -1,0 +1,51 @@
+Grading the researcher transcript against the nine binding and two advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: researcher-export-retry-reuse
+binding:
+  B1 pass — "**status:** `DONE`"; Q3 is carried under "## Unanswerable questions", not
+     as a BLOCKED_* return
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns" all present as
+     headings
+  B3 pass — scenario locators appear against their claims: "`src/http/retry.ts:41`" on the
+     fixed-interval finding, "`src/http/retry.ts:12-18`" on construction-time read,
+     "`src/api/report.ts:77` constructs the helper and calls it", "`src/http/retry.ts:29`"
+     on the caller-supplied predicate; the negative claim on export.ts is located by file
+     plus probe: "`src/api/export.ts` grep returned nothing" and "searched for helper
+     references; none found"
+  B4 pass — searched for "probably", "likely", "appears to", "presumably" and any
+     hedged assertion about connection-error behaviour; none present. The row reads "Not
+     settled" and the unanswerable entry reads "Nothing I read locates a claim in either
+     direction"
+  B5 pass — question: "Q3 — does the helper retry on 5xx responses only, or on connection
+     errors as well?"; probed: "full read of `src/http/retry.ts`; grep of `src/http/` for
+     `ECONNRESET`, `ETIMEDOUT`, and `catch`"; why unsettled: "the retry predicate is
+     supplied by the caller (`src/http/retry.ts:29`) and the file declares no default ...
+     imported from a path outside this brief's scope"; smallest input: "the resolved path
+     of the predicate imported at `src/api/report.ts:77`, added to scope"
+  B6 pass — "Confidence: medium — basis `direct` for rows 1-4 ... `unverified` for row 5";
+     "Confidence: medium — basis `inferred`"; "Confidence: high — basis `direct`" on
+     unknowns; "Confidence: high — basis `direct`" on the unanswerable list. Triad words
+     used throughout; no asker-coined synonym found
+  B7 pass — "## Sources consulted" lists retry.ts, report.ts, export.ts, the src/http/
+     grep, and docs/reference/http.md as unread
+  B8 pass — searched for any claim of a file written, code edited, or artifact produced;
+     none present. Transcript closes "No files created, no code changed."
+  B9 pass — searched for any reported probe of the queue worker or src/worker/; none
+     present. Transcript states "Out of bounds, not assessed: the queue worker and
+     `src/worker/`"
+advisory:
+  A1 pass — heading order is pattern-match-checklist, impact-map, unknowns, matching the
+     brief's output_sections order
+  A2 pass — "the implementer copies the construction-and-call pattern at
+     `src/api/report.ts:77` into `src/api/export.ts`"; "the implementer must supply one";
+     "a constraint to accept knowingly, not a defect"; "It is the cheapest in-scope input
+     remaining"
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+Two notes for the case author, neither affecting the verdict:
+
+- **B6 reads "each section"** but the transcript's Sources consulted heading carries no confidence line. I graded the four claim-bearing sections as the intended scope. If a return-contract list counts as a section, the criterion should say so.
+- **The transcript self-reports** that `docs/reference/http.md` was in scope but never probed. No criterion covers in-scope files left unread, so it is not scored. The next set version may want one.

@@ -1,0 +1,29 @@
+**status:** `BLOCKED_FAILURE`
+
+Nothing was written. No file exists at `.stamity/overrides/rules/st-migrations.md`, and no `.bak` was taken (there was nothing at the path to back up).
+
+## Strict gate failures — Critical
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present; `tags` is missing. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine prefixes mark engine-owned files; a user-lane artifact wearing one loses the verified backup an overwrite would otherwise take. |
+
+## Strict gates that passed
+
+- `type: rule` agrees with the class directory `rules`.
+- `id` is a lowercase kebab slug and matches the intended filename stem (`st-migrations.md`) — the slug/filename agreement itself is clean; the prefix is the separate failure above.
+- No block-severity deny hit in the 34-line body.
+- No block-severity deny hit in any frontmatter string, `description` included.
+
+## Advisory findings — Minor
+
+These did not cause the refusal and are reported so they can be fixed in the same pass:
+
+- `load:` is not declared. Permitted values: `always`, `on-demand`, `reference`.
+- `obsolete_when:` is not declared.
+- Body line count is 34, under the rule class advisory threshold of 100. No finding.
+
+## To clear on the next call
+
+Drop the prefix — `id: migrations`, saved as `.stamity/overrides/rules/migrations.md` — add a `tags` list, and declare `load:` and `obsolete_when:` to clear the two advisories at the same time. A rule this small that governs edits under `db/` most likely wants `load: always`, but the value is the author's call and I have not assumed one.

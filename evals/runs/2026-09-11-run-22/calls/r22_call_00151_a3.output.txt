@@ -1,0 +1,30 @@
+Grading the r12 round-1 review transcript against the nine binding and two advisory criteria, in written order, with closed-form citations.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: directly read diff hunk"
+  B4 pass — "### Applied lenses" "Security, Testability, Reliability, Maintainability, Product & Spec." "### Not applicable (no surface in this diff)" "UI, UX, Scalability, Performance, Enhancability."
+  B5 pass — "`src/api/export.ts:52`" "`src/api/export.ts:31`" "`test/api/export.test.ts:12`"
+  B6 pass — "Directly read diff hunk — not a native client artifact, not a structured result file, not a completion marker." "Directly read diff hunk." "Directly read diff hunk."
+  B7 pass — "### Findings at the human checkpoint" "| r12-F001 | `Critical` |" "No `Warning` findings." "### Ledgered — travels with the run, not the checkpoint" "| r12-F002 | `Minor` |" "| r12-F003 | `Minor` |"
+  B8 pass — searched for "edited", "fixed", "staged", "committed", "ran"; none
+  B9 pass — "no recorded seeded-defect baseline and no declared false-positive budget" "This verdict is **advisory, not merge-blocking**, and routes through human triage."
+     must-NOT part: searched for "gating the merge", "gates the merge", "blocks the merge"; none
+advisory:
+  A1 pass — "| r12-F001 | `Critical` |" "| r12-F002 | `Minor` |" "| r12-F003 | `Minor` |"
+  A2 pass — "| r12-F002 | `Minor` |" "| r12-F003 | `Minor` |"
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+Notes for the run artifact, none of which change a verdict:
+
+- **Case id missing.** The input carried no case id, so the emission line is a placeholder. The runner should supply it before this grade is filed.
+- **Multi-line criteria cited by elements.** B4, B5, B6, B7, A1 and A2 each require evidence spread across separate transcript lines. No single contiguous span on one line can show them met, so each is cited in the element form. If the reader only admits element form for ordering criteria, those citations need a ruling.
+- **B3 vocabulary.** The transcript's basis reads "directly read diff hunk" rather than the contract's literal "direct evidence". A basis is stated, which is the criterion's only fail condition, so it passes. The authoring set may want the criterion to say whether the literal vocabulary is required.
+- **B9 subject.** The transcript says the verdict routes through human triage. The criterion asks that the findings route through human triage. The findings are the content of that verdict and appear under a checkpoint section, so this is graded pass, but the wording is a near-miss worth tightening in either the criterion or the agent text.
+- **B9 term hit.** The string "merge-blocking" does occur in the transcript, but only inside the negation "advisory, not merge-blocking". The absence search for B9 therefore targets phrasings that would affirm gating, and none occur.
+- **No undecidable criteria** and no grouping disputes. Nothing to flag as an authoring defect beyond the two wording notes above.

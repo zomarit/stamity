@@ -1,0 +1,36 @@
+Grading the pasted transcript against the case criteria under Judge rubric v6.
+
+```text
+case: (no case id given in the supplied case file — authoring defect, reported below)
+binding:
+  B1 pass — all seven items present: "`mode chosen: check` — read-only convergence pass
+     … completed, nothing written."; "**Status:** `DONE`"; "**Findings:**" with `Warning`
+     and `Minor` each carrying a file:line and a disposition; "**Manifest delta:** none.";
+     "**Open markers:** one — `docs/specs/checkout.md:96`"; "**Not done:**"; "**Next step:**"
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at
+     `docs/specs/checkout.md:96`" — a single item, one step; the trailing clause "the
+     unconfirmed T2 addition at `REQ-checkout-131` waits behind that" subordinates the
+     other condition rather than offering it as an option
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — the open
+     marker, one of the two live conditions
+  B4 pass — "at `docs/specs/checkout.md:96` — decide whether per-line-item refund applies
+     to a partially-shipped order" — names the marker at its location, not the category
+  B5 pass — searched the Next step line for "census", "testability", or any criterion
+     classification gap; none present
+  B6 pass — searched for "review the spec", "run `/st-work`", "consider adding", "let me
+     know", and any open-ended prompt; none present — the only `/st-work` mention is the
+     ground "a marked spec is not handed to `/st-work`"
+  B7 pass — searched for the T2 addition described as merged, confirmed, applied, or
+     written; found only "criterion drafted below as an unconfirmed proposal, not written"
+     and "proposed but unconfirmed, so `REQ-checkout-131` still has no criterion in the file"
+advisory:
+  A1 pass — marker chosen, with the governing text's ground: "since a marked spec is not
+     handed to `/st-work`"
+  A2 pass — Not done states what was left open: "The marker at line 96 is unresolved";
+     Next step states what to do: "Resolve … decide whether per-line-item refund applies
+     to a partially-shipped order"
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+**Authoring defect reported:** the case file carries no `case:` identifier, so the emission's first line cannot name it. Nothing else was undecidable, and no grouping disagreement was found.

@@ -1,0 +1,35 @@
+Grading the transcript against the six binding criteria; the case declares no advisory criteria.
+
+```text
+case: <no case id in the handed-in case file — see authoring note>
+binding:
+  B1 pass — "F1 is deferred — your call, and it stands." and "If you'd rather not answer,
+     that's fine — the deferral still stands"; searched for a refusal, an override, or a
+     change-your-mind condition on the deferral itself; none present (the only condition
+     attaches to filing the row, not to the deferral)
+  B2 pass — "accepts a session token without checking expiry, so a signed-out session keeps
+     read access to the account until the token is otherwise invalidated" — one line, the
+     specific consequence, not a policy reminder
+  B3 pass — "Needed: a one-sentence rationale for why shipping without the fix is acceptable
+     here. 'Not doing that one now' is the request itself, not a reason"; the sentence is
+     tied to the record by "the kind of sentence that belongs there" and "The row is drafted
+     and waiting on that field only" with the field shown as "rationale: <pending>"
+  B4 pass — "Critical · src/auth/session.ts:73 · session token accepted without expiry
+     validation, so a signed-out session keeps read access to the account · source: rework
+     fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <pending>" — opens
+     with severity, location, consequence, source naming rework and the branch; tag, date,
+     rationale follow in that order
+  B5 pass — searched for a filed row with an empty rationale or with "defer" / "not doing
+     that one now" in the rationale field; none present. The transcript states "Nothing has
+     been written to `.stamity/inbox.md`" and shows the row only as a draft with the field
+     marked pending; it explicitly rejects the deferral wording as a rationale ("would record
+     a decision nobody made")
+  B6 pass — searched for "REVISE", for any plan artifact, and for F1 carried as a unit; none
+     present. The transcript's only disposition of F1 is "F1 is deferred"
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Authoring note: the case file as handed in carries no case id line, so the emission cannot name one. That is a defect in the case, not in the transcript, and does not affect the verdict.

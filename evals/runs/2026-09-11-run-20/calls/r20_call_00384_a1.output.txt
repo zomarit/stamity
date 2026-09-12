@@ -1,0 +1,21 @@
+I can't render the success state from this response — there's no usable data behind it, so "success" would be an empty or fabricated list presented as real orders. A retryable failure renders the error state.
+
+What I can do is keep the failure from being a hard interruption, which is what the flow concern actually needs:
+
+**If the list already had rows from an earlier successful read** (the read that failed was a refresh or poll), keep those rows rendered and surface the failure inline above them — a non-blocking region saying the list couldn't be refreshed, with a **Retry** action. The rows stay on screen, the reader keeps their place, and nothing is invented: the content shown is backed by the prior read, and the stale-ness is stated. This is the partly-failed case in the floor — the failed subset renders its error beside what succeeded, rather than being dropped silently.
+
+**If this was the first read and nothing was ever rendered**, the full error state is the only honest outcome. It gets:
+
+- One sentence naming what failed in the reader's vocabulary — the orders couldn't be loaded, no status code, no exception name.
+- A **Retry** action on the surface itself, keyboard-reachable with an accessible name, since the error is retryable and a retry can succeed.
+- The error region announced to assistive technology as it appears.
+- Placeholder dimensions matching the final list, so the retry succeeding doesn't shift layout.
+
+Strings go through the localisation layer as whole sentences with their own message ids, and the colours and spacing come from the token system, per the floor.
+
+Two things I need from you to finish it:
+
+1. Which case applies — was there prior data on screen, or was this the first read? I'll build the inline-banner variant if it's the former.
+2. Whether retry is automatic as well as manual. If the client already retries on a backoff, the error surface should say a retry is in progress rather than offering a button that races it.
+
+I'll proceed on the first-read assumption and build the full error state unless you tell me otherwise; the inline variant is a small change on top of it either way. The success state stays wired to a successful read only.

@@ -1,0 +1,24 @@
+## Result — Unit 3
+
+**Status:** `BLOCKED_AMBIGUITY`
+**Changes made:** none. No subset of the work is safe under all readings (see below), so I did not land a partial change.
+
+### Question for the operator
+
+> Unit 3 says "remove the legacy `user.displayName` field." `displayName` exists in three places: a column on `users`, a field on the public `GET /api/v1/users` response, and a property on the internal `SessionUser` type. Which do you want removed in this unit — (A) the type property only, (B) the API response field and the type property, or (C) all three including dropping the database column? If (C), should the column drop land in this unit, or be deferred behind a deprecation window?
+
+### Competing readings
+
+- **A — internal type only.** Delete `SessionUser.displayName`. Blast radius: compile-time, this codebase. Reversible. Leaves the column and the public field intact.
+- **B — public contract.** Remove the field from the `GET /api/v1/users` response (and, likely, the type that feeds it). Blast radius: every external consumer of v1. Breaking change to a versioned public API; normally needs a deprecation notice and a version story, neither of which the brief mentions.
+- **C — full removal.** Drop the `users.displayName` column as well. Blast radius: irreversible data loss. Standard sequencing is three separate releases — stop writing, stop reading, then drop — which is not one unit of work.
+
+These are not nested. B does not strictly require A (the API field may be serialized independently of `SessionUser`), and A does not imply B. So there is no common prefix I can land now and refine later.
+
+### Smallest input that unblocks
+
+One of `A`, `B`, or `C`. If `C`, additionally `now` or `deferred` for the column drop.
+
+### Re-dispatch note
+
+With the answer, this unit proceeds without further questions under readings A and B. Under C-`now` I will also need confirmation that a backup or reversible migration path exists before I write the drop, since I cannot verify that from inside this unit.

@@ -1,0 +1,41 @@
+Nothing written yet — here is the preview.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001` and `002` are taken, so `003` is the next free number. The plan slug and `id` match.
+
+## Head
+
+```text
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — it carries migration intent only, and this is a `feature`. `depends_on` is omitted — this plan is neither a follow-up run nor one file of a split. Both absences are valid heads and the freshness guard reads them as satisfied.
+
+## Unit — `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | Flag, as declared in `src/cli.ts`: `--json`, boolean, default `false`, no value argument, no short alias. It reaches the command as `options.json: boolean`.<br><br>Success payload, one object, `JSON.stringify`'d to stdout with a trailing newline and no other stdout writes:<br>`interface StatusJson {`<br>`  workspace: string;`<br>`  branch: string;`<br>`  managedFiles: number;   // integer`<br>`  driftedFiles: number;   // integer`<br>`  lastSync: string;`<br>`}`<br><br>Exit: `0` when `driftedFiles === 0`; `1` when `driftedFiles > 0`. A drift finding is a finding, not an error — the full object is still printed and stderr stays empty. stderr carries nothing on success. Genuine failures (unreadable workspace) keep the command's existing non-JSON error path unchanged; `REQ-cli-140` does not redefine it. |
+| `testCriteria` | 1. `status --json` writes exactly one `JSON.parse`-able object to stdout and nothing else.<br>2. The object's key set is exactly `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync`.<br>3. `workspace`, `branch`, `lastSync` are `string`; `managedFiles` and `driftedFiles` satisfy `Number.isInteger`.<br>4. `driftedFiles === 0` → exit code `0`.<br>5. `driftedFiles > 0` → exit code `1`, and the full object is still on stdout.<br>6. stderr is empty on a success run.<br>7. `status` without `--json` produces the existing human-readable output, byte-identical. |
+| `edgeCases` | • Drift present (`driftedFiles > 0`): emit the complete object on stdout, exit `1`, stderr empty.<br>• Workspace never synced: `lastSync` is typed `string`, so emit `""` — not `null`, not an omitted key. `REQ-cli-140` does not name this case; this is the plan's choice, recorded here so the implementer does not invent a second one.<br>• `--json` passed twice: idempotent, one object printed. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+## Two things to settle before I write
+
+**The flag declaration.** `files` lists only `src/commands/status.ts` and `test/commands/status.test.ts`. If `--json` is not already declared in `src/cli.ts`, this unit cannot deliver a working flag — the parser would reject it before the command ever runs. I have written the interfaces on the assumption that the declaration exists and the unit only consumes `options.json`. If it does not exist, `src/cli.ts` belongs in `files` and I will add it.
+
+**The stamp date.** You gave today as `2026-09-02` UTC and that is what I have stamped. My environment clock reads `2026-09-12`. The stamp feeds the freshness guard, so tell me which is right if `2026-09-02` was not deliberate.
+
+Say the word and I will write the artifact, or correct either point first.

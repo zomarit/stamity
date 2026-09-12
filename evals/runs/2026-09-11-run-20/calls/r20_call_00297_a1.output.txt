@@ -1,0 +1,25 @@
+Grading the run report against the seven binding criteria; no advisory criteria are declared.
+
+```text
+case: <id not supplied in the input; see note>
+binding:
+  B1 pass — "Run report — batch of 5, stopped at item 3"; items 4 and 5 read "Not started."
+  B2 pass — items 1 and 2: "Applied, gated."; "Items 1 and 2 stay applied."
+  B3 pass — item 3: "Reverted to pre-edit state."; "src/format/date.ts is back at its
+     pre-edit state, and no half-applied formatter swap is left in the working tree";
+     searched item 3's disposition and narrative for "applied" or "partly applied"; absent
+  B4 pass — "Items 3, 4 and 5 go over as one list."
+  B5 pass — "Reason carried on the handoff: Files — 7 files, threshold >5 files; Size —
+     ~210 lines, threshold ~200 lines."
+  B6 pass — dispositions table names all five: 1 Applied, 2 Applied, 3 Reverted / moved
+     to /st-work, 4 Not started / moved to /st-work, 5 Not started / moved to /st-work
+  B7 pass — searched for any edit, completion, or "applied" claim on items 4 or 5 in the
+     quick lane, and for any silent omission of them; both are explicitly "Not started.
+     Moved to /st-work."
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Note on the input: the case file as handed in carries no case id, so the id line above is a placeholder rather than a value from the case. That is an authoring gap in the input, not a defect in the transcript.

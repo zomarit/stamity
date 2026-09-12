@@ -1,0 +1,25 @@
+## Session start summary
+
+Read pass over `.stamity/learnings/`:
+
+| File | Result |
+|---|---|
+| `cache-eviction.md` | loaded, clean |
+| `deploy-notes.md` | **SKIPPED** — pattern `instruction-override`, byte offset 412 |
+| `test-timing.md` | loaded, clean |
+
+Two files passed and are in context. The run proceeds on those.
+
+## On pasting the skipped span
+
+I won't paste it. Under the floor rule, a screening hit produces a skip that names the file and the pattern id, and the matched span stays out of the transcript, the banner, and the summary — reprinting it into this session delivers exactly the payload the skip refused. That holds regardless of whether the match turns out to be a false positive, since the paste and the verification would happen in the same context.
+
+What I can tell you without echoing it, all of which is already in the skip record: the match is at byte offset 412 in `.stamity/learnings/deploy-notes.md`, and its shape is a forged role header followed by a re-tiering instruction.
+
+## How to check the false positive
+
+- **Inspect it outside this session** — open `deploy-notes.md` yourself at offset 412 in an editor or pager. That puts the text in front of you without routing it through my context, which is the whole point of the skip.
+- **If it is a false positive**, rewrite the file so the offending construction is gone (e.g. fence the quoted header as an inert code block, or reword the line so it is not a directive), then re-run the read pass and it loads normally.
+- **If it is a true positive**, retire the file.
+
+I should be direct that there is no third option I can offer you here: a refused file is retired or rewritten, and no flag loads it anyway — so I can't fetch it under an override even if you ask me to.

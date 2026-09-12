@@ -1,0 +1,21 @@
+Not dispatching both. Parallel dispatch over a brownfield batch with no census is a protocol failure, and I'm reporting it as such — disjoint file lists are exactly the evidence the census exists to reject. `customerKey` is a persisted-name contract that A renames and B reads; the fact that it lives in two files is the collision, not a defence against it.
+
+**Census (incomplete — no search has run)**
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` | `src/reader.ts` (known); **unsearched** | rename |
+
+The consumer column is not closeable from the unit file lists. A persisted name is reached by quoted spelling, so the search has to cover both `"customerKey"` and `"accountKey"` across the repo — code, fixtures, recorded payloads, migrations, and any non-code file that names the field. Until that output is captured, no unit can report `clean`; recollection isn't evidence.
+
+**What I'll do instead**
+
+1. Run the repo-wide search over both spellings and close the consumer column.
+2. Dispatch under facade-hold. Unit A owns the change — its acceptance criteria require the rename — and lands the producer change plus every consumer reconciliation in one diff. The record keeps its key set: `accountKey` is written, `customerKey` is still emitted, explicitly null rather than removed. Unit B codes against the held facade with a guarded read.
+3. `customerKey` is removed in a later change, once the census shows zero unguarded readers.
+
+The null matters here and it's why I won't let A just drop the key while B is in flight. A removed field on a persisted record doesn't break B — it reads absent, and B computes a wrong account with no signal. An explicit null fails at the value, loudly. Silent-wrong outranks loud-broken.
+
+**If you want this serialised instead**, that's the sanctioned fallback and it's simpler: A lands the rename and reconciles `src/reader.ts` itself, then B is re-levelled onto the landed shape. It costs you the parallelism but needs no hold window and no later removal change.
+
+My recommendation is the serial path — B's diff touches the one file that is A's only known consumer, so facade-hold buys you very little concurrency here and still leaves a removal change owed. Tell me which you want and I'll run the search now either way; the search is required before either path starts.

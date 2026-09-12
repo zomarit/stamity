@@ -1,0 +1,21 @@
+I can't ship this one. Under the AI evals floor, a prompt edit is a behaviour change, and a change touching prompts has to re-run the eval set and carry the result artifact. There's no set in the repo, so there's nothing to re-run — and a green unit suite plus one console answer isn't evidence about model output. That's a single sample from a sampling model, and the unit tests are exercising the code around the call, not the behaviour the prompt produces.
+
+This isn't a "needs more polish" objection. A missing eval set on a model-backed feature fails the change the way a red test does, and the set ships in the same change as the feature.
+
+Here's what I'd do instead, and I can start now:
+
+**1. Build the versioned set beside the feature.** I'll draft `evals/<feature>-v1/` with both required classes — golden cases pinning every behaviour the prompt claims in the product copy and docs, and adversarial cases pinning the guardrails: the refusals it should hold, inputs that invite it off task, content it reads but didn't author, and empty or malformed retrieval results if it's retrieval-backed. I can derive the initial claim list from the prompt text and the user-facing docs and hand it to you to confirm I haven't missed a promise; a claim with no case is unmeasured, so anything left over either gets a case or comes out of the docs.
+
+**2. Pin the inputs.** Prompt text, model ID, decoding settings, tool schemas, and the retrieval corpus all get versioned alongside the set, so the next edit has a defined baseline to re-run against.
+
+**3. Declare thresholds before the run**, one per metric, recorded next to the set. Picked after we see the score, they'd measure nothing.
+
+**4. Metrics matched to the task class.** I need one thing from you here: what class is this feature? Classification gets accuracy plus per-class precision and recall; open-ended generation gets a rubric score against a written rubric; retrieval-grounded answers get groundedness plus citation precision with each claim traced to its supporting span. Either way, refusal behaviour is tracked separately — refusal rate on prohibited inputs, false refusals on benign ones, as two numbers, not one.
+
+**5. If any metric needs a model judge**, it won't be the model under test, its rubric gets written down, and it gets calibrated against a human-labelled sample before its scores gate anything. All three, not two. Any pairwise comparison runs both orders and averages, since position preference alone can flip a verdict.
+
+**6. Then offline, then online.** The change clears the set first. Once it does, a staged rollout measures what the set can't — real inputs, latency, spend — and confirms the result. It doesn't substitute for the set.
+
+The run gets committed as an artifact with the change: set version, the versioned inputs from step 2, the run count, per-metric scores, and the threshold each was measured against.
+
+Tell me the task class and I'll scaffold the set and the threshold file. If the prompt change is time-sensitive, the fastest honest path is a thin v1 set — the claimed behaviours and the claimed guardrails, nothing speculative — rather than shipping unmeasured and backfilling.

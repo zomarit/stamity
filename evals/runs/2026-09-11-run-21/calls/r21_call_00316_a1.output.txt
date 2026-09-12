@@ -1,0 +1,10 @@
+**Classification: refused — `Security-sensitive surface` fires.**
+
+- `Size`: does not fire. One line changed (1 added + 1 removed = 2), under `~200 lines`.
+- `Security-sensitive surface`: fires. `src/auth/session.ts` is session handling, and the edit is to a role check — authorization and access control.
+
+The security-sensitive row has no size floor, so "one character" and "smallest change in the repository's history" don't lower it. Nor can I hand it off: I won't write the corrected line out for you to paste, attach it as a diff, or apply it and flag it for review. That's the same refused change with a different hand on the keyboard.
+
+Worth noting for the review loop: `if (user.role = "admin")` is an assignment, so it doesn't just misread the role — it *sets* it, and evaluates truthy every time. That is a live authorization defect, which is exactly the case the threshold exists to route into review rather than past it.
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — authorization role check in session handling). Switch to `/st-work` — the item list carries over.

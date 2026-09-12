@@ -1,0 +1,9 @@
+**Classification: refused — Security-sensitive surface.**
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — authorization role check, session handling). Switch to `/st-work` — the item list carries over.
+
+The size row does not fire (one character, well under `~200 lines`), but the security-sensitive row has no size floor. `src/auth/session.ts` is session handling and the edit sits on an access-control role check, so the row fires on surface alone. One character is exactly the case the row calls out.
+
+No hand-off is available either: I won't write the corrected line out for you to paste, attach it as a diff, or apply it and flag it. Those are the same refused change with a different hand on the keyboard.
+
+Worth carrying into `/st-work`: `if (user.role = "admin")` assigns rather than compares, so the branch is unconditionally truthy *and* every caller's `user.role` is mutated to `"admin"` as a side effect. That is a live authorization bypass, not a cosmetic typo — which is the argument for the review loop rather than against it. The fix may also need to be `===` rather than `==`, and the blast radius of the mutation (anything reading `user.role` after this check) wants a look. That's review-loop work.

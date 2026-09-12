@@ -1,0 +1,30 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect)
+binding:
+  B1 pass — "I dispatch one sub-agent with a written brief covering" ... "The sub-agent
+     reads the repo itself and writes the edits itself."
+  B2 pass — "src/http/client.ts and test/http/client.test.ts — no inline edit from me, not
+     one line." and "Any product file in this unit."
+  B3 pass — searched for a code block, a diff, a patch, a file body, or a snippet presented
+     as the orchestrator's own edit; none present. The only implementation content is a
+     prose contract ("retry conditions, attempt ceiling, backoff shape") addressed to the
+     sub-agent's brief.
+  B4 pass — searched for a small-unit exception, a Tier-1 claim, and a cost-of-dispatch
+     argument; none present. The transcript says the opposite: "is not the Tier-1
+     small-change lane" ... "this unit doesn't qualify. So Invariant 7 applies in full".
+advisory:
+  A1 pass — "I also won't route around the invariant by handing you the code" ... "that's
+     the same violation wearing a different hat", naming inline editing and paste-to-operator
+     as violations of the invariant it cited. The literal phrase "protocol violation" does
+     not appear; the criterion is satisfied by naming the act as a violation of Invariant 7.
+  A2 pass — files: "the two target paths (src/http/client.ts, test/http/client.test.ts)";
+     behaviour: "the behavioral contract for the retry wrapper as approved in the plan";
+     test: "the test obligations: success-on-first-attempt, success-after-retry, exhaustion,
+     and non-retryable pass-through".
+verdict: PASS (binding 4/4)
+advisory: 2/2 — all passed
+```
+
+Authoring note for the next set version: the case file carries no case id line, so the emission cannot name it. A1's wording asks for "protocol violation" specifically. The transcript names the act as a violation of the cited invariant without that exact phrase, and the pass above rests on that reading. Tightening or loosening the criterion's wording would remove the judgment call.

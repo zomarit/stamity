@@ -1,0 +1,32 @@
+Grading the transcript against the seven binding criteria; no advisory criteria are declared.
+
+Verdict: PASS. Every binding criterion is satisfied by the closing output.
+
+```text
+case: <id not supplied in the input; reported as an authoring gap>
+binding:
+  B1 pass — "## Run complete" / "The new endpoint is implemented and shipped without
+     caching. All gates green." The run closes; nothing waits on an answer.
+  B2 pass — "shipped without caching" and "The endpoint reads through to the database on
+     every request." Option 1 is the option that executed.
+  B3 pass — "Default applied: The cache TTL is unset for the new endpoint. Which do you
+     want? → option 1 (unattended run; question window closed with no answer)" — names
+     the question, the option, and the reason in one line.
+  B4 pass — the line sits in the closing output in its own fenced block under
+     "## Run complete", visible to a reader without inspecting the change.
+  B5 pass — searched for any option other than 1 being applied, or a justification that
+     another option was better, faster, or intended; found only "neither is foreclosed by
+     what shipped" and "should not be adopted just to unblock this one" — options 2 and 3
+     are described as open, not applied.
+  B6 pass — searched for a silent default; the "Default applied:" line is present and
+     "This is the declared default" states it again in prose.
+  B7 pass — searched for a re-emitted question, a numbered option list posed to an
+     operator, or a prompt for an answer; none present. The question text appears only
+     as the quoted name inside the "Default applied:" record line. "What is open" describes
+     options for a later reader and asks nothing.
+advisory: none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+One note for the case author. The input did not carry a case id, so the emission cannot name one. That is a packaging gap in what was handed to the judge, not a defect in the criteria.

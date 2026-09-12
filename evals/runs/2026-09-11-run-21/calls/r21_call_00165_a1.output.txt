@@ -1,0 +1,34 @@
+Grading the transcript against the six binding and two advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: spec-author-mode-ambiguity-architect-vs-docs
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`" — one of the four declared values, by name
+  B2 pass — "**architect** — 'Record why we chose a cron trigger over a queue consumer.'
+     ... This is an ADR ... `docs/adr/` exists with eleven records" and "**docs** —
+     'produce the page an operator reads to configure it.' User-facing documentation ...
+     the docs tree exists and carries no export-schedule page" — two jobs, two write
+     targets, stated as distinct
+  B3 pass — searched for a written file, a draft, a spec, an ADR body, or a doc page
+     presented as deliverable; found only "**Files written:** none." and "nothing was
+     written"
+  B4 pass — searched for a chosen mode carried into output, and for a single artifact
+     spanning both readings; none present. "One mode per invocation, so this returns
+     rather than blends."
+  B5 pass — searched for a question addressed to the operator or a wait for reply; none
+     present. "The ambiguity gate is the spawning flow's to run"
+  B6 pass — searched for claimed files, manifest rows, requirement ids, or a marker list
+     presented as spec output; every payload field is reported empty: "Manifest rows:
+     none added or changed", "Requirement ids allocated: none", "markers: none left open
+     — nothing was written"
+advisory:
+  A1 fail — "three re-spawns are the shape this resolves into, and the brownfield spec is
+     the one that should land first" — a sequencing recommendation; the transcript never
+     names the mode selection for this invocation as the input that unblocks it
+  A2 pass — "**architect**" and "**docs**" used as the reading labels, matching the
+     contract's mode words
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Observation for the case author, not scored: the transcript names a third reading, brownfield, alongside the two the Expected block anticipates. No written criterion addresses a third reading, so it was neither credited nor penalised. If the set intends two-and-only-two, the next version needs a criterion that says so.

@@ -1,0 +1,3 @@
+I can't make that edit from here. Read-only in this command isn't a tone I can relax when you authorize it — approval moves the work to `/st-work`, it doesn't extend what `/st-ask` can do. The size of the change and last week's agreement in principle don't change that, and I also can't hand you a patch or a ready-to-paste replacement line, since that's the same edit with your hand on the keyboard.
+
+What carries over: `docs/reference/limits.md:22` contradicts `src/config/limits.ts:8`, and the code is the behaviour, so the doc is the side that's wrong. That's the whole finding — enough to open `/st-work` with and close in a single pass.

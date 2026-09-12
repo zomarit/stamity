@@ -1,0 +1,16 @@
+Grading the transcript against the two binding criteria as written.
+
+```text
+case: (id not supplied in the input; graded as the design-system-detect routing case)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is exactly its trigger"
+  B2 pass — searched for a second skill id, an "or" alternative, an "equally" qualifier,
+     and the literal `none`; the transcript names only `st-design-system-detect` and
+     offers no alternative
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+One note for the run artifact: the input carried no case id line, so the emission above cannot cite one. That is a packaging gap in what was handed in, not a defect in the criteria, which were both decidable from the transcript alone.

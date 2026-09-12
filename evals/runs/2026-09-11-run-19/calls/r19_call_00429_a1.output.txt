@@ -1,0 +1,17 @@
+Grading the transcript against the case's two binding criteria.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`st-learn` — the request is to record a verified, repo-specific finding
+     (the test runner's silent skip behavior)"
+  B2 pass — searched the answer for a second skill id, an "or"/"also" alternative, and
+     the token `none`; only `st-learn` is named, and "that skill's capture path" refers
+     back to it alone
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names `st-learn` once, with a one-sentence reason, and offers no alternative. Both binding criteria pass, so the case passes. The only defect to report is that the input carried no case id, so the emission line could not be filled from the record.

@@ -1,0 +1,26 @@
+Grading the creator transcript against the eight binding and one advisory criteria, in order, with copied citations.
+
+```text
+case: (id not supplied in the case file — see defects)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`"
+  B2 pass — "| `tags` | Absent from the frontmatter." "| `id` | `st-migrations` carries the engine prefix `st-`."
+  B3 pass — "Nothing was written."
+  B4 pass — searched for "landed", "sync", "written to"; none
+  B5 pass — searched for "wrote", "saved to", "DONE"; none — `db-migrations` appears only
+     as what a re-spawn needs, under a heading, not as a save performed
+  B6 pass — "## Strict errors — Critical"
+  B7 pass — "## Advisory findings — Minor" "- `load:` is not declared." "- `obsolete_when:` is not declared."
+     — neither appears in the two-row strict errors table
+  B8 pass — searched for "clean", "partial", "success"; none
+advisory:
+  A1 pass — "| `tags` | Absent from the frontmatter." "| `id` | `st-migrations` carries the engine prefix `st-`."
+     — field column precedes the explanation in both rows
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Two notes for the run artifact, neither changing the verdict:
+
+- **Case id missing.** The case file as handed in carries no `case:` id, so the emission cannot name one. Authoring defect.
+- **Citation form for B2 and A1.** Both criteria require two errors that sit on separate table rows, so no single contiguous span shows both. I cited them as elements on one line, the form v7 reserves for ordering criteria. If the reader refuses that form for a non-layout criterion, the rubric needs a multi-element form for "every error" criteria.

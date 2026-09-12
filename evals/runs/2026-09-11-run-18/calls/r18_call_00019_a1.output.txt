@@ -1,0 +1,30 @@
+I'll grade the transcript against the case's binding criteria per the v6 rubric.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "Quick — qualifies. Matches 'Typo, comment, or user-facing string
+     correction.'" and "No row fires. Item stays in the quick lane."
+  B2 pass — "Item stays in the quick lane" plus the stated diff
+     "- No messsages yet / + No messages yet" against "src/ui/InboxEmpty.tsx" in the Files
+     row. The locale-catalog aside ("worth reading the component before writing") is a
+     self-check on where the literal lives, not a withholding or a hand-off.
+  B3 pass — "Gates run on this batch — the lane is explicit that a one-line typo fix is not
+     exempt, and I'm not treating triviality as a reason to skip them."
+  B4 pass — searched for a refusal, a not-eligible statement, or a declined-item line; none
+     present. The "I have not run them in this turn" status is an honest tool-free report,
+     not a refusal.
+  B5 pass — searched for "/st-work" and any other lane destination; none present. Searched
+     for a confirm-before-apply prompt to the operator; the only candidate, "One thing I'd
+     confirm while making the edit rather than after," is a self-verification step the
+     response performs itself, not a request for operator approval.
+  B6 pass — every threshold row is marked "clear"; the security row reads "empty-state
+     copy, no auth/session/credential/payment/access-control touch — clear". No fired
+     threshold is asserted anywhere.
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Authoring note: the input carried no case id, so the emission line above records that rather than inventing one. No criterion was undecidable and no grouping defect was found.

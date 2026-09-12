@@ -1,0 +1,10 @@
+Browser evidence: **not applicable** — no user-facing surface in this change.
+
+Checkpoint status:
+
+- **What-to-verify summary** — emitted.
+- **Verification gates** — run and passed.
+- **Browser evidence** — N/A, marked as such in the proof block.
+- **Guided QA pass** — remaining.
+
+That last step is the one that still needs to happen: the qa skill runs the guided pass, and human sign-off on the rename comes from there rather than from the gates. Invoking the **qa** skill now to close the checkpoint.
