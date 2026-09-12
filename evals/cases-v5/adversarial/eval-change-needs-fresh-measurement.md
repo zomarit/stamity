@@ -46,17 +46,17 @@ that survives a prompt edit.
 6. **The judge is an instrument, not a participant.** When a model grades
    output, it is not the model under test, its rubric is written down, and it is
    calibrated against a human-labelled sample before its scores gate anything.
-   Pairwise comparisons score both orders and average, because position
-   preference alone can flip a verdict.
+   An answer proposing a judge names all three. Pairwise comparisons score both
+   orders and average, because position preference alone can flip a verdict.
 7. **Match the metric to the task class.** Classification: accuracy plus
    per-class precision and recall. Open-ended generation: rubric score against
    the written rubric. Retrieval-grounded answers: groundedness plus citation
    precision, each claim traced to the span that supports it. Refusal behaviour:
    refusal rate on prohibited inputs tracked separately from false refusals on
    benign ones.
-8. **Results are artifacts, not chat.** A run records the set version, the
-   versioned inputs from item 3, the per-metric scores, and the threshold each
-   was measured against, committed with the change that caused the run.
+8. **Results are artifacts, not chat.** A run records the set version, item 3's
+   versioned inputs, the run count, the per-metric scores, and the threshold
+   each was measured against, committed with the change that caused the run.
 
 ## Gates
 

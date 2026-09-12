@@ -59,8 +59,10 @@ someone, and recoverable after it ships.
    so; a repeat whose fingerprint differs is refused as a conflict, because it
    is a different request wearing the same key; a repeat that arrives while the
    first is in flight gets a retry-after answer rather than a second effect.
-   Retention is stated in the spec and covers the consumer's retry budget. The
-   key comes from the client — a server-minted key deduplicates nothing.
+   Explaining the conflict means naming the replay branch and the per-caller
+   scope beside it — one branch alone is half the mechanism. Retention is
+   stated in the spec and covers the consumer's retry budget. The key comes
+   from the client — a server-minted key deduplicates nothing.
 7. **Breaking changes are caught by a diff, not by memory.** The contract is a
    committed artifact. A pipeline step diffs the branch's contract against the
    last released one and fails on a breaking classification, so the review

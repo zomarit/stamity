@@ -3596,6 +3596,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -3609,8 +3611,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -3621,12 +3624,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -3635,22 +3635,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 "
 `;
 

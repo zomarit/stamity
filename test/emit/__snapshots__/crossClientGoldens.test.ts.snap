@@ -631,6 +631,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -644,8 +646,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -656,12 +659,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -670,22 +670,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 
 ## Conditional rules (Codex down-conversion)
 
@@ -724,17 +720,17 @@ that survives a prompt edit.
 6. **The judge is an instrument, not a participant.** When a model grades
    output, it is not the model under test, its rubric is written down, and it is
    calibrated against a human-labelled sample before its scores gate anything.
-   Pairwise comparisons score both orders and average, because position
-   preference alone can flip a verdict.
+   An answer proposing a judge names all three. Pairwise comparisons score both
+   orders and average, because position preference alone can flip a verdict.
 7. **Match the metric to the task class.** Classification: accuracy plus
    per-class precision and recall. Open-ended generation: rubric score against
    the written rubric. Retrieval-grounded answers: groundedness plus citation
    precision, each claim traced to the span that supports it. Refusal behaviour:
    refusal rate on prohibited inputs tracked separately from false refusals on
    benign ones.
-8. **Results are artifacts, not chat.** A run records the set version, the
-   versioned inputs from item 3, the per-metric scores, and the threshold each
-   was measured against, committed with the change that caused the run.
+8. **Results are artifacts, not chat.** A run records the set version, item 3's
+   versioned inputs, the run count, the per-metric scores, and the threshold
+   each was measured against, committed with the change that caused the run.
 
 #### Gates
 
@@ -826,7 +822,8 @@ writer — teammate, tool, merge or outside pull request — can author these re
 7. **Rewording to pass is the defect.** A note refused for a class hit is
    rewritten as a claim, not respelled until the scan misses it. Evading the
    screen while keeping the same request is the exact behaviour the screen
-   exists to catch.
+   exists to catch. The claim carries observations — never an imperative, and
+   never a slot for a later run to fill.
 
 #### Gates
 
@@ -1083,6 +1080,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -1096,8 +1095,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -1108,12 +1108,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -1122,22 +1119,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 ",
   "packages/beta/AGENTS.md": "
 # Charter
@@ -1173,6 +1166,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -1186,8 +1181,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -1198,12 +1194,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -1212,22 +1205,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 ",
 }
 `;
@@ -1265,33 +1254,33 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/agents/stamity-design-quality.md": "248ba102d159693d08473e1f879b6be1051016ff46ed52bfacf31ae7ccbde4a0 7859 bytes",
   ".claude/agents/stamity-fixer.md": "e07245c31b51e0d7e1607add300132de80ee5ea04bce2951adc1213ac7750fbb 6138 bytes",
   ".claude/agents/stamity-implementer.md": "8c83b9fd03e8d4715384e4e300e7dd527a2bf2279ce6da822c9de09b819e31de 5490 bytes",
-  ".claude/agents/stamity-performance.md": "7528f6f39d838f7f089d42aaf3f7ad0b64d6e48ee66a87bc72686b834d3b09a7 8159 bytes",
-  ".claude/agents/stamity-researcher.md": "0938d483dcdf57eb5050735f8060cd2ab1265c93921ab7352755f51026e5755a 7365 bytes",
+  ".claude/agents/stamity-performance.md": "a2168fe84eb6379997b57e157e7f1c7fd57f187a73e43a401538e7b53115ed59 8337 bytes",
+  ".claude/agents/stamity-researcher.md": "9d34a351b81bfa1fc22066ce0b31065db197f79b69b2d86bea6aa26578a3c10c 7564 bytes",
   ".claude/agents/stamity-reviewer.md": "ddcc0744acc5f9a13d5d722803ae9d17604f34f1a709b4f5c5f8a6c03a59ca36 10541 bytes",
   ".claude/agents/stamity-security.md": "c9b70589b551a2d5bdf3ff19cf17b6f2bb77f20df5cbe2b037dd27d73273ee39 7555 bytes",
   ".claude/agents/stamity-spec-author.md": "2f7153c2d405e4bfe6f86229a94eb861aee6e56dac582b43dd782848eeac0ba2 9099 bytes",
   ".claude/agents/stamity-test-runner.md": "6948e5079e30e3ce50b8e317591158120e132fba0a4f051ed6f2334540d1bc69 5672 bytes",
   ".claude/commands/st-ask.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
   ".claude/commands/st-board.md": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75 21562 bytes",
-  ".claude/commands/st-debug.md": "2ebcf9a75d5d3e602efc801061972034b90d4d476ad64f2c11fef13e988bc1e1 11659 bytes",
+  ".claude/commands/st-debug.md": "8ada33406e21d1869d9964b90514149da49431f6ee4357c5e47dd1cb12ecf6bf 11846 bytes",
   ".claude/commands/st-plan.md": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0 25104 bytes",
   ".claude/commands/st-pr-resolve.md": "876fdd8c5e80c69aa16b5b058b03db30575d0e83d9e6f8a35ad93b42bdf7bf6a 19882 bytes",
-  ".claude/commands/st-quick.md": "cdabf1a3793eaff166d083bd6f09d6594b15a23c71907d4ade8e5644c1c0f375 8227 bytes",
-  ".claude/commands/st-rework.md": "25c7a49eb26047335fc5979470a87410dd87368d898aa7895b2fb88523473e61 17903 bytes",
-  ".claude/commands/st-spec.md": "262627f969d9f85c4d231400e272aaf10459ff1f61bba36afc916d2f37cab0cc 16687 bytes",
+  ".claude/commands/st-quick.md": "0b941124e1472619a18a48a2026bf01da84f0749e71fc21dce1459c9ed16d36e 8775 bytes",
+  ".claude/commands/st-rework.md": "1eb2bef0b91b1b83a0aea476933fc550ec35d1828c29d26de4ad3fcf6fa6860b 18337 bytes",
+  ".claude/commands/st-spec.md": "f6bcee66d8fe0027c1f2e4d55b42542c479691062d652f0fb3b716667d076731 16968 bytes",
   ".claude/commands/st-work.md": "2654178d97b2b2de0a87018247d4e75beae89968df04a7888f712fda246c3e49 23493 bytes",
-  ".claude/rules/stamity-ai-evals.md": "06a295e597264103790775e4dd9da5f36f38e1c454c96b005b5264d4c22d3a2a 3844 bytes",
-  ".claude/rules/stamity-api-versioning.md": "4e013575676dee4fec4a84ef4c07c06ad8ea19cafb233a5429f295e2ba5c564d 4852 bytes",
+  ".claude/rules/stamity-ai-evals.md": "52abc332caff9ebdce806220b6dfb1a937b32abd618774f2f139c15ba39b41bd 3897 bytes",
+  ".claude/rules/stamity-api-versioning.md": "a5238b328e0b45cb08c581a5cc167771894c0ea3bd3fc9c2606001ee24364bab 4992 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
-  ".claude/rules/stamity-injection-screening.md": "49e0dae094800f9cca655f783783a41d0d32cf0117b114987d49ff728e8d2a3c 7144 bytes",
-  ".claude/rules/stamity-learnings-schema.md": "f82f64d6f54091945258b016c8380cd6a09396e53dd0727a61ed6ae074d815a1 2602 bytes",
+  ".claude/rules/stamity-injection-screening.md": "e1a12a5957df6e5244f1adca254ab649c53b7e2ff09530f115efe07319632258 7245 bytes",
+  ".claude/rules/stamity-learnings-schema.md": "2f198bab7c82362db7328339dc10b576cb6694490e94451be40cc150ca4a25d0 2645 bytes",
   ".claude/rules/stamity-migrations.md": "1d822d21c8b502eabb392d1a794f8265d0cbe943a096869dfba5f023c99cd721 4727 bytes",
   ".claude/rules/stamity-question-protocol.md": "0700d055aa85f048345bd57afbfecaece70d985dc798e170600603748d7e74ff 3994 bytes",
   ".claude/rules/stamity-resilience.md": "089a40824f251b2032bc9e2c457ada244dffa6eb3f0ceebe40da15182ee1d26d 5029 bytes",
   ".claude/rules/stamity-secrets.md": "074b2f82a2f1711dcc68772ff149eeb3a48487e6170690fb9746715caeb3c2d3 6251 bytes",
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
-  ".claude/rules/stamity-testing.md": "bf7500ade30993447b616d498feb7d26b034c18c7db149854460781226088064 4176 bytes",
-  ".claude/rules/stamity-ui-states.md": "05a9372861cbfbe588494d72ce28492c1954f06c0db3ce11b1b29ef9d2d89b3e 4405 bytes",
+  ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
+  ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
   ".claude/settings.json": "a2cf9e1a0347a337cae332ba2d5543329e657a39ac33842b0b25ab2e2f934713 1603 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
@@ -1324,8 +1313,8 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".codex/agents/stamity-design-quality.toml": "77121897c46c11635f9c94ee9fdeae777b5d712b9f058befd477404d4b5f16f5 8465 bytes",
   ".codex/agents/stamity-fixer.toml": "6afabd264fb2f9807bd548b998af2572ce5441550679b724d5ce2c30678697a8 6754 bytes",
   ".codex/agents/stamity-implementer.toml": "8305bc24c5fc440a885957b83bb25f34f0fcb4dac0ee2d1730c98c4091782826 6114 bytes",
-  ".codex/agents/stamity-performance.toml": "a5ec9b910a338c5a4c8363b1a22fd69ac06154e7837228d4841a56a6d0a70645 8760 bytes",
-  ".codex/agents/stamity-researcher.toml": "10095eb040dc93b9994ba8aaef9467e548485fce68a2daf98e8d68da0c7f4e08 7974 bytes",
+  ".codex/agents/stamity-performance.toml": "034fc10bc1720db9b17859e0bed45441b8dc5d9fda1c96a55a849069293c3207 8938 bytes",
+  ".codex/agents/stamity-researcher.toml": "acee16602f0dab5dc23c2a1cb4a0e08d6d6e32737003f3e186fee2998a0c4ea0 8173 bytes",
   ".codex/agents/stamity-reviewer.toml": "de9e9273214c236ae7d77e1251933b88de3556142488e895d02b2708c9b86a0a 11141 bytes",
   ".codex/agents/stamity-security.toml": "53c03a86293aa45a6db3cc45738da2907fadb2246a7bfa5874117176d80ef8b3 8155 bytes",
   ".codex/agents/stamity-spec-author.toml": "a5ff44abdcf42b6c4b2afae218e0d454764649a61605a17c57403bb69b118981 9714 bytes",
@@ -1336,8 +1325,8 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/agents/stamity-design-quality.md": "7c9ff339433878ac8af990b27c594f8c8dc8e3dc10f9ec3b30be92b0f3968df9 7783 bytes",
   ".cursor/agents/stamity-fixer.md": "ce9922531f5adc46f691c5e2e15a0b520f28aaee43985d2d656bbeaf6e8014c4 6007 bytes",
   ".cursor/agents/stamity-implementer.md": "ff370bc7caf2d6519972f3fee3dd57e0d36734c1633e86fd7cac188a5e273d67 5357 bytes",
-  ".cursor/agents/stamity-performance.md": "c770d5d324032610ceb8a63e8a8633a08560facf85599c009b3b678179c0f11c 8082 bytes",
-  ".cursor/agents/stamity-researcher.md": "0219a2ed1f211afca72bc98bea25038f1677c3586e983c99eabf6303857d6d05 7268 bytes",
+  ".cursor/agents/stamity-performance.md": "1b97f7e60a141eb958c7fab086ee8f193b6f81a309659b30a817138d78513de7 8260 bytes",
+  ".cursor/agents/stamity-researcher.md": "4bd17dcd27a5af841c5125a94585facf5fd056faec79c4b50b0d8fe1c7f71e08 7467 bytes",
   ".cursor/agents/stamity-reviewer.md": "ddced5aca291933bce33b1d4a4e4f3ba942a58873521d8f3fdfd7a2ea393692b 10471 bytes",
   ".cursor/agents/stamity-security.md": "6817395074d753a68b2c655923c5691d110b7a0147de135abbe2fe533c1d0583 7485 bytes",
   ".cursor/agents/stamity-spec-author.md": "245f711445727e5e4dd826cbb540302bfa83b33d981b2bb275c90cb874e19e50 8984 bytes",
@@ -1346,58 +1335,58 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/hooks/mcp-guard.mjs": "6d3f766e24cefc51e0d0d7303bbc1a8a7357ca8821969889173e02bd54c0a060 7022 bytes",
   ".cursor/hooks/subagent-guard.mjs": "a4d16d0044f747097019e622f6b4320052eb53b9e936d35dd482aa4641aa2111 3409 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
-  ".cursor/rules/stamity-ai-evals.mdc": "d46ae81dd59d4be90c9362146469def4e9cf98242414ff13c8be061804a70bc8 3861 bytes",
-  ".cursor/rules/stamity-api-versioning.mdc": "23e052d41e9a3953a8558c68d44701b7bbb734df4c84ff4f9c52e59383079885 4855 bytes",
+  ".cursor/rules/stamity-ai-evals.mdc": "f2d0c5030b528c718388bdf80691d061f6c8dad52eab16f207234ab9b0dd3b2b 3914 bytes",
+  ".cursor/rules/stamity-api-versioning.mdc": "c405a8d84fba5c43febc84e956ba56f6eaa9c451b12f1216ebca2ff30c8f9f56 4995 bytes",
   ".cursor/rules/stamity-contract-census.mdc": "532217108950645cb080b5c2c84aaf5720da15db421800ffb8cda8f5beaa264d 3878 bytes",
-  ".cursor/rules/stamity-injection-screening.mdc": "778104dc8064261ae6d636b555e4d77a5923bd45b9b2f7e770f5266ef548f170 7159 bytes",
-  ".cursor/rules/stamity-learnings-schema.mdc": "06b820fa67d598aa43786fddbe322f4fe9b3b5d8187613af0de92190e7c7d9bc 2615 bytes",
+  ".cursor/rules/stamity-injection-screening.mdc": "8a3bc136b1cc8b86cb4a85f0ef8ac7762bb097e9dd2b3a9df807c29a6c08eb00 7260 bytes",
+  ".cursor/rules/stamity-learnings-schema.mdc": "f28d98e76d473b4a4eb43b10873d6f7c81e72e0ca93e2a0f5709c24bce67edab 2658 bytes",
   ".cursor/rules/stamity-migrations.mdc": "18a93918707e39ab4abe012db829e2cd8cd51c73b5be9d4aaa467d5619bf49e0 4733 bytes",
   ".cursor/rules/stamity-question-protocol.mdc": "9ae263fc86e6269e23da4c81cc1f6a6dfc1f8eb1fe1adf4093beae2838bb90d1 4013 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes",
   ".cursor/rules/stamity-security-patterns.mdc": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes",
-  ".cursor/rules/stamity-testing.mdc": "6be05910f96dcd7872779263f35ba66c8928ed3c0b32931a057353d2e7b4bf11 4180 bytes",
-  ".cursor/rules/stamity-ui-states.mdc": "254c519142a94c77a78210feaedec26ac3faedc448cf825a4821646b14644e1d 4403 bytes",
+  ".cursor/rules/stamity-testing.mdc": "b1e6ccf40fbc412f50906738e91daba2852e6c893ee201d43c1408397cef3a78 4250 bytes",
+  ".cursor/rules/stamity-ui-states.mdc": "3c80c0c1f3d61d337020b6b9a1de0da33ff4d9aed77d6194c345c50e8e2b9028 4510 bytes",
   ".cursor/skills/st-ask/SKILL.md": "c54d01dd7744948cc84d16ea225178b0ec600cd84f20ac02be5fa47689d98ba0 7313 bytes",
   ".cursor/skills/st-board/SKILL.md": "9939e09d56c9b78965f009713e1112190c8f261646aa1c071030041871a15f3a 21608 bytes",
-  ".cursor/skills/st-debug/SKILL.md": "67360f3a67d92364ac87632269d3ee24a4575f5504e01056ad739ddad75667d6 11703 bytes",
+  ".cursor/skills/st-debug/SKILL.md": "34e3f5fa195b3384317f30118343e30729f2aaff546e168f58ddc14987f1ed07 11890 bytes",
   ".cursor/skills/st-plan/SKILL.md": "3a43bcfb1eefcfba347e68b2368caf69dce689107cc8ec57e019a156f2d096a7 25147 bytes",
   ".cursor/skills/st-pr-resolve/SKILL.md": "66beda7c4e0031c0ac523407f0be602c09003ce4df7c20175b88da3ef2ebcad6 19933 bytes",
-  ".cursor/skills/st-quick/SKILL.md": "d9c0e2eb254cd9cd9e83b9d9e620ee3e4ac420a7bfd3eb55de0277bda92ff918 8271 bytes",
-  ".cursor/skills/st-rework/SKILL.md": "30759b1641ca29417a1cdbbbc4defdd1e471858d5da7e7ab9ed637d6ba6426ad 17950 bytes",
-  ".cursor/skills/st-spec/SKILL.md": "7c340aca38f99ef18a1cbcf3c466ee4253b8e7fd1e02b8e66d3ea0524e501a84 16732 bytes",
+  ".cursor/skills/st-quick/SKILL.md": "5bae0528c437cb1ca8f1c083156e3d92792aa9fdc0fbff968ddac671e57c5db1 8819 bytes",
+  ".cursor/skills/st-rework/SKILL.md": "81804eb71711ecac58ddcf83a3c691424cfbd8c7674331d8f808bf5bc739199c 18384 bytes",
+  ".cursor/skills/st-spec/SKILL.md": "fa64f960b9d28e7b3857fa741a6dc622816d3bd644c553502de9555a8af7e3aa 17013 bytes",
   ".cursor/skills/st-work/SKILL.md": "7abd93dc140c86f087897aa48645670ebe70829fbad1452ad29b274c20b8f6fe 23538 bytes",
   ".github/agents/stamity-creator.agent.md": "5b968808117a1e8ced84e03a8770b66b5f13029874e50517844ce977a18bee48 13813 bytes",
   ".github/agents/stamity-design-quality.agent.md": "ee3c885887329b678072ebe0da9c2b568f45ba86f61e4f9b7452454741a837c5 7848 bytes",
   ".github/agents/stamity-fixer.agent.md": "00ec0c786990feb73be1cdeea693cf98f147a33959b7b60f27f31f2638138f1e 6097 bytes",
   ".github/agents/stamity-implementer.agent.md": "b6e23f602c2b180713e988c000107917e0d2b7a9e78d5a7b751cd3df130e664f 5453 bytes",
-  ".github/agents/stamity-performance.agent.md": "5a25d80f30663b22ba7bf2cfc257528ab03099ae1b605abaca5a51a5c6d77958 8144 bytes",
-  ".github/agents/stamity-researcher.agent.md": "4e23810049c91e4ab5ff331d9c06c30165faec409546218613b4432c9ddb5e28 7336 bytes",
+  ".github/agents/stamity-performance.agent.md": "ad8a635ed88fe906c1f2a578bf1e51b26786fb5596aa5fb93871e56d471261e8 8322 bytes",
+  ".github/agents/stamity-researcher.agent.md": "031170925a330832d2130e148877c9d951e2de55f0700f299e2e8dbf8797d970 7535 bytes",
   ".github/agents/stamity-reviewer.agent.md": "1fc059b3a505f2d37b31fa9364ee48e4f6c1c092e64a46dc58c11b57d786d470 10530 bytes",
   ".github/agents/stamity-security.agent.md": "edb193fea28b238215eadc63eae65895c14cfe2328f4bf55d675cf0588c7ab44 7544 bytes",
   ".github/agents/stamity-spec-author.agent.md": "1ef533101c6744e24f1b0eef290ad3aa1c8078b6a883f8ff37f3b09b1ebfa4a7 9069 bytes",
   ".github/agents/stamity-test-runner.agent.md": "d8102e7d848adb5d26c127fff63171c22e9019edc726ab95b3b03f5b2cb41b46 5654 bytes",
   ".github/hooks/stamity.json": "8a8165e7d17d86e72418bc9ca47005078c7bf87d30a02e9563f5d8249a3bdd98 1317 bytes",
-  ".github/instructions/stamity-ai-evals.instructions.md": "9501fc7af00b41eb3c34eef537e5b0924bcce6eb98ce31ddcc2919a0d84e79d9 3858 bytes",
-  ".github/instructions/stamity-api-versioning.instructions.md": "3ae6a0a1470d45770fab0cc1c2b940eac3e264002163b9085f013cdae375c249 4840 bytes",
+  ".github/instructions/stamity-ai-evals.instructions.md": "7fdce7cda82c464e027aeeecc1475148233e0447350a96e581ad1fcc0c520b0b 3911 bytes",
+  ".github/instructions/stamity-api-versioning.instructions.md": "e160c1d1301d69de147f56649248357e09a8a43454b457beccbb40bf49558793 4980 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
-  ".github/instructions/stamity-injection-screening.instructions.md": "13fa1368cb3e9b5bbea4012f58316ed86932e5412bc2b06bb80e8f7f5569103d 7144 bytes",
-  ".github/instructions/stamity-learnings-schema.instructions.md": "376b04bd2dce6350ad061f02635b727bbf202b1005e8e2f43567d38d04d85592 2602 bytes",
+  ".github/instructions/stamity-injection-screening.instructions.md": "fdc17e2204e64a8246c574b38368eb7f1353a4f3b1080f5e6077492e1630a04b 7245 bytes",
+  ".github/instructions/stamity-learnings-schema.instructions.md": "ca3d64d566458bb2700f8f686a30a6d0638b733d1436d9dc6974d00aad699a89 2645 bytes",
   ".github/instructions/stamity-migrations.instructions.md": "cac769c4d18d8192c34d0939fca3c11685a32963b25bca9340ff6c725dd187e6 4718 bytes",
   ".github/instructions/stamity-question-protocol.instructions.md": "1b41f9aa809609eb5b7ae76f643259a1f1f0c1f3f09b88f0f03c4985ca1af1a8 4008 bytes",
   ".github/instructions/stamity-resilience.instructions.md": "777d6e62e82a88a892e368e7f82856a703b7747a3abd09f343aa550412ea7863 5017 bytes",
   ".github/instructions/stamity-secrets.instructions.md": "195f69bcccd0283ff1f519a1fed86dbc697757d5c802d530120da36967166f7f 6239 bytes",
   ".github/instructions/stamity-security-patterns.instructions.md": "11561e6ba340b435e0ff84de345595602c0fb7ec2adfb73cfe46874c79e01919 6349 bytes",
-  ".github/instructions/stamity-testing.instructions.md": "2ead3fd125db409a91b79ef51da9c1620a4b72c5dc0d211ea77af500d2b6624e 4167 bytes",
-  ".github/instructions/stamity-ui-states.instructions.md": "cf79d11ac6bbc29c5ab16186067261dabbfb92ad414d706000c9424851fbe953 4390 bytes",
+  ".github/instructions/stamity-testing.instructions.md": "2e47ffb0bc4190eb744a27f557d349d52443f66d90f8b01f78a5d2b996d83b86 4237 bytes",
+  ".github/instructions/stamity-ui-states.instructions.md": "3edf8f6ed10d97b55a0d9e2022040e67485aa6f1eac79936ebb8b3722e2b5cfa 4497 bytes",
   ".github/prompts/st-ask.prompt.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
   ".github/prompts/st-board.prompt.md": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75 21562 bytes",
-  ".github/prompts/st-debug.prompt.md": "2ebcf9a75d5d3e602efc801061972034b90d4d476ad64f2c11fef13e988bc1e1 11659 bytes",
+  ".github/prompts/st-debug.prompt.md": "8ada33406e21d1869d9964b90514149da49431f6ee4357c5e47dd1cb12ecf6bf 11846 bytes",
   ".github/prompts/st-plan.prompt.md": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0 25104 bytes",
   ".github/prompts/st-pr-resolve.prompt.md": "876fdd8c5e80c69aa16b5b058b03db30575d0e83d9e6f8a35ad93b42bdf7bf6a 19882 bytes",
-  ".github/prompts/st-quick.prompt.md": "cdabf1a3793eaff166d083bd6f09d6594b15a23c71907d4ade8e5644c1c0f375 8227 bytes",
-  ".github/prompts/st-rework.prompt.md": "25c7a49eb26047335fc5979470a87410dd87368d898aa7895b2fb88523473e61 17903 bytes",
-  ".github/prompts/st-spec.prompt.md": "262627f969d9f85c4d231400e272aaf10459ff1f61bba36afc916d2f37cab0cc 16687 bytes",
+  ".github/prompts/st-quick.prompt.md": "0b941124e1472619a18a48a2026bf01da84f0749e71fc21dce1459c9ed16d36e 8775 bytes",
+  ".github/prompts/st-rework.prompt.md": "1eb2bef0b91b1b83a0aea476933fc550ec35d1828c29d26de4ad3fcf6fa6860b 18337 bytes",
+  ".github/prompts/st-spec.prompt.md": "f6bcee66d8fe0027c1f2e4d55b42542c479691062d652f0fb3b716667d076731 16968 bytes",
   ".github/prompts/st-work.prompt.md": "2654178d97b2b2de0a87018247d4e75beae89968df04a7888f712fda246c3e49 23493 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".github/workflows/copilot-setup-steps.yml": "ecbfbddf199468b9cb2bad4e811b6d1b9eef4d810dfb64267a9ec3f4edc4fc9f 881 bytes",
@@ -1424,17 +1413,17 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "88812dd0f88c7d6a9ba131dbc6068823b3793596c1b3f780f1b417ef54103b18 64803 bytes",
+  ".stamity/manifest.json": "610ebc02b802bd4e7213ff555c2f7d739e55a4f46e5d3a8098d8f5ef9262aa6b 64803 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "7af7423a54ae96de9e814df7671e9f96591925340a4dd6dad130301d2d4d0412 29071 bytes",
+  "AGENTS.md": "8aaf8b65ee1aa4fac05250d1a2de63bf325d164cb1363ffcd446f725bbe255bf 29519 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
+  "packages/alpha/AGENTS.md": "9b092294eb4a8cc0a613f6436f53397c7baa20bdc0024d9ec972195ca58dbdae 4908 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
+  "packages/beta/AGENTS.md": "9b092294eb4a8cc0a613f6436f53397c7baa20bdc0024d9ec972195ca58dbdae 4908 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -1580,6 +1569,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -1593,8 +1584,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -1605,12 +1597,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -1619,22 +1608,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 ",
   "CLAUDE.md": "<!-- STAMITY:BEGIN v1.0.0-golden -->
 @AGENTS.md
@@ -1649,33 +1634,33 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/agents/stamity-design-quality.md": "248ba102d159693d08473e1f879b6be1051016ff46ed52bfacf31ae7ccbde4a0 7859 bytes",
   ".claude/agents/stamity-fixer.md": "e07245c31b51e0d7e1607add300132de80ee5ea04bce2951adc1213ac7750fbb 6138 bytes",
   ".claude/agents/stamity-implementer.md": "8c83b9fd03e8d4715384e4e300e7dd527a2bf2279ce6da822c9de09b819e31de 5490 bytes",
-  ".claude/agents/stamity-performance.md": "7528f6f39d838f7f089d42aaf3f7ad0b64d6e48ee66a87bc72686b834d3b09a7 8159 bytes",
-  ".claude/agents/stamity-researcher.md": "0938d483dcdf57eb5050735f8060cd2ab1265c93921ab7352755f51026e5755a 7365 bytes",
+  ".claude/agents/stamity-performance.md": "a2168fe84eb6379997b57e157e7f1c7fd57f187a73e43a401538e7b53115ed59 8337 bytes",
+  ".claude/agents/stamity-researcher.md": "9d34a351b81bfa1fc22066ce0b31065db197f79b69b2d86bea6aa26578a3c10c 7564 bytes",
   ".claude/agents/stamity-reviewer.md": "ddcc0744acc5f9a13d5d722803ae9d17604f34f1a709b4f5c5f8a6c03a59ca36 10541 bytes",
   ".claude/agents/stamity-security.md": "c9b70589b551a2d5bdf3ff19cf17b6f2bb77f20df5cbe2b037dd27d73273ee39 7555 bytes",
   ".claude/agents/stamity-spec-author.md": "2f7153c2d405e4bfe6f86229a94eb861aee6e56dac582b43dd782848eeac0ba2 9099 bytes",
   ".claude/agents/stamity-test-runner.md": "6948e5079e30e3ce50b8e317591158120e132fba0a4f051ed6f2334540d1bc69 5672 bytes",
   ".claude/commands/st-ask.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
   ".claude/commands/st-board.md": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75 21562 bytes",
-  ".claude/commands/st-debug.md": "2ebcf9a75d5d3e602efc801061972034b90d4d476ad64f2c11fef13e988bc1e1 11659 bytes",
+  ".claude/commands/st-debug.md": "8ada33406e21d1869d9964b90514149da49431f6ee4357c5e47dd1cb12ecf6bf 11846 bytes",
   ".claude/commands/st-plan.md": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0 25104 bytes",
   ".claude/commands/st-pr-resolve.md": "876fdd8c5e80c69aa16b5b058b03db30575d0e83d9e6f8a35ad93b42bdf7bf6a 19882 bytes",
-  ".claude/commands/st-quick.md": "cdabf1a3793eaff166d083bd6f09d6594b15a23c71907d4ade8e5644c1c0f375 8227 bytes",
-  ".claude/commands/st-rework.md": "25c7a49eb26047335fc5979470a87410dd87368d898aa7895b2fb88523473e61 17903 bytes",
-  ".claude/commands/st-spec.md": "262627f969d9f85c4d231400e272aaf10459ff1f61bba36afc916d2f37cab0cc 16687 bytes",
+  ".claude/commands/st-quick.md": "0b941124e1472619a18a48a2026bf01da84f0749e71fc21dce1459c9ed16d36e 8775 bytes",
+  ".claude/commands/st-rework.md": "1eb2bef0b91b1b83a0aea476933fc550ec35d1828c29d26de4ad3fcf6fa6860b 18337 bytes",
+  ".claude/commands/st-spec.md": "f6bcee66d8fe0027c1f2e4d55b42542c479691062d652f0fb3b716667d076731 16968 bytes",
   ".claude/commands/st-work.md": "2654178d97b2b2de0a87018247d4e75beae89968df04a7888f712fda246c3e49 23493 bytes",
-  ".claude/rules/stamity-ai-evals.md": "06a295e597264103790775e4dd9da5f36f38e1c454c96b005b5264d4c22d3a2a 3844 bytes",
-  ".claude/rules/stamity-api-versioning.md": "4e013575676dee4fec4a84ef4c07c06ad8ea19cafb233a5429f295e2ba5c564d 4852 bytes",
+  ".claude/rules/stamity-ai-evals.md": "52abc332caff9ebdce806220b6dfb1a937b32abd618774f2f139c15ba39b41bd 3897 bytes",
+  ".claude/rules/stamity-api-versioning.md": "a5238b328e0b45cb08c581a5cc167771894c0ea3bd3fc9c2606001ee24364bab 4992 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
-  ".claude/rules/stamity-injection-screening.md": "49e0dae094800f9cca655f783783a41d0d32cf0117b114987d49ff728e8d2a3c 7144 bytes",
-  ".claude/rules/stamity-learnings-schema.md": "f82f64d6f54091945258b016c8380cd6a09396e53dd0727a61ed6ae074d815a1 2602 bytes",
+  ".claude/rules/stamity-injection-screening.md": "e1a12a5957df6e5244f1adca254ab649c53b7e2ff09530f115efe07319632258 7245 bytes",
+  ".claude/rules/stamity-learnings-schema.md": "2f198bab7c82362db7328339dc10b576cb6694490e94451be40cc150ca4a25d0 2645 bytes",
   ".claude/rules/stamity-migrations.md": "1d822d21c8b502eabb392d1a794f8265d0cbe943a096869dfba5f023c99cd721 4727 bytes",
   ".claude/rules/stamity-question-protocol.md": "0700d055aa85f048345bd57afbfecaece70d985dc798e170600603748d7e74ff 3994 bytes",
   ".claude/rules/stamity-resilience.md": "089a40824f251b2032bc9e2c457ada244dffa6eb3f0ceebe40da15182ee1d26d 5029 bytes",
   ".claude/rules/stamity-secrets.md": "074b2f82a2f1711dcc68772ff149eeb3a48487e6170690fb9746715caeb3c2d3 6251 bytes",
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
-  ".claude/rules/stamity-testing.md": "bf7500ade30993447b616d498feb7d26b034c18c7db149854460781226088064 4176 bytes",
-  ".claude/rules/stamity-ui-states.md": "05a9372861cbfbe588494d72ce28492c1954f06c0db3ce11b1b29ef9d2d89b3e 4405 bytes",
+  ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
+  ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
   ".claude/settings.json": "a2cf9e1a0347a337cae332ba2d5543329e657a39ac33842b0b25ab2e2f934713 1603 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
@@ -1716,8 +1701,8 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "e400668221f92d59a9ffd3732a506eba85193aa84fa6df72b4b14f6e213b668f 18390 bytes",
-  "AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
+  ".stamity/manifest.json": "a2aadff7171067db94ee12f39af5959f78186940e0614e3982e1c2cd895c316c 18390 bytes",
+  "AGENTS.md": "9b092294eb4a8cc0a613f6436f53397c7baa20bdc0024d9ec972195ca58dbdae 4908 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -1830,6 +1815,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -1843,8 +1830,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -1855,12 +1843,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -1869,22 +1854,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 
 ## Conditional rules (Codex down-conversion)
 
@@ -1923,17 +1904,17 @@ that survives a prompt edit.
 6. **The judge is an instrument, not a participant.** When a model grades
    output, it is not the model under test, its rubric is written down, and it is
    calibrated against a human-labelled sample before its scores gate anything.
-   Pairwise comparisons score both orders and average, because position
-   preference alone can flip a verdict.
+   An answer proposing a judge names all three. Pairwise comparisons score both
+   orders and average, because position preference alone can flip a verdict.
 7. **Match the metric to the task class.** Classification: accuracy plus
    per-class precision and recall. Open-ended generation: rubric score against
    the written rubric. Retrieval-grounded answers: groundedness plus citation
    precision, each claim traced to the span that supports it. Refusal behaviour:
    refusal rate on prohibited inputs tracked separately from false refusals on
    benign ones.
-8. **Results are artifacts, not chat.** A run records the set version, the
-   versioned inputs from item 3, the per-metric scores, and the threshold each
-   was measured against, committed with the change that caused the run.
+8. **Results are artifacts, not chat.** A run records the set version, item 3's
+   versioned inputs, the run count, the per-metric scores, and the threshold
+   each was measured against, committed with the change that caused the run.
 
 #### Gates
 
@@ -2025,7 +2006,8 @@ writer — teammate, tool, merge or outside pull request — can author these re
 7. **Rewording to pass is the defect.** A note refused for a class hit is
    rewritten as a claim, not respelled until the scan misses it. Evading the
    screen while keeping the same request is the exact behaviour the screen
-   exists to catch.
+   exists to catch. The claim carries observations — never an imperative, and
+   never a slot for a later run to fill.
 
 #### Gates
 
@@ -2278,6 +2260,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -2291,8 +2275,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -2303,12 +2288,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -2317,22 +2299,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 ",
   "packages/beta/AGENTS.md": "
 # Charter
@@ -2368,6 +2346,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -2381,8 +2361,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -2393,12 +2374,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -2407,22 +2385,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 ",
 }
 `;
@@ -2460,8 +2434,8 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".codex/agents/stamity-design-quality.toml": "77121897c46c11635f9c94ee9fdeae777b5d712b9f058befd477404d4b5f16f5 8465 bytes",
   ".codex/agents/stamity-fixer.toml": "6afabd264fb2f9807bd548b998af2572ce5441550679b724d5ce2c30678697a8 6754 bytes",
   ".codex/agents/stamity-implementer.toml": "8305bc24c5fc440a885957b83bb25f34f0fcb4dac0ee2d1730c98c4091782826 6114 bytes",
-  ".codex/agents/stamity-performance.toml": "a5ec9b910a338c5a4c8363b1a22fd69ac06154e7837228d4841a56a6d0a70645 8760 bytes",
-  ".codex/agents/stamity-researcher.toml": "10095eb040dc93b9994ba8aaef9467e548485fce68a2daf98e8d68da0c7f4e08 7974 bytes",
+  ".codex/agents/stamity-performance.toml": "034fc10bc1720db9b17859e0bed45441b8dc5d9fda1c96a55a849069293c3207 8938 bytes",
+  ".codex/agents/stamity-researcher.toml": "acee16602f0dab5dc23c2a1cb4a0e08d6d6e32737003f3e186fee2998a0c4ea0 8173 bytes",
   ".codex/agents/stamity-reviewer.toml": "de9e9273214c236ae7d77e1251933b88de3556142488e895d02b2708c9b86a0a 11141 bytes",
   ".codex/agents/stamity-security.toml": "53c03a86293aa45a6db3cc45738da2907fadb2246a7bfa5874117176d80ef8b3 8155 bytes",
   ".codex/agents/stamity-spec-author.toml": "a5ff44abdcf42b6c4b2afae218e0d454764649a61605a17c57403bb69b118981 9714 bytes",
@@ -2479,14 +2453,14 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "63a688733c24b63703afc3aecb06a145bce86d405c18f6da09482aa8ddafc97c 13386 bytes",
-  "AGENTS.md": "7af7423a54ae96de9e814df7671e9f96591925340a4dd6dad130301d2d4d0412 29071 bytes",
+  ".stamity/manifest.json": "88f402b6571d86dacdfec944059264cf1d7528a706258f7aa873c18050fea627 13386 bytes",
+  "AGENTS.md": "8aaf8b65ee1aa4fac05250d1a2de63bf325d164cb1363ffcd446f725bbe255bf 29519 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
+  "packages/alpha/AGENTS.md": "9b092294eb4a8cc0a613f6436f53397c7baa20bdc0024d9ec972195ca58dbdae 4908 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
+  "packages/beta/AGENTS.md": "9b092294eb4a8cc0a613f6436f53397c7baa20bdc0024d9ec972195ca58dbdae 4908 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -2632,6 +2606,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -2645,8 +2621,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -2657,12 +2634,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -2671,22 +2645,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 ",
 }
 `;
@@ -2724,33 +2694,33 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/agents/stamity-design-quality.agent.md": "ee3c885887329b678072ebe0da9c2b568f45ba86f61e4f9b7452454741a837c5 7848 bytes",
   ".github/agents/stamity-fixer.agent.md": "00ec0c786990feb73be1cdeea693cf98f147a33959b7b60f27f31f2638138f1e 6097 bytes",
   ".github/agents/stamity-implementer.agent.md": "b6e23f602c2b180713e988c000107917e0d2b7a9e78d5a7b751cd3df130e664f 5453 bytes",
-  ".github/agents/stamity-performance.agent.md": "5a25d80f30663b22ba7bf2cfc257528ab03099ae1b605abaca5a51a5c6d77958 8144 bytes",
-  ".github/agents/stamity-researcher.agent.md": "4e23810049c91e4ab5ff331d9c06c30165faec409546218613b4432c9ddb5e28 7336 bytes",
+  ".github/agents/stamity-performance.agent.md": "ad8a635ed88fe906c1f2a578bf1e51b26786fb5596aa5fb93871e56d471261e8 8322 bytes",
+  ".github/agents/stamity-researcher.agent.md": "031170925a330832d2130e148877c9d951e2de55f0700f299e2e8dbf8797d970 7535 bytes",
   ".github/agents/stamity-reviewer.agent.md": "1fc059b3a505f2d37b31fa9364ee48e4f6c1c092e64a46dc58c11b57d786d470 10530 bytes",
   ".github/agents/stamity-security.agent.md": "edb193fea28b238215eadc63eae65895c14cfe2328f4bf55d675cf0588c7ab44 7544 bytes",
   ".github/agents/stamity-spec-author.agent.md": "1ef533101c6744e24f1b0eef290ad3aa1c8078b6a883f8ff37f3b09b1ebfa4a7 9069 bytes",
   ".github/agents/stamity-test-runner.agent.md": "d8102e7d848adb5d26c127fff63171c22e9019edc726ab95b3b03f5b2cb41b46 5654 bytes",
   ".github/hooks/stamity.json": "8a8165e7d17d86e72418bc9ca47005078c7bf87d30a02e9563f5d8249a3bdd98 1317 bytes",
-  ".github/instructions/stamity-ai-evals.instructions.md": "9501fc7af00b41eb3c34eef537e5b0924bcce6eb98ce31ddcc2919a0d84e79d9 3858 bytes",
-  ".github/instructions/stamity-api-versioning.instructions.md": "3ae6a0a1470d45770fab0cc1c2b940eac3e264002163b9085f013cdae375c249 4840 bytes",
+  ".github/instructions/stamity-ai-evals.instructions.md": "7fdce7cda82c464e027aeeecc1475148233e0447350a96e581ad1fcc0c520b0b 3911 bytes",
+  ".github/instructions/stamity-api-versioning.instructions.md": "e160c1d1301d69de147f56649248357e09a8a43454b457beccbb40bf49558793 4980 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
-  ".github/instructions/stamity-injection-screening.instructions.md": "13fa1368cb3e9b5bbea4012f58316ed86932e5412bc2b06bb80e8f7f5569103d 7144 bytes",
-  ".github/instructions/stamity-learnings-schema.instructions.md": "376b04bd2dce6350ad061f02635b727bbf202b1005e8e2f43567d38d04d85592 2602 bytes",
+  ".github/instructions/stamity-injection-screening.instructions.md": "fdc17e2204e64a8246c574b38368eb7f1353a4f3b1080f5e6077492e1630a04b 7245 bytes",
+  ".github/instructions/stamity-learnings-schema.instructions.md": "ca3d64d566458bb2700f8f686a30a6d0638b733d1436d9dc6974d00aad699a89 2645 bytes",
   ".github/instructions/stamity-migrations.instructions.md": "cac769c4d18d8192c34d0939fca3c11685a32963b25bca9340ff6c725dd187e6 4718 bytes",
   ".github/instructions/stamity-question-protocol.instructions.md": "1b41f9aa809609eb5b7ae76f643259a1f1f0c1f3f09b88f0f03c4985ca1af1a8 4008 bytes",
   ".github/instructions/stamity-resilience.instructions.md": "777d6e62e82a88a892e368e7f82856a703b7747a3abd09f343aa550412ea7863 5017 bytes",
   ".github/instructions/stamity-secrets.instructions.md": "195f69bcccd0283ff1f519a1fed86dbc697757d5c802d530120da36967166f7f 6239 bytes",
   ".github/instructions/stamity-security-patterns.instructions.md": "11561e6ba340b435e0ff84de345595602c0fb7ec2adfb73cfe46874c79e01919 6349 bytes",
-  ".github/instructions/stamity-testing.instructions.md": "2ead3fd125db409a91b79ef51da9c1620a4b72c5dc0d211ea77af500d2b6624e 4167 bytes",
-  ".github/instructions/stamity-ui-states.instructions.md": "cf79d11ac6bbc29c5ab16186067261dabbfb92ad414d706000c9424851fbe953 4390 bytes",
+  ".github/instructions/stamity-testing.instructions.md": "2e47ffb0bc4190eb744a27f557d349d52443f66d90f8b01f78a5d2b996d83b86 4237 bytes",
+  ".github/instructions/stamity-ui-states.instructions.md": "3edf8f6ed10d97b55a0d9e2022040e67485aa6f1eac79936ebb8b3722e2b5cfa 4497 bytes",
   ".github/prompts/st-ask.prompt.md": "fe1a6c29728db355ec47f719675bfe39901e60523976cdaecb25ccfdff4181e7 7269 bytes",
   ".github/prompts/st-board.prompt.md": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75 21562 bytes",
-  ".github/prompts/st-debug.prompt.md": "2ebcf9a75d5d3e602efc801061972034b90d4d476ad64f2c11fef13e988bc1e1 11659 bytes",
+  ".github/prompts/st-debug.prompt.md": "8ada33406e21d1869d9964b90514149da49431f6ee4357c5e47dd1cb12ecf6bf 11846 bytes",
   ".github/prompts/st-plan.prompt.md": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0 25104 bytes",
   ".github/prompts/st-pr-resolve.prompt.md": "876fdd8c5e80c69aa16b5b058b03db30575d0e83d9e6f8a35ad93b42bdf7bf6a 19882 bytes",
-  ".github/prompts/st-quick.prompt.md": "cdabf1a3793eaff166d083bd6f09d6594b15a23c71907d4ade8e5644c1c0f375 8227 bytes",
-  ".github/prompts/st-rework.prompt.md": "25c7a49eb26047335fc5979470a87410dd87368d898aa7895b2fb88523473e61 17903 bytes",
-  ".github/prompts/st-spec.prompt.md": "262627f969d9f85c4d231400e272aaf10459ff1f61bba36afc916d2f37cab0cc 16687 bytes",
+  ".github/prompts/st-quick.prompt.md": "0b941124e1472619a18a48a2026bf01da84f0749e71fc21dce1459c9ed16d36e 8775 bytes",
+  ".github/prompts/st-rework.prompt.md": "1eb2bef0b91b1b83a0aea476933fc550ec35d1828c29d26de4ad3fcf6fa6860b 18337 bytes",
+  ".github/prompts/st-spec.prompt.md": "f6bcee66d8fe0027c1f2e4d55b42542c479691062d652f0fb3b716667d076731 16968 bytes",
   ".github/prompts/st-work.prompt.md": "2654178d97b2b2de0a87018247d4e75beae89968df04a7888f712fda246c3e49 23493 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".github/workflows/copilot-setup-steps.yml": "ecbfbddf199468b9cb2bad4e811b6d1b9eef4d810dfb64267a9ec3f4edc4fc9f 881 bytes",
@@ -2764,10 +2734,10 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "85b813c7a4769668fd81964f1a64b3a533410e945dbf3f29a2b8804f1dc60e3b 19081 bytes",
+  ".stamity/manifest.json": "3b29139cb025f8001e9dc7d596a0ae7d0b336d8942afcf9ff7252341836b87c1 19081 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
+  "AGENTS.md": "9b092294eb4a8cc0a613f6436f53397c7baa20bdc0024d9ec972195ca58dbdae 4908 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -3150,6 +3120,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
    relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
    close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
 2. **Ambiguity (B1).** Two or more materially different readings of a request:
    ask one question with numbered options and a declared default-if-no-response.
    Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -3163,8 +3135,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    shared API shapes, schemas, and events break across file boundaries. Census
    shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
-   orchestrator editing product files inline is a protocol violation, and so is handing the
-   operator the line, diff, or file body to paste. One carve-out, and only this one: the
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
    Tier-1 small-change lane applies its own edits inline and still delegates verification.
 
 ## Touchpoints
@@ -3175,12 +3148,9 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
   greenfield and brownfield auto-detected.
-- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test,
-  roadmap) into a persisted plan.
-- \`/st-work\` — execute planned work end to end; closes with the QA human
-  checkpoint.
-- \`/st-board\` — work a task board: chat, a referenced file, or a linked
-  platform board.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
 - \`/st-ask\` — read-only codebase Q&A; writes nothing.
 - \`/st-debug\` — reproduce, root-cause, and fix a defect.
 - \`/st-quick\` — Tier-1 small-change lane; gates still run.
@@ -3189,22 +3159,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the
-  roster — read it rather than a count kept here, because selection and
-  installed packs both change what landed.
-- A glob-scoped rule attaches when the agent reads a file matching its globs,
-  except on a client with no glob-rule layer, where it is inlined into the
-  always-on file of the directory those globs anchor to. A description-scoped
-  rule declares no globs, so what it costs depends on the client: one that
-  supports description-pull loads it on relevance, and one that does not loads
-  it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on
-  every client belongs here, not in a rule that three clients out of four
-  would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\`
-  tree, plus a native copy where the client reads its own location. Named
-  invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
+  than a count kept here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory
+  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
+  the client: one that supports description-pull loads it on relevance, and one that does not
+  loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs
+  here, not in a rule that three clients out of four would have to load unconditionally to honour.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
+  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
+  call a skill whenever its description fits the job.
 ",
 }
 `;
@@ -3242,8 +3208,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/agents/stamity-design-quality.md": "7c9ff339433878ac8af990b27c594f8c8dc8e3dc10f9ec3b30be92b0f3968df9 7783 bytes",
   ".cursor/agents/stamity-fixer.md": "ce9922531f5adc46f691c5e2e15a0b520f28aaee43985d2d656bbeaf6e8014c4 6007 bytes",
   ".cursor/agents/stamity-implementer.md": "ff370bc7caf2d6519972f3fee3dd57e0d36734c1633e86fd7cac188a5e273d67 5357 bytes",
-  ".cursor/agents/stamity-performance.md": "c770d5d324032610ceb8a63e8a8633a08560facf85599c009b3b678179c0f11c 8082 bytes",
-  ".cursor/agents/stamity-researcher.md": "0219a2ed1f211afca72bc98bea25038f1677c3586e983c99eabf6303857d6d05 7268 bytes",
+  ".cursor/agents/stamity-performance.md": "1b97f7e60a141eb958c7fab086ee8f193b6f81a309659b30a817138d78513de7 8260 bytes",
+  ".cursor/agents/stamity-researcher.md": "4bd17dcd27a5af841c5125a94585facf5fd056faec79c4b50b0d8fe1c7f71e08 7467 bytes",
   ".cursor/agents/stamity-reviewer.md": "ddced5aca291933bce33b1d4a4e4f3ba942a58873521d8f3fdfd7a2ea393692b 10471 bytes",
   ".cursor/agents/stamity-security.md": "6817395074d753a68b2c655923c5691d110b7a0147de135abbe2fe533c1d0583 7485 bytes",
   ".cursor/agents/stamity-spec-author.md": "245f711445727e5e4dd826cbb540302bfa83b33d981b2bb275c90cb874e19e50 8984 bytes",
@@ -3252,26 +3218,26 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/hooks/mcp-guard.mjs": "6d3f766e24cefc51e0d0d7303bbc1a8a7357ca8821969889173e02bd54c0a060 7022 bytes",
   ".cursor/hooks/subagent-guard.mjs": "a4d16d0044f747097019e622f6b4320052eb53b9e936d35dd482aa4641aa2111 3409 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
-  ".cursor/rules/stamity-ai-evals.mdc": "d46ae81dd59d4be90c9362146469def4e9cf98242414ff13c8be061804a70bc8 3861 bytes",
-  ".cursor/rules/stamity-api-versioning.mdc": "23e052d41e9a3953a8558c68d44701b7bbb734df4c84ff4f9c52e59383079885 4855 bytes",
+  ".cursor/rules/stamity-ai-evals.mdc": "f2d0c5030b528c718388bdf80691d061f6c8dad52eab16f207234ab9b0dd3b2b 3914 bytes",
+  ".cursor/rules/stamity-api-versioning.mdc": "c405a8d84fba5c43febc84e956ba56f6eaa9c451b12f1216ebca2ff30c8f9f56 4995 bytes",
   ".cursor/rules/stamity-contract-census.mdc": "532217108950645cb080b5c2c84aaf5720da15db421800ffb8cda8f5beaa264d 3878 bytes",
-  ".cursor/rules/stamity-injection-screening.mdc": "778104dc8064261ae6d636b555e4d77a5923bd45b9b2f7e770f5266ef548f170 7159 bytes",
-  ".cursor/rules/stamity-learnings-schema.mdc": "06b820fa67d598aa43786fddbe322f4fe9b3b5d8187613af0de92190e7c7d9bc 2615 bytes",
+  ".cursor/rules/stamity-injection-screening.mdc": "8a3bc136b1cc8b86cb4a85f0ef8ac7762bb097e9dd2b3a9df807c29a6c08eb00 7260 bytes",
+  ".cursor/rules/stamity-learnings-schema.mdc": "f28d98e76d473b4a4eb43b10873d6f7c81e72e0ca93e2a0f5709c24bce67edab 2658 bytes",
   ".cursor/rules/stamity-migrations.mdc": "18a93918707e39ab4abe012db829e2cd8cd51c73b5be9d4aaa467d5619bf49e0 4733 bytes",
   ".cursor/rules/stamity-question-protocol.mdc": "9ae263fc86e6269e23da4c81cc1f6a6dfc1f8eb1fe1adf4093beae2838bb90d1 4013 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes",
   ".cursor/rules/stamity-security-patterns.mdc": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes",
-  ".cursor/rules/stamity-testing.mdc": "6be05910f96dcd7872779263f35ba66c8928ed3c0b32931a057353d2e7b4bf11 4180 bytes",
-  ".cursor/rules/stamity-ui-states.mdc": "254c519142a94c77a78210feaedec26ac3faedc448cf825a4821646b14644e1d 4403 bytes",
+  ".cursor/rules/stamity-testing.mdc": "b1e6ccf40fbc412f50906738e91daba2852e6c893ee201d43c1408397cef3a78 4250 bytes",
+  ".cursor/rules/stamity-ui-states.mdc": "3c80c0c1f3d61d337020b6b9a1de0da33ff4d9aed77d6194c345c50e8e2b9028 4510 bytes",
   ".cursor/skills/st-ask/SKILL.md": "c54d01dd7744948cc84d16ea225178b0ec600cd84f20ac02be5fa47689d98ba0 7313 bytes",
   ".cursor/skills/st-board/SKILL.md": "9939e09d56c9b78965f009713e1112190c8f261646aa1c071030041871a15f3a 21608 bytes",
-  ".cursor/skills/st-debug/SKILL.md": "67360f3a67d92364ac87632269d3ee24a4575f5504e01056ad739ddad75667d6 11703 bytes",
+  ".cursor/skills/st-debug/SKILL.md": "34e3f5fa195b3384317f30118343e30729f2aaff546e168f58ddc14987f1ed07 11890 bytes",
   ".cursor/skills/st-plan/SKILL.md": "3a43bcfb1eefcfba347e68b2368caf69dce689107cc8ec57e019a156f2d096a7 25147 bytes",
   ".cursor/skills/st-pr-resolve/SKILL.md": "66beda7c4e0031c0ac523407f0be602c09003ce4df7c20175b88da3ef2ebcad6 19933 bytes",
-  ".cursor/skills/st-quick/SKILL.md": "d9c0e2eb254cd9cd9e83b9d9e620ee3e4ac420a7bfd3eb55de0277bda92ff918 8271 bytes",
-  ".cursor/skills/st-rework/SKILL.md": "30759b1641ca29417a1cdbbbc4defdd1e471858d5da7e7ab9ed637d6ba6426ad 17950 bytes",
-  ".cursor/skills/st-spec/SKILL.md": "7c340aca38f99ef18a1cbcf3c466ee4253b8e7fd1e02b8e66d3ea0524e501a84 16732 bytes",
+  ".cursor/skills/st-quick/SKILL.md": "5bae0528c437cb1ca8f1c083156e3d92792aa9fdc0fbff968ddac671e57c5db1 8819 bytes",
+  ".cursor/skills/st-rework/SKILL.md": "81804eb71711ecac58ddcf83a3c691424cfbd8c7674331d8f808bf5bc739199c 18384 bytes",
+  ".cursor/skills/st-spec/SKILL.md": "fa64f960b9d28e7b3857fa741a6dc622816d3bd644c553502de9555a8af7e3aa 17013 bytes",
   ".cursor/skills/st-work/SKILL.md": "7abd93dc140c86f087897aa48645670ebe70829fbad1452ad29b274c20b8f6fe 23538 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "f8fbe8e8b09bc960be56387909425a4db0d79570de16d3fad0629c041839d681 9 bytes",
@@ -3284,8 +3250,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "8a086f23a1a69e5569926a7a03e30176cdd707d3f5bff26c6438cbdcdcb34839 18677 bytes",
-  "AGENTS.md": "0837e5abb52cd518c3fe1abc3715c4e6fbbd4ee5cc8100928f48d16aee9d1401 4614 bytes",
+  ".stamity/manifest.json": "552ea0351dd0bd751981fbd7380d0a8f785c85ddb7d6830a6c266b5186d6db58 18677 bytes",
+  "AGENTS.md": "9b092294eb4a8cc0a613f6436f53397c7baa20bdc0024d9ec972195ca58dbdae 4908 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

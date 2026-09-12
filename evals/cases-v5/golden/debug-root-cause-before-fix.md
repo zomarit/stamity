@@ -19,7 +19,7 @@ Governing text — `content/commands/st-debug.md`, "Hard gates":
 | Gate | Passes when | On failure |
 |---|---|---|
 | `root-cause-before-fix` | The cause is a causal chain from cited `path:line` to the observed symptom, confidence medium or better, explaining every step-4 observation including the points that stayed silent | No product-code edit. Run another round from step 1, or return `BLOCKED_FAILURE` with the surviving hypotheses ranked and the evidence each still needs |
-| `failing-test-before-fix` | A test fails on the current tree for the stated cause, and its failure message names the defect rather than asserting a placeholder | The fix does not start. A failure mode that cannot be automated records why, plus a QA row for the human checkpoint |
+| `failing-test-before-fix` | A test fails on the current tree for the stated cause, and its failure message names the defect rather than asserting a placeholder. The report says both in words before the fix starts — that this gate requires such a test, and whether the tree already carries one; writing the test is not a substitute for saying it | The fix does not start. A failure mode that cannot be automated records why, plus a QA row for the human checkpoint |
 | Work pipeline executes the fix | The diagnosis plus the failing test are handed to `/st-work` as the plan | An edit applied inside debug is a contract breach — **product code** is what that means, the same boundary gate 1 draws: revert it and re-route. There is no private fix pipeline. Two mutations sit outside the boundary and neither is a fix: step 2's instrumentation, and gate 2's test, which has to exist as a written file to fail on the current tree |
 [...]
 

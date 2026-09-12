@@ -40,9 +40,9 @@ lines, and on three of the four clients that cap is not the number a session loa
 
 | Client | Always-on lines | What it loads unconditionally |
 |---|---|---|
-| `claude` | 240 | the charter plus every rule with no globs — those carry no attach trigger, so they load every session |
-| `cursor` | 97 | the charter alone — a rule with no globs is pulled in when the conversation matches it |
-| `copilot` | 240 | the charter plus every rule with no globs — those carry no attach trigger, so they load every session |
+| `claude` | 236 | the charter plus every rule with no globs — those carry no attach trigger, so they load every session |
+| `cursor` | 93 | the charter alone — a rule with no globs is pulled in when the conversation matches it |
+| `copilot` | 236 | the charter plus every rule with no globs — those carry no attach trigger, so they load every session |
 | `codex` | 1063 | the charter plus EVERY selected rule — no per-rule attach mechanism, so the whole set is folded into the one instruction file |
 
 The line figures are the ratchet ceilings in `src/content/charter.ts`, each pinned at the load
@@ -52,8 +52,8 @@ bound a reader can plan against, not a reading this page took as it rendered.
 
 **What co-selecting codex costs every other client.** Selecting `codex` does not add a
 codex-only file. It rewrites the root `AGENTS.md` that every other selected client already
-reads, so a claude+codex repository hands claude the codex rules appendix too: 29071 bytes of
-shared instruction text against 4614 without it — ≈6.3x the always-on bytes every co-selected
+reads, so a claude+codex repository hands claude the codex rules appendix too: 29519 bytes of
+shared instruction text against 4908 without it — ≈6.0x the always-on bytes every co-selected
 client pays.
 
 That appendix does not fit the client's own 32 KiB ceiling: budget shaping drops 8 rules from

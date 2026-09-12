@@ -2,7 +2,7 @@
 id: agent-researcher-return-contract
 class: golden
 claim: "A research spawn returns status DONE carrying the named output sections, the unanswerable list and the sources consulted; every claim carries a locator, each section states confidence with a basis from the closed direct/inferred/unverified triad, a claim that cannot be located is dropped rather than softened into prose, and work outside the brief's stated scope is not reported as carried out."
-source: content/agents/stamity-researcher.md:14-16,52-120
+source: content/agents/stamity-researcher.md:14-16,52-122
 metric: rubric
 ---
 
@@ -30,9 +30,11 @@ Governing text — the same file, "Output contract" and "Return contract":
   indistinguishable from a dropped question.
 - Every claim carries `path:line`, a document section, or (at `+web`) a source name with
   its access date. A claim that cannot be located is dropped, not softened into prose.
-- Each section states confidence — high / medium / low — with its basis. The basis comes
-  from one closed triad, and this is where the triad is defined; every flow that asks a
-  researcher for a basis is asking for one of these three.
+- Each section states confidence — high / medium / low — with its basis. Both halves ride
+  together in every section the result carries, the unknowns and the unanswerable list
+  included: a basis word with no band beside it, or a band with no basis, is half a
+  statement. The basis comes from one closed triad, and this is where the triad is
+  defined; every flow that asks a researcher for a basis is asking for one of these three.
   - `direct` — read or measured at a cited location: a line of code, a gate result, a run's
     output, or a sampled observation with the sample stated.
   - `inferred` — assembled across two or more sources, or from an analogue. Every input

@@ -2,7 +2,7 @@
 id: rework-triage-revise-versus-defer
 class: golden
 claim: "Every finding leaves triage routed REVISE or DEFER by the first matching row of the routing table — REVISE findings become plan units, DEFER findings append to the inbox as one dated block of severity, file:line, one-line description and source rows — the whole table is presented once for one batched correction, and this command applies no fix."
-source: content/commands/st-rework.md:13-18,147-176
+source: content/commands/st-rework.md:13-18,150-181
 metric: rubric
 ---
 
@@ -55,7 +55,9 @@ inbox row.
   (*"revise 3, defer 7 and 9"*), not a prompt per finding.
 - Present each finding's disposition in the shape it will take: a REVISE finding as the plan
   unit it becomes, a DEFER finding as the inbox row it becomes, written out in full —
-  `severity · file:line · one-line description · source: rework <branch>`.
+  `severity · file:line · one-line description · source: rework <branch>`. Say where those
+  rows land: one dated block appended to `.stamity/inbox.md` for this rework run. Rows shown
+  without that block named leave the reader guessing what this run appends.
 ```
 
 Scenario state — the run so far, given to you as fact:

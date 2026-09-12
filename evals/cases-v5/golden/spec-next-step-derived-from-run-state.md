@@ -2,7 +2,7 @@
 id: spec-next-step-derived-from-run-state
 class: golden
 claim: "A /st-spec run's return contract closes on a Next step derived from that run's own state — an open [NEEDS CLARIFICATION] marker, an unconfirmed T2 or T3 proposal, or a census gap — never a fixed menu, and a run that closed with none of those says so in the same line."
-source: content/commands/st-spec.md:273-289
+source: content/commands/st-spec.md:276-292
 metric: rubric
 ---
 
