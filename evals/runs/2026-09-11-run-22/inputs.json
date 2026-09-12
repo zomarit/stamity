@@ -302,7 +302,7 @@
     "instrument": {
       "path": "scripts/eval/instrument.mjs",
       "sha256": "a27aa4daf2be84c3acee9b99b6ae72470e1e45bfa000381ad9de1a35c13923b0",
-      "note": "Instrument at public commit 224c8bc54d6b44809dba54e26e1edec2a7fc5147 (unit 9/9b, rounds 25-26): SET-v6 aggregate (two-class scoring rule per AD-119), rubric v7 support, ordered-spans citations checked in transcript order, absence form read first with searched-for terms recorded; the reader units 1-8g of runs 15-21 retained. Rubric v7 core 6209d8df…; SET-v6 25787818…; cases, criteria, expected answers, floor tags and threshold numbers unchanged (profile-amendment-7.json)."
+      "note": "Instrument at public commit 224c8bc54d6b44809dba54e26e1edec2a7fc5147 (unit 9/9b, rounds 25-26): SET-v6 aggregate (two-class scoring rule per the maintainer's decision of 2026-09-12), rubric v7 support, ordered-spans citations checked in transcript order, absence form read first with searched-for terms recorded; the reader units 1-8g of runs 15-21 retained. Rubric v7 core 6209d8df…; SET-v6 25787818…; cases, criteria, expected answers, floor tags and threshold numbers unchanged (profile-amendment-7.json)."
     },
     "set": {
       "path": "evals/SET-v6.md",
