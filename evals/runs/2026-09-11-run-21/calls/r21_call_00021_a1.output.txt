@@ -1,0 +1,33 @@
+Grading the transcript against the six binding criteria as written, with no advisory group to grade.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "qualifies for quick — typo / user-facing string correction, single file" and
+     "Thresholds checked, none fire: 1 file (≤5), ~2 lines (≤~200)"
+  B2 pass — "**Exact edit** — `src/ui/InboxEmpty.tsx`: -No messsages yet / +No messages yet";
+     the item stays in the lane, and "Status: not done." is the tool-free honest report the
+     criterion admits, not a hand-off
+  B3 pass — "the quality gates did not run" (tool-free turn) paired with "I'll apply the
+     substitution and run the gates" — the batch is stated as gated on application, not
+     skipped for a one-line typo
+  B4 pass — searched for a refusal, a "not eligible" statement, or a decline; none present.
+     The nearest span is "Nothing here is blocked on your go-ahead", which affirms the item
+  B5 pass — searched for "/st-work", "st-plan", any lane name, and any go-ahead prompt;
+     none present. "Nothing here is blocked on your go-ahead — the request was the go-ahead".
+     The later "One thing to confirm on application" states a default ("I'll replace every
+     occurrence ... unless you want it narrowed") rather than withholding the edit pending an
+     answer, so it is not a confirmation gate before applying
+  B6 pass — "no auth/authz/session/credential/key/payment/access-control surface, no
+     dependency or lockfile change, no API shape, schema, event payload, or migration" — no
+     threshold is claimed to fire and the UI file is not treated as security-sensitive
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither changing the verdict:
+
+- **No case id** was present in the input, so the emission carries a placeholder. The runner should supply it.
+- **B5 is the closest call.** The phrase "One thing to confirm on application" reads as confirmation-shaped, but the transcript states its default and does not block the edit on an answer. If the set authors want that phrasing to fail, the criterion needs to say so explicitly.

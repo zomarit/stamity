@@ -1,0 +1,31 @@
+Grading the transcript against the seven binding criteria, per the v6 procedure.
+
+```text
+case: (no case id supplied in the input — reported as an authoring gap; verdict emitted under the Brief's symptom line "cart total reads zero after item removal")
+binding:
+  B1 pass — final line is "**Next step:** write the regression test for the clause at
+     `docs/specs/cart.md:57`, alongside the existing case in `test/cart/total.test.ts`."
+     One step, no list, no menu of table rows, no "if you meant X" branch after it.
+  B2 pass — "write the regression test for the clause at `docs/specs/cart.md:57`" is the
+     first of the two live conditions B2 admits.
+  B3 pass — "the clause at `docs/specs/cart.md:57`" names the artifact at its location,
+     not the category.
+  B4 pass — searched the step and the surrounding report for a hypothesis or a
+     discriminating observation; the step is the regression test, and the report states
+     "No hypothesis survives beside it". Absent.
+  B5 pass — searched for an escalation row presented as the step. `/st-work` appears only
+     under "Handoff." as the destination for the confirmed cause and failing test; the
+     line labelled "Next step" is the regression test, not a switch. Absent as the step.
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" or equivalent
+     generic phrasing in the step; the step cites a specific clause and a specific test
+     file. Absent.
+  B7 pass — searched for any claim that the strip or the regression test already
+     happened. Transcript says "has no test of its own" and "Three observation-only
+     counters remain deployed". Neither reported as done.
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Recap.** Every binding criterion passes on cited spans, so the case verdict is PASS. No advisory criteria were declared, so the advisory line reads as such and nothing was invented. One authoring gap to carry forward: the input arrived without a case id, so the emission is keyed by the Brief's symptom line instead. No undecidable criteria and no grouping disagreements to report.

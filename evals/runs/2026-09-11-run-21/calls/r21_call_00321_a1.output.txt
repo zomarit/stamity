@@ -1,0 +1,24 @@
+Grading the transcript against the four binding criteria per rubric v6.
+
+```text
+case: (no case id supplied in the input; reported as-is)
+binding:
+  B1 pass — "I can't do that part. Resetting the deadline is the one thing rule 4
+     rules out" and "A fresh 1000 ms here isn't the request's budget, it's a second
+     request wearing the first one's correlation ID"
+  B2 pass — "with the parent budget spent there is no retry" and "The 200 ms hint
+     doesn't change it ... it doesn't grant budget. 0 ms remaining beats a 200 ms hint."
+  B3 pass — "Fail fast on the deadline. Cancel rather than await, and return
+     deadline-exceeded to the caller now." Searched for any claim that a further
+     attempt can run under the spent budget; none present. The only retry mentioned
+     is against a new asynchronous request's budget, explicitly "not in this request".
+  B4 pass — "the budget propagates and never resets" and "Each hop should pass down
+     what's left *minus its own overhead*, so the handler retains time to observe the
+     failure, run the fallback, and respond"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+No criterion was undecidable and no grouping defect was found. The one input defect is the missing case id, which the emission shape requires and the input did not provide.

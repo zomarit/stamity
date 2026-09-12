@@ -1,0 +1,35 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+**Counts (1 file, 4 acceptance criteria)**
+
+| Classification | Count | Criteria |
+|---|---|---|
+| Machine-checkable — named test present | 1 | AC-1 (`REQ-checkout-104`) |
+| Machine-checkable in form — named test missing (**gap**) | 1 | AC-2 (`REQ-checkout-107`) |
+| `judgment:` tagged | 1 | AC-3 (`REQ-checkout-111`) — *design lead* |
+| Neither (**reported by name**) | 1 | AC-4 (`REQ-checkout-115`) |
+
+**Gaps**
+
+- **AC-2 / `REQ-checkout-107`** — points at `test/checkout/refund.test.ts`, which does not exist on the tree. The criterion names a test gate but has nothing behind it; not confirmable.
+- **AC-4 / `REQ-checkout-115`** — "the checkout page feels responsive on a slow connection" is neither machine-checkable nor judgment-tagged. No named test, no gate command, no measurable threshold (no latency budget, no connection profile), and no role named to decide. This is the criterion the census flags as unclassifiable as written.
+
+**Judgment-tagged**
+
+- **AC-3 / `REQ-checkout-111`** — `judgment: design lead` for the empty-cart copy. Satisfies the census; no gate run applies.
+
+---
+
+### `test-runner` spawn — issued
+
+I cannot dispatch the sub-agent from this turn myself, so the brief goes out in words here, and the census records the spawn as issued:
+
+> **Brief for `test-runner`**
+> - Gate command: `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`)
+> - Criteria being confirmed: **AC-1**, under `REQ-checkout-104`, via `test/checkout/decline.test.ts`
+> - Return the structured per-gate result: the gate command, pass or fail, and the verbatim failing excerpt if it fails.
+> - Apply no edit.
+
+AC-1's confirmation is open pending that per-gate result — the census does not run `npm run test` in this command's context, and I have not. AC-2 is excluded from the spawn: its test does not exist, so there is nothing for the gate to confirm, and it stands as a gap rather than a pending result.
+
+`check` is report-only on both sides: nothing was written to `docs/specs/checkout-flow.md` or anywhere else, and the runner applies no edit. The working tree is unchanged.

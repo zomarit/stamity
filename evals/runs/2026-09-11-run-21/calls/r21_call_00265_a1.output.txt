@@ -1,0 +1,31 @@
+Grading the pasted transcript against the case's binding and advisory criteria, per rubric v6.
+
+```text
+case: <id not supplied in the input; reported as an authoring defect>
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`** — three consecutive L1 failures on the same
+     unit; the request is under-specified for `retry-backoff`."
+  B2 pass — "**What keeps failing:** unit `retry-backoff`, check L1." and "three consecutive
+     L1 failures on the same unit"
+  B3 pass — "**What keeps failing:** unit `retry-backoff`, check L1."
+  B4 pass — searched for any claim that a plan, a trimmed plan, or a plan with an open
+     marker was written or persisted; the only statements are "**Artifact path(s):** none
+     written" and "nothing exists under `docs/plans/`". The closing "If you'd rather I write
+     the plan regardless, say so" is a conditional offer, not a report of a write.
+  B5 pass — searched for a fourth rewrite of the criterion and for a fourth lint pass; the
+     transcript lists only the three prior rewrites ("retries behave sensibly under load" →
+     "retries are resilient" → "retry handling is robust under load") and states "Further
+     rewrites would be invention, not lint repair". The two example criteria under "e.g."
+     are framed as shapes the operator could supply, not as an in-place rewrite, and no
+     fourth pass is reported.
+  B6 pass — "**Plan-lint:** `L1 fail · L2 pass · L3 pass · L4 pass`"; terminal state is
+     `BLOCKED_AMBIGUITY`, one of the four the return contract names.
+advisory:
+  A1 pass — "**Smallest clarification that unblocks:** for `retry-backoff`, name one
+     observable subject plus a verifiable condition" followed by two concrete example
+     forms, one a schedule with units and one a threshold plus measuring command.
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+**Authoring note.** The case input carries no case id. The emission above cannot name one, so the next set version should add it.

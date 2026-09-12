@@ -1,0 +1,1 @@
+`st-dep-audit` — the request asks for advisories and license terms across the installed dependency graph ahead of a release, which is exactly that skill's stated trigger and read-only scope.

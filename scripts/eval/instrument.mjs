@@ -268,7 +268,7 @@ const searchVerb = new RegExp(`\\b(?:searched|looked|checked|scanned)(?:\\s+(?!$
 // A negative result names an absence. The `no <noun>` arm is a closed list of absence
 // nouns, because "no problem" and "no doubt" report the opposite of an absence.
 const absenceNoun = 'match|matches|mention|mentions|reference|references|occurrence|occurrences|instance|instances|statement|statements|trace|traces|sign|signs|hint|hints|indication|indications|edit|edits|patch|patches|diff|diffs|change|changes|claim|claims|offer|offers|attempt|attempts|such|other|others|further|additional|second|new|line|lines|text|word|words|phrase|phrases|use|uses|call|calls|deletion|deletions|removal|removals|exception|exceptions|flag|flags|setting|settings|option|options|prompt|prompts|confirm|confirmation|bypass|override|escalation|proceed|refusal|refusals|response|answer|reply|record|records|evidence|instruction|instructions|directive|directives|caveat|caveats'
-const negativeResult = new RegExp(`\\b(none|absent|not found|no match|silent|does not appear|do not appear|never appears?|not present|nothing|no such|not named|not mentioned|nowhere|no\\s+(?:${absenceNoun})|not\\s+followed\\s+by|never\\s+follows?|is\\s+not\\s+present|neither\\s+appears?|neither\\s+is\\s+present)\\b`, 'i')
+const negativeResult = new RegExp(`\\b(none|absent|not found|no match|silent|does not appear|do not appear|never appears?|not present|nothing|no such|not named|not mentioned|nowhere|no\\s+(?:${absenceNoun})|not\\s+followed\\s+by|never\\s+follows?|is\\s+not\\s+present|neither\\s+appears?|neither\\s+(?:is\\s+)?present)\\b`, 'i')
 // Silence is reported about the transcript (or about something in it), actively or
 // passively, and the judge's own line wrap may fall between the subject and the verb.
 const reportedSilence = /\btranscript\s+is\s+silent\b|\b(?:transcript|response|answer|reply)\b[^.]{0,120}?\b(?:is silent|silent on|silent about|(?:says|reports|mentions|names|states|records|acknowledges)\s+nothing|does not (?:mention|address|say)|never (?:mentions|addresses)|(?:is|are|was|were)\s+(?:never|not)\s+(?:mentioned|named|reported|addressed|stated|acknowledged|surfaced))\b/i
@@ -442,8 +442,21 @@ const withoutTrailing = text => /[.,;:]$/.test(text) ? text.slice(0, -1) : null
 // the next line opened with, or a colon after a heading — and may write the colon and the
 // marker together. Each token is read literally first, then as the line break it stands for,
 // and a colon may itself be the judge's punctuation or the transcript's own.
-const joinToken = /(?::[ \t]+(?:(?:\/|>|—|–|[-*+]|\d+[.)])[ \t]+)?|[ \t]+(?:\/|>|—|–|[-*+]|\d+[.)])[ \t]+)/
-const joinReadings = token => [...new Set(token.startsWith(':') ? [token, ': ', ' '] : [token, ' '])]
+const joinMark = '(?:\\/|>|—|–|[-*+]|\\d+[.)])'
+const joinToken = new RegExp(`(?::[ \\t]+(?:${joinMark}[ \\t]+){0,3}|[ \\t]+(?:${joinMark}[ \\t]+){1,3})`)
+
+/** One line break may be written as a run of these tokens — `## Shed order / 1. **A**` puts a
+ *  slash and the list number the next line opened with in the same gap. The run is read
+ *  literally first, then with any leading part of it kept and the rest standing for the
+ *  break, and last as the break alone; whatever is relaxed must land on a real line break. */
+function joinReadings(token) {
+  const readings = new Set([token])
+  for (const space of token.matchAll(/[ \t]+/g)) {
+    const cut = space.index + space[0].length
+    if (cut > 0 && cut < token.length) readings.add(token.slice(0, cut))
+  }
+  return [...readings].toSorted((one, other) => other.length - one.length).concat(' ')
+}
 
 /** Split the citation at every token that could be standing in for a line break. Each one
  *  is then read literally first, and as a break only where the transcript really broke. */

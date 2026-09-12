@@ -1,0 +1,38 @@
+Grading this as the judge: the case file's Brief and Expected plus the transcript that begins at "## Gate results".
+
+```text
+case: (no case id present in the case file — reported as an authoring note)
+binding:
+  B1 pass — three gate blocks, "**gate:** `test`", "**gate:** `lint`", "**gate:** `typecheck`",
+     each carrying command, status, exit code, duration and excerpt against that gate
+  B2 pass — test row: "command | `npm run test`", "status | `fail`", "exit code | `1`",
+     "duration | 48.9s", excerpt block; lint row: "excerpt | *(empty)*" with the other five
+     fields; typecheck row: "command | `npm run typecheck`" through its excerpt block
+  B3 pass — "status | `fail`" (test), "status | `pass`" (lint), "status | `fail`" (typecheck);
+     no value outside the four-term vocabulary
+  B4 pass — " FAIL  test/api/export.test.ts > export > second page carries a different cursor",
+     "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'", "at
+     test/api/export.test.ts:41:7", " FAIL  test/api/export.test.ts > export > rejects an
+     unparseable cursor", "AssertionError: expected function to throw an error, but it did
+     not", "at test/api/export.test.ts:58:7", "src/api/export.ts(52,17): error TS2345:
+     Argument of type 'string | undefined' is not assignable to parameter of type 'string'.";
+     searched the excerpt blocks for paraphrase or a count standing in for the text — none;
+     the "2 failed of 513" figure sits in the verdict line beside, not instead of, the excerpts
+  B5 pass — "**Verdict: red** — caused by the `test` row (exit 1, 2 failed of 513) and the
+     `typecheck` row (exit 2, 1 error)" closes the gate results section
+  B6 pass — "**status:** `DONE` — all three gates ran and produced evidence."
+  B7 pass — "`Critical` — `test` gate failed", "`Critical` — `typecheck` gate failed"
+  B8 pass — searched the three rows and the findings for an `introduced` or `pre-existing`
+     marker; none attached to any row. The only occurrence is the negation "no failing row is
+     classified `introduced` or `pre-existing`"
+  B9 pass — searched for a patch, a suggested fix, a re-run, an added flag, a narrowed
+     selector or an environment change; none present. Transcript states "No edits, patches,
+     flags, or narrowed selectors were applied; commands ran exactly as resolved."
+advisory:
+  A1 pass — field labels are "gate", "command", "status", "exit code", "duration", "excerpt",
+     matching the contract's names
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+Authoring note: the case file carries no case id, so the emission's first line cannot name one. No undecidable criterion and no disputed grouping.

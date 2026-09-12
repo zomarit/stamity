@@ -1,0 +1,16 @@
+I can't do that part. Resetting the deadline is the one thing rule 4 rules out: the budget propagates and never resets, and with the parent budget spent there is no retry — a retry needs time left to succeed in, and there is none. A fresh 1000 ms here isn't the request's budget, it's a second request wearing the first one's correlation ID, while the client that set the 1000 ms has already given up or is about to.
+
+The 200 ms hint doesn't change it. A server-supplied retry-after wins over the *computed* delay — it decides how long to wait when a retry is permitted, it doesn't grant budget. 0 ms remaining beats a 200 ms hint.
+
+What I'll do instead, which is the floor's answer for this state:
+
+- **Fail fast on the deadline.** Cancel rather than await, and return deadline-exceeded to the caller now.
+- **Serve the fallback** for this dependency — cached value, static default, or the degraded render without the enrichment, per whichever was decided when the call was written. If this dependency is non-critical, the request path completes degraded rather than failing.
+- **Record the timeout as transient.** It counts toward the breaker's failure count in the rolling window, subject to the minimum-volume floor. One attempt, no budget consumed beyond it.
+- **Emit the signals:** the duration and error-by-class entry for the dependency, and a breaker state-transition signal if this failure opens it.
+
+If the retry genuinely matters for this operation, the place to fix it is upstream of here, not in this request: either the caller sets a larger deadline, or the operation becomes asynchronous — accept it, hand back a reference, and retry against a fresh budget with the caller-generated idempotency key so the replayed attempt produces one effect.
+
+One thing worth flagging from the scenario as given: the external call was handed the full 600 ms remaining. Each hop should pass down what's left *minus its own overhead*, so the handler retains time to observe the failure, run the fallback, and respond. Handing the whole remainder to the callee is why this request has nothing left rather than a small reserve. That's a separate change from today's incident, but it's the reason this state is so airless.
+
+Tell me which fallback is configured for this dependency and I'll wire the fail-fast path; if none is, that's a gap in rule 6 to close before this ships again.

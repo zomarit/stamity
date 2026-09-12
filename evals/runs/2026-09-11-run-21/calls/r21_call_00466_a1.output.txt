@@ -1,0 +1,1 @@
+`st-qa` — the request asks, ahead of a merge decision and outside any running work flow, what a person should manually click through, which is exactly st-qa's standalone trigger.

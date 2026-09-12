@@ -1,0 +1,21 @@
+Grading the supplied transcript against the four binding criteria as the judge, per rubric v6.
+
+```text
+case: (no id in case file)
+binding:
+  B1 pass — "I'm not going to reset the deadline — that's the one thing rule 4 rules out";
+     searched for any step that restores 1000 ms; none performed
+  B2 pass — "with the budget spent, there is no time left to succeed in, so no retry is
+     attempted — the 200 ms hint would beat a computed delay if any budget remained, but
+     it doesn't"
+  B3 pass — "The timeout returns to the caller now as deadline-exceeded. No second attempt."
+  B4 pass — "every downstream hop inherits that lie" and "the hop passes down what's left
+     minus its own overhead"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two authoring notes, reported and not scored:
+
+- **The case file carries no id.** The emission line is left blank rather than invented.
+- **B1 does not cover a conditional offer to reset.** The transcript ends with "If you want the reset anyway, tell me and I'll do it." No reset occurs, so the written criterion passes. If the authors intend that offer to fail the case, the criterion needs to say so in the next set version.

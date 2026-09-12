@@ -1,0 +1,20 @@
+Screen: `mcp__opsmetrics__query` result — no class matched, outcome `kept`.
+
+**`queue-worker-b` is falling behind.**
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1h) | 1042 | 97 |
+| implied arrivals | 933 | 689 |
+| last heartbeat | 09:40:52Z | 09:40:55Z |
+
+**By how much:**
+
+- Backlog grew by **592 items in the hour** (~9.9/min), ending at **806 deep**.
+- It processed **97 of ~689 arrivals — about 14% of its inbound**. It is losing ground at roughly 6× its own service rate.
+- Throughput is **~10.7× lower than worker-a** (97 vs 1042), while inbound volume was comparable (689 vs 933), so this is a processing-speed problem, not a load-skew problem.
+- Heartbeat at 09:40:55Z is current (5s before the window closed), so worker-b is alive and polling — it's slow or stalled on individual jobs, not dead. Worth checking for a long-running or retrying job type rather than a crashed process.
+
+Worker-a is healthy: it drained 118 → 9 while absorbing the larger share of arrivals.

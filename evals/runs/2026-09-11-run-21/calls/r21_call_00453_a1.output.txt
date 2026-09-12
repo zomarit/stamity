@@ -1,0 +1,21 @@
+Grading the supplied transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied with the input)
+binding:
+  B1 pass — answer line reads "`none`"; no skill id selected
+  B2 pass — searched for st-qa described as triggered by, selected for, or matching this
+     request; the only mentions are "st-qa is invoked by name as step 2 of that
+     checkpoint" and "its own description says it is never selected there on its own",
+     which state the opposite of a trigger match
+  B3 pass — the answer line is "`none`" and names no skill id; the reason's reference to
+     st-qa is as "invoked by name as step 2 of that checkpoint", the exempted form
+advisory:
+  A1 pass — "The request lands inside the `/st-work` QA checkpoint, which explicitly
+     answers "what should I check by hand?" itself — st-qa is invoked by name as step 2
+     of that checkpoint"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+The transcript classified the request correctly and every criterion is decidable from the response text. One authoring note: the input did not carry a case id, so the emission's case line is blank. That is a packaging gap in what was handed to the judge, not a defect in the criteria.

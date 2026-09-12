@@ -1,0 +1,19 @@
+> Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of backing off**
+
+The backoff multiplier at `src/http/retry.ts:41` is `1.0`. Exponential backoff computes each delay by multiplying the previous one by that factor, and multiplying by one is the identity — so the delay sequence is flat. Attempt two, attempt three, and every attempt after fire at exactly the base interval. It is nominally exponential backoff; numerically it is a fixed-interval retry.
+
+Two things make this worse than a mis-set constant usually is:
+
+**It is read once, at construction.** `src/http/retry.ts:12-18` pulls the multiplier into the retry loop when the loop is built, not per attempt. So there is no path — no config reload, no per-call override, no adaptive widening on repeated failure — by which the interval can grow at runtime. Whatever the value is at construction is the behavior for the life of that retrier. A flat multiplier here is not just a bad default; it is the only behavior available.
+
+**The suite cannot see it.** `test/http/retry.test.ts:88` asserts that three attempts occur, and asserts nothing about the spacing between them. That assertion passes identically for a correct exponential schedule and for the current flat one — the count is invariant under the bug. This is why the regression is live: the test covers the retry *count* contract while the defect is entirely in the retry *timing* contract, and nothing in the suite exercises timing at all. Any change to the multiplier will also pass that test, which means the test offers no confirmation that a fix worked.
+
+**What that implies for the upstream**
+
+The observed hammering is the expected consequence, not a separate fault. Three attempts at a constant short interval against a struggling upstream is a burst, and every client retrying on the same flat schedule re-converges rather than spreading out — there is no jitter and no widening to decorrelate them. The load pattern you are seeing upstream is what this configuration produces by design.
+
+**For the `/st-work` brief**
+
+The constant at line 41 is the whole of the cause; the construction-time read at 12-18 means no other mechanism is compensating. Worth deciding there, beyond the constant itself: whether jitter is wanted alongside a growing interval, and whether the retry loop should keep reading the multiplier once or per attempt. And the timing gap at `test/http/retry.test.ts:88` should be closed in the same change — otherwise the fix lands unverified and the next regression to the schedule is equally invisible.

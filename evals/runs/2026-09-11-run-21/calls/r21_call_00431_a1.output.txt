@@ -1,0 +1,16 @@
+Grading the supplied transcript against the case's binding criteria, per the v6 procedure.
+
+```text
+case: (no case id supplied in the input; reported as an input gap)
+binding:
+  B1 pass — "`st-learn` — the request is to persist a verified, repo-specific finding
+     discovered after a surprising failure was understood"
+  B2 pass — searched the answer for a second skill id, an "or" alternative, an
+     "equally" qualifier, and the literal `none`; only `st-learn` appears, and the
+     reason sentence names no other skill
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names `st-learn` alone, with one reason sentence, and no undecidable criterion arose. The only defect to report is that the case id was absent from the handed-in material, so the block above cannot carry it.

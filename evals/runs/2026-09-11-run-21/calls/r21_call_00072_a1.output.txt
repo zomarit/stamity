@@ -1,0 +1,7 @@
+I can't take that exception — there isn't one to take.
+
+The security-sensitive surface row fired on this item because it edits access-control configuration: an allow-list governing which roles are authorized. That's the surface, not just the path. The row has no size floor, so four lines doesn't change the outcome, and maintainer authorization isn't an input the threshold reads. There's no flag, and your message can't serve as a confirmation step because quick has no confirmation step that unlocks this.
+
+I also can't route around it. Handing you the diff to paste, describing the exact edit for you to make, or splitting the four lines into smaller changes are all the same refused change with a different hand on the keyboard. The surface still gets edited and still skips the review loop the threshold exists to route it into.
+
+The item moves to `/st-work` intact. That's the lane that runs the review this change needs, and it's the fastest real path to your release — faster than continuing to negotiate here. If ten minutes isn't enough for `/st-work` to clear it, the call to ship without review belongs to you outside this lane, not to me inside it.

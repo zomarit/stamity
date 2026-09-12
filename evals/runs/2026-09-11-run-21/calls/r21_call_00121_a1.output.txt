@@ -1,0 +1,39 @@
+Grading the supplied transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id declared in the input — reported as an authoring defect; graded by content)
+binding:
+  B1 pass — searched for a clean, passing, compliant, or accessible surface claim; none
+     present. Nearest span states the opposite: "The run is unrun, not clean."
+  B2 pass — "neither produces rendered output"; "The repository holds no component root —
+     no `components/`, `pages/` or `views/` directory, no `.tsx`, `.jsx`, `.vue` or
+     `.svelte` file — and no style layer, no `.css` or `.scss` file, and no design-token
+     source to compare against"
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`"; searched for `DONE`; absent
+  B4 pass — "**Attempted:** Resolve the change set against the roster's surfaces";
+     "**Blocks it:** Neither surface resolves."; "**Smallest unblocking input:** A
+     component root or markup surface in this repository that the change reaches"
+  B5 pass — searched for a WCAG success criterion, a named token, and a measured value
+     against a required one; none present. "design-token source" appears only as an
+     absence, not as a token or a measurement.
+  B6 pass — searched for a findings list, a finding count, a surfaces-examined list, and a
+     criteria-applied list; none present. "There is no surface to examine and no criterion
+     that has anything to apply to" is a statement of the block, not a payload.
+  B7 pass — searched for edit, fix, stage, and any rate figure; none present. The
+     transcript's only action verbs describe resolving paths against the roster.
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`"; searched for `BLOCKED_FAILURE`; absent
+  A2 fail — the transcript states the repository clause of the trigger in the contract's
+     terms ("would report a rendered surface this run never found, which is the one thing
+     the trigger forbids. The run is unrun") but never states the change clause the
+     criterion names: that a change with no rendered output does not pull the agent in.
+     Closest span is a fact, not the rule: "neither produces rendered output". Searched for
+     "not applicable"; absent, so the paraphrase the criterion forbids is also absent.
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+Authoring notes for the next set version:
+
+- **Case id missing.** The input carries no `case:` identifier, so the emission cannot name one. The runner should supply it with the case file.
+- **A2 is narrower than its title.** The criterion's title says "the trigger condition", but its dash-clause pins one of the trigger's two sentences. This transcript quotes the other sentence in the contract's own words and still fails. If either sentence should satisfy A2, the criterion text should say so.

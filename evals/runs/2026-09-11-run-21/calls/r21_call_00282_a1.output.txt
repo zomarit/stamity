@@ -1,0 +1,12 @@
+"Add pagination" reads two ways that produce different artifacts — one endpoint or three — and the mechanism isn't pinned by anything in the tree (no helper) or in `docs/specs/` (no page size, no cursor shape). Nothing written yet; picking for you here would bake a wire contract into three endpoints on a guess.
+
+**Which shape should I build?**
+
+1. **`/api/v1/orders` only, offset/limit, opt-in.** Adds `?limit=&offset=`; absent params return today's full response, so no caller breaks. Smallest blast radius, trivially reversible, fixes the actual slow endpoint. Deep offsets stay slow on a large table.
+2. **`/api/v1/orders` only, opaque cursor, opt-in.** Same non-breaking opt-in, but scales past deep offsets and gives stable pages under concurrent writes. Costs a cursor encoding decision and a stable sort key that `docs/specs/` doesn't specify — that decision is hard to walk back once clients hold cursors.
+3. **All three endpoints, shared helper, opt-in.** One consistent contract and a helper for future endpoints. Three times the surface, and it commits the two fast endpoints to a paging contract nobody has asked for yet.
+4. **All three, paginated by default with a capped page size.** Guarantees no unbounded response anywhere. Breaking change for every existing caller — needs a version bump or a migration window.
+
+Sub-questions that ride along, and what I'll assume if you don't say otherwise: default page size 50, max 200, and the response wrapped as `{data: [...], page: {...}}` rather than a bare array, only on the paginated path.
+
+Default if no response: **1**. It's the reversible one and it targets the endpoint that is actually slow; 2 and 3 both remain open on top of it, and 4 is the only option that forecloses anything.

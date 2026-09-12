@@ -1,0 +1,15 @@
+**queue-worker-b** is the one falling behind.
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1 h) | 1042 | 97 |
+| implied arrivals | 933 | 689 |
+| heartbeat age | 8 s | 5 s |
+
+**By how much:** worker-b's backlog grew by 592 items in the hour (~9.9/min). It processed 97 against roughly 689 arrivals — about 14% of its inbound rate, leaving a throughput shortfall of ~592 items/hour. Worker-a drained its queue over the same window (−109, down to a depth of 9) while processing 1042, roughly 10.7× worker-b's volume.
+
+Worth noting: worker-b's heartbeat is current (5 s old), so it isn't dead — it's alive and processing at a small fraction of the needed rate. That pattern points at per-item slowness or a stuck/retrying job class rather than a crashed worker. Backlog is still climbing, so at the current rate expect ~1400 by the end of the next hour absent intervention.
+
+Data basis: 60 samples over the 3600 s window, `truncated: false` — full coverage, no gaps. The `mcp__opsmetrics__query` body screened clean against all five classes (`kept`); the numbers above are from that unmodified body.

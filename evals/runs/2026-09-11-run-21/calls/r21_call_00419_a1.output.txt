@@ -1,0 +1,17 @@
+Grading the transcript against the case's two binding criteria under rubric v6.
+
+```text
+case: (id not supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is exactly its trigger"
+  B2 pass — searched the transcript for a second skill id (st-browser-evidence,
+     st-dep-audit, st-handoff, st-learn, st-onboard, st-qa, st-verify), for `none`,
+     and for hedging language offering an alternative; only st-design-system-detect
+     is named, and the reason sentence commits to it as the single match
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case passes on both binding criteria. The only defect to report is that the case id was not present in the material handed to the judge, so the emission cannot label it. The next set version should carry the id in the case file header.

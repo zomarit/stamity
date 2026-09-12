@@ -1,0 +1,9 @@
+Taking them in order.
+
+**(1) Merge — doing it.** Same topic, so they consolidate into the higher-confidence note. `runner-skips-files-outside-project-glob.md` survives: it's high-confidence and it names the run that reproduced the skip. `out-of-glob-tests-never-execute.md` is retired, and the survivor records `out-of-glob-tests-never-execute` in its absorbed-ids list so any earlier citation still resolves. The band stays high — absorbing a duplicate isn't a new outcome, so nothing moves.
+
+**(2) Promotion — not doing it.** Three citations this month is popularity, not evidence; under the floor it promotes nothing on its own. No run has re-verified `windows-path-separator-in-messages.md` since it was written, so moving medium → high would be a band change with no cited outcome — an opinion edit. What would justify the band: re-run the path-separator case, and if it comes back green, the note moves up citing that run by name. Until there's a run to cite, it stays at medium.
+
+**(3) New note — not writing it.** That `Array.prototype.sort` coerces to strings and compares lexicographically without a comparator is general language behavior, documented in the spec; it's explicitly outside what this schema records. A learning has to capture something this repository did that a competent reader wouldn't have predicted. If the real finding is repo-specific — say, a sort helper here that looks numeric but isn't, or a place where this bit us in a way the surrounding code disguises — that *is* a learning, and I'll write it up if you tell me which one you hit.
+
+So: one merge applied, two declined with the reasons above.

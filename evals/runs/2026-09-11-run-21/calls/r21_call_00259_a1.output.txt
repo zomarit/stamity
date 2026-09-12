@@ -1,0 +1,38 @@
+Grading the pasted transcript against the case's binding criteria per the v6 rubric.
+
+```text
+case: st-plan-head-and-unit-preview
+binding:
+  B1 pass — head block carries "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" — all three research paths present
+  B4 pass — searched the head block for an `approach` key; absent. Transcript states
+     "`approach` is absent — it is migration-intent only and this is `feature`"
+  B5 pass — "`docs/plans/003-status-json-flag.md`"; "`003` is the next free number after
+     `001-worktree-lane.md` and `002-board-fill-source.md`" — concrete slug, not a
+     placeholder
+  B6 pass — unit table rows `id`, `requirements`, `files`, `interfaces`, `testCriteria`,
+     `edgeCases`, `depends_on` ("`none`"), `verify` — all eight present
+  B7 pass — "`requirements` | `REQ-cli-140`"; searched for the literal "spec carries no
+     ids"; absent
+  B8 pass — interfaces cell inline: "`--json`, boolean, default `false`, takes no value
+     argument, no short alias"; "keys `workspace` (string), `branch` (string),
+     `managedFiles` (integer), `driftedFiles` (integer), `lastSync` (string)"; "`0` on
+     success; `1` on a drift finding"; "nothing written on success". Every item the
+     criterion enumerates is inline, not deferred or pointed elsewhere
+  B9 pass — "**Drift finding with `--json`:** exit code is `1`, and stdout still carries
+     one complete JSON object with all five keys"; second case "**`--json` omitted:**
+     ... byte-identical to its current form"
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+Two notes outside the verdict.
+
+- **Criterion gap, not a defect.** The interfaces cell also contains a line reading "transcribed verbatim from the two files this run already read — see the note below". That is a partial deferral of the handler signature. The governing text forbids "see below" as a value for this field, but B8 only enumerates the flag shape and the contract, both of which are inline. Per item 7 I graded the written criterion, so B8 passes. If the authors intended B8 to catch any deferral within the field, the criterion needs a clause for it.
+- **Self-grading caveat.** The transcript references "this session's environment reports 2026-09-12", which matches the environment I am running in. If this transcript came from the same model in the same session, rubric item 5 says the judge should not be the one grading it. I have graded as asked, but the runner should confirm the scenario and judge models were distinct before admitting this as a score.

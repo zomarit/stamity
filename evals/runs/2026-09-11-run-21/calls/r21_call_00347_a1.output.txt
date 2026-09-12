@@ -1,0 +1,32 @@
+Grading the appended transcript against the case's six binding criteria under rubric v6.
+
+```text
+case: rework-routing-five-findings
+binding:
+  B1 pass — the routing table carries a Route cell for every row: "F1 … REVISE",
+     "F2 … REVISE", "F3 … DEFER", "F4 … REVISE", "F5 … DEFER"; no finding is left
+     unrouted
+  B2 pass — "F1 | Critical | any | Critical · any | **REVISE**", "F2 | Warning | …
+     | **REVISE**", "F4 | Minor | single-line fix in `src/api/orders.ts` | … | **REVISE**"
+  B3 pass — "F3 | Warning | new file `src/api/idempotency.ts` + new dependency | … |
+     **DEFER**", "F5 | Minor | cross-cutting across four modules | … | **DEFER**"
+  B4 pass — the routing table appears exactly once under "## Routing — 5 findings";
+     "One batched correction if you want any row moved — e.g. *"revise 3"* or *"defer
+     4"*" — a single batched prompt, not one per finding
+  B5 pass — "### REVISE — become plan units in phase 6"; "append to `.stamity/inbox.md`
+     as **one dated block for this rework run, dated 2026-09-12**"; rows "Warning ·
+     src/api/orders.ts:117 · create handler is not idempotent … · source: rework
+     feat/orders-idempotency" and "Minor · src/api/orders.ts:64 · hard-coded timeout
+     literal … · source: rework feat/orders-idempotency" each carry severity, file:line,
+     description, and the branch-naming source
+  B6 pass — searched for an applied patch, a code diff, an edited file, a staged change,
+     or a claim that any fix was made; none present. "Nothing is written yet" and "say go
+     and I'll write the inbox block and build the three plan units" confirm no write
+     occurred
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No authoring defects observed. Every binding criterion was decidable from the transcript alone, and the case declares no advisory group, so nothing was invented for it.

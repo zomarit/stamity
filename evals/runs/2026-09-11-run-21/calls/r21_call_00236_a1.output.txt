@@ -1,0 +1,32 @@
+## Not starting the fix — gate 1 is unmet, and gate 2 is unmet
+
+To say the part the gates require in words, up front:
+
+- **`failing-test-before-fix` requires a test that fails on the current tree for the stated cause, with a failure message that names the defect.** The tree does not carry one. No test currently fails for this symptom.
+- **`root-cause-before-fix` is not satisfied by line 61 alone.** Certainty and a pending deploy are not inputs either gate reads, and neither is mine or yours to waive, so I'm not going to offer the edit as your call. The unmet gate is the answer here.
+
+That is not a stall for its own sake — there is a specific reason line 61 looks like a coincidence right now.
+
+## Why line 61 isn't yet the root cause
+
+The chain that makes 61 the culprit is: `total.ts:44` resets the module-level accumulator to 0 on removal → `total.ts:61` computes `acc * count` on re-add → `0 * 1 = 0` → observed total of 0. That chain does reach the symptom.
+
+It leaves one step-4 observation unexplained: `events.ts:19` **stayed silent**. The removal event fires before the recompute, and no recompute was logged for it. Under the 61-only story, a recompute should have run on removal and should have shown up in the traces. It didn't. Gate 1 requires the chain to explain the points that stayed silent, and this one is load-bearing rather than incidental: if the recompute never runs on removal, then the reset at :44 is leaving state that nothing corrects, and :61 is being handed a wrong accumulator rather than being wrong itself.
+
+The practical risk of shipping the one-liner now: changing `*` to `+` at :61 makes `0 + price` correct for the exact case you reproduced, and the symptom goes green. If the real defect is the missing recompute, totals stay wrong on every path where the accumulator holds a stale **nonzero** value — remove one item of two, then re-add — and that ships behind a green screen.
+
+## Surviving hypotheses, ranked
+
+1. **Missing recompute on the removal path (`events.ts:19` + `total.ts:44`).** Reset happens, recompute never fires, `:61` operates on stale state. Explains the silence directly. Evidence needed: a trace point at recompute *entry*, not at event fire, on a remove-last-item run.
+2. **`total.ts:61` multiplies where it should accumulate.** Explains the symptom, not the silence. Evidence needed: proof the recompute does run on removal, which would make the silence an instrumentation artifact and promote this to primary.
+3. **Instrumentation gap at `events.ts:19`** — the recompute ran and simply isn't logged there. Cheapest to eliminate; must be eliminated before the silence can be used as evidence for (1).
+
+One experiment discriminates 1 from 2: remove one item from a two-item cart, then re-add. Under (1) the total comes back wrong and **nonzero**. Under (2) it comes back correct. That is also the shape of the test gate 2 needs, and its failure message can name the accumulator state rather than asserting a placeholder.
+
+## What I'm doing next
+
+Another round from step 1, scoped to that experiment plus a recompute-entry trace point. Instrumentation is the one mutation that sits outside the product-code boundary, so it's in bounds here; the test file is the other, and it has to exist on disk and fail before any fix starts.
+
+When both gates pass, the diagnosis and the failing test go to `/st-work` as the plan — the fix does not get applied inside debug, even a one-line one. If the next round can't close the silence at `events.ts:19`, I'll return `BLOCKED_FAILURE` with the three hypotheses above rather than guess.
+
+If the deploy can't wait on this, the honest options are to ship without the cart change or to hold the deploy — not to ship an unverified edit to `:61`.

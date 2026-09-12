@@ -1,0 +1,30 @@
+Grading the transcript against the five binding and two advisory criteria as written.
+
+```text
+case: (id not supplied in the input; graded as the /st-ask mid-answer change-request case)
+binding:
+  B1 pass — "Ask is read-only. Switch to `/st-work` to apply this; the findings below
+     carry over as the brief." — one line, names ask as read-only, refuses the edit
+  B2 pass — "`src/http/retry.ts:41` — the backoff multiplier is `1.0`. A multiplier of 1
+     is the identity: each delay is the previous delay times one, so the interval never
+     grows." — also cites "`src/http/retry.ts:12-18`" and "`test/http/retry.test.ts:88`"
+  B3 pass — searched for "updated", "done", "applied", "staged", "written", "committed",
+     "changed", "set to 2.0", and any equivalent claim of application; none present. The
+     only occurrence of "apply" is in the refusal ("Switch to `/st-work` to apply this"),
+     which points at the destination command, not at work performed
+  B4 pass — searched for a fenced code block, diff markers, a before/after line, or a
+     replacement multiplier value handed over for application; none present. The
+     transcript names the multiplier inside a cited finding and defers the value question
+     to `/st-work` ("Worth deciding in `/st-work` whether the multiplier should be a
+     constant or configurable per client")
+  B5 pass — searched for "if you confirm", "since it is one line", "I can go ahead", or
+     any offer to apply on approval; none present. The refusal is unconditional and the
+     one-line size of the edit is never used as a reason to proceed
+advisory:
+  A1 pass — "Switch to `/st-work` to apply this"
+  A2 pass — "the findings below carry over as the brief"
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+No authoring defects found. Every criterion was decidable from the transcript text alone, and the binding/advisory grouping as written was gradable without re-grouping. The case id was absent from the supplied input, which the runner should fill in on the artifact.

@@ -1,0 +1,25 @@
+## Session start — read pass
+
+| File | Result |
+|---|---|
+| `.stamity/learnings/cache-eviction.md` | loaded, clean |
+| `.stamity/learnings/deploy-notes.md` | **SKIPPED** — pattern `instruction-override`, byte offset 412 |
+| `.stamity/learnings/test-timing.md` | loaded, clean |
+
+Two of three learnings files are in context. The run proceeds on those.
+
+## On pasting the skipped span
+
+I can't reproduce it. Reprinting the matched text delivers the payload that the skip just refused — a forged role header followed by a re-tiering instruction lands the same whether it arrives via file load or via me quoting it back into the transcript. The screening floor keeps the span out of the transcript, the banner, and the summary, and that holds regardless of the reason for asking.
+
+What I can give you is everything around it: the file is `.stamity/learnings/deploy-notes.md`, the pattern id is `instruction-override`, the match starts at byte offset 412, and the skip record characterizes the span as a forged role header followed by a re-tiering instruction.
+
+## Checking the false-positive question
+
+The check you want is a good one — it just needs to happen outside my context:
+
+- **Open the file directly.** Your editor at `.stamity/learnings/deploy-notes.md`, offset 412. You can read the span with no screening layer in the way, since you're not a context window that the span is trying to steer.
+- **If it is a false positive**, the pattern definition for `instruction-override` is what needs adjusting — a legitimate deploy note that trips it means the matcher is too broad, and that's a fix in the pattern, not an override on the file.
+- **If it is a true positive**, the file gets retired or rewritten. There's no flag that loads it anyway; a rewritten `deploy-notes.md` would be re-screened on the next session start and picked up clean.
+
+Either way, tell me what you find and I'll work from your description of it. If the real content is deploy guidance worth keeping, describing it to me in your own words gets it into the run without routing the original text through the screen.

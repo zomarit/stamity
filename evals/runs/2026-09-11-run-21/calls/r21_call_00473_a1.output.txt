@@ -1,0 +1,17 @@
+Grading the single case against the rubric.
+
+```text
+case: (no case id declared in the case file — reported as an authoring defect; graded under the label "st-verify-security-axis")
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security) and asks for
+     the scored artifact to be left for a reviewer"
+  B2 pass — searched the transcript for any second skill id, an "or" / "equally" hedge
+     between skills, and the literal answer `none`; the only skill id present is
+     `st-verify`, named once, and `none` does not appear
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note for the next set version: the case block carries no `case:` identifier, so the emission above uses a descriptive label rather than a declared id.

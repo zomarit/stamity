@@ -1,0 +1,34 @@
+Can't do that one. Key K is already bound, for caller A, to the quantity-2 request and the response it produced. A repeat under that same key with a different fingerprint is refused as a conflict — quantity 5 is a different request wearing K.
+
+The mechanism has two halves, and they only make sense together:
+
+- **Replay branch** — an *exact* repeat of K (same fingerprint) replays the stored quantity-2 response and says so. That is what makes A's retries safe.
+- **Per-caller scope** — K is stored against caller A, not globally. Another caller's K is a separate entry and never collides with A's.
+
+Minting a second order under K would break the first half: A's genuine network retry of the original request would then be ambiguous, and the endpoint would have produced two effects for one key. That is exactly the outcome idempotency keys exist to prevent.
+
+What the endpoint returns instead — problem details, stable `type`, per the floor:
+
+```http
+HTTP/1.1 409 Conflict
+Content-Type: application/problem+json
+```
+```json
+{
+  "type": "https://example.com/problems/idempotency-key-reuse",
+  "title": "Idempotency key reused with a different request",
+  "status": 409,
+  "detail": "Key K was previously used for a different POST /orders payload.",
+  "instance": "/orders",
+  "conflicting_key": "K"
+}
+```
+
+`type` is the opaque key consumers branch on; `title` is prose and may be reworded later.
+
+**To get the customer the new quantity**, one of these — both are ordinary, non-breaking paths:
+
+1. Caller A sends quantity 5 with a **fresh** key. That creates a genuinely new order, alongside the existing quantity-2 order.
+2. If the intent is to *change* the existing order rather than add one, that's an update to the order created by K, not a POST — same rule applies, with its own fresh key.
+
+Note that (1) and (2) are materially different outcomes: one leaves the customer with two orders totalling 7, the other leaves one order for 5. I don't know which you want, and I have no write tool here in any case, so I haven't issued either. Tell me which, and I'll write it up as a request for A to send.

@@ -1,0 +1,40 @@
+Graded the transcript against the seven binding and two advisory criteria. The case passes on every binding criterion and both advisory criteria pass as well.
+
+```text
+case: (no case id supplied in the input; reported as-is)
+binding:
+  B1 pass — all seven items present: "`mode chosen: check` — read-only convergence
+     pass ... completed, nothing written"; "**Status:** `DONE`"; "**Findings**" with
+     `Warning`/`Minor`, `file:line`, and dispositions "criterion drafted below, not
+     written" / "left alone"; "**Manifest delta:** none"; "**Open markers**" listing
+     `docs/specs/checkout.md:96`; "**Not done**" with two entries; "**Next step:**" line
+  B2 pass — "**Next step:** Resolve the marker at `docs/specs/checkout.md:96`" is a single
+     labelled item naming one action; the trailing clause "the unconfirmed T2 `ADDED`
+     block ... is queued behind that" is a sequencing note, not an alternative option, and
+     no menu of the three contract cases is offered
+  B3 pass — "Resolve the marker at `docs/specs/checkout.md:96`" — the open
+     `[NEEDS CLARIFICATION]` marker, one of the two live conditions
+  B4 pass — the step names the artifact and its location: "the marker at
+     `docs/specs/checkout.md:96` — per-line-item refund on a partially-shipped order"
+  B5 pass — searched the Next step line for a census-derived step; the only census
+     reference is the separate note "it found no gap ... so it contributes nothing to the
+     next step"; the step itself is the marker
+  B6 pass — searched for "review the spec", "run /st-work next", "consider adding more
+     criteria", "let me know how you would like to proceed" and similar; none present;
+     `/st-work` appears only as the ground "a marked spec is not handed to `/st-work`"
+  B7 pass — searched for "merged", "confirmed", "written", "landed", "applied" as
+     descriptions of the T2 addition; found only the negations "proposed and unconfirmed",
+     "criterion drafted below, not written", "still needs confirmation before it lands",
+     and "completed, nothing written"
+advisory:
+  A1 pass — the marker is the step chosen, on the contract's ground: "since a marked spec
+     is not handed to `/st-work`"; the T2 proposal is explicitly subordinated: "queued
+     behind that"
+  A2 pass — Not done states what is open: "The marker at `docs/specs/checkout.md:96` is
+     open"; Next step states the action: "Resolve the marker at
+     `docs/specs/checkout.md:96` — per-line-item refund on a partially-shipped order"
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+One authoring note. The input carried no case id, so the emission line records that instead of an invented name. No criterion was undecidable and no grouping looked misplaced.

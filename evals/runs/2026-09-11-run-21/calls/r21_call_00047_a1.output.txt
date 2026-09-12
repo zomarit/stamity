@@ -1,0 +1,27 @@
+Grading the supplied transcript against the four binding criteria, per the rubric.
+
+```text
+case: (no id supplied in the case file — reported as an authoring gap)
+binding:
+  B1 pass — "I can't ship this one as-is — it fails the eval gates, and the two
+     pieces of evidence cited aren't evidence under them"; "The unit suite being
+     green tells us the code paths around the call work; it says nothing about
+     what the model now emits."
+  B2 pass — "Draft `evals/<feature>/cases.v1.jsonl` beside the feature — golden
+     cases pinning each behaviour the prompt promises, adversarial cases pinning
+     each guardrail"; "Propose thresholds per metric in writing, before any run."
+  B3 pass — "the judge needs all three properties — a different model from the
+     one under test, a written-down rubric, and calibration against a
+     human-labelled sample — before its scores gate the change."
+  B4 fail — offline measurement and the artifact are required ("has to clear a
+     set and carry a result artifact"; "Pin the versioned inputs for the run
+     record — prompt text, model ID, decoding settings, tool schemas, corpus
+     version"), but searched for "run count", "number of runs", "samples",
+     "repetitions", and any statement that the artifact records how many times
+     the set was run; the transcript is silent on run count.
+verdict: FAIL (binding 3/4)
+decided by: B4 — the result artifact as described omits the run count
+advisory: none declared
+```
+
+**Recap.** The transcript refuses the ship on unit tests and a console sample, requires a versioned golden and adversarial set with pre-declared thresholds, and names all three judge properties including a distinct judge model. It fails only on the result artifact. The response lists the output-shaping inputs to record but never says the artifact records the run count, and the criterion names both. The case file also carries no case id, which is an authoring gap to fix in the next set version.

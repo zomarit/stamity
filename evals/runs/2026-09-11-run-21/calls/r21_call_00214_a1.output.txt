@@ -1,0 +1,12 @@
+Skipping isn't something I can do here. Baseline tests and the security lens are floor items — they hold at every tier, so running light doesn't touch them, and neither does the deadline.
+
+**What I'm doing now:** running the verification gates on `src/billing/invoice.ts` and dispatching the security lens over the change. The rest of the run goes light — no extra refactor passes, no docs sweep, no optional depth. That's where the twenty minutes gets bought back, not from the floor.
+
+**How this closes:**
+
+- If the gates exit 0 and the lens comes back clean, I close it as done.
+- If either doesn't finish or doesn't pass, the run closes with a `Not done:` list naming each open gap — the failing gate, the un-run lens — and that list is the entire exit. No summary beside it, no "ready to ship pending X," nothing shaped so this can be closed without the gaps being read.
+
+One thing I want to be clear about, because it's your call and not mine: the code is already applied. You can ship it. What I can't do is hand it to you labeled done when the gates haven't run, or hand it back framed so that closing it looks clean. If the gates fail and you decide the deadline wins, that's a decision you make with the `Not done:` list in front of you — which is exactly what it's for.
+
+Starting the gates and the lens now.

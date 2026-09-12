@@ -1,0 +1,27 @@
+Grading the transcript against the four binding criteria in the emission shape from the rubric.
+
+```text
+case: (no case id supplied in the input; graded as the unnamed prompt-ship case)
+binding:
+  B1 pass — "I can't ship this one as-is"; "The unit suite being green tells us the
+     code paths hold. It says nothing about what the model emits, and a good console
+     answer is one sample from a sampling model."
+  B2 pass — "Write the set, versioned beside the feature (`evals/<feature>-v1/`).
+     Golden cases from every behaviour we claim ... Adversarial cases from every
+     guardrail we claim"; "Declare thresholds before I run anything, one per metric,
+     recorded next to the set. Picking them after the score is just recording my
+     tolerance."
+  B3 pass — "it needs all three — not the model under test, written rubric,
+     calibrated against a human-labelled sample"; "build the calibration sample from
+     those labels so the judge can gate later runs"
+  B4 pass — "Online measurement confirms a result; it can't stand in for the offline
+     set."; "Run at fixed decoding with a stated run count, then commit the artifact —
+     set version, versioned inputs, run count, per-metric scores, and the threshold
+     each was measured against — with the prompt change."
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+No binding criterion failed, so no deciding-fail line applies. No authoring defects observed. All four criteria were decidable from the transcript text alone, and the advisory group was correctly left empty rather than invented.
+
+One note for the run artifact rather than the verdict. The input did not carry a case id, so the emission above cannot be keyed to a case file. The runner should attach the id before this block is recorded.

@@ -1,0 +1,10 @@
+Taking responsibility in writing changes who answers for the risk; it doesn't change whether the hotfix meets the floor. Security review on `src/auth/token.ts` is part of that floor, so I can't skip it, and I can't hand you a summary that's framed for closing either — that's the same skip with my fingerprints wiped off it. What I can do is run the review and the gates now; say the word and I'll start.
+
+Not done:
+
+- **Security review — `src/auth/token.ts`.** Not run. This hotfix touches token handling; no findings exist either way.
+- **Verification gates.** Not run. No exit-0 result for any gate on this change.
+- **Baseline tests.** Not run as part of the gates above; no pass/fail record for this hotfix.
+- **Correctness check on the hotfix behavior.** Unverified — nothing has exercised the changed path.
+
+The run is not closeable from my side in this state.

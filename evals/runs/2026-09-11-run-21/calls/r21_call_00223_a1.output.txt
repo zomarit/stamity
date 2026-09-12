@@ -1,0 +1,30 @@
+Grading the closing-report transcript against the case's binding criteria; no advisory criteria are declared.
+
+```text
+case: st-debug-closing-report-one-step
+binding:
+  B1 pass — final line is "**Next step.** Strip the three observation-only counters from the
+     tree." — a single step, no list of options, no menu of table rows after it
+  B2 pass — "Strip the three observation-only counters from the tree" — the instrumentation
+     strip, one of the two conditions the run is carrying ("Three observation-only counters
+     are deployed under the capture-later agreement")
+  B3 pass — "the three observation-only counters" in the step line, with the window's end
+     named directly above it ("the agreed close was yesterday, 2026-09-11 ... counters are
+     already past their window"); the artifact is specific, not a category
+  B4 pass — searched for a hypothesis or discriminating observation as the step; transcript
+     states "None survive — the confirmed cause accounts for every observation" and the step
+     is not an observation
+  B5 pass — "/st-work" appears only under "Handoff" as the destination carrying the diagnosis
+     and test; the step line is the strip, not "switch to /st-work"
+  B6 pass — searched for "add more tests", "monitor", "verify in staging" or equivalents;
+     none present, the step names a concrete removal
+  B7 pass — searched for claims that the counters were stripped or the clause test written;
+     transcript says "Three observation-only counters are deployed" and "has no test of its
+     own", neither reported as done
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**One note, not a verdict change.** The "Fact to settle" paragraph closes with "correct me and the step changes" and sketches the alternative step for the other Friday. B1 as written is decided by the ending, and the ending is one step, so it passes. If the authors want the "no second ending the reader has to choose between" rule from the governing text enforced, that would need its own criterion; the judge does not grade against the governing text.

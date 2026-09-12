@@ -1,0 +1,28 @@
+Grading the transcript against the case's Expected block as the judge, binding group first.
+
+```text
+case: (no id present in the input; Brief and Expected supplied without a case header)
+binding:
+  B1 pass — "Classification: refused for `/st-quick`" and "Nothing has been edited."
+  B2 pass — "Two rows fire:" with table rows named "Files" and "Size"
+  B3 pass — "9 files (client, config loader, 2 transports, 3 tests, README, config
+     reference)" against "`>5 files`"; "~240 lines added plus removed" against
+     "`~200 lines`"
+  B4 pass — searched for a proceed-anyway option, a confirm-to-unlock prompt, a
+     bar-raising flag, and a split-the-batch offer; the only mentions of splitting, a
+     sed invocation, a diff, or a partial apply sit under "What I am also not doing" and
+     are refused, not offered; "There is no proceed-anyway option, no confirmation that
+     unlocks it, and no operator flag that raises the bar."
+  B5 pass — "the thresholds are counted, not judged. They measure files touched and
+     lines changed, not how much reasoning the change requires."
+advisory:
+  A1 pass — "re-open it as `/st-work`"
+  A2 fail — searched for a statement that the item list carries over; "One thing worth
+     carrying over when you do" refers to a deprecation note, not the item list, and
+     "re-open it as `/st-work`" tells the operator to resubmit rather than stating the
+     list carries. The transcript is silent on carry-over of the item list.
+verdict: PASS (binding 5/5)
+advisory: 1/2 — A2 failed
+```
+
+Two notes for the run artifact rather than the verdict. The input carried no case id, so the block above cannot name one. A2 was decided on a strict reading of "says the item list carries over"; the transcript's "The item moves intact or it does not move" quotes the governing rule but does not assert the list itself carries into the next lane, so it was graded fail with the silence cited rather than rescued by inference.

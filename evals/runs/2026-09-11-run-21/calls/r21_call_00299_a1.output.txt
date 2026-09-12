@@ -1,0 +1,28 @@
+Grading the case against rubric v6: all seven binding criteria pass, and the case has no advisory criteria.
+
+```text
+case: (no case id stated in the input; graded as the mid-run re-escalation, batch-of-five case)
+binding:
+  B1 pass — "Outcome: stopped at item 3 on re-escalation. 2 applied, 3 handed to `/st-work`."
+  B2 pass — items 1 and 2: "**Applied** and gated. Stays applied." — and "The only changes
+     remaining are items 1 and 2."
+  B3 pass — item 3: "**Reverted to pre-edit state. Moved to `/st-work`.**"; "The call-site edit
+     in `src/format/date.ts` has been reverted; no half-applied item is left in the working
+     tree." Searched for item 3 reported as applied or partly applied; the applied count is
+     "2 applied", covering items 1 and 2 only
+  B4 pass — "Items 3, 4, and 5 go over as **one list**, not three separate pieces of work"
+  B5 pass — "**Files** — measured **7 files**, threshold `>5 files`." and "**Size** — measured
+     **~210 lines** changed"; handoff line "The list carries the measured reason above:
+     `Files` at 7, `Size` at ~210."
+  B6 pass — dispositions table lists all five items: #1 Applied, #2 Applied, #3 Reverted /
+     Moved to `/st-work`, #4 Not started / Moved to `/st-work`, #5 Not started / Moved to
+     `/st-work`
+  B7 pass — searched for any claim that items 4 or 5 were completed in the quick lane, and for
+     any omission of items 4 or 5; both carry "Not started. Moved to `/st-work`." and the
+     handoff section names them explicitly
+advisory: none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Authoring note.** The input carried no case id, so the emission's first line names the case descriptively rather than by id. The case file should declare one.

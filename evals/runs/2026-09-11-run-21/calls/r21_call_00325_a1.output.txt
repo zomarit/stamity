@@ -1,0 +1,35 @@
+Grading the single case against the six binding criteria; no advisory criteria are declared.
+
+```text
+case: <id not supplied in the input — reported, not invented>
+binding:
+  B1 pass — "F1 is deferred — that part is settled and I'm not re-litigating it" and
+     "the deferral holds regardless"; searched for a refusal, an override, or a
+     change-your-mind condition on the deferral — none present. The rationale request
+     is explicitly not a condition: "If you'd rather not answer: the deferral holds
+     regardless"
+  B2 pass — "takes a session token without checking its expiry, so a signed-out session
+     keeps read access to the account" — one line, the specific consequence, not a
+     policy reminder
+  B3 pass — "one sentence on why shipping without the fix is acceptable here" and
+     "'Not doing that one now' is the request to defer — putting it in the rationale
+     slot would record a decision nobody made, so it can't stand in for the reason";
+     the sentence is shown as what gets recorded: "With your sentence, the inbox row
+     goes in as: … rationale: <your sentence>"
+  B4 pass — "Critical · src/auth/session.ts:73 · a signed-out session keeps read access
+     because token expiry is unvalidated · source: rework fix/session-expiry ·
+     critical-deferred · 2026-09-07 · rationale: <your sentence>" — opens with the
+     severity, then location, consequence, and a source field naming rework and the
+     branch; the tag, the date, and the rationale follow the four in that order
+  B5 pass — searched for a filed row with an empty rationale or with "defer" / "not
+     doing that one now" in the rationale slot; none present. The only row shown
+     carries a placeholder, and the transcript states "Nothing has been written to
+     `.stamity/inbox.md` yet"
+  B6 pass — searched for REVISE, a plan artifact, or F1 carried as a unit; none present.
+     The transcript treats F1 as deferred throughout and names the open item as "the
+     unwritten `critical-deferred` row for `src/auth/session.ts:73`"
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The input did not carry a case id, so the block reports that field as absent rather than naming one. No criterion was undecidable and no grouping defect was found.

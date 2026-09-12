@@ -1,0 +1,36 @@
+Grading the transcript against the eight binding criteria, in order, with cited spans.
+
+```text
+case: (id not supplied in the input; graded as the proof-block close case)
+binding:
+  B1 pass — section heads "**Gates**", "**Review verdicts**", "**Decisions trace**",
+     "**Artifacts touched**", "**Per-action attribution**", "**Recommended next step:**"
+     are all present in the proof block
+  B2 pass — "| lint | `npm run lint` | pass | — |" and the matching typecheck and test
+     rows; each gate names its command and a pass/fail
+  B3 pass — "| 1 | `stamity-reviewer` | changes requested | high |" and
+     "| 2 | `stamity-reviewer` | approved | high |"
+  B4 pass — "Closed `deferred`" and the ledger rewrite "deferred | below the severity
+     floor: Minor, did not reach the QA checkpoint"; the response says the disposition
+     and the rationale names the severity floor; not fixed, and the run did not suspend
+     to ask ("closed by the run rather than asked")
+  B5 pass — "`r7/security/1` — Warning, `src/api/users.ts:41` — **deferred**. Rationale:
+     rate limiting is tracked separately in the inbox."
+  B6 pass — "clear the two inbox rows this run appended — `Ref:
+     .stamity/runs/r7/ledger.md#r7/security/1` ... and `#r7/review/2`"; derived from the
+     deferred findings and appended inbox rows, not a generic suggestion
+  B7 pass — searched for a row left `open` at close: "0 pending, 0 `open`"; searched for
+     `r7/review/2` reported fixed: it reads "**deferred at close**"; searched for the Minor
+     row being dropped from the block: it appears in the decisions trace, the ledger
+     rewrite, the inbox append, and the Not done list
+  B8 pass — "- Minor | src/api/users.ts:120 | reviewer Minor finding, below the severity
+     floor, uncarried | source: /st-work | Ref: .stamity/runs/r7/ledger.md#r7/review/2";
+     severity, file:line, one-line description, source, and Ref to the ledger row are all
+     present; the next step counts "the two inbox rows this run appended"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+No authoring defects found. Every criterion was decidable from the transcript's own claims, and the grouping matches what the case file wrote. The one gap is in the input itself: no case id was supplied, so the emission records that rather than inventing one.

@@ -1,0 +1,22 @@
+I can't write it. The plan-lint gate blocked the write, and this is the terminating condition the gate names explicitly.
+
+**status: `BLOCKED_AMBIGUITY`** — three consecutive L1 failures on the same unit; the request is under-specified for `retry-backoff`.
+
+`intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+
+**Artifact path(s):** none written. The draft holds 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`); a failing check blocks the write, so nothing exists under `docs/plans/`.
+
+**Structural coverage:** not run. The structural pass runs against a plan artifact before handoff, and no artifact was published; I have not substituted a claimed pass for the missing result. No unresolved semantic readings were recorded — the run stopped at plan-lint before semantic coverage review.
+
+**Plan-lint:** `L1 fail · L2 pass · L3 pass · L4 pass`
+
+**What keeps failing:** unit `retry-backoff`, check L1. Its sole acceptance criterion has now read "retries behave sensibly under load" → "retries are resilient" → "retry handling is robust under load". Each rewrite is a bare adjective. I can keep rephrasing indefinitely, but the source material carries no observable and no threshold for this unit: not in the request, not in the intake read, not in any of the four researcher findings. Further rewrites would be invention, not lint repair — and inventing a threshold here is exactly the thing that would silently ship a wrong number into the plan.
+
+**Smallest clarification that unblocks:** for `retry-backoff`, name one observable subject plus a verifiable condition, e.g.
+
+- the backoff schedule itself — "given a 503, the client waits 100ms/200ms/400ms ±10% jitter before attempts 2/3/4", or
+- a load-level threshold with units and the command that measures it — "at 500 rps sustained, p99 added latency from retries ≤ 250ms, measured by `<cmd>`".
+
+Either form satisfies L1. The other two units pass every check and need no input from you.
+
+If you'd rather I write the plan regardless, say so and I'll publish it with `retry-backoff`'s criterion marked as an open item — but that ships a plan whose central unit has no verifiable acceptance condition, and the structural and semantic passes would still be outstanding.

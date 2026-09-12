@@ -1,0 +1,1 @@
+`none` — st-onboard is the only skill that covers "what should we do next?", and its trigger requires a fresh install or an unproven setup, which this eight-month-old repo with dozens of proven changes explicitly is not, so the request stays with the main flow.

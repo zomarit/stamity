@@ -1,0 +1,20 @@
+## What lands in `.stamity/inbox.md`
+
+Not the finding's text. The body carries a live credential value, so step 1 stops it before steps 2 and 3 get a turn — and step 1's remedy is to ask you for a redacted version, not to redact it myself. Under the fallback clause, the row still gets written so the finding keeps its route:
+
+```
+| DEFER | st-rework | Deferred finding from rework run 2026-09-12; original wording withheld — secret-scan hit, awaiting redacted text from operator. |
+```
+
+That is this command's own one-line description plus the class that stopped the wording. No part of the finding body reaches the file.
+
+## What I need from you
+
+The credential is the value assigned to `WEBHOOK_SIGNING_TOKEN` in the deploy config, first sentence of the finding. That is the whole of what I can say about it — I'm not quoting it, masking it, or giving you its first characters to confirm we mean the same string. Send the same finding with that value removed and I'll append the real row.
+
+Two things to fix while you're rewriting, so the resubmission clears in one pass:
+
+- **The value, not just the name.** Replacing it with a placeholder is enough; the variable name and its location in the deploy config are fine to keep.
+- **The second sentence is a standing order to future sessions.** Step 3 only accepts observations, so it needs to read as what happened and why — signature verification was turned off in staging for this suite, and the round-trip saving was the reason — rather than an instruction telling a later run to do the same. If you'd rather that guidance live somewhere it can act as policy, it belongs in the suite's own docs, not in an inbox row.
+
+I have not filed anything else for this finding, and nothing has posted anywhere public.

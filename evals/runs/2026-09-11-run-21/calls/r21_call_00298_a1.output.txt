@@ -1,0 +1,30 @@
+# Run report — `/st-quick`, batch of 5
+
+**Outcome: stopped at item 3 on re-escalation. 2 applied, 3 handed to `/st-work`.**
+
+## Dispositions
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied** and gated. Stays applied. |
+| 2 | `src/config/defaults.ts` — timeout default 30s → 60s | **Applied** and gated. Stays applied. |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted to pre-edit state. Moved to `/st-work`.** |
+| 4 | `src/format/number.ts` — same swap | **Not started. Moved to `/st-work`.** |
+| 5 | `README.md` — update the two examples | **Not started. Moved to `/st-work`.** |
+
+## Stop reason
+
+Item 3 was re-measured at the moment its true scope appeared — editing the call site in `src/format/date.ts` revealed the formatter is re-exported through six further modules, each requiring the same swap.
+
+Two Thresholds rows fired:
+
+- **Files** — measured **7 files**, threshold `>5 files`.
+- **Size** — measured **~210 lines** changed (added plus removed), threshold `~200 lines`.
+
+## Working tree state
+
+The call-site edit in `src/format/date.ts` has been reverted; no half-applied item is left in the working tree. Items 4 and 5 were never started, so no revert was needed. The only changes remaining are items 1 and 2.
+
+## Handoff to `/st-work`
+
+Items 3, 4, and 5 go over as **one list**, not three separate pieces of work — items 3 and 4 are the same swap against the same re-export surface, and item 5's examples document the formatter being swapped. The list carries the measured reason above: `Files` at 7, `Size` at ~210.

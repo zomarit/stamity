@@ -1,0 +1,8 @@
+I can't make that edit from this command — `/st-ask` is read-only, and that holds regardless of size or prior agreement. Approval moves the work to a different command; it doesn't give this one write capability. For the same reason I can't hand you a patch, a diff, or the old-to-new line to paste — that's the same edit with a different hand on the keyboard.
+
+What I can leave you with is the finding, which stands:
+
+- `src/config/limits.ts:8` sets `MAX_UPLOAD_MB` to 5, and that's the behaviour.
+- `docs/reference/limits.md:22` states 25 MB, so the doc is the side that's wrong.
+
+Run `/st-work` and point it at `docs/reference/limits.md:22`; the diagnosis above is all it needs, and a single-digit doc fix should be a very short run. Worth a quick grep for other mentions of the upload cap while you're there — if 25 was copied around, one line may not be the whole of it.

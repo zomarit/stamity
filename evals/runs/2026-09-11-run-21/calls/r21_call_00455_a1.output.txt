@@ -1,0 +1,22 @@
+Grading the single transcript against the case's Expected block under rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the sole case provided)
+binding:
+  B1 pass — answer line reads "`none`"
+  B2 pass — searched the reason for st-qa described as triggered, selected for, or
+     matching this request; the only mentions are the opposite: "never selected there on
+     its own" and "invoke qa as a command step, not as a trigger match"
+  B3 pass — the answer line is "`none`" and names no skill id; st-qa appears only in the
+     reason, as the skill "called by name from a work run's own QA checkpoint", which the
+     criterion exempts
+advisory:
+  A1 fail — the reason states the ownership substance ("the checkpoint steps already
+     running", "invoke qa as a command step, not as a trigger match") but never names the
+     running `/st-work` command; "a work run's own QA checkpoint" is quoted from the st-qa
+     description, not offered as the owner's name
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+Authoring note on A1: the criterion reads "names the running `/st-work` command", and the transcript conveys the ownership without the literal id. If the intent was the substance rather than the token, the next set version should say so. Graded as written.

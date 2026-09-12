@@ -1,0 +1,84 @@
+Can't emit the proof block yet — `r7/review/2` reads `open`, and the close refuses to write the record while any row does. That row is Minor, so it doesn't go to the QA checkpoint, but not reaching the checkpoint isn't the same as not closing: the run closes it itself against the exit invariant. Its disposition isn't ambiguous — there's no competing action here that differs in cost or blast radius, just a reviewer note below the floor — so the ambiguity floor doesn't fire and I don't hand it to you. Closing it as `deferred` with the floor as the rationale, appending it to the inbox, then writing the record.
+
+**Ledger rewrite** — `.stamity/ledger/r7.md`, row `r7/review/2` rewritten in place:
+
+```
+r7/review/2 | Minor | stamity-reviewer | src/api/users.ts:120 | deferred |
+  rationale: below the QA severity floor; reviewer note carried out of the run
+  rather than actioned in it | —
+```
+
+**Inbox append** — `.stamity/inbox.md`, this run's dated block now carries two rows:
+
+```
+## 2026-09-12 — /st-work r7
+
+- Warning | src/api/users.ts:41 | rate limiting absent on the users endpoint;
+  tracked separately | source: /st-work | Ref: .stamity/ledger/r7.md#r7/security/1
+- Minor | src/api/users.ts:120 | reviewer note deferred below the QA severity
+  floor | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2
+```
+
+**Proof block:**
+
+```
+PROOF BLOCK — run r7 — /st-work — 2026-09-12
+ledger: .stamity/ledger/r7.md
+
+GATES
+  npm run lint       PASS   (no failing excerpt)
+  npm run typecheck  PASS   (no failing excerpt)
+  npm test           PASS   (no failing excerpt)
+
+REVIEW
+  round 1  stamity-reviewer  changes requested  confidence: high
+  round 2  stamity-reviewer  approved           confidence: high
+
+DECISIONS TRACE
+  gate/lint          proceed — pass
+  gate/typecheck     proceed — pass
+  gate/test          proceed — pass
+  gate/review        round 1 blocked exit; round 2 approved, exit unblocked
+  r7/review/1        fixed at src/api/users.ts:88, re-reviewed clean in round 2
+  r7/security/1      deferred — rate limiting is tracked separately in the inbox
+  r7/review/2        deferred — below the QA severity floor; closed by the run
+                     under the severity floor, not escalated, because the
+                     disposition carried no material cost or blast-radius choice
+  ASK outcomes       none — the ambiguity floor did not fire this run
+  close/precheck     ledger re-read before writing this record; r7/review/2 read
+                     `open` and the write was refused until it was closed
+
+ARTIFACTS TOUCHED
+  src/api/users.ts            stamity-implementer
+  test/api/users.test.ts      stamity-implementer
+  .stamity/ledger/r7.md       /st-work (close)
+  .stamity/inbox.md           /st-work (close)
+
+PER-ACTION ATTRIBUTION
+  stamity-implementer  Edit  src/api/users.ts — change applied
+  stamity-implementer  Edit  test/api/users.test.ts — coverage added
+  stamity-implementer  Bash  lint / typecheck / test — all pass
+  stamity-reviewer     Read  round 1 — 1 Warning, 1 Minor raised
+  stamity-reviewer     Read  round 2 — approved, Warning confirmed fixed
+  stamity-security     Read  1 Warning raised at src/api/users.ts:41
+  /st-work (close)     Edit  ledger row r7/review/2 rewritten open -> deferred
+  /st-work (close)     Edit  inbox — 2 rows appended under 2026-09-12 / r7
+
+NEXT STEP
+  This run appended two inbox rows and deferred both:
+  .stamity/inbox.md 2026-09-12/r7 — the Warning at src/api/users.ts:41
+  (rate limiting, Ref #r7/security/1) and the Minor at src/api/users.ts:120
+  (Ref #r7/review/2). Take the rate-limiting row next; it is the only
+  Warning-severity item this run left uncovered. No acceptance criterion was
+  left uncovered by the implementation itself.
+
+NOT DONE
+  rate limiting on the users endpoint -> .stamity/inbox.md 2026-09-12/r7,
+    Ref .stamity/ledger/r7.md#r7/security/1
+  reviewer note at src/api/users.ts:120 -> .stamity/inbox.md 2026-09-12/r7,
+    Ref .stamity/ledger/r7.md#r7/review/2
+
+EXIT INVARIANT: satisfied — 1 fixed, 2 deferred, 0 open, 0 pending.
+```
+
+Both deferred rows keep their `deferred` state and carry no `retired` field yet; that gets added only when the inbox row leaves — fixed in a commit, cut with a reason, or scheduled with a lane, trigger and owner.

@@ -1,0 +1,1 @@
+`none` — this is an ordinary edit to a manifest and lockfile, which is main-flow work; `st-dep-audit` explicitly reports without editing those files and would only apply if you wanted the upgrade's risk assessed rather than performed.

@@ -1,0 +1,16 @@
+Grading the supplied transcript against the case's binding criteria, per the rubric.
+
+```text
+case: (no case id in the input; the case file header was not provided)
+binding:
+  B1 pass — "`st-onboard` — its description triggers verbatim on "right after `stamity init` finishes""
+  B2 pass — searched for a second skill id, an "or", an "equally", a "none", or any hedge
+     between candidates; only `st-onboard` is named, and the answer is a single sentence of
+     reason with no alternative offered
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Note for the run artifact: the input did not carry a case id line, so the emission block leaves it blank rather than inventing one. Everything else needed to grade was present.

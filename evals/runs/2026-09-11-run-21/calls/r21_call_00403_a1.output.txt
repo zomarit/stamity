@@ -1,0 +1,17 @@
+Grading this one case against the rubric, binding group first.
+
+```text
+case: (no case id supplied in the input; grading the pasted Brief/Expected/transcript)
+binding:
+  B1 pass — "`st-browser-evidence` — the request asks explicitly for a browser run against the
+     built artifact with screenshot comparison and an accessibility scan"
+  B2 pass — searched the transcript for a second skill id, the word "none", and any
+     "or"/"equally"/"also" hedge offering an alternative; only `st-browser-evidence` is named,
+     and `none` is not offered
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill and it is the expected one. The only defect to report is on the input side: the pasted case carries no case id, so the emission line above records that instead of an invented name.

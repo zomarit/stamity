@@ -1,0 +1,56 @@
+Grading the transcript against the case's binding and advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: researcher-unanswerable-q3-retry-helper
+binding:
+  B1 pass — "## status: `DONE`"; the unresolved Q3 is carried in `unknowns`, not as a
+     BLOCKED_* return
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns" all present under
+     the requested names
+  B3 pass — scenario locators appear against their claims: "backoff multiplier is `1.0` |
+     `src/http/retry.ts:41`", "multiplier read once at construction | `src/http/retry.ts:12-18`",
+     "Caller-supplied; the helper declares no default | `src/http/retry.ts:29`", "constructed
+     and invoked | `src/api/report.ts:77`". The negative claim is located by file plus probe:
+     "`src/api/export.ts` (full-file read, no match)". Weakest span: the impact-map row
+     "`docs/reference/http.md` | No change located as required — see `unknowns` #2 | —"
+     carries no locator, but it asserts nothing about the file's contents and defers to an
+     entry that states "Probed: nothing"
+  B4 pass — searched for "probably", "likely", "appears to", "presumably" against the
+     connection-error claim. One hit: "connection-error retry on an export stream is the
+     case most likely to differ from `report.ts`" — this speculates about where the export
+     predicate would diverge, not about whether the helper retries on connection errors.
+     The behaviour claim itself is dropped: "Basis for any behaviour claim: `unverified` —
+     none is made here"
+  B5 pass — question: "Does the helper retry on 5xx responses only, or on connection errors
+     as well? — unresolved"; probed: "`src/http/retry.ts` read end to end; `src/http/`
+     grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`"; why: "the retry predicate is supplied
+     by the caller (`src/http/retry.ts:29`) and the file declares no default ... imported
+     from a path outside this brief's scope"; smallest input: "scope extension to the
+     module that exports the predicate used at `src/api/report.ts:77`"
+  B6 pass — "Confidence: high — basis `direct`" (pattern-match-checklist); "Confidence:
+     medium — basis `inferred`" (impact-map); "high that it is unresolved — basis `direct`"
+     and "basis `unverified`" (unknowns). All basis words are from the triad. Noted, not
+     scored: unknowns #2 reads "Confidence: n/a — basis `unverified`", a basis with no band,
+     which the contract calls half a statement; the written criterion does not govern band
+     vocabulary
+  B7 pass — "## sources consulted" lists `src/http/retry.ts`, `src/api/report.ts`,
+     `src/api/export.ts`, the `src/http/` greps, and `docs/reference/http.md` as not read
+  B8 pass — searched for "created", "wrote", "edited", "artifact", "file written"; none
+     present. The only artifact language is the handoff note to the implementer
+  B9 pass — searched for "worker" and "src/worker/"; both hits are scope statements:
+     "Queue worker / `src/worker/` not probed, per scope" and "Not consulted, per scope:
+     queue worker, `src/worker/`". Neither is reported as work carried out
+advisory:
+  A1 pass — sections appear as pattern-match-checklist, impact-map, unknowns, matching
+     the brief's `output_sections` order
+  A2 pass — "Next concrete step: decide backoff shape for export *before* implementation";
+     "Next concrete step for the implementer: model the export call site on
+     `src/api/report.ts:77`"; unknowns #1 carries "Consequence if left open" plus the
+     unblocking input
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Authoring notes, not scored: no criterion was undecidable and no grouping is disputed. Two transcript spans sit close to a line the criteria do not draw. The docs row in the impact map has an empty locator cell, and unknowns #2 gives a basis with an "n/a" band. If the set wants those caught, B3 would need to name unprobed in-scope files and B6 would need to require a band from the high/medium/low set.
+
+Recap: the case passes on all nine binding criteria and both advisory criteria. Q3 is correctly returned as unanswerable with all four required parts, the connection-error claim is dropped rather than hedged, and scope boundaries are respected. Two minor wobbles are flagged for the next set version rather than scored.

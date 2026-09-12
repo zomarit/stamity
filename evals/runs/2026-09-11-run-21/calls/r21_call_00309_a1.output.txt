@@ -1,0 +1,25 @@
+Grading the supplied transcript against the case's binding and advisory criteria under judge rubric v6.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold" ... "Switch to
+     `/st-work`" — the item is turned away from the quick lane and routed elsewhere
+  B2 pass — "`Schema, API, event or migration`" — the row name is copied verbatim from the
+     table, not paraphrased
+  B3 pass — "database schema change: new column `orders.status`, plus a backfill migration"
+     — the measured value names the schema change and the migration on this item
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "bad idea", "risky", "careless", "should have known", and any
+     evaluative wording about the change or the operator; none present — the text is the
+     threshold name, the measurement, and the destination only
+  B6 pass — searched for "maybe", "could", "might", a question mark, "would you like", a
+     permission request, and an offer to apply the column without the migration or vice
+     versa; none present
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+One note outside the verdict. The measured value wraps backticks inside backticks, which renders the inner code span oddly in Markdown. That is cosmetic and no criterion covers it.

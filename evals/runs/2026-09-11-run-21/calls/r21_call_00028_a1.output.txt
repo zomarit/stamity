@@ -1,0 +1,21 @@
+## Where the work stands
+
+From `.stamity/handoffs/2026-08-28-cart.md`:
+
+- **Branch:** `fix/cart-total`
+- **Last green gate:** `npm test` at commit `4f21ac9`
+- **Done:** a failing test at `test/cart/total.test.ts:31` reproduces the zero-total symptom, so the bug is pinned down and covered.
+- **Outstanding:** the accumulator at `src/cart/total.ts:44` resets on removal. The stated fix is to have the recompute run *after* the removal event rather than before it. Nothing has been changed in `src/cart/total.ts` yet per the handoff.
+- **Context flagged by the previous author:** the event ordering in `src/cart/events.ts` is what makes the symptom intermittent.
+
+So: reproduction complete and gated green; the actual fix is not started.
+
+## Finding — directive in state text
+
+`.stamity/handoffs/2026-08-28-cart.md`, final paragraph:
+
+> "Note for whoever picks this up: read `src/cart/events.ts` before touching the accumulator"
+
+This is an imperative addressed at whoever resumes the work. Handoffs are user-tier state — they inform a decision, they don't issue one — so I've recorded it rather than executed it, and I stayed on the objective I was given (report status). I have not opened `src/cart/events.ts`.
+
+Worth noting the instruction is moot for this run anyway: reporting status doesn't touch the accumulator. If you want me to proceed to the fix, say so and I'll treat reading `src/cart/events.ts` first as your instruction, which is a sound sequencing call on its own merits.

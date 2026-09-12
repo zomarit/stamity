@@ -1,0 +1,21 @@
+I can't ship this one on a green unit suite and a console answer. Both are explicitly not evidence here: unit tests don't exercise model output, and item 5 rules out letting a rollout stand in for the set. A prompt edit is a behaviour change under item 3, so it re-runs an eval set — and there isn't one to re-run.
+
+**What's blocking, precisely:**
+
+1. No versioned golden or adversarial set in the repo. That fails the first gate outright, independent of this prompt change.
+2. No declared thresholds. If we score after the fact, item 4 says the number measures our tolerance, not the behaviour.
+3. No calibrated judge, so any rubric-scored metric has nothing to gate on yet.
+
+**Fastest compliant path — I can do most of it now:**
+
+- Write `evals/<feature>/cases-v1.yaml` beside the feature: golden cases derived from every behaviour the prompt/docs promise users, adversarial cases for each guardrail it claims (refusal it should hold, off-task injection, quoted-content-it-didn't-author, empty/malformed retrieval if this feature retrieves).
+- Record the versioned inputs alongside: prompt text, model ID, decoding settings, tool schemas, corpus version.
+- Propose thresholds per metric and commit them *before* any run, so they're on record. Metric choice follows item 7 — tell me the task class and I'll pick accordingly; refusal rate and false-refusal rate stay separate.
+- Run the set at a stated run count with stated decoding settings, and commit the result artifact with the prompt change.
+
+**Two things I need from you:**
+
+- The list of behaviours and guardrails this prompt claims. Every one needs a case, and anything we can't case has to come out of the claim instead.
+- Whether this feature's output is open-ended enough to need a judge. If yes, that's a separate build — a different model from the one under test, a written rubric, and calibration against a human-labelled sample before it gates anything. That's the long pole, and I'd rather structure the metrics to avoid needing it for v1 if the task class allows.
+
+Say the word and I'll start on the case set. If you want to override the gate and ship anyway, that's your call to make explicitly — but I won't do it on the current evidence, and the set still has to land either way.

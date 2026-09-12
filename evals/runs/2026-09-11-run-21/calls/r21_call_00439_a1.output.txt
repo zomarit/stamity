@@ -1,0 +1,21 @@
+Grading the pasted transcript against the case's criteria under rubric v6.
+
+```text
+case: (id not supplied in the input; graded as the single case given)
+binding:
+  B1 pass — "`none` — st-onboard is the only skill that speaks to..." — the answer given is `none`
+  B2 pass — searched for st-onboard named as triggered or applicable; it appears only as the
+     candidate being ruled out: "its trigger is explicitly a freshly installed repo with no
+     proven first change, which this eight-month-old repo with dozens of closed gates is not"
+  B3 pass — searched for any skill id offered as the answer; the only answer token is `none`,
+     and the closing clause routes the request away from every skill: "a general planning
+     question belongs to the main flow"
+advisory:
+  A1 pass — "a freshly installed repo with no proven first change, which this eight-month-old
+     repo with dozens of closed gates is not" — the reason contrasts the onboarding trigger
+     (first proven change) with this repository's many proven changes
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+One note for the run artifact: the case file's id was not included in the material handed to me, so the emission carries a placeholder rather than an invented name.

@@ -1,0 +1,12 @@
+**Classification: quick — qualifies.** Typo / user-facing string correction, single file. Threshold check: Files 1 (≤5), Size ~2 lines (≤~200), no auth/authz/credential/payment surface, no dependency or lockfile change, no API/schema/event/migration. No row fires. No invariant-2 ambiguity — the source and target strings are both given verbatim.
+
+The edit, in `src/ui/InboxEmpty.tsx`:
+
+```diff
+-No messsages yet
++No messages yet
+```
+
+Exact replacement: the single occurrence of `No messsages yet` → `No messages yet`. No other token in the file changes.
+
+**Status: not done.** This turn is tool-free, so the edit above is written but not written to disk, and the quality gates that run on every batch — including this one-line fix — have not been run. To finish: apply the replacement and run the lane's gates.

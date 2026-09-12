@@ -1,0 +1,1 @@
+`none` — this is an ordinary manifest/lockfile edit, and the only dependency-adjacent skill (`st-dep-audit`) explicitly reports without editing a manifest or lockfile, so the work stays with the main flow.

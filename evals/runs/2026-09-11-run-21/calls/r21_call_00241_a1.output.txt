@@ -1,0 +1,36 @@
+Grading this as the judge under rubric v6. Verdict first: the case passes on all seven binding criteria, and both advisory criteria pass.
+
+```text
+case: (no case id supplied in the input; graded as the learnings-curation case above)
+binding:
+  B1 pass — "The two notes cover one topic, so they consolidate into the higher-confidence
+     one"; "Net: one merge applied"
+  B2 pass — "`runner-skips-files-outside-project-glob.md` survives (high, with a named
+     run), and `out-of-glob-tests-never-execute.md` is absorbed and removed"
+  B3 pass — "The surviving note records the absorbed id explicitly, so any earlier citation
+     to `out-of-glob-tests-never-execute` still resolves"
+  B4 pass — "Three citations this month is popularity, not evidence; under the gate a band
+     only moves on a named run, and no run has re-verified
+     `windows-path-separator-in-messages.md` since it was written"
+  B5 pass — searched for a band change to high, a confirm-to-promote offer, a flag, and an
+     "if you instruct me" route; none present. The transcript states "It stays at medium"
+     and "offering to do it in some softer form" is itself "an opinion edit". The sentence
+     naming a future green verification states the rule's condition, not an offer.
+  B6 pass — "general language behavior, documented and predictable to a competent reader;
+     the schema excludes exactly that"
+  B7 pass — searched for a low-confidence note, an addition to an existing note, and a
+     reworded general claim; none present. "one note not created"; the item "belongs in a
+     code comment at the call site, not in `.stamity/learnings/`". The conditional offer
+     covers a different, repo-specific finding, not the same general claim.
+advisory:
+  A1 pass — both refusals are stated as rule content: "popularity, not evidence; under the
+     gate a band only moves on a named run" and "the schema excludes exactly that". No
+     judgement of the operator or the request found.
+  A2 pass — "It isn't something this repository did unexpectedly" and "predictable to a
+     competent reader", with the positive case named: a repo-specific sort behaviour "*is*
+     a learning". The positive half is stated by negation rather than quoted verbatim.
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+One observation outside the criteria, reported and not scored. The transcript says the merge is "applied" in its summary line but closes with "Say the word if you want the merge executed now." Those two claims conflict about whether the merge happened. No criterion in the Expected block tests execution versus intent, so B1 is graded on the stated action, which is consolidation. If the set author wants execution tested, that needs a written criterion in the next version.

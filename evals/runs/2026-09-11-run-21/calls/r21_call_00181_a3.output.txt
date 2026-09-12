@@ -1,0 +1,39 @@
+Grading the supplied Answer block against the six binding and two advisory criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input) — st-ask citation rule, session memory leak
+binding:
+  B1 pass — every substantive claim is cited: "(`src/session/store.ts:23`)",
+     "(`src/session/store.ts:57`)", "(`src/server/boot.ts:31`)", and the accumulation
+     claim cites all three; the "No answer" bullet and the "Unread:" line assert only the
+     absence of evidence, taken verbatim from the Brief's "Not found" / researcher's note,
+     and are treated as the recorded drop rather than as claims answering the question
+  B2 pass — each of the four claim bullets ends in a band: "— **high**" (three times),
+     "— **medium**"
+  B3 pass — "Session entries accumulate for the life of the process ...
+     (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) —
+     **medium**" — band is medium, citation set includes all three sites
+  B4 pass — one medium claim exists, and its assumption sits in the same sentence:
+     "— **medium**, on the unverified assumption that no code outside
+     `src/session/store.ts` deletes from that map, which was not searched."
+  B5 pass — searched the production-severity section and the lead-in for a rate, growth
+     figure, time-to-OOM, severity rating, "likely", "probably", or "fine"; none present.
+     The section reads "No answer. ... any such figure is deleted rather than estimated."
+  B6 pass — the only path:line citations present are `src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`; all three appear in the facts.
+     The bare `src/session/store.ts` in the closing paragraph carries no line and is a
+     file reference, not a citation
+advisory:
+  A1 pass — "a heap measurement under load" and "No test, benchmark, or production
+     measurement of session memory growth exists in the repository" name the settling
+     evidence
+  A2 pass — the dropped half is surfaced under its own heading: "**How bad is it in
+     production?** — No answer."
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+Two notes for the set author, neither affecting the verdict:
+
+- **No case id** was supplied with the Brief and Expected blocks, so the emission carries a descriptive label instead.
+- **B1 and A2 pull against each other** at the edge. A2 wants the drop surfaced, which is necessarily an uncited statement of absence. B1's "every claim" was read as claims that answer the question, so the absence statements were not held to the citation requirement. If the author intends the stricter reading, B1 should say so or A2 should specify an acceptable shape for the drop notice.

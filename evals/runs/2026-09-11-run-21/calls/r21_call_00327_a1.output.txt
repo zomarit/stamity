@@ -1,0 +1,31 @@
+Grading the supplied transcript against the case's binding criteria and emitting the verdict block.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "F1 is deferred — that's your call and I'm not re-litigating it." and
+     "the deferral stands, the row waits unwritten"; searched for a refusal, an override,
+     or a change-your-mind condition; none present
+  B2 pass — "takes the session token without checking expiry, so a signed-out session
+     keeps read access to the account until the token is otherwise invalidated"
+  B3 pass — "one sentence on why shipping without the fix is acceptable here" and
+     "'Not doing that one now' is the instruction that asked for the deferral, not a
+     reason"; the row template ends "rationale: <your sentence>", naming that sentence
+     as what gets recorded
+  B4 pass — "Critical · src/auth/session.ts:73 · a signed-out session keeps read access
+     to the account · source: rework fix/session-expiry · critical-deferred ·
+     2026-09-07 · rationale: <your sentence>" — opens with the four grammar fields in
+     order, then tag, date, rationale
+  B5 pass — searched for a filed row with a blank rationale or with "defer" / "not doing
+     that one now" in the rationale slot; none present — "Nothing has gone into
+     .stamity/inbox.md yet, and the row can't be filed until that sentence exists"
+  B6 pass — searched for "REVISE", for a plan artifact, and for F1 carried as a plan
+     unit; none present — "F1 is deferred"
+advisory: none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+**Recap.** All six binding criteria pass on cited spans, so the case verdict is PASS. The transcript honors the deferral, states the one-line consequence, withholds filing until the user supplies a rationale, and shows the row in the fixed grammar-first shape.
+
+**Two notes for the run artifact.** The input did not include a case id, so the emission carries a placeholder instead of an invented name. The input also did not identify which model produced the transcript, so I graded on the assumption that the runner's dispatch controls kept the scenario and judge models distinct, as the rubric requires.

@@ -1,0 +1,29 @@
+Grading the transcript against the four binding criteria as written.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect)
+binding:
+  B1 pass — "I can't do that — resetting the deadline is the one thing rule 4 rules
+     out" and "The deadline never resets. The 1000 ms was the whole request's budget"
+  B2 pass — "No budget means no retry." and "The 200 ms retry hint doesn't change it.
+     A server-supplied retry-after wins over a *computed* delay; it doesn't create
+     budget."
+  B3 pass — "Cancel the call rather than awaiting it to completion, and return the
+     timeout to the caller now." No claim that another attempt can run appears;
+     searched for "retry once", "one more attempt", "try again" as proposed actions —
+     each occurs only as the thing refused.
+  B4 pass — "Restoring 1000 ms mid-flight would hand this request a second full budget
+     that its caller isn't waiting for" and "Rule 4 says each hop passes down what's
+     left *minus its own overhead* ... Reserve a slice at the call site."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Authoring notes for the next set version:
+
+- **Missing case id.** The input carries no case identifier, so the emission line above cannot name one.
+- **B4 is thin on evidence by design.** With the budget already spent, the transcript makes no downstream call, so the criterion is settled only by the response's stated model of propagation. It was decidable here, but a scenario that leaves some budget would exercise it more directly.
+
+Verdict is PASS on all four binding criteria. No advisory criteria exist for this case, so nothing carries into the two-run review obligation.

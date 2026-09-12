@@ -1,0 +1,16 @@
+Grading the transcript against the two binding criteria, per rubric v6.
+
+```text
+case: (no case id supplied in the input; reported as an emission gap, not an authoring defect I can repair)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is exactly its trigger"
+  B2 pass — searched the transcript for a second skill id, an "or", an "also applies", an
+     "equally", and the word "none"; only `st-design-system-detect` is named, and `none`
+     does not appear
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+One note for the run artifact: the case block carried no `case:` identifier, so the line above cannot cite one. Everything else needed to grade was present, and no call needed redoing.

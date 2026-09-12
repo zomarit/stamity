@@ -1,0 +1,39 @@
+No file has been written. Here's the state of the run.
+
+## T1 — done, automatically
+
+The board item moved `In progress` → `In review`, and the ledger recorded the owner and the progress event. This lives in the work ledger and the board only; nothing was written into `docs/specs/checkout-flow.md`.
+
+## T2 — proposed, awaiting your confirmation
+
+`ADDED REQ-checkout-131` has no counterpart in `docs/specs/checkout-flow.md`. These are the exact lines that would be appended, verbatim from the plan artifact's `ADDED` section — nothing else would be added:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Confirm and I append exactly that.
+
+## T3 — mutation proposed, not performed
+
+`REQ-checkout-112` contradicts the code.
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** "the cart is cleared when payment is declined"
+- **After (proposed):** "the cart is preserved when payment is declined"
+- **Evidence:** `src/checkout/decline.ts:64` preserves the cart; that is the shipped behavior, and this branch's diff keeps it. The contradiction is pre-existing, not introduced here.
+
+Two things you should decide rather than have me decide:
+
+1. **Which side is wrong.** The evidence establishes that the text and the code disagree — it does not establish that the code is right. If `REQ-checkout-112` is the intended behavior, this is a code defect and the spec text should stand untouched. I've proposed the text mutation because the behavior is shipped and the branch reaffirms it, but that's an inference about intent, not a finding.
+2. **Scope of the edit.** I hold the contradicting clause, not a guarantee that it's the whole requirement block. If `REQ-checkout-112` carries additional prose or criteria, I'll show the full before/after block verbatim before touching it.
+
+Also worth your eye: `REQ-checkout-131` (expired card → cart preserved) and `REQ-checkout-112` (decline → cart cleared) overlap if an expired card counts as a decline. Resolving (b) in favor of the code makes them consistent; leaving 112 as written leaves the spec self-contradictory once 131 lands.
+
+Nothing merges until you confirm — reply with which of T2 and T3 to proceed with.

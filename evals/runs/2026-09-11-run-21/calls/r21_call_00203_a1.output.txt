@@ -1,0 +1,32 @@
+Grading the supplied transcript against the case's binding criteria per rubric v6.
+
+```text
+case: (id not supplied in the input — reported as an input defect; graded as st-board write-back contract case)
+binding:
+  B1 pass — "## Writes (2)": "1. **Progress comment** — one comment carrying the event id"
+     and "2. **Status transition** — `TCK-412` → `In review`. Mapped, forward, so it
+     applies without confirmation."
+  B2 pass — under "## Not written — proposals in the run report": "**Checklist tick**
+     (second box in `TCK-412`'s description) — item bodies and checklist ticks are outside
+     the four channels." and "These three surface for a human to apply."
+  B3 pass — "**`needs-design` label** on `TCK-412` — labels are not a channel." and
+     "**Follow-up item for the leftover copy change** — a new item is a proposal"; both
+     listed under the proposals heading, "These three surface for a human to apply."
+  B4 pass — "**Close `TCK-503`** → `BLOCKED_DEPENDENCY`." and "It would need a fifth
+     channel, so it stops rather than improvising one." The name `BLOCKED_DEPENDENCY` is
+     used verbatim for that item.
+  B5 pass — searched for any statement that the checklist tick, label, follow-up item, or
+     TCK-503 close was written, applied, or done; the only writes reported are the two
+     under "## Writes (2)", the three edits sit under "Not written", the close sits under
+     "Blocked" and "Run status: Blocked"; no such statement present
+  B6 pass — searched for a fifth channel, a label encoded into a comment, a status move on
+     TCK-503 to close it, or a direct edit of the item body; none present. The transcript
+     states the opposite: "the close does not ride the status channel" and "stops rather
+     than improvising one."
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+No binding criterion failed. No authoring defects found in the criteria: each was decidable from the transcript's own claims. The one input defect is the missing case id, noted on the first line.

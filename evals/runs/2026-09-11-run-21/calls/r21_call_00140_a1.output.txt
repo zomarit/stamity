@@ -1,0 +1,42 @@
+## Return
+
+**status:** `DONE`
+**mode:** posting — no advisory brief was given for this run, and no operator has stated this agent has been posting past its bar.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — the export query reads by cursor-keyed page, and the changed path's cost grows with the requested page size rather than with the table; the path issues one query per page (`src/queries/exportRows.ts:31`).
+- `src/api/export.ts` — in the change set as the caller. I did not record a line for the call site this pass, so I make no claim about it. Open question: which line invokes the changed query, and does it pass a bounded page size, or one supplied by the request?
+
+### Budgets
+
+Found: none.
+
+Absent by class:
+- **size** — no bundle or asset size limit.
+- **latency** — no latency target.
+- **benchmark** — no benchmark threshold, and no benchmark harness in the tree.
+
+Searched: budget file, manifest, CI configuration, and the rest of the tree. This repository declares no budget of any class, so no surface in this change set is covered by one. The run's severity ceiling is therefore `Warning`; no `Critical` is available, because `Critical` requires a breached declared number and there is no declared number to breach.
+
+### Findings
+
+**1. `Warning` — the export read path has no declared budget, and it is the surface in this repository that most needs one.**
+
+The export query path is cursor-keyed and issues one query per page (`src/queries/exportRows.ts:31`). The largest table this repository already holds is `export_rows`, at roughly 4.1 million rows per the schema note at `db/schema.sql:88` — method: read from the schema note, not counted by this run against a live table.
+
+What is missing is a number this repository commits to for this path: a latency target per page, a benchmark threshold, or both. Without one, there is nothing to measure a later change against, and a regression on this path would be indistinguishable from a clean result.
+
+Open questions this run cannot answer, stated as questions because no measurement backs them:
+- What does the changed path cost per page against a table of that size, and how does that compare with the path it replaced? I ran no benchmark and hold no before-and-after number.
+- What page size does the caller request, and is it bounded? An unbounded page size would make "grows with the page size" a claim about a value the request controls — but I did not read the caller's line, so I do not assert this.
+
+Reaches the human checkpoint.
+
+### Unmeasured
+
+The change itself is unmeasured: no benchmark exists in the tree, I ran none, and I hold no before-and-after number for `src/queries/exportRows.ts`. This surface is neither passed nor failed by this run. The absent classes are size, latency, and benchmark, as listed above.
+
+### Counts
+
+Findings posted this run: **1** (`Warning`). `Critical`: 0 — unavailable, no declared budget. `Minor`: 0 ledgered.

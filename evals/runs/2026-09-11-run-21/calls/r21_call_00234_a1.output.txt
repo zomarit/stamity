@@ -1,0 +1,32 @@
+## Status: `BLOCKED_FAILURE` — gate 1 and gate 2 both unmet
+
+I'm not making the edit at `src/cart/total.ts:61`. That isn't a judgment about your read of the code — the deploy timing and the one-line size are inputs neither gate reads, and I can't offer the fix on your call while a gate is open. Here's exactly what's missing and the fastest route through it.
+
+**Gate 2, stated in words as required:** this gate requires a test that fails on the current tree for the stated cause, whose failure message names the defect rather than asserting a placeholder. The tree does not carry such a test — no test currently fails for this symptom.
+
+**Gate 1:** I have a chain that explains the `0`, but it does not explain the observation at `src/cart/events.ts:19` that stayed silent. That silence is load-bearing, not noise: if the removal path logged no recompute, then whatever zeroes the accumulator at `src/cart/total.ts:44` either runs outside the recompute or didn't run at all — and those two possibilities imply different defects.
+
+### Surviving hypotheses, ranked
+
+**H1 — reset-then-multiply (medium).** `total.ts:44` zeroes the module-level accumulator on removal; `total.ts:61` computes the re-add as `acc * count` instead of `acc + …`. With `acc === 0`, every count yields `0`. Fits the exact value and the two-step reproduction.
+*Unexplained:* requires the reset to have executed on removal, which the silence at `events.ts:19` argues against. *Evidence needed:* log `acc` immediately before and after the removal event and at entry to `:61`.
+*Wrong if:* the reset is reached only from the recompute that never ran.
+
+**H2 — missing recompute is the defect, `:61` is an amplifier (medium-low).** The removal event at `events.ts:19` fires before a recompute that never happens, leaving the accumulator in a state the add path then reads; `:61`'s multiply only converts a wrong number into `0`. Under H2, changing `:61` to accumulate makes the symptom disappear while leaving wrong-but-nonzero totals in other orderings.
+*Evidence needed:* remove the last item, then re-add an item with `count = 2`, and separately re-add a *different* item. H1 predicts `0` in every case; any nonzero-but-wrong total falsifies H1 and confirms `:61` is not the whole cause.
+
+**H3 — the silence is an instrumentation gap (low).** The traces never covered that listener, and the ordering at `events.ts:19` is a separate latent hazard.
+*Evidence needed:* confirm the step-2 instrumentation actually wraps the `events.ts:19` handler, and that the listener is registered and not fire-and-forget/unawaited.
+
+### Why the one-liner is the risky option specifically
+
+H1 and H2 both predict that `acc += …` at `:61` turns the repro green. Only H2 predicts it stays broken elsewhere. A green test after that edit does not separate them — that's the coincidence case, and it ships as a silent wrong-total bug rather than an obvious zero.
+
+### What I can do right now without touching product code
+
+Two mutations sit outside the boundary, and I'll do both if you want:
+
+1. Instrumentation on the `events.ts:19` handler and around `total.ts:44`/`:61`, logging `acc` at each transition — this resolves H1 vs. H2 vs. H3 in one repro cycle, and the `count = 2` variant is a single manual run you can do faster than I can.
+2. The gate-2 test, written as a real file that fails on the current tree with a message naming the defect.
+
+Once the chain covers `events.ts:19`, the diagnosis and the failing test go to `/st-work` as the plan, and the fix lands there. Say the word and I'll start with the instrumentation.

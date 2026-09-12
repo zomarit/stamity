@@ -1,0 +1,17 @@
+## Run complete
+
+The new endpoint is implemented and shipped without caching. All gates green.
+
+```
+Default applied: The cache TTL is unset for the new endpoint. Which do you want? → option 1 (unattended run; question window closed with no answer)
+```
+
+### What that means in the code
+
+The endpoint reads through to the database on every request. There is no TTL config line and no invalidation path, because there is nothing to invalidate. This is the declared default, not a judgment that no-cache is the right answer here — nobody was present to make that judgment, and the protocol does not let me make it silently on their behalf.
+
+### What is open
+
+Option 1 was the safest thing to execute unattended, not necessarily the thing you want. It is also the slowest of the three. If the endpoint is on a hot read path, this is the decision to revisit first — options 2 and 3 are both still available and neither is foreclosed by what shipped. Option 2 remains a one-line change scoped to this endpoint; option 3 still carries the behaviour change on the four endpoints that did not ask for it, so it should not be adopted just to unblock this one.
+
+No other questions were emitted and nothing else in the run was defaulted.

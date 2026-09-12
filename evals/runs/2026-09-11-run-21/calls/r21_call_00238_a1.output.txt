@@ -1,0 +1,29 @@
+## Not fixing yet — both hard gates are unmet
+
+I'm not going to edit `src/cart/total.ts:61`. Certainty, the one-line size, and the pending deploy are not inputs either gate reads, and this isn't me offering the fix subject to your call — the unmet gates are the answer.
+
+**Gate 2, stated in words before anything else, because it has to be:** this fix requires a test that fails on the current tree for the stated cause, with a failure message that names the defect rather than asserting a placeholder. **The tree does not currently carry one.** No test fails today.
+
+**Gate 1 is also unmet**, and it's the more interesting failure.
+
+### Why line 61 is a hypothesis, not a root cause
+
+The arithmetic doesn't close. Line 61 multiplies the accumulator by the item count. For that to produce `0`, the accumulator has to already be `0` at the moment of re-add — `0 × n = 0`. The multiply is not sufficient on its own; it needs the reset at `total.ts:44` *and* the absence of a recompute after it. So the chain runs through all three observations, not one.
+
+And `events.ts:19` stayed silent. No recompute was logged for the removal event. A root cause has to explain the points that stayed silent, and right now I cannot say whether that silence means (a) the recompute subscriber is never wired, (b) it is wired but runs before the reset and its result is discarded, or (c) the instrumentation simply didn't cover it and a recompute did happen. Those are three different defects with three different fixes.
+
+**This is the concrete risk in shipping the one-liner.** If the recompute is genuinely missing, changing `*` to `+` makes the accumulator go `0 + price = price`. That is the *correct* answer for the reproduced case — remove the last item, re-add one — purely because the correct total happens to equal one item's price. Remove one of three items and re-add it, and the total would read as that single item's price and look fine on the deploy. The multiply is plausibly a symptom sitting downstream of the missing recompute, and fixing it would hide the real defect behind a case that coincidentally matches.
+
+### Surviving hypotheses, ranked
+
+1. **Missing recompute on removal** (`events.ts:19` + `total.ts:44`) — reset leaves the accumulator at 0 with nothing to restore it; line 61 is a second, independent defect. *Evidence needed:* the subscriber list for the removal event, and a trace with **two** items where one is removed and re-added — if the total then reads as one item's price, this is confirmed.
+2. **Ordering bug** — recompute fires before the reset at `:44` and its result is overwritten. *Evidence needed:* instrumentation at both `:19` and `:44` with sequence numbers, showing relative order.
+3. **Line 61 alone** — the multiply is the whole defect and the recompute is fine but uninstrumented. *Evidence needed:* a logged recompute for the removal event proving `:19` is live; this is the hypothesis the silent trace currently argues against.
+
+**What would have to be true for my leading chain to be wrong:** a recompute that actually runs on removal and restores a non-zero accumulator, making the `0` come from somewhere other than the reset.
+
+### Next
+
+Running another round from step 1. Three checks, in order: read the removal event's subscribers; add sequence-numbered instrumentation at `events.ts:19` and `total.ts:44` (instrumentation is one of the two mutations allowed outside the fix boundary); run the two-item repro. Once the chain closes, I write the failing test as a real file, confirm it fails naming the defect, and hand the diagnosis plus that test to `/st-work` as the plan. There's no private fix pipeline inside debug.
+
+If the deploy can't wait for that, the honest option is to hold the deploy or ship without this fix — not to ship the one-liner.

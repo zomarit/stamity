@@ -1,0 +1,23 @@
+Grading the supplied case against the rubric: one binding group of three, one advisory criterion, transcript is the single-line `none` answer.
+
+```text
+case: (no case id supplied in the input; graded as the st-onboard / "what next" adjacency case)
+binding:
+  B1 pass — "`none` — st-onboard is the only skill that covers ..." — the answer token is
+     `none`
+  B2 pass — searched for st-onboard named as triggered or applicable; it appears only to be
+     ruled out: "its trigger requires a fresh install or an unproven setup, which this
+     eight-month-old repo with dozens of proven changes explicitly is not"
+  B3 pass — searched for any skill id given as the answer; the only id in the transcript is
+     st-onboard, and it is stated as not triggered; "the request stays with the main flow"
+advisory:
+  A1 pass — "this eight-month-old repo with dozens of proven changes explicitly is not" —
+     the reason contrasts a fresh or unproven install with a repository that already has
+     many proven changes
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Authoring note, reported not repaired: the input carried no `case:` identifier, so the emission line above is a placeholder rather than an id from the case file. No criterion was undecidable and no grouping looks misplaced.
+
+Recap: the transcript answered `none`, named st-onboard only to exclude it on the fresh-install trigger, and its reason drew the distinction the advisory criterion asks for. All three binding criteria pass, the one advisory criterion passes, and the case verdict is PASS. The only defect is the missing case id in the handed-in input.

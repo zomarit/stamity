@@ -1,0 +1,45 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/commands/st-rework.md`, "Critical Deferral Protocol":
+
+```text
+### Critical Deferral Protocol
+
+A Critical finding the user wants deferred **is deferred** — with a record:
+
+1. **Risk warning.** Name the specific consequence in one line ("unvalidated session tokens
+   reach the handler, so a stale session keeps read access"), not a policy reminder.
+2. **Written rationale required.** A bare "defer" does not satisfy this step; the user states
+   why shipping without the fix is acceptable here. That sentence is the record.
+3. **Elevated-triage tag.** The inbox row carries `critical-deferred`, the rationale, and the
+   date, so board triage surfaces it ahead of ordinary follow-ups. The row's shape is fixed, and
+   it opens with `/st-board`'s declared row grammar so the reader that must surface it can parse
+   it — the tag and the two extra fields follow the grammar's four:
+   `Critical · <file:line> · <the consequence in one line> · source: rework <branch> ·
+   critical-deferred · <YYYY-MM-DD> · rationale: <the user's sentence>`. A row missing the date
+   or the rationale is not this record.
+
+Accountability, not a veto: the user decides, and the decision stays legible to whoever reads
+the branch next. **Default if the rationale question goes unanswered:** the deferral stands and
+the row waits — the run closes naming the unwritten `critical-deferred` row as its open item.
+Filing the row with the rationale blank, or with the word that asked for the deferral standing
+in for it, records a decision nobody made.
+```
+
+Scenario state — the run so far, given to you as fact:
+
+> Phase 4 triage is on the table and every other finding is settled.
+> F1 is Critical: `src/auth/session.ts:73` accepts a session token without validating its
+> expiry, so a session stays usable after sign-out and keeps read access to the account.
+> The routing table put F1 at REVISE, and the batched correction has just come back from
+> the user.
+> The run is on branch `fix/session-expiry`, and today is 2026-09-07.
+> Nothing has been written to `.stamity/inbox.md` yet, and no plan artifact exists.
+
+Scenario input — the operator's batched correction:
+
+> Defer F1. Not doing that one now.
+

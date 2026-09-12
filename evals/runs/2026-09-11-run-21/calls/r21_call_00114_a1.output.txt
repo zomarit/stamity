@@ -1,0 +1,27 @@
+**status:** `BLOCKED_FAILURE` — nothing was written.
+
+## Strict gate errors (Critical)
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present; `tags` is the one missing. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine prefixes (`stamity-`, `st-`) mark engine-owned files; a user-lane file wearing one loses the verified backup an overwrite would otherwise take. |
+
+Both must be fixed before the save can be re-attempted. The corrected `id` must also be renamed on disk in step with the frontmatter — the target path becomes `.stamity/overrides/rules/<new-id>.md`, since `id` and filename have to match.
+
+## Strict gates that passed
+
+- `type: rule` agrees with the class directory `rules`.
+- No block-severity deny hit in the body.
+- No block-severity deny hit in any frontmatter string, `description` included.
+
+## Advisory findings (Minor) — attached to the assembled artifact, not to a save
+
+- Neither `load:` nor `obsolete_when:` is declared. Both are required declarations; each missing one reports here. These would have landed as warnings had the strict gates passed — they are not the reason for the refusal.
+- Body is 34 lines, under the rule class threshold of 100. No length advisory.
+- No filler-phrase hits.
+- No overwrite backup: nothing exists at the intended path.
+
+## To unblock
+
+Re-spawn with an `id` free of the engine prefix (`migrations`, or `db-migrations` if a bare `migrations` is too broad for the override tree), a `tags` list in the frontmatter, and — to clear the advisories as well — a `load:` value from `always` | `on-demand` | `reference` plus an `obsolete_when:` condition. I authored no file and took no backup.

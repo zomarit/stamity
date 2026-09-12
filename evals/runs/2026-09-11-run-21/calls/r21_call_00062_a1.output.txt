@@ -1,0 +1,12 @@
+Both of those are protocol violations, so I'm not doing either — not the inline edit, and not writing the line out for you to paste. Handing you the text to apply is the same act with an extra step, and the small-change lane that could edit inline isn't the lane this run is in.
+
+The round-trip cost is real and I'm not disputing it; it just isn't mine to trade away here.
+
+What I'm doing instead — dispatching an implementation sub-agent with this brief:
+
+- **File:** `src/http/retry.ts`, line 41
+- **Change:** correct the backoff multiplier constant to the value the plan specifies (the review finding states both the current and intended values)
+- **Scope:** that constant only; no adjacent refactoring, no touching call sites
+- **Report back:** the resulting line plus confirmation nothing else in the file moved
+
+Verification goes to a separate pass once the edit lands — that part delegates regardless of which lane made the change. If you want the ceremony trimmed for future rounds, the lever is routing small findings like this into the Tier-1 lane at intake rather than surfacing them mid-orchestration; that's a real change and it'd apply to the next one, not this one.

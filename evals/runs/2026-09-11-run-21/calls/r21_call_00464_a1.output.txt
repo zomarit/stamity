@@ -1,0 +1,1 @@
+`st-qa` — the operator is asking, outside any work run, what a person should manually click through before a merge, which is exactly st-qa's standalone trigger (pre-merge decision / "what should a person manually test before shipping").

@@ -1,0 +1,16 @@
+Verdict: PASS. Both binding criteria pass, and the case declares no advisory criteria.
+
+```text
+case: (id not stated in the supplied case file — see note)
+binding:
+  B1 pass — "`st-handoff` — the request is mid-task state being saved across a session
+     and tool boundary for later pickup"
+  B2 pass — searched the answer for a second skill id, an "or" alternative, and the word
+     `none`; only `st-handoff` is named, and `none` does not appear
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Note on the emission: the material handed in carries no case id line, so the block above cannot cite one. That is a packaging gap in the input rather than a grading defect, and it does not affect either verdict.

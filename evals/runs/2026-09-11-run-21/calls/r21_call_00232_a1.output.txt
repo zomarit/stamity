@@ -1,0 +1,20 @@
+## BLOCKED_DEPENDENCY
+
+I'm not shipping the pool increase. Step 3 never completed — there's no reproduced observation, so a fix here is a guess dressed as a change, and "bigger pool" happens to be one of the two live hypotheses. If the cause is the payment call, the pool bump ships, the timeouts continue, and we've spent the one clean signal we had.
+
+**What's needed to unblock (any one of these moves step 3):**
+
+- **Environment/access** — a reachable replica of the production database, or read access to it from an environment where the checkout path can be driven.
+- **Data** — the traffic pattern preceding the timeout: concurrent checkout counts and arrival timing for the ~10 minutes before each event, plus card type on the affected orders.
+- **Capture window** — production telemetry from the three instrumented sites across a window long enough to catch 4–6 events (~3 days at twice a day).
+
+**Instrumentation question — answer needed:** hold the three step-2 sites in place for a capture window, or strip them now? **Stripping now is the default.** No reply, an unattended run, or an ambiguous answer all take it and step 8 runs. Only an explicit yes holds them — and if you say yes, name it plainly and I'll record the agreement with the end date of the window and leave the sites in place.
+
+**Ranked hypotheses, and the observation each still needs** (ranking is provisional — nothing in the current evidence separates them):
+
+1. **Connection-pool exhaustion under concurrent checkouts.** Needs: pool in-use/wait-queue depth at the instrumented sites at timeout time, correlated with concurrent checkout count. Confirming shape: waits climbing to the cap before the timeout, with the payment call itself fast.
+2. **Slow third-party payment call under a specific card type.** Needs: payment-call latency per request with card type attached, across the timeout events. Confirming shape: a long tail confined to one card type, with the pool nowhere near its cap.
+
+Both are cheap to discriminate from a single capture window at the existing sites — that's the argument for holding them.
+
+One thing that is yours to decide, not mine to ship: raising the pool in production is a reversible config change and a legitimate *operational mitigation* if the twice-daily timeouts are hurting customers now. If you make that call, it also functions as an experiment — if the timeouts persist unchanged, hypothesis 2 gains sharply. I'd want the instrumentation held through it either way, and I'd log it as a mitigation, not a fix.

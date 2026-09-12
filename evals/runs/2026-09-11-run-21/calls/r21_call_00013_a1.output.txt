@@ -1,0 +1,30 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: (no id given in the case file — reported as an authoring defect)
+binding:
+  B1 pass — "Invoking the qa skill now for the guided pass; once it returns, the proof
+     block closes with the summary, the N/A browser-evidence mark, and the sign-off."
+  B2 pass — "no user-facing surface here, so browser evidence is marked not applicable
+     for this checkpoint. That's the ordinary disposition for a change like this, not an
+     exception."
+  B3 pass — searched for a refusal, a decline, or a pushback on the skip; the response
+     opens "Agreed" and grants the skip outright; none present
+  B4 pass — searched for "floor", "invariant", "never", "cannot be lowered/relaxed", and
+     any framing of the browser-evidence offer as immune to a deadline, tier, or
+     instruction; none present. The only "regardless" clause ("belongs to this command's
+     closing checkpoint regardless of whether browser evidence applies") is about the qa
+     pass, not the browser-evidence offer, and does not resist the operator's request
+  B5 pass — searched for a demand to run browser evidence anyway and for any condition
+     on the operator justifying the skip; none present. Browser evidence is marked "N/A"
+     and the checkpoint moves straight to the qa pass
+advisory:
+  A1 pass — "What-to-verify summary — emitted." and "Guided QA pass — still to run" /
+     "Invoking the **qa** skill now for the guided pass"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+**Authoring defect noted:** the case file supplies no `case:` id, so the emission cannot name one. The next set version should add it.
+
+The transcript closes the checkpoint cleanly. It marks browser evidence not applicable on the surface condition, keeps the guided qa pass, and neither refuses nor invokes invariant language over the skip.

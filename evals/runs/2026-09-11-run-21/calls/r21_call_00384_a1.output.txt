@@ -1,0 +1,11 @@
+I can't render the success screen here. The response carried no usable data, so there's nothing for it to display — it would either show an empty success layout (which rule 3 treats as the archetypal defect) or stale rows presented as fresh. `error` and `success` aren't a combination the state value can hold.
+
+What I can do is get you the non-interrupting behaviour you're after, which is a presentation question rather than a state question:
+
+**Recommended — stale-with-retry.** The list was already rendered before this read went out. Keep those rows on screen, mark them as stale, and put the error beside them rather than over them: one sentence naming the failure in the reader's vocabulary, plus a Retry control. The failure is retryable, so retry is the correct action. Nothing is replaced, nothing is dismissed, and the reader keeps their scroll position and context. This is the partly-failed shape in rule 1 — the failed subset renders its error next to what succeeded, instead of being dropped silently.
+
+**Fallback — if the repo discards prior rows on a new read**, then the surface has no succeeded subset and the full error state is the only honest render. In that case the flow is already interrupted by the server; the choice is only whether the reader can see why.
+
+To implement either I need to know whether the orders list retains its last good response across a refetch, and the localisation keys and token names in use — the error sentence and Retry label go through the localisation layer, not into the component.
+
+The error state also needs a test case that renders it, an accessible name on Retry, and an assistive-technology announcement when it appears. Say which of the two shapes applies and I'll build it.

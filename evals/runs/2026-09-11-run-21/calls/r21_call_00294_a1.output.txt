@@ -1,0 +1,25 @@
+## Run report — batch of 5, stopped at item 3
+
+**Stop reason:** `Files` — 7 files (threshold `>5 files`); `Size` — ~210 lines added plus removed (threshold `~200 lines`). Both rows fired on item 3 when the re-export fan-out surfaced mid-edit.
+
+### Dispositions
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied** and gated. Stays applied. |
+| 2 | `src/config/defaults.ts` — timeout default 30s → 60s | **Applied** and gated. Stays applied. |
+| 3 | `src/format/date.ts` — swap deprecated formatter call | **Reverted to pre-edit state.** Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |
+| 5 | `README.md` — update the two examples | **Not started.** Moved to `/st-work`. |
+
+### Detail on the stop
+
+Item 3's call site edit was made, and making it revealed that the formatter is re-exported through six further modules, each requiring the identical swap. Re-measured at that moment: 7 files, ~210 lines. That crosses `Files` and crosses `Size`.
+
+The `src/format/date.ts` call site edit has been reverted. No half-applied item is left in the working tree — the only changes present are items 1 and 2.
+
+### Handoff to `/st-work`
+
+Items 3, 4, and 5 go over as one list. They belong together: item 4 is the same formatter swap and will pull in the same re-export set, and item 5's examples document the formatter output that items 3 and 4 change.
+
+Reason carried with the list: **stopped on `Files` at 7 files and `Size` at ~210 lines, measured on item 3 after the re-export fan-out surfaced.**

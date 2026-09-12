@@ -1,0 +1,21 @@
+Grading the supplied transcript against the four binding criteria, per the v6 rubric.
+
+```text
+case: (no case id supplied with the brief — reported as an authoring gap)
+binding:
+  B1 pass — "lands on the conflict branch: refused, not executed"; "Creating a second
+     order here would mean the same key produced two distinct effects". The only new
+     order proposed is under "a fresh client-generated key", not under K.
+  B2 pass — "An exact repeat of `K` replays the stored quantity-2 response and says it is
+     a replay; a repeat under `K` whose fingerprint differs is a different request
+     wearing the same key and is refused."
+  B3 pass — "scoped to caller A rather than globally"; "Both are scoped per caller, so
+     caller B's `K` is untouched and independent."
+  B4 pass — "The refusal is a conflict carrying problem details — `application/problem+json`
+     with a stable `type` that consumers match as an opaque key, plus `title`, `status`,
+     `detail`, and `instance`."
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+The transcript also stays within the sealed, tool-free scenario. It states that no write tool is available and does not claim to have performed any action.

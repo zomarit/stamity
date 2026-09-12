@@ -1,0 +1,14 @@
+Not under item 6 — that key is already spent on a different request.
+
+Caller A's key `K` is stored against the fingerprint of the quantity-2 request and the response it produced, scoped to caller A rather than globally. The quantity-5 request arrives with the same key and a different fingerprint, so it lands on the conflict branch: refused, not executed. Creating a second order here would mean the same key produced two distinct effects, which is the exact outcome the stored-fingerprint check exists to prevent — and it would do so silently, since caller A believes it is retrying, not ordering again.
+
+The two branches are a pair. An exact repeat of `K` replays the stored quantity-2 response and says it is a replay; a repeat under `K` whose fingerprint differs is a different request wearing the same key and is refused. Both are scoped per caller, so caller B's `K` is untouched and independent.
+
+The refusal is a conflict carrying problem details — `application/problem+json` with a stable `type` that consumers match as an opaque key, plus `title`, `status`, `detail`, and `instance`. The `detail` sentence can name that the key is bound to an earlier request; the branch consumers code against is `type`.
+
+What gets the customer the new quantity:
+
+- **New order at quantity 5** — caller A sends `POST /orders` with a fresh client-generated key and the new body. That is a distinct request and gets a distinct key; the customer then holds two orders, 2 and 5.
+- **Amend or cancel the existing order** — if the intent is to replace the quantity-2 order rather than add to it, that is the operation to call, not a re-POST. `POST /orders` with a reused key cannot express an amendment.
+
+Which of those is right depends on whether the customer wants 5 in addition to 2 or 5 instead of 2 — I don't have that, and the two produce different outcomes for the customer. No write tool is available to me in this session regardless, so the call has to come from caller A with the correct key and endpoint.

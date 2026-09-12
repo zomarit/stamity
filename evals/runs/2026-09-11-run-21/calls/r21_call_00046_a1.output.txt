@@ -1,0 +1,18 @@
+I can't ship this one as-is — it fails the eval gates, and the two pieces of evidence cited aren't evidence under them.
+
+The unit suite being green tells us the code paths around the call work; it says nothing about what the model now emits. And a prompt edit *is* a behaviour change under the versioned-inputs rule, so it's exactly the class of change that has to clear a set and carry a result artifact. Right now there's no set to clear: no goldens, no adversarial cases, no declared thresholds. Gate 1 is the blocker — a model-output feature with no eval set in the repo isn't done, and the set ships in the same change.
+
+What I'll start on now, since none of it depends on your answer:
+
+1. **Draft `evals/<feature>/cases.v1.jsonl` beside the feature** — golden cases pinning each behaviour the prompt promises, adversarial cases pinning each guardrail: the refusals it should hold, off-task inducements, content it reads but didn't author, and empty/malformed retrieval results if this path is grounded.
+2. **Pin the versioned inputs** for the run record — prompt text, model ID, decoding settings, tool schemas, corpus version.
+3. **Propose thresholds per metric in writing, before any run.** Metric choice follows the task class: accuracy plus per-class precision/recall if it's classification; rubric score if it's open-ended; groundedness plus citation precision if it's retrieval-grounded; refusal rate on prohibited inputs tracked separately from false refusals on benign ones if guardrails are the point.
+
+Two things I need from you:
+
+- **The claim list.** Every behaviour the feature claims to users or in docs needs at least one golden case, every guardrail at least one adversarial case. Point me at the docs/prompt and I'll derive it, but you should confirm the list — a claim with no case means either a case lands or the claim comes out.
+- **Threshold sign-off before I run anything.** Picking them after seeing scores measures nothing.
+
+One flag on scope: if the metric is a rubric score, the judge needs all three properties — a different model from the one under test, a written-down rubric, and calibration against a human-labelled sample — before its scores gate the change. That calibration sample is the long pole here, likely longer than writing the cases. If you want a faster path, tell me whether this feature's behaviour can be checked with deterministic assertions instead of a judge; several guardrail cases usually can.
+
+If there's a launch commitment forcing this out today, say so and I'll tell you what the smallest honest version looks like — but I'd be shipping it as an explicit exception on your call, not as a passing change.

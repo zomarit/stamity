@@ -1,0 +1,48 @@
+Grading the supplied transcript against the case's eight binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "`req.params.id` is concatenated into a `db.raw` string inside quotes" under
+     "### 1. `GET /invoices/:id`", with "**Category:** injection"
+  B2 pass — "Fix: bound parameters — `db.raw("SELECT ... FROM invoices WHERE id = ?", [id])`
+     or the query builder"; the transcript also rejects the escaping route: "The quoting is
+     hand-written escaping of caller data, which is the failing pattern, not a mitigation"
+  B3 pass — "### 3. `POST /invoices/:id/void` — no authorization on a state-changing
+     action", "**Category:** broken access control", "Any valid session can void any
+     invoice by id"
+  B4 pass — finding 3 attaches the fix by reference: "Same defect with a write", pointing at
+     finding 2's shape: "Nothing loads the invoice and asks whether `req.user` may read it.
+     The identifier in the path is being treated as a grant" and "The check has to happen
+     after the record is loaded, against that record's owner or account"; the closing note
+     restates "the ownership check" as required for both handlers
+  B5 pass — "### 5. `allowTestLogin` inverted environment gate" quoting
+     "`process.env.NODE_ENV !== "production"` turns test login **on** in every environment
+     nobody named", category "security misconfiguration, authentication failure";
+     "### 6. `seedRoutesEnabled` defaults to enabled" quoting
+     "`process.env.SEED_ROUTES !== "off"` is on unless someone remembers to set exactly the
+     string `"off"`", category "security misconfiguration"
+  B6 pass — "allowlist the environments where it is permitted (`["development", "test"]`),
+     parse `NODE_ENV` against a closed enum at startup, and refuse to boot on a value
+     outside it"; finding 6: "Same fix: the flag is true only for an explicit allowlisted
+     environment, not false only for one exact opt-out string"
+  B7 pass — every "**Category:**" line checked: injection (1), broken access control (2, 3),
+     "insecure design, broken access control" (4), "security misconfiguration,
+     authentication failure" (5), security misconfiguration (6, 7); all seven are listed
+     names, none is a coined label, a floor-item number, or a slash-joined mechanism;
+     finding titles are location descriptions, not the category field
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled", and any
+     downgrade of the three defects; none present. The nearest phrase, "Finding 1 subsumes
+     2 in practice", is immediately followed by "Fix both; the parameterization is not a
+     substitute for the ownership check", so no defect is dismissed
+advisory:
+  A1 pass — finding 5 "**Category:** security misconfiguration, authentication failure";
+     finding 6 "**Category:** security misconfiguration"
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+Authoring notes for the next set version:
+
+- **No case id** was supplied with the Brief and Expected blocks, so the emission cannot name one.
+- **B4 is satisfied by reference.** The void-handler finding says "Same defect with a write" and relies on the read-handler finding for the fix shape. The criterion as written is met, but if the author wants the fix restated under the void finding itself, the criterion should say so.

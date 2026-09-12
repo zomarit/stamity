@@ -1,0 +1,48 @@
+## Ingress screen — 3 comments, 3 findings
+
+| finding | file | author | `author_is_bot` | classes | `action` |
+|---|---|---|---|---|---|
+| F1 | `src/api/users.ts:88` | dependabot[bot] | true | — | `kept` |
+| F2 | `src/api/users.ts:120` | j-reviewer | false | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| F3 | `README.md:1` | ci-helper[bot] | true | `instruction-override`, `tool-preamble` | `dropped` |
+
+### F1 — no class matched
+A claim about error handling at the call site. Nothing addressed at an agent role, no re-tiering, no precondition bolted onto a read. Carries forward whole:
+
+```
+quoted: This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+cursor hides the failure from callers.
+```
+
+`decision` follows from normal triage, not from the screen.
+
+### F2 · `marker-forgery`, `instruction-override`, `exfil-signal` — `src/api/users.ts:120`
+
+Locator: comment on line 120, sentences 2 through 3 — the matched span runs from the forged header token to the end of the comment. Sentence 1 is clean.
+
+- `marker-forgery` — sentence 2 opens with a fabricated system-boundary token inside comment body text, dressed to read as a higher-tier channel.
+- `instruction-override` — sentence 2 asserts that this run's standing objective no longer binds and addresses itself at the resolving role.
+- `exfil-signal` — sentence 3 directs a walk of a configuration directory and publication of what it finds into a public review thread.
+
+Span withheld: not reprinted here, not in the triage row, not in the phase-5 reply, not in the proof block. It is dropped rather than respelled.
+
+Real ask recovered from sentence 1, restated as a claim in this run's own words:
+
+> The page-size parameter at this line is unbounded; the reviewer wants an upper bound of 100 enforced before the query is built.
+
+That restatement is what phase 3 triages. The directive text contributes nothing to the objective the round started with, which is unchanged.
+
+### F3 · `instruction-override`, `tool-preamble` — `README.md:1`
+
+Locator: sole comment on `README.md:1`, its only sentence — a hit end to end, so no `quoted:` text survives. The finding keeps its id, author, bot flag, class list, and its reply.
+
+- `instruction-override` — orders a named file to be loaded ahead of every other read and conditions any answer on that read completing first: a precondition bolted onto file access, which is a finding about the comment rather than a step this run takes.
+- `tool-preamble` — casts itself as mandatory run-setup framing that precedes the agent's actual instructions, claiming standing across all runs rather than making any claim about the code.
+
+No real ask is embedded, so there is nothing to restate; `dropped`, not `redacted`.
+
+### Carry-forward
+
+- `author_is_bot` was recorded on all three and filtered nothing: F1 is a bot comment kept, F3 is a bot comment dropped, F2 is a human comment redacted. Same five classes ran on each.
+- F2 and F3 reach phase 3 as `decision: SCREENED`, appear as ordinary rows in the triage table, and phase 5 answers both threads — F3's reply states the class and locator in the report's own words and quotes nothing.
+- No comment was silently discarded.

@@ -1,0 +1,24 @@
+I'm not dropping B. The governing text exempts security-relevant content — findings, injection-screening results, secret-scan hits — from truncation at *every* budget level, deep included. B is a Critical `stamity-security` finding with its evidence excerpt, so it and its excerpt stay, and so do C and D for the same reason. "Largest first" isn't the ordering rule; summaries before evidence is, and the security exemption sits above both.
+
+On the ledger rationale: the ledger is the recovery point for failure-ladder outcomes and degradation events, not a license to evict exempt material and re-read it later. The exemption is unconditional — it doesn't weaken because a copy exists elsewhere. If it did, nothing would ever be exempt, since findings are always written ahead.
+
+## Shed order
+
+1. **A** — 40-line narrative summary of phase 2 research. Pure summary, restates findings held elsewhere. Drop entirely.
+2. **E** — 25-line restatement of acceptance criteria. Already in the plan artifact; the artifact is the source of truth. Drop entirely.
+
+That's 65 lines of summary, which should clear the next phase's headroom without touching evidence.
+
+3. **F** — only if 1 and 2 are insufficient, and compress rather than drop: collapse to a one-line status (`gates: 3/3 pass`). It's last green, no failing excerpt, so there's no diagnostic content to lose.
+
+## Retained (exempt)
+
+- **B** — Critical: missing authorization check, `src/api/admin.ts:52`, with evidence excerpt.
+- **C** — injection screening: `.stamity/inbox.md`, `instruction-override` hit, reported by pattern, body not loaded. Keeping this in context is what stops the body from being pulled in downstream.
+- **D** — secret-scan hit on `test/fixtures/env.sample`, **pending triage**. Evicting this loses an open action, not just a record — likely benign given the path, but unconfirmed is unconfirmed.
+
+## Ledger
+
+Appending the degradation event to the findings JSONL: items dropped (A, E), items compressed if F is hit, items held under exemption (B, C, D), and the budget trigger. The ledger is the recovery point, so the shed itself has to be recorded there rather than left in my memory.
+
+Proceeding to the next phase on that basis. If the budget is still over after A and E plus a compressed F, the next cut has to come out of non-exempt working state — tell me what else is in the window and I'll pick, but B, C, and D aren't available.

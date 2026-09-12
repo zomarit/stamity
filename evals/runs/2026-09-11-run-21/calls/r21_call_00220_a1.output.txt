@@ -1,0 +1,27 @@
+Not dispatching both. Disjoint file lists are not evidence of independence — `customerKey` is a persisted-name contract shared across `src/writer.ts` and `src/reader.ts`, and no repo-wide search has run. Concurrent dispatch here is a protocol failure under the census floor, so I'm reporting it rather than executing it.
+
+## Census (open — not yet closable)
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` (Unit A) | `src/reader.ts` (Unit B) confirmed; remainder **unsearched** | rename |
+
+The consumer column cannot be closed from what we hold. The search that has to run before dispatch, over the whole repo and not the two units' file lists:
+
+- `customerKey` and `accountKey` in quoted form — persisted names are string-typed, so they will not appear as symbols.
+- Fixtures, recorded payloads, and snapshot files still asserting the old key.
+- Non-code files: migrations, deployment manifests, pipeline definitions, environment files.
+- Any dynamic access (`record[key]`, field-name maps) that no literal search reaches — those need a runtime guard, not a rename.
+
+A `clean` result on any of these is unevidenced without the captured search output.
+
+## Dispatch decision
+
+Unit A owns the contract: the rename is its acceptance criterion. Two options, and I recommend the first:
+
+1. **Serialise.** A lands the rename plus every consumer reconciliation — including `src/reader.ts` — in one diff. B then codes against the shape A landed. With a batch of two this is cheaper than running a hold, and it is the fallback the floor names.
+2. **Facade-hold**, if B genuinely must start now. A emits `accountKey` *and* keeps `customerKey` present as an explicit null rather than dropping it; B moves `src/reader.ts` to a guarded read. The key is removed in a later change, once a census shows zero unguarded readers. An absent key is a shape change a reader misreads silently; an explicit null fails at the value.
+
+One finding independent of which we pick: this is a **persisted** name, so records already written carry `customerKey`. The rename needs a read-side fallback or a migration regardless of unit ordering — otherwise stored history goes silently unreadable, which is the silent-wrong failure the gates rank above a broken build.
+
+Tell me to proceed on option 1 and I'll run the searches and dispatch A; or name the constraint forcing B to start now and I'll set up the hold.

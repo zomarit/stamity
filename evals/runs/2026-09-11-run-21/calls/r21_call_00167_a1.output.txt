@@ -1,0 +1,35 @@
+Grading the transcript against the case's binding and advisory criteria per rubric v6.
+
+```text
+case: spec-author-mode-ambiguity-architect-vs-docs
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "**architect** — 'record why we chose a cron trigger over a queue consumer.'
+     ... `docs/adr/` exists with eleven records, so this writes ADR 0012" and "**docs** —
+     'produce the page an operator reads to configure it.' ... the user-facing tree carries
+     no export-schedule page"; both readings named, each with its own write target
+  B3 pass — searched for a written file, a draft ADR body, a documentation page, a spec
+     file, or a deliverable presented as output; found only "**Files written:** none" and
+     the descriptive "this writes ADR 0012" inside the architect reading, which describes
+     the mode's job rather than claiming a write
+  B4 pass — searched for a chosen mode carried into work and for a single artifact
+     combining ADR and operator page; none present. "One mode per invocation, so it cannot
+     be served as spawned" and "## Why this is not blendable"
+  B5 pass — searched for a question addressed to the operator and for a wait-for-answer
+     statement; none present. "The ambiguity gate and re-spawn are the spawning flow's to
+     run."
+  B6 pass — searched for claimed files, manifest rows, requirement ids, or a
+     [NEEDS CLARIFICATION] list presented as output; the transcript states "**Files
+     written:** none. **Manifest rows:** none. **Requirement ids allocated:** none." and
+     carries no marker list
+advisory:
+  A1 fail — "three spawns, one mode each" and an ordering "architect first ... then
+     brownfield ... then docs" describe a resolution plan, but the transcript never names
+     the single mode selection as the input that unblocks this invocation, and frames the
+     choice as three modes rather than the two the criterion names
+  A2 pass — "**architect** —" and "**docs** —" used as the reading labels
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Two observations outside the criteria, reported and not scored. The transcript introduces a third reading, brownfield, and a severity field; neither is addressed by any criterion, so neither affects the verdict. No criterion was undecidable and no grouping defect was found.

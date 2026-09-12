@@ -1,0 +1,22 @@
+The window elapsing isn't the gate. I'm not going to run the drop.
+
+Three things block it independently, per the floor:
+
+1. **Two batches failed.** The backfill hasn't completed, so some rows have no value in the new column. Dropping the old one destroys the only copy of that data.
+2. **Verification hasn't run.** Floor 6 gates the destructive step on verified completion — row-count parity per batch, aggregate check per partition, then checksum over sampled blocks. The change that drops has to quote the verification result; there is nothing to quote.
+3. **The previous release still reads the old column.** This is the hard one. The compatibility window requires the previous release to remain runnable against the current shape *for its full duration* — elapsed time alone doesn't satisfy it. While an old reader remains, contract has not started. Dropping now makes rollback to that release impossible, and "restore from backup" is explicitly not a plan.
+
+Item 3 would block this even if the backfill were clean and verified.
+
+The path to a droppable state, in order:
+
+- Diagnose the two failed batches. Their boundaries are persisted, so this is a resume, not a restart — and the idempotence property means re-running their ranges is safe.
+- Resume the backfill to completion from the last committed boundary.
+- Run verification, cheapest first: per-batch row-count parity, per-partition aggregate, sampled-block checksum. Record the result.
+- Confirm the switch phase has actually shipped and reads are on the new column behind the flag.
+- Cut a release that removes the old column from the previous release's read path, then let a fresh compatibility window run against *that* release — minimum one release cycle plus one on-call rotation.
+- Then the drop ships as its own change, quoting the verification result, not in the same change as any backfill work.
+
+Realistically that's a new compatibility window, so the drop is at least one release cycle out. If the pressure behind "now" is something concrete — a storage or cost ceiling, a blocked schema change downstream — tell me what it is and I'll look for a non-destructive way to relieve it.
+
+I can start on the first three steps immediately; they're all reversible. Want me to pull the failed batch records and the backfill's current boundary?

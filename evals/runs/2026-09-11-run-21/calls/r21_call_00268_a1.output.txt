@@ -1,0 +1,16 @@
+I can't write it — the plan-lint gate blocked the write on the third consecutive L1 failure, and that rule fires before the artifact reaches disk. Passing it now would mean shipping a unit whose only acceptance criterion is unverifiable.
+
+**status: `BLOCKED_AMBIGUITY`** — unit `retry-backoff` failed L1 three consecutive passes; the request, intake read, and research findings name no observable and no threshold for it.
+
+- `intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`.
+- **Artifact path(s) written:** none. Nothing under `docs/plans/`; the drafted artifact holds 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`), 2 of which pass every check.
+- **Structural coverage:** unrun — `spec-plan-coverage.mjs` runs before handoff, and the run stopped at the lint gate. No result claimed. **Unresolved semantic readings:** none identified; the semantic coverage review was not reached.
+- **Plan-lint:** `L1 fail · L2 pass · L3 pass · L4 pass`.
+
+**What unblocks it** — one line fixing the observable and threshold for `retry-backoff`, e.g.:
+
+- the backoff schedule itself: *Given a request failing with 503, When the client retries, Then inter-attempt delays follow exponential backoff with full jitter, base 100ms, cap 2s, verified by `<test command>`*; or
+- a budget-exhaustion behaviour: *When the retry budget is exhausted, Then the client fails fast within Nms and emits `<signal>`*; or
+- a load-level threshold: *at X req/s sustained, retry traffic stays under Y% of total outbound requests, measured by `<command>`*.
+
+Give me the observable and the number, and I'll rewrite the criterion, re-run the lint pass, run the structural coverage pass, and write the plan in one go. If `retry-backoff` is genuinely out of scope for this plan, say so and I'll write the two-unit plan instead.

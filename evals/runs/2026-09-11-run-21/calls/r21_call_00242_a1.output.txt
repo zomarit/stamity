@@ -1,0 +1,11 @@
+Taking them in order.
+
+**(1) Merge — doing it.** Same topic, so they consolidate into the higher-confidence note: `runner-skips-files-outside-project-glob.md` survives (high, and it names the run that reproduced the behavior). Before removing the duplicate I'll read it for any detail the survivor doesn't already carry — a second symptom description or an extra path case is worth folding in even though the finding is the same — then record `out-of-glob-tests-never-execute` in the survivor's absorbed-ids list and delete that file. The absorbed id has to be in the note, otherwise the six-week-old citations point at nothing.
+
+The survivor stays at **high**. Absorbing a note isn't an outcome, so the band doesn't move in either direction.
+
+**(2) Promotion — not doing it.** Three citations this month is popularity, not evidence; the schema calls that out by name, and it promotes nothing on its own. No run has re-verified `windows-path-separator-in-messages.md` since it was written, so there's no outcome to cite, and a band that moves without one is an opinion edit. It stays at **medium**. If a verification run exercises the claim and comes back green, the promotion follows from that run and gets recorded with it.
+
+**(3) The `sort` note — not writing it.** That the default comparator coerces to strings and sorts lexicographically is general JavaScript knowledge, true of every repo, and a competent reader would predict it. It's explicitly out of scope for the learnings directory. If this repository has a *specific* scar here — a sort site that shipped a bug, a house lint rule, a comparator helper everyone is expected to use instead — that's a learning and I'll write it, but the language behavior by itself isn't.
+
+So: one merge performed, one promotion declined, one note not created. The only file changes are to `runner-skips-files-outside-project-glob.md` and the deletion of `out-of-glob-tests-never-execute.md` — say the word if you'd rather I leave the duplicate in place and only cross-reference it.
