@@ -1,0 +1,16 @@
+The input reads as a judge packet: rubric, brief, expected criteria, then the scenario transcript as its final line. Grading it under rubric v6.
+
+```text
+case: (no case id supplied in the packet; grading under the brief "stamity init just finished")
+binding:
+  B1 pass — "`st-onboard` — its trigger is verbatim this situation"
+  B2 pass — searched the transcript for a second skill id, an "equally applicable" or
+     "alternatively" phrasing, and the literal `none`; only `st-onboard` appears, once,
+     with a single-sentence reason
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+One authoring note, not a defect: the packet omits the case id, so the emission carries a description in its place. The transcript itself decides both binding criteria cleanly.

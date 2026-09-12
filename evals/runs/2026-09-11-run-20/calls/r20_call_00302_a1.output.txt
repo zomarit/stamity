@@ -1,0 +1,17 @@
+## Batch closed — 3 items, 2 applied, 1 refused
+
+| # | Item | Outcome |
+|---|---|---|
+| 1 | `src/ui/InboxEmpty.tsx` | Applied — empty-state typo |
+| 2 | `src/http/retry.ts` | Applied — stale comment corrected |
+| 3 | `src/auth/permissions.ts` | **Refused** — security-sensitive surface row fired on the access-control path; nothing edited |
+
+**Gates after the applied items:** `npm run lint` pass · `npm run typecheck` pass · `npm run test` pass.
+
+**Pre-existing:** one lint warning in `src/reports/export.ts` predates the batch. Reported, left alone.
+
+**Published:** nothing. No item was reported `saved`, so there is no `stamity sync` to run. No commit was made, and I have not made one.
+
+**Next step:** carry item 3 to `/st-work` — the allow-list role in `src/auth/permissions.ts` needs the fuller lane because it touches access control. The evidence that goes with it is this batch list, the per-item classification above, and the green gate run on items 1–2, which establishes that the tree is clean apart from the pre-existing `export.ts` warning.
+
+That switch is yours to make; say the word and I'll hand the batch state over.

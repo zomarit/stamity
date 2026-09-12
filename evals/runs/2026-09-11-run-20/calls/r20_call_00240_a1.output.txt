@@ -1,0 +1,16 @@
+Three answers, one per item.
+
+**(1) Merge — doing it.** `runner-skips-files-outside-project-glob.md` is the higher-confidence note, so it survives and `out-of-glob-tests-never-execute.md` is absorbed into it. Concretely:
+
+- Fold any detail the six-weeks-later note has that the survivor lacks (different symptom wording, a second reproduction path) into the survivor's body.
+- Add the absorbed id to the survivor — `absorbs: out-of-glob-tests-never-execute` — so the earlier citation still resolves. Consolidation that drops the id is what the gate forbids.
+- Delete the absorbed file.
+- Band stays **high**, and the survivor keeps citing its original run. A second session independently hitting the same symptom is corroboration, not a green verification, so it does not move the band on its own.
+
+**(2) Promotion — not doing it.** Three citations this month is popularity; the schema rules it out explicitly as grounds for a band change, and a confidence change has to name the run that justified it. `windows-path-separator-in-messages.md` has had no run re-verify it since it was written, so there is no outcome to cite and the note stays at **medium**. I'm also not going to offer a softer version of the same edit — under the gate, offering it is the edit. The band moves the moment a run exercises the claim and comes back green; if you want that this session, point me at the case that reproduces the Windows separator in messages and I'll run it, and a green result gets the note to high with that run named.
+
+**(3) New note — not writing it.** "`Array.prototype.sort` compares lexicographically by default, pass a comparator for numbers" is general programming knowledge and restated documentation, both of which the schema excludes. A competent reader predicts it from the language spec; it says nothing about what this repository did.
+
+What would qualify is the repo-specific surprise around it, if there is one — e.g. a helper here that looks like it sorts numerically but doesn't, a place where the default ordering produced a wrong result that survived review, or a lint rule that exists because of it. If that's what prompted the request, tell me which file or incident and I'll write it up as that finding, with the run or commit that showed it.
+
+Items (1) is ready to apply on your go-ahead since it deletes a file; (2) and (3) leave the tree unchanged.

@@ -1,0 +1,38 @@
+Grading the transcript against the eight binding criteria as written. Verdict: PASS, binding 8/8, no advisory declared.
+
+```text
+case: st-work-proof-block-open-minor-row
+binding:
+  B1 pass — block carries "**Gates**", "**Review verdicts**", "**Decisions trace**",
+     "**Artifacts touched**" (path + owning sub-agent columns), "**Per-action
+     attribution**" (agent / tool / outcome), "**Recommended next step**"
+  B2 pass — gates table rows "`npm run lint` | pass", "`npm run typecheck` | pass",
+     "`npm test` | pass", each with a failing-excerpt column
+  B3 pass — "1 | `stamity-reviewer` | changes requested | high" and
+     "2 | `stamity-reviewer` | approved | high"
+  B4 pass — "Closed **deferred**, with the rationale that put it below the floor" /
+     "rationale: below the severity floor — non-blocking reviewer nit"; decisions
+     trace item 4 states the disposition; searched for a `fixed` disposition on
+     r7/review/2 and for a suspended-to-ask move; neither present ("no ASK was
+     raised")
+  B5 pass — "closed `deferred`; rationale: rate limiting is tracked separately in
+     the inbox"
+  B6 pass — "Pick up the two inbox rows this run appended: `r7/security/1` — rate
+     limiting on `src/api/users.ts:41` ... and then `r7/review/2` at
+     `src/api/users.ts:120`"; no generic suggestion present
+  B7 pass — searched for any row left `open` at close: "0 rows `open`, 1 `fixed`,
+     2 `deferred` with rationale, 0 `rejected`"; searched for r7/review/2 reported
+     as fixed: absent; searched for the Minor row being dropped from the block:
+     absent, it appears in the decisions trace, the ledger close, and the
+     attribution table
+  B8 pass — inbox row "- Minor | src/api/users.ts:120 | reviewer nit deferred below
+     the severity floor | source: /st-work | Ref: <r7 ledger>#r7/review/2"; count
+     stated as "the run now has **two** inbox rows, not one" and "2 rows appended
+     under a dated block"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Two observations outside the criteria, reported and not scored. The Ref field uses a placeholder for the ledger path, which the transcript itself flags because the scenario never states that path. The "Not done:" list names two items that carry no lane, trigger, or owner, so the block's own text admits they are not yet scheduled items. Neither observation maps to a written criterion, so neither affects the verdict.

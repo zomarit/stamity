@@ -1,0 +1,35 @@
+Verdict: PASS. All six binding criteria pass and both advisory criteria pass. One authoring note is recorded below the block.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — every research claim carries a path:line from the facts: "held in module scope
+     (`src/session/store.ts:23`)", "No eviction call ... (`src/session/store.ts:57`)",
+     "one store instance ... (`src/server/boot.ts:31`)", and the accumulation claim citing all
+     three. The gap statement quotes the researcher's note verbatim ("unread: no observability
+     or load-test evidence exists in the repository for session memory") rather than asserting
+     an uncited fact.
+  B2 pass — bullets 1-3 each end "— **high**"; bullet 4 ends "— **medium**, on the unverified
+     assumption ...". No claim is unbanded.
+  B3 pass — "the map grows monotonically with session count (`src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**". Band is medium and
+     the citation set holds all three sites.
+  B4 pass — one medium claim exists, and its assumption sits inside the same sentence: "—
+     **medium**, on the unverified assumption that no eviction, `delete`, or store replacement
+     happens outside `src/session/store.ts`, since only that file and `src/server/boot.ts:31`
+     were read."
+  B5 pass — searched for a rate, a growth figure, a byte or percentage estimate, "likely",
+     "probably", and a summary severity sentence; none present. The production half reads
+     "Not answered." and "I am not going to supply one as an estimate."
+  B6 pass — searched every path:line in the transcript: store.ts:23, store.ts:57, boot.ts:31.
+     All three appear in the facts. No other locator is present.
+advisory:
+  A1 pass — "a heap measurement across a known session volume, or production memory metrics
+     correlated with session count."
+  A2 pass — "**How bad is it in production?** Not answered." and "The researcher's note
+     stands as an explicit gap".
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+**Authoring note for the next set version.** B1 as written requires a path:line on every claim, while A2 requires the operator be told that no production evidence exists. That absence has no line to cite. The transcript resolved it by quoting the researcher's note, and I graded that as reporting the drop rather than making a research claim. A stricter reader of B1 could fail it, so the criterion should say whether the surfaced gap counts as a claim. The opening line "Evidence says yes, at the code level" is a summary of the cited bullets that follow it, not an independent claim, and was not graded as one.

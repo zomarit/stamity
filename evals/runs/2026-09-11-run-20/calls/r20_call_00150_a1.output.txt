@@ -1,0 +1,34 @@
+## Review result — run r12, round 1
+
+**status:** `DONE`
+**verdict:** `request-changes`
+**confidence:** high — basis: unverified reading. The locator and behaviour were read directly from the diff hunk; no test was executed and no native artifact was produced, so this is a direct reading of source, not a verified failure.
+**gate standing:** **advisory, not merge-blocking.** This repo has no recorded seeded-defect catch rate and no declared false-positive budget, so steps 1 and 2 of the qualification gate are unsatisfied. Per step 3, these findings route through human triage. A clean verdict from this gate would carry no evidence; treat the `request-changes` as a triage input, not a merge block.
+
+### Lenses
+
+**Applied (5):** Security, Testability, Reliability, Maintainability, Product & Spec.
+**Not applicable (5):** UI, UX, Scalability, Performance, Enhancability — no rendered surface, no schema change, no dependency change, no background work in the diff.
+
+### Findings at the human checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-F1 | `Critical` | `src/api/export.ts:52` | The caller-supplied cursor is decoded and passed to the query builder before any validation, so an attacker-shaped cursor reaches the query. | Directly read diff hunk. None of the three evidence classes applies — no sub-agent transcript or hook-gate outcome (class 1), no structured result file (class 2), no completion marker (class 3). |
+
+No `Warning` findings.
+
+### Ledgered `Minor` findings — travel with the run, not the checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-F2 | `Minor` | `src/api/export.ts:31` | Local named `c`; every neighbouring call site in this file spells it `cursor`. | Directly read diff hunk (no class 1–3 artifact). |
+| r12-F3 | `Minor` | `test/api/export.test.ts:12` | Stale comment describes the old offset-based paging. | Directly read diff hunk (no class 1–3 artifact). |
+
+These are ledgered under the ids above and do not re-open the loop. They are not raised at the checkpoint and should not trigger a fix round on their own.
+
+### Re-review scope for round 2
+
+Delta plus `r12-F1` marked for verification. Dispositioned findings are not re-raised against unchanged code, and new `Minor` findings are suppressed from round 2 onward — only regressions against `r12-F1`/`r12-F2`/`r12-F3` and new `Critical` or `Warning` findings count.
+
+Fixes belong to the fixer role; I made no edits, ran no commands, and mutated no branch or board state.

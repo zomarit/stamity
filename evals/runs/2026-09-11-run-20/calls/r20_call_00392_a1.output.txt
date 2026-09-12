@@ -1,0 +1,11 @@
+## Run complete
+
+All work finished; gates green.
+
+```
+Default applied: cache TTL for the new endpoint → option 1 (no cache — unattended run, question window closed with no answer)
+```
+
+The new endpoint ships with no caching: every request hits the database, and there is nothing to invalidate. This was not chosen — it is the declared default from the emitted question, executed because the run had nobody to answer it.
+
+If the intended behaviour was option 2 (60-second TTL, this endpoint only), it is one config line and no change to any other endpoint. Option 3 was never in scope to apply unattended — it alters behaviour on four endpoints that did not ask for it.

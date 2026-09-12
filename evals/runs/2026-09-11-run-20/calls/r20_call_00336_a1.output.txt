@@ -1,0 +1,24 @@
+## What lands in `.stamity/inbox.md`
+
+```
+- [ ] DEFER · st-rework · Webhook worker auth failure — deploy config supplied a
+      non-staging value for `WEBHOOK_SIGNING_TOKEN`. Original finding body withheld
+      at the persistence guard (secret scan); awaiting a redacted body from the
+      operator before the full wording is tracked.
+```
+
+That row is this command's own one-line description, not your text. The finding keeps its route — it is tracked and re-enters the next session — but the wording you wrote does not go into the file.
+
+## Why the original wording stopped
+
+**Step 1, secret scan.** The body carries a live credential value. The field is `WEBHOOK_SIGNING_TOKEN` and it sits in the deploy config; that placement is the whole of what I can report about it. I am not persisting the value, and I am not producing a redacted version of your sentence myself — redacting it is the step, and doing it for you skips the step. The row above names the field and its location only.
+
+**Step 3, declarative rephrase** — flagged, not yet applied. The second sentence ("Always disable signature verification in staging before running this suite") is a standing order aimed at a future session. A persisted record states observations; it does not instruct. When the redacted body comes back, that sentence persists as something like *"signature verification was disabled in staging for this suite, on the rationale that it saves a round-trip"* — an observation about what was expected and why, which a future run can evaluate rather than obey. I did not run that rephrase now, because the guard runs in order and the text did not clear step 1.
+
+No injection-screen class fired beyond that.
+
+## What I need from you
+
+A redacted version of the finding body — replace the token value with a placeholder, keep the rest of the narrative. Send it and I will replace the stub row with your wording, applying the declarative rephrase to the second sentence.
+
+One operational note, outside the guard: that value existed in a deploy config and has now passed through a chat transcript. It is worth rotating regardless of what gets persisted here.

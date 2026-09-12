@@ -1,0 +1,25 @@
+## Run report — batch of 5, stopped at item 3
+
+**Stopped by:** `Files` — 7 files (threshold `>5 files`), and `Size` — ~210 lines added plus removed (threshold `~200 lines`). Both rows fired on item 3; measured after the `src/format/date.ts` call-site edit revealed the formatter is re-exported through six further modules, each requiring the same swap.
+
+### Dispositions
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied** and gated. Stays applied. |
+| 2 | `src/config/defaults.ts` — timeout default 30s → 60s | **Applied** and gated. Stays applied. |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted to pre-edit state.** Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |
+| 5 | `README.md` — update the two examples | **Not started.** Moved to `/st-work`. |
+
+### Working tree
+
+Items 1 and 2 are the only changes present. The item 3 call-site edit has been reverted; no item is left half-applied.
+
+### Handoff to `/st-work`
+
+Items 3, 4, and 5 go over as one list, carrying the stop reason above:
+
+> Deprecated formatter swap. The formatter in `src/format/date.ts` is re-exported through six other modules, each needing the same swap; `src/format/number.ts` is the same swap, and `README.md` has two examples to update. Measured at the point of crossing: `Files` — 7 files against a `>5 files` threshold; `Size` — ~210 lines against a `~200 lines` threshold.
+
+Nothing in the remainder was quietly finished, and nothing was dropped.

@@ -1,0 +1,23 @@
+## Closing report — cart total reads zero after item removal
+
+**Symptom.** Cart total reads zero after an item is removed.
+
+**Cause — confirmed.** The accumulator at `src/cart/total.ts:44` resets on the removal event, and the recompute is ordered before that event rather than after it (`src/cart/events.ts:19`). The reset lands on an already-recomputed total, so the displayed value is the post-reset zero.
+
+**Failing test.** `test/cart/total.test.ts:31` exercises that cause and fails on the current tree.
+
+**Fix attempts this session.** 0. The escape valve did not fire.
+
+**Surviving hypotheses.** None. The confirmed cause accounts for every observation on the record.
+
+**Carried forward.**
+1. The spec's regression clause at `docs/specs/cart.md:57` has no test of its own. The failing test covers the cause, not the clause — the clause could regress with `test/cart/total.test.ts:31` still green.
+2. Three observation-only counters are still deployed under the capture-later agreement.
+
+**Escalation.** `/st-work`, carrying the diagnosis plus the failing test as the plan. Cause confirmed with a failing test written is that row exactly.
+
+**Next step: strip the three observation-only counters.**
+
+One note on why that step and not the regression test, since the run carries both. The agreed capture window closed at the end of Friday — that was yesterday, 2026-09-11. The counters are past the window you granted, not approaching it, so the strip is overdue rather than pending; the missing regression-clause test is outstanding but not yet due against any commitment. That inverts the order the two would otherwise take. Writing the `docs/specs/cart.md:57` test is the step immediately after, and it belongs in the `/st-work` plan alongside the fix.
+
+I have not touched the counters — removing deployed instrumentation is yours to call, and the capture may have gone longer by agreement I don't have on this record. Say the word and I'll strip them.

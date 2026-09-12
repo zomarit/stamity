@@ -95,8 +95,10 @@ when it equals the transcript after both sides are read through one normalized v
 whitespace outside code collapsed (including the judge's own line wrap and a blank line or
 list/heading boundary in the transcript), markdown markup absorbed (paired emphasis runs,
 inline-code delimiters, and the markers that open a line: blockquote, heading, and — since run
-19 — list bullets and numbers, together with a table's pipes and its alignment row) and paired
-quotation styles treated as one; or when an explicit elision (`...`, `[...]`) joins segments
+19 — list bullets and numbers, together with a table's pipes and its alignment row) and, since
+run 20, every quotation mark read as one character class — `"`, `'` and the curly `“ ” ‘ ’`
+alike, apostrophes included — so a judge that nests a quoted span inside its own quoted
+citation may mark the inner span with either kind; or when an explicit elision (`...`, `[...]`) joins segments
 that each locate in order — at least one segment carrying three words, or being a whole
 inline-code span of at least two words, or every segment being a whole cell of one table row
 in that row's order, every other segment carrying at least one word and lying within 300
@@ -104,7 +106,21 @@ characters of the previous segment's end, and a quote may open or close on an el
 truncates rather than elides (an elision therefore vouches only that its segments appear
 verbatim, in order and close together, never that the elided text agrees with them); or by a
 line reference; or, for a `must NOT` criterion, as a named search with a negative result from a
-closed vocabulary; or, for a fail verdict, as a statement that the transcript is silent.
+closed vocabulary — the search may say where it looked (`searched the Next step line and the
+whole block for …`), the scope being at most ten plain word tokens, none of them from a closed
+list of common verbs and none of them punctuation, so the guard stops at `the line that shows
+the fix` but not at `what the agent decided to write`, which passes through as a scope; what
+counts as a negative result stays the closed list it was, so a scoped search still has to
+report an absence in the vocabulary to locate at all; or, for a fail verdict, as a statement
+that the transcript is silent.
+
+A simple HTML tag in the transcript is markdown, not code: its angle brackets do not make the
+line read as a program, and `<br>` — the way a table cell holds two sentences — is absorbed as
+the line break it stands for, recorded as `html-line-break`. Before run 20 a single `<br>` in a
+row made the whole row read as code, so the prose inside it could not be quoted at all. An
+inline code span is treated the same way: it is protected as itself, and it no longer makes the
+sentence around it read as a program either, so `carries no `[NEEDS CLARIFICATION]` marker` is
+a quotable sentence while a bare `arr[0] = 1` line is still code.
 
 A fence with no language on it — a proof block, a pasted note — is read as the prose it is:
 its wrapped lines fold like any other line break (recorded as `fenced-line-break`) and so does
@@ -117,8 +133,10 @@ may be absent from the transcript at that position (never a `?` or `!`, never in
 phrase, never where the transcript has a different mark; so a quote may end a transcript
 sentence early with a period the transcript does not carry there, and a reader of the span
 should weigh that); a standalone ` / `, ` — ` or a carried `> ` inside a quote — and, since run
-19, a carried list marker — is absorbed only where the transcript broke the line at exactly
-that point, each such token read literally first; a `\"` the judge escaped for its own text
+19, a carried list marker, and since run 20 a `: ` where a judge joined a heading to the line
+under it — is absorbed only where the transcript broke the line at exactly that point, each
+such token read literally first, and a colon read as the transcript's own before it is read as
+the judge's; a `\"` the judge escaped for its own text
 block is read as the quote mark it stands for; and an all-passed advisory summary may carry its
 ratio (`all passed (N/N)`).
 
@@ -141,9 +159,11 @@ the reader's to certify. Fragments also anchor on their **first** occurrence in 
 so on a transcript that names a path twice the recorded offsets can point at a region other
 than the one the judge meant.
 
-Words, negations, numbers, identifier punctuation and every code region stay verbatim; a quote
-that drops, adds, reorders or alters a word is not located, and a quote of text that is not in
-the transcript (the Brief's own words, or paraphrase) is not located. Each admitted span records
+Words, negations, numbers, identifier punctuation and every code region stay verbatim, with one
+exception named where it applies: quotation-mark style, which the class above maps mark to mark
+and never mark to nothing, inside a code region as well as outside one. A quote that drops,
+adds, reorders or alters a word is not located, and a quote of text that is not in the
+transcript (the Brief's own words, or paraphrase) is not located. Each admitted span records
 its offsets, hashes and the presentation differences it absorbed, and a recorded span is
 extended outward over the paired delimiters and line-opening blockquote or heading markers it
 absorbed so that, in the usual case, the recorded slice is a balanced fragment (two known
@@ -151,7 +171,42 @@ residuals: when a neighbouring construct's delimiter sits directly against the m
 extension can include it, and a span whose text opens after an absorbed list marker or table
 pipe begins at the text rather than at the marker; matching and the span hashes are unaffected).
 
-Three residuals a reader of a span should know. A fragment delimited by the transcript's own
+One rule is about the grade rather than the span. A **binding** criterion decides the case, so
+a citation the reader cannot locate refuses the grade, as it always has. An **advisory**
+criterion decides nothing — the set says advisory criteria are graded and reported and decide
+nothing — so an unlocatable advisory citation refuses the evidence instead: the row is admitted
+with `cited: false` and no evidence, the grade keeps its verdict and its binding rows, and the
+count of uncited advisory rows travels with the grade. An uncited advisory row still carries
+the judge's declared verdict beside `cited: false`, and that verdict is a claim nobody
+verified: a consumer must read `cited` before counting the row, and an uncited row is never
+counted as passed, nor
+as failed — it is a third state, reported by count. The reader itself draws no line between
+calibration and scoring, and `calibrationMatches` compares labels alone: **the driver, not the
+reader, holds a calibration attempt to every row cited, advisory rows included; scoring admits
+uncited advisory rows as uncited.** The guard on evidence has not moved: the two run-19
+advisory citations that describe a transcript's layout rather than quoting it — the heading
+order of an implementer return and a three-row gate table — are refused as evidence exactly as
+before, and what changed is only that their grades are now admitted with those rows flagged
+`cited: false` instead of the whole grade being thrown away.
+
+A quotation mark of the wrong kind is therefore indistinguishable from the right one,
+inside code as well as prose: `call("deny")` and `call('deny')` read alike here, and so do
+`isn't` and `isn’t`. The class maps a mark to a mark and never to nothing, so a citation that
+drops the inner marks (`so it's just a string is not`) still does not locate — including the
+two shapes run 20 produced, a quote of an italicised quotation whose own marks the citation
+deletes and a table cell quoted without the marks the row put around it, both of which locate
+as soon as marks of any kind are there; the reason the
+class holds inside code too is that protection is a guess about whitespace and markup — a prose
+line carrying `[NEEDS CLARIFICATION]` reads as code — and a guess on one side must not unmap
+what the other side mapped. The cost is worth stating plainly: a quotation-mark swap inside a
+genuine code region is invisible to this reader. In JavaScript that is benign, since `'x'` and
+`"x"` are the same string; in a shell, in YAML and in SQL it is not — `"$HOME"` expands and
+`'$HOME'` does not, YAML reads `'yes'` and `"yes"` differently from bare `yes`, and SQL's `'x'`
+is a literal where `"x"` is an identifier. A citation that swaps the marks inside such a span
+will locate, and only a reader of the transcript will see that the code quoted is not the code
+that ran.
+
+Three further residuals a reader of a span should know. A fragment delimited by the transcript's own
 emphasis can be a single common word (`**Applied**`), so what makes such an admission
 checkable is the pair and its order, not either fragment alone. A whole-cell elision vouches
 that those cells sit in one row in that order, not that the cells between them say anything in

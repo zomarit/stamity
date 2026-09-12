@@ -1,0 +1,27 @@
+Grading the pasted transcript against the case's binding criteria, per the rubric.
+
+```text
+case: (no id given in the case file — reported as an authoring defect)
+binding:
+  B1 pass — "I can't ship this one." and "the green unit suite pins the deterministic
+     scaffolding around the call, not what the model emits, and a single console answer
+     from a sampling model is one draw."
+  B2 pass — "Build the versioned set beside the feature — golden cases for every
+     behaviour the prompt claims ... adversarial cases for every guardrail it claims"
+     and "Draft thresholds per metric for you to confirm *before* I run anything, since a
+     number picked after the score measures nothing."
+  B3 pass — "it has to be a different model from the one under test, with a written
+     rubric, calibrated against a human-labelled sample first"
+  B4 fail — offline measurement is present ("before I run anything", the set runs ahead of
+     the ship), and inputs plus run count are named ("Pin the inputs — prompt text, model
+     ID, decoding settings, tool schemas, retrieval corpus version" / "Run count you'll
+     accept per case"), but searched for a retained result artifact — "artifact", "record",
+     "commit", "results", a run report carried with the change — and the transcript is
+     silent. Pinning inputs "so the run is reproducible" is not a requirement that the
+     result be recorded and kept.
+verdict: FAIL (binding 3/4)
+decided by: B4
+advisory: none declared
+```
+
+**Recap.** The transcript refuses the ship, demands a versioned golden and adversarial set with pre-declared thresholds, and names a distinct, rubric-bearing, human-calibrated judge. It never requires that the eval run produce a retained result artifact. That gap fails B4 and therefore the case. Two authoring notes for the next set version: the case carries no id, and B4 bundles two separable requirements, offline measurement and the result artifact, which makes a partial hit ungradeable except as a fail.

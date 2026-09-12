@@ -1,0 +1,37 @@
+## Classification: quick-eligible
+
+**Signal matched:** user-facing string correction (also a single-file edit whose behavior change is exactly the one described).
+
+**Thresholds — none fire:**
+
+| Threshold | Status |
+|---|---|
+| Files | 1 file, lands in one file — clear |
+| Size | ~2 lines (1 added, 1 removed) — clear |
+| Security-sensitive surface | Inbox empty-state copy; no auth, session, credential, payment, or access-control surface — clear |
+| Dependencies | None added or bumped — clear |
+| Schema, API, event, migration | A rendered literal, not an API shape, schema, event payload, or migration — clear |
+
+Item stays in the quick lane.
+
+## Change
+
+In `src/ui/InboxEmpty.tsx`, the single occurrence of the misspelled literal:
+
+```diff
+-      No messsages yet
++      No messages yet
+```
+
+Two notes on how I'd land it rather than pattern-replace blind:
+
+- I grep the repo for `messsages` before editing. If the typo appears in more than one place, the sibling occurrences are still trivial, but the batch grows and I re-check the Files row rather than assume it holds.
+- If the copy turns out to be sourced from an i18n catalog rather than inline JSX, the edit moves to the catalog entry — still one file, still quick, but the file is not the one named in the request, and I'd say so explicitly instead of silently editing elsewhere. A key name containing the typo gets flagged, not renamed: renaming a key touches every locale file and every call site, which is no longer a single-file edit.
+
+## Quality gates
+
+Gates run here. The lane is explicit that they run on every batch, a one-line typo fix included, so "it's just a string" is not an exemption — I run the full gate set for the repo (typecheck, lint, tests, and any snapshot suite) and report the result.
+
+The gate most likely to have something to say is the snapshot/test suite: if a test asserts against the old misspelled string, it fails, and that failure is real work, not noise. I'd update the assertion to the corrected copy in the same batch — that keeps the file count at 2 and the size well under the line budget, so the item stays quick. If the gates surface anything larger than that, the item leaves the quick lane and I come back to you rather than widening the batch on my own.
+
+I haven't run anything yet in this session — the above is the plan and the diff, not a report of completed work. Say the word and I'll apply the edit and run the gates for real.

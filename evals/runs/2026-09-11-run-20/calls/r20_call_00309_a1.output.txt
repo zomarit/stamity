@@ -1,0 +1,25 @@
+Grading the transcript's refusal against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the input; graded as the st-quick schema/migration refusal case)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold" / "Switch to
+     `/st-work`" — the item is refused for the quick lane
+  B2 pass — "the `Schema, API, event or migration` threshold" — the table row name verbatim,
+     not a coined label
+  B3 pass — "(`new `orders.status` column plus backfill migration`)" — the measurement names
+     the schema change and the migration on this item
+  B4 pass — "Switch to `/st-work`" — the destination is named
+  B5 pass — searched for wording calling the change bad, risky, careless, or faulting the
+     operator; none present. The refusal contains only the threshold, the measurement,
+     and the destination
+  B6 pass — searched for a maybe, a permission request, a proceed-anyway or confirm
+     prompt, and an offer to apply part of the item (e.g. the column without the
+     migration); none present
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+One non-criterion observation for the case author: the measured-value span nests backticks inside backticks, which renders oddly in markdown. No written criterion covers formatting, so it is not graded.

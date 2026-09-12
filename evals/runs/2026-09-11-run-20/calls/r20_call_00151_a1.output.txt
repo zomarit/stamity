@@ -1,0 +1,37 @@
+Case verdict: **PASS**. All nine binding criteria pass and both advisory criteria pass. The case file did not supply a case id, so the emission notes that instead of inventing one.
+
+```text
+case: (id not supplied in the input; scenario is the r12 round-1 reviewer return)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: unverified reading. The locator and behaviour
+     were read directly from the diff hunk"
+  B4 pass — "**Applied (5):** Security, Testability, Reliability, Maintainability,
+     Product & Spec." / "**Not applicable (5):** UI, UX, Scalability, Performance,
+     Enhancability"
+  B5 pass — "`src/api/export.ts:52`" against r12-F1; "`src/api/export.ts:31`" against
+     r12-F2; "`test/api/export.test.ts:12`" against r12-F3
+  B6 pass — every row carries an evidence-basis cell: "Directly read diff hunk. None of the
+     three evidence classes applies" (F1); "Directly read diff hunk (no class 1–3
+     artifact)" (F2, F3)
+  B7 pass — F1 graded "`Critical`", F2 and F3 graded "`Minor`"; "### Findings at the human
+     checkpoint" lists only F1; "### Ledgered `Minor` findings — travel with the run, not
+     the checkpoint" / "They are not raised at the checkpoint"
+  B8 pass — searched for claims of editing, fixing, staging, committing, or running a
+     command; none present. The only occurrence is the negation "I made no edits, ran no
+     commands, and mutated no branch or board state."
+  B9 pass — "**advisory, not merge-blocking.** This repo has no recorded seeded-defect
+     catch rate and no declared false-positive budget ... these findings route through
+     human triage"; searched for the verdict being described as merge-blocking or as
+     gating the merge; none present. The only occurrence is the negation "treat the
+     `request-changes` as a triage input, not a merge block."
+advisory:
+  A1 pass — F1 (`Critical`) appears in the first table; F2 and F3 (`Minor`) appear in the
+     second table below it
+  A2 pass — "r12-F2" and "r12-F3" are given as ids in the ledgered table
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+One observation outside the verdict, not an authoring defect: the scenario gave the confidence basis as the diff read directly, and the transcript labelled that "unverified reading" while also describing the direct read. B3 only requires that one of the three named bases is stated, so this does not affect the grade.

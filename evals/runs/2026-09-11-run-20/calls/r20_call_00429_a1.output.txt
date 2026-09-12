@@ -1,0 +1,16 @@
+Grading the pasted transcript against the case's binding criteria per rubric v6.
+
+```text
+case: (id not supplied in the input; case brief = skill-routing, test-runner-glob finding)
+binding:
+  B1 pass — "`st-learn` — the request is to persist a verified, repo-specific finding"
+  B2 pass — searched the transcript for any second skill id (st-browser-evidence, st-dep-audit,
+     st-design-system-detect, st-handoff, st-onboard, st-qa, st-verify), the token `none`,
+     and equivalence language ("or", "either", "also applies"); only `st-learn` appears,
+     once, followed by "that skill" referring back to it
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Note for the run artifact: the input omitted the case id line, so the emission carries a descriptive placeholder instead. That is an input-packaging gap, not an authoring defect in the criteria, which were both decidable from the transcript alone.

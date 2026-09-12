@@ -1,0 +1,15 @@
+"Add pagination" reads at least two ways here, and they produce different artifacts, so one question before anything is written.
+
+**Which pagination, on what surface?**
+
+1. **Offset/limit (`?limit=`/`?offset=`) on `GET /api/v1/orders` only.** Smallest diff, trivially reversible, unblocks the endpoint that's actually hurting — but offset pages drift when rows are inserted mid-scan, and deep offsets stay slow because the DB still walks the skipped rows.
+2. **Offset/limit on all three list endpoints.** One consistent contract across the API in a single pass — but it's a breaking-shape change on two endpoints that nobody has complained about, and three times the client-side fallout.
+3. **Opaque keyset cursor (`?limit=`/`?after=`) on `GET /api/v1/orders` only.** Actually fixes the slowness at depth and is stable under concurrent inserts — but it needs a cursor encode/decode helper built from scratch and commits us to a stable sort key, and `docs/specs/` defines neither the page sizes nor the cursor shape, so I'd be inventing both.
+
+Bundled sub-questions, same answer turn:
+
+- **Default and max page size?** I'd propose `limit` default 50, max 200, unless you have numbers.
+- **Envelope?** Wrap rows in `{ data, next }`, or keep the bare array and put paging state in headers? Option 3 effectively forces the envelope.
+- Whichever option lands, I'll put the paging logic in one shared helper rather than inline in the handler, so extending to the other two endpoints later is a small change.
+
+Default if no response: **1**, scoped to `GET /api/v1/orders`, with default limit 50 / max 200 and a bare array plus `Link`/`X-Total-Count` headers. It's the lowest-blast-radius reversible move and it leaves the door open to 3 — the offset params can stay accepted as a deprecated alias once a cursor exists. I won't touch the other two endpoints or write anything into `docs/specs/` about cursor shape without your pick.

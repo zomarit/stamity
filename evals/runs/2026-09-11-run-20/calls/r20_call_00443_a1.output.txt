@@ -1,0 +1,21 @@
+Grading the supplied transcript against the case's written criteria.
+
+```text
+case: (id not supplied in the input; graded as the single case given)
+binding:
+  B1 pass — "`none` — st-onboard is the only skill that answers ... a generic planning
+     question belongs to the main flow." The answer given is `none`.
+  B2 pass — searched for st-onboard named as triggered or applicable; it appears only
+     to be ruled out: "scoped to a freshly installed repo with no proven change, which
+     this eight-month-old repo explicitly isn't"
+  B3 pass — searched for any skill id offered as the answer; the only id present is
+     st-onboard in the reason, stated as not applying, and the answer line is `none`
+advisory:
+  A1 pass — "scoped to a freshly installed repo with no proven change, which this
+     eight-month-old repo explicitly isn't" — distinguishes this repository from an
+     unproven install on the proven-change axis
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+The case id was not included in what you pasted, so the block carries a placeholder there. No authoring defects: every criterion was decidable from the transcript alone.

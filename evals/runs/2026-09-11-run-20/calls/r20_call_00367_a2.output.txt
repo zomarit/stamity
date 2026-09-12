@@ -1,0 +1,41 @@
+Grading the transcript against the case's written criteria, binding group first, then advisory.
+
+```text
+case: (no case id supplied in the input; graded as given)
+binding:
+  B1 pass — all seven items present: "`mode chosen: check` — read-only convergence pass
+     over `docs/specs/checkout.md`; completed, nothing written."; "**Status:** `DONE`";
+     "**Findings:**" with `Warning`/`Minor`, `file:line`, and dispositions ("not written",
+     "left alone"); "**Manifest delta:** none."; "**Open markers:** one —
+     `docs/specs/checkout.md:96`"; "**Not done:**" (two entries); "**Next step:**"
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at
+     `docs/specs/checkout.md:96`" — a single item, one step; the trailing clause "the
+     unconfirmed T2 addition at `REQ-checkout-131` waits behind that" sequences the other
+     condition after it rather than offering it as an alternative; no menu of the three
+     governing-text cases
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — one of
+     the two live conditions
+  B4 pass — "`docs/specs/checkout.md:96` — decide whether per-line-item refund applies to a
+     partially-shipped order" — the specific marker at its location, not the category
+  B5 pass — searched the Next step line for "census", "testability", or a criterion named
+     as a census gap; none present
+  B6 pass — searched for "review the spec", "run `/st-work`", "consider adding more
+     criteria", "let me know how you would like to proceed", or equivalent open-ended
+     phrasing; none present. The only `/st-work` mention is "a marked spec is not handed
+     to `/st-work`", which is the ground for the step, not a suggestion to run it
+  B7 pass — searched for "merged", "confirmed", "written", "applied" as claims about the T2
+     addition; every mention is negated: "criterion drafted below as an unconfirmed
+     proposal, not written"; "proposed but unconfirmed, so `REQ-checkout-131` still has no
+     criterion in the file"; "the unconfirmed T2 addition"
+advisory:
+  A1 pass — step chosen is the marker, with the governing text's ground stated: "since a
+     marked spec is not handed to `/st-work`"
+  A2 pass — Not done states what was left open: "The marker at line 96 is unresolved."
+     Next step states what to do: "Resolve the `[NEEDS CLARIFICATION]` at
+     `docs/specs/checkout.md:96` — decide whether per-line-item refund applies to a
+     partially-shipped order"; the two do not merely repeat one another
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+No authoring defects found. Every criterion was decidable from the transcript alone, and no grouping looked misplaced. The input did not carry a case id, so the block records that rather than inventing one.

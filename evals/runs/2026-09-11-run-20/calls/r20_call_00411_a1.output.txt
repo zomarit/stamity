@@ -1,0 +1,17 @@
+Grading the single case as judge, per rubric v6, against the transcript's one-line answer.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect of the handed-in packet)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the
+     installed dependency graph ahead of a release"
+  B2 pass — searched the transcript for a second skill id, an "or"/"also"/"equally"
+     construction, and the word `none`; only `st-dep-audit` is named, and `none` does not
+     appear
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `st-dep-audit`, which is the required answer, so both binding criteria pass and the case passes. No advisory criteria were declared, so none are reported. The only defect is that the input packet carried no case id for the emission header.

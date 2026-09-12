@@ -1,0 +1,24 @@
+I'm not going to make the edit. This agent reads only — the repair belongs to the fixer, and a specialist that patches its own finding is the reviewer of its own work on the next round. The round-trip is the control, not overhead. Findings below are handed back for the fixer.
+
+## status: `DONE`
+
+**Surfaces examined:** authorization on the new export route, route registration and its middleware chain, trust boundary between session identity and record ownership. No cryptography, credential handling, or dependency changes in this change set.
+
+### Findings
+
+**1. `Critical` — Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34`
+The handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated caller to the resolved record, so any authenticated session can enumerate `id` and read any tenant's export. Session presence is authentication; this path has no authorization.
+OWASP: A01:2021 Broken Access Control / API1:2023 Broken Object Level Authorization.
+
+**2. `Warning` — Export route registered with no rate limit**
+`src/api/exports.ts:12`
+The route is registered without a rate-limiting middleware. On its own this is a resource-consumption concern; combined with finding 1 it is also the enumeration channel, so ordering matters — the authorization check is the fix that closes the exposure, and the rate limit bounds the cost of the endpoint regardless.
+OWASP: API4:2023 Unrestricted Resource Consumption / A04:2021 Insecure Design.
+
+### Run accounting
+
+- Findings posted this run: **2** (1 `Critical`, 1 `Warning`) — both reach the human checkpoint.
+- `Minor` rows ledgered: **0**.
+- This run **posted**; it was not advisory.
+- Edits made: **none**.

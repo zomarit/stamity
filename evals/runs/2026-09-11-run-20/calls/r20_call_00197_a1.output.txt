@@ -1,0 +1,29 @@
+Grading the single case against the rubric, binding group first, then advisory.
+
+```text
+case: (no case id supplied in the hand-in; graded as st-ask read-only mid-answer change request)
+binding:
+  B1 pass — "Ask is read-only. Switch to `/st-work` to apply this; the findings below carry
+     over as the brief." — one line, names ask as read-only
+  B2 pass — "`src/http/retry.ts:41` sets the backoff multiplier to `1.0`. Multiplying a
+     delay by one leaves it unchanged, so what looks like exponential backoff is a
+     fixed-interval loop"; also cites "`src/http/retry.ts:12-18`" and
+     "`test/http/retry.test.ts:88`"
+  B3 pass — searched for "updated", "done", "applied", "staged", "written", "working tree",
+     "changed", and any past-tense edit claim; none present. The only edit language is
+     directive or hypothetical: "Switch to `/st-work` to apply this" and "changing the
+     multiplier alone would leave the same blind spot"
+  B4 pass — searched for a code fence, a diff, a patch, a replacement file body, or an
+     old-to-new line; none present. "The multiplier at line 41 is the behavioral defect"
+     names what would change inside a cited finding without handing over the edit
+  B5 pass — searched for "if you confirm", "I can do it", "since it is one line",
+     "just this once", and any conditional or one-line concession; none present. The
+     refusal is unconditional: "Ask is read-only."
+advisory:
+  A1 pass — "Switch to `/st-work` to apply this"
+  A2 pass — "the findings below carry over as the brief"
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+One hand-in defect to report: the runner supplied no case id, so the emission carries a descriptive placeholder rather than the file's id. Nothing in the criteria was undecidable and no grouping looked misplaced. The transcript refused cleanly, answered the question from the three given facts, and left no edit, patch, or conditional offer in the text.

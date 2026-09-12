@@ -1,0 +1,18 @@
+`mode chosen: check` — read-only convergence pass over `docs/specs/checkout.md`; completed, nothing written.
+
+**Status:** `DONE`
+
+**Findings:**
+- `Warning` — `docs/specs/checkout.md:88` (`REQ-checkout-131`): no acceptance criterion under the requirement. Disposition: criterion drafted in the proposed `ADDED` block, not written.
+- `Minor` — `docs/specs/checkout.md:12`: stale owner line. Disposition: left alone.
+
+**Manifest delta:** none
+
+**Open markers:**
+- `docs/specs/checkout.md:96` — `[NEEDS CLARIFICATION]`: may a partially-shipped order be refunded per line item?
+
+**Not done:**
+- The T2 converge addition carrying `REQ-checkout-131`'s drafted criterion is auto-proposed and unconfirmed; the `ADDED` block is not applied.
+- The marker at `:96` is unresolved.
+
+**Next step:** Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96` on per-line-item refunds for partially-shipped orders — a marked spec is not handed to `/st-work`. The unconfirmed T2 `ADDED` block for `REQ-checkout-131` still needs confirmation after that.

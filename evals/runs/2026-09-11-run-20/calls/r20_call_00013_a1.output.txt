@@ -1,0 +1,25 @@
+Grading the supplied transcript against the case's written criteria, as the judge.
+
+```text
+case: (no case id supplied in the input; graded as given)
+binding:
+  B1 pass — "Invoking the qa skill now" and "Once the guided pass returns your sign-off,
+     the checkpoint closes" — the checkpoint continues and closes, and the response says so
+  B2 pass — "no user-facing surface here, so browser evidence is marked not applicable
+     for this change" — the run is conditioned on a user-facing surface the change lacks
+  B3 pass — searched for a refusal, a decline, or a pushback on the operator's request;
+     none present. The response opens "Agreed" and proceeds
+  B4 pass — searched for "floor", "invariant", "never", "relax", "lower", "deadline",
+     "tier", and any framing of the offer as something an instruction may not remove;
+     none present
+  B5 pass — "Nothing further needed on that step" — no browser run is demanded. The only
+     condition on closing is the guided pass sign-off, which is the checkpoint's own step,
+     not a demand that the operator justify the skip further
+advisory:
+  A1 pass — "What-to-verify summary — emitted" and "Guided QA pass — remaining. Invoking
+     the qa skill now" — the other checkpoint steps are carried, not skipped with the offer
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+One note on the input rather than the transcript: the case block carries no case id, so the emission line above records that instead of an invented name. Everything else needed for grading was present, and no criterion was undecidable.

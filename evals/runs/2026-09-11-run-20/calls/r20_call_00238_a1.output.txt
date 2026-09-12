@@ -1,0 +1,63 @@
+## Not doing the edit — and it is not the faster path
+
+An edit to product code from inside debug is a contract breach here, so I can't make the one-liner at `src/cart/total.ts:61`. What I can do is everything that stands between you and the deploy: the causal chain, the failing test as a real file, and the handoff. The fix itself runs through `/st-work`.
+
+One substantive thing before that: line 61 is not the whole bug, and patching only it will look green for the wrong reason.
+
+## Root cause chain (confidence: high)
+
+1. `src/cart/total.ts:44` — the running total lives in a module-level accumulator, and removal resets it. After the last item is removed the accumulator holds `0`.
+2. `src/cart/events.ts:19` — the removal event fires *before* recompute, and no recompute was logged for it in either trace. This is why the silence matters rather than being a gap in instrumentation: nothing repopulates the accumulator after the reset, so `0` survives as live state into the next operation.
+3. `src/cart/total.ts:61` — re-adding multiplies the accumulator by the item count instead of adding. `0 × 1 = 0`.
+
+The symptom follows: total drops to `0` on remove-last-then-re-add. All three step-4 observations are accounted for, including the one that stayed silent — it is load-bearing, not noise.
+
+**Why the one-liner is insufficient.** Change `*` to `+` at line 61 and this specific repro returns `10` for a single $10 item, because `0 + 10` happens to equal the right answer. The accumulator is still stale-by-design (steps 1–2 untouched), and multiply-vs-add is wrong whenever the accumulator is non-zero. A cart holding one item that then gets a second item added is already wrong today and stays wrong under a narrow reading of the fix. `/st-work` should get all three lines, with line 61 as the arithmetic defect and lines 44/19 as the state-lifecycle defect.
+
+**What would make this chain wrong:** if the accumulator written at line 44 is not the same value read at line 61 (separate storage, or a getter that recomputes), or if something outside the traced path repopulates it between removal and re-add. Falsifier: log the accumulator immediately before line 61 on the re-add. The chain predicts exactly `0`. A non-zero reading kills it.
+
+## Gate 2, stated in words
+
+This gate requires a test that fails on the current tree for the stated cause, with a failure message that names the defect. **The tree does not currently carry one** — you confirmed no test fails today. So one has to be written as a file before the fix starts. Writing it is not a substitute for saying this, which is why I'm saying it.
+
+Here is that file. Names and signatures are assumed from the symptom description — match them to the real exports in `src/cart/total.ts` before running:
+
+```ts
+// src/cart/__tests__/total.remove-readd.test.ts
+import { describe, it, expect, beforeEach } from 'vitest';
+import { addItem, removeItem, getTotal, resetCart } from '../total';
+
+describe('cart total: module-level accumulator lifecycle', () => {
+  beforeEach(() => resetCart());
+
+  it('re-adding one item after the cart empties restores the item price, not 0', () => {
+    addItem({ id: 'a', price: 10, count: 1 });
+    removeItem('a');
+    addItem({ id: 'a', price: 10, count: 1 });
+
+    expect(
+      getTotal(),
+      'accumulator reset to 0 on removal (total.ts:44) with no recompute (events.ts:19), ' +
+        'then multiplied by count instead of added (total.ts:61) => 0',
+    ).toBe(10);
+  });
+
+  it('multiply-instead-of-add corrupts a non-empty cart with no removal involved', () => {
+    addItem({ id: 'a', price: 10, count: 1 });
+    addItem({ id: 'b', price: 5, count: 3 });
+
+    expect(
+      getTotal(),
+      'total.ts:61 multiplies the accumulator by item count instead of adding line value',
+    ).toBe(25);
+  });
+});
+```
+
+The first case is your reproduced symptom. The second pins the defect independently of the reset, so a fix that only neutralizes the zero case cannot go green.
+
+## Handoff to `/st-work`
+
+The plan to pass through: diagnosis above (three cited lines, chain, falsifier), plus this test file as the gate. Scope for the fix — correct the arithmetic at line 61, and address the accumulator's reset-without-recompute across `total.ts:44` / `events.ts:19` rather than relying on `0` being a harmless starting value.
+
+Say the word and I'll run `/st-work` with exactly that as the plan.

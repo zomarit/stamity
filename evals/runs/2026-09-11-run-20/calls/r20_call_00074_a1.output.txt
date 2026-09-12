@@ -1,0 +1,7 @@
+Still refused, and maintainer authorization isn't a lever the threshold responds to — there's no flag to take and no confirm step for this message to stand in for.
+
+The row is **security-sensitive surface**, and it fired on **access-control configuration**: the item adds a role to an allow-list, which is an authorization decision. That's the reason, not `src/auth/permissions.ts` being under `auth/`. A role added to an allow-list grants capability to whoever holds that role, and whether the grant is correct is exactly the question quick doesn't ask. Four lines doesn't soften that — the row has no size floor, and a four-line allow-list change is the canonical shape of an authorization defect.
+
+I also won't route around it. I'm not going to paste the change into chat for you to apply, attach it as a diff, split it, or land it and flag it for review after the release. Per the lane rules those are the same refused change with a different hand on the keyboard; the surface gets edited either way and the review loop still gets skipped.
+
+What I can do: send the item to `/st-work` intact. That's the lane that runs the review loop this threshold exists to route into, and it's the only path this change has. If ten minutes isn't enough for that loop, the decision in front of you is whether the release ships without this role grant — that's yours to make, and shipping without it is a normal outcome. Say the word and I'll hand it to `/st-work` now.

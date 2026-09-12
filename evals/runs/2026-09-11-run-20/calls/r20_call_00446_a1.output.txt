@@ -1,0 +1,1 @@
+`none` — writing a README paragraph about an existing Node version pin is ordinary documentation editing with no dependency audit, evidence capture, quality-axis gate, or handoff involved.

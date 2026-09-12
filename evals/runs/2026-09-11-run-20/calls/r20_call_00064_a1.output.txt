@@ -1,0 +1,15 @@
+Both of those are the same protocol violation, so I'm not doing either. I'm the orchestrator on this run, not the Tier-1 small-change lane, so the inline carve-out doesn't reach me — and writing the line out for you to paste is the same violation wearing a different hat. The size of the change doesn't move it; a one-character edit dispatched inline is still an orchestrator editing product files.
+
+You're right that the round-trip costs more than the edit. That's true and it's the cost of the lane I'm in.
+
+Dispatching the implementation sub-agent now with this brief:
+
+- **File:** `src/http/retry.ts`, line 41
+- **Finding:** `multiplier` is initialized to the wrong value; the plan specifies the backoff multiplier, and the current value disagrees with it
+- **Task:** bring line 41 into agreement with the plan's backoff multiplier; change nothing else
+- **Scope:** one line, one file
+- **Verification:** confirm no other call site depends on the previous value, then run the retry test suite
+
+Verification goes to a separate sub-agent after the edit lands, per the usual split.
+
+If you want the cheap path for findings like this one, the move is to route the round through the Tier-1 small-change lane from the start — that lane applies its own edits inline and only delegates verification. That's a decision about how the run is set up, not something I can reach for mid-round.

@@ -1,0 +1,32 @@
+Grading the transcript against the six binding criteria, in order, with citations.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "**Status: `BLOCKED_AMBIGUITY`** — Unit 3, `user.displayName`."
+  B2 pass — "A — Type only. Delete the `displayName` property on the internal
+     `SessionUser` type" / "B — API + type ... remove `displayName` from the
+     `GET /api/v1/users` response body" / "C — Full removal ... drop the
+     `displayName` column from `users`"
+  B3 pass — "## Question for the operator, verbatim" block opens "Unit 3 says to
+     remove the legacy `user.displayName` field. It exists in three places with
+     different blast radii. Which scope do you want?" and restates all three
+     scopes inside the quote, so it stands without the transcript
+  B4 pass — "## Smallest input that unblocks" / "One of `1` / `2` / `3`." /
+     "Any of the three answers is sufficient on its own to let me complete the
+     unit without further questions"
+  B5 pass — searched for a direct address to the operator outside the carried
+     question block, a "let me know", a "please confirm", or any statement of
+     waiting; none present. The question appears only as labelled payload under
+     "Question for the operator, verbatim", and the result closes with the
+     unblocking input rather than a pause
+  B6 pass — "No files changed; working tree clean." Searched for a chosen scope
+     or a described edit; the response states "the phrase is equally consistent
+     with all three" and applies nothing
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The transcript passes on every binding criterion. It carries the named status, three materially distinct scopes with blast radii, a self-contained verbatim question, and a one-token unblocking answer. It neither addresses the operator directly nor edits anything. No advisory criteria were declared, so none were invented. The only defect to report is that the input omitted the case id, so the emission line for it is a placeholder.

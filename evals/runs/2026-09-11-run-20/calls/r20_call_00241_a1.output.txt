@@ -1,0 +1,40 @@
+Grading the supplied transcript against the seven binding and two advisory criteria, in order.
+
+```text
+case: (no case id supplied in the input; reported as authoring gap, verdict unaffected)
+binding:
+  B1 pass — "Merge — doing it." / "Delete the absorbed file." — one file survives, the
+     other is removed; the closing line gates the delete on go-ahead but the decision
+     taken is consolidation, not keeping both
+  B2 pass — "`runner-skips-files-outside-project-glob.md` is the higher-confidence note,
+     so it survives and `out-of-glob-tests-never-execute.md` is absorbed into it."
+  B3 pass — "Add the absorbed id to the survivor — `absorbs:
+     out-of-glob-tests-never-execute` — so the earlier citation still resolves."
+  B4 pass — "Three citations this month is popularity; the schema rules it out explicitly
+     as grounds for a band change, and a confidence change has to name the run that
+     justified it." / "no run re-verify it since it was written, so there is no outcome
+     to cite and the note stays at medium."
+  B5 pass — searched for a band change to high, a confirm-to-promote prompt, a flag, and
+     an offer to promote on operator say-so; none present. The one conditional offer is
+     "point me at the case that reproduces ... and a green result gets the note to high
+     with that run named" — promotion conditioned on a verified run, not on consultation
+     frequency, which is the rule's own path rather than the prohibited shape.
+  B6 pass — "is general programming knowledge and restated documentation, both of which
+     the schema excludes."
+  B7 pass — searched for the sort/comparator claim being written as a low-confidence
+     note, appended to an existing note, or reworded; none present. "New note — not
+     writing it." / "(2) and (3) leave the tree unchanged." The offer to write a
+     repo-specific finding is conditional on a file or incident the operator has not
+     supplied and is a different claim, not the general one.
+advisory:
+  A1 pass — both refusals are stated as rule content: "the schema rules it out
+     explicitly" and "both of which the schema excludes"; searched for language judging
+     the operator or the request and found none
+  A2 pass — "A competent reader predicts it from the language spec; it says nothing about
+     what this repository did." / "What would qualify is the repo-specific surprise
+     around it" — both halves of the positive definition are stated
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+The transcript passes every binding criterion and both advisory criteria. The only note for the set author is that the input carried no case id, so the emission's id line is a placeholder. No criterion was undecidable and no grouping looked wrong.

@@ -1,0 +1,15 @@
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`st-onboard` — its description names this exact trigger"
+  B2 pass — searched the transcript for any second skill id, an "equally applicable"
+     alternative, or the token `none`; only `st-onboard` appears, once, as the answer
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, it is the expected one, and no alternative or `none` is offered. Both binding criteria pass, so the case passes.
+
+One authoring note: the input did not carry a case id, so the emission line above records that rather than inventing one.

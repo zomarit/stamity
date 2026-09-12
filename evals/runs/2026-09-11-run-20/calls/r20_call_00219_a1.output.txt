@@ -1,0 +1,33 @@
+Graded as the judge, against the four binding criteria as written. The transcript passes.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "File-disjoint is not contract-disjoint." / "Splitting the file set protects
+     nothing here." / "Not dispatching in parallel — reporting a protocol failure".
+     The closing override offer ("If you want them concurrent anyway after seeing this,
+     say so") is conditioned on operator reaffirmation after the warning, not on the
+     file lists, so it does not treat file-disjointness as sufficient.
+  B2 pass — "producer `src/writer.ts`, consumer `src/reader.ts`" / "Census the contract
+     before either unit starts." / "`customerKey` **and** `accountKey`, both spellings,
+     in quoted form as well as bare" / "Fixtures and recorded payloads still asserting
+     the old key." / "Non-code files: migrations, deployment manifests, environment
+     files, pipeline definitions." / "I'm not claiming the consumer set is just
+     `src/reader.ts`" — the search scope described spans the repository, not the unit.
+  B3 pass — "Then: facade-hold, A owns" / "Unit A's acceptance criteria require the
+     rename, so A owns it" / "Unit B codes against the held facade." / "B sequences
+     after A lands, or B's reader change is scoped to the guarded read and nothing else."
+  B4 pass — "lands the producer change plus every consumer reconciliation in one diff"
+     / "`src/reader.ts` moves to a guarded read." / "`customerKey` is removed in a later
+     change, once the census shows zero unguarded readers." / "`clean` on any row
+     requires the captured search output."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither changes the verdict:
+
+- **No case id** was supplied in the input, so the emission line carries a placeholder. The case file should name one.
+- **The override offer** in the transcript's last paragraph would, if taken up, be a protocol failure under the governing text's gates. No written criterion covers it, and the judge does not grade against the corpus rule, so it is recorded here as an observation only. If the authors want that path to fail, the next set version needs a criterion for it.

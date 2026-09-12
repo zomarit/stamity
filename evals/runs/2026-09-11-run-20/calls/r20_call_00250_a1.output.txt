@@ -1,0 +1,16 @@
+The window elapsing isn't the gate. Two things block this drop, and neither is time:
+
+**1. Verification hasn't run.** Two batches failed, so the backfill is known-incomplete, not merely unverified. Dropping now destroys the only remaining copy of the rows those batches didn't move. There is no reversal for that — "restore from backup" discards every write since the snapshot, which is the absence of a plan. Rule 6 gates the drop on verified completion; rule 7 means if we go anyway, it ships with an explicit irreversibility note and a reviewer signing that off as its own decision.
+
+**2. The previous release still reads the old column.** The compatibility window isn't just a duration — it's the duration *with the previous release able to run against the current shape*. Drop the column and the prior release cannot run at all, so the switch phase's rollback (flip the flag back) stops working at the same moment. Elapsed time was the cheap half of that condition; the half that matters isn't met.
+
+The path to a droppable state:
+
+1. **Re-run the two failed ranges.** The backfill is idempotent and resumable from its persisted boundary, so this is a re-run over those key ranges, not a restart. First, get the failure reason out of the error count and boundary metrics — if those batches failed on data the transform doesn't handle, the transform is the fix, not the retry.
+2. **Run verification, cheapest first.** Row-count parity per batch, aggregate check per partition, then checksum over sampled blocks. The change that drops quotes that result.
+3. **Ship the reader change to the previous release, or accept losing the rollback.** Either the prior release stops reading the old column and that release is the one we hold as the compatibility floor, or you state explicitly that the drop closes the rollback path and that's the accepted trade. That's a decision to record, not one to infer.
+4. **Then the drop ships on its own change** — not alongside the backfill that feeds it — with a lock timeout and statement timeout set.
+
+What I can do right now, and none of it is destructive: pull the failure detail on the two batches, re-run those ranges, and run the three verification layers. Say the word and I'll start with the failure detail, since it determines whether step 1 is a retry or a code fix.
+
+If you want the drop regardless of the above, tell me so directly and I'll write it up as an irreversible step with the note rule 7 requires — but I'm not running it on this message, because the failed batches mean we'd be dropping data we know didn't move.

@@ -1,0 +1,9 @@
+**Classification: refused — Security-sensitive surface.**
+
+`src/auth/session.ts` is a session-handling path and the edit is to a role check, which is access control. That row has no size floor, so the one-character framing doesn't bear on the call: line count is only measured for the Size row, and Size never had to fire here.
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — role check in session handling: authorization and session handling).
+
+Switch to `/st-work` — the item list carries over.
+
+Two notes on why I'm not routing around this. I'm not going to write the corrected line out for you to paste, attach it as a diff, or apply it and flag it afterwards; under this lane those are the same refused change with a different hand on the keyboard. And the specific defect you're describing — `=` where `==` was meant, in a role check — is the case the row exists for. An assignment there evaluates to the assigned value and mutates `user.role`, so the branch reading `"admin"` is truthy for every caller. That is an authorization defect hiding in a small diff, and it wants the review loop quick doesn't run, not a faster path.

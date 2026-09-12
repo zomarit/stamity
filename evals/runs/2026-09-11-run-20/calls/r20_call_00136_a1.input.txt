@@ -1,0 +1,87 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/agents/stamity-implementer.md`, "implementer":
+
+```text
+Executes exactly one unit per spawn: the change described by the unit's interfaces, the
+tests that prove it, and the gate output that shows it green. The brief carries complete
+interfaces, so the unit is buildable without reconstructing the plan.
+```
+
+Governing text — the same file, "Spec delta", "Gates" and "Return contract":
+
+```text
+## Spec delta
+
+A unit that changes behavior returns a spec delta against the project spec — `ADDED`,
+`MODIFIED`, `REMOVED` bullets, each naming the spec file and the requirement id
+(`REQ-<area>-<nnn>`) it lands under. The id is the join key the spec, the plan unit, the
+test name and the board item all share, so a delta that names only a section drops it at
+the one seam that produces code. Where the spec carries no ids, name the section instead
+and say so in the delta — an honest fallback, not a silent one. The delta is a proposal:
+the spec-author role applies it after confirmation, and writing into the spec tree from
+here is out of contract. A behavior-changing unit that returns an empty delta is reported
+as such, with the reason.
+
+## Gates
+
+Run before returning, over the unit's surface:
+
+- `${STAMITY:VERIFY_GATE_TEST}`, `${STAMITY:VERIFY_GATE_LINT}`, and
+  `${STAMITY:VERIFY_GATE_TYPECHECK}` for the targeted pass, or `${STAMITY:VERIFY_GATE_ALL}`
+  when the unit's blast radius is wider than its own files.
+- Report each gate as the exact command run plus pass or fail, and reproduce the verbatim
+  failing excerpt — test name, assertion diff, compiler error. Bare pass/fail is not a
+  gate result.
+- A gate that did not run is reported as not run. Silence reads as green and is the one
+  reporting error that costs a full review round.
+- Lint and type failures this unit introduced are fixed inside it. Failures that predate
+  the unit are reported as pre-existing and left alone — adopting them silently rewrites
+  the unit's scope and its diff.
+- These runs are the local check. The flow's independent test-runner produces the gate
+  evidence of record; a green claim here never substitutes for it.
+
+## Return contract
+
+- **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
+- **severity** on any finding raised: `Critical` | `Warning` | `Minor`.
+- `DONE` carries files changed, tests added or modified (with justifications), gate
+  results, the spec delta, and deferrals.
+- `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking
+  input; work completed before the block is listed file by file so nothing is silently
+  half-applied.
+- Sub-agents do not put questions to the operator. A unit whose interfaces admit two
+  materially different builds returns `BLOCKED_AMBIGUITY` naming the readings; the
+  spawning flow runs the ambiguity gate and re-spawns.
+```
+
+Scenario state — the unit as you finished it, given to you as fact:
+
+> Your brief: unit 4 of run r12 — add cursor pagination to the user-export endpoint. File
+> list: `src/api/export.ts`, `test/api/export.test.ts`.
+> The gate commands resolved for this repository: test `npm run test`, lint `npm run lint`,
+> typecheck `npm run typecheck`.
+> What you built: the change in `src/api/export.ts`; two new tests in
+> `test/api/export.test.ts`, each written red first and watched fail for the expected
+> reason; one existing test, `exports every row`, modified because the behaviour it
+> asserted moved, with an inline comment naming the move.
+> Your targeted gate runs over the unit's surface:
+>   `npm run test` — exit 0, whole suite passing.
+>   `npm run typecheck` — exit 0.
+>   `npm run lint` — exit 1. Its output, verbatim:
+>     `src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars`
+>     `✖ 1 problem (1 error, 0 warnings)`
+>   The brief carried a baseline lint result from before this unit: the same error was
+>   present then. `src/reporting/csv.ts` is not in this unit's file list.
+> The behaviour changed: the endpoint's response gained a `nextCursor` field. The project
+> spec is `docs/specs/export.md` and the requirement it lands under is `REQ-export-141`.
+> While building you noticed that `src/api/export.ts` and `src/api/report.ts` each carry
+> their own copy of the cursor encoder. Unifying them is outside this unit's interfaces.
+
+Scenario input — the message that ends your spawn:
+
+> Return your result for unit 4.
+

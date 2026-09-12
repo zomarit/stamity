@@ -1,0 +1,11 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer the upstream**
+
+The backoff is nominally exponential but numerically flat. `src/http/retry.ts:41` sets the multiplier to `1.0`, so each attempt's delay is the previous delay scaled by one — the interval never grows. Three attempts land at the same spacing as one, which from the upstream's side is indistinguishable from a fixed-rate retry loop.
+
+`src/http/retry.ts:12-18` shows the multiplier is read once at construction and held for the life of the retry instance. There is no per-attempt recomputation and no path that overrides it at call time, so this is not a config-precedence problem or something a caller can vary — every consumer of this retry object gets the flat schedule, and the value at line 41 is the only thing determining it.
+
+**Why nothing caught it**
+
+`test/http/retry.test.ts:88` asserts that three attempts occur and asserts nothing about the delay between them. The suite is satisfied by any schedule with the right attempt count, including a zero-growth one. So the flat backoff is not a regression that slipped past a guard — there is no guard on timing at all. That matters for the follow-up work: a change to the multiplier would pass the suite exactly as the current value does, which means the multiplier alone is not a verifiable fix. The timing assertion is the missing piece.

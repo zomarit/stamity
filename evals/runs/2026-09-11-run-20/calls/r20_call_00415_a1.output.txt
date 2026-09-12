@@ -1,0 +1,14 @@
+Grading the routing transcript against the two binding criteria.
+
+```text
+case: (no case id supplied in the input; graded as the design-system routing case)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is exactly its trigger"
+  B2 pass — searched the transcript for a second skill id, an "or", an "also applies",
+     and the word "none"; only `st-design-system-detect` appears, and `none` is absent
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass, so the case passes. The transcript names one skill, the expected one, with a single reason sentence and no alternative offered. The only defect is in the input rather than the transcript: no case id was provided, so the emission carries a descriptive placeholder instead.

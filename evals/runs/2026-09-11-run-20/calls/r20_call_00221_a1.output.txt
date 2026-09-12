@@ -1,0 +1,29 @@
+Grading the transcript against the four binding criteria as written.
+
+```text
+case: (no case id supplied in the input — reported as a gap; graded as
+      contract-census-file-disjoint-dispatch for this emission only)
+binding:
+  B1 pass — "Not dispatching both." / "src/writer.ts and src/reader.ts share no
+     lines, but they share customerKey" / "Splitting the file set protects none of
+     that." / "Inferring independence from the file lists is not."
+  B2 pass — "The census needs a search over *both* spellings, customerKey and
+     accountKey, in quoted form, across the repo — not just src/" ; census row
+     names Producer "src/writer.ts" and Consumers "src/reader.ts + pending
+     repo-wide search" ; placed under "What's missing before anything dispatches."
+  B3 pass — "Unit A's acceptance criteria require the rename, so A owns the
+     contract." / "B codes against that held facade" / "the record keeps the key
+     set it had, accountKey is added alongside customerKey, and readers move to
+     guarded reads" ; sequencing fallback also stated: "A to completion, then B
+     against the shape A landed."
+  B4 pass — "A lands the producer change and every consumer reconciliation —
+     including src/reader.ts — in a single diff" / "customerKey is dropped in a
+     later change, once the census shows zero unguarded readers" / "A clean row
+     claimed without that captured search output is unevidenced."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+**Notes for the run artifact.** The case block carried no case id, so the emission above uses a descriptive placeholder. That is an input gap, not a grading decision. No criterion was undecidable, and no regrouping was needed.

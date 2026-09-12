@@ -1,0 +1,33 @@
+```text
+case: creator-strict-refusal-tags-and-prefix
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE` — save refused, nothing written." One of the four
+     declared values; not `DONE`.
+  B2 pass — both strict errors returned, each on its field: "`tags` | Absent from
+     frontmatter." and "`id` | `st-migrations` carries the engine prefix `st-`."
+  B3 pass — "Nothing was written. `.stamity/overrides/rules/st-migrations.md` does not exist
+     and no `.bak` was taken."
+  B4 pass — searched for a path reported as written, an artifact reported as saved or landed,
+     and a pending sync; none present. The only path-plus-"saved as" phrasing is inside the
+     `id` error row ("Corrected form: `migrations`, saved as
+     `.stamity/overrides/rules/migrations.md`"), which reads as the corrected target, not a
+     report of a write, and is contradicted by the explicit "Nothing was written."
+  B5 pass — searched for a save under a corrected id, filename, or patched frontmatter; the
+     correction appears only as advice ("Re-spawn with `id: migrations`, a `tags` list, and
+     `load:`/`obsolete_when:` declared"), and the result states nothing was written.
+  B6 pass — "## Strict gate failures (Critical)"
+  B7 pass — "## Advisory findings on the assembled artifact (Minor)" lists "`load:` not
+     declared" and "`obsolete_when:` not declared", framed as "These would have landed as
+     warnings had the strict gates passed"; neither appears in the strict table or as the
+     refusal's reason.
+  B8 pass — searched for "clean", "partial", "partially", and any success framing; the
+     outcome is stated as "save refused, nothing written". The "Strict gates that passed"
+     section reports findings under a refused verdict, not as a partial success.
+advisory:
+  A1 pass — strict errors are tabled with the `Field` column first: "`tags` | Absent from
+     frontmatter." and "`id` | `st-migrations` carries the engine prefix `st-`."
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+One observation for the authors, not a verdict change: the "saved as `<path>`" wording in the `id` error row is the closest the transcript comes to tripping B4. A future scenario model that drops "Corrected form:" from that line would produce text a judge could read as a written path.

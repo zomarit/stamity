@@ -68,3 +68,7 @@ the sealed Briefs updated in the same diff, to be measured only by a fresh full 
 
 `summary.json` carries `status: BLOCKED`. The `PROTOCOL.md` published beside this file is
 byte-identical to the pinned protocol (hash in `inputs.json`).
+
+## Correction, 2026-09-12 — the deterministic canaries this run cites
+
+`inputs.json` publishes the deterministic canaries K3c and K4c with `allPassed: true` and `checks: 0`. Those two ran no control: the private driver matched only the literal canary ids of the earlier generation, so the "re-run under the final driver" recorded here was vacuous. The control sets actually standing behind this run are K3b (15 checks) and K4b (23 checks), whose subject files (the inspector, the dispatcher and their tests) carried hashes identical to the final driver; only the run orchestrator had changed. The defect was found on 2026-09-12 while re-running the canaries for run 20, fixed (families dispatch by id prefix and an empty result set fails), and K3d/K4d and K3e/K4e then ran the full sets; nothing in this run's admission or reader conclusions depended on the vacuous pair.

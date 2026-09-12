@@ -1,0 +1,38 @@
+## Review result — run r12, round 1
+
+**status:** `DONE`
+**verdict:** `request-changes`
+**confidence:** high — basis: unverified reading. The Critical was read directly in the diff hunk at `src/api/export.ts:52`. This is not a class-1 native artifact and not a class-2 structured result file; no test was run against the cursor path, so the claim is a directly read diff hunk and is recorded as such.
+
+### Qualification status
+
+This repository has no recorded seeded-defect baseline and no declared false-positive budget, so steps 1 and 2 of the qualification gate are both unsatisfied. **This verdict is advisory, not merge-blocking**, and the findings below route through human triage. A clean verdict from this gate would carry no evidence; a `request-changes` verdict from it still needs a human to confirm the Critical before it gates anything.
+
+### Applied lenses
+
+Security, Testability, Reliability, Maintainability, Product & Spec.
+
+### Not applicable — no surface in this diff
+
+UI (no rendered surface), UX (no rendered surface), Scalability (no schema or dependency change, no background work), Performance (same), Enhancability (same).
+
+### Findings at the human checkpoint (severity floor: Critical + Warning)
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-f001 | Critical | `src/api/export.ts:52` | The caller-supplied cursor is decoded and handed to the query builder before any validation, so an attacker-shaped cursor reaches the query. Lens: Security. | Directly read diff hunk — not a native client artifact, not a structured result file, not a completion marker. No executed test corroborates it. |
+
+No Warning findings.
+
+### Ledgered — travels with the run, not with the checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-f002 | Minor | `src/api/export.ts:31` | Local named `c`; every neighbouring call site in this file spells it `cursor`. Lens: Maintainability. | Directly read diff hunk. |
+| r12-f003 | Minor | `test/api/export.test.ts:12` | Stale comment describes the old offset-based paging. Lens: Maintainability. | Directly read diff hunk. |
+
+Neither Minor re-opens the loop. Both carry stable ids for the run ledger.
+
+### Re-review scope for round 2
+
+The delta plus `r12-f001`, which is marked for verification. Findings already dispositioned are not re-raised against unchanged code, and new `Minor` findings are suppressed from round 2 onward — only regressions against `r12-f001`–`r12-f003` and new `Critical` or `Warning` findings count.

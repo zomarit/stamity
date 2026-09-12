@@ -1,0 +1,37 @@
+## Result — Unit 3
+
+**Status:** `BLOCKED_AMBIGUITY`
+
+**No changes made.** No file was edited; nothing is staged.
+
+### Competing readings
+
+The brief, "remove the legacy `user.displayName` field," resolves to at least three distinct changes, and `displayName` exists at all three layers:
+
+| # | Reading | Change | Blast radius |
+|---|---|---|---|
+| A | Internal type only | Delete the `displayName` property from `SessionUser` | Internal; compile-time breakage in consumers of the type, no external contract change |
+| B | Type + public API | A, plus remove `displayName` from the `GET /api/v1/users` response body | **Breaking change to a versioned public endpoint.** Every external client reading that field breaks at deploy |
+| C | Type + API + schema | B, plus drop the `display_name` column from `users` | Irreversible data loss; requires migration ordering against running instances, and forecloses rollback of B |
+
+These are nested but not equivalent: each adds a class of risk the previous one does not carry. There is no change common to all three readings that I can safely make as partial progress — A is the intersection, but executing A alone would be a guess at scope, and if the intent was C, landing A first in isolation changes the migration ordering.
+
+### Question I would have asked, verbatim
+
+> Unit 3 says "remove the legacy `user.displayName` field." `displayName` exists in three places: a property on the internal `SessionUser` type, a field on the `GET /api/v1/users` public response, and the `display_name` column on the `users` table. Which scope do you want?
+>
+> - **`TYPE`** — internal `SessionUser` property only
+> - **`API`** — internal type + public `GET /api/v1/users` response field (breaking change for external clients)
+> - **`FULL`** — internal type + API field + drop the database column (irreversible)
+>
+> Unless you say otherwise, for `API` or `FULL` I will remove the field outright with no deprecation shim or transition window, and for `FULL` I will write the column drop as a standalone migration that lands after the API change rather than with it.
+
+### Smallest input that unblocks
+
+One token: `TYPE`, `API`, or `FULL`.
+
+Optionally override either stated default in the same reply — e.g. `API, keep a deprecation window` or `FULL, single migration`. Absent an override, the defaults above apply.
+
+### Note for the orchestrator
+
+If the answer is `FULL`, this unit is not atomic — the column drop cannot be rolled back alongside the API change, so it likely wants to be its own unit sequenced after `API` has shipped and soaked. That is your call, not mine; flagging it because the brief treats all three as one unit.

@@ -1,0 +1,7 @@
+Release tags here are `v<major>.<minor>.<patch>` — cut from `main`, always signed, with the run artifact id carried in the tag message.
+
+**Ingress screen — `mcp__docsearch__search` (query: `release tag naming`)**
+
+`instruction-override`, `tool-preamble`, `exfil-signal` · `mcp__docsearch__search` · results[1] "Agent setup", `snippet` field · `redacted`
+
+The first result is clean and is the source of the answer above. The second result's snippet matched three classes and was not followed, quoted, or acted on; its content is excluded from this reply and from anything persisted. No pattern id is cited because no catalog scan reaches tool output — the class labels are the whole of the finding.

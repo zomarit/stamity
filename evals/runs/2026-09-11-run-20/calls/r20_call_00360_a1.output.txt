@@ -1,0 +1,38 @@
+I haven't written anything. `docs/specs/checkout-flow.md` is still untouched — two of the three items are gated and need your confirmation first. Here's the state of each.
+
+## (c) — done, automatic (T1)
+
+The board move `In progress` → `In review`, plus owner and progress event, are recorded in the run ledger and on the board. T1 never touches a spec file, so nothing about this item reaches `checkout-flow.md`.
+
+## (a) — T2, awaiting your confirmation
+
+The plan artifact's `ADDED` section carries `REQ-checkout-131`, and the spec has no such requirement. Append-only write, no existing line modified. These are the exact bytes that would be added, verbatim from the delta:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Nothing else in the file changes — no reordering, no reflow, no date restamp. Confirm and I'll append it.
+
+## (b) — T3, separate confirmation
+
+This is a requirement-text mutation, so it is never silent and never bundled with (a).
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** the cart is cleared when payment is declined
+- **After (proposed):** the cart is preserved when payment is declined
+- **Evidence:** `src/checkout/decline.ts:64` preserves the cart; this is the shipped behavior, and this branch's diff keeps preserving it.
+
+Two things worth your attention before you decide:
+
+The delta carries no `MODIFIED` entry for `REQ-checkout-112` — the `ADDED` section above is all it holds. So this mutation is one the scan surfaced, not one the author proposed, and the exact replacement wording above is mine, not text you've approved anywhere.
+
+This is not a `Warning` against the current change. The same-delivery mandate binds a diff that *changes* behavior; this diff changes nothing here, it preserves what was already preserved. The contradiction between recorded text and code pre-dates this branch. That makes it real drift worth fixing, but fixing it is a judgment call about which side is wrong — the code may be correct and the requirement stale, or the requirement may be correct and the code a long-standing bug. I read the evidence as the former, but I can't settle it from the diff alone.
+
+Tell me to proceed on (a), on (b), or on both, and give me a different replacement string for `REQ-checkout-112` if mine doesn't match your intent. If you'd rather leave (b) alone, (a) can land by itself.

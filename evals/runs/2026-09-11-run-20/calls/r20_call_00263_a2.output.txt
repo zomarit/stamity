@@ -1,0 +1,35 @@
+Verdict: the case passes. All nine binding criteria are met by the transcript, and the case declares no advisory criteria.
+
+```text
+case: (no case id supplied in the case file — authoring defect, see note)
+binding:
+  B1 pass — head block reads "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"; all four required keys present
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" lists exactly the three research paths
+  B4 pass — searched the head block for an `approach:` key; absent. Transcript also
+     states "`approach` is omitted — it is migration-intent only and this is a feature"
+  B5 pass — "docs/plans/003-status-json-flag.md"; under docs/plans/, number 003, slug
+     given rather than a placeholder
+  B6 pass — unit table rows `id`, `requirements`, `files`, `interfaces`, `testCriteria`,
+     `edgeCases`, `depends_on` ("`none`"), `verify`; all eight present
+  B7 pass — "`REQ-cli-140`" in the requirements row; searched that row for "spec carries
+     no ids"; absent
+  B8 pass — interfaces row reads "name `--json`, boolean, default `false`, takes no value
+     argument, no short alias", gives the object shape "{ "workspace": string, "branch":
+     string, "managedFiles": integer, "driftedFiles": integer, "lastSync": string }",
+     and "Exit codes: `0` on success ... `1` on a drift finding"; searched the row for
+     "not yet resolvable", "see below", "not yet fillable", and a pointer to another
+     document; none present
+  B9 pass — edgeCases row lists three, e.g. "Drift finding. The non-zero exit must not
+     suppress output: the full five-key object is still written to stdout, then the
+     process exits `1`"
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+**Authoring note.** The case file as handed in carries no case id, so the emission cannot name one. That is a defect in the case, not the transcript, and does not affect the verdict.

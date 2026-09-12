@@ -1,0 +1,20 @@
+Grading the single transcript against the three binding criteria, in order.
+
+```text
+case: (no case id supplied in the input; graded as the README-Node-pin routing case)
+binding:
+  B1 pass — "`none` — writing a README paragraph about an existing Node version pin is
+     ordinary documentation editing"
+  B2 pass — searched the response for "st-learn" and for any claim that a learning
+     capture is triggered; neither appears
+  B3 pass — searched the response for any of the eight skill ids (st-browser-evidence,
+     st-dep-audit, st-design-system-detect, st-handoff, st-learn, st-onboard, st-qa,
+     st-verify) offered as the answer; none is named, the only label given is "`none`"
+advisory: none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The case passes. The response gives the label as `none`, names no skill id, and does not mention the learning skill. The reason prose refers to audit, evidence, gate, and handoff only as concepts, not as selected skills, so it does not conflict with the third criterion.
+
+One reporting note: the input carried no case id line, so the emission above uses a descriptive placeholder. That is a packaging gap in what the runner handed in, not a defect in the criteria, which were all decidable from the transcript.

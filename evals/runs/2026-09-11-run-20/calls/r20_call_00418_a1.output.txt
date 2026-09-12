@@ -1,0 +1,1 @@
+`st-design-system-detect` — the request asks whether the repo already has a design system and what it defines, immediately before interface work that would add a component and a token, which is exactly that skill's stated trigger.

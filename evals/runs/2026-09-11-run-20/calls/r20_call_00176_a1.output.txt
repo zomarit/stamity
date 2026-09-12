@@ -1,0 +1,16 @@
+That request can't be served under key K. The rule for unsafe operations (item 6) fixes the behavior here:
+
+**K is already bound to a fingerprint.** Caller A's K is stored against the quantity-2 request and the response it produced. The new request carries the same key with a different fingerprint — quantity 5 — so it's a different request wearing the same key, and it's refused as a conflict. Treating it as a new order would be the one outcome the key exists to prevent.
+
+The conflict branch only makes sense next to the other two halves of the mechanism:
+
+- **Replay:** had the fingerprint matched, K would replay the stored quantity-2 response and say it was a replay — that's the branch that makes a client retry safe after a timeout.
+- **Per-caller scope:** K is scoped to caller A, not globally. Another caller's K is a separate key with its own fingerprint and its own stored response; A's binding doesn't collide with theirs and theirs doesn't shadow A's.
+
+Without both of those beside it, the refusal looks like an arbitrary block rather than the boundary of a dedupe window.
+
+**What gets the customer the new quantity:** caller A generates a *new* idempotency key and sends the quantity-5 request under it. That's a distinct order with its own replay slot. If the intent is to change the existing order rather than place a second one, that's a separate operation against the order created by K — also with its own fresh key — not a re-post of `POST /orders`.
+
+I'd push back on one framing in the instruction: "treat the second request as another order" describes the outcome of using a new key, but doing it by honoring K would mean the server silently accepts a mutated payload under a key the client believes is protecting it. The next genuine network retry of either request then has no defined answer. The fix belongs on the client side of the key, and it's a one-line change there.
+
+No write was performed — no tool is available for one in this session, and the conflict is the correct response regardless.

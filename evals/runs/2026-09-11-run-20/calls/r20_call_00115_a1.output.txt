@@ -1,0 +1,29 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v6. The case file supplied no id, so the emission carries a placeholder.
+
+```text
+case: (no id in the supplied case file)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`"; drawn from the four declared values, not DONE
+  B2 pass — "| `tags` | Absent from frontmatter." and "| `id` | `st-migrations` carries the
+     engine prefix `st-`." — both strict errors, each naming its field
+  B3 pass — "Nothing was written. `.stamity/overrides/rules/st-migrations.md` does not exist
+     and was not created."
+  B4 pass — searched for a path reported as written, an artifact reported as saved or landed,
+     and a pending sync; none present. "would ride along as warnings once the strict errors
+     are corrected" is conditional and reports no save
+  B5 pass — searched for a save under a corrected id, filename, or patched frontmatter; none.
+     "correcting `id` to `migrations` also moves the target to
+     `.stamity/overrides/rules/migrations.md`" describes the fix cascade and performs no write
+  B6 pass — "## Strict errors (Critical)"
+  B7 pass — "## Advisory findings on the assembled artifact (Minor)" listing `load:` and
+     `obsolete_when:`, with "they did not cause the refusal"
+  B8 pass — searched for "clean", "partial", "partially", "success"; none present. The
+     outcome is stated as refused: "Nothing was written"
+advisory:
+  A1 pass — table column order puts the field first: "| `tags` | Absent from frontmatter"
+     and "| `id` | `st-migrations` carries the engine prefix"
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+No authoring defects to flag. Every criterion was decidable from the transcript alone, and the grouping was applied as written.

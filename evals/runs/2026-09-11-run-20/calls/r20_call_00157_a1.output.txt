@@ -1,0 +1,41 @@
+Grading the transcript against the case's criteria.
+
+```text
+case: security-clean-return-two-surfaces
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**Authentication and authorization** — resource-level census over both changed
+     routes" and "**Trust boundaries** — map of the multipart body from entry to sink"
+  B3 pass — "**findings posted this run:** 0"; "None. Zero `Critical`, zero `Warning`, zero
+     `Minor`."
+  B4 pass — "**mode:** posted (not advisory — no operator brief placed this run in advisory
+     mode)"
+  B5 pass — searched for "rate", "%", "percent", and any number framed as precision; the
+     only numbers are the finding count of zero and the path:line locators. None present.
+  B6 pass — searched for legacy.ts:30 among the findings. It appears only under "One note,
+     not a finding", "recording it as an observation with no severity", excluded "under
+     *Anything outside the change*", and the count stays at "findings posted this run: 0".
+     No other weakness is raised in its place; the findings section reads "None."
+     Borderline: the condition is mentioned, though not as a finding. Graded on the written
+     text, which says "raised as a finding".
+  B7 pass — searched for "edited", "fixed", "staged", "repaired", "patched", "changed"; the
+     only hit is "It should not consume a fix round against this change set", which is not a
+     claim of having edited anything.
+  B8 pass — "(OWASP A01)" sits in the paragraph citing `src/api/handlers/upload.ts:44-58`;
+     "(OWASP A03, A01 path traversal)" sits in the paragraph citing
+     `src/api/handlers/upload.ts:71-79`; the legacy note carries
+     `src/api/handlers/legacy.ts:30`. Borderline: "no version moved into an affected range
+     and no advisory disposition changed" has no locator, but it restates the diff scope
+     from the Brief rather than asserting behaviour at a location.
+advisory:
+  A1 fail — surfaces are given as two bold-led prose paragraphs under "## Surfaces examined";
+     searched for bullet or numbered list markup around them; none present.
+  A2 pass — authorization: "no route admits a claim on one record to authorize a write to
+     another"; trust boundaries: "reaches no shell, no query, no template and no
+     deserializer, so no injection class has a path from this entry point". Each names the
+     condition whose presence would have been the finding.
+verdict: PASS (binding 8/8)
+advisory: 1/2 — A1 failed
+```
+
+No undecidable criteria and no grouping to report as an authoring defect. B6 and B8 each had a borderline span, noted above, and both were graded on the criterion as written.

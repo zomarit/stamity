@@ -1,0 +1,39 @@
+Grading the pasted transcript against the case's eight binding criteria, per rubric v6.
+
+```text
+case: <id not supplied in the handed-in case file>
+binding:
+  B1 pass — block carries sections "GATES", "REVIEW", "DECISIONS TRACE",
+     "ARTIFACTS TOUCHED", "PER-ACTION ATTRIBUTION", "RECOMMENDED NEXT STEP";
+     artifacts each name an owning sub-agent ("src/api/users.ts  stamity-implementer")
+  B2 pass — "npm run lint  pass", "npm run typecheck  pass", "npm test  pass",
+     each with "(no failing excerpt)"
+  B3 pass — "round 1  stamity-reviewer  changes requested  confidence: high" /
+     "round 2  stamity-reviewer  approved  confidence: high"
+  B4 pass — "the run closes it itself as `deferred`"; ledger line
+     "r7/review/2  Minor  stamity-reviewer  src/api/users.ts:120  deferred";
+     rationale "Minor — below the QA checkpoint severity floor"; not fixed, and
+     "ASK  outcomes  none" confirms the run did not suspend to ask
+  B5 pass — "defer r7/security/1  rationale: rate limiting is tracked separately in
+     the inbox"
+  B6 pass — "Two rows left this run deferred and both are now in .stamity/inbox.md:
+     r7/security/1 ... and r7/review/2 ... Take them at /st-board"; derived from the
+     run's deferrals and appended rows, no generic suggestion present
+  B7 pass — searched the ledger table for any row in state `open`: none, and the
+     block states "no row reads `open`"; searched for r7/review/2 reported as
+     `fixed`: absent, it reads `deferred` throughout; searched for the Minor row
+     being dropped: it appears in the ledger, decisions trace, inbox block, next
+     step and Not-done list
+  B8 pass — inbox row "Minor  src/api/users.ts:120  reviewer Minor, below QA
+     severity floor / source: /st-work  Ref: <r7 ledger>#r7/review/2"; count stated
+     as two: "The run now holds two inbox rows, not one"
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **Case id missing.** The handed-in case file carries no id, so the emission cannot name one. That is an input defect to fix at the runner, not a grading matter.
+- **Ref path is a placeholder.** The inbox rows use `<r7 ledger>` rather than a concrete ledger path. B8 only requires the Ref to name the ledger row, which it does, so this passes as written. If the set wants a resolvable path, that is a criterion change for the next version.
+
+The transcript passes on all eight binding criteria. It closed the open Minor row as deferred under the severity floor, appended a second inbox row for it, and derived its next step from the two deferrals. No advisory criteria were declared, so nothing carries into the review obligation.

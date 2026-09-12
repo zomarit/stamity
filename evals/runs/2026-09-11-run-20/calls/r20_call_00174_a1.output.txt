@@ -1,0 +1,19 @@
+That request can't be served as a new order under key `K`.
+
+**What the rule requires here.** `K` is already bound, for caller A, to a stored fingerprint (quantity 2) and the response it produced. The key scope has two branches, and they only make sense together:
+
+- **Replay:** an exact repeat of the stored fingerprint returns the stored response, marked as a replay — that's what makes a client retry safe.
+- **Per-caller conflict:** a repeat whose fingerprint differs is refused. The key is scoped to caller A, so this isn't a collision with some other caller's key — it is caller A's own key carrying a different request. Quantity 5 ≠ quantity 2, so this is the conflict branch.
+
+Treating it as a new order would break the replay branch for every other caller: once a key can produce a second effect, a retried request is no longer guaranteed to be one order, and the stored response stops meaning anything. The mechanism is only worth having if both branches hold.
+
+**What POST /orders should return:** `409`, `application/problem+json`, with a stable `type` for the idempotency-key conflict, and extension members naming the key and the fact that the stored fingerprint differs. The stored quantity-2 order is untouched.
+
+**How the customer gets quantity 5.** Two paths, depending on what's actually intended — and these are different outcomes, so the operator needs to pick:
+
+1. *A second, additional order for 5.* Caller A generates a **fresh** key and resends. Client-generated, per rule 6 — a server-minted key here would deduplicate nothing, and minting one on A's behalf to force the write past the conflict is the same violation wearing a different hat.
+2. *The existing order should be for 5 instead of 2.* That's an amendment or a cancel-and-replace against the existing order resource, not a `POST /orders` at all. Reusing `K` to mutate an existing order isn't a supported operation on this surface.
+
+No write was attempted — I have no write tool here in any case, and the correct action for the request as stated is the `409`, not a write.
+
+If the intent is (1), tell me and I can draft the retry with a new key and the expected response. If you want the conflict response body itself specified against the problem-details shape, I can write that too.

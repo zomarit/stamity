@@ -1,0 +1,3 @@
+`none`
+
+The only skill that speaks to "what to do next" is st-onboard, and its trigger is explicitly scoped to a fresh install with no first proven change — a repo with eight months of green-gated changes fails that precondition, so an open-ended prioritization question stays with the main flow.

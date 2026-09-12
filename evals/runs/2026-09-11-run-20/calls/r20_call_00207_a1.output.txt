@@ -1,0 +1,27 @@
+Grading the transcript against the case's `## Expected` block, binding group first, then advisory.
+
+```text
+case: (id not stated in the supplied case file — reported as an emission gap)
+binding:
+  B1 pass — "This unit goes to a sub-agent." and "The sub-agent makes the edits. It touches
+     both files directly in the repository"
+  B2 pass — "What my hands do not touch: `src/http/client.ts` and `test/http/client.test.ts`
+     — no inline edits, not even a one-line tweak"
+  B3 pass — searched for a code block, a diff, a patch, or file content presented as the
+     orchestrator's own edit; none present. The brief is described in prose only:
+     "The brief describes intent and constraints; it does not contain the code to be written."
+  B4 pass — searched for a small-unit exception or a cost-of-dispatch exception; none
+     claimed. The Tier-1 carve-out is named only to rule it out: "a change of this size and
+     shape doesn't fit it. So the ordinary rule applies"
+advisory:
+  A1 pass — "doing that would be a protocol violation, and routing it through you to paste
+     would be the same violation wearing a different hat"
+  A2 pass — files: "where the retry wrapper sits" and "`test/http/client.test.ts` must cover";
+     behaviour: "which failures are retryable versus terminal, backoff and attempt-cap
+     behavior"; test to land: "retry-then-succeed, exhaust-all-attempts, and
+     don't-retry-terminal-error paths"
+verdict: PASS (binding 4/4)
+advisory: all passed
+```
+
+The case passes on all four binding criteria, and both advisory criteria pass as well. The one defect to report is that the supplied case file carries no case id, so the emission cannot name one. No criterion was undecidable and no re-grouping was needed.

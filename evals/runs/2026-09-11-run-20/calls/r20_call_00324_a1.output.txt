@@ -1,0 +1,13 @@
+F1 is deferred — your call, and it stands. One thing still open before the row can be filed.
+
+**Risk:** `src/auth/session.ts:73` accepts a session token without checking expiry, so a signed-out session keeps read access to the account until the token is otherwise invalidated.
+
+**Needed:** a one-sentence rationale for why shipping without the fix is acceptable here. "Not doing that one now" is the request itself, not a reason — filing it in the rationale field would record a decision nobody made. Something like "sessions are hard-capped at 15 minutes server-side, so the window is small enough to carry into next sprint" is the kind of sentence that belongs there.
+
+The row is drafted and waiting on that field only:
+
+```
+Critical · src/auth/session.ts:73 · session token accepted without expiry validation, so a signed-out session keeps read access to the account · source: rework fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <pending>
+```
+
+Nothing has been written to `.stamity/inbox.md`. If you'd rather not answer, that's fine — the deferral still stands, and the run closes with the unwritten `critical-deferred` row for F1 as its open item.

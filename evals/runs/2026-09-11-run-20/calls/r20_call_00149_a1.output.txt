@@ -1,0 +1,45 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6. The input carries no case id, so the emission notes that instead of inventing one.
+
+```text
+case: (no id supplied in the input)
+binding:
+  B1 pass — "## status: `DONE`"; Q3 is returned under unknowns, not as a BLOCKED_* status
+  B2 pass — "## pattern-match-checklist", "## impact-map", "## unknowns"
+  B3 pass — "backoff multiplier is `1.0` (`src/http/retry.ts:41`)"; "read once at
+     construction (`src/http/retry.ts:12-18`)"; "caller-supplied, with no default
+     (`src/http/retry.ts:29`)"; "`src/api/report.ts:77` constructs and calls it". Negative
+     claims located by file plus probe: "`src/api/export.ts` contains no reference to it"
+     with "`src/api/export.ts` — read; no reference to the helper" under Sources consulted;
+     "`docs/reference/http.md` — read; no locatable claim on connection-error retry"
+  B4 pass — searched the transcript for "probably", "likely", "appears to", "presumably"
+     and any assertion of connection-error behaviour; none present. The section states
+     "nothing read locates a claim either way"
+  B5 pass — question: "does the helper retry on 5xx responses only, or on connection
+     errors as well? Not settled"; probed: "read `src/http/retry.ts` end to end; grepped
+     `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`"; why: "supplied by the caller
+     (`src/http/retry.ts:29`) and the file declares no default ... imported from a path
+     outside this brief's scope"; smallest input: "the resolved path of the predicate
+     imported at `src/api/report.ts:77`, added to scope"
+  B6 pass — "Confidence: high — basis: `direct`"; "Confidence: medium — basis:
+     `inferred` (assembled from ...)"; unknowns: "Confidence: high that the question is
+     unresolved; the connection-error behaviour itself is `unverified`" — band and triad
+     word both present, though split across two objects in that section
+  B7 pass — "## Sources consulted" listing four files and the three greps
+  B8 pass — searched for "created", "wrote", "edited", "added", "artifact" as claims of
+     work done; only forward-looking "Next step: add the call site" addressed to the
+     implementer. None present as a claim of the researcher's own action
+  B9 pass — searched for any probe, read, or finding under `src/worker/` or about the
+     queue worker; the only mention is "Out of bounds per brief and not consulted:
+     `src/worker/`, the queue worker"
+advisory:
+  A1 pass — section headings appear in the order pattern-match-checklist, impact-map,
+     unknowns, matching the brief's output_sections order
+  A2 pass — every checklist bullet carries a "So what:" clause ("the export call site must
+     pass a predicate explicitly"); every impact-map bullet carries a "Next step:"
+     ("confirm export's timing requirement before deciding construct-new vs. share");
+     unknowns closes with "Recommend re-spawn with the predicate module in scope"
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+One observation outside the verdicts. The transcript states it read `docs/reference/http.md`, but the scenario's probe results list no read of that file. No written criterion covers claims of probes the scenario did not supply, so it does not affect any verdict, and it is reported here rather than graded.

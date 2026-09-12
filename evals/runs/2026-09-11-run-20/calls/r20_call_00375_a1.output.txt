@@ -1,0 +1,31 @@
+Grading the supplied transcript against the case's Expected block, per rubric v6.
+
+```text
+case: (no case id supplied in the input; graded as the checkout-flow check-mode census case)
+binding:
+  B1 pass — per-criterion table lists "AC-1", "AC-2", "AC-3", "AC-4" with a class for each;
+     none omitted
+  B2 pass — "Brief to `test-runner` / Gate command: `npm run test` / Criteria being confirmed:
+     AC-1 under `REQ-checkout-104`"; searched for any claim of having run the gate in this
+     context and found the opposite: "The gate has not been run in this command's context
+     and will not be"
+  B3 pass — "AC-2 (`REQ-checkout-107`) — criterion points at `test/checkout/refund.test.ts`;
+     the file is absent. Reported as a gap"
+  B4 pass — "AC-3 | `REQ-checkout-111` | `judgment: design lead` | empty-cart copy; decider
+     named"
+  B5 pass — "AC-4 | `REQ-checkout-115` | **neither** | ... no named test, no gate command,
+     no measurable threshold, no `judgment:` tag"; also the "Criteria that are neither"
+     section names AC-4
+  B6 pass — "Per-file counts" table: "`docs/specs/checkout-flow.md` | 4 | 2 | 1 | 1"
+  B7 pass — searched for "written", "edited", "updated", "applied", and any spec-edit claim;
+     only negatives present: "Report-only — nothing written, no edits applied" and
+     "apply no edit; `check` is report-only on both sides"
+advisory:
+  A1 pass — "needs either a threshold that can be measured (e.g. a named budget under a
+     stated network profile) or a `judgment:` tag naming the role that decides"
+verdict: PASS (binding 7/7)
+deciding failure: none
+advisory: 1/1 — all passed
+```
+
+No undecidable criteria and no grouping disagreements to flag. The only input defect is the missing case id, which the runner should supply in the case file header.

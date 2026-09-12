@@ -1,0 +1,11 @@
+Agreed — no UI surface here, so browser evidence is not applicable on this change.
+
+**Checkpoint status**
+
+- What-to-verify summary: emitted.
+- Browser evidence: **N/A** — rename of an internal helper in `src/queue/serialize.ts` and its call sites; nothing rendered, no template shipped.
+- Guided pass: running now.
+
+That last one is the remaining step. Invoking the **qa** skill for the guided pass — it's what carries the human sign-off, and it's separate from the browser offer you dropped. The gates that already passed cover the mechanical side (the rename resolves, call sites compile, tests green); the guided pass covers what they can't, which on a rename is mostly: no stale references in strings, dynamic lookups, or serialized payloads that the compiler wouldn't catch.
+
+Once you sign off on that pass, the checkpoint closes and the proof block goes out with browser evidence marked N/A.

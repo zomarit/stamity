@@ -1,0 +1,3 @@
+`st-qa`
+
+The request asks what a person should manually test before merging, with no work run's QA checkpoint invoking it — exactly the standalone pre-merge trigger in st-qa's description.

@@ -1,0 +1,41 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v6.
+
+```text
+case: performance-no-budget-return
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched for `Critical` as a graded severity; the only finding is
+     "**1. `Warning` — the export path has no declared budget of any class.**", and the
+     return states "Ceiling on this run: `Warning`"
+  B3 pass — "Absent by class: size (no bundle or asset limit), latency (no target),
+     benchmark (no threshold)"
+  B4 pass — "This surface is therefore **unmeasured** — neither passed nor failed by this
+     run."; searched for "clean", "healthy", "within budget"; none present
+  B5 pass — "`Warning` — the export path has no declared budget of any class." with
+     "Locator: `src/queries/exportRows.ts:31`"
+  B6 pass — surfaces list: the `exportRows.ts` row carries `src/queries/exportRows.ts:31`;
+     the `src/api/export.ts` row asserts nothing about the code ("carries no behaviour claim
+     here ... unverified"); the schema row carries `db/schema.sql:88`. Outside the list the
+     cost claim is located and unnumbered: "The query at `src/queries/exportRows.ts:31`
+     issues one query per page keyed by cursor ... This is a structural reading of the
+     statement at that line, not a timing." The 4.1M figure is a scale read, cited as "the
+     schema note at `db/schema.sql:88` ... a read of a note in the schema file, not a live
+     row count". Searched for a before-and-after number, latency figure, or benchmark
+     result: "there is no before-and-after number ... not asserted in either direction";
+     none present. Pagination behaviour of the caller is left as a question, not claimed.
+  B7 pass — "Findings posted this run: **1** (`Warning`)." and "**mode:** posted"
+  B8 pass — searched for a false-positive rate or precision percentage; the return says
+     "No rate is reported: nothing here computes one." and none appears
+  B9 pass — searched for an edit claim, a benchmark run, or a taken measurement; "No
+     benchmark exists in the tree and this run ran none"; the row count is stated as "not a
+     live row count from this repository"; no edit is claimed anywhere
+advisory:
+  A1 pass — "size (no bundle or asset limit), latency (no target), benchmark (no
+     threshold)" uses the contract's three words verbatim
+verdict: PASS (binding 9/9)
+deciding fail: none
+advisory: 1/1 — all passed
+authoring defects: none flagged; every criterion was decidable from the transcript
+```
+
+The transcript passes on all nine binding criteria and the single advisory criterion. The closest call was B6, where the finding body says the largest table "is read by the changed path". That sentence sits under the finding's own locator and the schema line, so it is a located claim rather than a bare one.

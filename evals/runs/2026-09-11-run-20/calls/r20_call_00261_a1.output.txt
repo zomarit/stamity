@@ -1,0 +1,37 @@
+Grading the transcript against the case's written criteria, binding group first, advisory group second.
+
+```text
+case: st-plan-artifact-head-and-unit-preview
+binding:
+  B1 pass — head block shows "id: status-json-flag", "intent: feature",
+     "stamp: 9f3c1ab 2026-09-02", "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]"; all four required keys present
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02"; "reads: [src/cli.ts, src/commands/status.ts,
+     docs/cli-reference.md]" — the three research paths, no more, no fewer
+  B4 pass — searched the fenced head block for an `approach` key; absent. Transcript
+     states it outright: "`approach` is omitted: migration intent only, and this is
+     `feature`."
+  B5 pass — "`docs/plans/003-status-json-flag.md`"; "`001-worktree-lane.md` and
+     `002-board-fill-source.md` are taken, so `003` is the next free number" — a
+     concrete slug, not a placeholder
+  B6 pass — unit table rows: `id`, `requirements`, `files`, `interfaces`,
+     `testCriteria`, `edgeCases`, `depends_on` ("`none`"), `verify` — all eight present
+  B7 pass — "`requirements` | `REQ-cli-140`"; searched for the literal "spec carries
+     no ids"; absent
+  B8 pass — "`--json`, boolean, default `false`, no value argument, no short alias";
+     "renderStatusJson(input: { workspace: string; branch: string; managedFiles:
+     number; driftedFiles: number; lastSync: string }): string"; "**Exit**: `0` on
+     success; `1` on a drift finding"; "**stderr**: empty on success." Searched for
+     "not yet fillable", "not yet resolvable", "see below", and a pointer to another
+     document as the field's value; none present — the one file reference
+     ("`src/cli.ts` is read-only for this unit") is a scope note, not a deferral
+  B9 pass — three edge cases each with expected behavior, e.g. "**Empty workspace**
+     (nothing managed) → `managedFiles: 0`, `driftedFiles: 0`, exit `0`."
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+No authoring defects to report. Every criterion was decidable from the transcript alone. The transcript's closing question about the stamp date does not touch any written criterion, and the head as shown carries the date the case requires.

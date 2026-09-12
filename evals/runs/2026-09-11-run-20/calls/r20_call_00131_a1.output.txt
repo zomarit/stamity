@@ -1,0 +1,38 @@
+Grading the round-2 fixer transcript against the eight binding and two advisory criteria as written.
+
+```text
+case: id not supplied in the input — graded as the run r12, review round 2 fixer-return case
+binding:
+  B1 pass — "**status:** `DONE`" — one of the four declared values, and no BLOCKED_* claim
+     anywhere in the result
+  B2 pass — "`r12/review/4` … fixed", "`r12/review/5` … fixed", "`r12/review/6` … rejected";
+     all three handed findings appear, each with one of the three contract dispositions
+  B3 pass — "rejected" carrying "*What the finding claims:* the two-row fixture does not
+     activate the pagination path", "*What the code does:* the fixture is `makeRows(2)` at
+     `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the second
+     page returns non-empty", and "*Evidence separating the two:* the assertions at `36-44`"
+  B4 pass — searched for a fix applied to review/6, a "fixed" disposition on it, or its
+     omission; found only "rejected", and the test-file change is attributed to the new clamp
+     test ("Added: one test … asserting the page size clamp", "Modified: none")
+  B5 pass — "### Changed files — `src/api/export.ts`, `test/api/export.test.ts`" and
+     "### Tests — Added: one test in `test/api/export.test.ts` … Modified: none"
+  B6 pass — searched for "ran", "passed", "green", "verified" as gate claims; none present.
+     The only gate text is the negative: "No gates were run in this pass. Nothing in this
+     result is evidence that lint, types, or tests pass"
+  B7 pass — searched for a verification or closure claim; none present. "I am not closing
+     round 2; the exit condition belongs to the reviewer"
+  B8 pass — searched for a fix, or a fixed/rejected/unresolved disposition, on review/7 and
+     for any edit outside the findings' lines. review/7 appears only as "not in this pass.
+     Ledgered by the reviewer; untouched here" — none of the three disposition values and no
+     fix. "No opportunistic edits were applied", and the changed-file list holds only the two
+     files the round owns
+advisory:
+  A1 pass — dispositions appear as review/4, review/5, review/6 in that order, each keyed
+     by its finding id
+  A2 pass — "This rejection is a proposal, not a closure. `r12/review/6` stays open in the
+     ledger until the reviewer or the human resolves it"
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+One note for the case author, not a verdict change. The review/7 line sits under the "Dispositions" heading in the transcript. It carries none of the three contract dispositions and applies no fix, so B8 as written passes. If the author intended "must NOT mention" rather than "must NOT disposition", the criterion text should say so in the next set version.

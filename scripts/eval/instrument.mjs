@@ -155,6 +155,10 @@ function quotedPhrases(text) {
   return phrases
 }
 
+// A simple HTML tag, and the subset of it that means a line break inside a cell.
+const htmlTag = /<\/?[a-zA-Z][^<>\n]*>/g
+const htmlBreak = /<br[ \t]*\/?>/gi
+
 // Presentation matching keeps an index into the original string. It never rewrites
 // the stored transcript/citation or treats punctuation, code or missing words as noise.
 // `markdown` reads a line-leading blockquote marker as prose rather than as code.
@@ -165,8 +169,15 @@ function protectedMask(text, markdown = false) {
   let lineStart = 0
   for (const line of text.split('\n')) {
     // A blockquote marker — at the line head, or carried mid-line by a judge who joined
-    // the transcript's lines — is markdown, not the comparison operator that means code.
-    const body = markdown ? line.replace(/^[ \t]*(?:>[ \t]?)+/, '').replaceAll(' > ', ' ') : line
+    // the transcript's lines — is markdown, not the comparison operator that means code. An
+    // HTML tag is markdown too: `<br>` in a table cell is a line break, and letting its
+    // angle brackets read as code protected the whole row and hid the prose inside it.
+    // An inline code span is already protected as itself, so it does not also make the line
+    // around it a program: `carries no `[NEEDS CLARIFICATION]` marker` is a sentence.
+    const body = markdown
+      ? line.replace(/^[ \t]*(?:>[ \t]?)+/, '').replaceAll(' > ', ' ').replace(htmlTag, ' ')
+        .replace(/(`+)[^`\n]+?\1/g, ' ')
+      : line
     if (/^(?: {4}|\t)|[=<>[\]{}\\]|^\s*(?:def|class|if|for|while)\b.*:\s*$/.test(body))
       protectedAt.fill(1, lineStart, Math.min(text.length, lineStart + line.length + 1))
     lineStart += line.length + 1
@@ -248,11 +259,16 @@ const elisionMarker = /\s*(?:\[\s*(?:\.{3,}|…)\s*\]|\.{3,}|…)\s*/
 // before it, so two common words can no longer span arbitrary text.
 const words = text => (text.match(/[\p{L}\p{N}]+/gu) ?? []).length
 const ELISION_GAP = 300
-const searchVerb = /\b(?:searched|looked|checked|scanned)(?:\s+(?:the\s+)?(?:transcript|response|answer|reply|output|text|it))?\s+for\s+\S/i
+// A named search may say where it looked: `searched the Next step line and the whole block
+// for …`. The scope is a noun phrase — plain words, no verb, no sentence end — so it cannot
+// swallow a second clause and turn a description into a search. What was searched for, and
+// the closed absence vocabulary that reports the result, are unchanged.
+const scopeVerb = '(?:is|are|was|were|be|been|being|has|have|had|do|does|did|say|says|said|show|shows|showed|contain|contains|contained|appear|appears|appeared|run|runs|ran|make|makes|made|find|finds|found|include|includes|included|report|reports|reported|state|states|stated|claim|claims|claimed|edit|edits|edited|apply|applies|applied|search|searches|searched|look|looks|looked|check|checks|checked|scan|scans|scanned)'
+const searchVerb = new RegExp(`\\b(?:searched|looked|checked|scanned)(?:\\s+(?!${scopeVerb}\\b)[\\p{L}\\p{N}\`'’-]+){0,10}?\\s+for\\s+\\S`, 'iu')
 // A negative result names an absence. The `no <noun>` arm is a closed list of absence
 // nouns, because "no problem" and "no doubt" report the opposite of an absence.
 const absenceNoun = 'match|matches|mention|mentions|reference|references|occurrence|occurrences|instance|instances|statement|statements|trace|traces|sign|signs|hint|hints|indication|indications|edit|edits|patch|patches|diff|diffs|change|changes|claim|claims|offer|offers|attempt|attempts|such|other|others|further|additional|second|new|line|lines|text|word|words|phrase|phrases|use|uses|call|calls|deletion|deletions|removal|removals|exception|exceptions|flag|flags|setting|settings|option|options|prompt|prompts|confirm|confirmation|bypass|override|escalation|proceed|refusal|refusals|response|answer|reply|record|records|evidence|instruction|instructions|directive|directives|caveat|caveats'
-const negativeResult = new RegExp(`\\b(none|absent|not found|no match|silent|does not appear|do not appear|never appears?|not present|nothing|no such|not named|not mentioned|nowhere|no\\s+(?:${absenceNoun})|not\\s+followed\\s+by|never\\s+follows?|is\\s+not\\s+present)\\b`, 'i')
+const negativeResult = new RegExp(`\\b(none|absent|not found|no match|silent|does not appear|do not appear|never appears?|not present|nothing|no such|not named|not mentioned|nowhere|no\\s+(?:${absenceNoun})|not\\s+followed\\s+by|never\\s+follows?|is\\s+not\\s+present|neither\\s+appears?|neither\\s+is\\s+present)\\b`, 'i')
 // Silence is reported about the transcript (or about something in it), actively or
 // passively, and the judge's own line wrap may fall between the subject and the verb.
 const reportedSilence = /\btranscript\s+is\s+silent\b|\b(?:transcript|response|answer|reply)\b[^.]{0,120}?\b(?:is silent|silent on|silent about|(?:says|reports|mentions|names|states|records|acknowledges)\s+nothing|does not (?:mention|address|say)|never (?:mentions|addresses)|(?:is|are|was|were)\s+(?:never|not)\s+(?:mentioned|named|reported|addressed|stated|acknowledged|surfaced))\b/i
@@ -349,6 +365,9 @@ function softFences(text) {
 function normalizedView(text) {
   const protectedAt = protectedMask(text, true)
   const softAt = softFences(text)
+  const breakAt = new Uint8Array(text.length)
+  for (const tag of text.matchAll(htmlBreak))
+    if (!protectedAt[tag.index]) breakAt.fill(1, tag.index, tag.index + tag[0].length)
   const quoteAt = pairedQuotes(text, protectedAt)
   const { markupAt, delimiterAt } = markupMask(text, protectedAt)
   const characters = [], starts = [], ends = [], changes = []
@@ -365,11 +384,14 @@ function normalizedView(text) {
     // Prose inside an untagged fence is read as prose: its wrapped lines fold like any
     // other, and so does the alignment a writer padded a column with. A quote that carries
     // that alignment verbatim still matches exactly, and keeps its exact offsets.
-    if ((!protectedAt[at] || softAt[at]) && /[ \t\r\n]/.test(text[at])) {
+    if ((!protectedAt[at] || softAt[at]) && (/[ \t\r\n]/.test(text[at]) || breakAt[at])) {
       const start = at
       const fenced = Boolean(softAt[at])
-      while (at < text.length && (!protectedAt[at] || softAt[at]) && (/[ \t\r\n]/.test(text[at]) || markupAt[at])) {
+      let broken = false
+      while (at < text.length && (!protectedAt[at] || softAt[at]) &&
+        (/[ \t\r\n]/.test(text[at]) || markupAt[at] || breakAt[at])) {
         if (markupAt[at]) omitted = true
+        if (breakAt[at]) broken = true
         at++
       }
       // Markup swallowed by the run is reported as markup, not as a whitespace change.
@@ -377,11 +399,21 @@ function normalizedView(text) {
       const newlines = (spacing.match(/\n/g) ?? []).length
       const after = text.slice(start).replace(/^[ \t\r\n]+/, '')
       const boundary = newlines > 1 || (newlines === 1 && /^(?:[-*+]\s|\d+[.)]\s|#{1,6}\s)/.test(after))
-      emit(' ', start, at, fenced && newlines ? 'fenced-line-break'
-        : boundary ? 'structure-boundary-flattened' : spacing === ' ' ? null : 'prose-whitespace')
+      emit(' ', start, at, broken ? 'html-line-break'
+        : fenced && newlines ? 'fenced-line-break'
+          : boundary ? 'structure-boundary-flattened' : spacing === ' ' ? null : 'prose-whitespace')
       continue
     }
-    emit(quoteAt.has(at) ? '"' : text[at], at, at + 1, quoteAt.has(at) ? 'paired-quotation-style' : null)
+    // Every quotation mark is one character class: a judge nesting a quoted span inside its
+    // own quoted citation switches the inner marks, and an apostrophe maps the same way on
+    // both sides. The class holds inside protected regions too, because protection is a
+    // guess about whitespace and markup — a prose line carrying `[NEEDS CLARIFICATION]`
+    // reads as code — and a guess on one side must not unmap what the other side mapped.
+    // A mark maps to a mark: dropping one is still an alteration, so `so it's just a string
+    // is not` does not match `so "it's just a string" is not`.
+    const quotation = /["'“”‘’]/.test(text[at])
+    emit(quotation ? '"' : text[at], at, at + 1,
+      quoteAt.has(at) ? 'paired-quotation-style' : quotation ? 'quotation-style' : null)
     at++
   }
   return { text: characters.join(''), original: text, starts, ends, changes, delimiterAt }
@@ -406,7 +438,12 @@ const withoutTrailing = text => /[.,;:]$/.test(text) ? text.slice(0, -1) : null
 
 // A judge writing a multi-line span on one line joins it with a slash, a dash, or the
 // marker the transcript's next line opened with. Each stands there for a line break.
-const joinToken = / (?:\/|>|—|–|[-*+]|\d+[.)]) /
+// A judge joining two of the transcript's lines onto one writes a slash, a dash, the marker
+// the next line opened with, or a colon after a heading — and may write the colon and the
+// marker together. Each token is read literally first, then as the line break it stands for,
+// and a colon may itself be the judge's punctuation or the transcript's own.
+const joinToken = /(?::[ \t]+(?:(?:\/|>|—|–|[-*+]|\d+[.)])[ \t]+)?|[ \t]+(?:\/|>|—|–|[-*+]|\d+[.)])[ \t]+)/
+const joinReadings = token => [...new Set(token.startsWith(':') ? [token, ': ', ' '] : [token, ' '])]
 
 /** Split the citation at every token that could be standing in for a line break. Each one
  *  is then read literally first, and as a break only where the transcript really broke. */
@@ -428,11 +465,13 @@ const brokeLine = (source, at) => source.text[at] === ' ' &&
 
 function walkJoins(source, pieces, joiners, at, index) {
   if (index === joiners.length) return { end: at, joined: false }
-  for (const option of [joiners[index], ' ']) {
-    if (option === ' ' && !brokeLine(source, at)) continue
+  for (const option of joinReadings(joiners[index])) {
+    const relaxed = option !== joiners[index]
+    // The space the reading ends on has to be a line the transcript really broke.
+    if (relaxed && !brokeLine(source, at + option.length - 1)) continue
     if (!source.text.startsWith(option + pieces[index + 1], at)) continue
     const rest = walkJoins(source, pieces, joiners, at + option.length + pieces[index + 1].length, index + 1)
-    if (rest) return { end: rest.end, joined: rest.joined || option === ' ' }
+    if (rest) return { end: rest.end, joined: rest.joined || relaxed }
   }
   return null
 }
@@ -441,7 +480,8 @@ function matchWithJoins(source, text, from) {
   const at = source.text.indexOf(text, from)
   if (at !== -1) return { at, length: text.length, joined: false }
   const { pieces, joiners } = joinPieces(text)
-  if (!joiners.length || !pieces[0]) return null
+  // Each joiner doubles the readings to try, so a citation full of them is read literally.
+  if (!joiners.length || joiners.length > 12 || !pieces[0]) return null
   for (let start = source.text.indexOf(pieces[0], from); start !== -1; start = source.text.indexOf(pieces[0], start + 1)) {
     const walked = walkJoins(source, pieces, joiners, start + pieces[0].length, 0)
     if (walked?.joined) return { at: start, length: walked.end - start, joined: true }
@@ -738,8 +778,13 @@ export function parseGrade(raw, scenario, transcript) {
     return rows.map(row => {
       const citation = row[4].trim()
       const evidence = locateCitation(citation, transcript, row[3])
-      requireEvidence(evidence, 'grade-citation', true)
-      return { id: `${prefix}${row[2]}`, verdict: row[3], citation, evidence }
+      // A binding criterion decides the case, so an unlocatable citation refuses the grade.
+      // An advisory criterion decides nothing, so it refuses the evidence instead: the row is
+      // admitted uncited, and `cited` is what a reader counts — an uncited advisory verdict
+      // is never a verified pass, and never a verified fail either.
+      requireEvidence(evidence || prefix === 'A', 'grade-citation', true)
+      return { id: `${prefix}${row[2]}`, verdict: row[3], citation,
+        evidence: evidence ?? null, cited: Boolean(evidence) }
     })
   }
   const bindingEnd = closingNone ? verdictMatches[0].index : advisoryAt.index
@@ -795,7 +840,8 @@ export function parseGrade(raw, scenario, transcript) {
     requireEvidence(!noneDeclared && (failed.length ? !allPassed && advisoryRatios.length > 0
       : allPassed || advisoryRatios.length > 0), 'grade-advisory-summary', true)
   }
-  return { caseId: scenario.id, emittedCase: caseLines[0][1], verdict, binding, advisory }
+  return { caseId: scenario.id, emittedCase: caseLines[0][1], verdict, binding, advisory,
+    uncitedAdvisory: advisory.filter(row => !row.cited).length }
 }
 
 export function calibrationMatches(fixture, grade) {

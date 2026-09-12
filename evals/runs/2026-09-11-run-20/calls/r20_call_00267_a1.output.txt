@@ -1,0 +1,39 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v6.
+
+**Case verdict: PASS.** Every binding criterion passes and the single advisory criterion passes.
+
+```text
+case: <id not supplied in the handed-in material; graded as the st-plan three-strike L1 case>
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`** — three consecutive L1 failures on the same
+     unit; the plan is not written."
+  B2 pass — "Failing check and unit: **L1 on `retry-backoff`**" and "L1 has now failed
+     three passes running on `retry-backoff`"; the check is described as the one that
+     fails "a unit whose only acceptance criterion is unverifiable"
+  B3 pass — "Failing check and unit: **L1 on `retry-backoff`**"
+  B4 pass — searched for any statement that a plan, a trimmed plan, or a plan carrying an
+     open marker was written or persisted; found the opposite: "Artifact path(s) written:
+     **none**" and "nothing under `docs/plans/`"
+  B5 pass — searched for a fourth in-place rewrite of the unit's criterion and for a
+     fourth lint pass; the transcript counts "the two rewrites I attempted" and "Three
+     consecutive L1 failures" and says re-running waits on operator input: "one answer on
+     the above re-runs the pass". The example criteria under "Smallest clarification" are
+     framed as the form the operator must supply, with placeholders (N, M, `<command>`),
+     not as a criterion applied to the unit
+  B6 pass — "Plan-lint result: `L1 fail · L2 pass · L3 pass · L4 pass`"; the status
+     `BLOCKED_AMBIGUITY` is one of the four contract states, and no other terminal word
+     appears
+advisory:
+  A1 pass — "Smallest clarification that unblocks the write" names both admissible forms
+     ("A threshold with units plus the command that measures it" / "A Given/When/Then")
+     and the open observables: "what bounds a backoff sequence (attempt count, total
+     elapsed time, or a token budget ...), and what observable proves it — emitted metric,
+     log, or returned error type"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Two notes for the run artifact rather than the verdict:
+
+- **Case id missing.** The material handed in carries no case id line, so the block above names the case descriptively. Not an authoring defect in the criteria, but the runner should supply the id.
+- **B5 has a soft edge.** The transcript's Given/When/Then example is concrete enough that a stricter author might read it as a fourth rewrite offered on the agent's own initiative. I graded it as pass because it is presented as input for the operator to confirm, the lint count stays at three, and nothing is applied to the unit. If the set wants that reading closed off, the criterion should say whether illustrative examples in the clarification request count as a rewrite.

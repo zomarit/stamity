@@ -1,0 +1,15 @@
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`none` — writing a README paragraph is ordinary documentation editing that
+     stays with the main flow"
+  B2 pass — searched for `st-learn` named as triggered or applicable; the only related
+     span is "learning capture" listed among things the request does not touch, which is a
+     negation, not a selection
+  B3 pass — the only label given as the answer is "`none`"; no skill id appears as the
+     answer, and every skill area mentioned is in the exclusion list after "it touches no"
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```

@@ -1,0 +1,1 @@
+`st-browser-evidence` — the request asks to drive the built app in a real browser for a before/after screenshot comparison plus an accessibility scan of a rendered page, which is exactly that skill's stated trigger.

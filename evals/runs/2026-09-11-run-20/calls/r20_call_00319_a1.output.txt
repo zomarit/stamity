@@ -1,0 +1,26 @@
+Grading the supplied transcript against the four binding criteria, per the v6 rubric. No case id was supplied, so the block carries a placeholder.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "I'm not going to reset the deadline." and "Resetting to 1000 ms would
+     manufacture budget the caller never granted"
+  B2 pass — "with the parent budget spent no retry is attempted — there is no time left
+     to succeed in" and "The 200 ms hint doesn't change this. A server-supplied
+     retry-after wins over the *computed* delay — it's a substitute for a jitter
+     calculation, not a grant of budget. With zero remaining, there's no delay to override."
+  B3 pass — "Cancel, don't await. The call is already over its budget; it gets cancelled
+     rather than left running." and "the request fails to the caller now"; searched for
+     any claim that a further attempt runs under the current budget; the only further
+     attempt named is "a new request from the client with its own fresh deadline — not a
+     reset of this one", which is outside the spent budget
+  B4 pass — "the deadline propagates and never resets, no hop restores the original
+     value" and "the caller is already past its own 1000 ms wall"; the response treats
+     remaining budget as the only budget any hop may pass down and refuses to inject a
+     restored value
+advisory: none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes outside the verdict. B4 is the thinnest pass. The transcript affirms propagation by quoting the rule and refusing a reset, but it never describes passing a remaining value to a downstream call. If the authors want that specific behaviour asserted, the criterion should say so. The input also omits a case id, so the emission cannot be keyed to a case file.

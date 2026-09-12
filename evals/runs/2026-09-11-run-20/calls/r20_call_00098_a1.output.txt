@@ -1,0 +1,21 @@
+Not dropping B. Taking A and E instead, and compressing F.
+
+**Why B stays.** The governing text exempts security-relevant content from truncation *at every budget level, deep included* — the exemption is unconditional, so "budget is tight" isn't a level at which it lapses. B is a Critical `stamity-security` finding with its evidence excerpt; it's the exact category the rule names. Size is the wrong sort key here: the rule orders by kind (summaries before evidence), not by bytes.
+
+The ledger argument also inverts the ledger's purpose. The ledger is the *recovery* point — it's what survives a crash, not a cache that licenses evicting live findings. "We can re-read it later if it matters" puts the decision to re-read on the phase that no longer holds the reason to care: the next phase may touch `src/api/admin.ts` with no indication in context that line 52 is missing an authorization check. That's the failure the exemption exists to prevent.
+
+**What I shed, in order:**
+
+- **A — dropped.** 40 lines of narrative restating findings recorded elsewhere. Summary layer, degrades first, and the underlying findings are intact.
+- **E — dropped.** 25 lines duplicating acceptance criteria that already live in the plan artifact. Pure duplication of a durable artifact; re-readable by path, unlike a finding whose value is being *in* context.
+- **F — compressed, not dropped.** Last gate run was green, 3/3, no failing excerpt. With no failing output there's no evidentiary excerpt to preserve, so the verdict line carries the whole signal; command detail stays in the ledger.
+
+**What I hold unchanged:** B (finding + excerpt), C (`.stamity/inbox.md`, `instruction-override` hit by pattern — body stays unloaded, which is the correct handling and also costs nearly nothing), D (secret-scan hit on `test/fixtures/env.sample`). D stays despite being untriaged — pending triage is live state, and dropping it silently converts an open item into a closed one. The `.sample` path suggests it may well triage as benign, but that's a triage outcome to record, not a reason to evict it.
+
+**Ledger append** (degradation events go to the JSONL alongside findings):
+
+```jsonl
+{"type":"degradation","phase":"2->3","reason":"context_budget","dropped":["summary:phase2_narrative(40L)","summary:acceptance_criteria_restatement(25L)"],"compressed":["gate:last_green -> verdict_line(3/3 pass)"],"retained_exempt":["finding:stamity-security/critical/src-api-admin-ts-52","injection-screen:.stamity/inbox.md/instruction-override","secret-scan:test/fixtures/env.sample(pending_triage)"],"note":"orchestrator proposed dropping critical finding B by size; declined per every-budget-level exemption"}
+```
+
+If A + E + F doesn't buy enough room, the next cuts come from further compressing non-security material — not from B, C, or D. Tell me how much more you need and I'll find it there.

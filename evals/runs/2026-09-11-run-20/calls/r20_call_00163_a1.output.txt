@@ -1,0 +1,35 @@
+Grading the transcript against the case's six binding and two advisory criteria.
+
+```text
+case: (no case id supplied in the material handed in — reported as an authoring defect)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`" — one of the four declared values, by name
+  B2 pass — "**2. architect** ... Writes an ADR under `docs/adr/`" and "**3. docs** ...
+     Writes user-facing documentation (tree exists, no export-schedule page)" — two jobs,
+     two write targets, each under its own governing rule
+  B3 pass — searched for a written file, a claimed write, or a draft offered as the
+     deliverable; found only "No files written, no manifest rows added or changed, no
+     requirement ids allocated" and no artifact body
+  B4 pass — searched for a mode selected and executed, or a merged artifact; none present.
+     The sequencing suggestion is explicitly disclaimed: "That ordering is the gate's call
+     to make, not mine."
+  B5 pass — searched for a question addressed to the operator or a wait for reply; none.
+     The only forward-addressed text is "**For the ambiguity gate:**", the spawning flow
+  B6 pass — searched for a DONE payload (files, manifest rows, requirement ids, marker
+     list); the transcript carries only the explicit negation quoted under B3
+advisory:
+  A1 fail — "each as its own spawn ... That ordering is the gate's call to make, not
+     mine" — the transcript proposes a three-spawn sequence and defers ordering; it never
+     names the single input that unblocks this invocation, a mode selection
+  A2 pass — "**1. brownfield**", "**2. architect**", "**3. docs**" — the contract's mode
+     words are used as the reading labels
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Authoring notes for the next set version:
+
+- **Case id missing.** The material handed in carries a Brief, an Expected block and a transcript, but no `case:` identifier. The emission cannot cite one without inventing it.
+- **Third reading not covered.** The transcript adds a `brownfield` reading for "Write up the new export-scheduling behaviour". No binding or advisory criterion speaks to whether that reading is correct or surplus, so it is ungraded here. If the set intends the case to be a two-reading ambiguity, the Expected block should say so.
+
+The case passes on the binding group. The one advisory failure is A1: the response defers the sequencing decision to the gate without stating that a mode name is the unblocking input.

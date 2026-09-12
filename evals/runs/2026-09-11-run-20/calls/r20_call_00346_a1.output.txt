@@ -1,0 +1,40 @@
+## Routing — 3 REVISE, 2 DEFER
+
+| # | Severity | Scope as matched | Route |
+|---|---|---|---|
+| F1 | Critical | any | REVISE |
+| F2 | Warning | inside diff files, traceable to recorded criterion `REQ-orders-109` | REVISE |
+| F3 | Warning | new file + new dependency | DEFER |
+| F4 | Minor | single-line fix inside a diff file | REVISE |
+| F5 | Minor | cross-cutting (four modules) | DEFER |
+
+Each row matched a specific scope; no catch-all was reached.
+
+### REVISE — plan units for phase 6
+
+**U1 · F1 · `src/api/orders.ts:88` — order total computed before discount**
+Forward change: move total computation after discount application in the order-total path.
+Acceptance criterion: for an order with a discount applied, the charged amount equals the post-discount total; covered by a case in `test/api/orders.test.ts`.
+
+**U2 · F2 · `src/api/orders.ts:141` — conflict path returns 500**
+Forward change: return 409 on the conflict path.
+Acceptance criterion: a duplicate-key conflict request returns HTTP 409, matching the recorded criterion for `REQ-orders-109`; covered by a case in `test/api/orders.test.ts`.
+
+**U3 · F4 · `src/api/orders.ts:22` — misspelled local name**
+Forward change: rewrite the identifier on that line.
+Acceptance criterion: the corrected identifier is the only name in scope and lint passes on `src/api/orders.ts`.
+
+### DEFER — inbox rows
+
+These two append to `.stamity/inbox.md` as a single dated block for this rework run (dated 2026-09-12, branch `feat/orders-idempotency`), written through the persistence guard:
+
+```
+Warning · src/api/orders.ts:117 · create handler not idempotent; needs new src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency
+```
+
+Both stay tracked: `/st-board` fill triages the inbox, and `/st-work` surfaces overlapping items when its framing phase touches `src/api/orders.ts`.
+
+---
+
+Nothing is written yet. One batched correction if you want any row moved — e.g. *"revise 3"* or *"defer 4"* — otherwise say go and I'll write the inbox block and build the three plan units. Execution of the units routes to `/st-work`; this command doesn't patch.

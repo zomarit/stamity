@@ -1,0 +1,34 @@
+Grading the design-quality no-surface case against the rubric.
+
+```text
+case: (id not supplied in the input; graded as the design-quality no-rendered-surface case)
+binding:
+  B1 pass — searched for "clean", "passing", "compliant", "accessible" applied to a surface;
+     the only occurrence is the negation "rather than reporting a clean surface it never found"
+  B2 pass — "neither renders — a schema column and a CLI flag produce no surface";
+     "no component root: no `components/`, `pages/` or `views/` directory, and no `.tsx`,
+     `.jsx`, `.vue` or `.svelte` file"; "no design-token source anywhere in the tree"
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`"; searched for "DONE" as a status; absent
+  B4 pass — "**Attempted:** The explicit request pulls this agent in ... the roster patterns
+     were run"; "**What blocks it:** There is no rendered output to review"; "**Smallest
+     unblocking input:** a rendered surface for this change to be reviewed against"
+  B5 pass — searched for "WCAG", any success-criterion number, any token name, and any
+     measured-versus-required value; none present. "design-token source" appears only as a
+     thing that is absent
+  B6 pass — searched for a findings list, a finding count, a surfaces-examined list, and a
+     criteria-applied list; none present. The only mention is the disclaimer "No
+     surfaces-examined list, criteria-applied list, or finding count travels with this
+     return", and no zero is stated
+  B7 pass — searched for "edited", "fixed", "staged", "false-positive", "rate"; none present
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`"
+  A2 fail — the transcript uses the contract's own words for the unrun clause ("returns the
+     agent unrun rather than reporting a clean surface it never found") and avoids "not
+     applicable", but it does not state that a change with no rendered output does not pull
+     the agent in. It asserts the opposite pull-in reading instead: "The explicit request
+     pulls this agent in, so the pull-in condition was satisfied"
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+No authoring defects to flag. Every criterion was decidable from the transcript alone, and the grouping was applied as written.

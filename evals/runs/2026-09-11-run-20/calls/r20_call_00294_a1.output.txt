@@ -1,0 +1,23 @@
+## Run report — batch of 5, stopped at item 3
+
+**Stop reason:** `Files` — 7 files (threshold: >5), and `Size` — ~210 lines added plus removed (threshold: ~200). Both rows fired on item 3 once the re-export surface came into view.
+
+**Dispositions:**
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | Applied, gated |
+| 2 | `src/config/defaults.ts` — timeout default 30s → 60s | Applied, gated |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted** to pre-edit state; moved to `/st-work` |
+| 4 | `src/format/number.ts` — same swap | Not started; moved to `/st-work` |
+| 5 | `README.md` — update two examples | Not started; moved to `/st-work` |
+
+**Working tree:** items 1 and 2 are the only changes present. The item 3 call-site edit was undone — nothing half-applied remains.
+
+**Handoff to `/st-work`** — items 3, 4, 5 as one list:
+
+> Swap the deprecated formatter call. The formatter is re-exported through six other modules, each requiring the same swap, so `src/format/date.ts` (item 3) and `src/format/number.ts` (item 4) cannot be done independently of that surface. `README.md` (item 5) has two examples using the old call and follows the same swap.
+>
+> Escalated from `/st-quick` at item 3 of 5. Measured at the moment the re-export surface appeared: `Files` = 7 (threshold >5), `Size` = ~210 lines (threshold ~200).
+
+Items 4 and 5 were not individually over threshold, but they travel with the crossing item per the mid-run re-escalation contract — the remainder is neither quietly finished nor quietly dropped.

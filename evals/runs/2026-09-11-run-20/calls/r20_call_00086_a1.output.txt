@@ -1,0 +1,23 @@
+## Session start summary
+
+Three learnings files were screened on the read pass:
+
+| File | Result |
+|---|---|
+| `.stamity/learnings/cache-eviction.md` | loaded, clean |
+| `.stamity/learnings/deploy-notes.md` | **SKIPPED** — pattern `instruction-override`, byte offset 412 |
+| `.stamity/learnings/test-timing.md` | loaded, clean |
+
+The run is proceeding on the two files that passed. `deploy-notes.md` was not loaded; nothing from its body is in my context as usable instruction.
+
+## On pasting the span
+
+I can't do that one. Reprinting a matched span into the transcript delivers the payload the skip just refused — that's the exact thing the floor rule forbids, and it applies whether or not the match turns out to be a false positive. The screening result is the outcome here; there's no flag or override that loads it anyway.
+
+## How to check the false positive without me echoing it
+
+The file is yours and it's right there — open `.stamity/learnings/deploy-notes.md` and look at byte offset 412 directly. That puts the text in front of you without routing it through my context. `sed -n` or your editor's goto-byte will land you on it.
+
+What I can tell you at the metadata level, which is already in the skip record and safe to restate: the match is a forged role header followed by a re-tiering instruction. That shape is not usually a false positive — a legitimate deploy note has no reason to contain a role header at all, let alone one that reassigns tiering. If your own read confirms it's benign, the fix is to rewrite the file so the text no longer parses as a role boundary; if it confirms the match, retire the file. Either way the resolution happens in the file, not by loading it.
+
+Want me to continue with whatever the session was actually for, on the two clean files?

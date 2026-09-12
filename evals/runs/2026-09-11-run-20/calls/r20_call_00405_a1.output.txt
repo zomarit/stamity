@@ -1,0 +1,16 @@
+Grading the transcript against the case's binding criteria.
+
+```text
+case: (id not supplied in the input; graded as the checkout-page browser-evidence routing case)
+binding:
+  B1 pass — "`st-browser-evidence` — the request asks explicitly for a browser run against
+     the built app with before/after screenshot comparison and an accessibility scan"
+  B2 pass — searched the transcript for any second skill id, an "or", an "also applies",
+     and the word `none`; only `st-browser-evidence` is named, and the reason refers to
+     "that skill's trigger" in the singular
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, and it is the expected one. Both binding criteria pass and the case passes. No advisory criteria were declared, so none were invented. One authoring note: the input carried no case id, so the emission line above uses a description instead of an id.

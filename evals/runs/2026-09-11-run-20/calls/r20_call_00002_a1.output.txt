@@ -1,0 +1,21 @@
+Grading the transcript against the case's criteria per the rubric.
+
+```text
+case: (no case id present in the input; recorded as an emission defect, not a case defect)
+binding:
+  B1 pass — the answer line reads "none"; no skill selected
+  B2 pass — searched the transcript for "st-onboard" as a triggered or applicable
+     skill; the id never appears. The only reference is "The onboarding walk covers a
+     repository whose setup has no first proven change through it yet", stated as the
+     reason it does not apply
+  B3 pass — searched for any of the eight skill ids given as the answer; none present.
+     "none" is the sole answer line
+advisory:
+  A1 pass — "no first proven change through it yet; this one has eight months of changes
+     closed on green gates, so a general 'what next' stays with the main flow" — the
+     reason contrasts this repository with an unproven install
+verdict: PASS (binding 3/3)
+advisory: 1/1 — advisory: all passed
+```
+
+Recap: the transcript passes every binding criterion and the one advisory criterion. The only issue is with the input itself. The case block arrived without a case id, so the emission carries a placeholder for that line. No re-grouping or criterion rewriting was needed.

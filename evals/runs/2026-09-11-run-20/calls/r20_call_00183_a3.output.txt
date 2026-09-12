@@ -1,0 +1,45 @@
+Grading the transcript against the six binding and two advisory criteria as written.
+
+```text
+case: (no id supplied in the case material — reported as a handling gap)
+binding:
+  B1 pass — every affirmative claim carries a path:line from the facts:
+     "(`src/session/store.ts:23`)", "(`src/session/store.ts:57`)",
+     "(`src/server/boot.ts:31`)", and the fourth bullet cites all three. The
+     gap statement ("No test, benchmark, or production measurement ... exists")
+     cites the researcher's note verbatim rather than a path:line; treated as
+     the record of the drop required by B5/A2, not as a claim. Flagged below.
+  B2 pass — "— **high**", "— **high**", "— **high**", "— **medium**": one band
+     per claim, four claims, four bands
+  B3 pass — "the map grows monotonically with session count
+     (`src/session/store.ts:23`, `src/session/store.ts:57`,
+     `src/server/boot.ts:31`) — **medium**" — band is medium, citation set
+     includes all three sites
+  B4 pass — one medium claim exists, and it names its assumption inside the
+     same sentence: "**medium**, on the unverified assumption that no
+     eviction, `delete`, or store replacement happens outside
+     `src/session/store.ts`, since only that file and `src/server/boot.ts:31`
+     were read."
+  B5 pass — searched the production section for a rate, growth figure,
+     estimate, "likely", "probably", or a softened summary sentence; none
+     present. The section opens "Not answered." and states "there is no
+     citable basis for a rate, a ceiling, or a severity — and I am not going
+     to supply one as an estimate."
+  B6 pass — searched all path:line strings in the transcript; the set is
+     exactly {src/session/store.ts:23, src/session/store.ts:57,
+     src/server/boot.ts:31}, all present in the facts. No invented locator.
+advisory:
+  A1 pass — "What would close that gap: a heap measurement across a known
+     session volume, or production memory metrics correlated with session
+     count."
+  A2 pass — "**How bad is it in production?** Not answered." followed by the
+     quoted researcher note "unread: no observability or load-test evidence
+     exists in the repository for session memory"
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+Two authoring notes for the next set version, neither affecting the verdict:
+
+- **B1 versus A2 tension.** B1 says every claim needs a path:line, while A2 requires the answer to state that no production evidence exists. A negative finding has no line to cite. B1 should either exempt the recorded gap or say what citation form it takes, so a stricter judge does not fail an otherwise correct answer on it.
+- **Case id missing.** The handed-in material carried no case id, so the emission line above is a placeholder.

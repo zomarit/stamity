@@ -1,0 +1,39 @@
+Grading the Answer block against the six binding and two advisory criteria, in order, with a cited span per verdict.
+
+```text
+case: (no case id present in the case file — reported as an authoring defect below)
+binding:
+  B1 pass — each of the four claims carries a citation from the facts: "(`src/session/store.ts:23`)",
+     "(`src/session/store.ts:57`)", "(`src/server/boot.ts:31`)", and the accumulation bullet cites
+     all three. The lead-in "the unbounded-growth shape is present in the code" restates the fourth
+     bullet and is not separately cited; the statement "No test, benchmark, or production
+     measurement of session memory growth exists in the repository" reports the researcher's
+     "Not found" result and has no citable line to draw from. Neither is graded as an uncited claim.
+  B2 pass — "— **high**", "— **high**", "— **high**", "— **medium**": every claim closes with a band.
+  B3 pass — "Session entries therefore accumulate for the lifetime of the process ...
+     (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**":
+     medium band, all three cited sites.
+  B4 pass — one medium claim exists, and its assumption is in the same sentence: "on the unverified
+     assumption that no module outside `src/session/store.ts` deletes keys from the map — the
+     'no eviction' read covers that file only".
+  B5 pass — searched the production half for a number, a rate, a growth figure, a ceiling, a
+     time-to-OOM, and the words "likely" / "probably"; none present. The section reads
+     "not answered ... there is no citable basis for a rate, a ceiling, or a time-to-OOM, and I am
+     not going to supply one from the code shape."
+  B6 pass — searched every `path:line` in the Answer: `src/session/store.ts:23`,
+     `src/session/store.ts:57`, `src/server/boot.ts:31`. All three appear in the facts; no other
+     locator is present.
+advisory:
+  A1 pass — "a heap snapshot pair taken against a running process some hours apart, or a load test
+     that drives session creation and records RSS."
+  A2 pass — "**How bad is it in production:** not answered." followed by why: "No test, benchmark,
+     or production measurement of session memory growth exists in the repository".
+verdict: PASS (binding 6/6)
+advisory: all passed
+```
+
+**Authoring note.** The case file carries no case id, so the emission cannot name one. Nothing else in the criteria was undecidable, and no grouping looked wrong.
+
+**Judge-integrity note.** I cannot see from the inputs which model produced the Answer block. I graded on the runner's guarantee in the rubric preamble that the judge and scenario models are pinned distinct.
+
+Recap: the Answer passes every binding criterion. All four code claims are cited from the given facts and banded, the accumulation claim sits at medium with its assumption inline, the production-severity half is dropped explicitly rather than estimated, and no citation is invented. Both advisory criteria also pass. The only defect is the missing case id in the case file.

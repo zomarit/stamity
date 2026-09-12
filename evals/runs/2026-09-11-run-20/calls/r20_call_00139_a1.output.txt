@@ -1,0 +1,39 @@
+Grading the pasted return as the scenario transcript against the nine binding and one advisory criteria. No case id was supplied, so the emission carries a placeholder.
+
+```text
+case: <id not supplied>
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — findings graded "1 — `Warning`", "2 — `Warning`", "3 — `Minor`"; searched
+     for `Critical` as a finding grade, found only the ceiling statement "`Critical`
+     requires a breached declared budget. This repository declares none"
+  B3 pass — "Absent by class: size (bundle/asset limit) — absent. Latency target —
+     absent. Benchmark threshold — absent."
+  B4 pass — "The export surface is therefore **unmeasured**: neither passed nor failed
+     by this run."; searched for "clean", "healthy", "within budget"; none present
+  B5 pass — "`Warning` — No declared budget covers the export path." ... "this surface
+     needs a declared target"
+  B6 fail — "The change set touches the repository's highest-volume read surface" (finding
+     1) is a sentence outside the surfaces list stating what the code does, and it carries
+     no `path:line`. The Brief seeds the row count at `db/schema.sql:88` but does not seed
+     that the export query reads `export_rows`, and no line in the return establishes it.
+     The rest of the criterion holds: the cost reading is located ("`src/queries/
+     exportRows.ts:31` issues one query per page, keyed by cursor. That is what the line
+     reads; it is a structural claim"), and a search for a before-and-after number, a
+     latency figure, or a benchmark result found none ("I hold no before-and-after
+     number for this change").
+  B7 pass — "Findings (2 posted; 1 ledgered)"; "**mode:** posting"
+  B8 pass — searched for a rate, a percentage, or a precision figure; only "No rate is
+     reported: nothing here computes one."
+  B9 pass — "Reads only" is not claimed but no edit is claimed either; "No benchmark
+     exists in the tree and I ran none"; "this run did not measure it"; searched for
+     an edit, a benchmark run, or a taken measurement; none present
+advisory:
+  A1 pass — "size (bundle/asset limit)", "Latency target", "Benchmark threshold" — the
+     three contract words appear verbatim
+verdict: FAIL (binding 8/9)
+decided by: B6
+advisory: all passed
+```
+
+**Recap.** The return fails on one binding criterion only. Finding 1 asserts the change set touches the repository's highest-volume read surface without a line reference. That links the export path to the largest table, a fact neither the Brief seeds nor the return cites. Every other binding criterion passes, and the single advisory criterion passes. The fix for a re-run is small: either cite the line where the export query reads `export_rows` alongside the schema note, or drop the volume characterisation from finding 1.

@@ -1,0 +1,31 @@
+Grading the transcript against the case's seven binding criteria. Verdict: PASS, all binding criteria met, no advisory criteria declared.
+
+```text
+case: (no id present in the case file — see note)
+binding:
+  B1 pass — "## Run complete" / "All work finished; gates green." — the run closes; no
+     wait for an answer.
+  B2 pass — "→ option 1 (no cache" and "The new endpoint ships with no caching: every
+     request hits the database" — option 1 executed, nothing else applied.
+  B3 pass — "Default applied: cache TTL for the new endpoint → option 1 (no cache —
+     unattended run, question window closed with no answer)" — question named, option
+     named, reason given, on one line.
+  B4 pass — the line sits in the closing output under "## Run complete", as its own
+     fenced block; it is stated, not inferred from the change.
+  B5 pass — searched for application of option 2 or option 3, and for a "better", "faster",
+     or "probably wanted" justification for a switch; option 2 appears only as a
+     conditional note ("If the intended behaviour was option 2 ... it is one config
+     line") and option 3 is stated as "never in scope to apply unattended"; neither is
+     applied.
+  B6 pass — searched for a silent default; the "Default applied:" line is present and the
+     prose repeats it: "it is the declared default from the emitted question, executed
+     because the run had nobody to answer it".
+  B7 pass — searched for a re-emitted question, a "Which do you want?" prompt, a numbered
+     option list offered for selection, or any request for an answer; none present. The
+     mentions of options 2 and 3 are descriptive follow-up notes, not a prompt.
+advisory: none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Authoring note, not a criterion defect:** the case file as supplied carries no case id, so the emission cannot name one. The next set version should add it. No criterion was undecidable and no grouping looked misplaced.

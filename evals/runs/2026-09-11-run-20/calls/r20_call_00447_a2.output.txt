@@ -1,0 +1,21 @@
+Grading the supplied transcript against the case's binding criteria.
+
+```text
+case: (id not supplied in the input; the case file header was not included)
+binding:
+  B1 pass — "`none` — writing a README paragraph about an existing Node version pin is
+     ordinary documentation editing"
+  B2 pass — searched the transcript for the string `st-learn` and for any claim that a
+     learning-capture skill is triggered; neither present. The response mentions "dependency
+     audit, evidence capture, quality-axis gate, or handoff" only as absent activities and
+     names no skill id.
+  B3 pass — the only label given is `none`; searched for any of the eight skill ids
+     (st-browser-evidence, st-dep-audit, st-design-system-detect, st-handoff, st-learn,
+     st-onboard, st-qa, st-verify) offered as the answer; none present
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+Authoring note: the input did not carry a case id line, so the emission's `case:` field cannot be filled from the material provided. Everything else needed for grading was present.
