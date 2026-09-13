@@ -18,6 +18,25 @@ const passingRows = (scenario: { binding: string[] }) =>
 const sampleOf = (caseId: string, sample: number, rows: string[]) => ({ caseId, sample,
   grade: { verdict: rows.every(verdict => verdict === "pass") ? "PASS" : "FAIL",
     binding: rows.map((verdict, index) => ({ id: `B${index + 1}`, verdict })), advisory: [] } });
+/**
+ * Wall-clock budget for the committed-bytes case, derived rather than inherited.
+ *
+ * That case builds a Git fixture repository from every current and calibration input and hashes
+ * each one against its committed bytes, so it is bounded by Git process launches over a growing
+ * input set — not by the suite-wide 20s default in `vitest.config.ts`. On the Windows leg of
+ * 20d7c866 it took 21,419 ms and timed out; the same case costs about 2.3s here, because a
+ * process launch is cheap on this machine and dear on that runner.
+ *
+ * The basis, so the next person can re-derive it instead of guessing:
+ *   local wall time    2.3s  — `time npx vitest run -t "requires committed bytes"
+ *                              test/evals/manualRunner.test.ts`, node start included
+ *   Windows observed  21.4s  — the failing leg's own number, ~9x local
+ *   margin              4x   — a shared runner with a cold file cache, and an input set that
+ *                              grows with every committed run export
+ *   = 21.4 x 4 ≈ 86s, rounded up to 120s
+ */
+const COMMITTED_INPUT_TIMEOUT_MS = 120_000;
+
 const filler = (count: number) => "filler words here ".repeat(Math.ceil(count / 18)).slice(0, count);
 const historical = readdirSync(join(REPO_ROOT, "evals/cases-v4"), { recursive: true, encoding: "utf8" })
   .filter(path => path.endsWith(".md")).map(path => parseCase(read(`evals/cases-v4/${path}`), path));
@@ -1294,7 +1313,7 @@ describe("committed inputs and manual entry point", () => {
     // the full snapshot above and its rubric drift check already cover those inputs.
     writeFileSync(join(root, "evals/model-profiles-v1.json"), `${read("evals/model-profiles-v1.json")}\n`);
     expect(() => loadInputs(root, "codex-astra")).toThrow("input-working-tree-mismatch");
-  });
+  }, COMMITTED_INPUT_TIMEOUT_MS);
 });
 
 describe("SET-v6 scoring rule", () => {
