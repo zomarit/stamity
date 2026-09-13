@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria and emitting the block.
+
+```text
+case: (case id not supplied in the input; reported as a run-artifact gap, not a grading defect)
+binding:
+  B1 pass — "`st-onboard` — the request is verbatim its trigger"
+  B2 pass — searched for "none", "st-handoff", "st-qa", "st-verify", "st-learn", "st-browser-evidence", "st-dep-audit", "st-design-system-detect"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `st-onboard`, offers no alternative, and does not answer with none. Both binding criteria pass and the case passes. The only gap is that the input carried no case id, so the block above cannot name one.

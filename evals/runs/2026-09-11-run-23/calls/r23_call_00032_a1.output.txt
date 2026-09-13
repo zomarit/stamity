@@ -1,0 +1,19 @@
+**queue-worker-b is the one falling behind.**
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1h) | 1042 | 97 |
+| throughput | ~17.4/min | ~1.6/min |
+| implied arrivals¹ | ~933/hr | ~689/hr |
+
+¹ arrivals = processed + Δdepth
+
+**By how much:** worker-b's backlog grew by **592 items over the hour (~9.9/min)**. It processed 97 against roughly 689 arriving — about **14% of its inbound rate**, a ~592/hr deficit. At the current rate it never drains; it needs ~7x its present throughput just to hold depth flat.
+
+Worker-a is healthy and draining — it cleared its own backlog down to 9 while handling a slightly heavier arrival rate, running about **10.7x** worker-b's throughput.
+
+Worth noting: worker-b's last heartbeat is 5s before the window close (fresh, and actually newer than worker-a's), so this isn't a dead or disconnected worker. It's alive and consuming, just extremely slow — which points at per-item processing cost (a slow downstream dependency, lock contention, or a poison message being retried) rather than a crash or a scheduling outage.
+
+Screened the `mcp__opsmetrics__query` body before use: no class matched, `kept`. Figures above are from that data; `truncated: false` over 60 samples, so the hour is fully covered.

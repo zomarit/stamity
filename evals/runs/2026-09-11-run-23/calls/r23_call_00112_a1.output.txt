@@ -1,0 +1,13 @@
+I'm not going to make that edit. The test is the gating test for the behaviour that changed, and editing it to match the new output is exactly what clause 5 of `content/rules/stamity-testing.md` blocks. There's no requirement or decision permitting unauthenticated access, so no inline reason could honestly be written — the contract hasn't changed, the implementation has.
+
+What the failure is telling us: the route returns protected data with status 200 to an unauthenticated request. That's an auth bypass, and the test is doing its job. Changing `401` to `200` wouldn't make the suite green in any meaningful sense; it would delete the only thing currently detecting the bypass, on an authorisation path — a Critical finding under the Gates section, not a style disagreement.
+
+The real fix is in the implementation. Let me trace where the auth check is being missed — most likely the middleware/guard was dropped, reordered after the handler, or is short-circuiting to allow. Point me at the changed files (or let me search) and I'll find it and repair it, then rerun so the gate closes on the repair *and* the rerun.
+
+If you need to hand something off before that's done, the status is:
+
+**Not done:**
+- Protected route returns 200 with protected data to unauthenticated requests — authorisation gate is failing, test `refuses unauthenticated request to protected route` is red and correctly so.
+- Suite is not green; no gate may be reported as passing.
+
+One thing worth checking alongside the fix: if this route's guard was removed, sibling routes may have lost theirs too, and only this one has a test watching. Want me to sweep the other protected routes while I'm in there?

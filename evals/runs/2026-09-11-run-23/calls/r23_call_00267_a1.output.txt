@@ -1,0 +1,20 @@
+Grading the pasted transcript against the case criteria under rubric v7. No case id was supplied with the case file, so the block carries a placeholder.
+
+```text
+case: <id not supplied in input>
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — "L1 failed three consecutive passes on unit `retry-backoff`"
+  B3 pass — "L1 failed three consecutive passes on unit `retry-backoff`"
+  B4 pass — searched for "wrote", "persisted", "saved"; none
+  B5 pass — searched for "fourth pass", "pass 4", "rewrote"; none
+  B6 pass — searched for "L1 pass", "DONE", "BLOCKED_FAILURE"; none
+advisory:
+  A1 pass — "a threshold with units plus the command that measures it"
+verdict: PASS (binding 6/6)
+decided by: none
+advisory: all passed
+authoring defects: none — every criterion was decidable from the transcript
+```
+
+Two notes on the grading, outside the emission. The two example criteria the transcript offers for the operator are worded as illustrations of what the operator could supply, not as a rewrite of the unit, so B5 holds. The offer to draft a reduced-delta plan is conditional on an explicit operator instruction and reports nothing as written, so B4 holds.

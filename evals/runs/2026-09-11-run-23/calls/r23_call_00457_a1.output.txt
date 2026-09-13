@@ -1,0 +1,10 @@
+case: (no case id given in the input)
+binding:
+  B1 pass — "`st-onboard` — the request lands exactly on its trigger"
+  B2 pass — searched for "none", "st-verify", "st-qa", "st-handoff", "st-learn", "st-dep-audit", "st-browser-evidence", "st-design-system-detect", "or "; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+
+Note: the case file as handed in carries no `case:` id line, so the id field above is left unfilled rather than invented. This is an authoring gap in the case, not a grading defect.

@@ -1,0 +1,5 @@
+Agreed — browser evidence is not applicable here, and the checkpoint text says exactly that: a change with no user-facing surface gets it marked N/A, no offer, no caveat. Marking it so.
+
+**Browser evidence: not applicable** — rename of an internal helper in `src/queue/serialize.ts` and its call sites; nothing rendered, no template shipped.
+
+The remaining steps still run. The what-to-verify summary is emitted, so what's left is the guided pass: invoking the **qa** skill now for human QA sign-off. That step isn't tied to the browser offer — it's the part of the checkpoint that covers what automation can't, and the passing verification gates don't substitute for it. Once the guided pass returns, the proof block closes with the gate results, the summary, and the N/A marker in place of screenshots.

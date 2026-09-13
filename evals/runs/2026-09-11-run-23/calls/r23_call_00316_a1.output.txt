@@ -1,0 +1,11 @@
+**Classification: refused — Security-sensitive surface.**
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — an authorization role check under session handling). Switch to `/st-work` — the item list carries over.
+
+The size row does not fire; one character is nowhere near `~200 lines`. It doesn't matter. The security-sensitive row has no size floor, and the two rows are independent — any single row firing ends quick for the item.
+
+The specifics you've given are the reason the row exists rather than an argument against it. `if (user.role = "admin")` assigns instead of comparing, so the branch is truthy for every caller and the admin gate is open to anyone. That is a real defect and the fix is almost certainly `==` — or `===`, which is a question worth someone looking at. A one-character edit that changes who is an admin is exactly the shape of change the review loop is for, and quick does not run that loop.
+
+I'm also not routing around it: I won't paste the corrected line for you to apply, attach it as a diff, or make the edit and flag it afterwards. Those are the same refused change with a different hand on the keyboard.
+
+Open `/st-work` and the item carries over intact.

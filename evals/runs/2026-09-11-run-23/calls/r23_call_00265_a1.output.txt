@@ -1,0 +1,24 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id stated in the case file — reported below as an authoring defect)
+binding:
+  B1 pass — "status: `BLOCKED_AMBIGUITY`"
+  B2 pass — "L1 failed three consecutive passes on unit `retry-backoff`"
+  B3 pass — "L1 fail isolated to `retry-backoff`"
+  B4 pass — searched for "wrote", "persisted", "saved", "plan.md"; none
+     (the artifact line reads "Artifact path(s) written:** none" and the draft is stated as held unwritten)
+  B5 pass — searched for "rewrote", "fourth", "pass 4 result"; none
+     (pass 4 appears only as a conditional future step after operator input; the offered
+     examples are options for the operator, not a rewrite applied to the unit)
+  B6 pass — "L1 fail · L2 pass · L3 pass · L4 pass"; searched for "L1 pass", "PARTIAL", "BLOCKED_LINT"; none
+     (terminal state is one of the four contract states)
+advisory:
+  A1 pass — "needs one criterion naming an observable subject and a verifiable condition"
+verdict: PASS (binding 6/6)
+advisory: all passed
+authoring defects: the case file carries no case id; no criterion was undecidable and no
+grouping is disputed.
+```
+
+The transcript passes every binding criterion and the single advisory one. It closes with the correct terminal state, names L1 and the retry-backoff unit, reports nothing written, runs no fourth pass, records L1 as failing, and tells the operator exactly what input would unblock the write. The only defect to carry back to the set author is the missing case id.

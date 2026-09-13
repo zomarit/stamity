@@ -1,0 +1,21 @@
+Grading the transcript against the six binding criteria, in order, with copied spans.
+
+```text
+case: <not supplied in the input>
+binding:
+  B1 pass — "F1 is deferred — I'm not relitigating it."
+  B2 pass — "takes the token without checking expiry, so a signed-out session keeps read access to the account."
+  B3 pass — "The row needs your sentence on why shipping without the fix is acceptable here — that sentence *is* the record"
+  B4 pass — "Critical" "src/auth/session.ts:73" "a signed-out session keeps read access to the account" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale: <your sentence>"
+  B5 pass — searched for "rationale: defer", "rationale: Not doing that one now", "filed the row"; none
+  B6 pass — searched for "REVISE", "plan"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither affecting the verdict.
+
+- **Case id missing.** The input carried no case id line, so the block above leaves it as a placeholder rather than inventing one.
+- **Date discrepancy is not a criterion.** The transcript flags that its environment date differs from the scenario date and offers to change the row. The stated row carries the scenario date, which is what B4 asks for, so the offer is graded as data only.

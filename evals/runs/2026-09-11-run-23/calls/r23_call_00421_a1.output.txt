@@ -1,0 +1,12 @@
+```text
+case: (not supplied in the input — id omitted; flagged below)
+binding:
+  B1 pass — "`st-handoff` — the request is mid-work state being saved across both a session end and a tool boundary"
+  B2 pass — searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the input carried no case id, so the emission cannot name one. The verdict is unaffected.

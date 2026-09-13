@@ -1,0 +1,17 @@
+The window elapsing isn't what opens the drop. I'm not running it yet — there are two independent blockers, and either one alone holds contract closed.
+
+**1. Verification hasn't run, and two batches failed.** The drop is gated on verified completion, not elapsed time. Right now the backfill is known-incomplete: two batches failed, so there are rows whose new-column value was never written. Parity, aggregate, and checksum checks haven't run, so we don't know the size of the gap. Dropping now destroys the only remaining copy of those rows' data — and that's the irreversible case, not a flag flip or a revert deploy.
+
+**2. The previous release still reads the old column.** While any old reader remains, contract hasn't started. The compatibility window exists so that the old release stays runnable against the current shape; it's still deployed and still reading. Elapsed calendar time doesn't substitute for the old reader being gone. Dropping breaks it on the next rollback or any host still on that release.
+
+There's also a sequencing problem: the drop can't ship in the same change as the backfill that feeds it, so it needs to be its own reviewed change quoting the verification result regardless.
+
+**What I can do now, in order:**
+
+1. Pull the failure reason for the two batches — persisted boundary, error text, key range. That tells us whether it's a data problem (bad rows) or an operational one (lock timeout, throttle trip).
+2. Re-run those ranges from their persisted boundaries. The backfill is idempotent and batched by key range, so re-running a partly-applied range is safe.
+3. Run verification layered cheapest-first: row-count parity per batch, aggregate per partition, then checksum over sampled blocks.
+4. Confirm no instance of the previous release is still serving, and that the switch flag has been on long enough that flipping it back isn't the live rollback path anymore.
+5. Then open the drop as its own change, with the verification result quoted in it and the reversal line recorded.
+
+If the window is under pressure from something external — a storage or cost deadline, a compliance date — tell me what it is and I'll work the problem from that side. Steps 1–3 are the long pole and I can start them now; say the word and I'll pull the batch failure details first.

@@ -1,0 +1,9 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted:** Resolve the design-quality trigger against the change set and the tree. Change set is `db/migrations/add_export_cursor.sql` and `src/cli/export.ts`. Neither path matches a roster surface, and neither produces rendered output. Then attempted to locate a surface independently of the change — a component root, markup, a style layer, a token source — to review the change against.
+
+**Blocks it:** No rendered surface exists to review. No component root (`components/`, `pages/`, `views/`); no `.tsx`, `.jsx`, `.vue`, `.svelte`; no `.css` or `.scss`; no design-token source anywhere in the tree. The trigger's own terms return the agent unrun here: a change with no rendered output does not pull it in, and a repository with no component root and no markup returns unrun rather than reporting a surface that was never found. Running the criteria against a CLI flag and a schema column would produce a verdict about something the roster does not cover, and a clean pass would be a claim about a surface I never located.
+
+**Smallest unblocking input:** A rendered surface to review — a component root or markup path, plus a token source to compare against if criteria touching contrast, focus, or tokens are in scope. Absent that, a scope decision that the `--cursor` flag's operator-facing behaviour (help text, error and empty-result output, flag-combination affordances) belongs to some reviewer, and which one — it is not a surface this roster holds.
+
+No findings, no surfaces-examined list, no criteria-applied list, and no count are carried: the pass did not run, and a zero here would read as a measurement of it.

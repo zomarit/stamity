@@ -1,0 +1,79 @@
+Can't write the record yet — `r7/review/2` reads `open`, and the close refuses while any row does. Closing it first.
+
+**`r7/review/2` disposition.** Minor, below the QA severity floor, and its disposition isn't itself ambiguous — there's no choice here that differs materially in cost or blast radius, so the ambiguity floor doesn't fire and this is mine to close, not yours to answer. Closed `deferred`: the rationale that kept it below the floor is that it's a Minor style/robustness note on a path the round-2 approval covered, with all three gates green on it. It travels to the inbox rather than dying in the ledger.
+
+---
+
+## Proof block — run `r7`
+
+### Gate results
+
+| gate | command | result | failing excerpt |
+|---|---|---|---|
+| lint | `npm run lint` | pass | — |
+| typecheck | `npm run typecheck` | pass | — |
+| test | `npm test` | pass | — |
+
+### Review verdicts
+
+| round | agent | verdict | confidence |
+|---|---|---|---|
+| 1 | `stamity-reviewer` | changes requested | high |
+| 2 | `stamity-reviewer` | approved | high |
+
+### Decisions trace
+
+- gate `lint` — pass, proceed.
+- gate `typecheck` — pass, proceed.
+- gate `test` — pass, proceed.
+- round 1 "changes requested" → re-entered implementation, did not advance to close.
+- `r7/review/1` (Warning, `src/api/users.ts:88`) → **fixed**; cleared by round 2 approval.
+- `r7/security/1` (Warning, `src/api/users.ts:41`) → **deferred**, rationale: rate limiting is tracked separately in the inbox. Above the severity floor, so it reached the QA checkpoint and was deferred there.
+- `r7/review/2` (Minor, `src/api/users.ts:120`) → **deferred** at close, rationale: Minor, below the QA severity floor; disposition unambiguous, so closed by the run under the severity floor rather than escalated.
+- ASK outcomes: none. No row's disposition hit the ambiguity floor this run.
+- round 2 "approved" high → close.
+
+### Artifacts touched
+
+| path | owning sub-agent |
+|---|---|
+| `src/api/users.ts` | `stamity-implementer` |
+| `test/api/users.test.ts` | `stamity-implementer` |
+
+### Per-action attribution
+
+| agent | tool | outcome |
+|---|---|---|
+| `stamity-implementer` | not recorded | `src/api/users.ts` modified |
+| `stamity-implementer` | not recorded | `test/api/users.test.ts` modified |
+| `stamity-reviewer` | review (round 1) | changes requested, high |
+| `stamity-reviewer` | review (round 2) | approved, high |
+| `stamity-security` | security review | 1 Warning raised (`src/api/users.ts:41`) |
+| `/st-work` close | ledger + inbox write | `r7/review/2` closed deferred; 2 inbox rows |
+
+Flagging one gap rather than filling it: the per-action rows for the implementer carry no tool identity in this run's record, so the attribution is agent-and-outcome only. That's a thinner audit trail than the section is meant to carry.
+
+### Ledger at exit
+
+| id | severity | evidence | state | eighth field |
+|---|---|---|---|---|
+| `r7/review/1` | Warning | `src/api/users.ts:88` | fixed | — |
+| `r7/review/2` | Minor | `src/api/users.ts:120` | deferred | `retired`: unset |
+| `r7/security/1` | Warning | `src/api/users.ts:41` | deferred | `retired`: unset |
+
+No row reads `open`. Run-exit invariant satisfied.
+
+### Inbox appended — `.stamity/inbox.md`, dated block `2026-09-13`
+
+```
+Warning | src/api/users.ts:41 | no rate limiting on this endpoint; tracked separately | source: /st-work | Ref: .stamity/ledger/r7.md#r7/security/1
+Minor | src/api/users.ts:120 | reviewer note below the QA severity floor; gates green on this path | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2
+```
+
+Both rows keep `deferred` in the ledger; each gains `retired` only when its inbox row leaves — fixed in a commit, cut with a reason, or scheduled with a lane, trigger and owner.
+
+### Recommended next step
+
+Take the rate-limiting Warning at `src/api/users.ts:41` (inbox row `Ref: …#r7/security/1`) — it is the only deferral this run left above the severity floor, and it is unscheduled: no lane, trigger or owner. The Minor at `src/api/users.ts:120` (`Ref: …#r7/review/2`) rides behind it.
+
+**Not done:** the two findings above, both now carried as inbox rows rather than scheduled items.

@@ -1,0 +1,44 @@
+I did not write anything. Nothing in this run is safe to apply unattended, so the spec file is still unopened for writing. Here is what moved and what is waiting on you.
+
+## T1 — applied automatically
+
+The board item moved `In progress` → `In review`, and the run ledger records the owner and the progress event. This is execution record only; it is not written into `docs/specs/checkout-flow.md`.
+
+## T2 — proposed, awaiting confirmation: add `REQ-checkout-131`
+
+The gap scan found the delta's `ADDED` requirement with no counterpart in the spec. These are the exact lines that would be appended, verbatim — read them, not my summary of them:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only. No existing line in the file is touched by this item.
+
+## T3 — proposed, awaiting explicit confirmation: `REQ-checkout-112`
+
+The recorded requirement contradicts the shipped code.
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** "the cart is cleared when payment is declined"
+- **After (proposed):** "the cart is preserved when payment is declined"
+- **Evidence:** `src/checkout/decline.ts:64` preserves the cart; this branch's diff keeps that behavior rather than introducing it.
+
+Two caveats on this one.
+
+First, the fork is yours, not mine. The evidence establishes that text and code disagree; it does not establish which is wrong. I am proposing that the text drifted, because the code has shipped this way and this branch reaffirms it — and because `REQ-checkout-131` points the same direction for expired cards. The other reading is that `REQ-checkout-112` was the real intent and the code is the defect, in which case the fix is in `decline.ts`, not the spec, and this mutation should be rejected.
+
+Second, before you confirm, the before/after above should be checked against the file's exact bytes. I have the "before" as a quoted clause, not as the full line as it sits on disk; the requirement may carry surrounding prose or a Given/When/Then criterion that also has to change for the requirement to be internally consistent. Confirming against my rendering of a line rather than the line itself is exactly the paraphrase problem. I'll read the file and re-present the literal before/after if you want to proceed with this item.
+
+## Same-delivery check
+
+No `Warning` finding against this change. The diff's behavior change ships with its delta (`REQ-checkout-131`). Item (b) is pre-existing drift surfaced by the gap scan, not a missing delta for this diff.
+
+## To proceed
+
+Tell me which to apply: the T2 addition, the T3 mutation, or both. They are independent — confirming the append does not commit you to the requirement rewrite. This run is not a no-op; the scan found two real gaps, so `sync` will not report `no changes` until they are resolved one way or the other.

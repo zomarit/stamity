@@ -1,0 +1,38 @@
+## Routing — one pass, five findings
+
+| # | Severity | Scope as matched | Table row that matched (first match wins) | Route |
+|---|---|---|---|---|
+| F1 | Critical | any | `Critical · any` (row 1) | **REVISE** |
+| F2 | Warning | inside a diff file, traceable to recorded AC `REQ-orders-109` | `Warning · inside diff files and traceable to a recorded acceptance criterion` (row 2) | **REVISE** |
+| F3 | Warning | needs new file `src/api/idempotency.ts` + new dependency | `Warning · new files, a new dependency, or a design change` (row 3) | **DEFER** |
+| F4 | Minor | single-line identifier fix in a diff file | `Minor · single-line fix inside a diff file` (row 4) | **REVISE** |
+| F5 | Minor | cross-cutting across four modules | `Minor · cross-cutting, or outside the diff` (row 5) | **DEFER** |
+
+No finding fell through to a catch-all; rows 1–5 matched directly.
+
+### REVISE — the plan units these become
+
+**PU-1 — Apply the discount before computing the order total** (`src/api/orders.ts:88`)
+Forward change: move the discount application ahead of the total computation so the charged amount reflects it.
+*Acceptance criterion:* an order with a discount charges subtotal − discount; a test in `test/api/orders.test.ts` asserts the charged amount for a discounted order and fails against the current ordering.
+
+**PU-2 — Return 409 on the conflict path** (`src/api/orders.ts:141`)
+Forward change: replace the 500 on the conflict path with a 409, matching the recorded acceptance criterion for `REQ-orders-109`.
+*Acceptance criterion:* a duplicate-key create request returns 409 with the conflict body shape; test asserts the status, and `REQ-orders-109` is satisfied as recorded in the source run's proof block.
+
+**PU-3 — Correct the misspelled local name** (`src/api/orders.ts:22`)
+Forward change: rewrite the identifier on that line.
+*Acceptance criterion:* the corrected spelling is the only occurrence in the file, and lint plus build pass clean.
+
+### DEFER — the inbox rows these become
+
+```
+Warning · src/api/orders.ts:117 · idempotent create handler needs new file src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal shared with three other modules; needs an extracted shared constant · source: rework feat/orders-idempotency
+```
+
+Both rows land in **one dated block appended to `.stamity/inbox.md`** for this rework run — a single `2026-09-13` block holding exactly these two rows, written through the persistence guard. Nothing is written yet. `/st-board` fill triages that inbox, and `/st-work` surfaces these when its framing phase touches `src/api/orders.ts`, so neither deferral is dropped.
+
+Nothing here reverts or resets anything — F3's idempotency work stays deferred rather than being pulled into this round, and every REVISE unit is a forward change.
+
+**One batched correction, then I proceed.** Reply in the shape *"revise 3, defer 1"* to move findings across, or "go" to take the routing as shown. On "go" I append the inbox block and build PU-1–3 into the phase 6 plan; execution of that plan routes to `/st-work` — this command does not patch.

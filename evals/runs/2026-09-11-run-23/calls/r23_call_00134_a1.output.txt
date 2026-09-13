@@ -1,0 +1,45 @@
+**status:** `DONE` — unit 4 of run r12, cursor pagination on the user-export endpoint.
+
+## Files changed
+
+- `src/api/export.ts` — cursor pagination on the export endpoint; response gained a `nextCursor` field.
+- `test/api/export.test.ts` — see below.
+
+## Tests
+
+- **Added** two tests in `test/api/export.test.ts` covering the paginated path. Each was written red first and watched fail for the expected reason before the implementation landed.
+- **Modified** one existing test, `exports every row`. Justification: the behaviour it asserted moved — a single call no longer returns the full row set, so the assertion was rewritten against the paginated contract. An inline comment in the test names the move.
+
+No other tests touched.
+
+## Gate results
+
+| Command | Result |
+| --- | --- |
+| `npm run test` | **pass** (exit 0, whole suite passing) |
+| `npm run typecheck` | **pass** (exit 0) |
+| `npm run lint` | **fail** (exit 1) — pre-existing, see below |
+
+Targeted pass over the unit's surface; the unit's blast radius is its own two files, so `${STAMITY:VERIFY_GATE_ALL}` was not run.
+
+Verbatim lint output:
+
+```
+src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars
+✖ 1 problem (1 error, 0 warnings)
+```
+
+**Pre-existing, not introduced by this unit.** The brief's baseline lint result carried the same error before this unit, and `src/reporting/csv.ts` is not in this unit's file list. Left alone — fixing it here would rewrite the unit's scope and its diff. Severity: `Minor`.
+
+These runs are the local check only. The flow's independent test-runner produces the gate evidence of record; the green test and typecheck claims above do not substitute for it.
+
+## Spec delta (proposal — for spec-author to apply after confirmation)
+
+- `MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the user-export endpoint response gains a `nextCursor` field; a response carries the cursor for the next page, and its absence marks the final page. Callers paginate by passing the returned cursor back on the subsequent request.
+
+No `ADDED` or `REMOVED` bullets.
+
+## Deferrals
+
+- `src/api/export.ts` and `src/api/report.ts` each carry their own copy of the cursor encoder. Unifying them is outside this unit's interfaces, so both copies stand and this unit's pagination uses the local one in `src/api/export.ts`. Worth a unit of its own — the two copies can drift, and a drifted encoder is a cross-endpoint correctness bug rather than a tidiness one. Severity: `Warning`.
+- Pre-existing `no-unused-vars` error in `src/reporting/csv.ts:88` (above). Severity: `Minor`.

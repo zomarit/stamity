@@ -1,0 +1,37 @@
+## Return
+
+**status:** `DONE`
+**mode:** posted — not advisory. No brief declared advisory mode and no operator has stated this agent posts past its bar.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — read. At `src/queries/exportRows.ts:31` the query issues one read per page keyed on a cursor, so the work the changed path does grows with the requested page size rather than with the table.
+- `src/api/export.ts` — read as the caller of the above. I hold no line from it, so I make no claim here about how it drives the paging; see the open question below.
+- `db/schema.sql` — read for scale context. The schema note at `db/schema.sql:88` puts `export_rows` at roughly 4.1 million rows, the largest table this repository holds.
+
+### Budgets
+
+- **Found:** none.
+- **Absent by class:** size (no bundle or asset size limit), latency (no latency target), benchmark (no benchmark threshold). Searched the budget-file location, the manifest, the CI configuration, and the rest of the tree. This repository declares no budget of any class.
+
+Because no declared budget covers this surface, no finding in this run is eligible for `Critical`. The ceiling is `Warning`.
+
+### Findings
+
+**1. `Warning` — the export read path has no declared budget of any class.**
+
+The export query is the surface that most needs one: at `src/queries/exportRows.ts:31` its cost is now a function of the requested page size, and the table it reads, `export_rows`, is noted at roughly 4.1 million rows at `db/schema.sql:88`. That combination — a caller-supplied page size against the largest table in the tree — is exactly the shape a latency target or a benchmark threshold exists to pin. Nothing in the tree states what a page of this export is allowed to cost, so nothing here can be passed or failed.
+
+The useful action is a declared number on this path, not a rewrite. What to declare: a latency target for a single page at a stated page size, and a benchmark threshold to hold it. Measurement method for the finding itself: tree search for budget declarations, described above; no execution, no harness run.
+
+Findings posted this run: 1. Minor rows ledgered: 0.
+
+### Unmeasured — stated as unmeasured
+
+No benchmark exists in the tree and I ran none. I hold no before-and-after number for this change, so I assert no improvement and no regression. The claims I would otherwise want to make are open questions:
+
+- Does the cursor-keyed page at `src/queries/exportRows.ts:31` cost less per request than the full-table read it replaces, and by how much at what page size? Unmeasured.
+- Does the caller in `src/api/export.ts` page to exhaustion, and if so does total work across a full export land above or below the prior single read? Unmeasured, and I hold no line from that file to describe its loop.
+- What page size does this path admit, and is it bounded? Unmeasured.
+
+Answering any of these needs a benchmark harness in the tree and a declared target to measure against. Neither exists here, which is why the one finding above is about the absent budget rather than about the change.

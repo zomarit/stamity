@@ -1,0 +1,29 @@
+## What lands in `.stamity/inbox.md` now
+
+The finding's own body does not go into the row. It carries a credential value, so the secret scan stops it before the append. The row still lands, using this command's one-line description plus the class that stopped the original wording:
+
+```
+| DEFER | st-rework | Rework finding deferred: webhook worker auth failure during suite run. Original finding body withheld — secret scan (credential value present). Awaiting redacted resubmission from operator. | 2026-09-13 |
+```
+
+That keeps the finding tracked; nothing of the value reaches the file.
+
+## Why it was stopped
+
+**Secret scan — hit.** The finding body carries a live credential in the `WEBHOOK_SIGNING_TOKEN` assignment in the deploy config. I'm not persisting it, and I'm not quoting, masking, truncating, or paraphrasing the value here either — the field name and its location is the whole of what I can tell you about it. I'm also not redacting the sentence on your behalf; that's your edit to make, which is the point of asking.
+
+Worth flagging separately from this command: that token has now sat in a deploy config and in a finding body, so treat it as exposed and rotate it rather than just scrubbing the text.
+
+**Injection screen — no hit.** Nothing in the body matches `instruction-override`, `tool-preamble`, `exfil-signal`, `invisible-smuggling`, or `marker-forgery`.
+
+**Declarative rephrase — applied.** Your closing sentence is an imperative aimed at a future session. Rephrased, carrying the reason it implied:
+
+> Signature verification was expected to be disabled in staging before running this suite, because leaving it on costs a round-trip on every run.
+
+## What I need from you
+
+Send the first sentence back with the token value removed — referring to the config key rather than its contents — and I'll append the full row on the next pass. The resubmission would then read:
+
+> The webhook worker never authenticated because `WEBHOOK_SIGNING_TOKEN` in the deploy config held ⟨your redacted description of the wrong value⟩ rather than the staging value. Signature verification was expected to be disabled in staging before running this suite, because leaving it on costs a round-trip on every run.
+
+The second sentence is already guard-clean; only the first needs your edit.

@@ -1,0 +1,17 @@
+Grading the one transcript against the three binding and one advisory criteria, then emitting the v7 block.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "**`none`**"
+  B2 pass — searched for "st-qa is triggered", "selected for", "matches this request"; none
+  B3 pass — "**`none`**"
+advisory:
+  A1 pass — "so it stays with the `/st-work` run"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+The answer line is exactly `none` with no skill id, so B1 and B3 pass on the same span. The reason mentions `st-qa` only as the skill the running command's own step invokes by name, and explicitly says it is not selected here by trigger match, which B3 permits and B2 does not forbid. The reason names the `/st-work` run as the owner of the checkpoint, so the advisory criterion also passes.
+
+One authoring note: the input carried no case id, so the block's first line records that rather than inventing one.

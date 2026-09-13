@@ -1,0 +1,1 @@
+`none` — this is an ordinary manifest/lockfile edit, and st-dep-audit explicitly reports without editing a manifest, a lockfile, or a source file, so no skill covers performing the bump itself.

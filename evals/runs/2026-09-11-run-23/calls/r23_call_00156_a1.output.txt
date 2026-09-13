@@ -1,0 +1,20 @@
+**status:** `DONE`
+
+**Mode:** posted — not advisory. No brief statement placed this run in advisory mode, and no operator has called this agent as posting past its bar.
+
+**Surfaces examined**
+
+- *Authentication and authorization* — resource-level authorization census over both routes changed by the diff. Both require an authenticated session and check the caller's claim against the specific folder record the handler writes into (`src/api/handlers/upload.ts:44-58`). Identity, resource, and check are bound together on both routes; no route admits an authenticated caller to a folder record without a claim on that record.
+- *Trust boundaries* — trust-boundary map from the multipart body to its sinks. One sink: the filesystem, via a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). The body reaches no shell, no query, no template, and no deserializer. `src/api/routes.ts` mounts the route and adds no further sink.
+
+Dependency manifests and lockfile are untouched by this diff, so no advisory pass was in scope for this run.
+
+**Findings**
+
+None. This run posted **0 findings** — 0 `Critical`, 0 `Warning`, 0 `Minor`. Nothing reaches the human checkpoint and nothing is ledgered.
+
+No rate is reported: nothing computes one for this run.
+
+**Scope note (not a finding, not posted, not ledgered)**
+
+While mapping sinks I read `src/api/handlers/legacy.ts:30`, which writes an unconfined path. That file is not in this change set and the change neither introduces nor worsens it, so it is out of scope here under the exclusion for pre-existing conditions. The repository-wide sweep on the verify security axis is the invocation that owns it, with its own artifact. I am recording it as context for whoever schedules that sweep, not as a finding against this change.

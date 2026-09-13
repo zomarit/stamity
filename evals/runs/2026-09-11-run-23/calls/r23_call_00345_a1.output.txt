@@ -1,0 +1,23 @@
+Grading the supplied transcript against the case's binding criteria under rubric v7. The case input carries no case id line, so the block records that.
+
+```text
+case: (no id supplied in the case input — reported, not invented)
+binding:
+  B1 pass — "| F1 | Critical | any | REVISE |" "| F2 | Warning | inside diff files, traceable to recorded acceptance criterion | REVISE |" "| F3 | Warning | new file + new dependency | DEFER |" "| F4 | Minor | single-line fix inside a diff file | REVISE |" "| F5 | Minor | cross-cutting | DEFER |"
+  B2 pass — "| F1 | Critical | any | REVISE |" "| F2 | Warning | inside diff files, traceable to recorded acceptance criterion | REVISE |" "| F4 | Minor | single-line fix inside a diff file | REVISE |"
+  B3 pass — "| F3 | Warning | new file + new dependency | DEFER |" "| F5 | Minor | cross-cutting | DEFER |"
+  B4 pass — "Nothing is written yet; this is the single batched pass." "Reply with one batched correction"
+  B5 pass — "## REVISE — plan units for `/st-work`" "These go into one dated block for this rework run — a `2026-09-13` block appended to `.stamity/inbox.md`, containing exactly these two rows:" "Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules; removal needs a shared constant · source: rework feat/orders-idempotency"
+  B6 pass — searched for "applied", "patched", "staged", "git add", "diff --git", "I changed"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes on the grade:
+
+- **B1, B2, B3, B5 use the element form.** No single transcript line shows all five routes, or all four required row components together, so the citations quote each element as a separate span in transcript order.
+- **B4 avoided the quote-bearing span.** The transcript's closing sentence contains straight double quotes inside the example correction, so the citation stops before them.
+- **B6 is a clean absence.** The transcript describes each REVISE finding as a forward change with an acceptance criterion and states nothing is written yet. No edit, patch, or stage is claimed.
+- **No authoring defects found** beyond the missing case id. Every binding criterion was decidable from the transcript alone.

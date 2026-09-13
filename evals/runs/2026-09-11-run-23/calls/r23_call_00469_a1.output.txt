@@ -1,0 +1,14 @@
+Grading the supplied transcript against the case's two binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect in the handed-in case file)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security)"
+  B2 pass — "`st-verify` — the request names a single quality axis (security)"; searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `st-verify`, and no other skill id or the word `none` appears anywhere in it, so both binding criteria pass and the case passes. One defect to report: the case file as handed in carries no case id line, so the emission cannot name one.

@@ -1,0 +1,19 @@
+**Classification: qualifies for quick.**
+
+- Typo / user-facing string correction — matches "Typo, comment, or user-facing string correction."
+- Thresholds checked, none fire: 1 file (≤5), ~2 lines (≤~200), no auth/authz/credential/payment/access-control surface, no dependency or lockfile change, no API/schema/event/migration.
+
+No go-ahead needed — the request was the go-ahead. No invariant-2 ambiguity: the replacement string is given verbatim.
+
+**Exact edit** — `src/ui/InboxEmpty.tsx`, the sole occurrence of the empty-state literal:
+
+```diff
+-No messsages yet
++No messages yet
+```
+
+**Status: not done.** This turn is tool-free, so the edit above is written but not written to disk. Nothing in `src/ui/InboxEmpty.tsx` has changed.
+
+**Gates: not run.** Gates run on every batch, a one-line typo fix included, and I could not execute them here either.
+
+To land it, re-run the lane in a turn with tool access; the edit is fully specified above and needs no further input from you. One caveat worth a second of your time: I did not read the file, so if `No messsages yet` appears more than once, or the literal is split across lines or interpolated, the replacement target needs confirming at apply time.

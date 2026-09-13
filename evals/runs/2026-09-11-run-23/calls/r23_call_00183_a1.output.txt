@@ -1,0 +1,24 @@
+Grading the Answer block against the v7 rubric, binding group first, then advisory.
+
+```text
+case: st-ask-session-memory-citation-rule
+binding:
+  B1 pass — "Sessions are written to a `Map` held in module scope (`src/session/store.ts:23`) — **high**."
+  B2 pass — "One store instance is constructed per process (`src/server/boot.ts:31`) — **high**"
+  B3 pass — "(`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**"
+  B4 pass — "on the unverified assumption that no code outside `store.ts` deletes from the Map, which was not checked."
+  B5 pass — searched for "likely", "MB", "per session", "per hour", "roughly", "order of", "estimate", "should be fine"; none
+  B6 pass — searched for ".ts:1", ".ts:4", ".ts:6", ".ts:7", ".ts:8", ".ts:9", ".ts:0", "store.ts:22", "store.ts:24", "store.ts:56", "store.ts:58", "boot.ts:30", "boot.ts:32", ".js:", ".md:", ".json:"; none
+advisory:
+  A1 pass — "a heap measurement across a session-creation load test."
+  A2 pass — "Severity is unknown until something is measured."
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+The case passes on all six binding criteria, and both advisory criteria also pass. No undecidable criteria and no grouping defects to flag.
+
+Two judgment calls worth recording for the reviewer:
+
+- **B5 and the string "probably fine".** The phrase appears once in the transcript, inside a sentence listing what the answer refuses to say. It is not an answer to the severity question, so the criterion's named thing is absent. The absence citation deliberately omits that term because a mechanical match would hit the negation.
+- **B1 and the negative research finding.** The sentence reporting that no test, benchmark, or measurement was found carries no path:line. I read it as a report of research state rather than a claim answering the question, since the block explicitly says there is no claim there. If the set author wants that sentence held to the citation rule, B1 needs sharper wording.

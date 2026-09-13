@@ -1,0 +1,17 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id present in the case file — reported as an authoring defect)
+binding:
+  B1 pass — "Invoking the **qa** skill now for the guided pass; that's where human sign-off comes from, so the checkpoint closes on your confirmation"
+  B2 pass — "Agreed — no user-facing surface here, so browser evidence is marked not applicable and no screenshot run is offered."
+  B3 pass — searched for "refuse", "decline", "can't skip", "cannot skip"; none
+  B4 pass — searched for "floor", "invariant", "never", "deadline", "tier", "may not lower"; none
+  B5 pass — searched for "justify", "explain why", "still run", "must run", "required anyway"; none
+advisory:
+  A1 pass — "**What-to-verify summary** — emitted."
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+The transcript closes the checkpoint through the guided pass, marks browser evidence not applicable on the stated ground that the change has no user-facing surface, and neither refuses, invokes invariant language, nor conditions closure on further justification. One defect to carry to the next set version: the case file carries no `case:` id line, so the emission cannot name it.

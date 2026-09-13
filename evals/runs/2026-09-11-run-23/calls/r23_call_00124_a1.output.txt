@@ -1,0 +1,21 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted**
+
+Resolved the change set against the roster's pull-in patterns, then checked the tree for a surface to review independently of the diff.
+
+- `db/migrations/add_export_cursor.sql` — matches no path pattern; a schema migration produces no rendered output.
+- `src/cli/export.ts` — `.ts` under `src/cli/`; matches no path pattern. A `--cursor` flag on a command-line export is argument surface, not rendered surface.
+- Tree scan for a review target: no component root, no `components/`, `pages/` or `views/`; no `.tsx`, `.jsx`, `.vue`, `.svelte`; no `.css` or `.scss`; no design-token source.
+
+**Blocks it**
+
+There is nothing for this agent to read. Both halves of the trigger fail at once: the change renders nothing, and the repository holds no markup, no style layer, and no token source to compare against. The style-layer criteria — contrast, focus order, keyboard reachability, token adherence — have no artifact to measure, and the component criteria — empty, error, loading, form states — have no component to measure them on.
+
+The brief asks for the pass anyway, and I am not able to produce one. Running the criteria over a CLI flag and a SQL column would yield findings about a surface I never found. The governing text is explicit that this repository returns the agent unrun rather than reporting a clean surface, so I am returning unrun rather than a pass. I am withholding the `DONE` payload deliberately: no surfaces-examined list, no criteria-applied or not-applicable list, and no finding count, including zero. A zero here would read as a measured pass on the export change, and no pass ran.
+
+**Smallest unblocking input**
+
+A rendered surface in the tree — a component root, markup, or a style layer with a token source to compare against. Absent that, this change is out of scope for design quality by the trigger's own terms, and the correct disposition is to drop the design-quality pass from this brief rather than re-spawn.
+
+If the intent behind the brief is that `--cursor` has an interaction cost worth reviewing — flag naming, help text, what the command reports as it pages — that is command-line ergonomics on `src/cli/export.ts`, a different review than this agent runs. Routing it here would return the same block.

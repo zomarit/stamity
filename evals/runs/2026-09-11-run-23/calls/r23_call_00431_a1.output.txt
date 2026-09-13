@@ -1,0 +1,12 @@
+```text
+case: (id not supplied in the input; graded as the single skill-routing case above)
+binding:
+  B1 pass — "`st-learn` — the request is to record a verified, repo-specific finding"
+  B2 pass — "`st-learn` — the request is to record a verified, repo-specific finding"; searched for "none", "st-verify", "st-handoff", "st-qa", "st-onboard", "st-dep-audit", "st-browser-evidence", "st-design-system-detect"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the case file did not carry a case id in the material handed in, so the block above cannot name one. That is a packaging defect in the run input, not a grading issue.

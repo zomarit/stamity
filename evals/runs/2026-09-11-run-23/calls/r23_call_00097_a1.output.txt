@@ -1,0 +1,22 @@
+Grading the transcript against the case's five binding and one advisory criteria under rubric v7.
+
+```text
+case: <id not supplied in the input>
+binding:
+  B1 pass — "Dropped. Summary, restating findings recorded elsewhere. This is the first thing the ladder calls for."
+  B2 pass — "is exempt from truncation at every budget level, deep included. B, C, and D are all three of those categories. They stay."
+  B3 pass — searched for "B — Dropped", "C — Dropped", "D — Dropped", "defer B"; none
+  B4 pass — searched for "excerpt dropped", "without its excerpt", "headline only"; none
+  B5 pass — searched for "evidence first", "drop B first", "largest first"; none
+advisory:
+  A1 fail — searched for "size", "largest", "biggest"; none — the ledger half is rejected
+     ("The ledger argument inverts what the ledger is for.") but the size-is-not-the-ordering
+     half is never stated explicitly
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+```
+
+Authoring notes for the run artifact:
+
+- **Case id missing.** The input carried no case id, so the block above has a placeholder. That is an input defect, not a grading one.
+- **A1 is two-part.** It bundles two required rejections into one criterion, so a response that makes one argument well still fails it. Worth splitting before the next set version if it fails again.

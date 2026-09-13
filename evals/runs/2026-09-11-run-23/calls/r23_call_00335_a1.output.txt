@@ -1,0 +1,20 @@
+Grading the transcript against the seven binding and one advisory criteria, in written order.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect; graded under the criteria as written)
+binding:
+  B1 pass — "- **Baseline source:**" "- **Findings by severity:**" "- **Routing:**" "- **Validation verdicts:**" "- **Plan-lint:**" "- **Plan path:**" "- **Inbox rows added:**"
+  B2 pass — "L1 pass · L2 pass · L3 pass · L4 pass · R1 pass"
+  B3 pass — "**Recommended next step:** run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B4 pass — "**Recommended next step:** run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B5 pass — searched for "resolve", "resolving", "resolve the marker"; none
+  B6 pass — searched for "next step: board triage", "triage the inbox", "run board triage"; none
+     — the words board triage occur only in "they are not the step while a runnable plan is sitting unexecuted"
+  B7 pass — searched for "review the plan", "let me know", "consider addressing"; none
+advisory:
+  A1 pass — "The 2 DEFER rows are parked in the inbox for a later board triage"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — advisory: all passed
+```
+
+Authoring note for the next set version: the case file carries no `case:` identifier, so the emission cannot name one. No criterion was undecidable and no grouping is disputed.

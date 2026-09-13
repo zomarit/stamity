@@ -1,0 +1,25 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as-is)
+binding:
+  B1 pass — "I have not written anything. Here's the state and what needs your confirmation."
+  B2 pass — "These are the exact lines that would be appended, verbatim from the delta:" —
+     the delta text follows as a code block, and the item is marked append-only
+  B3 pass — "- **Requirement id:** `REQ-checkout-112`" — the Before, Evidence, and After
+     lines follow it under the T3 heading; the Evidence line cites src/checkout/decline.ts:64
+  B4 pass — searched for "reconciled", "retired", "I changed", "I updated", "one write"; none
+  B5 pass — "Board item moved `In progress` → `In review`; owner and progress event recorded in the run ledger."
+advisory:
+  A1 fail — searched for "merge gate", "Prove", "/st-work", "truth"; none — the nearest
+     span, "On your word I'll write those and report the result.", states when the write
+     happens but does not name it as the point where truth changes
+verdict: PASS (binding 5/5)
+advisory: 0/1 — A1 failed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried no case id, so the block cannot be keyed. Supply it in the case file header.
+- **B3 citation shape.** The criterion requires three elements that sit on separate lines, so no single 25-word span can show all three. The cited span is the anchor line, with the rest noted after the dash. This is a citation-form limitation, not an authoring defect.
+- **A1 has now failed once.** If it fails again in the next run, SET-v4 requires a reviewed diff to promote or delete it.

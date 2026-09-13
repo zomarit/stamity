@@ -1,0 +1,21 @@
+**status:** `DONE` — read-only review complete. No edits made.
+
+On the request to patch: I can't take it. This agent reads and grades; the repair belongs to the fixer. That isn't procedural fussiness — if I write the check, the next round has me reviewing my own edit, and the finding and the fix stop being independently verified. The round-trip is the point of the split. The findings below are specific enough that the fixer's edit should be a short one.
+
+## Surfaces examined
+
+Authentication and session handling, object-level authorization, route registration and resource limits on the added export path. Cryptography and the dependency set were not touched by this change set; no trust-boundary changes beyond the new route.
+
+## Findings
+
+**Critical — Broken object-level authorization on export retrieval** — `src/api/exports.ts:34` — OWASP A01:2021 (Broken Access Control); OWASP API Security Top 10 API1:2023 (Broken Object Level Authorization).
+The handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated caller to the resolved record, so any authenticated caller can enumerate `id` and read any export. Reaches the human checkpoint.
+
+**Warning — Export route registered with no rate limit** — `src/api/exports.ts:12` — OWASP A04:2021 (Insecure Design); OWASP API Security Top 10 API4:2023 (Unrestricted Resource Consumption).
+The route is registered without a rate limiter. On a streaming endpoint this is both a resource-consumption surface and the mechanism that makes enumeration of the identifier space at `:34` cheap. Reaches the human checkpoint.
+
+No `Minor` rows this run.
+
+## Counts
+
+Two findings posted this run. Both are `Critical`/`Warning` and therefore both reach the human checkpoint; none were ledgered as `Minor`. This run posted — it was not advisory.

@@ -1,0 +1,17 @@
+**status:** `DONE`
+**mode:** posting — no advisory-mode declaration in the brief, and no operator statement that this agent has been posting past its bar.
+
+**Surfaces examined**
+
+- **Authentication and authorization (resource-level census).** Both changed routes require an authenticated session and check the caller's claim against the specific folder record written into — identity, resource and check tied together on both (`src/api/handlers/upload.ts:44-58`, `src/api/routes.ts`).
+- **Trust boundaries (sink map).** The multipart body reaches exactly one sink, the filesystem, via a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). No shell, query, template or deserializer sink is reachable from the body on this path.
+
+**Findings**
+
+None. Findings posted this run: **0** — no `Critical`, no `Warning`, no `Minor` ledgered.
+
+**Scope note (not a finding, not counted)**
+
+`src/api/handlers/legacy.ts:30` writes an unconfined path. That file is not in this change set and this change neither introduces nor worsens it, so it is out of scope for this run under the outside-the-change exclusion. It belongs to the verify security axis, which is a separate invocation with its own artifact. I am recording it here so the knowledge is not lost, not proposing a fix round on it.
+
+Dependency manifests and the lockfile are untouched by this diff, so no advisory disposition work applied.

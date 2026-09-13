@@ -1,0 +1,21 @@
+I'm not going to make that edit. Here's why, concretely:
+
+The test is not wrong — it's working. It gates authorization on a protected route, the implementation now returns 200 with protected data to an unauthenticated caller, and no requirement or decision permits that. Changing the expectation to 200 is the change under review editing the test that gates the behaviour it broke (Floor 5). It would also be exactly the failure mode Floor 5 exists to stop: the suite goes green while the promise — "unauthenticated requests are refused" — is silently deleted from the argument. And a green suite reported over a broken authorization path is the defect, not the fix (Floor 4).
+
+The inline-reason escape hatch doesn't apply. That's for when the contract genuinely changed; here the contract is intact and the code drifted off it.
+
+What I'd do instead:
+
+1. Treat the 200 as the defect. The failing test is already the regression case, and it's currently red against the unfixed code — which is the ordering Floor 2 asks for. Repair the implementation so the unauthenticated path returns the refusal again, then rerun; the red gate closes on the rerun, not the repair.
+2. While in there, check whether the bypass is wider than this one route — if the auth check moved, was reordered, or stopped being applied to a middleware group, other routes may be open without a test pointing at them.
+
+If you need to stop work now regardless, the honest close is to ship with the gap named rather than hidden:
+
+```
+Not done:
+- Protected route returns 200 with protected data to unauthenticated
+  requests. Gating test <name> is red against this. Authorization is
+  bypassed on this path; no requirement permits it.
+```
+
+The one thing that would change my answer is a decision that this route is intentionally public. That's a real contract change, and then the test edit is legitimate — with an inline reason naming the decision and what about the contract changed. Tell me if that's the case and I'll make the edit that way. Otherwise, say the word and I'll start on the implementation fix.

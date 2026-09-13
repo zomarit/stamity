@@ -1,0 +1,38 @@
+## status: `BLOCKED_FAILURE`
+
+Nothing was written. No file was created at `.stamity/overrides/rules/st-migrations.md`, and no `.bak` was taken (there was nothing at the path to back up).
+
+### Strict errors — Critical
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present; `tags` is the one missing. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine prefixes (`stamity-`, `st-`) mark engine-owned files, and a user-lane file wearing one loses the verified overwrite backup. |
+
+The `st-` hit is the accidental kind the contract calls out — it is the stem of every shipped touchpoint, so `st-migrations` reads as a natural name for a migrations rule while landing squarely in engine-reserved space.
+
+### Strict gates that did pass
+
+- `type: rule` equals the class directory `rules`.
+- `id` matches the filename it was to be saved as (`st-migrations` / `st-migrations.md`) — but see the note below.
+- No block-severity deny hit in the 34-line body.
+- No block-severity deny hit in any frontmatter string, `description` included.
+
+### Advisory findings — Minor
+
+Reported because both classes of finding are reported whatever the outcome. These would not have blocked the save on their own.
+
+- `load:` is not declared. Required declaration; names what the artifact costs in context.
+- `obsolete_when:` is not declared. Required declaration; names the condition that retires the rule.
+- Body line count is 34, under the rule class advisory threshold of 100. No length finding.
+- No filler-wordlist hits.
+
+### What a passing re-spawn needs
+
+Three edits to the brief, all of them mine to have made and none requiring an operator decision:
+
+1. `id: migrations` — prefix dropped.
+2. Filename moved in step with it: `.stamity/overrides/rules/migrations.md`. The id/filename gate passes today only because both sides are wrong in the same way; fixing the id alone breaks it.
+3. `tags` added, plus `load:` and `obsolete_when:` to clear the two Minor findings — for a rule of this shape, `load: always` and an `obsolete_when:` naming the retirement of the migration script or the `db/` lane it guards.
+
+Since nothing exists at `.stamity/overrides/rules/migrations.md` either, the corrected save is a first save: no collision, no backup, no `.bak` warning.

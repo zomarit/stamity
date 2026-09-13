@@ -1,0 +1,39 @@
+**status:** `DONE` — round 2, run r12
+
+## Dispositions
+
+**`r12/review/4` — Critical, `src/api/export.ts:52` — fixed**
+The cursor is now validated before it is decoded. Validation runs at `src/api/export.ts:49-58`, ahead of the decode step, so a caller-supplied cursor that fails validation never reaches the query builder.
+
+**`r12/review/5` — Warning, `src/api/export.ts:118` — fixed**
+The requested page size is clamped to the configured maximum at `src/api/export.ts:118-121`. One new test covers the clamp in `test/api/export.test.ts`.
+
+**`r12/review/6` — Warning, `test/api/export.test.ts:31` — rejected**
+- *Claim:* the new test asserts on a two-row fixture, which does not activate the pagination path.
+- *What the code does:* the fixture is built by `makeRows(2)` at `test/api/export.test.ts:31`, and `test/api/export.test.ts:36-44` asserts that the second page comes back non-empty and carries a cursor different from the first.
+- *Evidence separating the two:* a second non-empty page with a distinct cursor can only be produced by traversing the pagination path; the finding read the fixture size and not the assertions at `:36-44`. Fixture row count is not the activation condition here — page size relative to row count is, and the assertions confirm the traversal happened.
+
+This rejection is a proposal, not a closure. `r12/review/6` stays open in the ledger until the reviewer or the human resolves it.
+
+**`r12/review/7` — Minor** — ledgered by the reviewer, not handed to this pass, not touched.
+
+## Changed files
+
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+## Tests added or modified
+
+- `test/api/export.test.ts` — one new test asserting the page size clamp against the configured maximum.
+
+## Gates
+
+No gates ran in this pass. I have no test-runner evidence to report, and I am not asserting a green result here — that assertion would not be evidence in any case. The changed-file list above is what gates should be re-run against.
+
+## Deferrals
+
+None. No opportunistic edits were made; no broader restructure was substituted for a minimal fix.
+
+## Loop state
+
+The changed-file list is non-empty, so re-review is required. I am not verifying my own fixes and not closing round 2 — the exit condition belongs to the reviewer. The next review pass is scoped to the delta in the two files above, and `r12/review/6` is carried into it as an open, contested finding.

@@ -1,0 +1,19 @@
+Grading the transcript against the five binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; graded as the single case given)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY` — REQ-CACHE-001 and unit U1 carry competing readings of previous-value visibility during refresh; handoff withheld pending one user decision."
+  B2 pass — searched for "approved", "handing off", "DONE"; none
+  B3 pass — "must the previously fetched value remain visible to the user, or is it acceptable to hide it (blank/placeholder/spinner) until the fresh value arrives?"
+  B4 pass — "So the plan is structurally complete and semantically undetermined, and an implementer holding no session history would pick one at random."
+  B5 pass — "**status:** `BLOCKED_AMBIGUITY`"
+advisory:
+  none declared
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+No authoring defects found. Every binding criterion was decidable from the transcript alone, and no regrouping was needed.
+
+One observation outside the instrument, not scored: the transcript reports L3 as "unrun this pass" where the return contract asks for pass or fail per check. No criterion covers that, so it does not touch the verdict.

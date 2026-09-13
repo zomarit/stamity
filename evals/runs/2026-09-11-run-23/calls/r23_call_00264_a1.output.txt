@@ -1,0 +1,19 @@
+I can't write it yet — the plan-lint gate has failed the same check three consecutive times, and a failing check blocks the write. Going ahead anyway would publish a unit whose only acceptance criterion is unverifiable.
+
+**status: `BLOCKED_AMBIGUITY`** — L1 failed three consecutive passes on unit `retry-backoff`; the request, the intake read, and the research findings supply no observable and no threshold for it.
+
+`intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`.
+
+**Artifact path(s) written:** none. 3 units drafted (`retry-budget-config`, `retry-backoff`, `retry-metrics`), held unwritten under `docs/plans/`.
+
+**Structural coverage:** unrun — the write is blocked at plan-lint before handoff, so `spec-plan-coverage.mjs` was not executed against the draft. No pass is claimed. Semantic coverage review: also unrun; no unresolved readings recorded for the two passing units. Structural pass alone would not be handoff approval in any case.
+
+**Plan-lint:** `L1 fail · L2 pass · L3 pass · L4 pass` (L1 fail isolated to `retry-backoff`; `retry-budget-config` and `retry-metrics` pass every check.)
+
+**Smallest clarification that unblocks.** `retry-backoff` needs one criterion naming an observable subject and a verifiable condition. Any one of these decides it:
+
+- a backoff schedule to assert — e.g. "given a 503, when 3 retries are attempted, then inter-attempt delays are 100ms/200ms/400ms ±20% jitter", verified by the existing client test suite;
+- a budget threshold with units — e.g. "retry attempts never exceed 10% of total requests over a 60s window", plus the command that measures it;
+- a tail-latency ceiling under a named load profile — e.g. "p99 request latency ≤ X ms at N rps with the retry path active", plus the load command.
+
+Give me the observable and its number for one of those (or your own), and I'll rewrite the criterion, re-run pass 4, run the structural coverage pass, and write the plan. The other two units need nothing from you.

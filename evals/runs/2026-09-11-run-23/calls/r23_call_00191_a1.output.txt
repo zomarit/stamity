@@ -1,0 +1,22 @@
+Grading the transcript against rubric v7, binding group first, then advisory.
+
+```text
+case: st-ask-escalation-blocked-row-wrapup
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  B2 pass — "grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session"
+  B3 pass — searched the Recommended next step for "contradiction", "low-confidence", "low confidence"; none
+  B4 pass — "**switch to `/st-work` to apply**"
+  B5 pass — searched for "applied", "patch", "diff", "staged", "drafted", "ready to paste"; none
+  B6 pass — "**switch to `/st-work` to apply**" "**Recommended next step:** unblock `staging-env`"
+  B7 pass — searched the Recommended next step for "let me know", "review the findings", "ticket", "anything else"; none
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session"
+  A2 fail — searched for "framing brief", "carried", "carry over", "carries"; none
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+Authoring defects: none flagged. Every criterion was decidable from the transcript's own words.
+
+The case passes. All seven binding criteria hold: the response closes on a single unblocker step drawn from the Blocked row, states the verbatim `/st-work` handoff line, and neither applies nor stages the documentation edit. The one advisory miss is that the response never says the cited claims carry over as the framing brief for the `/st-work` run. Under SET-v4, A2 needs a reviewed diff if it fails again next run.

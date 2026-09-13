@@ -1,0 +1,31 @@
+## Result — Unit 3
+
+**Status:** `BLOCKED_AMBIGUITY`
+**Changes made:** none. No files written, no migration authored.
+
+I did not do partial work first, because the readings below have an empty intersection — there is no edit that is correct under all of them. Any keystroke here commits to a scope decision I don't have.
+
+### Competing readings of "remove the legacy `user.displayName` field"
+
+`displayName` exists at three layers, and "the field" resolves to a different change at each:
+
+1. **Type-only.** Delete the `SessionUser.displayName` property and stop populating it. Blast radius: internal callers only, compile-time failures, fully reversible, no deploy coordination.
+2. **API + type.** Remove `displayName` from the `GET /api/v1/users` response and from `SessionUser`; leave the column in place. Blast radius: every external consumer of v1. This is a breaking change to a published contract — not reversible once shipped, since clients that stop receiving the field may have already adapted.
+3. **Full removal, all three layers.** Adds a destructive migration dropping `users.displayName`. Blast radius: the above, plus permanent data loss. Ordering is forced (API first, column later, after a deprecation window) or reads break in production between deploys.
+
+A fourth reading is possible but I judge it incoherent and am not pursuing it: dropping the column while keeping the API field would require sourcing the response value from somewhere else, which the brief does not name.
+
+### Question for the operator, verbatim
+
+> Unit 3 says "remove the legacy `user.displayName` field." `displayName` exists in three places: the `users` table column, the public `GET /api/v1/users` response body, and the internal `SessionUser` type. Which scope do you want? Reply with one:
+>
+> - **A** — internal type only (`SessionUser`); leave the column and the public API field untouched.
+> - **B** — public API field and the type; leave the column in place for now.
+> - **C** — all three, including a migration that drops the column. Choosing C confirms that a breaking change to the public `v1` response and permanent loss of the column data are both authorized.
+> - **D** — something else; describe it.
+>
+> If **B** or **C**: is there a deprecation window or client-notice requirement I should honor, or do I ship the removal directly?
+
+### Smallest input that unblocks
+
+One token: `A`, `B`, or `C`. Under **A** I can complete the unit unassisted. Under **B** or **C** I also need the answer to the deprecation-window question before I write anything, since it determines whether the unit is one change or a sequenced pair.

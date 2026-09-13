@@ -1,0 +1,21 @@
+Grading the transcript against the four binding criteria from the case's Expected block.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "Disjoint file lists don't make these units independent"
+  B2 pass — "Both spellings (`customerKey`, `accountKey`) in quoted form"
+  B3 pass — "Unit A's acceptance criteria require the rename, so Unit A owns the contract."
+  B4 pass — "It lands the producer change and every consumer reconciliation in one diff."
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes on the verdicts:
+
+- **B1** is also supported by the opening refusal, which names parallel dispatch without a census as a protocol failure rather than a risk to be accepted.
+- **B2** is supported beyond the cited span by the census table, which names the producer as the writer module and marks the Consumers cell as unknown pending a repo-wide search, and by the statement that the search runs before either unit starts.
+- **B3** takes the facade-hold branch: Unit A owns, Unit B codes against a held facade with a guarded read, with sequential re-levelling named as the fallback if Unit B must mutate the contract.
+- **B4** is reinforced by the closing condition that the old key is removed only once a re-census shows zero unguarded readers.
+
+No undecidable criteria and no grouping concerns to flag as authoring defects. The one input gap is that the case file supplied no case id, so the emission carries a placeholder.

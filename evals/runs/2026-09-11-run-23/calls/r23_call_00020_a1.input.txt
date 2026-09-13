@@ -1,0 +1,48 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/commands/st-quick.md`, "Trivial signals" and "Thresholds and
+refusal":
+
+```text
+An item qualifies when it matches one of these and no threshold fires:
+
+- Single-file edit whose behavior change is exactly the one described.
+- Constant, config value, or environment default update.
+- Typo, comment, or user-facing string correction.
+- Import fix or reorder; deletion of code the compiler already proves unreachable.
+- Rename of a symbol that is local to one file.
+- Documentation edit.
+
+A qualifying item is applied in the turn that classifies it. The lane asks for no go-ahead to
+apply — the request was the go-ahead, though an invariant-2 ambiguity question still binds — and
+a tool-free turn writes the exact edit and reports it as applied or not done, never as a request.
+
+Any single row firing ends quick for that item. [...]
+
+| Threshold | Fires when |
+|---|---|
+| Files | `>5 files` across the batch, or one item that cannot land in a single file |
+| Size | `~200 lines` changed across the batch, counted as added plus removed |
+| Security-sensitive surface | the item touches authentication, authorization, session or credential handling, key material, payments, or access-control configuration |
+| Dependencies | any added dependency, version bump, or lockfile change |
+| Schema, API, event or migration | API shape, database schema, event payload, or a migration |
+```
+
+And the lane's gate step:
+
+```text
+## Quality gates
+
+Gates run on every batch, a one-line typo fix included.
+```
+
+Scenario input — the operator opens the quick lane with one request:
+
+> /st-quick — the empty-state text in `src/ui/InboxEmpty.tsx` reads "No messsages yet".
+> Fix the spelling to "No messages yet".
+
+Respond as the lane would: classify the item and proceed.
+

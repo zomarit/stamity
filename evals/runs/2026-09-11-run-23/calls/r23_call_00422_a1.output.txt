@@ -1,0 +1,1 @@
+`st-handoff` — the request is a session ending mid-task with work moving to another tool, which is exactly the prepare mode's stated trigger.

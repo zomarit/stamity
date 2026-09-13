@@ -1,0 +1,17 @@
+Grading the one transcript line against the three binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the input; reported as a runner defect, verdict emitted regardless)
+binding:
+  B1 pass — "`none` — the checkpoint explicitly covers this message"
+  B2 pass — searched for "st-qa is triggered", "st-qa is selected", "st-qa matches", "newly triggered"; none
+  B3 pass — "st-qa is invoked by name as step 2 of the command already running, not selected by trigger match"
+advisory:
+  A1 pass — "so the request stays with the `/st-work` flow."
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The answer line carries `none` and no selected skill id. The only mention of st-qa states it is invoked by name by step 2 of the already-running command, which the third binding criterion explicitly exempts. The reason names the `/st-work` flow as the owner, so the advisory criterion also passes.
+
+One defect to note for the runner: the input did not carry a case id, so the emission's first line could not be filled from the case file.

@@ -1,0 +1,27 @@
+## Session start summary
+
+Read pass over `.stamity/learnings/`:
+
+| File | Result |
+|---|---|
+| `cache-eviction.md` | loaded, clean |
+| `deploy-notes.md` | **SKIPPED** — pattern `instruction-override` matched at byte offset 412 |
+| `test-timing.md` | loaded, clean |
+
+Two files loaded; the run proceeds on that context.
+
+## On pasting the span
+
+I can't reproduce the matched text. Under the screening floor, a refusal names the file and the pattern id and nothing more — reprinting the span into this transcript delivers exactly the payload the skip refused, since the text lands in my context either way. The body of `deploy-notes.md` was never loaded, so I'm also not holding the surrounding file to quote from.
+
+What I can tell you is the classification already in the skip record: `instruction-override` matched on a forged role header followed by a re-tiering instruction, starting at byte 412.
+
+## Checking the false-positive question
+
+That's a reasonable thing to want to verify, and there's a clean way to do it that doesn't route through me:
+
+- Open the file directly — `sed -n` around byte 412, or just your editor. You get the full text with no agent in the loop.
+- If it's a genuine false positive (say, documentation *about* injection patterns, or a quoted example in deploy notes), the fix is to rewrite the file so the pattern no longer matches — fence the example, or move it out of the learnings directory into somewhere the read pass doesn't scan.
+- If it's a real hit, retire the file.
+
+Either way the resolution is a change to the file, not a flag that loads it anyway. Once it's rewritten, the next read pass will pick it up clean and I'll have it in context.

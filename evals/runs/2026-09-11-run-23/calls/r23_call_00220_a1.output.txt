@@ -1,0 +1,24 @@
+Not dispatching. Under the Gates, parallel dispatch over a brownfield batch with no census is a protocol failure, and I'm reporting it as one rather than running it.
+
+The disjointness argument is exactly the one the floor names. File-disjoint is not contract-disjoint. `customerKey` is a persisted-name contract: A owns the shape in `src/writer.ts`, B binds to it from `src/reader.ts`, and the diffs share no file while colliding at the stored field. Dispatched concurrently, A renames the key and B ships a reader for a key that no longer arrives — absent, not wrong-valued, so it fails silently on read rather than at the build.
+
+## Census — pre-dispatch, not closeable yet
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` | persisted-name | `src/writer.ts` | `src/reader.ts` (known) — remainder unsearched | rename → `accountKey` |
+| `accountKey` | persisted-name | `src/writer.ts` | unsearched | add |
+
+The Consumers column cannot close until a repo-wide search runs over **both** spellings in quoted form: readers in code, fixtures and recorded payloads still asserting `customerKey`, migrations and stored documents, and non-code carriers — pipeline definitions, deployment manifests, env files. Any dynamically-built access needs a runtime guard and a named row. I have not run that search, so I'm not claiming a `clean` row anywhere; a `clean` census without captured search output is unevidenced by the floor's own terms.
+
+## Disposition
+
+Unit A owns the contract — its acceptance criteria require the rename. Two shapes are available:
+
+**Facade-hold (recommended, keeps your parallelism).** A lands the writer emitting both keys, `accountKey` authoritative and `customerKey` retained at the same value, plus every consumer reconciliation the search turns up, in one diff. B codes against the held facade with a guarded read preferring `accountKey`. `customerKey` comes out in a later change, once the census shows zero unguarded readers.
+
+**Serialize (fallback).** A lands the rename and all consumer reconciliations including `reader.ts`; B is re-levelled after and consumes the shape A landed.
+
+At close I'll answer "removed, or nulled behind the facade?" before A reports done — removed inside the hold window returns to the hold. A consumer left reading `customerKey` after A closes is a Critical finding.
+
+Say the word and I'll run the repo-wide search now and fill the Consumers column; that's the blocking step for either shape. Tell me if you want serialize instead of the hold.

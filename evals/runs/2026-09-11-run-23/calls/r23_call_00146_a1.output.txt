@@ -1,0 +1,61 @@
+## status: `DONE`
+
+---
+
+### pattern-match-checklist
+
+- **Retry strategy is fixed-interval, not exponential.** The backoff multiplier is `1.0` (`src/http/retry.ts:41`), so the three attempts fire at a constant delay rather than backing off. The multiplier is read once at construction (`src/http/retry.ts:12-18`), so a caller cannot vary it per-call after the helper is built. *So what:* if the export endpoint needs exponential backoff, reuse means changing the helper's construction path, not passing an option at the call site — decide that before writing the call.
+- **Attempt count is three** (`src/http/retry.ts:41` region, same construction block `src/http/retry.ts:12-18`). *So what:* implementer should confirm three attempts is acceptable for an export request's latency budget; there is no per-call override.
+- **The retry predicate is caller-supplied, with no default in the helper** (`src/http/retry.ts:29`). *So what:* reusing the helper is not "call it and inherit behaviour" — the export endpoint must supply its own predicate, and that predicate is where the 5xx-versus-connection-error decision actually lives. This is the concrete first step for the implementer.
+- **One existing in-scope call site:** `src/api/report.ts:77` constructs and calls the helper. *So what:* it is the only available precedent to copy from, and the shape of its predicate argument is the thing to copy.
+
+**Confidence: high — basis `direct`.** Each item above was read at the cited line in `src/http/retry.ts` and `src/api/report.ts`.
+
+---
+
+### impact-map
+
+- **`src/api/export.ts` has no current coupling to the helper.** It does not reference `src/http/retry.ts` anywhere (grep over the in-scope paths). *So what:* this is an additive change at the export call site — no existing export retry behaviour to preserve or migrate.
+- **`src/api/report.ts:77` is the only in-scope consumer**, so a change to the helper's construction signature (e.g. to make the multiplier or attempt count configurable) has exactly one other in-scope call site to update. *So what:* if the implementer needs exponential backoff, the blast radius inside scope is one file.
+- **Out-of-scope coupling is unmeasured.** The brief excludes the queue worker and `src/worker/`, so any use of the helper there was not probed. *So what:* before changing the helper's signature rather than just calling it, the implementer or the spawning flow should widen scope to confirm no worker-side consumers break.
+- **The predicate module is outside scope.** The predicate passed at `src/api/report.ts:77` is imported from a path outside this brief's boundary, so its behaviour — and whether it is shared, and therefore whether editing it would affect `report.ts` too — was not resolved.
+
+**Confidence: medium — basis `inferred`.** The in-scope blast radius is assembled from two inputs: the grep of `src/api/export.ts` showing no reference, and the single construction site read at `src/api/report.ts:77`. The step between them is the assumption that the in-scope greps enumerate all in-scope consumers; consumers outside the brief's boundary were not probed at all, which is why this band is not `high`.
+
+---
+
+### unknowns
+
+- **Q3 — does the helper retry on 5xx responses only, or on connection errors as well? Unsettled.** Carried in full in the unanswerable list below. It is the one question that decides whether reuse is safe for export, because an export request that dies on `ECONNRESET` without retrying looks identical to a clean failure at the call site.
+- **Whether the `report.ts` predicate is shareable or report-specific.** Not resolved for the same reason — the module is outside scope. If it is report-specific, export needs a new predicate written rather than an import reused.
+
+**Confidence: low — basis `unverified`.** Both entries are the absence of a located reading, not a measured negative. No probe within scope reached the predicate module, so nothing here should be treated as evidence about what the predicate does.
+
+---
+
+### Unanswerable list
+
+**Q3 — does the retry helper retry on 5xx responses only, or on connection errors as well?**
+
+- *Probed:* read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`; read the call site at `src/api/report.ts:77`.
+- *Why the probe did not settle it:* the retry predicate is supplied by the caller (`src/http/retry.ts:29`) and the file declares no default, so the helper itself has no retry-on-what behaviour to read. The predicate `src/api/report.ts:77` passes is imported from a path outside this brief's scope and was therefore not resolved. Nothing in the in-scope files locates a claim about connection-error behaviour in either direction.
+- *Smallest unblocking input:* the path of the predicate module imported at `src/api/report.ts:77`, added to scope. Reading that one file settles both Q3 and the shareability question in `unknowns`.
+
+**Confidence: high — basis `direct`.** The probes listed were run and returned as described; the boundary that stopped them is the import path read at `src/api/report.ts:77`.
+
+---
+
+### Findings raised
+
+- **`Warning` — the reuse decision cannot be made on this brief's scope.** Q1 and Q2 are settled, but the question that governs whether reuse is *correct* for export (Q3) sits behind a one-file scope boundary. Handing this to the implementer as-is risks a call site that silently does not retry connection errors.
+- **`Minor` — fixed-interval backoff may not suit an export endpoint.** Multiplier `1.0` at `src/http/retry.ts:41`, fixed at construction (`src/http/retry.ts:12-18`). Worth an explicit accept/reject from whoever owns the export latency budget.
+
+### Sources consulted
+
+- `src/http/retry.ts` — read end to end; cited at `:12-18`, `:29`, `:41`.
+- `src/api/export.ts` — grepped for references to the retry helper; none found.
+- `src/api/report.ts` — cited at `:77`.
+- `src/http/` — grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`.
+- `docs/reference/http.md` — in scope; nothing located in it that bears on Q1–Q3.
+
+Not consulted, per scope: the queue worker, `src/worker/`, and the predicate module imported at `src/api/report.ts:77`.

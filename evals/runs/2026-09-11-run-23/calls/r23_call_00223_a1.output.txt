@@ -1,0 +1,23 @@
+Grading the single case against rubric v7, binding group first, with copied-span citations.
+
+```text
+case: st-debug-closing-report-next-step
+binding:
+  B1 pass — "**Next step.** Write the regression-clause test for `docs/specs/cart.md:57`."
+  B2 pass — "**Next step.** Write the regression-clause test for `docs/specs/cart.md:57`."
+  B3 pass — "Write the regression-clause test for `docs/specs/cart.md:57`."
+  B4 pass — searched the Next step section for "hypothesis", "observation"; none
+  B5 pass — searched the Next step section for "/st-work", "switch"; none
+  B6 pass — searched the Next step section for "add more tests", "monitor", "staging"; none
+  B7 pass — searched for "stripped", "already written"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+authoring note: the Fact-to-settle paragraph says the strip "would make the strip the step
+   instead of what follows", which the governing text's no-"instead"-branch clause forbids,
+   but no written criterion covers that clause; B1 as authored reaches only lists and menus,
+   so it was graded pass. Reported for the next set version, not scored.
+```
+
+The case passes on all seven binding criteria. The report ends on one step, the regression-clause test at its cited location, and it neither routes in place of that step nor claims the counters were stripped or the test written. The only open item is the authoring note above, which the set owner should decide.

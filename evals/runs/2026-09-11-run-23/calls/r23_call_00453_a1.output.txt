@@ -1,0 +1,21 @@
+I'll grade the one-line transcript against the case's three binding and one advisory criteria and emit the v7 block.
+
+```text
+case: (id not supplied in the hand-in — the case file's id line is missing)
+binding:
+  B1 pass — "`none` — the checkpoint text explicitly covers this"
+  B2 pass — searched for "st-qa is triggered", "selected for", "matches this request"; none
+     — the only st-qa mention is as the command's own by-name invocation, "rather than
+     through a trigger match"
+  B3 pass — "`none` — the checkpoint text explicitly covers this" — the one skill id in
+     the line, st-qa, appears as the skill the running command's step invokes by name,
+     the exemption the criterion states
+advisory:
+  A1 fail — searched for "/st-work", "st-work"; none — the reason refers to the owner
+     only as "the command" and "the run's own QA checkpoint", by reference rather than
+     by the running command's id
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+The case passes on all three binding criteria. The transcript answers `none`, names no skill as selected, and its st-qa mention sits inside the carve-out that criterion B3 spells out. The single advisory criterion fails because the reason never names the running command by its id, only as "the command". One hand-in gap to fix: the case id was not supplied, so the block carries a placeholder rather than an invented name.

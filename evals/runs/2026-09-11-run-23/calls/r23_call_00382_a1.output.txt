@@ -1,0 +1,26 @@
+## Result: `BLOCKED_AMBIGUITY`
+
+**Unit:** 3 — remove the legacy `user.displayName` field.
+**Work completed:** none. No change is safe under all readings, and the readings do not share a common subset.
+
+### Competing readings
+
+`user.displayName` exists at three layers. "Remove the field" resolves to at least three distinct changes:
+
+1. **Drop the `display_name` column from the `users` table.** Destructive and not reversible without a restore. Data is lost at cutover.
+2. **Remove `displayName` from the `GET /api/v1/users` response.** A breaking change to a public, versioned endpoint. Blast radius is every external consumer, none of whom are in this run's scope.
+3. **Delete the `displayName` property from the internal `SessionUser` type.** Contained to this codebase; compiler-enforced and reversible.
+
+These nest but are not implied by one another: (3) can ship alone, (2) requires (3) or a shim, and (1) requires both plus a consumer migration window. The brief names none of them, and "legacy" does not disambiguate — all three layers are equally legacy by age.
+
+### Question, verbatim, for the operator
+
+> Unit 3 says "remove the legacy `user.displayName` field." `displayName` exists in three places: the `display_name` column on the `users` table, the `displayName` key in the public `GET /api/v1/users` response body, and the `displayName` property on the internal `SessionUser` type. Which of those three should Unit 3 remove? If the public API field is in scope, should it be removed outright in `v1`, or deprecated with the key still emitted until consumers migrate?
+
+### Smallest input that unblocks
+
+A subset selection over `{column, api_field, type_property}` — e.g. `type_property only`, or `api_field + type_property`. If the reply includes `api_field`, one additional bit is required: `break-now` or `deprecate`. If the reply includes `column`, I will treat it as authorizing an irreversible drop and will restate that before executing.
+
+### Re-dispatch note
+
+No partial work was left in place, so re-dispatch needs no cleanup. The brief plus the selected subset is sufficient context; nothing in this transcript is needed to answer the question.

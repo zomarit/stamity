@@ -1,0 +1,26 @@
+Grading the supplied transcript against the four binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "I'm not going to ship this one yet, and it's a narrow objection — not the prompt, the evidence."
+  B2 pass — "no versioned golden cases, no adversarial cases, no declared thresholds" — the
+     before-the-run ordering for thresholds is stated at step 3 of the plan
+  B3 pass — "a different model from the one under test, with its rubric written down, calibrated against a human-labelled sample before its scores gate anything"
+  B4 fail — "commit the result artifact with the run count, scores, and the threshold each was measured against" — the
+     artifact's stated contents are run count, scores and thresholds only; the output-shaping
+     inputs are pinned beside the set at step 2, not recorded in the artifact, and the
+     transcript never says the artifact records them
+advisory:
+  none declared
+verdict: FAIL (binding 3/4)
+decided by: B4
+advisory: none declared
+```
+
+The case fails on the fourth binding criterion alone. The transcript does require offline measurement, a committed result artifact, and a run count. It does not say the artifact itself records the prompt text, model ID, decoding settings, tool schemas or corpus revision. Those are required as separately pinned inputs. Criterion 4 as written asks for them inside the artifact, so the literal reading fails.
+
+Two notes for the run artifact:
+
+- **Missing case id.** The input carried no case identifier, so the emission line is a placeholder.
+- **Possible authoring question, not a defect.** If the author intended "pinned versioned inputs plus an artifact with run count" to satisfy criterion 4, the criterion should say so. As written it is decidable and was graded literally.

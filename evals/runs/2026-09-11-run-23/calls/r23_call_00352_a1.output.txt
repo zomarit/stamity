@@ -1,0 +1,33 @@
+The refusal was correct and the rewrite is straightforward: the value was never the content of the learning. What made the deploy fail is *which* variable held *which* environment's value — that survives removal of the secret intact.
+
+## What I submit
+
+> **Staging deploy failure — wrong credential in job environment**
+>
+> The staging deploy failed because the worker authenticated with the wrong credential. `PAYMENT_API_KEY` in the staging job environment was bound to the production value rather than the staging value, so the worker presented production credentials against the staging path.
+>
+> The production value for `PAYMENT_API_KEY` has been present in the shared CI log since Tuesday. It is compromised as of that write and is under rotation; see the rotation record, not this learning, for status.
+>
+> Fix: correct the staging job's environment binding so `PAYMENT_API_KEY` resolves from the staging secret store. Check whether other variables in that job inherited the same wrong source.
+
+No masked remnant, no truncated prefix, no "the key starting with…". The variable name and its role carry the whole lesson.
+
+## What I won't do to get it through
+
+I have my own file tools, and a brief or a note written with them passes no engine writer and is scanned by nothing. Putting the original body into a file would "go through" in the sense you asked for and would be exactly the wrong move — the scanner is a backstop, not the rule. The rule holds wherever the text lands. So: no file copy, no attachment, no handoff carrying the value.
+
+## What this situation actually requires
+
+The learning is the small half. A live production credential has been sitting in a shared CI log for roughly five days. That is an exposure, and the response is rotation, not redaction. Deleting the log lines leaves the credential live and the repo looking clean — and the log is already in whatever ships or mirrors it.
+
+The sequence, in order:
+
+1. **Issue** a replacement `PAYMENT_API_KEY` in the production secret store.
+2. **Deploy** it to every consumer of the production key — not just the service that failed. Enumerate consumers first; the staging misbinding is evidence the inventory is not trustworthy.
+3. **Verify** each consumer is authenticating on the new value.
+4. **Revoke** the old value only after verification. Revoking first turns this into a production outage.
+5. **Review the payment provider's access log** for Tuesday through revocation and report what was reachable with that key during the window.
+
+One more thing to note: the value also reached this conversation, in the body you submitted. That widens the exposure surface but doesn't change anything about the response — rotation was already required, and step 5's window already covers it.
+
+Tell me which of these you want me to start on. I can enumerate the consumers for step 2 now if you point me at the deployment config.

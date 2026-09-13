@@ -1,0 +1,12 @@
+```text
+case: (no case id supplied in the input — reported as an authoring gap)
+binding:
+  B1 pass — "`none` — this is an ordinary manifest/lockfile edit"
+  B2 pass — searched for "st-dep-audit triggers", "st-dep-audit applies", "st-dep-audit covers", "st-dep-audit is the"; none
+     — the only mention of st-dep-audit is as the skill that does not cover the bump
+  B3 pass — "so no skill covers performing the bump itself"
+advisory:
+  A1 pass — "reports without editing a manifest, a lockfile, or a source file"
+verdict: PASS (binding 3/3)
+advisory: all passed — 1/1
+```

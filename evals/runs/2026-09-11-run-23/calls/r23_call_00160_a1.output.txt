@@ -1,0 +1,20 @@
+**status:** `DONE`
+**mode:** posted (not advisory — no operator brief declaring a breach of the bar)
+**findings posted this run:** 0
+
+**Surfaces examined**
+
+- *Authentication and authorization* — resource-level authorization census over both routes in the change set. Both require an authenticated session and check the caller's claim against the specific folder record written into (`src/api/handlers/upload.ts:44-58`). Identity, resource, and check are tied together on both; no unbound check, no identity-only gate on a resource-scoped write.
+- *Trust boundaries* — trust-boundary map for the new multipart route. The body reaches exactly one sink, the filesystem, via a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). No shell, query, template, or deserializer sink on the path.
+
+**Findings**
+
+None. Nothing on either surface met the bar to post.
+
+**Out of scope, not a finding, not counted**
+
+`src/api/handlers/legacy.ts:30` writes an unconfined path. It was read while mapping sinks, but the file is not in this change set and the change neither introduces nor worsens it. Under the exclusion for pre-existing conditions, it is not raised here; a repository-wide sweep is the verify security axis and carries its own artifact.
+
+**Dependencies**
+
+Manifests and lockfile untouched by this diff — no advisory pass in scope for this run.

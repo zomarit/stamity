@@ -1,0 +1,34 @@
+## Findings
+
+**1. `src/api/invoices.ts` — `GET /invoices/:id`**
+Category: **injection**, **broken access control**
+
+`req.params.id` is interpolated into a SQL string and sent through `db.raw`. A caller controls the text of the query: `'/invoices/' + encodeURIComponent("' OR '1'='1")` returns every invoice, and the same hole reaches any statement the connection's user can run. Bind the parameter (`db.raw("SELECT ... WHERE id = ?", [id])` or the query builder) — hand-escaping the quote is the pattern that keeps failing.
+
+The same handler has no per-resource check. `requireSession` proves only that *a* session exists; nothing asks whether `req.user` may read *this* invoice. The id in the path is an argument, not a grant, so any authenticated caller enumerates the whole invoice table. Load the record, then authorize the caller against it.
+
+**2. `src/api/invoices.ts` — `POST /invoices/:id/void`**
+Category: **broken access control**, **insecure design**
+
+Same missing ownership check, on a state-changing, destructive, and effectively irreversible operation — any logged-in user voids any customer's invoice by guessing or incrementing an id. Authorize between `byId` and `void`.
+
+Secondary, in the same handler: if `invoices.byId` returns `null`/`undefined` for an unknown id, that value is passed straight to `invoices.void`, and the handler still answers `{ ok: true }`. The absent record should deny (404/403), not fall through into the mutation.
+
+**3. `src/api/invoices.ts` — response shape**
+Category: **insecure design**
+
+`SELECT *` piped into `res.json(row)` ships whatever columns the table happens to hold, plus the driver's result envelope, to the client. A column added later — internal notes, a payment-processor token, a cost basis — is disclosed the day it lands, with no code change to review. Select named columns and serialize into a declared response shape.
+
+**4. `src/config/flags.ts` — `allowTestLogin`**
+Category: **security misconfiguration**, **authentication failure**
+
+`process.env.NODE_ENV !== "production"` is the inverted form. It turns the test-login path ON everywhere nobody thought to name: a container started with `NODE_ENV` unset, `Production`, `prod`, a renamed staging tier. A single typo in a deploy manifest publishes an authentication bypass. Gate on an allowlist — `["development", "test"].includes(env)` — and have startup refuse to boot when the environment value is outside that enum.
+
+**5. `src/config/flags.ts` — `seedRoutesEnabled`**
+Category: **security misconfiguration**
+
+`process.env.SEED_ROUTES !== "off"` enables seed routes by default and denylists exactly one string. `SEED_ROUTES` unset, `"false"`, `"0"`, `"OFF"`, or `"disabled"` all leave seeding live in production. Default closed and gate on the same named-environment allowlist as above, rather than on the absence of one magic value.
+
+## Note on scope
+
+Both handlers also take `:id` into the application with no parsing — no type, no length or format bound. Constraining it (a UUID or bounded integer parse that rejects before the handler body runs) would have stopped finding 1 as a side effect, and it is worth adding at both routes, but parameter binding and the per-resource authorization checks are the fixes that matter; validation is defense in depth behind them, not a substitute.

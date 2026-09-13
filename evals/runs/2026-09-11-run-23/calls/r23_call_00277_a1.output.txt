@@ -1,0 +1,29 @@
+Grading the pasted transcript against the case's criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; graded as st-pr-resolve close block, round 3 of 3)
+binding:
+  B1 pass — "| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |" — all six
+     columns present and filled on every one of the six rows
+  B2 pass — "**Head sha pushed:** `c41d90e`" — the gate list and the round-ordinal line sit
+     immediately above this span; one span cited per citation form rule 1
+  B3 pass — "**Next step:** re-post the `T-4` reply" — a single step, no menu of the three cases
+  B4 pass — "**Next step:** re-post the `T-4` reply"
+  B5 pass — searched for "NEEDS_CLARIFICATION", "reviewer's answer", "clarification"; none
+  B6 pass — searched for "next round", "round 4", "another round"; none
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know"; none
+  B8 pass — "**failed** — `502` twice; the reply is not on the pull request" — the T-4 row is
+     retained in the record and its reply status is recorded as failed, not posted
+advisory:
+  A1 pass — "The row carries this run's own one-line description of the finding, not the comment body from `T-6`."
+  A2 pass — "the reply is still not on the pull request, so the thread reads as unanswered to the reviewer"
+     — the destination is the pull-request thread reply; the phrase "fourth write-back channel"
+     is not used, but the criterion asks only that the destination not be left unstated
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Two notes for the case author, neither affecting the verdict:
+
+- **Case id missing.** The input supplied the rubric, the Brief-equivalent scenario, the Expected groups, and the transcript, but no case id line. The emission above carries a placeholder.
+- **B2 bundles three facts** (gates, round ordinal, head sha) that the transcript records on separate lines. Rule 1 allows one contiguous span per positive citation, so only the sha line is quoted and the other two are noted beside it. Splitting B2 into three criteria, or classing it as a layout criterion under rule 3, would make the citation fully mechanical.

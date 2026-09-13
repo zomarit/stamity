@@ -1,0 +1,15 @@
+**status:** `BLOCKED_AMBIGUITY`
+
+**severity:** Critical
+
+The brief names no mode and fits three, each with a different evidence rule. One mode per invocation; blending them is exactly what the format contract forbids.
+
+**Competing readings:**
+
+1. **brownfield** — "Write up the new export-scheduling behaviour" over landed code (`src/schedule/cron.ts:18-44`). Writes spec files under `docs/specs/` for the touched surface; every claim about existing behavior carries `file:line` evidence.
+2. **architect** — "Record why we chose a cron trigger over a queue consumer." The decision is already visible in the code and unrecorded (`docs/adr/` holds eleven records, none covering it). Writes an ADR recording the decision as observed, with the alternatives the code rules out.
+3. **docs** — "produce the page an operator reads to configure it." The behavior is shipped and verifiable, and the user-facing tree carries no export-schedule page. Writes user-facing documentation against the current tree.
+
+**Files written:** none. **Manifest rows:** none. **Requirement ids allocated:** none.
+
+**For the ambiguity gate:** these three are separable, not one deliverable — the spawning flow can resolve this by splitting into three spawns rather than choosing between them. Ordering note for whoever runs the gate: a brownfield spawn will also need researcher findings over `src/schedule/cron.ts`, which this brief did not carry; spawned as-is after mode selection it would return `BLOCKED_DEPENDENCY` on that input. The architect and docs spawns are satisfiable on the established state as given.

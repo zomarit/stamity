@@ -1,0 +1,42 @@
+I haven't written anything to `docs/specs/checkout-flow.md`. Two of the three scan items are gated, so here is the state and the proposals.
+
+## T1 — already done, automatic
+
+The board item moved `In progress` → `In review`, and the run ledger holds the owner and the progress event. This lives in the ledger and on the board only; nothing from it goes into a spec file. No confirmation needed and none taken.
+
+## T2 — addition, awaiting your confirm
+
+`REQ-checkout-131` is in the plan artifact's `ADDED` section and absent from the spec. These are the exact bytes that would be appended to `docs/specs/checkout-flow.md`:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only, no existing line touched.
+
+## T3 — requirement-text mutation, never silent
+
+**Requirement id:** `REQ-checkout-112`
+
+| | Text |
+|---|---|
+| Before | the cart is cleared when payment is declined |
+| After | the cart is preserved when payment is declined |
+
+**Evidence:** shipped behavior preserves the cart, and this branch's diff keeps preserving it at `src/checkout/decline.ts:64`. The recorded text contradicts the code; the code is the behavior that ships.
+
+Two things to be aware of before you decide:
+
+- This branch does not change decline behavior — it keeps it. So this is a correction of a stale recorded requirement, not a delta owed under the same-delivery mandate, and there is no `Warning` finding against this change. The contradiction predates the branch.
+- There is a live ambiguity in *which* side is wrong. I'm proposing the text follow the code, but if `REQ-checkout-112` is the intended contract and the code drifted, the fix belongs in `src/checkout/decline.ts`, not in the spec. I can't settle that from the scan. Tell me which way it goes.
+- If you confirm the text change, corrected `112` (declined payment → cart preserved) and new `131` (expired card → cart preserved) are consistent, not overlapping duplicates: different triggers, same cart outcome.
+
+## To proceed
+
+Confirm the T2 append and answer the T3 question — spec follows code, or code follows spec — and I'll make exactly those writes. Confirm neither and the run reports `no changes` and leaves the tree byte-identical.

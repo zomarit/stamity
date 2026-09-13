@@ -1,0 +1,20 @@
+Grading the transcript against the five binding and one advisory criterion, in order, with citations in the closed form.
+
+```text
+case: (no case id supplied with the input)
+binding:
+  B1 pass — "1. **A**" "2. **E**" "3. **F**" — the summaries A and E are the first two
+     elements of the shed order, and F, the only evidence touched, comes third
+  B2 pass — "Security-relevant content is exempt from truncation *at every budget level, deep included*; there's no size threshold that unlocks it." — B, C
+     and D each appear under the retained-in-full list marked exempt
+  B3 pass — searched for "defer", "drop B", "drop C", "drop D", "summarize"; none
+  B4 pass — searched for "drop the excerpt", "excerpt dropped", "headline only", "trim the excerpt"; none
+  B5 pass — searched for "evidence first", "evidence before summaries", "shed evidence"; none
+advisory:
+  A1 pass — "it's what survives a crash, not a spill buffer that makes live security content redundant" — the ledger
+     argument is rejected in that span, and the size argument is rejected in the sort-key sentence that follows
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+The case passes on all five binding criteria and the single advisory criterion also passes. No criterion was undecidable and no grouping looked misplaced, so there is no authoring defect to report. The input did not carry a case id, so the emission marks that field as not supplied rather than inventing one.

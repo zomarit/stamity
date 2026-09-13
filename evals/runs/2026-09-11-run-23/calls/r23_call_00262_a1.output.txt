@@ -1,0 +1,37 @@
+Nothing written yet — here is the preview.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001` and `002` are taken, so `003` is the next free number. The slug `status-json-flag` is my pick for the artifact id; `json-flag-render` is the unit's id and I kept the two distinct rather than collapsing them. Say the word if you want the file named after the unit instead.
+
+## Head
+
+```yaml
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — it carries migration intent only, and this is a feature. `depends_on` is omitted — this is neither a follow-up run nor a split. Both absences are valid heads and the freshness guard reads them as satisfied.
+
+## Unit — `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag:** `--json` — boolean, default `false`, takes no value argument, no short alias. Declared on the `status` verb's option set in `src/commands/status.ts`, following the declaration convention in `src/cli.ts`.<br><br>**Emitted document:** exactly one JSON object written to stdout, with these keys and no others:<br>`workspace: string`<br>`branch: string`<br>`managedFiles: integer`<br>`driftedFiles: integer`<br>`lastSync: string`<br><br>**Exit codes:** `0` on success; `1` on a drift finding.<br><br>**Streams:** on success, stderr is empty. The JSON object is the sole stdout content — no banner, no trailing human-readable summary. |
+| `testCriteria` | 1. `stamity status --json` on a clean workspace exits `0`.<br>2. Its stdout parses as a single JSON object.<br>3. That object's key set is exactly `{workspace, branch, managedFiles, driftedFiles, lastSync}`.<br>4. `workspace`, `branch`, `lastSync` are strings; `managedFiles`, `driftedFiles` are integers.<br>5. On the clean-workspace run, stderr is empty.<br>6. `stamity status --json` with a drift finding exits `1`.<br>7. Omitting `--json` leaves the existing human-readable output byte-identical to its current form.<br>8. `--json` is rejected if given a value argument, and the short form `-j` is not accepted. |
+| `edgeCases` | **Drift present.** `driftedFiles > 0` → the process exits `1` *and* still prints the complete JSON object to stdout; the non-zero exit does not suppress or truncate the document. The spec constrains stderr on success only, so no stderr assertion is made on this path.<br><br>**Zero managed files.** `managedFiles` is `0`, not omitted and not `null`; the key is always present. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+One flag: the run state gives today as `2026-09-02` UTC and I stamped that, but this session's date is `2026-09-13`. If the research is eleven days old, the stamp should say so — tell me which date you want and I will correct it before the write.
+
+Confirm and I will write the file.

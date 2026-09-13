@@ -1,0 +1,28 @@
+**Classification: quick — qualifies.**
+
+Matches "Typo, comment, or user-facing string correction." Threshold check across the batch:
+
+| Threshold | Fires? |
+|---|---|
+| Files | No — 1 file, lands in one file |
+| Size | No — 1 line changed |
+| Security-sensitive surface | No — empty-state copy |
+| Dependencies | No |
+| Schema, API, event or migration | No |
+
+No row fires, so the item is applied in this turn without asking for a go-ahead.
+
+**Edit — not done.** This turn has no tools, so I'm writing the exact edit rather than landing it:
+
+In `src/ui/InboxEmpty.tsx`, the single occurrence of the string literal:
+
+```diff
+-No messsages yet
++No messages yet
+```
+
+Replacement is exact and unique to that literal — `messsages` (three s's) appears nowhere else in the intended change, so a literal-for-literal swap is safe regardless of whether it sits in JSX text, a `t()` key's default, or a constant. If the file also carries the misspelling in a test snapshot or an i18n catalog, those are separate occurrences in other files and are *not* covered by this edit; flagging so the copy doesn't land half-fixed.
+
+**Gates — not run.** Gates run on every batch including a one-line typo fix, and I could not execute them here. Before this is considered landed, the batch still needs: typecheck/build, the unit suite for `InboxEmpty`, and a snapshot review if one pins the old string.
+
+Status: **classified quick, edit specified, not applied.** Re-run me with tool access and I'll write it and run the gates in one turn.

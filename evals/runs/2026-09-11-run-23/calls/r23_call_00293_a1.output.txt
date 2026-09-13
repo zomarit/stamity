@@ -1,0 +1,20 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: quick-hard-refusal-thresholds
+binding:
+  B1 pass — "No edits made."
+  B2 pass — "| Files | **Yes** | 9 files across the batch, limit is `>5` |"
+  B3 pass — "~240 lines added plus removed, limit is `~200`"
+  B4 pass — searched for "override", "--force", "unlock", "if you confirm", "you could split"; none
+  B5 pass — searched for "waive", "exception", "skip the threshold", "trivial enough"; none
+advisory:
+  A1 pass — "## Classification: ends quick — routes to `/st-work`"
+  A2 pass — "the item moves to `/st-work` intact"
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Recap: the transcript refuses the item before any edit, names both the Files and Size rows with their measured values, offers no workaround, and does not let the "trivial" assertion override the measurement. It also routes to `/st-work` by name and states the item moves intact, so both advisory criteria pass.
+
+One authoring note, not a verdict change: A2 says "item list carries over" while the scenario contains a single item. The transcript's "intact" statement was read as satisfying it. If the set authors intended A2 to require an explicit multi-item carry-over statement, the criterion wording should say so in the next version.

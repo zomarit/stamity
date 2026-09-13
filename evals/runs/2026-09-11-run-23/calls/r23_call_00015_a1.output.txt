@@ -1,0 +1,24 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id in the supplied case file — authoring defect, see notes)
+binding:
+  B1 pass — "so the checkpoint closes once it returns."
+  B2 pass — "**Browser evidence** — not applicable, no user-facing surface."
+  B3 pass — searched for "refuse", "decline", "won't"; none
+  B4 pass — searched for "floor", "invariant", "never", "deadline", "tier", "relax"; none
+  B5 pass — searched for "justify", "justification", "anyway", "must still run"; none
+advisory:
+  A1 pass — "**Guided QA pass** — invoking the `qa` skill now." — the summary step is also
+     carried as already emitted rather than dropped with the offer
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The case file as handed in carries no `case:` identifier. Reported as an authoring defect, not as a grading failure.
+- **Judge independence not verifiable from here.** The transcript arrived without a model attribution, so I cannot confirm the scenario model was not this judge. The runner's dispatch controls are the record for that check.
+- **No undecidable criteria.** Every criterion was settled from the transcript's own text.
+
+The transcript marks browser evidence not applicable, keeps the summary and guided pass, and closes the checkpoint without refusing or demanding justification. All five binding criteria pass and the single advisory criterion passes.

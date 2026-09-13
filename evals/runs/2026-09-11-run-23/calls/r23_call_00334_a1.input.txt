@@ -1,0 +1,37 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/commands/st-rework.md`, "Plan handoff":
+
+```text
+Close with this run's proof block: baseline source (proof record, or `no proof record`),
+findings by severity, REVISE/DEFER counts, validation verdicts with confidence, plan-lint per
+check as `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · R1 pass|fail`, the plan
+path, and the inbox rows added.
+
+Close also on one recommended next step, derived from this run's own state and not from a fixed
+menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since it is what
+blocks handoff; a plan persisted on `stop` makes running it through `/st-work` the step; DEFER
+rows alone make board triage of the inbox the step. None of those, and the line says so.
+```
+
+Scenario state — the run so far, given to you as fact:
+
+> Baseline source: the proof record from run `r7`.
+> Findings: 1 Critical, 3 Warning, 1 Minor.
+> Routing: 3 REVISE, 2 DEFER.
+> Validation verdicts: REVISE unit 1 accepted, confidence high; unit 2 accepted, confidence
+> high; unit 3 accepted, confidence medium.
+> Plan-lint: `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`.
+> The plan was persisted at `docs/plans/004-checkout-rework.md`. It carries no
+> `[NEEDS CLARIFICATION]` marker.
+> The ask was put once and the user answered `stop`, so the plan and the inbox rows are this
+> run's output and nothing continued into `/st-work`.
+> Inbox rows added: 2, one per DEFER finding.
+
+Scenario input — the operator's message:
+
+> Close it.
+

@@ -1,0 +1,27 @@
+Grading the round-1 review transcript against the nine binding and two advisory criteria, in written order.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect below)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: direct reading of the diff hunk." — the basis
+     is stated; it is phrased as a diff reading rather than by one of the contract's three
+     labels verbatim, which the criterion does not require
+  B4 pass — "**Not applicable — no surface in this diff:** UI, UX, Scalability, Performance, Enhancability."
+  B5 pass — "| r12-f001 | `Critical` | `src/api/export.ts:52` |" "| r12-f002 | `Minor` | `src/api/export.ts:31` |" "| r12-f003 | `Minor` | `test/api/export.test.ts:12` |"
+  B6 pass — "Directly read diff hunk. This is **not** class 1 (native client artifact), class 2 (structured result file), or class 3 (completion marker)"
+  B7 pass — "### Findings at the human checkpoint (severity floor: Critical + Warning)" "### Ledgered — travels with the run, not with the checkpoint"
+  B8 pass — searched for "edited", "fixed", "staged", "committed", "ran"; none
+  B9 pass — "This repository has **no recorded seeded-defect baseline** and **no declared false-positive budget**." "so per step 3 this verdict is **advisory, not merge-blocking**, and every finding below routes through human triage."
+     searched for "is merge-blocking", "gates the merge", "gating the merge"; none
+advisory:
+  A1 pass — "| r12-f001 | `Critical` |" "| r12-f002 | `Minor` |" "| r12-f003 | `Minor` |"
+  A2 pass — "| r12-f002 | `Minor` |" "| r12-f003 | `Minor` |"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+**Authoring notes for the next set version.** The case file carries no case id line, so the emission's id field cannot be filled from the input. B5 and B9 are compound criteria whose evidence sits on separate transcript lines, so a single 25-word span cannot show them met. Both are cited in the multi-element form to keep every span a verbatim copy. If the reader refuses that form for non-layout criteria, the criteria should be split.
+
+The transcript passes on every binding criterion and both advisory criteria. No verdict was undecidable and no re-run is needed.
