@@ -136,6 +136,27 @@ function readPortableRegistration(command: string): HookInterchange {
   return row;
 }
 
+/**
+ * Wall-clock budget for one golden-repository fixture, derived rather than inherited.
+ *
+ * `makeGoldenRepo` composes and emits a whole repository and `readEmittedTree` reads it back,
+ * so what these hooks are bounded by is that fixture's cost — not the suite-wide 20s default in
+ * `vitest.config.ts`, which is sized for a CLI spawn. On the Windows leg of 20d7c866 the
+ * four-tool hook exceeded it and the suite reported a hook timeout plus a cascade
+ * (`Cannot read properties of undefined (reading 'cleanup')`) rather than a cost.
+ *
+ * The basis, so the next person can re-derive it instead of guessing:
+ *   local wall time   14s   — `time npx vitest run test/emit/crossClientGoldens.test.ts`,
+ *                             14.1s for five fixtures, so ~3s for the heaviest single one
+ *   Windows ratio     ~7x   — the slowest runner's file operations against this machine's;
+ *                             the same hook that costs ~3s here exceeded 20s there
+ *   margin            2x    — a shared runner with a cold file cache, not a second budget
+ *   = 3 x 7 x 2 ≈ 42s, rounded up to 120s, which is also >= 6x the whole suite's local time
+ *
+ * A fixture that genuinely hangs still fails, at a point where the timeout is the finding.
+ */
+const GOLDEN_FIXTURE_TIMEOUT_MS = 120_000;
+
 describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   let repo: GoldenRepo;
   let tree: Record<string, string>;
@@ -143,11 +164,13 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   beforeAll(async () => {
     repo = await makeGoldenRepo({ tools });
     tree = await readEmittedTree(repo.rootDir);
-  });
+  }, GOLDEN_FIXTURE_TIMEOUT_MS);
 
+  // Guarded: when the setup hook fails or times out there is no fixture to clean up, and an
+  // unguarded call turns that one failure into a second, less informative one.
   afterAll(async () => {
-    await repo.cleanup();
-  });
+    await repo?.cleanup();
+  }, GOLDEN_FIXTURE_TIMEOUT_MS);
 
   // Reviewed refreshes, newest first — each committed after reading BOTH
   // goldens as a file review, so a later reader can attribute every moved line
@@ -924,11 +947,13 @@ describe("four-tool union", () => {
   beforeAll(async () => {
     repo = await makeGoldenRepo({ tools: TOOLS });
     tree = await readEmittedTree(repo.rootDir);
-  });
+  }, GOLDEN_FIXTURE_TIMEOUT_MS);
 
+  // Guarded for the same reason as the sibling suite above: a failed setup hook should report
+  // itself, not a `cleanup` of undefined.
   afterAll(async () => {
-    await repo.cleanup();
-  });
+    await repo?.cleanup();
+  }, GOLDEN_FIXTURE_TIMEOUT_MS);
 
   it("writes one root charter, one skills tree, and one policy document for all four", () => {
     const owners = ownersByPath(repo.manifest);
