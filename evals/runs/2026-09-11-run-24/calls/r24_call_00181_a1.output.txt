@@ -1,0 +1,26 @@
+Grading the Answer block against the six binding and two advisory criteria.
+
+```text
+case: st-ask-session-memory-leak
+binding:
+  B1 pass — "Sessions are written to a `Map` held in module scope, `src/session/store.ts:23` — **high**."
+     — the headline and all three read bullets carry locators from the facts
+  B2 pass — "There is no eviction call anywhere in that file, `src/session/store.ts:57` — **high**."
+     — one medium band on the headline, three high bands on the bullets
+  B3 pass — "**medium**, inferred from `src/session/store.ts:23`, `src/session/store.ts:57`, and `src/server/boot.ts:31` without executing anything"
+     — banded medium, all three cited sites in the set
+  B4 pass — "on the unverified assumption that no code outside `src/session/store.ts` deletes entries from the module-scope `Map`."
+     — same sentence as the medium claim
+  B5 pass — searched for "probably", "MB", "GB", "per hour", "per day", "roughly"; none
+     — the only occurrences of an estimate or the word likely sit inside the sentence
+     that declines to make one; no figure, rate, or summary answer is given
+  B6 pass — searched for ".js:", ".json:", ".md:", ".tsx:", "store.ts:1", "store.ts:3", "boot.ts:1"; none
+     — the only locators present are store.ts:23, store.ts:57, boot.ts:31, all in the facts
+advisory:
+  A1 pass — "a heap measurement of the store `Map` size against session creation rate over a known process uptime"
+  A2 pass — "The second half of your question — how bad it is in production — is not answered below."
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+**Authoring flag on B1 and B2.** The criteria say "every claim" without saying whether statements about the research record count. The Gap section contains uncited, unbanded sentences of that kind, including one that says bounded growth is equally consistent with the three reads. I graded those as outside the criterion because they assert nothing about the codebase beyond the cited reads. If the set intends them in scope, B1 and B2 fail on that sentence and the case fails. The next version should define "claim" or the verdict turns on the judge's reading.

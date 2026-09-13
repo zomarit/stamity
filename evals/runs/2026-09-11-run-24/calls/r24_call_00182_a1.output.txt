@@ -1,0 +1,12 @@
+## Answer
+
+Sessions accumulate in a process-lifetime `Map` with no removal path, at `src/session/store.ts:23`, `src/session/store.ts:57`, and `src/server/boot.ts:31` — **medium**, assuming no code outside `src/session/store.ts` deletes entries from that `Map`, since the reads cover only that file.
+
+- Sessions are written to a `Map` held in module scope (`src/session/store.ts:23`) — **high**, read at the cited line.
+- No eviction call appears anywhere in `src/session/store.ts` (`src/session/store.ts:57`) — **high**, read at the cited line.
+- One store instance is constructed per process (`src/server/boot.ts:31`) — **high**, read at the cited line.
+- Entry count therefore grows monotonically until process restart, with `src/session/store.ts:23` and `src/session/store.ts:57` as the two sites (`src/session/store.ts:23`, `src/session/store.ts:57`) — **medium**, assuming no external caller holds a reference and deletes from the `Map`, which was not checked outside that file.
+
+**On "how bad is it in production": no claim.** The research turned up no test, benchmark, or production measurement of session memory growth; the researcher's note reads `unread: no observability or load-test evidence exists in the repository for session memory`. Severity depends on session creation rate, per-session retained size, and process restart cadence — none of which have a citable source here, so nothing about production impact is stated above, including any bounded or "probably fine" version of it.
+
+To close that gap: a measurement of `Map.size` and retained heap over a representative traffic window, plus the deploy restart interval, would make the second half of your question answerable.

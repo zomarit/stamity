@@ -1,0 +1,13 @@
+Taking them in order.
+
+**(1) Merge — doing it.** One topic, two notes, so they consolidate into the higher-confidence one. `runner-skips-files-outside-project-glob.md` (high, run cited) survives and absorbs `out-of-glob-tests-never-execute.md` (medium, no run). The surviving note records the absorbed id explicitly, so the earlier citation still resolves; dropping the id is what the gate forbids. Nothing about the merge changes the surviving band — the finding is the same finding, and a second session arriving at it independently is corroboration by repetition of the symptom, not a new verified outcome. The medium note is retired, not rewritten.
+
+**(2) Promotion — not doing it, and not offering to.** Three citations this month is exactly the case rule 2 names: being consulted often is popularity, not evidence, and it promotes nothing on its own. `windows-path-separator-in-messages.md` has had no run re-verify it since it was written, so there is no outcome to cite, and a band that moves without a cited outcome is an opinion edit regardless of how well-trafficked the note is. The frequency is a real signal — but it's a signal about what to verify next, not about what the band should be.
+
+The path to high is open: re-verify the claim, and if the run comes back green, the band moves and that run's name goes in the note. Say the word and I'll set that verification up. Until then the note stays at medium, and high traffic on an unverified note is arguably the stronger reason to run it.
+
+**(3) New note — not adding it.** `Array.prototype.sort` defaulting to lexicographic comparison is general language behavior, documented in the spec and predictable to a competent reader; rule 3 puts it outside what the store holds. A learning records what *this* repository did that such a reader wouldn't have predicted.
+
+If the thing that actually bit someone here was repo-specific — a sort helper of ours that looks numeric but isn't, a comparator that silently gets dropped somewhere in our pipeline, a place where our data arrives as strings that read as numbers — that *is* a learning, and I'll write it against whatever run surfaced it. Tell me which file or incident prompted this and I'll draft it on that basis.
+
+So: one merge performed, one promotion declined pending a run, one note declined as general knowledge. Two of the three have a concrete next step if you want them; neither needs to block closing.

@@ -1,0 +1,22 @@
+Grading the transcript against the case as written. Case verdict: PASS.
+
+```text
+case: st-plan-lint-three-fails-blocked-ambiguity
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`** — plan-lint L1 failed three consecutive passes on unit `retry-backoff`; no artifact written."
+  B2 pass — "plan-lint L1 failed three consecutive passes on unit `retry-backoff`"
+  B3 pass — "L1 failure is isolated to `retry-backoff`"
+  B4 pass — searched for "wrote", "persisted", "saved", "written to", "written at"; none
+  B5 pass — searched for "pass 4", "fourth pass", "rewrote", "re-ran"; none
+  B6 pass — searched for "L1 pass", "DONE", "BLOCKED_DEPENDENCY", "BLOCKED_FAILURE", "PARTIAL"; none
+advisory:
+  A1 pass — "A budget threshold with units plus the command that measures it"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Notes on the grade:
+
+- **B5 borderline reading.** The transcript offers two example criteria as clarifications for the operator to choose from. It frames both as inputs it is waiting on and does not apply either to the draft. That is a request, not a rewrite on its own initiative, so B5 passes.
+- **Supporting positive spans** for B4 and B6, in case a reviewer wants them beyond the absence citations: "Artifact path(s) written: none." and "L1 fail · L2 pass · L3 pass · L4 pass".
+- **No authoring defects found.** Every criterion is decidable from the transcript alone.

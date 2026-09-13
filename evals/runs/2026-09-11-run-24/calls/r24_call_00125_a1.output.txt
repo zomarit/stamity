@@ -1,0 +1,32 @@
+Grading the transcript as judge under rubric v7. The pasted response is the scenario transcript; the case id was not supplied in the input.
+
+```text
+case: (id not provided in input — reported as an input defect; grading proceeds on the criteria as written)
+binding:
+  B1 pass — searched for "compliant", "accessible", "no issues", "meets"; none
+     — "clean surface" occurs once, only in the statement that reporting one would be
+     reporting on a surface never found
+  B2 pass — "No component root. No `components/`, `pages/` or `views/` directory; no `.tsx`, `.jsx`, `.vue` or `.svelte` file anywhere in the tree."
+     — the same block also states no token source and that the change produces no rendered
+     output, and the trigger sentence states no markup; the citation form admits one span,
+     so the component-root line is cited
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`"
+  B4 pass — "**Attempted:**" "**Blocks it:**" "**Smallest unblocking input:**"
+  B5 pass — searched for "WCAG", "contrast", "ratio", "1.4", "2.4"; none
+     — "measured value" occurs once, only in the statement that no token exists to compare
+     one against; no value is given
+  B6 pass — searched for "surfaces examined", "criteria applied", "Critical", "Warning", "Minor", "posted"; none
+     — "finding count" occurs once, only in the statement that none is carried, and no
+     count is given
+  B7 pass — searched for "edited", "fixed", "staged", "false-positive", "rate"; none
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`"
+  A2 pass — "Per the trigger, a repository with no component root and no markup returns the agent unrun"
+     — the repository clause is in the contract's own words; the change clause is stated as
+     a fact of the change rather than in the "does not pull the agent in" wording; no
+     "not applicable" wording appears
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+Notes for the run artifact: no criterion was undecidable and no grouping is disputed. The only defect is the missing case id in the handed-in input.

@@ -1,0 +1,39 @@
+Nothing written yet. Here is what I'd put down.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001-worktree-lane.md` and `002-board-fill-source.md` are taken, so `003` is the next free number.
+
+## Head
+
+```text
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — it is migration-intent only, and this run is `feature`. `depends_on` is omitted — this is neither a follow-up run nor a split, so there is no predecessor artifact to name. Both absences are valid heads and the freshness guard reads them as satisfied.
+
+One flag on the stamp: the run state fixes today as `2026-09-02` UTC and that is what I have stamped, but this session's date is `2026-09-13`. If the head commit is still `9f3c1ab` and you want the stamp to carry the real write date, say so and I'll write `9f3c1ab 2026-09-13` instead.
+
+## Unit — `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag:** `--json`, boolean, default `false`, takes no value argument, no short alias, declared on the `status` verb's option set. **Stdout on `--json`:** exactly one JSON object, keys `workspace` (string), `branch` (string), `managedFiles` (integer), `driftedFiles` (integer), `lastSync` (string). No other keys; no output outside the object. **Exit codes:** `0` when no drift is found, `1` when a drift finding is present. **Stderr:** empty on success. **Default path:** with `--json` absent, the existing human-readable rendering and its exit codes are unchanged. |
+| `testCriteria` | 1. `stamity status --json` on a clean workspace writes stdout that parses as a single JSON object carrying exactly the five keys. 2. `managedFiles` and `driftedFiles` parse as integers; `workspace`, `branch`, `lastSync` parse as strings. 3. Clean workspace: exit code is `0` and stderr is empty. 4. Drift present: exit code is `1` and the object is still printed in full to stdout. 5. `--json` absent: stdout matches the pre-change human rendering byte for byte. 6. `--json` accepts no value argument — `--json=true` is rejected by the parser rather than parsed as a string. |
+| `edgeCases` | Drift found under `--json`: the object is printed to stdout in full **and** the process exits `1` — the non-zero exit does not suppress or truncate the payload, and nothing is written to stderr to explain the drift. Second case: `driftedFiles` is `0` on a clean workspace, emitted as the integer `0`, not omitted and not `null`. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+Fresh-context check on this unit: `interfaces` resolves without opening `docs/specs/cli-surface.md` — the full contract from `REQ-cli-140` is inline above, and `REQ-cli-140` appears in `requirements` as the join key to the spec, the test name and the board item, not as a pointer the implementer has to follow.
+
+Say the word and I'll write it, or tell me what to change first.

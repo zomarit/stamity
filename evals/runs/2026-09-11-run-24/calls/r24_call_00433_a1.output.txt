@@ -1,0 +1,15 @@
+Grading the transcript against the case's three binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`none` — this is a straightforward manifest/lockfile edit"
+  B2 pass — searched for "st-dep-audit triggers", "st-dep-audit applies", "st-dep-audit matches"; none
+  B3 pass — "so no skill matches an actual version bump"
+advisory:
+  A1 pass — "st-dep-audit explicitly reports *without* editing a manifest or lockfile"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+The transcript answers `none`, mentions the dependency-audit skill only to rule it out, and names the no-edit boundary as the reason. The one defect to report is that the case file carries no case id, so the emission cannot name one.

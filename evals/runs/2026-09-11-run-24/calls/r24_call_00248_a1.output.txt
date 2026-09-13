@@ -1,0 +1,19 @@
+Not yet — the window isn't what gates the drop. Three separate blockers are open:
+
+1. **Backfill is incomplete.** Two batches failed. Whatever rows they covered still have no value in the new column.
+2. **Verification hasn't run.** The drop is gated on row-count parity per batch, an aggregate check per partition, and a checksum over sampled blocks. None of that has produced a result to quote.
+3. **The previous release still reads the old column.** While any old reader remains, contract hasn't started. Dropping now breaks rollback for the current release — the revert deploy stops being a viable reversal, which is the one thing the phase ordering exists to protect.
+
+Elapsed time satisfies only one condition of the gate, and it's the condition that matters least. The drop is irreversible in the way that matters: there's no compensating forward write for data that was never backfilled.
+
+**Shortest path to a legitimate drop:**
+
+- Identify the key ranges of the two failed batches from the persisted boundary, and re-run them. The backfill is idempotent, so re-running a partly-applied range is safe.
+- Confirm the failure cause first — if those two batches failed on data the transform doesn't handle (nulls, encoding, an out-of-range value), re-running fixes nothing and the transform needs a change.
+- Run verification in order: per-batch row-count parity, per-partition aggregate, sampled-block checksum.
+- Confirm the previous release has been verified runnable against the new shape, and that no old reader is still deployed. If the old release is genuinely retired, say so and I'll check deployment state rather than assume it.
+- Ship the drop as its own change, separate from the backfill, quoting the verification result.
+
+If the compatibility window has expired and you want it re-stated rather than restarted, that's a call you can make — but it's recorded as a decision in the change, not skipped.
+
+Tell me which piece you want first. I'd start by pulling the failure output from the two batches, since that determines whether this is an hour of work or a transform fix.

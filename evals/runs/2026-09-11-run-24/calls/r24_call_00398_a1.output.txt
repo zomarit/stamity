@@ -1,0 +1,76 @@
+One row blocks the close: `r7/review/2` is still `open`, and the close refuses to write the record while any row reads `open`. It's Minor, so it doesn't go to the QA checkpoint — and its disposition isn't ambiguous (no material cost or blast-radius fork), so the ambiguity floor doesn't fire either. The run closes it itself, as the severity floor directs: `deferred`, rationale being what put it below the floor. That makes it a second inbox append.
+
+Appended to `.stamity/inbox.md`, in this run's dated block:
+
+```
+## 2026-09-13 — /st-work r7
+- Warning | src/api/users.ts:41 | rate limiting absent on the users endpoint | source: /st-work | Ref: .stamity/ledger/r7.md#r7/security/1
+- Minor | src/api/users.ts:120 | reviewer finding held below the severity floor; carried out of the run undecided | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2
+```
+
+---
+
+## Proof block — run `r7`
+
+**Gates**
+
+| gate | command | result | failing excerpt |
+|---|---|---|---|
+| lint | `npm run lint` | pass | — |
+| typecheck | `npm run typecheck` | pass | — |
+| test | `npm test` | pass | — |
+
+**Review verdicts**
+
+| round | agent | verdict | confidence |
+|---|---|---|---|
+| 1 | `stamity-reviewer` | changes requested | high |
+| 2 | `stamity-reviewer` | approved | high |
+
+**Decisions trace**
+
+1. Gates lint / typecheck / test each passed — no gate decision required beyond proceed.
+2. Round 1 "changes requested" → `r7/review/1` (Warning, `src/api/users.ts:88`) raised and closed `fixed`; re-review triggered.
+3. Round 2 "approved" at high confidence → review loop exits.
+4. `r7/security/1` (Warning, `src/api/users.ts:41`) closed `deferred`, rationale: rate limiting is tracked separately in the inbox. Inbox row appended.
+5. `r7/review/2` (Minor, `src/api/users.ts:120`) was `open` at close. Severity floor: Minor rows do not reach the QA checkpoint but must still close against the exit invariant. Disposition not materially ambiguous → ambiguity floor did not fire, no ASK. Closed `deferred`, rationale: below the severity floor, carried to the inbox rather than actioned in-run. Inbox row appended.
+6. ASK outcomes: none. No question was raised to the operator this run.
+
+**Ledger at exit** — no row `open`.
+
+| id | severity | source | evidence | state | retired |
+|---|---|---|---|---|---|
+| `r7/review/1` | Warning | `stamity-reviewer` | `src/api/users.ts:88` | fixed | — |
+| `r7/review/2` | Minor | `stamity-reviewer` | `src/api/users.ts:120` | deferred | — |
+| `r7/security/1` | Warning | `stamity-security` | `src/api/users.ts:41` | deferred | — |
+
+**Artifacts touched**
+
+| path | owning sub-agent |
+|---|---|
+| `src/api/users.ts` | `stamity-implementer` |
+| `test/api/users.test.ts` | `stamity-implementer` |
+| `.stamity/inbox.md` | `/st-work` (close) |
+
+**Per-action attribution**
+
+| agent | tool | outcome |
+|---|---|---|
+| `stamity-implementer` | write | `src/api/users.ts` modified |
+| `stamity-implementer` | write | `test/api/users.test.ts` modified |
+| `stamity-reviewer` | read | round 1 — changes requested, 1 Warning |
+| `stamity-implementer` | write | `r7/review/1` fixed at `src/api/users.ts:88` |
+| `stamity-reviewer` | read | round 2 — approved |
+| `stamity-security` | read | 1 Warning at `src/api/users.ts:41` |
+| `/st-work` (close) | bash | three gates run, all pass |
+| `/st-work` (close) | write | 2 inbox rows appended |
+
+Tool identities above are recorded at the granularity this run captured; where a sub-agent's exact tool call was not logged, the column states the action class rather than a fabricated call.
+
+**Recommended next step** — Two inbox rows now carry this run's unfinished work: `.stamity/inbox.md#r7/security/1`, rate limiting on `src/api/users.ts:41`, and `.stamity/inbox.md#r7/review/2`, the Minor reviewer finding at `src/api/users.ts:120`. Take them through `/st-board` to get a lane, trigger and owner on each, or cut them with a reason; when either leaves the inbox, write the `retired` field back onto its ledger row. No acceptance criterion was left uncovered by this run.
+
+**Not done:** empty.
+
+---
+
+One thing to flag rather than bury: I closed `r7/review/2` on your behalf under the severity floor, which is the rule's normal path for a Minor row, but it means a reviewer finding left this run undecided on its merits. If you'd rather it were actually looked at, it's one line in the inbox and cheap to pull back.

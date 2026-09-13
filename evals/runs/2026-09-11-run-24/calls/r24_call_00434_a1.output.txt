@@ -1,0 +1,3 @@
+`none`
+
+This is an ordinary edit task — bumping a dependency and regenerating a lockfile — and the only dependency-adjacent skill, `st-dep-audit`, explicitly reports without editing a manifest, lockfile, or source file, so it doesn't cover doing the upgrade.

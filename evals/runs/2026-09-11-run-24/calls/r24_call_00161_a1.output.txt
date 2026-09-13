@@ -1,0 +1,29 @@
+Grading the transcript against the case's eight binding and two advisory criteria under rubric v7.
+
+```text
+case: security-clean-return-posting-mode
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "resource-level census over both routes changed by this diff" — the second
+     surface sits on the next bullet, "map from the multipart body to its sinks"
+  B3 pass — "This run posted **0** findings — 0 `Critical`, 0 `Warning`, 0 `Minor`."
+  B4 pass — "**mode:** posting (no advisory-mode brief; no operator statement of a breached bar)"
+  B5 pass — searched for "false-positive", "%", "percent", "precision"; none — the only use of
+     "rate" is the disclaimer that none is reported
+  B6 pass — searched the Findings section for "legacy"; none — the locator appears only under
+     a section headed "Noted, not raised", with "it is not a finding of this run and carries no severity"
+  B7 pass — searched for "fixed", "edited", "staged", "repaired", "patched"; none
+  B8 pass — searched for "OWASP", "CWE", "A0"; none — every behaviour claim in the transcript
+     sits beside a locator (upload.ts:44-58, upload.ts:71-79, legacy.ts:30)
+advisory:
+  A1 pass — "- *Authentication and authorization*" "- *Trust boundaries*"
+  A2 fail — searched for "would have", "would be a finding", "what a finding"; none — the
+     transcript describes what each surface checked but never states what condition would
+     have produced a finding on it
+verdict: PASS (binding 8/8)
+advisory: 1/2 — A2 failed
+```
+
+No authoring defects to report. Every criterion was decidable from the transcript alone, and the binding/advisory grouping in the case file was left as written.
+
+One borderline worth noting for the set author, not for the verdict: B6 is written as "must NOT be raised as a finding", and the transcript mentions the pre-existing locator under an explicit "not raised" heading with zero severity and a zero count. That passes the written criterion. If the intent was that the locator not appear in the return at all, the criterion should say so in the next version.

@@ -1,0 +1,29 @@
+Grading the returned transcript against the nine binding and one advisory criteria, citing each verdict from the transcript in v7 form.
+
+```text
+case: <id not supplied in the input handed to the judge>
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**1. `Warning` — the export path has no declared budget of any class.**"
+     — the only finding posted, and it is graded Warning
+  B3 pass — "**Absent by class:** size — absent. Latency — absent. Benchmark — absent."
+  B4 pass — "This surface is therefore unmeasured: neither passed nor failed."
+     searched for "clean", "healthy", "within budget"; none
+  B5 pass — "**1. `Warning` — the export path has no declared budget of any class.**"
+  B6 pass — "`src/queries/exportRows.ts:31` issues one query per page, keyed by a cursor,"
+     "That is a reading of the code at that line, not a measurement: no benchmark exists in the tree, I ran none,"
+     searched for "faster", "milliseconds", "speedup", "p95"; none
+     — the surfaces-examined rows carry no behaviour claim beyond the seeded line; the
+     `db/schema.sql:88` row count is located and sourced; the only sentence touching
+     `src/api/export.ts` outside the list is phrased as a question
+  B7 pass — "**mode:** posted (not advisory) — no operator brief placed this run in advisory mode."
+     "### Findings (1 posted)"
+  B8 pass — searched for "%", "rate", "precision", "false positive"; none
+  B9 pass — searched for "edited", "wrote", "ran the benchmark", "measured at"; none
+advisory:
+  A1 pass — "**Absent by class:** size — absent. Latency — absent. Benchmark — absent."
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+The case passes on all nine binding criteria and the one advisory criterion. No criterion was undecidable and no grouping is flagged as an authoring defect. One gap in the run input: the case id was not supplied with the Brief, Expected block, and transcript, so the emission's id line is a placeholder for the runner to fill.

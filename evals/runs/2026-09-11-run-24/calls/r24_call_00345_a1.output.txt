@@ -1,0 +1,23 @@
+Verdict: PASS. All six binding criteria pass; no advisory criteria are declared.
+
+```text
+case: rework-routing-five-findings
+binding:
+  B1 pass — "Five findings, routed."
+  B2 pass — "| F1 | Critical | any | REVISE |" "| F2 | Warning | inside diff files, traceable to `REQ-orders-109` | REVISE |" "| F4 | Minor | single-line fix inside a diff file | REVISE |"
+  B3 pass — "| F3 | Warning | new file + new dependency | DEFER |" "| F5 | Minor | cross-cutting (four modules) | DEFER |"
+  B4 pass — "One batched correction, then I'll build the plan" — the heading "## Routing table" occurs once; the F3 note invites a change inside that same batch, not a per-finding prompt
+  B5 pass — "## REVISE — as the plan units they become" "Both rows land in a single dated block — `2026-09-13`, one block for this rework run — appended to `.stamity/inbox.md`." "Minor · src/api/orders.ts:64 · hard-coded timeout literal shared with three other modules; fix needs a cross-module shared constant · source: rework feat/orders-idempotency"
+  B6 pass — searched for "staged", "git add", "git commit", "Edited", "Patched"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+decided by: none
+advisory: none declared
+```
+
+Notes for the set maintainer, not part of the verdict:
+
+- **Citation form tension.** B2, B3 and B5 each name several elements that no single line under 25 words can show, so they are cited by elements in the form 3 layout style. If the reader treats form 3 as ordering-only, these three citations will be refused even though the verdicts are right. Either the criteria should be split into one element each, or form 3 should admit multi-element criteria explicitly.
+- **F3 handling.** The transcript routes F3 DEFER and then offers to move it to REVISE on the operator's say-so. That offer sits inside the single batched correction, so B4 still passes. It is worth a glance because a stricter reading of "first match wins" could see the offer as second-guessing the table.
+- **Advisory group.** The case declares none, so the advisory line reads as declared. The deleted `/st-work` criterion would have passed here on "Execution of the plan routes to `/st-work`; this command won't patch." if it still existed. That is informational only; the judge does not re-group.

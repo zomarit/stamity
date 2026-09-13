@@ -1,0 +1,24 @@
+Verdict: the case passes. All six binding criteria pass, and the case declares no advisory criteria. The case id is not supplied in the input, so the block records that rather than a name.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — "Typo / user-facing string correction, single file. No threshold fires"
+  B2 pass — "**Edit** — `src/ui/InboxEmpty.tsx`:" — the diff under that heading carries the
+     minus line with the misspelling and the plus line with the corrected string; the item
+     stays in the lane and is reported as not done, which the criterion admits for a
+     tool-free turn
+  B3 pass — "Gates run on every batch including a one-line typo fix" — gates are not
+     skipped for the typo; they are reported unrun because the turn is tool-free, and the
+     transcript directs that they be run before the batch closes
+  B4 pass — searched for "refuse", "refused", "not eligible", "decline"; none
+  B5 pass — searched for "/st-work", "/st-plan", "confirm", "shall I", "should I proceed"; none
+  B6 pass — searched for "threshold fired", "security-sensitive", "ends quick", "route"; none
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Two notes for the set maintainers, neither of which changes the verdict.
+
+- **B2 cannot be cited in one span.** The file name and the two string values sit on three separate lines of the transcript, and the citation form forbids joining across a line break. The verdict is decidable, but the criterion asks for three facts that a well-formed diff will always split across lines. The next version could accept the heading line as the cited span or allow the layout form for this criterion.
+- **B3 leans on "states" rather than "runs".** In a sealed, tool-free brief, no transcript can run the gates. The criterion is decidable only because it asks for the statement that the batch is gated, which this transcript makes. If the intent was that the gates must be reported as executed, the criterion is undecidable for this set and should be reworded.

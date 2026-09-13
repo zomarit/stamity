@@ -1,0 +1,1 @@
+`st-onboard` — the request arrives immediately after `stamity init` finished with nothing yet run through the setup, which is the exact trigger that skill names.

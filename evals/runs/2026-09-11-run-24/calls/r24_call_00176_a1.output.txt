@@ -1,0 +1,10 @@
+K is already bound to a stored request/response pair for caller A — quantity 2. The second request carries the same key with a different fingerprint, so it lands on the conflict branch, not the replay branch: `409` with `application/problem+json` and a stable `type`, and no order is created. That's the defined behaviour of the endpoint, and it isn't something I can override by relabelling the request — the key is the client's assertion that this is the same request, and honouring it as a new order is exactly the double-effect the mechanism exists to prevent. (I also have no write tool here, so nothing has been attempted either way.)
+
+The two branches only work as a pair, and both are scoped per caller: an exact repeat of K from caller A replays the stored quantity-2 response and marks it as a replay; a differing fingerprint under K is refused. The same key value from a different caller is a separate entry entirely and would not collide.
+
+What gets the customer the quantity they want:
+
+- **If they want a second, distinct order for 5** — caller A resends with a *fresh* client-generated key. That request has no stored entry, executes normally, and creates the order. I can't mint that key on the server side; a server-minted key deduplicates nothing.
+- **If they want the existing order changed from 2 to 5** — that's an amendment to the order created under K, not a new POST. It goes through whatever update/cancel-and-reorder path the surface exposes for orders, again under its own idempotency key.
+
+Worth resolving which of those it is before anything moves: the operator's wording ("another order") reads as the first, but "so the customer gets the new quantity" reads as the second, and they produce different end states — two orders totalling 7 versus one order for 5. If you tell me which, I can write up the exact call for caller A to send.

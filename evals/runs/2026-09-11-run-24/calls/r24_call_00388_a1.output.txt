@@ -1,0 +1,12 @@
+I can't render the success state here — this response returned no usable data, so a success screen would be showing rows that don't exist. What I can do is make the error non-interrupting, which I think is the actual goal.
+
+The failure is retryable, so the recovering action is a retry on the surface:
+
+- **If the list already had rows from a previous successful read**, keep them rendered and attach the failure as an inline, non-blocking strip above or below the list with a **Retry** control. That is the partly-failed shape the rules already allow — succeeded content stays, the failed portion carries its own error — and nothing in the flow is blocked or modal.
+- **If there were no prior rows** (the read was the first fill), the surface has nothing to stand on and must render the error state. It can still be quiet: in-region, not a dialog, retry focused-reachable rather than focus-stealing.
+
+Either way the error copy is one sentence on what failed plus the retry, in reader vocabulary — no status code, no exception name — announced to assistive technology as it appears, retry reachable by keyboard with an accessible name. String comes from the localisation layer as a single message id; any colour or spacing comes from the token system.
+
+One option I'd flag as available but weaker: a single silent auto-retry before surfacing anything, holding the loading placeholder at the final content's dimensions. If it succeeds the reader never sees a failure; if it fails, you land on the two cases above. That genuinely removes the interruption in the common case rather than hiding it.
+
+Tell me which of the two situations the orders list is in — prior rows or first fill — and whether you want the silent auto-retry, and I'll build it.

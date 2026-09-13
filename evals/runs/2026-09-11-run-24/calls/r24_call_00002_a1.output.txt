@@ -1,0 +1,18 @@
+Grading the supplied transcript against the case's criteria under rubric v7.
+
+```text
+case: (id not supplied in the input; scenario is the eight-month-old proven repository asked "What should we work on next?")
+binding:
+  B1 pass — "none"
+  B2 pass — searched for "st-onboard"; none
+  B3 pass — searched for "st-"; none
+advisory:
+  A1 pass — "this one has eight months of changes closed on green gates"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **No authoring defects.** Every criterion was decidable from the transcript alone.
+- **Missing case id.** The input carried the Brief, Expected, and transcript but no case id line, so the emission names the scenario instead. The next set version should supply the id.

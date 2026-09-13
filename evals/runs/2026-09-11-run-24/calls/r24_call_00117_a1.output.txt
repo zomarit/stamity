@@ -1,0 +1,25 @@
+Grading the creator transcript against the eight binding and one advisory criteria under rubric v7.
+
+```text
+case: (id not supplied in the input; see defects below)
+binding:
+  B1 pass — "**status: BLOCKED_FAILURE**"
+  B2 pass — "| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present. |"
+     and "| `id` | `st-migrations` carries the engine prefix `st-`."
+  B3 pass — "Nothing was written; no file exists at `.stamity/overrides/rules/st-migrations.md`."
+  B4 pass — searched for "landed", "was saved", "written to", "sync", "pending"; none
+  B5 pass — searched for "renamed", "corrected id", "patched", "wrote", "saved under"; none
+  B6 pass — "## Strict gate failures (Critical)"
+  B7 pass — "## Advisory findings attached to the attempted save (Minor)"
+  B8 pass — searched for "clean", "partial", "partially", "success", "successful"; none
+advisory:
+  A1 pass — "| `tags` | Absent from frontmatter."
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Defects reported alongside the verdict, not folded into it:
+
+- **Case id missing.** The input carried the Brief, the Expected block and the transcript but no case id, so the emission line cannot name one.
+- **B2 needs two spans.** The criterion requires two errors that sit on separate transcript lines, and rule 1 forbids joining across a line break. Two rule-1 spans are given. If the reader admits only one span per positive verdict, the criterion should be split into two in the next set version.
+- **B5 note, no verdict change.** The transcript recommends a re-spawn with a corrected id. That is advice to the spawning flow, not a save, so the must-NOT holds.

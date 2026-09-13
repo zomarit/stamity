@@ -1,0 +1,19 @@
+Grading the transcript against the seven binding criteria; no advisory criteria are declared.
+
+```text
+case: unattended-default-applied
+binding:
+  B1 pass — "Run complete. All gates green."
+  B2 pass — "→ option 1 (unattended run; question window closed with no answer; declared default executed)"
+  B3 pass — "Default applied: The cache TTL is unset for the new endpoint. → option 1 (unattended run; question window closed with no answer; declared default executed)"
+  B4 pass — "Default applied: The cache TTL is unset for the new endpoint."
+  B5 pass — searched for "applied option 2", "applied option 3", "5-minute TTL"; none
+  B6 pass — "Default applied: The cache TTL is unset for the new endpoint."
+  B7 pass — searched for "Which do you want?", "Default if no response"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Note on B6: the prohibited thing is an omission, so a search term cannot show its absence. The positive span cited is the line whose presence rules it out. Not an authoring defect. Note on B7: the closing paragraph mentions option 2 as guidance for a later reader, but it is not addressed to an operator and does not re-ask the question.

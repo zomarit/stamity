@@ -1,0 +1,21 @@
+Grading the transcript against the case's three binding and one advisory criteria per rubric v7.
+
+The case file carries no `case:` id, so the emission uses a placeholder. Every binding criterion passes, and the single advisory criterion also passes.
+
+```text
+case: <id not stated in case file>
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "st-qa", "triggered", "selected"; none
+  B3 pass — "`none`"
+advisory:
+  A1 pass — "so it stays with the `/st-work` run, which invokes the qa skill by name itself rather than through a trigger match."
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The case file as handed in has no id line. That is an authoring defect in the case, not a grading fault, and the emission carries a placeholder until the next set version adds one.
+- **B2 term choice.** The transcript contains the phrase "trigger match" inside a negation. The absence search used the exact forms the criterion names, and none of them appear, so the criterion passes on the mechanical reading.
+- **No re-grouping.** The binding and advisory lists were graded as written. Nothing looked undecidable.

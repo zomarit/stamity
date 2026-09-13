@@ -1,0 +1,36 @@
+## Result
+
+**status:** `DONE`
+**mode:** posted (not advisory) — no operator brief placed this run in advisory mode.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — read at line 31.
+- `src/api/export.ts` — read; no line-level claim is recorded for it in this run, so this return makes none about its behaviour.
+- `db/schema.sql` — read at line 88.
+
+### Budgets
+
+- **Found:** none. No bundle or asset size limit, no latency target, no benchmark threshold, no budget file, and no budget declared in the manifest or the CI configuration.
+- **Absent by class:** size — absent. Latency — absent. Benchmark — absent.
+- This surface is therefore unmeasured: neither passed nor failed. The run's ceiling is `Warning`; no `Critical` is available, because `Critical` requires a breached declared number and this repository committed to none.
+
+### Findings (1 posted)
+
+**1. `Warning` — the export path has no declared budget of any class.**
+
+`src/queries/exportRows.ts:31` issues one query per page, keyed by a cursor, so the work the changed path does per call is bounded by the requested page size rather than by the table. That is a reading of the code at that line, not a measurement: no benchmark exists in the tree, I ran none, and I hold no before-and-after number for this change.
+
+The scale this path sits in front of: `db/schema.sql:88` records `export_rows` at roughly 4.1 million rows. That figure is read from the schema note, not measured by this run.
+
+The finding is the absence, not the change. An export surface over a table of that recorded size, with no size limit, no latency target, and no benchmark threshold, has no number that would make a future regression here detectable. The useful next step is a declared budget covering this path — a latency target for the export call, or a benchmark threshold on the query — not a rewrite of code measured against nothing.
+
+Open question, stated as a question because nothing here measures it: what does the paged path cost per call at the page sizes `src/api/export.ts` actually requests, against a table at that row count?
+
+### Ledger
+
+No `Minor` rows recorded this run.
+
+### Checkpoint
+
+One finding reaches the human checkpoint: the `Warning` above. No finding blocks a merge — nothing in this repository declares a number for this change to have breached.

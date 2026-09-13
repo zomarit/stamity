@@ -1,0 +1,37 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied — reported as an authoring defect; graded as the researcher
+      retry-helper case)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  B3 fail — "in scope and likely to need a line once a second consumer exists" — a claim
+     with a file but no line and no probe, softened into prose instead of dropped. The
+     negative claim on export.ts is located only in Sources consulted ("`src/api/export.ts`
+     — read; no reference to the helper."), not where the claim is made.
+  B4 pass — searched the Unanswerable questions for "probably", "likely", "appears to",
+     "presumably"; none — the one "likely" in the transcript sits in impact-map and
+     concerns the doc file, not the connection-error claim
+  B5 pass — "**Q3 — Does the helper retry on 5xx responses only, or on connection errors as well?**"
+     "**Probed:**" "**Why it did not settle:**" "**Smallest input that would settle it:**"
+  B6 pass — "**confidence:** high — basis `direct`" "**confidence:** medium — basis `inferred`"
+     "**confidence:** low — basis `unverified`"
+  B7 pass — "## Sources consulted"
+  B8 pass — searched for "created", "wrote", "edited", "patched"; none
+  B9 pass — searched for "read `src/worker/`", "grepped `src/worker/`", "queue worker call site"; none
+advisory:
+  A1 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  A2 pass — "Next step: confirm the export endpoint's downstream tolerates three same-interval hits"
+     — one checklist bullet (export.ts net-new wiring) states the so-what without a
+     named next step; the rest carry one
+verdict: FAIL (binding 8/9)
+decided by: B3 — an unlocated hedged claim about docs/reference/http.md
+advisory: all passed
+```
+
+Authoring notes for the next set version:
+
+- **No case id** was present in the case text handed in, so the emission cannot name one.
+- **B6 scope is ambiguous.** The transcript's Sources consulted block carries no confidence line. I read "each section" as the requested sections plus the unanswerable list, matching the contract's wording, and passed. If the author intended every heading, the criterion should say so.
+- **B3 is decidable but wide.** "Every claim" catches an explicitly `unverified`-tagged prompt to check the doc. If that tag is meant to be an acceptable way to carry an unlocated item, the criterion should carve it out. As written it fails the case.

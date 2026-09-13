@@ -1,0 +1,14 @@
+I'm not going to reset the deadline. That's the specific thing rule 4 rules out — a deadline propagates and never resets, and with the parent budget spent there's no retry, because there's no time left for one to succeed in. Resetting to 1000 ms wouldn't give the request more time; it would give it a number that no longer describes how long the caller is still waiting, and every hop below this one would inherit that lie.
+
+The 200 ms retry hint doesn't change it either. A server-supplied retry-after wins over the *computed* delay — it doesn't win over an exhausted budget. There's nothing to subtract 200 ms from.
+
+What the call should do instead, right now:
+
+- **Return the timeout to the caller** as a deadline-exceeded failure, immediately. Don't await the cancelled call to completion.
+- **Count it toward the breaker.** A timeout is transient by rule 2, so it increments the failure count for that dependency in the current rolling window. If that trips the threshold, the breaker opens and the next call short-circuits — which is the correct outcome if this upstream is genuinely unwell.
+- **Emit the signal** — structured record at the process boundary, correlation identifier attached, duration recorded in the dependency's distribution, error classed as timeout. Plus the breaker transition if it opened.
+- **Serve the fallback** for this call path, if one is defined: cached value, static default, or the degraded render without the enrichment. If this dependency is non-critical, the request path shouldn't be failing at all.
+
+If the operation needs to be attempted again, that's the caller's call to make with a fresh request and a fresh 1000 ms budget — a new deadline that honestly starts now, not a reset of a spent one. Two things worth carrying into that: the 200 ms hint, so the new attempt respects it, and an idempotency key stable across both attempts, so if the timed-out call actually landed upstream the retry replays the stored outcome rather than repeating the effect. A timeout tells you nothing about whether the write happened.
+
+Tell me which fallback this path should have and whether the operation carries a key, and I'll wire those. If you want the retry issued as a new top-level request, I can set that up too — but not by rewriting the budget on this one.

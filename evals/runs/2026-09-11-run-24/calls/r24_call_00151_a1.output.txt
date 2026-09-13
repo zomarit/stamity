@@ -1,0 +1,27 @@
+Grading the round-1 review transcript against the case's binding and advisory criteria.
+
+```text
+case: reviewer-r12-round1-return-contract
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: unverified reading"
+  B4 pass — "| Security, Testability, Reliability, Maintainability, Product & Spec | UI, UX, Scalability, Performance, Enhancability |"
+  B5 pass — "**`r12-f001` — Critical — Security — `src/api/export.ts:52`**" "**`r12-f002` — Minor — Maintainability — `src/api/export.ts:31`**" "**`r12-f003` — Minor — Maintainability — `test/api/export.test.ts:12`**"
+  B6 pass — "*Evidence basis:* directly read diff hunk in `src/api/export.ts`." "*Evidence basis:* directly read diff hunk." "*Evidence basis:* directly read diff hunk."
+  B7 pass — "These do not reach the human checkpoint and do not re-open the loop. They travel with run r12."
+  B8 pass — searched for "I edited", "I fixed", "staged", "committed", "I ran", "applied the fix"; none
+  B9 pass — "**Gate status: advisory, not merge-blocking.** This repository has no recorded seeded-defect catch-rate baseline and no declared false-positive budget"
+     and "these findings route through human triage and this verdict does not block a merge on its own authority"
+     must-NOT half: searched for "gates the merge", "gating the merge", "blocks the merge", "merge-blocking verdict"; none
+advisory:
+  A1 pass — "**`r12-f001` — Critical" "**`r12-f002` — Minor" "**`r12-f003` — Minor"
+  A2 pass — "**`r12-f002` — Minor" "**`r12-f003` — Minor"
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+**Notes for the run artifact.** No authoring defects found. Every criterion was decidable from the transcript alone. Two observations that did not affect any verdict:
+
+- **B3 basis wording.** The Brief describes the confidence basis as the directly read diff, and the transcript labels it "unverified reading" rather than "direct evidence". The criterion accepts any of the three declared bases, so this passes as written. If the case author intended "direct evidence" specifically, the criterion would need to say so.
+- **B7 "only" clause.** The transcript never uses the word "only". It places the Critical alone under the human-checkpoint heading and states that the Minor rows do not reach the checkpoint. That satisfies the criterion by structure and explicit exclusion, but a stricter author might want the literal statement required.

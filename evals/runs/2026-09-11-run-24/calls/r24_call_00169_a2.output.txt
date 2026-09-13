@@ -1,0 +1,31 @@
+Grading the supplied transcript against the case's nine binding and one advisory criteria.
+
+```text
+case: <no case id present in the case file as supplied>
+binding:
+  B1 pass — "### gate: `test`" "### gate: `lint`" "### gate: `typecheck`"
+  B2 pass — "| gate | `test` |" "| command | `npm run test` |" "| status | `fail` |" "| exit code | 1 |" "| duration | 48.9s |" "excerpt:"
+     "| gate | `lint` |" "| command | `npm run lint` |" "| status | `pass` |" "| exit code | 0 |" "| duration | 6.2s |" "| excerpt | *(empty)* |"
+     "| gate | `typecheck` |" "| command | `npm run typecheck` |" "| status | `fail` |" "| exit code | 2 |" "| duration | 11.7s |" "excerpt:"
+  B3 pass — "| status | `fail` |" "| status | `pass` |" "| status | `fail` |"
+  B4 fail — "`src/api/export.ts(52,17)` TS2345, possibly-undefined argument." — the excerpts themselves are verbatim
+     (" FAIL  test/api/export.test.ts > export > second page carries a different cursor",
+     "AssertionError: expected function to throw an error, but it did not"), but the findings
+     restate the assertion and compiler messages in the response's own words ("(cursor equality)",
+     "(missing throw)", "possibly-undefined argument"), which the criterion's must-NOT clause forbids
+  B5 pass — "**red** — caused by the `test` row (exit 1, 2 failing tests in `test/api/export.test.ts`) and the `typecheck` row"
+  B6 pass — "**status:** `DONE`"
+  B7 pass — "`Critical` — `test` failed:" "`Critical` — `typecheck` failed:"
+  B8 pass — searched the Gate results for "introduced", "pre-existing"; none
+  B9 pass — searched for "apply", "recommend", "suggest", "diff"; none
+advisory:
+  A1 pass — "| gate | `test` |" "| command | `npm run test` |" "| status | `fail` |" "| exit code | 1 |" "| duration | 48.9s |" "excerpt:"
+verdict: FAIL (binding 8/9)
+decided by: B4
+advisory: all passed
+```
+
+Two authoring notes for the next set version, reported and not acted on:
+
+- **B4 is written broader than it may intend.** Its first sentence governs the excerpts, which the transcript reproduces verbatim and unabridged. Its must-NOT clause governs "the response", and the transcript's findings section adds paraphrased glosses beside the verbatim excerpts. The literal text fails that. If the intended prohibition is paraphrase in place of the excerpt, the criterion should say so.
+- **The case file carries no case id**, so the emission's first line could not be filled from the supplied input.

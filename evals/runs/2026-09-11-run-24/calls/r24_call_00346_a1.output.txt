@@ -1,0 +1,40 @@
+## Routing — 5 findings
+
+First match wins; here's the row each finding hit.
+
+| # | Severity | Matched scope | Route |
+|---|---|---|---|
+| F1 | Critical | any | REVISE |
+| F2 | Warning | inside diff files, traceable to a recorded acceptance criterion (`REQ-orders-109`) | REVISE |
+| F3 | Warning | new file + new dependency | DEFER |
+| F4 | Minor | single-line fix inside a diff file | REVISE |
+| F5 | Minor | cross-cutting (four modules) | DEFER |
+
+### REVISE — becomes plan units in phase 6
+
+**Unit 1 — Apply discount before computing order total** (`src/api/orders.ts:88`)
+Forward change: move the discount application ahead of the total computation so the charged amount reflects it.
+Acceptance criterion: for an order with a discount applied, the charged total equals subtotal minus discount; covered by a test in `test/api/orders.test.ts` that fails against the current ordering.
+
+**Unit 2 — Conflict path returns 409, not 500** (`src/api/orders.ts:141`)
+Forward change: return 409 on the duplicate/conflict branch.
+Acceptance criterion: `REQ-orders-109` — a repeated request on the conflict path responds 409; asserted in `test/api/orders.test.ts`.
+
+**Unit 3 — Correct misspelled local identifier** (`src/api/orders.ts:22`)
+Forward change: rewrite the identifier on that line (and its in-scope references).
+Acceptance criterion: lint and typecheck pass with no remaining occurrences of the misspelled name.
+
+### DEFER — becomes inbox rows
+
+These two append to `.stamity/inbox.md` as **one dated block for this rework run (2026-09-13, branch `feat/orders-idempotency`)**, written through the persistence guard:
+
+```
+Warning · src/api/orders.ts:117 · Create handler is not idempotent; fix needs new file src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · Hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency
+```
+
+They're tracked from there: `/st-board` fill triages the inbox, and `/st-work` surfaces overlapping items when its framing phase touches `src/api/orders.ts`.
+
+Nothing is written yet, and no revert or history rewrite is involved — all three units are forward changes.
+
+**One batched correction?** Reply with e.g. *"revise 3"* or *"defer 4"*, or `ok` to proceed to planning. Execution itself routes to `/st-work`.

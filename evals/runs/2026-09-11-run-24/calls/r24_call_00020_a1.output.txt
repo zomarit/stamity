@@ -1,0 +1,17 @@
+**Classification: quick — qualifies.** Typo / user-facing string correction, single file (`src/ui/InboxEmpty.tsx`), one line changed. No threshold fires: 1 file ≤ 5, ~2 lines counted added+removed, no auth/credential/payment surface, no dependency change, no API/schema/event/migration.
+
+The exact edit:
+
+```diff
+--- a/src/ui/InboxEmpty.tsx
++++ b/src/ui/InboxEmpty.tsx
+-No messsages yet
++No messages yet
+```
+
+**Status: not done.** This turn is tool-free, so the edit above is written but not written to disk, and the quality gates that run on every batch — the one-line typo fix included — have not been run. Nothing is blocking it and no go-ahead is outstanding; the request was the go-ahead. It needs a turn with file access to land.
+
+Two things I could not verify without reading the file, and which the applying turn should confirm rather than assume:
+
+- The literal may be wrapped (JSX text node, a `t()` key, a prop default), so the surrounding characters differ even though the replaced substring is exactly `messsages` → `messages`.
+- If `No messsages yet` also appears in a test assertion or snapshot, that occurrence is part of the same item and must change with it; if it instead lives in a locale catalog rather than the component, the file named in the request is not where the fix belongs, and that is an invariant-2 ambiguity to raise before editing.

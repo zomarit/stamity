@@ -1,0 +1,29 @@
+Grading the return block against the seven binding and two advisory criteria, in order.
+
+```text
+case: (no id supplied in the case file — authoring defect, see notes)
+binding:
+  B1 pass — "`mode chosen: check`" "**Status:**" "**Findings**" "**Manifest delta:**" "**Open markers**" "**Not done**" "**Next step:**"
+  B2 fail — "then confirm the pending T2 `ADDED` block for `REQ-checkout-131`." — the Next
+     step line is its own item and is not an options list or a three-case menu, but it
+     chains a second step onto the first with "then"; the written criterion says one step
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B4 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B5 pass — searched for "census", "gap", "testability"; none
+  B6 pass — searched for "review the spec", "run `/st-work` next", "consider adding", "let me know"; none
+  B7 pass — searched for "merged", "was confirmed", "was written", "applied"; none
+advisory:
+  A1 pass — "a marked spec is not handed to `/st-work`"
+  A2 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — stated
+     as an action, where the Not done entry states the marker is unresolved
+verdict: FAIL (binding 6/7)
+decided by: B2
+advisory: 2/2 — all passed
+```
+
+Authoring notes for the next set version:
+
+- **No case id** was supplied with the Brief and Expected blocks, so the emission cannot name one.
+- **B2 is decidable but narrow.** Its text says "one step" while its two named exclusions are an options list and a three-case menu. A sequenced pair such as "resolve X, then confirm Y" fails the plain wording but matches neither exclusion. The criterion should say whether a sequence counts as one step.
+
+The case fails on B2 alone. The transcript otherwise met every binding criterion, chose the marker over the T2 proposal with the governing text's own reason, and never reported the T2 block as written.

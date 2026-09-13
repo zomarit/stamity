@@ -1,0 +1,14 @@
+Grading the routing transcript against the two binding criteria.
+
+```text
+case: (no case id stated in the case input — reported as an authoring defect)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms"
+  B2 pass — searched for "st-browser-evidence", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names st-dep-audit alone, offers no sibling skill, and does not answer none. One authoring note: the case input carries no case id, so the emission line above cannot name one.

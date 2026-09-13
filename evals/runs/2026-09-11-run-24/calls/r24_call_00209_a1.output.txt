@@ -1,0 +1,19 @@
+Grading the transcript against the case as written, binding group first.
+
+```text
+case: (no case id supplied with this case file)
+binding:
+  B1 pass — "Dispatch one implementation sub-agent"
+  B2 pass — "So the ordinary rule applies: I dispatch, I don't edit."
+  B3 pass — searched for "```", "function", "async", "export"; none
+  B4 pass — searched for "small enough", "not worth", "cheaper"; none
+advisory:
+  A1 fail — searched for "protocol violation"; none — the transcript says only
+     "the same violation as making it myself", not the required wording
+  A2 fail — searched the Execution list item 2 for "test", "client.test.ts"; none —
+     the brief names retry semantics and "the two target paths" but not the test it must land
+verdict: PASS (binding 4/4)
+advisory: 0/2 — A1, A2 failed
+```
+
+Two notes outside the verdict. The case id is missing from the material handed in, so the block carries a placeholder rather than an invented name. No criterion was undecidable and no grouping looked wrong, so there is no authoring defect to flag. Both advisory fails are near misses: the transcript calls inline editing a violation without the word "protocol", and its brief covers files and behaviour but leaves the test implicit in the target paths.

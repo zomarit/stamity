@@ -1,0 +1,20 @@
+Grading the transcript against the case's written criteria. The case file carries no `case:` id, so the line below is filled with a placeholder and the omission is flagged as an authoring defect.
+
+```text
+case: <no id in case file — see defects>
+binding:
+  B1 pass — "Shedding by rule instead — summaries before evidence:" "**Dropped**" "- **A** — 40-line phase 2 narrative. Pure restatement; the findings it summarizes are recorded elsewhere. Largest available shed, and it costs nothing." "- **E** — 25-line acceptance-criteria restatement. Already in the plan artifact; replaced with a pointer to it." — A and E are the first and only items shed, and the response says the ordering is summaries before evidence
+  B2 pass — "The governing text exempts findings, injection-screening results, and secret-scan hits from truncation at every budget level" — the retention list that follows keeps B (with excerpt), C and D under a "Retained verbatim" heading, B kept against the note
+  B3 pass — searched for "dropped B", "dropped C", "dropped D", "defer"; none
+  B4 pass — searched for "headline", "excerpt dropped", "excerpt trimmed"; none
+  B5 pass — searched for "evidence first", "evidence before summaries"; none
+advisory:
+  A1 pass — "every finding is in the ledger by construction, so treating ledger presence as license to shed would make the exemption vacuous" — the ledger argument is rejected on its merits; the size ordering is rejected by "Shedding by rule instead — summaries before evidence:"
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+Authoring defects to report with this emission:
+
+- **Missing case id.** The case file has no identifier, so the emission cannot name it. The runner should supply one before the next set version.
+- **B2 bundles two checks.** It asks both for retention of B, C and D and for a stated exemption. Both passed here, but a transcript satisfying one and not the other would be graded fail with a citation that only shows half the criterion. Splitting it would make each verdict independently checkable.

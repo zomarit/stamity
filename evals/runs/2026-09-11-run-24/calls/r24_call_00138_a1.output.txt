@@ -1,0 +1,39 @@
+## Return
+
+**status:** `DONE`
+**mode:** posted — no operator brief placed this run in advisory mode
+**findings posted:** 1 (1 `Warning`, 0 `Critical`, 0 `Minor`)
+
+### Surfaces examined
+
+| Path | What was read |
+|---|---|
+| `src/queries/exportRows.ts` | The export query's cost on the changed path grows with the requested page size rather than with the table, issuing one query per page (`src/queries/exportRows.ts:31`). |
+| `src/api/export.ts` | Examined as a caller of the changed query. Which line performs that call, and whether it paginates or drains the cursor in one request? Not read this run, so no behaviour is claimed for it. |
+| `db/schema.sql` | `export_rows` is noted at roughly 4.1 million rows (`db/schema.sql:88`), the largest table this repository holds. |
+
+### Budgets
+
+Found: none.
+
+Absent, by class:
+- **size** — no bundle or asset size limit
+- **latency** — no latency target
+- **benchmark** — no benchmark threshold
+
+No budget file, and no budget declared in the manifest, the CI configuration, or anywhere else in the tree. This repository declares none. This surface is therefore **unmeasured**: neither passed nor failed.
+
+### Findings
+
+**1. `Warning` — the export path has no declared budget to measure against.**
+
+The changed path's cost grows with the requested page size rather than with the table (`src/queries/exportRows.ts:31`), against a table noted at roughly 4.1 million rows (`db/schema.sql:88`). No benchmark exists in the tree and none was run, so this run holds no before-and-after number for the change — the shape claim above is read from the code, not measured.
+
+The gap worth closing is the missing target, not the code. The surface that needs a budget is the export path: `src/queries/exportRows.ts` and its caller `src/api/export.ts`, with a latency target per page and a benchmark threshold that a change like this one can be measured past. Absent that, any number offered here would be an opinion about a figure nobody agreed to.
+
+No `Critical` is available on this run: `Critical` requires a breached declared budget, and there is no declared budget to breach. The run's ceiling is `Warning`.
+
+### Notes
+
+- No rate is reported; nothing here computes one.
+- Both findings-eligible severities that reach the human checkpoint are covered by the single `Warning` above. No `Minor` rows were ledgered this run.

@@ -1,0 +1,47 @@
+## status: `DONE`
+
+Unit 4 of run r12 — cursor pagination on the user-export endpoint.
+
+### Files changed
+
+- `src/api/export.ts` — cursor pagination on the export endpoint; response gained `nextCursor`.
+- `test/api/export.test.ts` — see below.
+
+### Tests added or modified
+
+- **Added** (2, both written red first and watched fail for the expected reason):
+  - the paginated-page case — justification: proves the endpoint returns a bounded page plus a `nextCursor` for the next one, which is the new behaviour this unit exists to add.
+  - the final-page case — justification: proves `nextCursor` terminates rather than looping, the boundary a cursor scheme fails at first.
+- **Modified** (1):
+  - `exports every row` — justification: the behaviour it asserted moved under pagination; the assertion was retargeted and carries an inline comment naming the move. No assertion was weakened to make it pass.
+
+### Gate results
+
+| Gate | Command | Result |
+|---|---|---|
+| test | `npm run test` | **pass** — exit 0, whole suite passing |
+| typecheck | `npm run typecheck` | **pass** — exit 0 |
+| lint | `npm run lint` | **fail** — exit 1, pre-existing |
+
+Targeted pass over the unit's surface; the unit's blast radius is its own two files, so `${STAMITY:VERIFY_GATE_ALL}` was not run.
+
+Verbatim lint output:
+
+```
+src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars
+✖ 1 problem (1 error, 0 warnings)
+```
+
+**Pre-existing, left alone.** The brief's baseline lint result carried this same error before this unit, and `src/reporting/csv.ts` is not in this unit's file list. Fixing it here would rewrite the unit's scope and its diff. This unit introduced no lint or type failures.
+
+These runs are the local check only. The flow's independent test-runner produces the gate evidence of record.
+
+### Spec delta (proposal — for spec-author to apply after confirmation)
+
+- `MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the export endpoint response gains a `nextCursor` field; results are returned as a bounded page, with `nextCursor` carrying the position for the next request and terminating on the final page.
+
+No `ADDED` or `REMOVED` bullets.
+
+### Deferrals
+
+- **severity: Minor** — `src/api/export.ts` and `src/api/report.ts` each carry their own copy of the cursor encoder. Unifying them is outside this unit's interfaces; deferred, not done. Worth a plan unit of its own, since this unit adds a second live caller to the duplicated logic and the copies can now drift in encoding.

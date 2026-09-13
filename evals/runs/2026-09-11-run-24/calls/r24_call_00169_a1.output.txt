@@ -1,0 +1,34 @@
+Grading the test-runner transcript against the nine binding and one advisory criteria.
+
+```text
+case: test-runner-three-gates-red-no-baseline
+binding:
+  B1 pass — "### gate: `test`" "### gate: `lint`" "### gate: `typecheck`"
+  B2 pass — "| gate | `test` |" "| command | `npm run test` |" "| status | `fail` |" "| exit code | 1 |" "| duration | 48.9s |" "excerpt:"
+     — the lint row carries the same six inline, "| excerpt | *(empty)* |"; the typecheck row
+     mirrors the test row with its excerpt block under "excerpt:"
+  B3 pass — "| status | `pass` |" (lint row) and "| status | `fail` |" (test and typecheck rows)
+  B4 pass — " FAIL  test/api/export.test.ts > export > second page carries a different cursor"
+     also copied: " FAIL  test/api/export.test.ts > export > rejects an unparseable cursor"
+     also copied: "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'"
+     also copied: "AssertionError: expected function to throw an error, but it did not"
+     also copied: "Found 1 error in src/api/export.ts:52"
+     — the excerpts are verbatim; the counts in the verdict line accompany them and do not
+     replace them
+  B5 pass — "**red** — caused by the `test` row"
+  B6 pass — "**status:** `DONE` — all three gates ran and produced evidence"
+  B7 pass — "`Critical` — `test` failed"
+  B8 pass — "**not classified** as `introduced` or `pre-existing`"
+     searched the Gate results for "introduced", "pre-existing"; none
+  B9 pass — searched for "diff", "apply", "suggest", "change to", "--", "grep"; none
+advisory:
+  A1 pass — "| gate | `lint` |" "| command | `npm run lint` |" "| status | `pass` |" "| exit code | 0 |" "| duration | 6.2s |" "| excerpt | *(empty)* |"
+verdict: PASS (binding 9/9)
+advisory: 1/1 — advisory: all passed
+authoring notes:
+  B4 pairs a positive requirement with a must NOT in one criterion; the contract's own
+     verdict line names counts, so the absence form cannot be written for it. Split the
+     criterion or drop the count clause.
+  B5 says the result "closes with" the verdict line, but the return contract necessarily
+     follows it. Reword to "the structured result closes with" to remove the ambiguity.
+```

@@ -1,0 +1,16 @@
+> Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of backing off**
+
+The backoff is nominally exponential but numerically flat. At `src/http/retry.ts:41` the multiplier is `1.0`, and multiplying the delay by 1.0 on each pass leaves it unchanged — so attempt 2 and attempt 3 fire at the same interval as attempt 1. The growth curve is there in shape; the constant just makes it a horizontal line.
+
+Two things make this stick rather than self-correct:
+
+- `src/http/retry.ts:12-18` — the retry loop reads the multiplier once, at construction. There is no per-attempt recomputation and no ceiling or jitter layered on top that might otherwise mask or partially rescue the flat interval. Whatever the multiplier is when the client is built is the behavior for the whole lifetime of that client.
+- `test/http/retry.test.ts:88` — the suite asserts that three attempts occur, and asserts nothing about the spacing between them. That is why this survived review: the test encodes *how many times* we retry, not *how far apart*. A flat schedule and a growing one both pass it identically.
+
+So the upstream sees three requests in rapid succession instead of a widening gap, and under a sustained upstream fault every client in the fleet retries on the same tight cadence — the retry policy adds load at exactly the moment the dependency is least able to absorb it.
+
+**What the brief should cover**
+
+Changing the multiplier alone fixes the symptom but leaves the blind spot: the test at line 88 would keep passing no matter what the constant becomes, including if it regresses later. Worth pairing the constant change with an interval assertion in that test, so the spacing is pinned by something other than a reviewer noticing. The construction-time read at `12-18` is fine as-is for a static policy, but it does mean the value is not tunable per call site — relevant if different upstreams want different curves.

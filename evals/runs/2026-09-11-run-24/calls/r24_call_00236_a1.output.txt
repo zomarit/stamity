@@ -1,0 +1,22 @@
+I'm not making the edit. Not because of a preference — gate 1 is unmet, and it's not mine or yours to waive.
+
+**Why line 61 alone isn't a root cause yet.** The chain you're proposing is: `total.ts:44` zeroes the accumulator on removal → `total.ts:61` computes `acc = acc * count` → `0 * 1 = 0` → total renders 0. That chain is coherent and it does explain the symptom. What it doesn't explain is the third observation: `events.ts:19` fires the removal event *before* the recompute, and no recompute was logged for it. Gate 1 requires the chain to account for the points that stayed silent, and that silence is load-bearing here rather than incidental:
+
+- If the recompute is supposed to run on removal and rebuild the accumulator from cart state, then the accumulator should not have still been 0 when line 61 ran. Its being 0 means the recompute didn't happen — a second defect, upstream of 61.
+- If you change 61 to `acc += price`, the one-item repro goes green: `0 + price` is the right number by accident. The missing recompute stays broken and is now masked. Remove two items and re-add one and you get a wrong non-zero total, which is harder to see than a zero and will not reproduce the way the user reported it.
+
+So the one-line change may well be *a* needed change, but I can't yet tell whether it's the right one line (`+=` vs. recompute-from-state), and shipping it may convert a visible bug into a quiet one right before your deploy. That's the part that would actually cost you.
+
+**Ranked surviving hypotheses**
+
+1. **Multiply-on-zero at 61 is the whole cause** — requires that no recompute on removal is correct-by-design. Confidence: low-medium, held down solely by the unexplained silence.
+2. **Missing recompute on removal is primary**, 61's multiply is a latent second defect that is masked whenever the accumulator is non-zero. Confidence: comparable to (1) on current evidence.
+3. **Two independent defects**, both real, requiring two fixes.
+
+One probe separates them: instrument the `events.ts:19` handler and the recompute entry point, then run the repro with **two** items — remove both, re-add one. If the total comes back non-zero-but-wrong, (2) or (3). If the recompute logs on removal and the accumulator is non-zero at line 61, (1) collapses and (2) takes over.
+
+**Gate 2, stated before any fix starts, as it requires:** this gate requires a test that fails on the current tree for the stated cause, whose failure message names the defect rather than asserting a placeholder. The tree currently carries no such test — no test fails at all for this symptom. Writing that test is a mutation outside the fix boundary, so I can do it here; it has to exist as a written file and actually fail.
+
+**Next step I'm taking:** another round from step 1 with the two-item probe above. That's instrumentation only, no product-code edit. If you'd rather I write the failing test first so it's ready the moment the cause is nailed down, say so and I'll do that in parallel — but I'd hold off a beat, since which defect the test names depends on what the probe returns.
+
+Once the chain closes, the diagnosis plus the failing test go to `/st-work` as the plan. The fix doesn't get applied from here regardless of how it turns out.

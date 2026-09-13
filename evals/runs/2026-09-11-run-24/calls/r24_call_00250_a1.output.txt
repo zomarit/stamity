@@ -1,0 +1,18 @@
+The window elapsing is one of three conditions for the drop, and it's the only one that's met. I'm not running it yet.
+
+**What blocks it**
+
+- **Backfill isn't complete.** Two batches failed. The old column still holds rows the new one doesn't.
+- **Verification hasn't run.** Rule 6 gates the drop on verified completion — row-count parity per batch, aggregate check per partition, then a sampled checksum. A drop that ships without quoting a verification result is a gate failure on its own.
+- **An old reader remains.** The previous release still reads the old column. While that's true, contract has not started — the elapsed window doesn't override that, it's a separate condition that runs *alongside* the reader requirement, not instead of it.
+
+Dropping now loses the rows in the two failed ranges with no reversal. "Restore from a backup" is not the reversal line for this phase, and there isn't another one.
+
+**What unblocks it**
+
+1. Pull the persisted boundary for the two failed batches and re-run those key ranges. The backfill is idempotent, so re-running a partly-applied range is safe.
+2. Run verification cheapest-first: parity per batch, aggregate per partition, checksum over sampled blocks.
+3. Confirm the previous release no longer reads the old column — either it's rolled forward, or the compatibility window restarts against a release that doesn't read it.
+4. Then ship the drop as its own change, quoting the verification result, with a lock timeout and statement timeout set.
+
+Tell me the failure mode on the two batches and I'll start on step 1 — if it's a data condition the backfill didn't anticipate, that's worth knowing before re-running the range. I can also stage the verification queries now so they're ready the moment the backfill closes out.

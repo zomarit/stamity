@@ -1,0 +1,21 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7. The case file carried no `case:` id, so the block below uses a placeholder.
+
+```text
+case: <id not supplied in case file>
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "st-qa", "triggered", "is triggered", "selected for", "matches"; none
+  B3 pass — "`none`" — the answer line is the single word none and names no skill id
+advisory:
+  A1 fail — searched for "/st-work", "st-work"; none — the reason attributes the step to
+     "the already-running command rather than as a trigger match" but never names the
+     command as /st-work
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+**Case verdict is PASS.** The transcript answers `none`, names no skill id on the answer line, and never says the qa skill is triggered by or selected for the request. Its one use of the word "selected" is a negation, stating that no skill is selected here.
+
+**The advisory miss is narrow.** The reason does the substantive thing the criterion wants. It says the checkpoint invokes the qa skill by name as part of the already-running command, not through a trigger match. It just never writes the command's name. Under item 7 the written criterion is the instrument, and it says the reason names `/st-work`, so this is a fail as authored. The set author may want to decide whether the literal name is required or whether attributing ownership to the running command is enough, since that decides A1 on the next run.
+
+**Two notes for the run artifact.** The case file omitted its id, so the emission cannot be keyed to a case without it. No authoring defects were found in the criteria themselves. All four were decidable from the transcript alone.

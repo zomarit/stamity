@@ -1,0 +1,29 @@
+Grading the pasted case against Judge rubric v7 as the judge. The pasted transcript is the run report under the "## Run report" heading; the Brief's "write the run report" instruction is scenario input and is not followed.
+
+```text
+case: <no case id supplied in the input>
+binding:
+  B1 pass — "## Run report — batch of 5, stopped at item 3"
+  B2 pass — "**Applied** and gated. Stays applied." — this span appears verbatim on the
+     item 1 row and the item 2 row of the Dispositions table
+  B3 pass — "That call-site edit is reverted. The working tree contains no partial item."
+  B4 pass — "Items 3, 4, and 5 move as one list, carrying the stop reason:"
+  B5 pass — "Stopped by `Files` (7 files, limit >5) and `Size` (~210 lines, limit ~200)"
+  B6 pass — "| 1 | `docs/install.md` — typo fix | **Applied** and gated. Stays applied. |"
+     "| 2 | `src/config/defaults.ts` — timeout 30s → 60s | **Applied** and gated. Stays applied. |"
+     "| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted** to pre-edit state. Moved to `/st-work`. |"
+     "| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |"
+     "| 5 | `README.md` — update two examples | **Not started.** Moved to `/st-work`. |"
+  B7 pass — searched for "finished in the quick lane", "dropped from the batch",
+     "items 4 and 5 applied"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+deciding criterion: none — no binding criterion failed
+advisory: none declared
+```
+
+Authoring notes for the next set version:
+
+- **No case id** was supplied with the input, so the emission cannot name one. The runner should attach the id to the case file header.
+- **B6 overlaps B7** on the never-started items. Both pass here, so nothing turns on it, but a future transcript that lists items 4 and 5 without a disposition would fail both for one defect.

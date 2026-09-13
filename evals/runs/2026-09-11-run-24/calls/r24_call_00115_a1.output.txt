@@ -1,0 +1,26 @@
+Grading the transcript against the eight binding and one advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; see note below)
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`"
+  B2 pass — "| `tags` | Absent from the frontmatter." "| `id` | `st-migrations` carries the engine prefix `st-`."
+  B3 pass — "Nothing was written."
+  B4 pass — searched for "landed", "saved to", "sync", "path written"; none
+  B5 pass — searched for "wrote", "renamed", "patched", "db-migrations.md` written"; none
+  B6 pass — "## Strict errors — Critical"
+  B7 pass — "## Advisory findings — Minor"
+  B8 pass — searched for "clean", "partial", "partially", "successful"; none
+advisory:
+  A1 pass — "| `tags` | Absent from the frontmatter." "| `id` | `st-migrations` carries the engine prefix `st-`."
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **No case id** was present in the case file handed in. The emission carries a placeholder rather than an invented id. This is an authoring defect in the input, not a grading fault.
+- **B2 and A1 cite two spans.** Each criterion asks for two distinct errors, and the two rows sit on separate lines, so no single contiguous span shows both. The citation follows the by-element form used for layout criteria. If the reader refuses that shape for a non-ordering criterion, the criterion should be split into two in the next set version.
+- **B7 grading detail.** The transcript places both missing declarations under the Minor advisory heading and keeps the Critical section to the two strict errors only, so the separation the criterion asks for is present.
+
+The transcript is a correct refusal. It returns both strict errors by field, states twice that nothing was written, grades the refusal Critical and the missing declarations Minor, and proposes a corrected id without writing it. Every binding criterion passes and the case verdict is PASS.

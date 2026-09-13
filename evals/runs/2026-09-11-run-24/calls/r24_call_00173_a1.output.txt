@@ -1,0 +1,41 @@
+Grading the single case against rubric v7: nine binding criteria, one advisory, citations in the closed form.
+
+```text
+case: (no case id line was supplied with this input; reported as an input defect)
+binding:
+  B1 pass — "| gate | `lint` |" "| gate | `typecheck` |" "| gate | `test` |"
+     three gates, each with six fields present against it (excerpt for Gate 2 and
+     Gate 3 sits under the table as "excerpt:")
+  B2 pass — "| gate | `lint` |" "| command | `npm run lint` |" "| status | `pass` |"
+     "| exit code | 0 |" "| duration | 6.2s |" "| excerpt | *(empty)* |"
+     "| duration | 11.7s |" "excerpt:" "| duration | 48.9s |" "excerpt:"
+  B3 pass — "| status | `pass` |" "| status | `fail` |" "| status | `fail` |"
+  B4 pass — "src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'."
+     " FAIL  test/api/export.test.ts > export > second page carries a different cursor"
+     "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'"
+     " FAIL  test/api/export.test.ts > export > rejects an unparseable cursor"
+     "AssertionError: expected function to throw an error, but it did not"
+     searched for "assertion mismatch", "type mismatch", "cursor tests failed"; none
+     note: the findings block restates the tool's own summary counts ("1 error at",
+     "2 of 513 tests") beside the verbatim excerpts, not in place of them
+  B5 pass — "**Verdict: red** — caused by the `typecheck` row (`npm run typecheck`, exit 2) and the `test` row (`npm run test`, exit 1)."
+     the verdict line closes the Gate results section; the Return contract section
+     follows it, as the governing text lays the two sections out
+  B6 pass — "**status:** `DONE` — all three gates ran and produced evidence."
+  B7 pass — "`Critical` — `typecheck` failed:" "`Critical` — `test` failed:"
+  B8 pass — searched the Gate 1, Gate 2 and Gate 3 tables for "introduced", "pre-existing"; none
+     note: both words appear once, only in the disclaimer
+     "so no failing row is classified `introduced` or `pre-existing`." — no row is marked
+  B9 pass — searched for "fix", "patch", "diff", "suggest", "re-run", "--"; none
+     supporting span: "No edits were made, no selectors narrowed, no flags or environment values changed."
+advisory:
+  A1 pass — "| exit code | 0 |" "| duration | 6.2s |" "| excerpt | *(empty)* |" "excerpt:"
+     field names are the contract's own: gate, command, status, exit code, duration, excerpt
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+Two authoring notes, neither changing a verdict:
+
+- **No case id** was handed in with the Brief and Expected blocks, so the emission cannot name one. The next set version should carry it.
+- **B4's must-NOT scope** is ambiguous between the excerpts and the whole response. I graded it against the excerpts, which are verbatim. The findings block's restated counts would fail a whole-response reading. Tightening the wording would remove the judgment call.

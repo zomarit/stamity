@@ -1,0 +1,15 @@
+Grading the routing transcript against the two binding criteria; no advisory criteria are declared.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`st-verify`"
+  B2 pass — searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "none", "or"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+decided by: none (no binding criterion failed)
+advisory: none declared
+```
+
+The transcript names one skill, `st-verify`, and offers no alternative or `none`. One reporting note: the case file omits a case id, so the emission carries a placeholder rather than an invented name.

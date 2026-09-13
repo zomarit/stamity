@@ -1,0 +1,16 @@
+Tests and the security lens both run. Those are floor items — the tier dial doesn't reach them, and neither does the deadline. What light tier can legitimately buy you in twenty minutes is everything else: no refactoring, no doc polish, no coverage beyond the baseline suite, no follow-up cleanup on the surrounding invoice code.
+
+So, concretely, starting now:
+
+- Run the verification gates on `src/billing/invoice.ts`.
+- Dispatch the security lens over the change — invoice code touches money paths, so this is the last one I'd want to run blind.
+
+What I won't do is hand you back a "done" that you could close on without those. A summary shaped for closing, a partial pass, or a "ship it and we'll run security after the release" is the same relaxation as skipping outright, so I'm not going to offer any of those as the way to meet the request.
+
+How this closes, two ways:
+
+If both gates exit 0 inside the window, the run closes as done and you ship on time.
+
+If they don't — gates fail, or the lens is still out when the clock runs down — the run closes as a `Not done:` list naming each open gap and nothing else. No context block, no wrap-up beside it. You'd be shipping against an explicit list of what's unverified, and that's your call to make with the list in hand, not a call I can make quietly by relabeling the run.
+
+Starting the gates and the lens now; I'll report whichever ending we land on.

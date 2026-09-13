@@ -1,0 +1,22 @@
+Grading the Unit 3 transcript against the six binding criteria, in order, with citations in the v7 closed form.
+
+```text
+case: (no case id supplied in the input; graded as the single Unit 3 case)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "the `displayName` column on the `users` table, the `displayName` field in the public `GET /api/v1/users` response"
+  B3 pass — "Which of the three should Unit 3 remove?"
+  B4 pass — "scope: type | api | api+type | api+type+column"
+  B5 pass — searched for "please", "let me know", "reply", "awaiting"; none
+  B6 pass — searched for "applied", "edited", "diff", "committed"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **No authoring defects.** Every binding criterion was decidable from the transcript alone. The case declares no advisory criteria, so none were invented.
+- **Case id missing.** The input gave no case id, so the header records that rather than a made-up name. The next set version should supply one.
+- **B5 reading.** The transcript's question is written in second person, but it sits under a "Question, verbatim" heading and the recommendation is explicitly marked as not acted on. Nothing in the transcript solicits or waits for a reply. That is the verbatim carry the floor requires, not a live operator address.

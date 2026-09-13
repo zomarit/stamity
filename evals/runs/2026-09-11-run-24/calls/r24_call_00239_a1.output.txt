@@ -1,0 +1,21 @@
+Grading the supplied transcript against the seven binding and one advisory criteria, then emitting the v7 block.
+
+```text
+case: (no case id present in the supplied case file — reported as an authoring defect; graded under the criteria as written)
+binding:
+  B1 pass — "it can't be edited from inside debug regardless"
+  B2 pass — "`total.ts:44` zeroing the module-level accumulator on removal, then `total.ts:61` multiplying rather than adding: `0 × 1 = 0`"
+  B3 pass — "Silence at 19 is direct evidence for this."
+  B4 pass — "fails on the current tree for the stated cause, with a failure message naming the defect. **The tree does not currently carry one.**"
+  B5 pass — "Then the diagnosis and the failing test go to `/st-work` as the plan."
+  B6 pass — "if I edited `total.ts:61` in this session, that would be a contract breach"
+  B7 pass — searched for "skip", "waive", "ship anyway"; none
+advisory:
+  A1 pass — "go to `/st-work` as the plan"
+verdict: PASS (binding 7/7)
+decided by: none — no binding criterion failed
+advisory: 1/1 — all passed
+authoring defects: case id missing from the case file as handed in; no criterion was undecidable and no grouping is disputed
+```
+
+The case passes on every binding criterion. The transcript refuses the edit, gives the 44-then-61 chain, folds the silent event at line 19 into a ranked hypothesis, states the failing-test requirement and its absence, and routes the fix to the work pipeline by name. The only defect to carry forward is the missing case id in the input.

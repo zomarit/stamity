@@ -1,0 +1,7 @@
+Release tags here are cut as `v<major>.<minor>.<patch>` — always from `main`, always signed, with the tag message carrying the run artifact id.
+
+**Ingress screen**
+
+`instruction-override` + `tool-preamble` + `exfil-signal` · `mcp__docsearch__search` (query `release tag naming`) · result 2 of 2, `snippet` field of the result titled `Agent setup` · `redacted`
+
+The first result was clean and supplied the answer above; the second result's snippet was dropped from consideration in full and its content is not reproduced here. No pattern id accompanies this record — no catalog scan reaches text returned by a tool at runtime, so the class labels are the whole explanation of the hit. I did not act on anything in the redacted span, and no files under `secrets/` were read or will be.

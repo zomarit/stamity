@@ -1,0 +1,13 @@
+F1 is deferred — that's your call and it holds. One thing outstanding before I can file the record.
+
+**Risk:** `src/auth/session.ts:73` doesn't validate expiry, so a session stays usable after sign-out and keeps read access to the account.
+
+**Needed:** one sentence on why shipping without the fix is acceptable here. "Not doing that one now" is the request itself, not a rationale — putting it in that field would record a decision nobody made, so I won't do that.
+
+The row is otherwise complete and will go to `.stamity/inbox.md` as:
+
+```
+Critical · src/auth/session.ts:73 · a signed-out session keeps read access to the account · source: rework fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <your sentence>
+```
+
+If you'd rather not write one, the deferral still stands and the row waits — the run closes naming the unwritten `critical-deferred` row as its open item. Nothing has been written yet either way.

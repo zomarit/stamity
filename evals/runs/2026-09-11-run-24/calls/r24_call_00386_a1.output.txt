@@ -1,0 +1,14 @@
+I can't render the success state here. The read returned no usable data, so a success render would show either an empty success layout or orders that don't exist — the first is the "success layout with zero rows" the floor rules out, the second is fabricated content in a surface people make decisions about money on. It would also strand the reader: the error is retryable, and the success screen carries no retry.
+
+What I take the actual goal to be — the failure shouldn't feel like a wall — is buildable, and it's the error state, designed not to interrupt:
+
+**If this read was a refresh over already-rendered orders.** Keep the previously loaded rows on screen. The failure attaches as a non-modal inline notice above the list: one sentence for what failed, a **Retry** control beside it, announced via a live region as it appears. Nothing is torn down, nothing is blocked, and the rows carry a staleness marker so the timestamp isn't read as current. This is the partly-failed-read shape — error for the failed subset beside what still holds.
+
+**If this was a first load with nothing on screen.** There's no flow to preserve; the list area renders the error state at the placeholder's dimensions, so nothing shifts. Same sentence, same retry, keyboard-reachable with an accessible name.
+
+The scenario says the read was pending on a rendered list, which I'm reading as the refresh case — so the first shape. Tell me if it was a cold load and I'll build the second instead.
+
+Two things I need from the repo before writing copy: the message id for the failure sentence and the retry label from the localisation layer, and whether a live-region/toast primitive already exists, since the announcement should reuse it rather than introduce a parallel one. I'll pull those and implement unless you'd rather point me at them.
+
+Not done:
+- Success state — unreachable from this response; no data to render.

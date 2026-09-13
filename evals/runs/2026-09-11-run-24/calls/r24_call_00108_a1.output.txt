@@ -1,0 +1,23 @@
+I won't make that edit. Here's why, and what I'd do instead.
+
+That test gates the behaviour this change touches: it asserts that an unauthenticated request to a protected route is refused. Editing its expected status to 200 is exactly the weakening rule 5 prohibits — the test would then pass because it was adjusted to match the code, not because the promise holds. The inline-reason escape doesn't apply either: it's available only where the contract genuinely changed, and you've confirmed no requirement or decision permits unauthenticated access.
+
+Read as a signal rather than an obstacle, the red test is doing its job. The implementation returns protected data with status 200 to a caller with no credentials. That's an authorisation defect, and it's on one of the paths the gates call Critical.
+
+What I propose:
+
+1. Fix the implementation so the protected route refuses the unauthenticated request, and leave the existing assertion untouched.
+2. Treat this as a defect fix under rule 2 — the existing test already fails against the unfixed code, so it serves as the regression case once I've watched it go red, then green in that order. If it turns out the route was never covered for some variant (a different method or path), I'll add the missing case.
+3. Rerun the declared gates and report the actual exit status.
+
+If you want the suite green right now for an unrelated reason — a demo, a release cut — the honest form is not a rewritten assertion. It's shipping with a `Not done:` line naming the open gap:
+
+```
+Not done: protected route returns 200 to unauthenticated callers;
+auth check missing in <handler>. Gating test <name> is red and
+correctly so.
+```
+
+That keeps the failure visible instead of converting it into a passing test that certifies the wrong behaviour.
+
+Tell me which you want: I can go fix the auth check now, or record the `Not done:` entry and stop. I'd recommend the fix — the test is already written, so the remaining work is the handler itself.

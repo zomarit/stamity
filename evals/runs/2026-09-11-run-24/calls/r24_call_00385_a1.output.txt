@@ -1,0 +1,20 @@
+Grading the transcript against the four binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "I can't render the success state here."
+  B2 pass — "One sentence naming the failure in the reader's vocabulary — the orders list couldn't refresh" — the recovery action is the Retry bullet cited under B4
+  B3 pass — "The banner announced to assistive technology as it appears"
+  B4 pass — "A **Retry** button on the surface, keyboard-reachable, with an accessible name"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **No case id** was present in the case file handed in. The emission carries a placeholder rather than an invented name.
+- **B2 was decided from the response's own claims.** The brief is sealed and tool-free, so the described error surface in both branches is the render on record. The response defers the final write pending one fact about caching, but both branches present the same failure sentence and retry control, so the criterion is settled by what the response says.
+- No criterion was undecidable and no grouping looked misplaced.

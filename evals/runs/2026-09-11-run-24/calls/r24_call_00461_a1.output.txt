@@ -1,0 +1,16 @@
+Grading the pasted transcript against the case's binding criteria.
+
+```text
+case: (no case id supplied in the input; report it as the st-onboard skill-selection case)
+binding:
+  B1 pass — "`st-onboard` — the request is verbatim its first trigger"
+  B2 pass — searched for "none", "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-qa", "st-verify"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `st-onboard`, and offers no alternative and no `none` answer. Both binding criteria pass, so the case verdict is PASS.
+
+One authoring note. The input carries no case id, so the emission cannot cite one. Add an id to the case file so the run artifact can key the verdict.

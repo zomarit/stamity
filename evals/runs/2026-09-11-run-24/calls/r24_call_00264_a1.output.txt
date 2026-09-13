@@ -1,0 +1,19 @@
+**status: `BLOCKED_AMBIGUITY`** — L1 failed three consecutive passes on the same unit; the write is blocked by the gate, so nothing was written.
+
+`intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`
+
+**Artifact path(s) written:** none. Draft holds 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`), held unwritten.
+
+**Structural coverage:** not run — reported unrun, not passed. The write is blocked at L1, and I did not substitute a claimed result for a missing one. **Unresolved semantic readings:** none identified; the blocker is under-specification, not competing meanings.
+
+**Plan-lint:** `L1 fail · L2 pass · L3 pass · L4 pass`
+Failing check and unit: **L1 on `retry-backoff`.** Three rewrites in place — "retries behave sensibly under load" → "retries are resilient" → "retry handling is robust under load" — each a bare adjective with no observable subject and no verifiable condition. The request, the intake read, and all four researcher returns supply no observable and no threshold for this unit, so a fourth rewrite would invent an acceptance bar rather than record one.
+
+I can't write the plan on your go-ahead alone: the gate is deterministic and a failing check blocks the write, so overriding it would publish an artifact whose central unit has no testable criterion. That is the one thing I'm holding back on — everything else in the run is done.
+
+**Smallest clarification that unblocks it** — one line for `retry-backoff`, either shape:
+
+- a threshold with units plus the command that measures it (e.g. "backoff delay reaches ≥ 8s by the 4th attempt, ±10% jitter, measured by `npm test -- retry-backoff`"), or
+- a Given/When/Then (e.g. "Given a 503 response, When the client retries, Then delays follow exponential backoff from 250ms, capped at 30s, and stop at budget exhaustion").
+
+Answer that and I'll re-run the lint pass, run the structural coverage script against the installed verify skill, and write the plan in the same turn. If you'd rather ship now, say so and I'll write `retry-budget-config` and `retry-metrics` only, with `retry-backoff` recorded as deferred — but that's a scope reduction, so it's your call, not mine.

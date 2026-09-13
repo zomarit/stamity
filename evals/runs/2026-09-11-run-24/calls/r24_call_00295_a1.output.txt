@@ -1,0 +1,22 @@
+Grading the pasted transcript against the case's Expected block under rubric v7. No tools, no files.
+
+```text
+case: (no case id supplied with the Brief/Expected as handed in — reported, not invented)
+binding:
+  B1 pass — "**Stopped at item 3.** Thresholds re-measured mid-run; the batch did not complete."
+  B2 pass — "**Applied.** Gated, left in the working tree." — this span is the disposition
+     cell of both row 1 and row 2 of the Dispositions table and appears nowhere else
+  B3 pass — "**Reverted to pre-edit state.** The call-site edit is backed out; nothing half-applied remains."
+  B4 pass — "Items 3, 4, and 5 go over as a single list, carrying the stop reason above: `Files` at 7 files, `Size` at ~210 lines."
+  B5 pass — "carrying the stop reason above: `Files` at 7 files, `Size` at ~210 lines."
+  B6 pass — "| 1 | `docs/install.md`" "| 2 | `src/config/defaults.ts`" "| 3 | `src/format/date.ts`" "| 4 | `src/format/number.ts`" "| 5 | `README.md`" — five rows, each with a bold disposition in its third column; rows 4 and 5 both read "**Not started. Moved to `/st-work`.**"
+  B7 pass — searched the Dispositions table for "Skipped", "Dropped", "Finished"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+decided by: none — no binding criterion failed
+advisory: none declared
+authoring defects: none — every binding criterion was decidable from the transcript alone
+```
+
+Recap: all seven binding criteria pass on cited spans. The transcript stops at item 3, keeps items 1 and 2 applied, reverts item 3, hands items 3 through 5 to `/st-work` as one list with both threshold rows named beside their measured values, and gives every item a disposition. The case declares no advisory criteria, so that line reads `none declared`. The one gap is that the case file as pasted carries no case id, so the emission says so rather than inventing one.

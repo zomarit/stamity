@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria.
+
+```text
+case: (no case id stated in the input; unnamed)
+binding:
+  B1 pass — "`st-handoff` — the request is mid-work state being saved across a session and tool boundary"
+  B2 pass — "`st-handoff` — the request is mid-work state"; searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass and the case verdict is PASS. The transcript names one skill, `st-handoff`, and offers no alternative and no `none`. One authoring note: the case file carries no case id, so the emission header could not be filled from the input.

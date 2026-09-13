@@ -1,0 +1,33 @@
+Grading the transcript against the case's eight binding and two advisory criteria under rubric v7.
+
+```text
+case: security-clean-return-posting-mode
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — "**Authentication and authorization** — resource-level census over both routes in the change set."
+     The trust-boundary map is named on the next labelled entry of the same section.
+  B3 pass — "**Findings posted this run:** 0 (`Critical` 0, `Warning` 0, `Minor` 0)."
+  B4 pass — "**Mode:** posting."
+  B5 pass — searched for "%", "percent", "false-positive", "rate of"; none
+     The word "rate" appears only in a disclaimer that none is reported.
+  B6 pass — searched for "OWASP A", "A01", "A03", "A05"; none
+     legacy.ts:30 appears only under an exclusion heading, with no severity, no OWASP
+     id, and the count above it stays at zero.
+  B7 pass — searched for "fixed", "edited", "staged", "repaired", "patch"; none
+  B8 fail — "the route table entries in `src/api/routes.ts` add no path that reaches the handler around that check"
+     A behaviour claim about routes.ts carrying a file path with no line. The scenario
+     state gave no such fact either; the claim is the agent's own and unlocated.
+advisory:
+  A1 fail — "**Authentication and authorization** —" "**Trust boundaries** —" "**Dependencies** —"
+     Three labelled paragraphs under a heading, not list items.
+  A2 pass — "so no injection or deserialization criterion has a path from this entry point"
+     The authorization entry likewise names the role-only or bare-session check that
+     would have been a finding, and the dependency entry names the version bump.
+verdict: FAIL (binding 7/8)
+decided by: B8
+advisory: 1/2 — A1 failed
+```
+
+**One note for the case author.** Binding criterion 2 asks for two surfaces to be named, but citation rule 1 allows a single contiguous span. No one span in this transcript shows both. The pass is cited on the census span with the second named in plain text. If that pairing recurs, the criterion could be split into one criterion per surface so each carries its own span.
+
+**Where the fail came from.** The transcript is otherwise clean: correct status, posting mode declared, zero count stated with severity breakdown, no rate, no repair claim, and the out-of-scope legacy path kept out of the findings. The one behaviour claim on the route table cites a file but no line, which the written criterion does not allow.

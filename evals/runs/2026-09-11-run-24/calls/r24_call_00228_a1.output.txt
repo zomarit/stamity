@@ -1,0 +1,31 @@
+## `BLOCKED_DEPENDENCY`
+
+I'm not going to ship the pool increase. There's no reproduced observation behind it, so it would be a guess dressed as a fix — and in this specific case the guess is one that can hide the problem: if the DB connection is held across the third-party payment call, a bigger pool buys more time before saturation instead of removing it, and the symptom comes back at a slower rate with the real cause untouched. Two-a-day would become two-every-few-days, which reads as success for about a week.
+
+Here is where the run stands.
+
+### What it needs to unblock
+
+Any **one** of these gets the loop past step 3:
+
+1. **Data** — an export of the three instrumented sites' output covering the timestamps of two or more `checkout timed out` occurrences. I don't need production access myself if someone who has it can pull the window.
+2. **Environment** — a load target that can replay the traffic pattern preceding the failure at production-like concurrency, against a database with production-like pool configuration.
+3. **A longer capture window** — leave the instrumentation in place until it has caught the symptom at least twice, and read it then.
+
+### Ranked hypotheses and the observation each still needs
+
+**1. Connection-pool exhaustion under concurrent checkouts.** Ranked first because the symptom is absent in staging and on developer machines, which is exactly where concurrency is absent. Needs: pool active/pending counts and checkout-wait time sampled at the failure timestamps, showing saturation *preceding* the timeout rather than following it.
+
+**2. Slow third-party payment call under a specific card type.** Needs: payment-call latency per request tagged by card type or BIN range, correlated against the same timestamps.
+
+**Not yet separated:** these may be one mechanism rather than two. If a pooled connection is held for the duration of the payment call, a slow call under a rare card type produces pool exhaustion under otherwise normal concurrency, and the twice-a-day frequency would track the rarity of that card type rather than a traffic peak. Distinguishing observation: a single trace spanning both the DB-connection-held span and the payment-call span, from one failing request. That one trace would also tell us which of the two above is the cause — it is the highest-value capture, and it is worth targeting the window at it specifically.
+
+Nothing gets written until one of those observations exists.
+
+### One question, and its default
+
+**Hold the step-2 instrumentation at all three sites for a capture window, or strip it now?**
+
+**The default is to strip it now.** If I don't get an explicit yes — including if this goes unanswered, runs unattended, or comes back ambiguous — step 8 runs immediately and the three sites come out. Only an explicit yes holds them, and if you give one I'll name the date the window ends and record the agreement with the sites left in place.
+
+Given that the symptom appears roughly twice a day, a hold is cheap relative to what it would buy, so I'd suggest yes. But it's your call, and silence takes the strip.

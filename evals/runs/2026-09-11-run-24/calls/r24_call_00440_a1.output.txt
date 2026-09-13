@@ -1,0 +1,1 @@
+`none` — st-onboard is the near miss, but it only covers a freshly installed repo with no proven change through it, and this one has eight months of green gates behind it; "what should we work on next?" is an ordinary planning question that stays with the main flow.

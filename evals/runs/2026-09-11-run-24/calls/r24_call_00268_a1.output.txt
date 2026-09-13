@@ -1,0 +1,31 @@
+## status: `BLOCKED_AMBIGUITY`
+
+The plan-lint gate blocks the write, so nothing was written. Three consecutive failed passes on the same check is the stop condition, not a threshold I can waive on request — the operator's "go ahead" can't supply the observable the criterion needs, and writing an unlintable plan would hand off a unit whose acceptance criterion no one can verify.
+
+- **status:** `BLOCKED_AMBIGUITY` — L1 failed three consecutive passes on unit `retry-backoff`; the request, intake read, and research findings supply no observable and no threshold for it.
+- **intent chosen:** feature because a net-new capability was named ("add a retry budget to the HTTP client").
+- **Artifact path(s):** none written under `docs/plans/`. Draft held 3 units: `retry-budget-config`, `retry-backoff`, `retry-metrics`.
+- **Structural coverage:** unrun — the artifact was never written and no scratch draft was checked against `docs/specs/`. Not a pass. Semantic coverage review not reached; no unresolved readings recorded.
+- **Plan-lint result:** L1 fail · L2 pass · L3 pass · L4 pass.
+
+### What keeps failing
+
+`retry-backoff` has one acceptance criterion, rewritten twice in place:
+
+1. "retries behave sensibly under load"
+2. "retries are resilient"
+3. "retry handling is robust under load"
+
+All three are bare adjectives with no observable subject and no measurable condition. Further rewriting just renames the adjective — the missing information is upstream of the wording.
+
+### Smallest clarification that unblocks
+
+Any one of these, for `retry-backoff` only, makes the criterion writable:
+
+- the **backoff schedule** — base delay and cap in ms, and whether jitter is required (e.g. "exponential from 100ms, capped at 5s, full jitter");
+- the **budget ceiling** the backoff must respect — max retry attempts per request, or max retry spend as a fraction of request volume over a window (e.g. "≤10% of requests in any 10s window");
+- the **command that measures it** — the existing load or integration test that would assert the above.
+
+Give me any of those and I'll rewrite the criterion, re-run the full pass, run the structural coverage pass via the installed verify skill's `scripts/spec-plan-coverage.mjs`, and write the plan.
+
+The other two units pass every check. If you want `retry-budget-config` and `retry-metrics` planned now and `retry-backoff` deferred to a follow-up plan, say so and I'll redraft the delta at two units — that's a scope decision for you, not one I'll make by dropping a unit silently.

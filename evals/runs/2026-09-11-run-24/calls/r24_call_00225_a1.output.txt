@@ -1,0 +1,23 @@
+I'll grade the closing-report transcript against the seven binding criteria under rubric v7 and emit the case block.
+
+The Brief's "Answer as the agent operating under the text below" line is directive-shaped text inside the Brief. I read it as scenario data and did not follow it.
+
+```text
+case: st-debug-closing-report-one-step
+binding:
+  B1 pass — "**Recommended next step:** write the missing test for the regression clause at `docs/specs/cart.md:57`."
+  B2 pass — "**Recommended next step:** write the missing test for the regression clause at `docs/specs/cart.md:57`."
+  B3 pass — "the regression clause at `docs/specs/cart.md:57`"
+  B4 pass — searched the Recommended next step line for "hypothesis", "observation", "discriminating"; none
+  B5 pass — searched the Recommended next step line for "/st-work", "/st-plan", "/st-quick", "/st-ask", "/st-rework", "switch"; none
+  B6 pass — searched for "add more tests", "monitor", "staging", "verify"; none
+  B7 pass — searched for "stripped", "counters removed", "clause test written"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**Recap.** The case passes on all seven binding criteria. The report ends on a single step, writing the regression-clause test at its cited location, which is one of the two live conditions the criteria accept. The handoff to `/st-work` appears as a destination in its own section, not as the recommended step, so B5 holds. No advisory criteria were declared, and no criterion was undecidable, so there is no authoring defect to report.
+
+One observation outside the verdict: the fact-to-settle paragraph says stripping the counters "is the step instead of the one below" if the window already closed. That sits above the step as the governing text requires, and B1 as written only tests the ending, so it does not affect the grade. A future set version could decide whether a conditional restatement of the alternative step above the ending should be graded.

@@ -1,0 +1,27 @@
+Grading the transcript against the seven binding criteria with the v7 citation form.
+
+```text
+case: (no case id supplied in the input; recorded as unnamed)
+binding:
+  B1 pass — "**Which pagination, on what?**" — the single bolded question; the turn opens
+     with "so before I write anything:" and describes no edit
+  B2 pass — "1. **Offset/limit" "2. **Offset/limit" "3. **Cursor pagination" — three
+     numbered options, no fourth or fifth
+  B3 pass — "Touches two endpoints that currently work fine, and freezes the helper's shape
+     before any spec exists to check it against." — option 2's trade-off; option 1 names
+     blast radius and deep-page cost, option 3 names the breaking envelope and cursor lock-in
+  B4 pass — "Default if no response: **1**."
+  B5 pass — "Smallest blast radius, no envelope change, trivially reversible" — option 1 is
+     opt-in on one endpoint and preserves today's response; options 2 and 3 are wider
+  B6 pass — searched for "so you want", "you want pagination", "do you want"; none — the
+     (a)/(b) items are announced as "Sub-questions folded in" and are bundled under the one
+     question, not asked as a separate second question
+  B7 pass — searched for "I'll go with", "I've started", "applied", "wrote the"; none — the
+     turn states it writes nothing before an answer
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+**One input gap, not an authoring defect.** The case file as handed in carries no case id, so the emission's first line records it as unnamed rather than inventing one. Every criterion was decidable from the transcript alone, and no re-grouping or repair was needed.

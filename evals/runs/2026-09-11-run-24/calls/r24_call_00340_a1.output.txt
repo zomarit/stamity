@@ -1,0 +1,27 @@
+## What lands in `.stamity/inbox.md`
+
+One DEFER row, carrying this command's own description and the class that stopped the original wording — not the finding body:
+
+```
+- [ ] DEFER — st-rework: deferred finding from rework run; body withheld, awaiting redacted resubmission (secret-scan: credential value in finding body) — 2026-09-13
+```
+
+The finding keeps its route and stays tracked; only the wording is held back.
+
+## Why the body didn't go in
+
+**Secret scan.** The finding body carries the value of `WEBHOOK_SIGNING_TOKEN`, assigned inline in the sentence about the deploy config. That's a live credential, and I don't persist it — not in the row, not anywhere else the run writes. I also won't redact it for you: producing the redacted version is the step, and doing it myself skips it. Please resubmit the finding with that assignment removed.
+
+**Injection screen.** No hit on any of the five classes.
+
+**Declarative rephrase.** The closing sentence is an imperative aimed at a future session. Here is the rephrased form, to carry into the resubmission in place of it:
+
+> Signature verification was expected to be off in staging for this suite because leaving it on costs a round-trip per run.
+
+## What I need from you
+
+Resend the finding as the two observations, with the token assignment gone — roughly:
+
+> The webhook worker never authenticated because the deploy config held the wrong value for `WEBHOOK_SIGNING_TOKEN` rather than the staging one. Signature verification was expected to be off in staging for this suite because leaving it on costs a round-trip per run.
+
+On receipt I'll replace the placeholder row with the real body. Separately, and outside this command: that token was in a config you pasted from, so it's worth treating as disclosed and rotating.

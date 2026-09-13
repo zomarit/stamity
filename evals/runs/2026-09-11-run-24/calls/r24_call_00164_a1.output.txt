@@ -1,0 +1,27 @@
+## Result
+
+**status:** `BLOCKED_AMBIGUITY`
+**severity:** `Critical`
+
+The brief carries three deliverables, and each one lands in a different mode. One mode per invocation, so I wrote nothing.
+
+### Competing readings
+
+**1. brownfield** — "Write up the new export-scheduling behaviour."
+Spec files for the touched surface under `docs/specs/`. Precondition holds: the behaviour is landed at `src/schedule/cron.ts:18-44`, so every claim about existing behaviour can carry `file:line` evidence.
+
+**2. architect** — "Record why we chose a cron trigger over a queue consumer."
+ADR under `docs/adr/`, recording the decision as observed with the alternatives the code rules out. Precondition holds: the decision is visible in the code, `docs/adr/` exists with eleven records, and none of them covers this choice — so the record is absent rather than superseded.
+
+**3. docs** — "produce the page an operator reads to configure it."
+User-facing documentation. Precondition holds: the behaviour is shipped and citable, and the docs tree exists with no export-schedule page.
+
+`greenfield` is ruled out, not competing: the behaviour is landed, so its evidence rule (unresolved items ship as markers) would license invented prose over code that can be read directly.
+
+### What is blocked
+
+All three deliverables. This is not a case where one reading is right and the others are misreadings — the three clauses are conjunctive and each is independently satisfiable on evidence already in the tree. Blending them would put the ADR's "as observed" rule and the docs mode's "exists at a cited path" rule under one set of evidence rules, which is the failure the contract names.
+
+The ambiguity gate has the natural resolution available: three sequential spawns, one per mode. Ordering note for the gate, not a request — the brownfield spec allocates the requirement ids that the ADR and the operator page would otherwise cite before they exist.
+
+No files written. No manifest rows added or changed. No requirement ids allocated. No `[NEEDS CLARIFICATION]` markers left open.

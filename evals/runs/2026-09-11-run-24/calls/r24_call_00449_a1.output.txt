@@ -1,0 +1,16 @@
+Grading the one transcript against the case's three binding criteria, advisory group empty.
+
+```text
+case: (id not supplied in the input; flagged below)
+binding:
+  B1 pass — "`none` — writing a README paragraph is ordinary documentation editing"
+  B2 pass — searched for "st-learn"; none
+  B3 pass — searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify"; none
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+deciding fail: none
+advisory: none declared
+```
+
+Authoring note: the case input carried no case id, so the id line above is a placeholder rather than an invented name. The criteria themselves were all decidable from the transcript, and B1 and B3 overlap in what they test, which is harmless but redundant.

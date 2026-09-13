@@ -1,0 +1,3 @@
+`none`
+
+The "what next?" phrasing is the surface-level cue for `st-onboard`, but that skill's trigger is scoped to a freshly installed repo with no proven change through it — this repo has eight months and dozens of green-gated changes, so the adjacency doesn't hold and the question is ordinary planning that stays with the main flow.

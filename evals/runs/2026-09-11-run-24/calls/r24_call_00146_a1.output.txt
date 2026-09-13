@@ -1,0 +1,57 @@
+**status:** `DONE`
+**handoff_to:** implementer
+
+---
+
+## pattern-match-checklist
+
+**confidence:** high — basis `direct`
+
+- **Retry strategy is fixed-interval, not exponential.** The backoff multiplier is `1.0` (`src/http/retry.ts:41`), so the three attempts fire at a constant interval rather than backing off. Next step: confirm the export endpoint's downstream tolerates three same-interval hits; if it needs backoff, this helper does not supply it as configured.
+- **Attempt count is three** (`src/http/retry.ts:41`). Next step: check it against the export caller's own timeout budget — three fixed-interval attempts must fit inside it.
+- **The multiplier is read once at construction** (`src/http/retry.ts:12-18`). It cannot be varied per call, so an export-specific backoff means a second helper instance, not a per-invocation argument. Next step: if export wants different timing, construct a separate instance at the export call site.
+- **The retry predicate is caller-supplied, and the helper declares no default** (`src/http/retry.ts:29`). Reuse is not drop-in: the export endpoint must pass its own predicate. Next step: the implementer writes or imports an explicit predicate for export rather than assuming inherited behaviour. — **severity: Warning**
+- **One existing consumer to pattern-match against:** `src/api/report.ts:77` constructs and calls the helper. Next step: read that call site as the reference shape for the export call site.
+- **`src/api/export.ts` does not reference the helper anywhere** — this is net-new wiring, not a modification of existing usage.
+
+## impact-map
+
+**confidence:** medium — basis `inferred`
+
+Assembled from two inputs: the helper's construction-time configuration (`src/http/retry.ts:12-18`, `:29`) and the single existing call site (`src/api/report.ts:77`). The step between them: a second consumer wiring itself the same way inherits the same construction-time constraints, so the blast radius is the new call site plus anything sharing an instance.
+
+- **`src/api/export.ts`** — the only file that must change to adopt the helper. New construction + call, shaped after `src/api/report.ts:77`.
+- **`src/http/retry.ts`** — unchanged if export supplies its own predicate; changed only if the team decides a default predicate belongs here (`src/http/retry.ts:29` currently declares none). That change would be shared surface and would reach `src/api/report.ts:77`.
+- **`src/api/report.ts`** — untouched by reuse, but becomes co-tenant of any future change to the helper's defaults or timing.
+- **`docs/reference/http.md`** — in scope and likely to need a line once a second consumer exists. `unverified`: nothing I read located the doc's current statement about consumers, so treat this as a prompt to check, not a finding.
+- **Out of bounds and not assessed:** the queue worker and everything under `src/worker/`. If either consumes the helper, this map is incomplete by construction.
+
+## unknowns
+
+**confidence:** low — basis `unverified`
+
+- **Whether the helper retries on connection errors or on 5xx responses only — unresolved.** See the unanswerable list below; it is the brief's question 3 and it is the one that decides whether export can reuse the helper safely.
+- **What predicate `src/api/report.ts:77` passes** — imported from a path outside this brief's scope, so unresolved. Its behaviour is the nearest available analogue for export and is currently unreadable to me.
+- **Whether `docs/reference/http.md` documents retry-on-connection-error semantics** — I did not locate a claim either way; stated as unverified rather than as absence.
+
+---
+
+## Unanswerable questions
+
+**confidence:** high — basis `direct` (the probes below were run and their outcomes read)
+
+**Q3 — Does the helper retry on 5xx responses only, or on connection errors as well?**
+
+- **Probed:** read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`.
+- **Why it did not settle:** the retry predicate is supplied by the caller (`src/http/retry.ts:29`) and the file declares no default, so the helper itself has no retry-on-connection-error behaviour to read. The predicate `src/api/report.ts:77` passes is imported from a path outside this brief's scope, so I could not resolve it. No grep hit locates a claim either way.
+- **Smallest input that would settle it:** the import path of the predicate passed at `src/api/report.ts:77` added to scope — one file read resolves it. Failing that, a one-line statement from the owner of `src/http/` on whether a connection-error predicate is the house default.
+
+Restating the shape of the answer: the helper's connection-error behaviour is not a property of the helper. It is whatever the export endpoint's predicate says it is. The implementer decides it rather than inherits it, which makes the unresolved import a reference question, not a blocker on the reuse decision.
+
+## Sources consulted
+
+- `src/http/retry.ts` — read end to end; cited at `:12-18`, `:29`, `:41`.
+- `src/api/export.ts` — read; no reference to the helper.
+- `src/api/report.ts` — call site at `:77`.
+- `src/http/` — grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`; no locating hit.
+- `docs/reference/http.md` — in scope; no claim located on retry predicate or connection-error semantics.

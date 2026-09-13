@@ -1,0 +1,103 @@
+`r7/review/2` reads `open`, so the close refuses to write the record. I closed it first, then produced the block.
+
+It's a Minor row and its disposition isn't ambiguous — no material difference in cost or blast radius between the available dispositions — so the severity floor's normal path applies: the run closes it itself as `deferred`, with the rationale that put it below the floor, rather than sending it to you. That makes two deferrals in this run, so two inbox rows, not one.
+
+**Ledger row rewritten in place** (same id, so the rewrite converges):
+
+```
+r7/review/2 | Minor | stamity-reviewer | src/api/users.ts:120 | deferred |
+rationale: below the QA checkpoint floor — Minor, non-blocking, and round 2
+approved with it outstanding; carried to the inbox rather than fixed in-run.
+```
+
+**Appended to `.stamity/inbox.md`** (dated block for this run, `/st-board` row grammar):
+
+```
+## 2026-09-13 — /st-work r7
+Warning | src/api/users.ts:41 | rate limiting absent on the users endpoint; tracked separately | source: /st-work | Ref: .stamity/ledger/r7.md#r7/security/1
+Minor   | src/api/users.ts:120 | reviewer Minor finding, deferred below the QA checkpoint floor | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2
+```
+
+---
+
+```yaml
+proof_block:
+  run: r7
+  date: 2026-09-13
+
+  gates:
+    - command: npm run lint
+      result: pass
+      failing_excerpt: —
+    - command: npm run typecheck
+      result: pass
+      failing_excerpt: —
+    - command: npm test
+      result: pass
+      failing_excerpt: —
+
+  review_verdicts:
+    - round: 1
+      agent: stamity-reviewer
+      verdict: changes requested
+      confidence: high
+    - round: 2
+      agent: stamity-reviewer
+      verdict: approved
+      confidence: high
+
+  decisions_trace:
+    - gate: lint / typecheck / test — all pass, no gate decision required
+    - row: r7/review/1
+      decision: fixed
+      rationale: Warning, above the floor, reached the QA checkpoint and was
+        resolved in-run; round 2 approved.
+    - row: r7/security/1
+      decision: deferred
+      rationale: rate limiting is tracked separately in the inbox
+    - row: r7/review/2
+      decision: deferred
+      rationale: Minor, below the QA checkpoint floor; disposition unambiguous,
+        so closed by the run under the severity floor rather than escalated.
+    - asks: none — no row's disposition differed materially in cost or blast
+        radius, so the ambiguity floor did not fire.
+
+  artifacts_touched:
+    - path: src/api/users.ts
+      owner: stamity-implementer
+    - path: test/api/users.test.ts
+      owner: stamity-implementer
+    - path: .stamity/inbox.md
+      owner: /st-work (close)
+
+  per_action_attribution:
+    - agent: stamity-implementer
+      tool: Edit
+      target: src/api/users.ts
+      outcome: applied
+    - agent: stamity-implementer
+      tool: Edit
+      target: test/api/users.test.ts
+      outcome: applied
+    - agent: stamity-reviewer
+      tool: Read
+      outcome: round 1 changes requested; round 2 approved
+    - agent: stamity-security
+      tool: Read
+      outcome: 1 Warning raised (r7/security/1)
+    - agent: /st-work (close)
+      tool: Edit
+      target: .stamity/inbox.md
+      outcome: 2 rows appended
+
+  exit_invariant: satisfied — 1 fixed, 2 deferred, 0 rejected, 0 open
+
+  not_done: []
+
+  next_step: Triage the two inbox rows this run appended — `r7/security/1`
+    (rate limiting, src/api/users.ts:41) and `r7/review/2`
+    (src/api/users.ts:120) — via /st-board; each ledger row takes its `retired`
+    field when its inbox row leaves.
+```
+
+`Not done:` is empty because both deferrals became inbox rows rather than dropped lines. Neither ledger row carries a `retired` field yet — that only lands when the inbox row leaves with a commit, a cut reason, or a lane/trigger/owner.

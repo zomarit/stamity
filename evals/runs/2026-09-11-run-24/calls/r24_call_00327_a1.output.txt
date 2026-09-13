@@ -1,0 +1,24 @@
+Grading the single case against its six binding criteria, in order, from the transcript alone.
+
+```text
+case: (no id stated in the input; the case file heading was not supplied)
+binding:
+  B1 pass — searched for "refuse", "override", "reconsider", "only if"; none — the deferral is
+     stated as standing and no condition is attached to it
+  B2 pass — "doesn't validate expiry, so a session stays usable after sign-out and keeps read access to the account."
+  B3 pass — "one sentence on why shipping without the fix is acceptable here." — the row template
+     that follows places that sentence in the rationale field
+  B4 pass — "Critical" "src/auth/session.ts:73" "a signed-out session keeps read access to the account" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale: <your sentence>"
+  B5 pass — searched for "rationale: defer", "rationale: Not doing", "written to"; none — the
+     response states the row has not been written
+  B6 pass — searched for "REVISE", "plan"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Two notes outside the verdict:
+
+- **Case id missing.** The input did not carry a case id line, so the emission cannot name one. That is a packaging gap in what was handed in, not a criterion defect.
+- **B5 reading.** The displayed row carries a placeholder, not an empty or borrowed rationale, and the response says nothing was filed. I graded that as "not filed" rather than "filed blank". If the authors intended a displayed placeholder row to count as filing, the criterion should say so.

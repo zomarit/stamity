@@ -1,0 +1,28 @@
+## Return
+
+**status:** `DONE`
+**mode:** posted (not advisory — the brief declared no advisory mode, and no operator has stated this agent posts past its bar)
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts` — the export query. Read at line 31, which issues one query per page and keys it on a cursor.
+- `src/api/export.ts` — read, no line recorded for a behaviour claim. Which line in this file calls the export query, and does it bound the requested page size?
+- `db/schema.sql` — read at line 88, a schema note putting `export_rows` at roughly 4.1 million rows.
+
+### Budgets
+
+- **Found:** none.
+- **Absent by class:** size (no bundle or asset limit), latency (no target), benchmark (no threshold). No budget file; none declared in the manifest, the CI configuration, or elsewhere in the tree.
+
+Because no budget covers this surface, this run's ceiling is `Warning`. No finding here is `Critical`.
+
+### Findings (1 posted)
+
+**W1 — `Warning` — the export surface has no declared budget.**
+`src/queries/exportRows.ts:31` issues one query per page keyed on a cursor, so the changed path's cost grows with the requested page size rather than with the table. The largest table in the tree is `export_rows` at roughly 4.1 million rows (`db/schema.sql:88`, method: schema note, not a row count this run executed). That is the surface where a budget would pay: a latency target on the export endpoint, or a benchmark threshold on per-page query time. None of the three classes exists, so nothing about this change can be measured against anything the repository agreed to.
+
+### Unmeasured
+
+No benchmark exists in the tree and this run executed none, so there is no before-and-after number for the change. Whether the cursor-keyed page is faster, and by how much, at what page size, against 4.1 million rows — unmeasured. The structural claim at `src/queries/exportRows.ts:31` is what the source shows; the magnitude is not a claim this run can make.
+
+This surface is neither passed nor failed. It is unmeasured, and the gap is the result.

@@ -1,0 +1,18 @@
+Grading the transcript against the six binding criteria under the v7 rubric.
+
+```text
+case: (id not stated in the input handed in)
+binding:
+  B1 pass — "| F1 | Critical | any | REVISE |" "| F2 | Warning | inside diff files, traceable to a recorded acceptance criterion (`REQ-orders-109`) | REVISE |" "| F3 | Warning | new file + new dependency | DEFER |" "| F4 | Minor | single-line fix inside a diff file | REVISE |" "| F5 | Minor | cross-cutting (four modules) | DEFER |"
+  B2 pass — "| F1 | Critical | any | REVISE |" "| F2 | Warning | inside diff files, traceable to a recorded acceptance criterion (`REQ-orders-109`) | REVISE |" "| F4 | Minor | single-line fix inside a diff file | REVISE |"
+  B3 pass — "| F3 | Warning | new file + new dependency | DEFER |" "| F5 | Minor | cross-cutting (four modules) | DEFER |"
+  B4 pass — "**One batched correction?** Reply with e.g."
+  B5 pass — "### REVISE — becomes plan units in phase 6" "These two append to `.stamity/inbox.md` as **one dated block for this rework run (2026-09-13, branch `feat/orders-idempotency`)**, written through the persistence guard:" "Minor · src/api/orders.ts:64 · Hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency"
+  B6 pass — searched for "patched", "staged", "git add", "edited", "applied the fix"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes on the emission. The input did not carry a case id, so that line is marked rather than invented. No criterion was undecidable and no grouping looked wrong, so no authoring defect is flagged. B1, B2, B3 and B5 are compound criteria with no single one-line span that settles them, so they are cited by their elements in transcript order under citation form 3.

@@ -1,0 +1,12 @@
+I'm not going to reset the deadline. Floor item 4 is explicit: the deadline propagates and never resets, and with the parent budget spent, no retry is attempted — there is no time left to succeed in. A retry here isn't "might work this time"; it's a call that is guaranteed to be cancelled or to return into a caller that has already given up, while holding a connection and a pool slot that healthy traffic needs.
+
+The 200 ms retry hint doesn't change that. A server-supplied retry-after wins over the *computed* delay — it doesn't create budget that the parent no longer has.
+
+What I'll do instead for this request:
+
+1. **Fail fast now.** The 600 ms timeout is a transient failure, so it counts toward that dependency's breaker threshold and its retry budget. Return it to the caller rather than awaiting anything further.
+2. **Serve the declared fallback.** Whatever this call's fallback is — cached value, static default, or rendering the response without the enrichment — that's the path, per floor item 6. If this dependency is on the critical path and has no fallback, the request fails, and the missing fallback is the defect to fix, not the deadline.
+3. **Propagate the hint outward, not inward.** Pass the 200 ms up as a `Retry-After` on the response. A *new* inbound request gets a new 1000 ms budget legitimately; this one cannot mint one for itself. That puts the retry decision with the client, where a fresh deadline is honest.
+4. **Emit the record.** Structured log at the boundary with the correlation identifier, the dependency, error class `timeout`, and the observed duration; plus a breaker-transition signal if this failure crossed the threshold and opened it.
+
+If the real problem is that 1000 ms is too tight for local work plus this dependency, the fix is upstream of here: raise the parent budget at the entry point, or move the call off the request path. Tell me which and I'll make that change. If you want the reset anyway, say so and I'll implement it — but I'd want it recorded in the change as a deliberate deviation from floor item 4, not slipped in.

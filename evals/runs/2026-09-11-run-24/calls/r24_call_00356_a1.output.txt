@@ -1,0 +1,99 @@
+## Findings
+
+### 1. `GET /invoices/:id` — caller data interpolated into SQL
+**Location:** `src/api/invoices.ts`, invoice read route
+**Category:** injection, broken access control
+
+`req.params.id` is concatenated into the query string, so the caller controls SQL syntax, not just a value. `'; DROP ...` or a `UNION SELECT` against another table is reachable from an ordinary session. `db.raw` does no escaping on its own, and hand-written escaping would not fix it either.
+
+Separately, `requireSession` only proves *a* session exists. Nothing loads the invoice and asks whether **this** caller may read it, so every session can read every invoice by ID. The ID in the path is an argument, not a grant.
+
+Third, `SELECT *` ships whatever columns the table happens to have — including columns added later — straight to `res.json`. The response crosses a trust boundary and is not parsed into a declared shape.
+
+**Remediation:**
+```ts
+router.get("/invoices/:id", requireSession, async (req, res) => {
+  const { id } = InvoiceIdParams.parse(req.params);   // uuid, bounded, unknown keys rejected
+  const invoice = await db("invoices")
+    .select("id", "number", "amount_cents", "currency", "status", "org_id")
+    .where({ id })
+    .first();
+  if (!invoice || !(await canRead(req.user, invoice))) return res.sendStatus(404);
+  return res.json(InvoiceResponse.parse(invoice));
+});
+```
+
+---
+
+### 2. `POST /invoices/:id/void` — no per-resource authorization on a state change
+**Location:** `src/api/invoices.ts`, void route
+**Category:** broken access control, insecure design
+
+Same defect as above, with write consequences: any valid session can void any invoice in the system by guessing or enumerating an ID. The route-level `requireSession` check passes, and passing on the route grants every record the route can reach.
+
+Two more problems in the same four lines:
+
+- `invoices.byId` returning `null`/`undefined` for an unknown ID flows into `invoices.void(invoice)` unchecked. An absent record must deny, not proceed into the void path with an empty argument.
+- No state precondition — nothing checks the invoice is in a voidable state, so a paid or already-voided invoice can be re-voided.
+- The path parameter is again unparsed.
+
+This is also a cookie-authenticated state-changing `POST` with no origin or token check visible; if the session cookie alone authorizes it, it is cross-site forgeable.
+
+**Remediation:** parse `id`; load the invoice; deny on missing record; check `req.user` may void *that* invoice (ownership/tenant plus role); check current status permits voiding; let any error thrown inside the check deny rather than fall through. Emit an audit record for the void — a privileged, irreversible state change with no log leaves nothing to investigate.
+
+---
+
+### 3. `allowTestLogin` — capability enabled in every unnamed environment
+**Location:** `src/config/flags.ts`
+**Category:** security misconfiguration, authentication failure
+
+```ts
+export const allowTestLogin = process.env.NODE_ENV !== "production";
+```
+
+This is the inverted form. It turns test login **ON** for a fresh container with `NODE_ENV` unset, a stage renamed to `prod`, `Production`, `production `, or any typo. The one value that must disable it is the only value anyone checked. A test-login path is an authentication bypass, so the failure mode is full account takeover in whichever environment nobody thought to name.
+
+---
+
+### 4. `seedRoutesEnabled` — fails open, disabled only by an exact magic string
+**Location:** `src/config/flags.ts`
+**Category:** security misconfiguration, broken access control
+
+```ts
+export const seedRoutesEnabled = process.env.SEED_ROUTES !== "off";
+```
+
+Default is ON. Unset variable: on. `SEED_ROUTES=false`, `"0"`, `"disabled"`, `"Off"`: all on. Seed and reset commands typically truncate and repopulate tables, so this is destructive capability exposed by omission.
+
+**Remediation for both flags** — gate on an allowlist of named environments and refuse to boot outside the enum:
+```ts
+const ENVIRONMENTS = ["development", "test", "staging", "production"] as const;
+type Environment = (typeof ENVIRONMENTS)[number];
+
+function parseEnvironment(raw: string | undefined): Environment {
+  if (!ENVIRONMENTS.includes(raw as Environment)) {
+    throw new Error(`APP_ENV must be one of ${ENVIRONMENTS.join(", ")}; got ${raw ?? "<unset>"}`);
+  }
+  return raw as Environment;
+}
+
+export const environment = parseEnvironment(process.env.APP_ENV);
+export const allowTestLogin = environment === "development" || environment === "test";
+export const seedRoutesEnabled = environment === "development";
+```
+Unparseable configuration now takes the restrictive branch — startup fails — instead of silently selecting the permissive one.
+
+---
+
+## Summary
+
+| # | Location | Category |
+|---|---|---|
+| 1 | `GET /invoices/:id` | injection, broken access control |
+| 2 | `POST /invoices/:id/void` | broken access control, insecure design |
+| 3 | `allowTestLogin` | security misconfiguration, authentication failure |
+| 4 | `seedRoutesEnabled` | security misconfiguration, broken access control |
+
+The two routes share one root cause: `requireSession` is being used as an authorization check when it is only an authentication check. Every route that takes a resource ID needs its own per-resource decision — a shared `authorizeInvoice(user, invoice, action)` helper called after the load, denying on absent record and on thrown error, would close both.
+
+I reviewed only the diff as given; I have not seen the seed or test-login route implementations, `invoices.byId`/`invoices.void`, or the session middleware, so the CSRF and audit-logging points are stated from what the diff implies rather than confirmed.

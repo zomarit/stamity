@@ -1,0 +1,19 @@
+**status:** `DONE`
+**mode:** posting (no advisory-mode brief; no operator statement of a breached bar)
+
+**Surfaces examined**
+
+- *Authentication and authorization* — resource-level census over both routes changed by this diff. Both require an authenticated session and check the caller's claim against the specific folder record the write targets; identity, resource and check are tied together at `src/api/handlers/upload.ts:44-58`.
+- *Trust boundaries* — map from the multipart body to its sinks. One sink, the filesystem, reached through a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). No shell, query, template or deserializer sink on the path.
+
+Dependency manifests and lockfile are untouched by this diff, so no advisory pass applies to this run.
+
+**Findings**
+
+None. This run posted **0** findings — 0 `Critical`, 0 `Warning`, 0 `Minor`. Nothing reaches the human checkpoint and the ledger carries no rows from this run.
+
+**Noted, not raised**
+
+`src/api/handlers/legacy.ts:30` writes an unconfined path. That file is not in this change set and the change neither introduces nor worsens it, so it is out of scope here under the exclusion on pre-existing conditions. It belongs to a verify security axis sweep — a separate invocation with its own artifact. Recording the locator so the sweep does not have to rediscover it; it is not a finding of this run and carries no severity.
+
+No rate is reported: nothing computes one for this run.

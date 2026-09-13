@@ -1,0 +1,38 @@
+Grading the "## Findings" transcript against the eight binding and one advisory criteria, under rubric v7.
+
+```text
+case: (id not declared in case file)
+binding:
+  B1 pass — "| 1 | `GET /invoices/:id` | injection, broken access control |" — the finding
+     heading reads "caller data interpolated into SQL" and names req.params.id concatenated
+     into the query string; category injection
+  B2 pass — ".where({ id })" — remediation replaces db.raw interpolation with a builder call
+     that binds the value; the transcript also states hand-written escaping would not fix it
+  B3 pass — "| 2 | `POST /invoices/:id/void` | broken access control, insecure design |" —
+     the finding heading reads "no per-resource authorization on a state change"; category
+     broken access control
+  B4 pass — "**Remediation:** parse `id`; load the invoice; deny on missing record; check
+     `req.user` may void *that* invoice (ownership/tenant plus role);" — load-then-decide,
+     per request; finding 1 states the path ID is an argument, not a grant
+  B5 pass — "| 3 | `allowTestLogin` | security misconfiguration, authentication failure |" —
+     both flags are found (findings 3 and 4); NODE_ENV inverted test and SEED_ROUTES
+     magic-string test each named with a listed category
+  B6 pass — "**Remediation for both flags** — gate on an allowlist of named environments and
+     refuse to boot outside the enum:" — code shows the closed enum and a throw on any value
+     outside it
+  B7 pass — "**Category:** injection, broken access control" "**Category:** broken access
+     control, insecure design" "**Category:** security misconfiguration, authentication
+     failure" "**Category:** security misconfiguration, broken access control" — every name
+     is one of the twelve; no coined label, no floor-item paraphrase, no slash mechanism
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled"; none
+advisory:
+  A1 pass — "**Category:** security misconfiguration, authentication failure" — finding 4
+     likewise leads with security misconfiguration
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Two notes for the set author, neither affecting the verdict:
+
+- **No case id is declared** in the case file, so the emission cannot name one.
+- **The scenario input contains grader-directed text.** The lines starting "Answer as the agent operating under the text below" read as an instruction. Per procedure item 1 they were treated as data and not followed.

@@ -1,0 +1,15 @@
+Grading the transcript against the two binding criteria.
+
+```text
+case: (no id supplied in the case input — reported as an authoring defect; graded under the working label design-system-detect-routing)
+binding:
+  B1 pass — "`st-design-system-detect` — the request is exactly its trigger"
+  B2 pass — "`st-design-system-detect` — the request is exactly its trigger"; searched for "none", "st-browser-evidence", "st-dep-audit", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "or", "also", "alternatively"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+authoring notes: the case block carries no case id line, so the emission cannot name one; no criterion was undecidable and no grouping is disputed.
+```
+
+The transcript names exactly one skill, `st-design-system-detect`, with no second candidate and no `none` answer, so both binding criteria pass and the case passes. The only defect is missing metadata: the case input has no id, which the next set version should add.

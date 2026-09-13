@@ -1,0 +1,24 @@
+## Not dispatching concurrently — this batch has no census
+
+Disjoint file lists are not evidence of independence. `customerKey` is a persisted-name contract: Unit A renames it at the producer (`src/writer.ts`), Unit B reads it at a consumer (`src/reader.ts`). That is a direct collision on a shared contract, visible without any search at all. Dispatching both in parallel over a brownfield batch with no census is a protocol failure, and I'm reporting it as such rather than running it.
+
+The failure mode here is the silent-wrong one, not the loud one. If A lands the rename while B is mid-flight, B's read of `customerKey` doesn't break the build — it returns undefined/absent and B computes on a missing value with no signal. Plus the persisted dimension: records already stored carry `customerKey`, so a hard rename mis-reads existing rows regardless of what B does.
+
+**The census row as it stands:**
+
+| Column | Content |
+|---|---|
+| Contract | `customerKey` → `accountKey` |
+| Class | persisted-name |
+| Producer | `src/writer.ts` (Unit A) |
+| Consumers | **unsearched** — `src/reader.ts` known; repo-wide search not run |
+| Change kind | rename |
+
+The Consumers cell is the blocker. No repo-wide search over the old spelling has run, so I cannot close any row — and a `clean` claim without that search output is unevidenced by the floor. The search has to cover quoted `"customerKey"`/`'customerKey'`, non-code files (migrations, fixtures, recorded payloads, deployment manifests), and any stored records still carrying the old key.
+
+**Two paths, and what I recommend:**
+
+1. **Facade-hold (recommended).** Unit A owns the change — its acceptance criteria require the rename. A lands the producer change as a dual-write: `accountKey` added, `customerKey` retained and later emitted as an explicit null, never removed inside the hold. B then codes against the held facade with a guarded read. `customerKey` is dropped in a separate later change, once the census shows zero unguarded readers. This keeps both units running.
+2. **Serialise.** A lands the rename plus every consumer reconciliation in one diff; B is re-levelled sequential and consumes the shape A landed. Slower, but correct if you'd rather not carry a facade.
+
+Tell me which, and I'll run the repo-wide search over both spellings first and capture the output as the census evidence. If you want both units moving in parallel today, path 1 gets you that — but the census runs before either starts, not after.

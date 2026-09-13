@@ -1,0 +1,3 @@
+`none`
+
+The checkpoint's step 2 states this case explicitly: "what should I check by hand?" arriving at this point is what the checkpoint already answers, so it stays with the `/st-work` run, which invokes the qa skill by name itself rather than through a trigger match.
