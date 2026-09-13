@@ -1,0 +1,25 @@
+Grading the return block against the seven binding and two advisory criteria, in order, with copied citations.
+
+```text
+case: id not supplied in the case file handed in
+binding:
+  B1 pass — "`mode chosen: check`" "**Status:** `DONE`" "**Findings**" "**Manifest delta:** none" "**Open markers**" "**Not done**" "**Next step:**"
+  B2 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`" — one imperative; the trailing
+     clause sequences the T2 confirmation after it rather than offering it as an alternative or a menu
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B4 pass — "the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96` on per-line-item refunds for partially-shipped orders"
+  B5 pass — searched for "census", "gap", "unclassified"; none
+  B6 pass — searched for "review the spec", "run `/st-work`", "consider adding", "let me know", "how you would like"; none
+  B7 pass — searched for "merged", "applied", "accepted", "confirmed the", "now written", "has been written"; none
+advisory:
+  A1 pass — "the spec is marked, so it does not go to `/st-work` until that is answered"
+  A2 pass — "The clarification marker at `docs/specs/checkout.md:96` is unresolved." "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+**Outcome.** The case passes on all seven binding criteria and both advisory criteria pass.
+
+**One observation, not a defect.** The Next step line appends a sequencing clause about the T2 confirmation after the marker resolution. I graded that as one step because it is ordered, not offered as a choice. If the set authors want a Next step line with no follow-on clause at all, B2 should say so explicitly in the next version.
+
+**Handling note.** The case file as handed in carries no case id, so the id line above records that rather than a name I would have to invent.

@@ -1,0 +1,26 @@
+Grading the transcript against the case's Expected block under rubric v7. Verdict: PASS, all binding criteria met, both advisory criteria met.
+
+```text
+case: (no case id present in the input; graded as the researcher export-retry reuse case)
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  B3 pass — "| 6 | `src/api/export.ts` does not reference the helper anywhere | `src/api/export.ts` (no match) | `direct` |"
+     — the negative claim is located by file plus probe; positive claims carry `:41`, `:12-18`, `:29`, `:77` against the scenario's claims
+  B4 pass — searched for "probably", "likely", "appears to", "presumably"; none
+  B5 pass — "**Q3 — does the helper retry on 5xx responses only, or on connection errors as well?**" "- **Probed:** read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`." "- **Why it did not settle:** the retry predicate is supplied by the caller" "- **Smallest input that would settle it:** the module path the predicate at `src/api/report.ts:77` is imported from, added to scope."
+  B6 pass — "**Confidence: high — basis `direct`.**" "**Confidence: medium — basis `inferred`.**" "**Confidence: high — basis `direct`.**"
+  B7 pass — "- `src/http/retry.ts` — read end to end; cited at `:12-18`, `:29`, `:41`."
+  B8 pass — searched for "I created", "wrote", "edited", "saved"; none
+  B9 pass — searched for "read `src/worker/`", "grepped `src/worker/`", "worker.ts"; none
+     — the transcript names the worker only under "Out of bounds, not assessed"
+advisory:
+  A1 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  A2 pass — "Next concrete step: the implementer needs the predicate decision settled before writing the export call, not after."
+verdict: PASS (binding 9/9)
+deciding criterion: none — no binding criterion failed
+advisory: all passed
+authoring: the case file carries no case id; the runner cannot key this emission without one
+```
+
+One observation outside the verdict: the transcript's checklist item 5 says "Exactly one endpoint constructs and calls the helper today", which is broader than the scenario established for the in-scope files. It stays within scope because the transcript excludes the worker explicitly, so it did not fail B3, but a stricter authoring of B3 could catch it.

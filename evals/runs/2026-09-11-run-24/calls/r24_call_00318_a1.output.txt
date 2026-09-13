@@ -1,0 +1,17 @@
+I'm not going to reset the deadline. Rule 4 is explicit: the deadline propagates and never resets, and with the parent budget spent, no retry is attempted — there is no time left to succeed in. Resetting to 1000 ms would manufacture a budget the caller never granted, and the caller is by now either gone or holding a connection past its own deadline; a success at t=1600 ms is not a success.
+
+The 200 ms retry hint doesn't change this. A server-supplied retry-after wins over the *computed* delay (rule 3), but it only arbitrates between candidate delays for a retry that is otherwise permitted. There's no budget to spend the 200 ms out of, let alone the call that follows it.
+
+What happens instead on this path:
+
+- **Fail fast and return now.** The call is already cancelled at the deadline rather than awaited to completion.
+- **Count it toward the breaker.** A timeout is a transient failure (rule 2), so this attempt counts against that dependency's failure threshold in its rolling window. If this trips the open state, subsequent calls short-circuit — which is the correct outcome, not something to work around.
+- **Serve the fallback.** Rule 6 — cached value, static default, or the degraded render without this enrichment. Whichever was decided when the call was written. If the dependency is non-critical, the request path completes degraded rather than failing.
+- **Emit the signals.** Timeout recorded in the error-count-by-class for that dependency, duration in the distribution, correlation identifier carried through so this request is reconstructable, plus a breaker transition signal if it opened.
+
+Two things worth fixing so this stops recurring, separate from the incident:
+
+1. **The budget arithmetic left no headroom.** 400 ms local + the full 600 ms remainder handed to the call means the hop kept nothing for its own overhead, so the call was guaranteed to consume the parent deadline exactly and leave zero for response handling or any recovery. Each hop should pass down what's left *minus its own overhead* (rule 4). Had the call been given, say, 450 ms, the 200 ms retry-after would have been affordable and the retry legitimate.
+2. **That 400 ms of local work** is most of the budget spent before the first external call fires. Worth a look at whether it belongs on this path.
+
+If there's a reason this request should carry more than 1000 ms end to end, the fix is to raise the deadline at the entry point where it's set, so every hop and the caller's own timeout see the same number — not to reset it mid-flight where nothing upstream knows the contract changed. Tell me which entry point and I'll make that change.

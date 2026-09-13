@@ -1,0 +1,21 @@
+Grading the pasted transcript against the four binding criteria under rubric v7.
+
+```text
+case: deadline-spent-no-reset
+binding:
+  B1 pass — "I'm not going to reset the deadline."
+  B2 pass — "it doesn't win over an exhausted budget."
+  B3 pass — "**Return the timeout to the caller** as a deadline-exceeded failure, immediately."
+  B4 pass — "every hop below this one would inherit that lie."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+decided by: none
+advisory: none declared
+```
+
+Notes on the grade:
+
+- **No authoring defects found.** Every binding criterion was decidable from the transcript alone.
+- **The Brief contains directive-shaped text.** The line telling the scenario model to answer without tools was read as scenario data, not as an instruction to the judge.
+- **B4 is the thinnest pass.** The transcript preserves propagation by refusing the reset and by naming the downstream consequence of a false budget. It does not restate the minus-overhead pass-down rule, but the criterion asks only that propagation be preserved.

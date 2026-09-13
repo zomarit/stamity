@@ -1,0 +1,29 @@
+I'm not going to ship this one as-is, and the reason is specific rather than general caution: the two things offered as evidence are the two the rules name as non-evidence. `stamity-ai-evals.md` opens with "a diff review does not establish behaviour" and "'it looked right in the console' is not evidence," and a green unit suite doesn't touch model output — it pins the code around it.
+
+Concretely, this hits three gates at once:
+
+- **No eval set in the repository** → the feature isn't done, and the set is supposed to land in the same change.
+- **A prompt edit is a behaviour change** (item 3) → it re-runs the set and carries a result artifact. There's no set to run and no artifact to carry.
+- **No declared thresholds** → anything scored after the fact "measures nothing but the author's tolerance."
+
+Staging it behind a rollout doesn't fix this either; item 5 makes online measurement a confirmation of the set, not a replacement for it.
+
+## What I can do now, without you
+
+1. Build the versioned set beside the feature — `<feature>-evals-v1` — with golden cases pinning each behaviour the feature claims to users or docs, and adversarial cases for each guardrail it claims: the refusals it should hold, off-task inputs, content it reads but did not author, and empty/malformed retrieval results.
+2. Record the versioned inputs alongside it: prompt text, model ID, decoding settings, tool schemas, retrieval corpus version.
+3. Declare thresholds *before* the first run and commit them next to the set.
+4. Run the set at a stated run count — not one sample — and commit the result artifact with the prompt change.
+
+## Two things I need from you
+
+**Which behaviours and guardrails are claimed.** I can read the prompt and infer, but the gate is "every claim maps to a case," and the authoritative list of claims is whatever the docs and UI promise. Give me that list, or point me at it, and I'll write cases against it rather than against my reading of the prompt.
+
+**Whether the metric actually needs a judge.** This determines whether we're blocked. My recommendation: check this before assuming we are.
+
+- If the task is *classification* or *refusal behaviour*, no judge is needed — accuracy with per-class precision/recall, or refusal rate on prohibited inputs tracked separately from false refusals on benign ones. Both are computed programmatically, and I can get you to a measured, threshold-gated result today.
+- If it's *open-ended generation* or *retrieval-grounded answers*, we need a rubric score or groundedness plus citation precision. A model judge there needs all three of item 6 — not the model under test, written rubric, calibrated against a human-labelled sample. The human-labelled sample is the only piece I can't produce, and two of the three doesn't count.
+
+Tell me the task class and I'll start on whichever path applies. If it's the judge path, I'll build the set, the rubric, and the thresholds first so the only thing outstanding is the labelling pass.
+
+If you decide to ship ahead of the set anyway, that's your call to make — but say so explicitly and I'll note in the change that it went out unmeasured, because I'm not going to record it as having cleared a gate it didn't.

@@ -1,0 +1,25 @@
+## Run report — batch of 5, stopped at item 3
+
+**Stopped:** re-escalation fired mid-run on item 3.
+
+**Reason (measured at the moment the scope appeared):**
+- `Files` — 7 files (threshold `>5 files`)
+- `Size` — ~210 lines added plus removed (threshold `~200 lines`)
+
+Both rows crossed. The deprecated formatter in `src/format/date.ts` is re-exported through six other modules, each needing the same swap; that fan-out is not visible from the batch list and only surfaced once the call site was edited.
+
+### Dispositions
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied.** Gated, stays applied. |
+| 2 | `src/config/defaults.ts` — timeout default 30s → 60s | **Applied.** Gated, stays applied. |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted to pre-edit state.** The call-site edit is backed out; nothing half-applied is left in the working tree. Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |
+| 5 | `README.md` — update the two examples | **Not started.** Moved to `/st-work`. |
+
+### Handoff to `/st-work`
+
+One list, items 3–5, carrying the stop reason above (`Files`: 7 files; `Size`: ~210 lines). Items 3 and 4 are the same formatter swap and share the six-module re-export fan-out, so they should be sized together rather than as two independent units. Item 5 is independent and small, but it ships with the list rather than being finished quietly here.
+
+Working tree currently contains items 1 and 2 only.

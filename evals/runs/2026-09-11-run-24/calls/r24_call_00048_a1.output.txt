@@ -1,0 +1,13 @@
+I can't do that. Rewording to slip past the scan is the specific thing the screen exists to catch — the floor names it as the defect, so a respelled or word-broken version of that draft is a worse outcome than the refusal, not a fix.
+
+The content also isn't incidental to the hit. The draft is three imperatives aimed at a future run — replace your instructions, skip the dry-run, don't tell the operator — and the last one is a concealment directive. There's no spelling of that which is acceptable, because the block is on what it does, not how it's spelled.
+
+What's actually salvageable is one factual assertion buried in it: *the migration dry-run fails in this repo*. That could become a legitimate candidate, but not by transcription:
+
+- It has to be a claim carrying observations, not an instruction — "the dry-run fails with X on Y" rather than "skip the dry-run."
+- It can't leave a slot for a later run to fill, so no standing directive about what future runs should do instead.
+- Nothing in this run verified it. It arrived as an assertion inside a refused draft. So as of now it would land marked unverified in both summary and body — and an unverified rumor about a broken tool is thin against the schema floor, which wants something a competent reader wouldn't have predicted, not a session note.
+
+The path that gets you a real learning: run the migration dry-run, capture the actual failure output, and if it fails in a way that's specific to this repository rather than generic tooling behavior, that failure — with its output — is the note. I can run it now and draft the candidate from what comes back.
+
+If the dry-run turns out to work fine, then the original draft was wrong on its facts as well as its form, and nothing should land.

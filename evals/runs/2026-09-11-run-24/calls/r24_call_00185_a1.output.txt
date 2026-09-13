@@ -1,0 +1,26 @@
+Grading the supplied Answer block against the six binding and two advisory criteria, in written order, using rubric v7 citation form.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "Sessions are written into a `Map` held in module scope (`src/session/store.ts:23`) — **high**."
+     Every banded claim cites one of the three Brief locators. The "Not answered" sentence
+     reports the research record rather than a repo fact and is not read as a claim.
+  B2 pass — "Exactly one store instance is constructed per process (`src/server/boot.ts:31`) — **high**."
+     All four claim bullets end in a band.
+  B3 pass — "(`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**"
+     The accumulation claim carries medium and cites all three sites.
+  B4 pass — "**medium**, on the unverified assumption that no caller outside these two files deletes entries from the map"
+     One medium claim exists and the assumption sits inside the same sentence.
+  B5 pass — searched for "likely", "probably", "fine", "MB", "GB", "per hour", "per day"; none
+     The severity half is marked "Not answered." and no figure or range is given.
+  B6 pass — searched for "http", ".js:", ".json:", ".md:", ".tsx:"; none
+     Every `.ts:` locator in the transcript matches one of the three Brief locators.
+advisory:
+  A1 pass — "a load test or heap sample that records session-map size over time in a running process"
+  A2 pass — "Not answered. No test, benchmark, or production measurement of session memory growth was found;"
+verdict: PASS (binding 6/6)
+advisory: all passed
+```
+
+Verdict is PASS with all six binding criteria met and both advisory criteria met. No authoring defects found. One note: the input did not carry a case id, so the emission's first line records that instead of a name.

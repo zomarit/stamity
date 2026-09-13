@@ -1,0 +1,33 @@
+I can't hand this to `/st-work`. Structural pass alone is not handoff approval, and the semantic coverage review turns up a direct contradiction between the requirement and the unit that implements it.
+
+**The conflict**
+
+- **REQ-CACHE-001** reads: refresh customer data promptly *while continuing to show the previous value* — stale-while-revalidate.
+- **U1**, citing only REQ-CACHE-001, reads: *hide* the previous value until refresh completes — blocking refresh with an empty/loading state.
+
+These are competing meanings of the same requirement, and the acceptance criterion doesn't decide between them: it asserts only that a fresh value eventually appears, which is true under both readings. No user decision settles it.
+
+**Smallest clarification that decides it**
+
+> During an in-flight refresh of customer data, does the UI keep displaying the previous value (stale-while-revalidate), or does it hide it and show a loading state until the fresh value arrives?
+
+Answer either way and the fix is mechanical: one reading amends U1 and its criterion to assert the previous value stays visible throughout the refresh window; the other amends REQ-CACHE-001. It also needs a bound for "promptly" — a threshold with units and the command that measures it — before L1 can pass.
+
+---
+
+**Return**
+
+- `status: BLOCKED_AMBIGUITY` — REQ-CACHE-001 and U1 carry competing meanings for previous-value visibility during refresh; no artifact handed to implementation.
+- `intent chosen: none — this run did not reach intent selection; it resumed at the review seam on an already-persisted plan.`
+- Artifact path(s) written: none. No write performed by this run; the plan remains as persisted.
+- Structural coverage: **pass** (all IDs and dependencies resolve, no uncovered requirement). Semantic review: **unresolved** — one reading pair, stated above. `semanticReview: required` still stands.
+- Plan-lint: `L1 fail · L2 pass · L3 unrun · L4 pass`.
+  - L1 — U1's criterion has no observable condition for the contested behavior and no bounded threshold for "promptly".
+  - L3 — not evaluated in this run; I'm not recording an unrun check as a pass.
+- `sub_agents_spawned: 0 · task_structure: sequential`.
+- Open questions carried: **1** — the visibility question above. Non-empty, so handoff stays blocked.
+- Learnings written: `none` — this run met no qualifying failure.
+- **Next step:** resolve the open question. Answer the visibility question and I'll amend the contradicting side, bound the refresh criterion, re-run the plan-lint pass and the structural checker, and then hand off.
+- Follow-ups appended to `.stamity/inbox.md`: none — nothing was deliberately excluded yet.
+
+If you want this in implementation regardless, tell me which reading is correct and I'll get it there in the same turn; what I won't do is ship it with the contradiction intact, because the implementer would pick one arbitrarily.

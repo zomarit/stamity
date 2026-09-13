@@ -1,0 +1,18 @@
+I can't render the success state here. The read failed and returned nothing usable, so a success screen would have to invent orders — a reader would act on rows that don't reflect the server. That's the one thing in this situation I won't build.
+
+What I can do is make the failure non-interrupting, which is what I take the actual goal to be.
+
+**If the list already had rows rendered before this read:** keep them. Those rows came from a prior successful read and are real, so the surface stays on screen and nothing is torn down. The state value moves to `error` with the previously-fetched data retained, and the failure renders as an inline banner above the list rather than a full-surface takeover:
+
+- One sentence naming the failure in the reader's vocabulary — the orders list couldn't refresh — with no status code or exception name in the copy.
+- A **Retry** button on the surface, keyboard-reachable, with an accessible name, since the error is retryable.
+- The banner announced to assistive technology as it appears, so a screen-reader user learns the list is stale rather than reading it as current.
+- A visible staleness marker on the retained rows, because unlabelled stale data is the same lie as the success screen, just quieter.
+
+**If nothing was rendered before this read:** there is no honest content to keep, so it's the full error state — same sentence, same retry, same announcement. The flow is interrupted because the data isn't there; the alternative is a blank list that reads as "you have no orders," which is worse than the interruption.
+
+Either way the state stays a single value. I'm not adding an `error` flag alongside a `success` flag to let both render at once — that combination is exactly what produces screens nobody designed.
+
+Two things this pulls in that I'd flag now: the banner copy and retry label need message ids from the localisation layer rather than literals, and the suite needs a case rendering this error-with-retained-rows path, since it's a fourth reachable state on this surface and an unrendered state has never been seen. I'll include rendered evidence for loading, empty, error, and success when I hand this back.
+
+Tell me which of the two branches matches the orders list today — whether it caches prior rows — and I'll write it. If it caches, you get the non-interrupting version you're asking for, honestly labelled.

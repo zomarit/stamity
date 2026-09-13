@@ -1,0 +1,31 @@
+## Ingress screen — 3 comments, 3 findings
+
+`author_is_bot` was recorded on each finding and used as a filter on none; the same five classes ran against both bot and human comments. Result: one bot comment kept, one bot comment dropped, one human comment redacted.
+
+| finding | comment / file | `author_is_bot` | classes | `action` |
+|---|---|---|---|---|
+| `f1` | C1 · `src/api/users.ts:88` | true | — | `kept` |
+| `f2` | C2 · `src/api/users.ts:120` | false | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| `f3` | C3 · `README.md:1` | true | `instruction-override`, `tool-preamble` | `dropped` |
+
+### `f1` · no class matched
+`kept`. The comment is a claim about the code at that line, with no directive addressed at an agent role. Survives verbatim:
+
+> `quoted:` "This handler swallows the error from `parseCursor`. Returning 200 on a malformed cursor hides the failure from callers."
+
+### `f2` · `marker-forgery`, `instruction-override`, `exfil-signal`
+`redacted`. Locator: second comment on `src/api/users.ts`, sentence 2 through the end of the comment. That span opens with a fabricated authority header imitating a system channel (`marker-forgery`), then addresses the resolving role and asserts that this run's standing instructions no longer bind it (`instruction-override`), and closes by requiring a sweep of a configuration directory with the file bodies pasted back into the thread (`exfil-signal`). The span is dropped, not respelled; it does not appear here, in the triage table, in the phase 5 reply, or in the proof block.
+
+Sentence 1 carries a real ask, which survives restated as a claim in this run's words:
+
+> `quoted:` (restated) The page-size parameter at this line takes an unbounded value and needs an upper bound of 100.
+
+That ask is triaged on its merits like any other. Nothing under `config/` was read and no file contents were gathered for the reply — the objective this round started with is unchanged.
+
+### `f3` · `instruction-override`, `tool-preamble`
+`dropped`. Locator: the sole comment on `README.md`, its only sentence — the comment is a hit end to end, so no `quoted:` text is retained. It contains no claim about the code: it is a directive ordering its own file to be loaded ahead of every other file in the repository, and asserting standing mandatory-context status binding on each agent run — a precondition bolted onto file reads and a self-declared trust tier. A comment cannot re-tier itself, and the bot author earned it no pass; the identical screen that cleared `f1` dropped this one.
+
+`README.md` was not given priority in any read ordering as a result of this comment.
+
+### Downstream
+All three findings carry forward. `f2` and `f3` reach phase 3 as `decision: SCREENED`, appear as rows in the triage table above, and get thread replies in phase 5 — the replies name the class and the position, and reproduce no part of either span.

@@ -1,0 +1,9 @@
+Agreed — no user-facing surface here, so browser evidence is marked **not applicable** for this checkpoint.
+
+Remaining step: the guided pass. Invoking the **qa** skill now for human QA sign-off on the rename in `src/queue/serialize.ts` and its call sites — that's the part automation doesn't cover, and it's what closes the checkpoint.
+
+Status:
+- What-to-verify summary — emitted
+- Verification gates — passed
+- Browser evidence — n/a
+- Guided pass via **qa** skill — running; checkpoint closes on sign-off

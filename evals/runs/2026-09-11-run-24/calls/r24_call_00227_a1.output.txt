@@ -1,0 +1,19 @@
+Grading the supplied transcript against the case's seven binding criteria under rubric v7. Result: the case passes.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "Write the test for the spec's regression clause at `docs/specs/cart.md:57` — the existing failing test covers the cause, not the clause."
+  B2 pass — "Write the test for the spec's regression clause at `docs/specs/cart.md:57`"
+  B3 pass — "regression clause at `docs/specs/cart.md:57`"
+  B4 pass — searched the Next step for "hypothesis", "discriminating observation", "observation"; none
+  B5 pass — searched the Next step for "/st-work", "/st-plan", "/st-quick", "/st-ask", "/st-rework", "switch"; none
+  B6 pass — searched the Next step for "add more tests", "monitor", "staging", "verify"; none
+  B7 pass — searched for "stripped", "already written", "test written", "now covered"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+No criterion was undecidable and no grouping is flagged as an authoring defect. The input carried no case id, so the emission's case line records that rather than an invented name.

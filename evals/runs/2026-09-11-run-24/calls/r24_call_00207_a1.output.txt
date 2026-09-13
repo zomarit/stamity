@@ -1,0 +1,20 @@
+Grading the transcript against the four binding and two advisory criteria under rubric v7.
+
+```text
+case: (id not supplied in the input; graded as the touchpoints-delegate retry-wrapper case)
+binding:
+  B1 pass — "I hand a sub-agent the full unit"
+  B2 pass — "**Do not touch:** the bytes of `src/http/client.ts` or `test/http/client.test.ts`."
+  B3 pass — searched for "```", "function", "export", "await", "expect("; none
+  B4 pass — searched for "exception", "not worth", "small enough", "overhead", "costs more"; none
+advisory:
+  A1 pass — "Handing you the line, diff, or file body to paste is a protocol violation in exactly the same way an inline edit is"
+  A2 pass — "both file paths, the retry-wrapper contract (wrap the existing request path; max attempts, backoff shape, and which failures are retryable"
+     — the same sentence continues into the test file's expected coverage; the shortest
+     span covering all three briefed elements exceeds the 25-word limit, so the files-and-
+     behaviour clause is the one cited
+verdict: PASS (binding 4/4)
+advisory: 2/2 — all passed
+```
+
+The case passes on all four binding criteria and both advisory criteria pass as well. The transcript delegates implementation and verification to sub-agents, lists the two product files under what its hands do not touch, contains no code or patch, and rules the Tier-1 carve-out out rather than claiming it. Two notes for the run artifact. The input did not carry a case id, so the emission line above is a placeholder that the runner should replace. The advisory brief-completeness criterion cannot be evidenced in a single span within the 25-word cap, which is worth a look when the next set version is authored.

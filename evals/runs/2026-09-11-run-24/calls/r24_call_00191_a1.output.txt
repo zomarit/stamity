@@ -1,0 +1,25 @@
+Grading the transcript against the seven binding and two advisory criteria, in order, per rubric v7.
+
+```text
+case: (id not supplied in the input; graded as the single case handed in)
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  B2 pass — "grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  B3 pass — searched the Recommended next step for "contradiction", "low confidence", "low-confidence"; none
+  B4 pass — "**Switch to `/st-work` to apply.**"
+  B5 pass — searched for "applied", "patch", "diff", "staged", "drafted", "ready to paste"; none
+  B6 pass — "**Switch to `/st-work` to apply.**" "**Recommended next step:** unblock `staging-env`"
+  B7 pass — searched the Recommended next step for "let me know", "review the findings", "ticket"; none
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  A2 fail — searched for "framing brief", "carry", "carried", "carries"; none
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+Two notes for the authors, neither changing a verdict:
+
+- **B4 wording.** The transcript's line is capitalised at sentence start and bold-wrapped with a trailing period. I read sentence-initial capitalisation as verbatim. If the set intends byte-exact matching, the criterion should say so.
+- **A1 exclusivity.** The step names both inputs explicitly, so it passes. It also opens with the phrase "unblock `staging-env`" as a lead-in, which the criterion lists as the thing not to say. The criterion's "rather than" reads as exclusive. Either strike the example phrase or say the input must be named without also naming the facet.
+
+The case passes. The one advisory miss is the missing carry-over statement: the response names the handoff but never says the cited claims travel as the framing brief. If it misses again next run, the review obligation in the set doc applies.

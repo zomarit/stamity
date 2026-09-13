@@ -1,0 +1,23 @@
+Grading the transcript against the four binding criteria under rubric v7.
+
+Verdict: FAIL. The response refuses the success screen and specifies accessibility correctly, but it never renders the error state. It describes what the error copy would say and then stops to ask which situation the list is in.
+
+```text
+case: (id not supplied in the case input)
+binding:
+  B1 pass — "I can't render the success state here"
+  B2 fail — "and I'll build it." — the response describes an error state but renders none;
+     no sentence naming what failed appears in the transcript
+  B3 pass — "announced to assistive technology as it appears"
+  B4 pass — "retry reachable by keyboard with an accessible name"
+advisory:
+  none declared
+verdict: FAIL (binding 3/4)
+decided by: B2
+advisory: none declared
+```
+
+Two notes for the run artifact:
+
+- **Case id missing.** The input carried no case id, so the emission line could not be filled. That is an input defect, not a grading one.
+- **B2 turns on the word "renders".** The transcript commits to one sentence on what failed plus a Retry control, but defers producing either until the operator answers a question. If the authors intended B2 to accept a specification rather than a rendered state, the criterion wording needs changing in the next set version. I graded the criterion as written.

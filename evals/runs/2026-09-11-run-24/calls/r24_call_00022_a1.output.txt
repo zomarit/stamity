@@ -1,0 +1,14 @@
+**Classification: quick-qualifying.** Typo / user-facing string correction, single file. No threshold fires — 1 file (≤5), ~1 line changed, no auth/credential/access-control surface, no dependency or lockfile change, no API shape, schema, event payload, or migration.
+
+**Edit** — `src/ui/InboxEmpty.tsx`:
+
+```diff
+- No messsages yet
++ No messages yet
+```
+
+**Status: not done.** This turn is tool-free, so the edit above is written but not written to disk. It is the exact change to apply — not a request for a go-ahead; the original request was the go-ahead, and nothing about this item is ambiguous enough to hold it.
+
+**Gates: not run.** Gates run on every batch including a one-line typo fix, and I can't execute them without tools. Whoever lands this should run the lane's gate step against the change before it's considered closed.
+
+One thing to check when applying: if the copy is also present in an i18n catalog or a snapshot test, the misspelling likely repeats there. That would still be quick (well under the file and size thresholds), but it's a second and third site, not a rename of this one.

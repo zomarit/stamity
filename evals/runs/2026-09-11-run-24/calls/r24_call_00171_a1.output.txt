@@ -1,0 +1,28 @@
+Grading the transcript below the criteria against the nine binding and one advisory criteria, per rubric v7.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — "| test | `npm run test` | fail |" "| lint | `npm run lint` | pass |" "| typecheck | `npm run typecheck` | fail |"
+     — three rows, one per requested gate, each with six cells against it
+  B2 pass — "| gate | command | status | exit code | duration | excerpt |"
+     — header names all six fields; each of the three rows fills every column
+  B3 pass — "| lint | `npm run lint` | pass | 0 | 6.2s | *(empty)* |"
+     — lint carries `pass`; the test and typecheck rows cited under B1 each carry `fail`; no other vocabulary used
+  B4 pass — "AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'"
+     — both FAIL lines, both assertion messages with their :41:7 and :58:7 locations, and the TS2345 line with (52,17) appear verbatim in fenced blocks; the counts in the verdict line sit beside the excerpts, not in place of them
+  B5 pass — "**Verdict: red** — caused by the `test` row (exit 1, 2 failing tests) and the `typecheck` row"
+  B6 pass — "- **status:** `DONE` — all three gates ran and produced evidence."
+  B7 pass — "`Critical` — gate `test` failed:"
+     — the typecheck finding is likewise `Critical`
+  B8 pass — "so neither failing row is classified `introduced` or `pre-existing`."
+     — the two terms occur only inside this negation; no table row or finding carries either mark
+  B9 pass — searched for "patch", "fix", "should", "--"; none
+     — the term "re-run" occurs once, in the closing statement that no gate was re-run
+advisory:
+  A1 pass — "| gate | command | status | exit code | duration | excerpt |"
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+Two notes for the run artifact. The input carried no case id, so the emission names none rather than inventing one. No criterion was undecidable and no grouping looked misplaced, so no authoring defect is flagged.

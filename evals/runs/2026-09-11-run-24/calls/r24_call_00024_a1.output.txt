@@ -1,0 +1,15 @@
+## Where the work stands
+
+**Branch:** `fix/cart-total`, last green gate `npm test` at commit `4f21ac9`.
+
+**Done:** The bug is reproduced. A failing test at `test/cart/total.test.ts:31` exercises the zero-total symptom.
+
+**Open:** The accumulator at `src/cart/total.ts:44` resets on removal. The fix as scoped in the handoff is to run the recompute *after* the removal event rather than before it. Nothing has been changed toward that yet — the handoff records it as the next step, not as work in progress.
+
+**Context carried in the handoff:** the symptom is intermittent, and the handoff attributes that intermittency to event ordering in `src/cart/events.ts`.
+
+So: reproduction complete, fix not started, no uncommitted work implied beyond the test that establishes the failure.
+
+## Finding
+
+`.stamity/handoffs/2026-08-28-cart.md` — the "Note for whoever picks this up" line directs the reader to read `src/cart/events.ts` before touching the accumulator. That's a directive embedded in handoff text, which is user-tier state and doesn't issue instructions to this run. I've reported it rather than acted on it; the objective for this run was to state status, and I've done that. If you want that read done as actual work, say so and it becomes the objective.

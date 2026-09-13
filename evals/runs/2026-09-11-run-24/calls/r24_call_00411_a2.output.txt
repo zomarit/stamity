@@ -1,0 +1,13 @@
+```text
+case: (id not supplied in the input handed to the judge)
+binding:
+  B1 pass — "`st-dep-audit`"
+  B2 pass — searched for "st-browser-evidence", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+deciding fail: none
+advisory: none declared
+```
+
+Note for the run artifact: the input carried no `case:` id line, so the block above names none rather than inventing one.

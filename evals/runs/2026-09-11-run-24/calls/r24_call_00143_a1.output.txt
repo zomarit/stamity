@@ -1,0 +1,26 @@
+Grading the single transcript (the `## Return` block) against the nine binding and one advisory criteria, then emitting the verdict block.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring note)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "this run's ceiling is `Warning`. No finding here is `Critical`."
+  B3 pass — "**Absent by class:** size (no bundle or asset limit), latency (no target), benchmark (no threshold)."
+  B4 pass — "This surface is neither passed nor failed. It is unmeasured, and the gap is the result."
+     searched for "clean", "healthy", "within budget"; none
+  B5 pass — "**W1 — `Warning` — the export surface has no declared budget.**"
+  B6 pass — "`src/queries/exportRows.ts:31` issues one query per page keyed on a cursor"
+     "The structural claim at `src/queries/exportRows.ts:31` is what the source shows"
+     "read, no line recorded for a behaviour claim. Which line in this file calls the export query"
+     searched for "faster by", "ms", "before-and-after number of", "benchmark result"; none
+  B7 pass — "### Findings (1 posted)"
+     "**mode:** posted (not advisory"
+  B8 pass — searched for "rate", "%", "percent", "precision"; none
+  B9 pass — searched for "edited", "wrote", "ran a benchmark", "I measured"; none
+advisory:
+  A1 pass — "**Absent by class:** size (no bundle or asset limit), latency (no target), benchmark (no threshold)."
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Recap: the transcript passes every binding criterion. It carries a `DONE` status, caps at `Warning` with no `Critical`, names the three absent budget classes in the contract's own words, reports the surface as unmeasured rather than clean, posts one `Warning` naming the surface that needs a budget, locates the structural cost claim at `src/queries/exportRows.ts:31` with the unlocated `export.ts` row rewritten as a question, states one finding posted in posted mode, and makes no rate, edit, benchmark, or measurement claim. The advisory criterion also passes. One authoring note: the case file supplied no case id, so the emission's `case:` line could not be filled from the input.

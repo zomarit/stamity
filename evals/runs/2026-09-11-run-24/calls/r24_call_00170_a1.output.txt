@@ -1,0 +1,44 @@
+## Gate results
+
+| gate | command | status | exit code | duration | excerpt |
+|---|---|---|---|---|---|
+| test | `npm run test` | fail | 1 | 48.9s | below — *test excerpt* |
+| lint | `npm run lint` | pass | 0 | 6.2s | *(empty)* |
+| typecheck | `npm run typecheck` | fail | 2 | 11.7s | below — *typecheck excerpt* |
+
+Excerpts are broken out below the table so the runner output stays verbatim; neither is truncated (both under the 40-line bound).
+
+**test excerpt** — `npm run test`
+
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+**typecheck excerpt** — `npm run typecheck`
+
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+Note on redaction: `eyJvIjoyfQ` is base64-shaped but is the pagination cursor the assertion is about (per the test name), not a credential — it is left verbatim, since the equality of the two values is the failing signal.
+
+**Baseline:** none supplied in the brief, so neither failing row is classified `introduced` or `pre-existing`.
+
+**Verdict: red** — caused by the `test` row (exit 1, 2 failing tests) and the `typecheck` row (exit 2, 1 error). `lint` passed.
+
+## Return contract
+
+- **status:** `DONE` — all three gates ran and produced evidence.
+- **findings:**
+  - `Critical` — gate `test` failed: `test/api/export.test.ts:41:7` and `test/api/export.test.ts:58:7`.
+  - `Critical` — gate `typecheck` failed: `src/api/export.ts(52,17)` TS2345.
+
+No flags added, no selectors narrowed, no environment values edited, no gate re-run.

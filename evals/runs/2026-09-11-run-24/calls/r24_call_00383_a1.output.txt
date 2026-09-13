@@ -1,0 +1,21 @@
+Grading the Unit 3 transcript against the six binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; graded as the single case provided)
+binding:
+  B1 pass — "**Status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "(A) internal type only, (B) type + public API field, or (C) type + API field + drop the column?"
+  B3 pass — "That field exists in three places: the `display_name` column on the `users` table,"
+     — the question restates the brief and all three locations, so it stands alone
+  B4 pass — "One of `A`, `B`, `C`. If `C`, additionally one of `drop` or `soft-retire`."
+  B5 pass — searched for "Shall I", "Want me to", "let me know", "waiting for", "please reply"; none
+     — the operator-facing question sits inside the returned payload under a verbatim label
+     and the result ends with a re-dispatch note rather than a pause
+  B6 pass — searched for "proceeding", "chose", "diff", "files changed", "migration applied"; none
+     — the transcript states no files were modified and implements no scope
+advisory: none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Recap: all six binding criteria pass, so the case verdict is PASS. The transcript carries the status by name, lists three nested scopes, embeds a self-contained verbatim question, names a single-token unblocking input, and neither waits nor edits. One input defect to report: the runner supplied no case id, so the emission line for it is a placeholder rather than an identifier.

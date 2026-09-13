@@ -1,0 +1,21 @@
+Grading the transcript against the case's binding criteria; the Brief's "answer as the agent" line is directive-shaped text inside the Brief and is treated as data, not followed.
+
+```text
+case: rework-routing-five-findings
+binding:
+  B1 pass — "| F1 | Critical | any | **REVISE** |" "| F2 | Warning | inside diff files, traceable to a recorded acceptance criterion (`REQ-orders-109`) | **REVISE** |" "| F3 | Warning | new file + new dependency | **DEFER** |" "| F4 | Minor | single-line fix inside a diff file | **REVISE** |" "| F5 | Minor | cross-cutting (four modules) | **DEFER** |"
+     — every finding carries a route; none is left unrouted
+  B2 pass — "| F1 | Critical | any | **REVISE** |" "| F2 | Warning | inside diff files, traceable to a recorded acceptance criterion (`REQ-orders-109`) | **REVISE** |" "| F4 | Minor | single-line fix inside a diff file | **REVISE** |"
+  B3 pass — "| F3 | Warning | new file + new dependency | **DEFER** |" "| F5 | Minor | cross-cutting (four modules) | **DEFER** |"
+  B4 pass — "Correct the routing in one message if you want changes"
+     — the transcript contains a single routing table and one batched-correction prompt; searched for a per-finding prompt; none
+  B5 pass — "### REVISE → plan units in phase 6" "### DEFER → `.stamity/inbox.md`" "One dated block appended for this rework run, dated 2026-09-13, containing exactly these two rows:" "Warning · src/api/orders.ts:117 · create handler not idempotent; needs new src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency"
+     — REVISE named as plan units; DEFER named as one dated block in the inbox file; each row carries severity, file:line, description, and source naming feat/orders-idempotency
+  B6 pass — searched for "applied", "patched", "wrote", "staged", "git add", "edited", "replaced"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Authoring notes: none. Every binding criterion was decidable from the transcript's own text, the grouping matches the case file, and the Brief's directive-shaped opening line was graded as scenario data.

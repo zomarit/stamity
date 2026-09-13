@@ -1,0 +1,12 @@
+```text
+case: (id not supplied in the input; scenario is the pre-release dependency-exposure routing request)
+binding:
+  B1 pass — "`st-dep-audit`"
+  B2 pass — "`st-dep-audit`" is the only skill id in the transcript; searched for "st-verify", "st-qa", "st-browser-evidence", "st-handoff", "st-learn", "st-onboard", "st-design-system-detect", "none", "either", "alternatively", "or"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names one skill, it is the expected one, and no alternative or `none` is offered. No authoring defects observed. The case id was not present in the input handed in, so the block carries a descriptive placeholder rather than an invented id.

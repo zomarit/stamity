@@ -1,0 +1,22 @@
+Grading the transcript against the six binding and two advisory criteria under rubric v7.
+
+```text
+case: (no case id carried in the input)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "ADR under `docs/adr/`, recording the decision as observed with the alternatives the code rules out." "User-facing documentation. Precondition holds: the behaviour is shipped and citable, and the docs tree exists with no export-schedule page."
+  B3 pass — searched for "written to", "wrote the", "draft", "created"; none
+  B4 pass — searched for "proceeding", "combined", "single artifact", "I picked"; none
+  B5 pass — searched for "please", "which do you want", "let me know", "awaiting"; none
+  B6 pass — searched for "DONE", "files written:", "rows added:", "ids allocated:"; none
+advisory:
+  A1 fail — "The ambiguity gate has the natural resolution available: three sequential spawns, one per mode." — the transcript proposes a downstream plan and never names the input this invocation lacks, a single mode name
+  A2 pass — "**2. architect** —" "**3. docs** —"
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Two notes for the set author, outside the verdict:
+
+- **B2 and A2 each require two named elements.** No single one-line span without a double-quote character shows both, so each is cited by its elements under form 3. If form 3 is meant only for ordering criteria, these two criteria cannot be cited under v7 as written.
+- **The transcript names three readings, not two.** It adds a brownfield reading for the first clause of the brief. B2 as written is satisfied by naming both required readings and is silent on extra ones, so the extra reading did not affect the grade.

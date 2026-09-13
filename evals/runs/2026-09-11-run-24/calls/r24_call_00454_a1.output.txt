@@ -1,0 +1,3 @@
+`none`
+
+The checkpoint text says this exact request — "what should I check by hand?" — is what step 2 already answers, so it stays with the running `/st-work` command; st-qa still gets invoked there by name as a command step, not as a trigger match.

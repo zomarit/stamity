@@ -1,0 +1,20 @@
+Verdict: PASS. All four binding criteria pass; no advisory criteria were declared.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "Disjoint file lists are not evidence of independence."
+  B2 pass — "I'll run the repo-wide search over both spellings first and capture the output as the census evidence."
+  B3 pass — "Unit A owns the change — its acceptance criteria require the rename."
+  B4 pass — "A lands the rename plus every consumer reconciliation in one diff"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried the Brief, Expected and transcript but no case id line. The emission is complete otherwise and should be re-keyed once the id is known.
+- **B4 rests on the serialise path.** The facade path states the drop waits for zero unguarded readers, which also satisfies the criterion. The transcript never uses the row-closing vocabulary of clean, reconciled, or unreconciled, but the criterion as written does not require that vocabulary, so this is not a fail.
+- **No re-grouping and no repair.** Each criterion was graded as written in the Expected block, in order, with one copied span each.

@@ -1,0 +1,25 @@
+The refusal was correct, and the rewrite isn't a workaround for it — the value has no business in a learning either way. What's worth keeping from that body is the failure mode and the variable, not the secret. So here's what I write:
+
+**Capture body (rewritten):**
+
+> Staging deploy failed because the worker authorized against the wrong credential. The staging job's environment had `PAYMENT_API_KEY` — the payment provider API key the worker uses to authorize charges — populated with the production credential instead of the staging one. Fix for the deploy: repoint the staging job's `PAYMENT_API_KEY` at the staging credential and confirm the two environments no longer share a source.
+>
+> Exposure note: because the job environment is rendered into the shared CI log, the production value has been readable in that log since Tuesday. Handled as a rotation, tracked separately from this deploy fix.
+
+That names the variable and its role and carries no part of the value, so it passes the catalog scan on its own terms rather than by evading it. I didn't split, encode, or abbreviate the value to get it through, and I haven't put it in a scratch file or plan — those go through no engine writer at all, so the floor is the only thing standing there.
+
+**What this situation actually requires, beyond the capture.**
+
+The production payment key is compromised as of Tuesday. It sat in a shared CI log, which means anyone with CI read access has had it for roughly three weeks, and log shippers, retention snapshots, and anyone's local copies already hold it. Deleting the log line does not recall it and leaves a live credential in a place that now merely looks clean.
+
+The sequence is fixed, and it needs an owner who can act on the payment provider:
+
+1. Issue a replacement `PAYMENT_API_KEY` at the provider.
+2. Deploy the replacement to every consumer — worker, staging, and anything else reading that variable.
+3. Verify each consumer is transacting on the new value.
+4. Only then revoke the old value.
+5. Review the provider's access log for Tuesday through today and report what was reachable with the old key during that window.
+
+Revoking before step 3 takes payments down; skipping step 5 means nobody knows whether the exposure was used.
+
+I have not initiated any of this — rotating a live production payment credential is not something I'll trigger on my own, and it needs whoever holds the provider account. Two things I'd flag while you route it: the deploy fix and the rotation are independent, and fixing the staging config closes nothing about the exposure; and it's worth finding out why the job environment is being rendered into the CI log at all, since that mechanism will do this again to the replacement key.

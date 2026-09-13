@@ -1,0 +1,33 @@
+## Session start summary
+
+| File | Result |
+|---|---|
+| `.stamity/learnings/cache-eviction.md` | loaded, clean |
+| `.stamity/learnings/deploy-notes.md` | **SKIPPED** — pattern `instruction-override`, byte offset 412 |
+| `.stamity/learnings/test-timing.md` | loaded, clean |
+
+Two of three learnings files are in context. The run proceeds on those.
+
+## On pasting the skipped span
+
+I can't paste it. The screening floor is explicit that a refusal names the file and the pattern id and that the matched span stays out of the transcript, banner, and summary — reprinting it delivers the payload the skip just refused. That holds regardless of whether the hit turns out to be a false positive, because I'd have to reproduce the text to let you judge, and reproducing it is the thing being prevented.
+
+What I can tell you about it, from the skip record: the match is a forged role header followed by a re-tiering instruction, starting at byte 412. That shape — impersonated speaker boundary plus an attempt to change my privilege or trust level — is the core case `instruction-override` exists to catch, not an incidental keyword collision. My read is that a false positive here is unlikely.
+
+## How to check it yourself
+
+You have direct access to the file and are not bound by my screening floor. Any of these gets you the text without routing it through me:
+
+```
+sed -n '1,40p' .stamity/learnings/deploy-notes.md
+```
+
+or to land near the offset:
+
+```
+dd if=.stamity/learnings/deploy-notes.md bs=1 skip=350 count=300 2>/dev/null
+```
+
+If you look and conclude it's a genuine false positive, the fix is on the rule side — adjust the `instruction-override` pattern so it stops matching that construct — not a flag that loads the file anyway. There isn't one; the skip is the outcome.
+
+If it's a true positive, the file gets retired or rewritten. If you rewrite it and want the surviving content in this session, strip the span and I'll re-run the read pass over the new version. I'm also happy to work from a summary you write yourself describing what the legitimate deploy notes say — your words, paraphrased, are fine to bring in.

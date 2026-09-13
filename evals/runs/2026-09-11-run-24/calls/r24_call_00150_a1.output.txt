@@ -1,0 +1,40 @@
+## Review result — run r12, round 1
+
+**status:** `DONE`
+**verdict:** `request-changes`
+**confidence:** high — basis: unverified reading (directly read diff hunk; not executed, not reproduced)
+
+**Gate status: advisory, not merge-blocking.** This repository has no recorded seeded-defect catch-rate baseline and no declared false-positive budget, so steps 1 and 2 of the qualification gate are both unsatisfied. Under step 3, these findings route through human triage and this verdict does not block a merge on its own authority.
+
+### Lenses
+
+| Applied | Not applicable (no surface in this diff) |
+|---|---|
+| Security, Testability, Reliability, Maintainability, Product & Spec | UI, UX, Scalability, Performance, Enhancability |
+
+No rendered surface, no schema change, no dependency change, no background work in the diff.
+
+### Findings at the human checkpoint
+
+**`r12-f001` — Critical — Security — `src/api/export.ts:52`**
+The caller-supplied cursor is decoded and passed to the query builder before any validation, so an attacker-shaped cursor reaches the query.
+*Evidence basis:* directly read diff hunk in `src/api/export.ts`. This is none of the three evidence classes — not a native client artifact, not a structured result file, not a completion marker — and it is not a reproduction or a failing test. It is a reading of the code as written.
+*Marked for verification on re-review.*
+
+### Ledgered — below the severity floor
+
+These do not reach the human checkpoint and do not re-open the loop. They travel with run r12.
+
+**`r12-f002` — Minor — Maintainability — `src/api/export.ts:31`**
+Local is named `c`; every neighbouring call site in this file spells it `cursor`.
+*Evidence basis:* directly read diff hunk.
+
+**`r12-f003` — Minor — Maintainability — `test/api/export.test.ts:12`**
+Stale comment describes the old offset-based paging.
+*Evidence basis:* directly read diff hunk.
+
+### Re-review scope
+
+Round 2 scope is the delta plus `r12-f001`. From round 2 onward, only regressions against these prior findings and new `Critical` / `Warning` findings count; new `Minor` findings are suppressed. `r12-f002` and `r12-f003` are dispositioned and will not be re-raised against unchanged code.
+
+I made no edits and ran no commands — the fix for `r12-f001` belongs to the fixer role.

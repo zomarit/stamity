@@ -1,0 +1,39 @@
+Here is what I am about to write. Nothing has been written yet.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001` and `002` are taken, so `003` is the next free number. The plan slug is `status-json-flag` — the artifact's `id`, distinct from the unit slug `json-flag-render` inside it. Say the word if you want the artifact slug to match the unit slug instead.
+
+## Head
+
+```
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is absent — it is migration-intent only and this is a feature. `depends_on` is absent — this is neither a follow-up run nor a split, so there is no predecessor artifact to name. Both are valid absences and the freshness guard reads them as satisfied.
+
+## Unit `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag.** `--json`, boolean, default `false`, no value argument, no short alias. Declared on the status command's option set in `src/commands/status.ts`; `src/cli.ts` is not written by this unit, so the declaration must live with the command, not in the CLI's central table.<br><br>**Payload type**, exported from `src/commands/status.ts`:<br>`export interface StatusJson {`<br>`  workspace: string;`<br>`  branch: string;`<br>`  managedFiles: number;   // integer`<br>`  driftedFiles: number;   // integer`<br>`  lastSync: string;`<br>`}`<br><br>**Options and entry point:**<br>`export interface StatusOptions { json: boolean }`<br>`export function statusCommand(opts: StatusOptions): Promise<number>` — resolves to the process exit code.<br><br>**Emission.** When `opts.json` is true: exactly one write to stdout, `JSON.stringify(payload) + "\n"`, where `payload` is a `StatusJson`. No other stdout writes, and no stderr writes, on success. Key order is not part of the contract; presence and type of all five keys is.<br><br>**Exit codes.** `0` when `driftedFiles === 0`; `1` when `driftedFiles > 0`. The JSON object is printed in both cases — a drift finding is a successful report, not an error path.<br><br>**Default path.** When `opts.json` is false, existing human-readable output and existing exit-code behavior are unchanged. |
+| `testCriteria` | 1. `stamity status --json` on a clean workspace writes exactly one line to stdout that `JSON.parse`s to an object.<br>2. The parsed object has exactly the keys `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync`.<br>3. `workspace`, `branch`, `lastSync` are `string`; `managedFiles` and `driftedFiles` are integers (`Number.isInteger`).<br>4. On a clean workspace, stderr is empty and the resolved exit code is `0`.<br>5. On a workspace with at least one drifted file, the resolved exit code is `1` and stdout still parses to a conforming `StatusJson` with `driftedFiles > 0`.<br>6. Invoked without `--json`, stdout matches the pre-existing human-readable format and no JSON is emitted. |
+| `edgeCases` | **Drift present.** `driftedFiles > 0` → the full JSON object is still printed to stdout and the exit code is `1`; nothing is written to stderr. Drift is a reported finding, not a failure to report.<br>**Zero managed files.** An empty workspace → `managedFiles: 0`, `driftedFiles: 0`, exit `0`; the counts are emitted as integers, never omitted and never `null`.<br>**No recorded sync.** A workspace that has never synced → `lastSync` remains a string (the empty string), preserving the declared type rather than emitting `null`. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+One flag on the `lastSync` edge case: `REQ-cli-140` fixes the type as string but does not say what a never-synced workspace carries. I have assumed the empty string to keep the type contract intact. If `docs/specs/cli-surface.md` settles that elsewhere, tell me and I will match it rather than assume.
+
+I have used `2026-09-02` in the stamp as the run states, though this session's date is `2026-09-13`; if the run is in fact being written today, the stamp date should be `2026-09-13` against whatever head commit is current, or the freshness guard will read it as stale.
+
+Confirm and I will write the artifact.

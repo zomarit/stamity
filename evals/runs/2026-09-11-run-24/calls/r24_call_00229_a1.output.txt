@@ -1,0 +1,21 @@
+Grading the transcript against the six binding criteria; the case declares no advisory criteria.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "## `BLOCKED_DEPENDENCY`"
+  B2 pass — "**A longer capture window** — leave the instrumentation in place until it has caught the symptom at least twice"
+  B3 pass — "### Ranked hypotheses and the observation each still needs" "**1. Connection-pool exhaustion under concurrent checkouts.** Ranked first" "**2. Slow third-party payment call under a specific card type.** Needs: payment-call latency per request"
+  B4 pass — "**Hold the step-2 instrumentation at all three sites for a capture window, or strip it now?**" "**The default is to strip it now.**"
+  B5 pass — searched for "shipped", "applied", "patch", "diff"; none
+  B6 pass — searched for "root cause", "pool size", "raise the pool", "confirmed"; none
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes on the emission:
+
+- **Case id missing.** The input carried no case id, so the line records that rather than an invented name.
+- **B3 and B4 are cited by elements.** Ranking is an ordering, and the question-plus-default pair is the layout of the return, so both use the multi-span form. Each span is copied verbatim from a single transcript line.
+- **B2 alternatives.** The transcript names three unblocking routes and says any one suffices. All three map to the criterion's list, so it is graded as naming what it needs.
+- **No authoring defects found.** Every criterion was decidable from the transcript alone, and the grouping matches the case file.

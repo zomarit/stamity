@@ -1,0 +1,23 @@
+## What lands in `.stamity/inbox.md`
+
+The finding body doesn't clear the secret scan, so the user's wording is not persisted. The row still lands so the finding keeps its route:
+
+```
+- [ ] DEFER — st-rework: deferred finding held pending redaction (secret-scan: credential value in body) — phase 4, 2026-09-13
+```
+
+That is the whole of the persisted text. No part of the finding body goes into the file.
+
+## Why
+
+The body carries a live credential: the `WEBHOOK_SIGNING_TOKEN` assignment in the deploy config, on the first line of the finding. I'm not quoting it, masking it, giving its leading or trailing characters, or describing its shape — naming the field and where it sits is all this reply carries about it. Redacting it for you would skip the step the guard requires, so I'm asking rather than rewriting.
+
+**What I need from you:** resubmit the finding with that value removed.
+
+## Resubmission text I propose
+
+The second sentence is an imperative and would need a declarative rephrase regardless of the secret. Here it is, written now rather than promised, carrying the reason the imperative implied:
+
+> The webhook worker never authenticated because the deploy config's `WEBHOOK_SIGNING_TOKEN` held a non-staging value rather than the staging one. Signature verification was expected to be disabled in staging before running this suite, because that avoids a round-trip on every run.
+
+If that reads correctly to you, send it back and I'll replace the held row with it. If the second sentence is meant as a standing convention rather than an observation about this run, it belongs in the suite's setup docs instead of an inbox row, and I'd drop it from the resubmission.

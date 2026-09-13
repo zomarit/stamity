@@ -1,0 +1,36 @@
+**status:** `DONE`
+
+## Verdict
+
+| | |
+|---|---|
+| **verdict** | `request-changes` |
+| **confidence** | high |
+| **basis** | Direct reading of the diff hunk. No execution, no sub-agent transcript, no structured result file — so this is not a class-1 or class-2 citation and is not upgraded to one. |
+| **gate status** | **Advisory, not merge-blocking.** This repo has no recorded seeded-defect catch rate and no declared false-positive budget, so the qualification gate is unmet and findings route through human triage. |
+
+## Applied lenses
+
+Applied: Security, Testability, Reliability, Maintainability, Product & Spec.
+Not applicable (no surface in this diff): UI, UX, Scalability, Performance, Enhancability — no rendered surface, no schema change, no dependency change, no background work.
+
+## Findings at the human checkpoint
+
+**`r12-F001` — Critical — `src/api/export.ts:52`**
+The caller-supplied cursor is decoded and handed to the query builder with no validation between decode and use, so an attacker-shaped cursor reaches the query.
+*Evidence basis:* directly read diff hunk (no class-1/2/3 artifact; weaker than an executed reproduction).
+*Marked for verification on re-review.*
+
+No `Warning` findings.
+
+## Ledgered (travel with run r12, not with the checkpoint)
+
+**`r12-F002` — Minor — `src/api/export.ts:31`** — local named `c` where neighbouring call sites in this file spell it `cursor`. *Evidence basis:* directly read diff hunk.
+
+**`r12-F003` — Minor — `test/api/export.test.ts:12`** — stale comment describing the old offset-based paging. *Evidence basis:* directly read diff hunk.
+
+Both are ledgered under the nit policy and do not re-open the loop.
+
+## Re-review scope for round 2
+
+The delta, plus `r12-F001`. Dispositioned findings are not re-raised against unchanged code, and new `Minor` findings are suppressed from round two onward — only regressions against `r12-F001`–`F003` and new `Critical`/`Warning` findings count.

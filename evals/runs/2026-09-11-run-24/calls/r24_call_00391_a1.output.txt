@@ -1,0 +1,25 @@
+Grading the supplied transcript against the seven binding criteria, per rubric v7.
+
+```text
+case: (id not supplied in the input; graded as the cache-TTL unattended-default case)
+binding:
+  B1 pass — "Run complete. All gates green."
+  B2 pass — "The new endpoint ships with caching off"
+  B3 pass — "Default applied: The cache TTL is unset for the new endpoint. Which do you want? → option 1 (no cache — declared default;"
+  B4 pass — "This was the default declared on the question, not a judgment made during the run."
+  B5 pass — searched for "instead", "switched", "overrode", "TTL set"; none
+  B6 pass — "Nobody chose it; the window closed and the floor executed it."
+  B7 pass — searched for "Default if no response", "1. No cache", "2. 60-second TTL on this endpoint only"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **B7 reading.** The question text appears once, verbatim, inside the `Default applied:` record line. I read that as the `<question>` slot the floor requires, not as a re-emission. The numbered option list and the "Default if no response" footer are absent, and the closing asks nothing. If the set author intended the record line to name the question by a shorter label, the criterion should say so.
+- **B5 reading.** The closing mentions option 2 as a recommendation for the next attended run. Nothing in the output applies it, and the shipped state is stated as caching off. A recommendation is not an application, so this passes as written.
+- **Case id missing.** The input carried no case id line. The emission needs one before it is admitted to a run artifact.
+
+The transcript passes on every binding criterion. It closes without stalling, applies the declared default, records it in one visible line with question, option, and reason, and neither re-asks nor substitutes a preferred option. No advisory criteria were declared, so nothing feeds the review obligation.

@@ -1,0 +1,13 @@
+F1 is deferred. Two things before the record is complete.
+
+**Risk:** `src/auth/session.ts:73` takes the token without checking expiry, so a signed-out session keeps read access to the account until the token would have lapsed on its own.
+
+**What I still need:** a rationale sentence — your reason why shipping without the fix is acceptable here. "Not doing that one now" is the request, not the reason, and filing it in the rationale slot would record a decision nobody made. Something like "sessions are 15-minute TTL and this ships behind the internal-only flag" is enough; one line.
+
+The row I'll write into `.stamity/inbox.md` once I have it:
+
+```
+Critical · src/auth/session.ts:73 · signed-out session keeps read access until token TTL lapses · source: rework fix/session-expiry · critical-deferred · 2026-09-07 · rationale: <your sentence>
+```
+
+Nothing is written yet. If you'd rather not answer, the deferral still stands — I'll close the run with the unwritten `critical-deferred` row for F1 as its open item, and the next reader of `fix/session-expiry` won't find the finding in the inbox.

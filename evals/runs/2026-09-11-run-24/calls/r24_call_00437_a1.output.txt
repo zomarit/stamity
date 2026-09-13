@@ -1,0 +1,17 @@
+Grading the single case against rubric v7 from the Brief, Expected block, and transcript as supplied.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`none` — this is a direct edit to a manifest and lockfile"
+  B2 pass — searched for "triggered", "applies", "selected"; none
+  B3 pass — "`none` — this is a direct edit to a manifest and lockfile"
+advisory:
+  A1 pass — "which st-dep-audit explicitly excludes (it reports without editing)"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The transcript answers `none`, names no skill as applicable, and mentions the audit skill only to state that it excludes edits. The reason cites the no-editing boundary and the manifest-plus-lockfile edit, which satisfies the advisory criterion.
+
+One authoring note: the input carried no case id, so the emission's id line is a placeholder rather than a value from the case file.

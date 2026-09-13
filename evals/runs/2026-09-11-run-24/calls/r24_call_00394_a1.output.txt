@@ -1,0 +1,11 @@
+Run complete. All gates green.
+
+```
+Default applied: The cache TTL is unset for the new endpoint. → option 1 (unattended run; question window closed with no answer; declared default executed)
+```
+
+**Result:** the new endpoint ships with no caching. Every request hits the database. Nothing is cached, so there is nothing to invalidate.
+
+**Scope of this decision:** endpoint-local. No change to the four existing read endpoints; no shared cache config was touched.
+
+**For whoever picks this up:** option 1 is the slow outcome, not the chosen-on-merit one — it executed because it was the declared default and nobody was present to answer. If the endpoint is read-heavy, option 2 (60-second TTL, this endpoint only) is one config line and does not touch the other four endpoints. That call needs a human; this run was not permitted to make it.

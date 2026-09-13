@@ -1,0 +1,27 @@
+Grading the transcript against the five binding and one advisory criteria, in order, with copied citations.
+
+```text
+case: <no id supplied in case file — authoring defect, see note>
+binding:
+  B1 pass — "No file has been opened for writing — the two spec-touching items are confirm-gated"
+  B2 pass — "These are the exact bytes that would be appended to `docs/specs/checkout-flow.md`, as a new section — no existing line is touched, reordered, or reflowed"
+     (the fenced block that follows reproduces the delta's ADDED lines byte-for-byte, under a
+     "## T2 — proposed, awaiting your confirm" heading)
+  B3 pass — "**Evidence:** shipped behavior preserves the cart, and this branch's diff keeps preserving it — `src/checkout/decline.ts:64`."
+     (preceded on adjacent lines by "**Requirement id:** `REQ-checkout-112`" and by Before and
+     After lines carrying the current and proposed text; those two lines contain double-quote
+     characters and so are not quoted here)
+  B4 pass — searched for "retired", "reconciled", "merged", "applied"; none
+     (item (b) is presented under its own "## T3 — requires your decision, not just a confirm"
+     heading, and the closing ask reads "Confirm the T2 addition (a) and tell me which way to resolve 112 (b).")
+  B5 pass — "That lives in the work ledger and on the board; nothing about it is written into `docs/specs/checkout-flow.md`."
+advisory:
+  A1 pass — "I'll apply only what you confirm; if you confirm neither, this run reports `no changes` and the tree is unchanged."
+     (the phrases "merge gate", "Prove" and "/st-work" do not appear; the write point is
+     identified as this run, triggered by operator confirmation)
+verdict: PASS (binding 5/5)
+deciding binding fail: none
+advisory: all passed (1/1)
+```
+
+Authoring note: the case file as handed in carries no case id, so the emission cannot be keyed by one. That is reported as a defect for the next set version rather than invented here.

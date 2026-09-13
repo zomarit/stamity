@@ -1,0 +1,40 @@
+## Routing — 5 findings
+
+Read top to bottom, first match wins:
+
+| # | Severity | Matched scope | Route |
+|---|---|---|---|
+| F1 | Critical | any | **REVISE** |
+| F2 | Warning | inside diff files, traceable to a recorded acceptance criterion (`REQ-orders-109`) | **REVISE** |
+| F3 | Warning | new file + new dependency | **DEFER** |
+| F4 | Minor | single-line fix inside a diff file | **REVISE** |
+| F5 | Minor | cross-cutting (four modules) | **DEFER** |
+
+### REVISE → plan units in phase 6
+
+**PU-1 — Apply discount before computing order total** (`src/api/orders.ts:88`)
+Forward change: reorder the total computation so the discount is applied to the line subtotal before the charged amount is derived.
+Acceptance criterion: for an order with a non-zero discount, the charged amount equals `subtotal − discount`; a regression test in `test/api/orders.test.ts` covers a discounted order and asserts the charged figure.
+
+**PU-2 — Conflict path returns 409, not 500** (`src/api/orders.ts:141`)
+Forward change: the duplicate-key conflict branch returns 409 with the conflict body.
+Acceptance criterion: `REQ-orders-109` — a replayed request against an existing idempotency record responds 409; test asserts the status and that no second order is written.
+
+**PU-3 — Correct misspelled local identifier** (`src/api/orders.ts:22`)
+Forward change: rewrite the identifier on that line and its references within the function.
+Acceptance criterion: the misspelled name appears nowhere in `src/api/orders.ts`; lint and typecheck pass.
+
+### DEFER → `.stamity/inbox.md`
+
+One dated block appended for this rework run, dated 2026-09-13, containing exactly these two rows:
+
+```
+Warning · src/api/orders.ts:117 · create handler not idempotent; needs new src/api/idempotency.ts and a new dependency · source: rework feat/orders-idempotency
+Minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules; needs a shared constant · source: rework feat/orders-idempotency
+```
+
+Both rows are tracked from there: `/st-board` fill triages the inbox, and `/st-work` surfaces them when its framing phase touches `src/api/orders.ts`.
+
+---
+
+Nothing is written yet. Correct the routing in one message if you want changes (*"revise 3, defer 4"*), or say go and I'll write the inbox block, build the three plan units, and lint the plan — execution then routes to `/st-work`.

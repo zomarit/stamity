@@ -1,0 +1,3 @@
+`st-dep-audit`
+
+It asks for advisories and license terms across the installed dependency graph ahead of a release — exactly the report-only pre-release audit that skill describes.

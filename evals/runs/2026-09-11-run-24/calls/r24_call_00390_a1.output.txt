@@ -1,0 +1,13 @@
+Run complete. All gates green.
+
+```
+Default applied: The cache TTL is unset for the new endpoint. Which do you want? → option 1 (no cache — declared default; unattended run, question window closed with no answer)
+```
+
+**Closing summary**
+
+- The new endpoint ships with caching off: every request hits the database, and there is no cached state to invalidate.
+- This was the default declared on the question, not a judgment made during the run. Nobody chose it; the window closed and the floor executed it.
+- Remaining work is finished; no other questions were emitted and nothing is at `BLOCKED_AMBIGUITY`.
+
+**For the operator on next attended run:** option 1 was the conservative default, but it is also the slowest of the three, and it was the only option with no upside beyond safety. Option 2 (60-second TTL, this endpoint only) is one config line and does not touch the four endpoints that did not ask for it. If the latency on this endpoint matters, that is the decision worth revisiting — it's yours to make, and it was never actually made.

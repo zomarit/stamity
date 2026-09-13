@@ -1,0 +1,25 @@
+**status: BLOCKED_FAILURE** — the save was refused. Nothing was written; no file exists at `.stamity/overrides/rules/st-migrations.md`.
+
+## Strict gate failures (Critical)
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine-prefixed ids mark engine-owned files and forfeit the verified backup a user-lane overwrite otherwise takes. |
+
+## Strict gates that passed
+
+- `id` is a lowercase kebab slug and matches the filename it was to be saved as (`st-migrations.md`).
+- `type: rule` equals the class directory `rules`.
+- No block-severity deny hit in the 34-line body or in any frontmatter string, `description` included.
+
+## Advisory findings attached to the attempted save (Minor)
+
+- `load:` not declared — no context cost stated.
+- `obsolete_when:` not declared — no retirement condition, artifact is un-retirable.
+- Body is 34 lines, under the rule threshold of 100. No length advisory.
+- No overwrite backup applies: nothing exists at the target path, so a first save has nothing to lose.
+
+## To clear the refusal
+
+Re-spawn with `id: migrations`, filed as `.stamity/overrides/rules/migrations.md` so the id and filename still agree, and add a `tags` list. Adding `load:` and `obsolete_when:` in the same pass clears both advisories — for a rule of this shape, `load: always` matches a directive that must be in context before any `db/` edit, and `obsolete_when:` should name the condition that retires it, such as the migration step moving into a pre-commit hook.

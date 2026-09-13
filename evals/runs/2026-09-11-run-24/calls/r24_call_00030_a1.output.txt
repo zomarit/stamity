@@ -1,0 +1,19 @@
+**queue-worker-b** is falling behind.
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | −109 | **+592** |
+| processed (1h) | 1,042 | 97 |
+| implied arrivals | 933 | 689 |
+| last heartbeat | 09:40:52 | 09:40:55 |
+
+**By how much:**
+- Backlog grew by **592 items over the hour** (~9.9/min net accumulation).
+- It processed **97** of the ~689 items that arrived — about **14% of its inbound rate**, so it's shedding ~86% of arrivals into the queue.
+- Throughput is **10.7× lower** than worker-a (97 vs 1,042) on a comparable arrival load.
+- At its current rate, the standing 806-item backlog would need ~8.3 hours to drain *even with zero new arrivals*; under continued load it never converges.
+
+Worth noting: b's heartbeat is current (3 s before the window close, fresher than a's), so it isn't dead or disconnected — it's alive and slow. That pattern points at per-item stalls on the worker rather than a crash or a lost consumer: blocking I/O, a retry loop, or a lock/throttle on its path. Worth checking b's per-item latency and error/retry counts next.
+
+*Screening: `mcp__opsmetrics__query` result body screened clean against all five classes — outcome `kept`; figures above come from that body.*

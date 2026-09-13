@@ -1,0 +1,79 @@
+## Findings
+
+### 1. SQL injection in `GET /invoices/:id`
+
+**Category:** injection
+
+`req.params.id` is interpolated directly into the query string. `/invoices/'%20OR%201=1--` returns the table; the same hole supports `UNION SELECT` against any table the connection can reach, and on a driver with multi-statement support, writes. Nothing upstream constrains the parameter — `requireSession` checks a cookie and stops.
+
+Fix: bound parameter (`db.raw("SELECT ... WHERE id = ?", [id])` or the query builder), and parse `:id` into its declared shape first — if invoice IDs are UUIDs or integers, reject anything that isn't one before the value reaches the data layer.
+
+---
+
+### 2. No per-resource authorization on either route
+
+**Category:** broken access control
+
+Both handlers treat the path identifier as a grant. `requireSession` establishes *who* the caller is and nothing about *what* they may address, so any caller with a valid session can read any invoice in the system and void any invoice in the system. The void route is the more serious of the two: it is an unauthenticated-in-effect, state-changing financial operation reachable by every session holder.
+
+Fix: load the record, then ask whether `req.user` may act on *it* — owner/tenant match, role, invoice state. The check belongs server-side in both handlers; a route-level check would grant every record the route can reach.
+
+---
+
+### 3. Void handler does not fail closed on a missing invoice
+
+**Category:** insecure design, broken access control
+
+`invoices.byId` has no null check. If it returns `undefined` for an unknown ID, `invoices.void(undefined)` runs with whatever that means in the data layer, and the caller still receives `{ ok: true }`. An absent record must deny.
+
+---
+
+### 4. `SELECT *` serialized straight to the response
+
+**Category:** insecure design
+
+The response is an unparsed database row (and, depending on the driver, a result wrapper rather than the row itself). Every column the table grows later — internal notes, cost basis, payment processor tokens, soft-delete metadata — ships to the caller automatically. Responses cross a trust boundary too: select named columns and serialize a declared shape.
+
+---
+
+### 5. `allowTestLogin` is the inverted environment check
+
+**Category:** security misconfiguration, authentication failure
+
+```ts
+export const allowTestLogin = process.env.NODE_ENV !== "production";
+```
+
+This turns a test-login path ON in every environment nobody thought to name: an unset `NODE_ENV`, a fresh container, a renamed stage, `"Production"`, `"prod"`, a typo. An authentication bypass gated on the absence of one exact string is one deploy-config slip from being live.
+
+Fix: allowlist the environments where it is permitted — `["development", "test"].includes(env)` — resolved from an environment value that startup validates against a named enum and refuses to boot outside of.
+
+---
+
+### 6. `seedRoutesEnabled` defaults on
+
+**Category:** security misconfiguration
+
+```ts
+export const seedRoutesEnabled = process.env.SEED_ROUTES !== "off";
+```
+
+Unset means enabled. So does `"false"`, `"0"`, `"OFF"`, and every misspelling of `"off"`. Seed and reset commands in production are destructive and frequently authentication-free. Same fix: positive allowlist of named environments, absent grant denies.
+
+---
+
+### 7. No startup validation of the environment value
+
+**Category:** security misconfiguration
+
+Both flags read raw `process.env` at module load with no enum check. Nothing in the diff refuses to boot on an unrecognized environment, which is what makes items 5 and 6 silent rather than loud.
+
+---
+
+### Worth confirming (not visible in this diff)
+
+Voiding an invoice is an irreversible financial state change and there is no audit record in the handler. If that logging happens inside `invoices.void`, this is nothing; if it doesn't, it's a **logging failure** — no way to reconstruct who voided what after the access-control gap above is exploited.
+
+---
+
+**Blocking:** items 1, 2, 5, and 6. Item 1 is remotely exploitable without any valid account beyond a session; item 2 makes every invoice in the tenant base readable and voidable by any session holder; items 5 and 6 are live in production the moment an environment variable is unset or misspelled.

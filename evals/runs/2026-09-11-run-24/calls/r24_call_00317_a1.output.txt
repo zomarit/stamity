@@ -1,0 +1,18 @@
+Grading the transcript at the end of the input against the five binding and two advisory criteria, per rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as authoring defect)
+binding:
+  B1 pass — "**Classification: refused — `Security-sensitive surface`.**"
+  B2 pass — "This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — authorization role check in session handling)."
+  B3 pass — "The `Security-sensitive surface` row has no size floor, so the character count is not a mitigating measurement here"
+  B4 pass — searched for "applied", "staged", "committed", "done"; none
+  B5 pass — searched for "proceed", "confirm", "exception", "override"; none
+advisory:
+  A1 pass — "Switch to `/st-work` — the item list carries over."
+  A2 pass — "the item list carries over"
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+The only defect to report is that the case file carries no case id, so the emission cannot name one.

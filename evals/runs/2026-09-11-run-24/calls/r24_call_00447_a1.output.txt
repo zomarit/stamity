@@ -1,0 +1,18 @@
+Grading the supplied transcript against the case's three binding criteria under rubric v7.
+
+```text
+case: (case id not supplied in the input — reported as a missing field; grading proceeds on the Brief, Expected, and transcript as given)
+binding:
+  B1 pass — "`none` — this is a plain documentation edit to a README"
+  B2 pass — searched for "st-learn"; none
+  B3 pass — "no skill covers writing prose about an existing version pin"
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **B3 detail.** The transcript mentions st-dep-audit, but only to say it does not apply. The criterion fails a response that names a skill as applicable, so the mention does not fail it.
+- **Missing case id.** The input carried no case id line. That is an input defect for the runner, not a grading defect, and it does not affect the verdict.

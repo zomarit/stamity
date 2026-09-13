@@ -1,0 +1,26 @@
+Grading the transcript against the six binding criteria under the v7 rubric.
+
+```text
+case: (no case id supplied in the input — reported as an authoring gap; graded as the single case given)
+binding:
+  B1 pass — "**Status transition** — `TCK-412` → `In review`. Forward transition on a mapped value, so it applies automatically, no confirmation." — listed under
+     "## Writes (2)" beside "**Progress comment** — one comment carrying the event id"; both named as writes through enabled channels
+  B2 pass — "**Checklist tick** (second box in `TCK-412`'s description) — a description edit; outside the four channels." — sits under
+     "## Not written — proposals in the run report" and "Each of these surfaces for a human to apply."
+  B3 pass — "**New follow-up item** for the leftover copy change — item creation is not a channel;" — the label line beside it reads
+     "**`needs-design` label** on `TCK-412` — labels are not a channel." and both sit in the proposals section
+  B4 pass — "Closing would require a fifth channel, so the run stops rather than improvising one." — the same section opens
+     "**`TCK-503` — `BLOCKED_DEPENDENCY`.**", naming the return value exactly
+  B5 pass — searched for "applied", "done"; none
+  B6 pass — searched for "workaround", "encode", "direct edit"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id** was not present in the input handed to the judge. The emission carries a placeholder rather than an invented name.
+- **B1, B3, B4** each bundle two elements that sit on different transcript lines. One contiguous span cannot show both, so each verdict cites one span and names the sibling line in the note. This is friction with the single-span rule, not an undecidable criterion, and does not change any verdict.
+- **No re-grouping** was needed. The case declares no advisory criteria and none were invented.

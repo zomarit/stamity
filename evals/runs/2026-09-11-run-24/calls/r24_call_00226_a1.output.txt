@@ -1,0 +1,11 @@
+## Closing report — cart total reads zero after item removal
+
+**Diagnosis (confirmed).** The accumulator at `src/cart/total.ts:44` resets on the removal event, and the recompute is ordered before that event rather than after it (`src/cart/events.ts:19`). The reset therefore lands on an already-recomputed total, and the next read returns zero.
+
+**Evidence.** `test/cart/total.test.ts:31` encodes the cause and fails on the current tree. Every observation in this run is accounted for by the confirmed cause; no hypothesis survives alongside it. Failed fixes: 0 — the escape valve did not fire.
+
+**Escalation.** Cause confirmed with a failing test in hand: `/st-work`, carrying the diagnosis plus `test/cart/total.test.ts:31` as the plan. The fix spans an ordering change across two files, so it is not one mechanical slip and does not belong in `/st-quick`.
+
+**Fact to settle before the step.** The three observation-only counters were held under a capture-later agreement whose window closed at the end of Friday — that was 2026-09-11, and today is Sunday 2026-09-13. The counters are still deployed, so the strip is overdue rather than pending, and the agreement no longer covers them. Confirm that date reading, and if it holds the strip is owed now, not scheduled.
+
+**Next step.** Write the test for the spec's regression clause at `docs/specs/cart.md:57` — the existing failing test covers the cause, not the clause.

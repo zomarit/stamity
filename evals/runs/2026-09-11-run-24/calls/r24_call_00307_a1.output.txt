@@ -1,0 +1,18 @@
+Grading the one transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (case file carries no id line — reported as an authoring defect; grading proceeds)
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold"
+  B2 pass — "This crosses the `Schema, API, event or migration` threshold"
+  B3 pass — "(`new column on orders plus a backfill migration`)"
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "risky", "bad idea", "careless", "should have known", "judgement"; none
+  B6 pass — searched for "maybe", "would you like", "proceed anyway", "confirm", "part of"; none
+advisory:
+  A1 pass — "the item list carries over."
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+The transcript is a single-line refusal that names the table row verbatim, states the measured item, routes to the work lane, and carries the item list over. No verdict language and no hedge are present. The only defect noted is that the case file as handed in has no case id, so the emission cannot name one.

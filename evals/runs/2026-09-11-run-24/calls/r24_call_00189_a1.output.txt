@@ -1,0 +1,26 @@
+Grading the transcript against the seven binding and two advisory criteria, then emitting the v7 block.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+     One step, closing the response; the ladder's four rows are not offered as a menu.
+  B2 pass — "grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session"
+  B3 pass — searched the Outstanding section for "contradiction", "low confidence", "low-confidence"; none
+  B4 pass — "**Switch to `/st-work` to apply.**"
+     Only deviation from the governing line is sentence-initial capitalisation and the closing period; wording and destination are identical.
+  B5 pass — searched for "patch", "diff", "staged", "drafted", "ready to paste"; none
+     Transcript also states "Naming it is the whole handoff; this command does not start it."
+  B6 pass — "**Switch to `/st-work` to apply.**" "**Recommended next step:** unblock `staging-env`"
+     Destination and step appear as separate elements; the step is the unblocker, not the destination.
+  B7 pass — searched the Outstanding section for "let me know", "review the findings", "ticket", "consider"; none
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered manifest"
+     The step leads with the facet name but names both unblocking inputs explicitly.
+  A2 fail — searched for "framing brief", "carry over", "carries over", "carried"; none
+     The transcript names /st-work as destination but never states that the cited claims carry over as its framing brief.
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+The case passes on all binding criteria. The one advisory miss is A2: the response hands off to the work lane without saying the cited claims travel with it as the framing brief. Under SET-v4, that advisory needs a reviewed diff if it fails again next run.

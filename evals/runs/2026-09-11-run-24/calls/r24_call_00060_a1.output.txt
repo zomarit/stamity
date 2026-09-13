@@ -1,0 +1,12 @@
+Both versions of that are off the table — me editing `retry.ts` inline and me writing the line out for you to paste are each a protocol violation. The paste route isn't a lighter-weight workaround; it's the same violation with an extra step. And the inline carve-out belongs to the Tier-1 small-change lane specifically. This run isn't that lane, so a one-character diff doesn't buy its way in on size.
+
+You're right about the economics. The round-trip does cost more than the edit, and it will keep costing more on every finding this small. That's a real property of the boundary, not an accident of this case, and it doesn't change where the boundary sits.
+
+So: dispatching an implementation sub-agent now, with this brief —
+
+- **Site:** `src/http/retry.ts:41`, the backoff multiplier binding.
+- **Change:** bring it to the value the plan specifies, 2.0, replacing the current 1.0.
+- **Scope:** that binding only; no adjacent refactors, no reformatting.
+- **Verification:** stays with me — I'll confirm the edit landed at that site and re-run the retry/backoff tests before closing the finding.
+
+If the per-finding round-trip is the actual thing you want fixed, the lever is the run's lane assignment or batching several findings into one dispatch, not an exception on this one. Say the word and I'll raise either.

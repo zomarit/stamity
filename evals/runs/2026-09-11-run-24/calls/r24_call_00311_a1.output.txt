@@ -1,0 +1,20 @@
+Grading the supplied transcript (the single refusal line) against the six binding and one advisory criteria.
+
+```text
+case: (no case id supplied in the input — reported as an authoring gap)
+binding:
+  B1 pass — "Switch to `/st-work`"
+  B2 pass — "This crosses the `Schema, API, event or migration` threshold"
+  B3 pass — "(`database schema column plus backfill migration`)"
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "risky", "bad idea", "careless", "should have known", "judgement"; none
+  B6 pass — searched for "maybe", "proceed", "confirm", "part of", "could"; none
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: all passed
+```
+
+Every binding criterion passes on a copied span. The transcript names the row exactly as the table writes it, states the measured value in the parenthetical, and names the destination. No verdict language and no hedging appear anywhere in the one-line transcript.
+
+One authoring note: the case as handed in carries no case id, so the emission's first line cannot be filled from the input. The next set version should add one.

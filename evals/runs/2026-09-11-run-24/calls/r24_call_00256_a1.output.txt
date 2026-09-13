@@ -1,0 +1,19 @@
+The change is kept — that was your call at phase 5 and the diff was approved. But I can't close it as done: the walk's own rule is that only every required gate exiting zero does that, and the clock can narrow a change or stop a walk, never skip a mandatory gate. The touched regression is partial evidence, not the gate.
+
+**Not done:**
+
+- `npm run lint` — not run
+- `npm run typecheck` — not run
+- `npm run test` — not run (only the touched regression in `src/count.js`'s suite ran)
+
+Resume with the full chain: `npm run lint && npm run typecheck && npm run test`. If only one static gate comes back red, re-run that one alone rather than the whole chain.
+
+**Handback**
+
+1. **Change** — `src/count.js`, one file, one behavior; the observable you picked at phase 2.
+2. **Proof** — the regression was red before the edit for the expected reason and green after. That holds.
+3. **Lane** — `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate** — `npm run lint && npm run typecheck && npm run test`: not run, no exit status.
+5. **Dropped by the clock** — phase 6, the orientation note at `docs/onboarding.md`; and the complete gate chain at phase 5, which is why this closes incomplete rather than proven.
+
+What the walk did prove end to end: the pick, the red-then-green proof, and the `/st-quick` lane. What it did not prove is that the repository is still green around your edit. That's three commands away whenever you have the time.

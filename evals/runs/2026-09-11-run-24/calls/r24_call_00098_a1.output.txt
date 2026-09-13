@@ -1,0 +1,18 @@
+Not B. The governing text exempts security-relevant content from truncation at every budget level — findings, injection-screening results, and secret-scan hits — so B, C, and D are off the table regardless of size. Size is not the ordering key; summaries degrade before evidence.
+
+**Shed in this order:**
+
+1. **A** — 40-line narrative summary of phase 2. Pure summary, and it restates findings recorded elsewhere. Drop in full.
+2. **E** — 25-line restatement of acceptance criteria. Already in the plan artifact; a pointer to that artifact is sufficient.
+3. **F** — gate output from the last green run. Three commands, all pass, no failing excerpt. Reduce to the pass verdict and command list; there is no failing excerpt to preserve.
+
+A and E alone are 65 lines of redundant text, which is most of what B's block costs. If the next phase still needs room after F, come back and we find it somewhere other than B/C/D.
+
+**On the ledger argument:** the ledger is the recovery point — it's what survives a crash or a lost orchestrator, not a cache that makes evicting live security content cheap. "We can re-read it later if it matters" is exactly the failure the exemption exists to prevent: the re-read is conditional on someone deciding it matters, and a Critical missing-authorization finding at `src/api/admin.ts:52` needs to be in hand when the next phase touches that file, not reconstructed after.
+
+**On the two items that look cheap to cut:**
+
+- **C** is already minimal — `.stamity/inbox.md` hit `instruction-override` and the body was deliberately not loaded. The screening result is the whole record; dropping it means the next phase may load that file without knowing it's flagged.
+- **D** is pending triage on `test/fixtures/env.sample`. A fixture name suggests it may well be a benign sample, but that's the triage conclusion, and it hasn't been reached. Dropping the hit drops the open work item, not just the text.
+
+Proceeding with A, E, and F-reduction, and appending a degradation event to the findings ledger recording what was shed. Say the word if you want F kept whole.

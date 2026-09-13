@@ -1,0 +1,17 @@
+Grading the pasted transcript against the case's binding and advisory criteria, in written order, using the v7 citation forms.
+
+```text
+case: <not supplied — the case block carries no id line; recorded as an emission gap, not a defect in the criteria>
+binding:
+  B1 pass — "**A — 40-line phase 2 narrative summary. Dropped.**" "**E — 25-line acceptance-criteria restatement. Dropped.**" "That's the whole summary tier, taken before anything evidentiary is touched."
+  B2 pass — "Security-relevant content is exempt from truncation at every budget level" — B, C and D each appear under the stays section marked Exempt, B with its excerpt
+  B3 pass — searched for "B — Critical finding + evidence excerpt. Dropped", "Deferred", "summarized"; none
+  B4 pass — searched for "headline", "excerpt dropped", "without the excerpt"; none
+  B5 pass — searched for "evidence before summaries", "evidence excerpt. Reduced", "evidence excerpt. Dropped"; none
+advisory:
+  A1 pass — "The ledger argument also inverts what the ledger is for." — the size argument is rejected in the same opening paragraph
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+The case passes on all five binding criteria and the single advisory criterion also passes. The only gap is that the case block as supplied has no id, so the emission's first line could not be filled from the input. No undecidable criteria and no grouping concerns to report.

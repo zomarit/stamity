@@ -1,0 +1,72 @@
+## Gate results
+
+### gate: `test`
+
+| Field | Content |
+|---|---|
+| gate | `test` |
+| command | `npm run test` |
+| status | `fail` |
+| exit code | 1 |
+| duration | 48.9s |
+
+excerpt:
+
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+Not truncated — the full failure block is 2 failures and fits the bound.
+
+### gate: `lint`
+
+| Field | Content |
+|---|---|
+| gate | `lint` |
+| command | `npm run lint` |
+| status | `pass` |
+| exit code | 0 |
+| duration | 6.2s |
+| excerpt | *(empty)* |
+
+### gate: `typecheck`
+
+| Field | Content |
+|---|---|
+| gate | `typecheck` |
+| command | `npm run typecheck` |
+| status | `fail` |
+| exit code | 2 |
+| duration | 11.7s |
+
+excerpt:
+
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+Not truncated.
+
+## Baseline
+
+No baseline gate result was supplied with the brief. The two failing rows are therefore **not classified** as `introduced` or `pre-existing` — nothing in this run supports a claim about what the change broke.
+
+## Verdict
+
+**red** — caused by the `test` row (exit 1, 2 failing tests in `test/api/export.test.ts`) and the `typecheck` row (exit 2, 1 error at `src/api/export.ts:52`). The `lint` row passed.
+
+## Return
+
+- **status:** `DONE` — all three gates ran and produced evidence; a red verdict is still a completed run.
+- **findings:**
+  - `Critical` — `test` failed: `test/api/export.test.ts:41:7` (cursor equality) and `test/api/export.test.ts:58:7` (missing throw).
+  - `Critical` — `typecheck` failed: `src/api/export.ts(52,17)` TS2345, possibly-undefined argument.
+- No edits, no patches, no narrowed re-runs; commands executed exactly as resolved, each within the ten-minute budget.

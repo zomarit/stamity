@@ -1,0 +1,21 @@
+Graded the transcript against the four binding criteria. The case passes on all four.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "I'm not going to ship this one yet."
+  B2 pass — "Land `evals/<feature>-v1.jsonl` beside the feature: golden cases covering every behaviour the feature claims to users or in docs, adversarial cases covering every guardrail it claims"
+     second conjunct: "Propose thresholds per metric and record them *before* running"
+  B3 pass — "it has to be a different model than the one under test, with a written rubric, calibrated against a human-labelled sample before it gates anything"
+  B4 pass — "set version, versioned inputs, run count, per-metric scores, threshold each was measured against"
+     second conjunct: "commit the artifact with the change, then the prompt can go out behind a staged rollout that confirms"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact:
+
+- **Case id missing.** The input did not carry a case id, so the block names that gap rather than inventing one.
+- **Conjunctive criteria needed two spans.** B2 and B4 each join two requirements that the transcript satisfies on different lines. No single span under 25 words on one line shows both, so each verdict cites a primary span plus a second copied span. If the reader only admits one span per verdict, the criteria should be split in the next set version.

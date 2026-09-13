@@ -1,0 +1,30 @@
+Grading the returned transcript against the nine binding and one advisory criteria.
+
+```text
+case: performance-no-budget-return
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched for "`Critical` —", "Critical —"; none
+  B3 pass — "**size** — no bundle or asset size limit" "**latency** — no latency target" "**benchmark** — no benchmark threshold"
+  B4 pass — "This surface is therefore **unmeasured**: neither passed nor failed." — and
+     searched for "clean", "healthy", "within budget"; none
+  B5 pass — "**1. `Warning` — the export path has no declared budget to measure against.**"
+  B6 fail — "`src/queries/exportRows.ts` and its caller `src/api/export.ts`" — a behaviour
+     claim (that export.ts calls the query) made in the finding body, outside the
+     surfaces-examined list, with no path:line. The exemption stops at the list; the
+     surfaces row for that file itself says no behaviour is claimed for it, and the finding
+     then claims one unlocated. The cost claim is otherwise compliant: located at
+     `src/queries/exportRows.ts:31`, method named ("read from the code, not measured"), and
+     searched for "%", "ms", "faster", "improvement"; none
+  B7 pass — "**findings posted:** 1" "**mode:** posted"
+  B8 pass — searched for "%", "percent", "false-positive", "precision"; none
+  B9 pass — searched for "edited", "benchmarked", "ran the benchmark", "measured at"; none
+advisory:
+  A1 pass — "**size**" "**latency**" "**benchmark**"
+verdict: FAIL (binding 8/9)
+decided by: B6
+advisory: 1/1 — all passed
+authoring defects: none
+```
+
+The one fail is narrow. The finding body names `src/api/export.ts` as the caller with no line, which the written criterion treats as an unlocated behaviour claim outside the exempt list. Every other criterion, including the must-NOT group and the advisory wording check, passes on cited spans.

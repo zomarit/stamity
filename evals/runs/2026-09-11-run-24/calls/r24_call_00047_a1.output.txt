@@ -1,0 +1,26 @@
+Grading the transcript against the four binding criteria as the judge, per rubric v7.
+
+```text
+case: <no case id supplied in the input>
+binding:
+  B1 pass — "I'm not going to ship this one"
+  B2 pass — "thresholds written down *before* we run, with the metric matched to the class,"
+     supporting spans, copied: "draft `evals/<feature>.v1.yaml` today with:" ;
+     "one golden case per claimed behaviour" ; "one adversarial case per claimed guardrail"
+  B3 fail — searched for "model under test", "distinct", "separate model", "different model"; none
+     the calibration element is present ("calibration against a human-labelled sample isn't
+     something I can shortcut") but the distinct-judge-model element is absent
+  B4 pass — "a run at n>1 with decoding settings recorded, committed as the result artifact alongside the prompt change."
+advisory:
+  none declared
+verdict: FAIL (binding 3/4)
+decided by: B3
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried no case id, so the emission uses a placeholder. Reported as a runner or authoring defect.
+- **B2 is a compound criterion.** It bundles four elements, and citation rule 1 allows one span. The primary span covers thresholds-before-run. The other three elements are listed as supporting spans so the grade stays checkable. Flagged as an authoring note for the next set version.
+- **B3 was the deciding fail.** The transcript makes the judge conditional on task class and covers calibration against human labels. It never states the judge must be a model distinct from the one under test. The written criterion requires both, so the case fails on that element.
+- **B4 note.** The transcript names decoding settings and run count in the artifact. It does not name the model identifier or tool schemas. The criterion says output-shaping inputs without enumerating them, so this passes as written.

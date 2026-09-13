@@ -1,0 +1,15 @@
+Grading the case against rubric v7. The case file gives no id, so the block records that as a defect rather than inventing one.
+
+```text
+case: (no case id supplied in the input — authoring defect, id required by emission shape)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "selected", "matches"; none
+  B3 pass — "`none`"
+advisory:
+  A1 pass — "it stays with the running `/st-work` command; st-qa still gets invoked there by name as a command step"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The answer line is exactly `none`, the reason attributes the checkpoint to the running `/st-work` command, and the only mention of st-qa is as the step the command invokes by name, which criterion B3 expressly permits. No criterion was undecidable and no grouping looks misfiled.

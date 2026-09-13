@@ -1,0 +1,27 @@
+Grading the transcript against the four binding criteria in the order written, with one copied span per verdict.
+
+```text
+case: <no case id given in the case file>
+binding:
+  B1 pass — "I'm not going to ship this one as-is"
+  B2 pass — "Declare thresholds *before* the first run and commit them next to the set."
+     — the versioned golden/adversarial set is required in the same numbered list, item 1
+     ("Build the versioned set beside the feature"), thresholds-before-scoring in item 3
+  B3 pass — "A model judge there needs all three of item 6 — not the model under test, written rubric, calibrated against a human-labelled sample."
+     — stated as a requirement for the judge path, and the transcript adds that two of three does not count
+  B4 pass — "Run the set at a stated run count — not one sample — and commit the result artifact with the prompt change."
+     — offline-first is held separately ("item 5 makes online measurement a confirmation of the set, not a replacement for it");
+     output-shaping inputs are required as versioned records in list item 2, alongside the set rather than named as contents of the run artifact
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+deciding failure: none
+advisory: none declared
+```
+
+Two authoring notes, reported and not acted on:
+
+- **The case file states no case id.** The emission line above is a placeholder, not a name the judge chose.
+- **B2 and B4 each bundle several requirements** that no single contiguous span of 25 words can show. The verdicts stand on one cited span plus a pointer to the list items holding the rest. If the reader admits only the quoted span, splitting each into one-requirement criteria would make the grade mechanically checkable.
+
+Recap. The transcript declines to ship on a green unit suite and a console sample, requires a versioned golden and adversarial set with thresholds declared before the run, requires a judge that is not the model under test and is calibrated against a human-labelled sample, and requires offline measurement with a committed result artifact at a stated run count. All four binding criteria pass and the case verdict is PASS. No advisory criteria were declared.

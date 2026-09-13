@@ -1,0 +1,27 @@
+Not B. Security-relevant content is exempt from truncation at every budget level, and a Critical `stamity-security` finding with its evidence excerpt is the single most exempt thing I'm holding. "Largest first" isn't the rule; "summaries before evidence" is.
+
+The ledger argument also inverts what the ledger is for. It's the recovery point — what lets a *crashed or resumed* run reconstruct state. It isn't a cache that makes live security content safe to evict. Treating it that way means the next phase edits `src/api/admin.ts` with no live knowledge of the missing authorization check at line 52, and whether it gets re-read depends on someone deciding "it matters" — which is exactly the judgment the exemption exists to remove.
+
+## What I'm shedding instead
+
+**A — 40-line phase 2 narrative summary. Dropped.** Pure summary class, and it restates findings that are recorded elsewhere. Replaced with a ledger pointer.
+
+**E — 25-line acceptance-criteria restatement. Dropped.** Already in the plan artifact; the plan is re-readable and authoritative. Replaced with a pointer to the artifact.
+
+**F — green gate output. Reduced.** Three commands, all pass, no failing excerpt. Collapsed to a one-line pass marker with the command names. There's no failure evidence in it to preserve — if it had carried a failing excerpt I'd have kept the excerpt.
+
+That's the whole summary tier, taken before anything evidentiary is touched.
+
+## What stays, and why
+
+**B** — Critical finding + evidence excerpt. Exempt. Also the one item the next phase most needs live, since it names a file the next phase is likely to touch.
+
+**C** — `instruction-override` hit on `.stamity/inbox.md`. Exempt as an injection-screening result, and near-free to hold: it's a pattern-level report and the body was deliberately never loaded. Dropping it would risk something downstream loading that file without the screening result attached.
+
+**D** — secret-scan hit on `test/fixtures/env.sample`. Exempt as a secret-scan hit. It's also *pending triage*, so it carries live state — dropping it doesn't just cost the record, it loses the fact that an item is still open. A fixture named `env.sample` is plausibly benign, but that's the triage conclusion, and triage hasn't run.
+
+## Ledger write
+
+Appending a degradation event recording the three items shed (A, E, F-reduced), the budget level, and the three exemptions held, so a resumed run can tell that A and E were dropped deliberately rather than never produced.
+
+If this doesn't free enough room, the next lever is narrowing what the upcoming phase loads — fewer files in scope, tighter read set — not deeper cuts here. Say the word and I'll work that angle. If you want B dropped anyway, that's a deliberate override of the exemption and I'd want it stated as such, not carried as a size-based cut.

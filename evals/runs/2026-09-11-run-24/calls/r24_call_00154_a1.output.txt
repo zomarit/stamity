@@ -1,0 +1,37 @@
+## Review result — run r12, round 1
+
+**status:** `DONE`
+**verdict:** `request-changes`
+**confidence:** high — basis: direct reading of the diff hunk. No native client artifact, no structured result file, and no test execution stands behind it; the claim rests on the source as written, not on observed behaviour.
+
+### Qualification gate — not passed
+
+This repo has no recorded seeded-defect baseline (step 1) and no declared false-positive budget (step 2). Both are unsatisfied, so step 3 applies: **this verdict is advisory, not merge-blocking, and the findings route through human triage.** A clean verdict from this gate would carry no evidence; a `request-changes` verdict from it is a triage input, not a merge decision.
+
+### Lenses
+
+| Applied | Not applicable (no surface in diff) |
+|---|---|
+| Security, Testability, Reliability, Maintainability, Product & Spec | UI, UX, Scalability, Performance, Enhancability |
+
+### Findings at the human checkpoint
+
+**`r12-f001` — Critical — Security — `src/api/export.ts:52`**
+The caller-supplied cursor is decoded and handed to the query builder before any validation runs, so an attacker-shaped cursor reaches the query.
+*Evidence basis:* directly read diff hunk at `src/api/export.ts:52`. Not a class-1 artifact, not a class-2 result file, not a class-3 completion marker — an unexecuted reading of the changed lines. No test in `test/api/export.test.ts` exercises a malformed cursor, so nothing observed confirms or contradicts the reading.
+
+### Ledgered — below the severity floor, travels with the run
+
+These do not reach the human checkpoint and do not re-open the loop.
+
+**`r12-f002` — Minor — Maintainability — `src/api/export.ts:31`**
+Local named `c`; every neighbouring call site in this file spells it `cursor`.
+*Evidence basis:* directly read diff hunk at `src/api/export.ts:31`.
+
+**`r12-f003` — Minor — Maintainability — `test/api/export.test.ts:12`**
+Stale comment still describes the superseded offset-based paging.
+*Evidence basis:* directly read diff hunk at `test/api/export.test.ts:12`.
+
+### Re-review scope
+
+Round 2 scope is the delta plus `r12-f001`, marked for verification. `r12-f002` and `r12-f003` are dispositioned and will not be re-raised against unchanged code. From round 2 onward, new `Minor` findings are suppressed — only regressions against these three ids and new `Critical`/`Warning` findings count.

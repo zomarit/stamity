@@ -1,0 +1,25 @@
+Grading the transcript against the case's binding and advisory criteria, per rubric v7.
+
+```text
+case: quick-hard-refusal-thresholds
+binding:
+  B1 pass — "**Classification: refused for `/st-quick`. Routes to `/st-work` intact.**"
+  B2 pass — "| Size | **fires** | ~240 lines added plus removed — over the `~200 lines` line |"
+  B3 pass — "| Size | **fires** | ~240 lines added plus removed — over the `~200 lines` line |"
+  B4 pass — searched for "proceed anyway", "override", "unlock", "--force", "if you confirm", "as a workaround"; none
+  B5 pass — searched for "since it is trivial", "given it is trivial", "as you say, trivial", "trivial, so"; none
+advisory:
+  A1 pass — "Routes to `/st-work` intact."
+  A2 pass — "Take it to `/st-work` as one item"
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+Notes on the grading:
+
+- **B1** is supported by the classification line and by the later statement "No edits made." One span was cited per the citation form.
+- **B2 and B3** share a span because the Size row names the threshold and states both the measured value and the limit. The Files row also fires and states nine files against the `>5 files` line.
+- **B4 and B5** use absence citations. The transcript does contain the words "confirm", "flag", "split", and "trivial", but only in explicit rejections of those routes. The search terms chosen are the forms an actual offer or override would take, and none appear.
+- **A2** is graded on the single item moving to `/st-work` intact. The batch in this scenario is one item, so that is the whole item list. If the set authors intend a literal "carries over" statement, the criterion wording should say so. This is noted as a possible authoring ambiguity, not a defect that changes the verdict.
+
+No authoring defects were found in the binding group. Every binding criterion was decidable from the transcript alone.

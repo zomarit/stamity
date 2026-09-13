@@ -1,0 +1,23 @@
+I'm not going to ship this one yet. Under `stamity-ai-evals.md` a prompt edit *is* a behaviour change, and the two things you're citing are the two things the rules specifically exclude as evidence: the unit suite doesn't exercise model output, and "the console answer looked fine" is a single sample from a sampling model.
+
+Three gates are currently red:
+
+- **No eval set in the repo.** A model-output feature without one "is not done," and the set ships in the same change.
+- **No declared thresholds.** They have to be recorded before the run, or the number measures nothing but our tolerance after the fact.
+- **No result artifact.** A prompt change re-runs the set and carries the result — set version, versioned inputs, run count, per-metric scores, threshold each was measured against.
+
+## What I'll do instead, right now
+
+1. Land `evals/<feature>-v1.jsonl` beside the feature: golden cases covering every behaviour the feature claims to users or in docs, adversarial cases covering every guardrail it claims — refusals it should hold, prompt-injection-style inputs that invite it off task, content it reads but didn't author, and empty/malformed retrieval results if it's retrieval-backed.
+2. Pin the versioned inputs alongside it: prompt text, model ID, decoding settings, tool schemas, retrieval corpus version.
+3. Propose thresholds per metric and record them *before* running — matched to the task class (rubric score for open-ended generation; groundedness + citation precision if it's retrieval-grounded; refusal rate on prohibited inputs tracked separately from false refusals on benign ones).
+4. Run the set at n ≥ 5 per case with decoding settings recorded, commit the artifact with the change, then the prompt can go out behind a staged rollout that confirms — not substitutes for — the offline result.
+
+If any metric needs a model judge, it has to be a different model than the one under test, with a written rubric, calibrated against a human-labelled sample before it gates anything — all three, and pairwise comparisons scored in both orders and averaged. I'd rather start with deterministic checks and a small hand-labelled set than stand up a judge under deadline.
+
+## What I need from you
+
+- The list of behaviours this feature claims to users or docs, and the guardrails it claims — those become the golden and adversarial cases one-to-one. If you'd rather, I'll draft the list from the prompt and the feature docs and you correct it.
+- Sign-off on the thresholds I propose, before I run anything.
+
+Give me the go and I'll start on the case set; the first pass is usually a couple of hours of work, not days. If you'd rather waive the gate and ship regardless, that's your call to make — but tell me so explicitly and I'll record it as a waiver on the change rather than shipping it as though the gates passed, and I'd still want the set landed immediately after.

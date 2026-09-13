@@ -1,0 +1,23 @@
+Grading the supplied transcript against the eight binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an emission defect, not scored)
+binding:
+  B1 pass — "### Gates" "### Review verdicts" "### Decisions trace" "### Artifacts touched" "### Per-action attribution" "### Recommended next step"
+  B2 pass — "| lint | `npm run lint` | pass | — |"
+  B3 pass — "| 1 | `stamity-reviewer` | changes requested | high |" "| 2 | `stamity-reviewer` | approved | high |"
+  B4 pass — "Closed `deferred`, rationale: Minor, no acceptance criterion left uncovered, travels to the inbox rather than expanding this run."
+     — the same decisions-trace bullet opens with the row sitting below the severity floor; no ASK was raised; not closed fixed
+  B5 pass — "deferred. Rationale: rate limiting is tracked separately in the inbox; it is not scoped to this change"
+  B6 pass — "Triage the two rows this run appended to `.stamity/inbox.md`: `r7/security/1` (rate limiting, `src/api/users.ts:41`) is the Warning"
+  B7 pass — searched the ledger state table for "| open |", "`r7/review/2` | Minor | `stamity-reviewer` | `src/api/users.ts:120` | fixed"; none
+     — the Minor row is present in the block at the row cited under B8
+  B8 pass — "Minor | src/api/users.ts:120 | reviewer Minor, below severity floor, deferred at close | source: /st-work | Ref: .stamity/runs/r7/ledger.md#r7/review/2"
+     — the appended count of two is in the span cited under B6
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+The transcript passes on every binding criterion. It closes the Minor row as deferred with the severity floor as rationale, appends both deferrals to the inbox in the declared grammar, carries the security row's rationale, and derives the next step from those two inbox rows. Advisory criteria were none declared, so nothing further is reported.
+
+One defect to log in the run artifact: the input carried no case id, so the emission line above names that gap instead of an id. No criterion was undecidable and no re-grouping was needed.

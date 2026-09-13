@@ -1,0 +1,72 @@
+One row blocked the record: `r7/review/2` read `open`, and the close refuses to write while any row does. It's Minor, so it doesn't reach the QA checkpoint, and its disposition isn't ambiguous — nothing turns on choosing between dispositions with different cost or blast radius. So the run closed it itself as `deferred` and appended it to today's inbox block alongside the security deferral. Record follows.
+
+---
+
+## Proof block — run `r7`
+
+### Gates
+
+| gate | command | result | excerpt |
+|---|---|---|---|
+| lint | `npm run lint` | pass | — |
+| typecheck | `npm run typecheck` | pass | — |
+| test | `npm test` | pass | — |
+
+### Review verdicts
+
+| round | agent | verdict | confidence |
+|---|---|---|---|
+| 1 | `stamity-reviewer` | changes requested | high |
+| 2 | `stamity-reviewer` | approved | high |
+
+### Decisions trace
+
+- **Gate `lint` / `typecheck` / `test`** — all pass, no decision required, run proceeds.
+- **`r7/review/1`** (Warning, `src/api/users.ts:88`) — fixed in place; round 2 re-review confirms. Closed `fixed`.
+- **`r7/security/1`** (Warning, `src/api/users.ts:41`) — deferred. Rationale: rate limiting is tracked separately in the inbox; it is not scoped to this change and fixing it here would widen the run past its acceptance criteria.
+- **`r7/review/2`** (Minor, `src/api/users.ts:120`) — below the severity floor, so it did not reach the QA checkpoint. Disposition unambiguous, so the ambiguity floor did not fire and the run closed it without asking. Closed `deferred`, rationale: Minor, no acceptance criterion left uncovered, travels to the inbox rather than expanding this run.
+- **ASK outcomes** — none. No decision in this run met the ambiguity floor.
+
+### Ledger state at exit
+
+| id | severity | source | evidence | state |
+|---|---|---|---|---|
+| `r7/review/1` | Warning | `stamity-reviewer` | `src/api/users.ts:88` | fixed |
+| `r7/review/2` | Minor | `stamity-reviewer` | `src/api/users.ts:120` | deferred |
+| `r7/security/1` | Warning | `stamity-security` | `src/api/users.ts:41` | deferred |
+
+No row reads `open`. Run-exit invariant satisfied. Neither deferred row carries a `retired` field yet.
+
+### Artifacts touched
+
+| path | owning sub-agent |
+|---|---|
+| `src/api/users.ts` | `stamity-implementer` |
+| `test/api/users.test.ts` | `stamity-implementer` |
+| `.stamity/inbox.md` | `/st-work` (close) |
+
+### Per-action attribution
+
+| agent | tool | outcome |
+|---|---|---|
+| `stamity-implementer` | Edit | `src/api/users.ts` modified |
+| `stamity-implementer` | Edit | `test/api/users.test.ts` modified |
+| `stamity-reviewer` | Read | round 1 — changes requested, 1 Warning + 1 Minor ledgered |
+| `stamity-implementer` | Edit | `r7/review/1` fix applied at `src/api/users.ts:88` |
+| `stamity-reviewer` | Read | round 2 — approved |
+| `stamity-security` | Read | 1 Warning ledgered at `src/api/users.ts:41` |
+| `/st-work` (gates) | Bash | lint, typecheck, test — all pass |
+| `/st-work` (close) | Edit | `r7/review/2` rewritten `open` → `deferred`; both deferrals appended to `.stamity/inbox.md` |
+
+### Inbox appended — dated block `2026-09-13`
+
+```
+Warning | src/api/users.ts:41 | no rate limiting on the users endpoint | source: /st-work | Ref: .stamity/runs/r7/ledger.md#r7/security/1
+Minor | src/api/users.ts:120 | reviewer Minor, below severity floor, deferred at close | source: /st-work | Ref: .stamity/runs/r7/ledger.md#r7/review/2
+```
+
+### Recommended next step
+
+Triage the two rows this run appended to `.stamity/inbox.md`: `r7/security/1` (rate limiting, `src/api/users.ts:41`) is the Warning and should be scheduled with a lane, trigger and owner or cut with a reason; `r7/review/2` (`src/api/users.ts:120`) is Minor and can ride the next touch of that file. Whichever leaves the inbox, write its disposition back as the `retired` field on the matching ledger row.
+
+**Not done:** empty — both open items became the inbox rows named above.

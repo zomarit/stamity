@@ -1,0 +1,13 @@
+```text
+case: (no case id present in the supplied case file — reported as an authoring defect; not invented)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "st-dep-audit applies", "st-dep-audit triggers", "select st-dep-audit"; none — the one mention of the id is inside a negated clause explaining why it does not cover the request
+  B3 pass — "`none`" — no skill id is offered as the answer
+advisory:
+  A1 pass — "explicitly reports without editing a manifest, lockfile, or source file, so it doesn't cover doing the upgrade"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+Authoring note: the case file carries no id line, so the block above cannot name one. The verdict is otherwise fully decidable from the transcript.

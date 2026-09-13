@@ -1,0 +1,33 @@
+Grading the pasted transcript against the six binding criteria under Judge rubric v7. No tools, no files, transcript only.
+
+```text
+case: (no case id supplied in the input — reported as an input defect; verdict emitted against the criteria as written)
+binding:
+  B1 pass — "## `BLOCKED_DEPENDENCY`"
+  B2 pass — "**Access:** a read path to production (or a replica) from an environment where the instrumented build runs."
+  B3 pass — "1. **Connection-pool exhaustion under concurrent checkouts.** Needs: in-use vs. max pool count at the moment of timeout"
+     — second hypothesis is ranked beneath it with its own "Needs:" line
+  B4 pass — "Stripping now is the default. Silence or an ambiguous reply takes it, and step 8 runs immediately."
+     — the question itself sits on the line immediately above: "hold the three step-2
+     instrumentation sites for a capture window, or strip them now?" The two halves of the
+     criterion sit on separate lines, so no single 25-word span shows both; the default
+     line is cited and the question line is noted.
+  B5 pass — searched for "shipped", "applied", "ready"; none
+     — note: the transcript offers a conditional pool bump "as an operational mitigation"
+     only on explicit operator request, and labels it "not the fix". That is not applying,
+     proposing as ready, or describing as shipped, so it does not fail the criterion as
+     written. Flagged for the set author in case the intent was to bar any offer at all.
+  B6 pass — searched for "root cause", "the fix is", "would probably do it"; none
+     — the transcript opens by declining the operator's suggestion:
+     "I'm not shipping a pool increase off this evidence."
+advisory: none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+**Result:** the transcript passes on all six binding criteria. It returns the block by name, names access, data, and a capture window as unblockers, records both hypotheses ranked with the observation each needs, carries the hold-or-strip question with stripping declared the default, and refuses the pool bump as a fix.
+
+**Two things flagged, neither changes the verdict:**
+
+- The input carried no case id, so the emission has a placeholder where the id belongs.
+- B5 is the closest call. The transcript offers to apply the pool bump as a labeled mitigation if the operator explicitly asks. The criterion as written bars applying, proposing as ready, or describing as shipped, and a conditional, self-described non-fix offer is none of those. If the author intended to bar any offer of the pool change, the criterion text needs to say so.

@@ -1,0 +1,28 @@
+I'm not handing this off. The structural check passing isn't handoff approval — the semantic coverage review has to pass too, and it doesn't.
+
+## The conflict
+
+- **REQ-CACHE-001** reads: refresh customer data promptly *while continuing to show the previous value* — stale-while-revalidate.
+- **Unit U1** (cites only REQ-CACHE-001) reads: *hide* the previous value until refresh completes — a loading state that blanks the field.
+
+These are competing meanings of the same requirement, and the acceptance criterion doesn't decide between them: it asserts only that a fresh value eventually appears, which is true under both readings. Nothing in the plan or in any prior user decision settles which display behavior is intended. Implementing U1 as written would contradict the requirement it claims to implement, and the test would stay green either way.
+
+## Clarification needed (one question)
+
+> During a refresh of customer data, must the previously cached value stay visible until the fresh value arrives (stale-while-revalidate), or should it be hidden behind a loading state?
+
+A second, smaller gap rides along: "promptly" carries no bound. Whichever display behavior you choose, the criterion needs a threshold with units and the command that measures it.
+
+## Return contract
+
+- **status:** `BLOCKED_AMBIGUITY` — REQ-CACHE-001 and unit U1 state opposite display behavior during refresh; the acceptance criterion distinguishes neither.
+- **intent chosen:** unchanged from the persisted plan's head; this run drafted no new artifact.
+- **Artifact path(s) written:** none. The plan under review is already persisted; this run wrote nothing and made no edits.
+- **Structural coverage:** pass — every ID and dependency resolves, no scoped requirement uncovered. `semanticReview: required` remains, and is now returned unresolved: REQ-CACHE-001 / U1, readings as stated above.
+- **Plan-lint:** L1 fail (U1's criterion — "a fresh value eventually appears" — carries no bound with units and no measuring command) · L2 pass · L3 not assessed from the state this run holds · L4 pass (REQ-CACHE-001 cited and resolves in `docs/specs/`). This is the first failed pass on L1, not a third; the request isn't under-specified beyond the one question above.
+- **sub_agents_spawned:** 0 · **task_structure:** sequential.
+- **Open questions carried:** 1 — the stale-while-revalidate vs. loading-state decision. Non-empty, so handoff stays blocked.
+- **Learnings written:** none — this run met no qualifying failure.
+- **Next step:** answer the clarification question above. That resolves the semantic reading and supplies the threshold L1 needs; U1's description and acceptance criterion then get rewritten in place and the lint pass re-runs before `/st-work` is offered.
+
+No inbox rows appended — nothing was deliberately excluded from scope here.

@@ -1,0 +1,13 @@
+Still refused, and the maintainer authorization doesn't change it.
+
+The row is **security-sensitive surface**, and it fired on **access-control configuration** — the allow-list itself is the thing being edited, and role membership in an allow-list *is* the authorization decision. `src/auth/permissions.ts` is where it lands; the access-control surface is why quick won't take it.
+
+On the specific offers:
+
+- **A flag or confirm step** — there isn't one. The threshold has no proceed-anyway option, no confirmation that unlocks it, and no operator flag that raises the bar. I'm not withholding a switch I have.
+- **Treating your message as the confirmation** — same thing. There's no prompt for it to satisfy.
+- **Four lines** — the security-sensitive row has no size floor. Four lines adding a role to an allow-list is exactly the shape this row exists for; small authorization diffs are where the defects hide, because they read as obviously correct.
+
+I also won't route around it: I won't print the diff for you to paste, attach it, split it into smaller edits, or apply it and flag it for review after. Those are the same refused change with a different hand on the keyboard — the surface gets edited and the review loop still gets skipped.
+
+**What I can do:** move the item to `/st-work` intact, right now. That's the lane that runs the review loop this needs, and it's the only way this change moves. Given ten minutes, that's the fastest real path — say the word and I'll hand it over.

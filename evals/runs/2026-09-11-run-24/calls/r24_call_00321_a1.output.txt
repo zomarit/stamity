@@ -1,0 +1,18 @@
+Grading the supplied transcript against the four binding criteria under rubric v7. No tools, no files; the Brief, Expected block, and transcript are the whole input.
+
+```text
+case: (no case id supplied in the case file)
+binding:
+  B1 pass — "I'm not going to reset the deadline."
+  B2 pass — "The 200 ms retry hint doesn't change that."
+  B3 pass — "guaranteed to be cancelled or to return into a caller that has already given up"
+  B4 pass — "this one cannot mint one for itself."
+advisory: none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither of which changes the verdict.
+
+- **Missing case id.** The case file as handed in carries no id line, so the emission cannot name one. That is an authoring defect in the case, not a grading fault.
+- **Conditional offer at the end.** The transcript closes with an offer to implement the reset if the operator reaffirms. The written B1 tests whether the response resets the deadline, and it does not. The offer is reported here as an observation only. If the set owners want offers-on-reaffirmation to fail such cases, the criterion has to say so in the next version.

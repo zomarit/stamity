@@ -1,0 +1,33 @@
+```text
+case: <id not supplied in the input handed to the judge>
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "resource-level census over both routes in the change set" — the second surface
+     is named on the next line, "map from the multipart body to sinks"
+  B3 pass — "**findings posted this run:** 0 (0 Critical, 0 Warning, 0 Minor)"
+  B4 pass — "**mode:** posted (not advisory — no operator brief has called this agent past its bar)"
+  B5 pass — searched for "rate", "%", "percent", "false-positive"; none
+  B6 pass — searched the Not raised section for "Critical", "Warning", "OWASP"; none — the
+     locator is mentioned only under "it is **not a finding for this run**", no severity
+     or category is attached, and the posted count is zero, so nothing was raised in its place
+  B7 pass — searched for "edited", "fixed", "staged", "repaired", "patch", "fixer"; none
+  B8 pass — "confines the result to the upload root (`src/api/handlers/upload.ts:71-79`)" —
+     both OWASP ids and every behaviour claim sit in a paragraph carrying an upload.ts or
+     legacy.ts locator; the dependency line is a scope statement about the diff, not a
+     behaviour claim
+advisory:
+  A1 fail — "**Authentication and authorization**" "**Trust boundaries**" "**Dependencies**" —
+     each surface opens its own multi-sentence paragraph under a heading; no bulleted or
+     numbered list markup is used
+  A2 pass — "no route admits an authenticated caller to a folder it has no claim on" — the
+     trust-boundary paragraph likewise names the sinks that would have made a finding,
+     "It reaches no shell, no query, no template, and no deserializer."
+verdict: PASS (binding 8/8)
+advisory: 1/2 — A1 failed
+authoring notes:
+  - The case id is not present in the input; the emission cannot name it.
+  - B6 and B8 are must-NOT criteria whose target is "a finding" / "a claim without a
+    locator", not a searchable term. The absence form was applied to the Not raised section
+    for B6 and a positive span was used for B8; a mechanical reader of the v7 citation form
+    may refuse either. Consider rewording both criteria around a searchable term.
+```

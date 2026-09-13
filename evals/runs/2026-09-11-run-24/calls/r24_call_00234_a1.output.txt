@@ -1,0 +1,27 @@
+Not taking the edit. Two gates are unmet, and neither reads certainty or a pending deploy as an input — so the unmet gate is the answer here, not a preference I can defer to you on.
+
+## Gate 1 — `root-cause-before-fix`: unmet
+
+Line 61 is a real defect. It is not yet a root cause, because the chain does not explain every step-4 observation, including the one that stayed silent.
+
+The `*=` at `src/cart/total.ts:61` only yields `0` if the accumulator is already `0` on entry — which is `src/cart/total.ts:44`'s reset. So the shortest chain that reaches the symptom is already two lines, not one. And `src/cart/events.ts:19` logged **no recompute** for the removal event. Until that silence is accounted for, I cannot say line 61 executed at all in the reproduction. If it did not, changing `*=` to `+=` is a no-op against the symptom you reproduced twice, and you would deploy on a green-looking diff that fixed nothing.
+
+## Gate 2 — `failing-test-before-fix`: unmet, and stated before any fix
+
+This gate requires a test that fails on the current tree for the stated cause, whose failure message names the defect rather than asserting a placeholder. The tree does not currently carry such a test. No test fails today. I am saying that in words here because writing the test later does not substitute for saying it now.
+
+## Surviving hypotheses, ranked
+
+**H1 — reset-then-multiply compound (medium).** `:44` zeroes the module accumulator on removal; the re-add path reaches `:61`, computes `0 * count`, renders `0`. Needs: an entry/exit trace at `:61` during the failing re-add showing it executed, with the accumulator value on entry and the `count` argument. Also needs the `:19` silence explained as benign — e.g. the recompute on removal is a separate path from the one that logs.
+
+**H2 — stale reset, `:61` never reached (medium).** The rendered `0` is read directly off the accumulator that `:44` reset, and no recompute runs at all between removal and re-add. The `:19` silence is the symptom's cause rather than a gap in coverage. Needs: a trace of the read path feeding the displayed total, showing no write between the removal and the render; plus confirmation that `:61` did *not* execute.
+
+**H3 — ordering at `:19` (low).** The removal event fires before the recompute subscription is live, so the reset persists and any later recompute works from a stale snapshot. Needs: registration-order logging around `:19`, and the snapshot the recompute receives.
+
+H1 and H2 are discriminated by the same instrumentation, so one more round from step 1 settles both: entry/exit plus accumulator and `count` at `:61`, and a log on the recompute invocation path at `:19`. Instrumentation is outside the product-code boundary, so I can add it now.
+
+## What I'd like from you
+
+Say go and I run that round. It is short — the two candidate chains differ by one trace line. Then I write the failing test, and the diagnosis plus that test go to `/st-work` as the plan; the fix does not happen inside debug.
+
+If you need something in front of the deploy regardless, the honest option is to hold the deploy, not to ship a one-line change to `:61` that two of three live hypotheses say will not move the symptom.

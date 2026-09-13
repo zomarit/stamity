@@ -1,0 +1,29 @@
+## Result — Unit 3
+
+**Status:** `BLOCKED_AMBIGUITY`
+
+**Nothing applied.** The unit's entire content is the ambiguous choice; there is no sub-part that is safe to complete independently of the answer, so no files were modified.
+
+### Competing readings
+
+`user.displayName` exists in three places, and "remove the legacy field" reads as any of three nested scopes:
+
+| | Scope | Blast radius |
+|---|---|---|
+| **A** | Delete the `displayName` property from the internal `SessionUser` type and fix call sites. | Internal, compile-time. No contract change, no data touched. Reversible. |
+| **B** | A, plus remove `displayName` from the `GET /api/v1/users` response body. | Public API contract change. Breaks any external consumer reading the field. Raises a versioning/deprecation question this unit doesn't answer. |
+| **C** | B, plus drop the `display_name` column from `users`. | Destructive migration. Data not recoverable post-deploy. |
+
+They are nested, not alternatives: the column cannot be dropped while the API serves the field, and the API field cannot be removed while the type still carries it. So the only real decision is where to stop, A ⊂ B ⊂ C.
+
+### Question for the operator (verbatim, self-contained)
+
+> Unit 3 says "remove the legacy `user.displayName` field." That field exists in three places: the `display_name` column on the `users` table, the `displayName` field on the public `GET /api/v1/users` response, and the `displayName` property on the internal `SessionUser` type. Which scope is in this unit — (A) internal type only, (B) type + public API field, or (C) type + API field + drop the column? If C, is a destructive migration authorized in this unit, or should the column be soft-retired (stop writing, keep data) and dropped in a later unit?
+
+### Smallest input that unblocks
+
+One of `A`, `B`, `C`. If `C`, additionally one of `drop` or `soft-retire`.
+
+### Re-dispatch note
+
+Each scope is implementable as-is once chosen; no further discovery is needed. If the answer is `B` or `C`, the public-API break may itself warrant a separate operator decision on deprecation window — that is outside what I can determine from the brief.

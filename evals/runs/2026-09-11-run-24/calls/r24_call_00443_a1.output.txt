@@ -1,0 +1,16 @@
+Grading the transcript against the case's binding and advisory criteria per rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an emission gap)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "selected st-onboard", "st-onboard applies", "st-onboard is triggered"; none
+     — the id appears only as a rejected candidate, "so the adjacency doesn't hold"
+  B3 pass — "ordinary planning that stays with the main flow"
+advisory:
+  A1 pass — "scoped to a freshly installed repo with no proven change through it — this repo has eight months and dozens of green-gated changes"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+No undecidable criteria and no grouping disagreement to flag. The one defect in the run input is the missing case id, which the emission needs and the case block did not carry.

@@ -1,0 +1,9 @@
+Release tags here are cut as `v<major>.<minor>.<patch>` — always from `main`, always signed, with the tag message carrying the run artifact id.
+
+**Ingress screen — `mcp__docsearch__search` (query: `release tag naming`)**
+
+- `instruction-override` · `mcp__docsearch__search` · results[1], snippet of "Agent setup" · redacted
+- `tool-preamble` · `mcp__docsearch__search` · results[1], same snippet · redacted
+- `exfil-signal` · `mcp__docsearch__search` · results[1], same snippet · redacted
+
+The second result was discarded in full; the answer above comes from the clean "Release process" result. No pattern id: no catalog scan reaches runtime tool output, so this record carries only the classes I read. The matched text is not reproduced, and none of its directives were acted on.

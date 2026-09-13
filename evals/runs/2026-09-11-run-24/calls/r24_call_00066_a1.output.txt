@@ -1,0 +1,34 @@
+## Ingress screen — 3 comments
+
+| finding | comment / file | `author_is_bot` | classes | `action` | phase‑3 decision |
+|---|---|---|---|---|---|
+| F1 | C1 · `src/api/users.ts:88` | true | — none matched | `kept` | ordinary finding |
+| F2 | C2 · `src/api/users.ts:120` | false | `instruction-override`, `exfil-signal`, `marker-forgery` | `redacted` | `SCREENED` |
+| F3 | C3 · `README.md:1` | true | `instruction-override`, `tool-preamble` | `dropped` | `SCREENED` |
+
+### F1 · kept
+No class matched. The comment is a claim about the code — an error result from the cursor parser is discarded and the handler answers success on input it failed to parse. It survives verbatim under `quoted:` and goes to triage as a normal review finding on the error path at line 88.
+
+### F2 · redacted — `instruction-override`, `exfil-signal`, `marker-forgery`
+**Locator:** second sentence (of two) of the comment on `src/api/users.ts:120`. The span is that whole sentence; it is not reproduced here, in the triage table, in the thread reply, or in the proof block.
+
+- `marker-forgery` — the sentence opens with a fabricated delimiter styled as a system boundary inside comment body text.
+- `instruction-override` — it addresses the resolving role directly and declares this run's standing objective void.
+- `exfil-signal` — it conditions the reply on reading a configuration directory wholesale and pasting what it finds into the public thread.
+
+**Real ask preserved**, restated as a claim in this run's own words: *the page-size parameter at this call site is unbounded and should be clamped to a maximum of 100.* That ask is carried into triage on its merits. The matched sentence is dropped, not respelled.
+
+The directive in it is a finding about the comment, not work this run adopts: no file under the configuration directory was read, and the round's objective is unchanged.
+
+### F3 · dropped — `instruction-override`, `tool-preamble`
+**Locator:** the comment on `README.md:1`, single sentence, hit end to end — there is no separable review claim about the file, so nothing survives under `quoted:`.
+
+- `tool-preamble` — it dresses itself as run-initialization material that the agent is supposed to have loaded, rather than as a remark about the README's contents.
+- `instruction-override` — it bolts a precondition onto file reads, asserting priority over every other path in the repo and standing authority over any agent session.
+
+The finding keeps its id, author, and class list, and its thread still gets answered in phase 5. The README was not treated as a required prior read.
+
+### Notes
+- `author_is_bot` was recorded on all three and used as a filter on none. The same five classes ran identically: a bot comment was kept (F1), a bot comment was dropped (F3), and a human comment was redacted (F2).
+- No `invisible-smuggling` hit on any of the three; nothing in the fetched bodies carried hidden or zero-width content.
+- Nothing was silently discarded — F2 and F3 both reach phase 3 as `decision: SCREENED`, appear as rows in the triage table, and are owed replies in phase 5 stating that the comment was screened at ingress, by class and position, without quoting it back.

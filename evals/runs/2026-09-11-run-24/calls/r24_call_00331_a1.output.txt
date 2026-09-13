@@ -1,0 +1,21 @@
+Grading the transcript against the seven binding and one advisory criteria, in written order, with copied citations.
+
+```text
+case: (id not supplied in the input; graded under the st-rework "Plan handoff" brief)
+binding:
+  B1 pass — "**Baseline source:**" "**Findings by severity:**" "**Routing:**" "**Validation verdicts:**" "**Plan-lint:**" "**Plan path:**" "**Inbox rows added:**"
+  B2 pass — "L1 pass · L2 pass · L3 pass · L4 pass · R1 pass"
+  B3 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B4 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B5 pass — searched the Recommended next step for "resolve", "resolving", "clarify"; none
+  B6 pass — searched the Recommended next step for "triage the inbox", "triage first", "start triage"; none
+  B7 pass — searched for "review the plan", "let me know", "consider addressing"; none
+advisory:
+  A1 pass — "The 2 DEFER rows are parked in the inbox and can wait for board triage on a later pass"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The case passes. All seven proof-block items are present, the lint line is rendered per check, and the single recommended step is running the persisted plan through `/st-work` with the plan path named. No clarification-resolving, triage, or generic step appears. The advisory criterion also passes because the response says the deferred rows stay parked in the inbox for a later pass rather than being closed.
+
+One note for the case author: the input carried no case id, so the emission line records that rather than inventing one. No authoring defects found in the criteria themselves.

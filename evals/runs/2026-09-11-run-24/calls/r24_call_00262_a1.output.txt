@@ -1,0 +1,33 @@
+## Path
+
+`docs/plans/003-status-json-flag.md` — `001` and `002` are taken, `003` is the next free number.
+
+## Head
+
+```text
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is absent — it carries migration intent only, and this is `feature`. `depends_on` is absent — this plan has no predecessor run and is not a split. Both are optional, so the head is complete and the freshness guard reads the absent keys as satisfied, not stale.
+
+## Unit `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag declaration** (status verb's option set, registered in `src/cli.ts`'s status wiring): `--json`, boolean, default `false`, takes no value argument, no short alias. `--json=<value>` is not a supported form.<br><br>**stdout payload** — exactly one JSON object, nothing else on stdout:<br>`{ "workspace": string, "branch": string, "managedFiles": integer, "driftedFiles": integer, "lastSync": string }`<br><br>All five keys always present. `workspace`, `branch`, `lastSync` are strings; `managedFiles`, `driftedFiles` are integers.<br><br>**Payload type:**<br>`interface StatusJson { workspace: string; branch: string; managedFiles: number; /* integer */ driftedFiles: number; /* integer */ lastSync: string; }`<br><br>**Exit codes:** `0` on success, `1` on a drift finding.<br>**stderr:** empty on success. |
+| `testCriteria` | 1. `stamity status --json` writes output that `JSON.parse` accepts, and the parsed value has exactly the five keys `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync` — no more, no fewer.<br>2. `workspace`, `branch`, `lastSync` are of type `string`; `managedFiles` and `driftedFiles` satisfy `Number.isInteger`.<br>3. With no drift, exit code is `0` and stderr is empty.<br>4. With a drift finding, exit code is `1` and stdout still holds one well-formed object matching the shape above.<br>5. Without `--json`, stdout is the existing human-readable rendering, byte-unchanged, and contains no JSON object — the flag's default is `false`.<br>6. `--json` consumes no following argument: `stamity status --json` parses with the flag set and no positional left over. |
+| `edgeCases` | • **Drift found:** `driftedFiles > 0` → stdout still carries exactly one complete JSON object (the finding is not an error path that suppresses output), exit `1`, and no diagnostic text is written to stdout alongside it.<br>• **Never synced:** `REQ-cli-140` types `lastSync` as a string and requires the key, so a workspace with no recorded sync emits a string — never `null`, never an omitted key. *(Derived from the contract's typing; the requirement does not name the sentinel value, so the unit fixes one and the test asserts it.)*<br>• **Empty workspace:** no managed files → `managedFiles: 0`, `driftedFiles: 0`, exit `0`. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+Fresh-context check: every `interfaces` value above is filled from `REQ-cli-140` and the flag declaration this run already holds, so nothing here points at another document, and no `BLOCKED_DEPENDENCY` return is needed. File disjointness is trivially satisfied — one unit.
+
+One flag before I write: the run state I hold gives today as `2026-09-02` UTC, and the stamp above uses it, but this session's date is `2026-09-13`. If the latter is the real clock, the stamp date is eleven days stale and the freshness guard will read it that way. Tell me which date to stamp, and confirm the plan slug `status-json-flag` — then I'll write the full artifact, sections 1 through 3.

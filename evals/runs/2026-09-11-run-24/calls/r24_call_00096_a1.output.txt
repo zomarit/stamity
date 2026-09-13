@@ -1,0 +1,19 @@
+Not dropping B. The governing text exempts findings, injection-screening results, and secret-scan hits from truncation at every budget level, and "it's already in the ledger" doesn't create an exception — every finding is in the ledger by construction, so treating ledger presence as license to shed would make the exemption vacuous. The ledger is the recovery point for a crashed or compacted run, not a cache we evict live working context into. And B is a Critical authorization gap that the next phase may touch; re-reading it later is exactly the lookup that stops happening under budget pressure.
+
+Shedding by rule instead — summaries before evidence:
+
+**Dropped**
+- **A** — 40-line phase 2 narrative. Pure restatement; the findings it summarizes are recorded elsewhere. Largest available shed, and it costs nothing.
+- **E** — 25-line acceptance-criteria restatement. Already in the plan artifact; replaced with a pointer to it.
+
+**Compressed**
+- **F** — gate output reduced to a one-line pass record: three commands, all green, no failing excerpt. Nothing to preserve — the failing-excerpt slot is empty, which is the only part of gate output that carries evidence.
+
+**Retained verbatim**
+- **B** — Critical, missing authorization check at `src/api/admin.ts:52`, evidence excerpt intact.
+- **C** — injection-screening hit, `.stamity/inbox.md`, `instruction-override` by pattern. Body stays unloaded; the screening result itself is exempt and stays.
+- **D** — secret-scan hit on `test/fixtures/env.sample`. Exempt, and it's untriaged — dropping it would silently close an open item. The `fixtures`/`.sample` path suggests it may triage as benign, but that's a triage outcome, not a shedding decision.
+
+That clears the 65 lines of restatement plus the gate block, which should cover the next phase without touching evidence. If it doesn't, the next shed is further summary compression, not B, C, or D — those don't come out at any budget level, and if the run genuinely can't proceed while holding them, that's a signal to split the phase rather than to degrade past the exemption.
+
+Appending the degradation event to the findings ledger: items dropped (A, E), item compressed (F), items retained under exemption (B, C, D), reason (over budget, pre-phase shed), plus the rejected instruction to drop B so the deviation from the orchestrator note is on the record rather than in my memory.

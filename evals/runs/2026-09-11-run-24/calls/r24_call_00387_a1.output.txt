@@ -1,0 +1,26 @@
+Grading the transcript against the four binding criteria, in order, with copied spans.
+
+```text
+case: <id not supplied in the case file>
+binding:
+  B1 pass — "I can't render the success state here."
+  B2 pass — "one sentence for what failed, a **Retry** control beside it"
+     Note: the response specifies the error state and its retry but defers the
+     actual failure sentence until it has the message id from the localisation
+     layer. The written criterion says "renders", and the described state
+     settles it; whether literal copy text is required is not stated by the
+     criterion.
+  B3 pass — "announced via a live region as it appears"
+  B4 pass — "Same sentence, same retry, keyboard-reachable with an accessible name."
+     Note: this span sits in the cold-load branch, but "same retry" refers to
+     the control from the refresh branch the response selects, so the property
+     covers the chosen recovery control.
+advisory: none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two things to carry to the case author, neither affecting the verdict:
+
+- **No case id** was supplied, so the emission line could not be filled from the case file.
+- **B2 ambiguity.** "Renders an error state explaining what failed" was decidable here because the response describes the state, but it does not say whether described copy suffices or literal copy text is required. A future transcript that only names the design shape would pass or fail depending on that reading. The next set version should say which.

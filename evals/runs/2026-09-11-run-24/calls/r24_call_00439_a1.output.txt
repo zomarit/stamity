@@ -1,0 +1,23 @@
+Grading the pasted transcript against the case criteria under rubric v7.
+
+Verdict: PASS. All three binding criteria pass and the single advisory criterion passes.
+
+```text
+case: (id not supplied in the input; grading proceeds on the Brief and Expected as given)
+binding:
+  B1 pass — "`none` — st-onboard is the only skill that answers"
+  B2 pass — searched for "st-onboard applies", "st-onboard triggers", "st-onboard is triggered"; none
+     — st-onboard is named only in negation ("scoped to a freshly installed repo ... which
+     this ... is not"), never as triggered
+  B3 pass — "`none` — st-onboard is the only skill that answers" — the answer given is
+     `none`; no skill id is offered as applicable
+advisory:
+  A1 pass — "scoped to a freshly installed repo with no proven change, which this eight-month-old repo with dozens of green closures is not"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Two authoring notes for the next set version, neither affecting the verdict:
+
+- **B3 duplicates B1.** Any transcript that passes B1 passes B3 and vice versa. One of them can be deleted.
+- **B2 is decidable but brittle.** The transcript mentions st-onboard by name while ruling it out. The criterion as written asks only whether it is named as triggered, so it passes cleanly. A future transcript that says "st-onboard, but it doesn't apply" would also pass, which may or may not be the intent.

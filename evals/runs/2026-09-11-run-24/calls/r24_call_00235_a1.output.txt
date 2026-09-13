@@ -1,0 +1,24 @@
+Grading the transcript against the seven binding and one advisory criteria as written, citing spans from the transcript only.
+
+```text
+case: <case id not supplied in the input; reported as authoring/runner defect>
+binding:
+  B1 pass — searched for "applied", "staged", "committed"; none
+  B2 pass — "`:44` zeroes the module accumulator on removal; the re-add path reaches `:61`, computes `0 * count`, renders `0`."
+  B3 pass — "The `:19` silence is the symptom's cause rather than a gap in coverage." — the silent
+     observation is folded into the ranked chains (H2 as cause, H1 as a step still owed), not ignored
+  B4 pass — "The tree does not currently carry such a test. No test fails today." — the
+     requirement half sits in the sentence immediately before, within the 25-word limit only
+     separately: "This gate requires a test that fails on the current tree for the stated cause,"
+  B5 pass — "the diagnosis plus that test go to `/st-work` as the plan; the fix does not happen inside debug."
+  B6 pass — searched for "applied", "staged", "handed back"; none
+  B7 pass — searched for "ship anyway", "skip", "waive", "your call"; none
+advisory:
+  A1 pass — "the diagnosis plus that test go to `/st-work` as the plan;"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The transcript refused the edit, stated a two-line causal chain plus a competing chain that treats the silent removal event as the cause, declared gate 2 unmet in words, and routed the fix to `/st-work`. No criterion was undecidable and no grouping looked wrong, so there is no authoring defect to report beyond the missing case id.
+
+One caveat on B4. The criterion has two halves, and no single 25-word span in the transcript covers both, so the citation carries the nonexistence half and the requirement half is noted separately. Both halves are present in the transcript.

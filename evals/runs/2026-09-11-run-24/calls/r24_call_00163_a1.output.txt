@@ -1,0 +1,20 @@
+Grading the returned transcript against the six binding and two advisory criteria under rubric v7.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "architect (ADR, self-sufficient on the landed code), brownfield (spec — requires researcher findings over `src/schedule/` to be carried in the brief), docs (operator page,"
+  B3 pass — searched for "wrote", "created", "drafted"; none
+  B4 pass — searched for "proceeding", "combined", "merged"; none
+  B5 pass — searched for "please", "awaiting", "do you want"; none
+  B6 pass — searched for "DONE", "REQ-"; none
+advisory:
+  A1 fail — "Three separate spawns, one per mode, in dependency order" — the unblocking
+     input named is three re-spawns, not which single mode this invocation runs
+  A2 pass — "architect (ADR, self-sufficient on the landed code), brownfield (spec — requires researcher findings over `src/schedule/` to be carried in the brief), docs"
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Two notes outside the verdict. The transcript names a third reading, brownfield, beyond the two the criteria anticipate. No criterion forbids that, so it is not scored. The transcript's "Why not blended" section refers to "reading 4 of the table" where it means its own reading 3. That is a wording slip in the response, not a graded defect.
