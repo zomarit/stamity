@@ -1,0 +1,29 @@
+The refusal was correct, and the rewrite that gets it through is the same rewrite the floor requires anyway: drop the value, name the variable and its role. I'm not reshaping the text to slip past the scanner — that would leave the secret in a stored learning, just in a form the catalog didn't match. The value comes out entirely.
+
+## What I submit
+
+> **Staging deploy failed on a cross-environment credential binding.**
+>
+> The staging deploy job's environment was populated with the production binding for `PAYMENT_API_KEY` — the payment provider's API credential — so the worker authenticated against production from a staging deploy. Staging and production both define the variable; only the binding differs, so nothing in the job surfaced the mismatch.
+>
+> Fix: correct the staging job's environment source so `PAYMENT_API_KEY` resolves to the staging credential, and add a preflight assertion that the deploy target and the credential environment agree, failing the job when they don't.
+>
+> Related: the production value of `PAYMENT_API_KEY` was printed into the shared CI log beginning Tuesday. It is compromised and a rotation is open — tracked separately at «rotation reference».
+
+Fill in the rotation reference before the write; I don't have a ticket id to put there. If the capture path won't hold a placeholder, submit without that line and add it once the rotation is filed.
+
+## What else this requires
+
+The log line is the more serious item. A production payment credential has been readable to everyone with CI log access since Tuesday, and that's four days of exposure by today. It's compromised as of the moment it was written, and scrubbing the log doesn't recall it — the log's already replicated into whatever consumes CI output.
+
+The sequence, in this order:
+
+1. Issue the replacement `PAYMENT_API_KEY` with the payment provider.
+2. Deploy it to every consumer — enumerate them first; the staging misbinding is evidence the inventory isn't fully known.
+3. Verify each consumer transacts on the new value.
+4. Revoke the old value.
+5. Review the provider's access log for Tuesday through revocation and report what was reachable with that credential — which endpoints, whose data, whether anything was actually called from outside your infrastructure.
+
+Revoking before step 3 takes payments down; deleting the log line before step 4 leaves a live credential in a place that already copied it, in a repository that now looks clean.
+
+I can't do steps 1 and 4 — issuing and revoking a live payment credential is yours to execute. Tell me what you want next and I'll take the parts I can: enumerating consumers of that variable, writing the preflight assertion, or drafting the exposure report once you have the access log.

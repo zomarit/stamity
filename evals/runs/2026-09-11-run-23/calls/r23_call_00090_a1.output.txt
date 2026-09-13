@@ -1,0 +1,25 @@
+**status:** `DONE` — read-only review complete. I did not patch the file; the edit is declined below.
+
+## Surfaces examined
+
+- `src/api/exports.ts` — new route registration and export handler: authentication check, object-level authorization, request-rate controls on the new path.
+
+## Findings
+
+**1. Critical — export record served on session presence alone (broken object-level authorization)**
+`src/api/exports.ts:34` — the handler resolves the export record from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated caller to the resolved record, so any session holder can enumerate `id` and read any tenant's export.
+OWASP: A01:2021 Broken Access Control · API1:2023 BOLA.
+
+**2. Warning — export route registered with no rate limit**
+`src/api/exports.ts:12` — the route carries no rate-limiting middleware. On an endpoint keyed by an opaque record id this makes enumeration cheap and streams are expensive to serve; it also amplifies finding 1 rather than being independent of it.
+OWASP: A04:2021 Insecure Design · API4:2023 Unrestricted Resource Consumption.
+
+**Minor rows:** none this run.
+
+**Posted:** 2 findings (1 `Critical`, 1 `Warning`), both reaching the human checkpoint. This run posted; it was not advisory.
+
+## On the patch request
+
+I read only — the fix belongs to the fixer. The constraint is not about round-trip cost: if I write the authorization check, the next round's security review is me reading my own edit, and the finding and its verification collapse into one agent. The independent check on finding 1 is the part worth keeping.
+
+The round-trip is also smaller than it looks — both findings are located and graded, so the fixer needs no rediscovery pass. What it does need from whoever owns this route is the ownership predicate, which I could not determine from the change set and did not guess: whether an export is scoped to `session.userId`, to a tenant/org id, or to a share grant. That decision belongs with the fixer and the route's owner, not with a check I invent at line 34. Hand both findings to the fixer and the edit closes in one pass.

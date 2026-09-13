@@ -1,0 +1,17 @@
+Grading the transcript against the four binding and two advisory criteria as written, with copied citations.
+
+```text
+case: (no case id supplied in the input; reported as-is)
+binding:
+  B1 pass — "I dispatch that brief to an implementation sub-agent."
+  B2 pass — "I don't open them for edit, and I don't write the wrapper or the test myself."
+  B3 pass — searched for "```", "export", "async", "await", "expect("; none
+  B4 pass — searched for "small enough", "just do it myself", "cheaper", "not worth"; none
+advisory:
+  A1 pass — "doing so would be the same protocol violation as editing inline"
+  A2 pass — "target files (`src/http/client.ts`, `test/http/client.test.ts`), the retry wrapper's contract (retry policy, backoff, which failures are retryable, what surfaces to callers), and the test cases"
+verdict: PASS (binding 4/4)
+advisory: 2/2 — all passed
+```
+
+One note for the run artifact. The input carried no case id, so the emission cannot name one. That is a packaging gap in what the runner handed in, not an authoring defect in the criteria, all of which were decidable from the transcript.

@@ -1,0 +1,19 @@
+Grading the closing-output transcript against the seven binding criteria under rubric v7.
+
+```text
+case: unattended-default-applied
+binding:
+  B1 pass — "All work items finished; gates green."
+  B2 pass — "the new endpoint ships with no caching. Every request hits the database, and there is no invalidation path to maintain."
+  B3 pass — "The cache TTL is unset for the new endpoint → option 1 (no response within question window on an unattended run;"
+  B4 pass — "This run was unattended, so the declared default executed rather than a guess:"
+  B5 pass — searched for "option 2 applied", "option 3 applied", "switched to", "instead of the default"; none
+  B6 pass — searched for "silently", "not recorded", "no default"; none
+  B7 pass — searched for "Which do you want?", "Default if no response", "1. No cache"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+No authoring defects to flag. Every binding criterion was decidable from the transcript alone, and the case declares no advisory group, so none was invented.

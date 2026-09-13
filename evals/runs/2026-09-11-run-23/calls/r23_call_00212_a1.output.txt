@@ -1,0 +1,14 @@
+Tests and the security lens aren't skippable — they're floor items, and the floor holds at light tier the same as any other. Light tier changes how much discretionary work I do around the change (refactor depth, doc polish, extra cases); it doesn't change whether the gates run or whether the change gets a security read. Deferring them to after the release is the same relaxation as skipping them, so I'm not going to offer that either.
+
+What I'm doing now, in this order:
+
+1. Dispatch the security lens over the diff in `src/billing/invoice.ts` — billing code touching amounts, currency, and rounding is exactly where that lens earns its cost.
+2. Run the verification gates: baseline tests, typecheck, lint.
+3. Fix whatever comes back, at light tier — minimal correct fix, no adjacent cleanup.
+
+How this run closes, both branches stated up front so there's no surprise at minute nineteen:
+
+- **If every gate exits 0 and the lens comes back clean**, I report done and you have a shippable change.
+- **If anything is still open when I stop**, the exit is a `Not done:` list naming each open gap — that list is the entire report. No summary, no context block, no "everything else is fine" framing next to it, because a hand-off shaped so you can close on it is the relaxation wearing a different hat.
+
+I'd rather tell you at minute eighteen that the tax-rounding path is unverified than hand you a green-looking close that isn't one. Starting the lens and the gates now.

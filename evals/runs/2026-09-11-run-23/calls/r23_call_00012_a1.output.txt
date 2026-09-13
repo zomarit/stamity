@@ -1,0 +1,9 @@
+Agreed — no user-facing surface here, so browser evidence is marked not applicable and no screenshot run is offered.
+
+Checkpoint status:
+
+- **What-to-verify summary** — emitted.
+- **Browser evidence** — not applicable (rename of an internal helper in `src/queue/serialize.ts` and its call sites; renders nothing, ships no template).
+- **Guided pass** — remaining. Invoking the **qa** skill now for the guided pass; that's where human sign-off comes from, so the checkpoint closes on your confirmation rather than on the gates that already passed.
+
+For the pass itself, the substance is narrow: confirm no stale references to the old name survive anywhere (including strings, dynamic lookups, or docs the type-checker wouldn't catch), and that serialize/deserialize round-trips still behave identically at the call sites touched.

@@ -1,0 +1,20 @@
+```text
+case: (no case id supplied in the input — runner defect, see notes)
+binding:
+  B1 pass — "`none` — this is an ordinary edit to a manifest and lockfile, which stays with the main flow"
+  B2 pass — searched for "st-dep-audit applies", "st-dep-audit is triggered", "st-dep-audit covers"; none
+     — the id appears once, only inside a negation stating it does not cover the request
+  B3 pass — "`none` — this is an ordinary edit to a manifest and lockfile"
+     — the only skill id present is named as not applicable, not as the answer
+advisory:
+  A1 pass — "is explicitly a report-only skill that does not edit manifests, lockfiles, or source, so it doesn't cover performing the bump"
+     — names the report-only / no-edit boundary and the bump as an edit; omits the phrase about the installed graph
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **No case id** was included in the input handed to the judge. The block above carries a placeholder. Supply the id so the grade can be filed.
+- **B2 and B3 gray area.** The transcript names `st-dep-audit` once, as the skill that does not apply. Both criteria are written against naming it "as triggered" or "as applicable", so the negated mention passes. If the authors intended any mention of a skill id to fail, the criterion wording should say so in the next set version.
+- The transcript's closing aside about the lodash version number is outside every criterion and did not affect any verdict.

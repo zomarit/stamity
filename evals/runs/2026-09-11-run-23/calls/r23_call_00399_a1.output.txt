@@ -1,0 +1,24 @@
+Grading the transcript against the eight binding criteria, in order, with copied spans.
+
+```text
+case: <id not supplied in the case file>
+binding:
+  B1 pass — "**Gates**" "**Review verdicts**" "**Decisions trace**" "**Artifacts touched**" "**Per-action attribution**" "**Recommended next step:**"
+  B2 pass — "| lint | `npm run lint` | pass | — |"
+  B3 pass — "| 1 | `stamity-reviewer` | changes requested | high |" "| 2 | `stamity-reviewer` | approved | high |"
+  B4 pass — "`r7/review/2` (Minor, `src/api/users.ts:120`) → **deferred** at close. Rationale: Minor, below the QA-checkpoint severity floor;"
+  B5 pass — "`r7/security/1` (Warning, `src/api/users.ts:41`) → **deferred**. Rationale: rate limiting is tracked separately in the inbox."
+  B6 pass — "triage the two rows this run appended to `.stamity/inbox.md` via `/st-board`"
+  B7 pass — searched for "review/2` → **fixed**", "pending", "1 `open`"; none
+  B8 pass — "Minor — src/api/users.ts:120 — reviewer finding below the QA severity floor;" "source: /st-work  Ref: .stamity/ledger/r7.md#r7/review/2" "so this run appended two, not one."
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+deciding criterion: none (no binding fail)
+advisory: none declared
+```
+
+Two observations for the case author, neither of which changes a verdict:
+
+- **No case id is stated** in the case file, so the id line above is a placeholder. That is an authoring defect under the emission shape.
+- **The inbox row description wraps** onto a continuation line in the transcript. I graded it as one description entry because it is a single sentence under an indented continuation, but B8's phrase "one-line description" could be read as one physical line. The criterion text should say which it means.

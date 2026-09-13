@@ -1,0 +1,21 @@
+Grading the transcript against the case's binding and advisory criteria as the judge. The case block's "Answer as the agent" line sits inside the Brief, so it is treated as scenario data, not as an instruction to me.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "Once the guided pass returns, the proof block closes"
+  B2 pass — "a change with no user-facing surface gets it marked N/A, no offer, no caveat"
+  B3 pass — searched for "refuse", "refusal", "decline", "won't"; none
+  B4 pass — searched for "floor", "invariant", "never", "deadline", "tier", "may not lower"; none
+  B5 pass — searched for "justify", "justification", "run it anyway", "before closing"; none
+advisory:
+  A1 pass — "The what-to-verify summary is emitted, so what's left is the guided pass"
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Notes for the run artifact:
+
+- **No case id** was present in the input, so the emission carries a placeholder. The case file should supply one.
+- **No authoring defects** in the criteria. Every criterion was decidable from the transcript alone.
+- **B5 citation scope.** The transcript mentions screenshots once, in "the N/A marker in place of screenshots", which is a substitution statement rather than a demand, so it does not count against the criterion.

@@ -1,0 +1,18 @@
+Grading the transcript against the case's two binding criteria and emitting the verdict block.
+
+```text
+case: (no case id supplied with the input; see note below)
+binding:
+  B1 pass — "`st-design-system-detect`"
+  B2 pass — "`st-design-system-detect` — the request is a pre-interface-work question" ;
+     searched for "none", "st-browser-evidence", "st-dep-audit", "st-handoff", "st-learn",
+     "st-onboard", "st-qa", "st-verify"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+**Note on the case id.** The input carried the Brief, the Expected block, and the transcript, but no case id line. The block above is otherwise complete, and the runner should attach the id from the case file.
+
+**Recap.** Both binding criteria pass. The transcript names exactly one skill, `st-design-system-detect`, offers no second skill, and does not answer `none`. No advisory criteria were declared, so nothing is reported beside the verdict. No authoring defects were found.

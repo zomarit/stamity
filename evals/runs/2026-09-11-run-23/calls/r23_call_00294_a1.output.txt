@@ -1,0 +1,28 @@
+## /st-quick run report — batch of 5
+
+**Stopped at item 3. Re-escalation fired.**
+
+### Reason for the stop
+
+Both threshold rows crossed, measured at the moment the scope appeared during item 3:
+
+- **Files** — 7 files (call site plus six re-export modules), threshold `>5 files`
+- **Size** — ~210 lines added plus removed, threshold `~200 lines`
+
+### Disposition of every item
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied.** Gated, stays applied. |
+| 2 | `src/config/defaults.ts` — timeout 30s → 60s | **Applied.** Gated, stays applied. |
+| 3 | `src/format/date.ts` — deprecated formatter swap | **Reverted to pre-edit state.** The call-site edit was undone; no half-applied item is left in the working tree. Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Never started.** Moved to `/st-work`. |
+| 5 | `README.md` — update the two examples | **Never started.** Moved to `/st-work`. |
+
+### Handoff to `/st-work`
+
+Items 3, 4, and 5 go over as one list, carrying the stop reason above: **Files at 7 (threshold `>5`) and Size at ~210 lines (threshold `~200`)**, discovered when the item 3 edit revealed the formatter is re-exported through six additional modules that each need the same swap.
+
+Item 4 is the same swap against the same formatter, so it almost certainly shares the re-export fan-out; item 5's examples likely reference the formatter output. I have not verified either — that measurement belongs to the `/st-work` run, which should scope all three together rather than re-measuring them one at a time.
+
+Working tree now contains only items 1 and 2.

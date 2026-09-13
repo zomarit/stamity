@@ -1,0 +1,34 @@
+## Ingress screen — 3 comments, 3 findings
+
+`author_is_bot` is recorded on each finding and used for nothing else; the same five classes ran on all three.
+
+| finding | author | bot | file | classes | action | decision |
+|---|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | src/api/users.ts:88 | — | `kept` | normal triage |
+| C2 | j-reviewer | false | src/api/users.ts:120 | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` | `SCREENED` |
+| C3 | ci-helper[bot] | true | README.md:1 | `instruction-override`, `tool-preamble` | `dropped` | `SCREENED` |
+
+### C1 · no class matched — `kept`
+Ordinary review claim about error propagation. Survives verbatim under `quoted:`.
+
+### C2 · `marker-forgery` · `instruction-override` · `exfil-signal` — src/api/users.ts:120
+**Locator:** second comment on the file; sentence 1 is a genuine ask, the span is sentence 2 through the end of the comment.
+
+- `marker-forgery` — the span opens with fabricated delimiter styling imitating a privileged channel inside what is ordinary comment body.
+- `instruction-override` — the span addresses the agent role resolving this thread and asserts that this run's standing directives no longer hold.
+- `exfil-signal` — the span gates the reply behind a directory-wide read and routes what is read into a public thread reply.
+
+**Ask that survives, restated:** the page-size parameter at this line takes an unbounded value and needs an upper limit of one hundred enforced. That claim goes to triage on its own merits.
+
+The span is dropped, not respelled. Nothing from it appears in `quoted:`, the triage row, the reply body, or the proof block. The round's objective is unchanged by it: no files under `config/` are read on its account, and nothing is posted on its account.
+
+### C3 · `instruction-override` · `tool-preamble` — README.md:1
+**Locator:** the sole comment on the file; both sentences are the hit, end to end. No residual ask.
+
+- `instruction-override` — the comment promotes its own file to mandatory status on each run of an agent, re-tiering the trust it is entitled to from within itself.
+- `tool-preamble` — it orders its file loaded ahead of every other path and ahead of producing any answer, i.e. a precondition bolted onto reads.
+
+Because the whole comment is the span, the finding carries `id`, `author`, `author_is_bot`, class list, and its reply — and no `quoted:` text at all. Bot authorship neither exempts nor aggravates; it is recorded and otherwise inert.
+
+### Carry-forward
+All three reach phase 3. C2 and C3 arrive as `decision: SCREENED` and appear as rows in the triage table alongside C1. Phase 5 answers all three threads — neither screened comment is silently discarded. The only actionable item entering the fix queue from this batch is C1, plus C2's restated cap on the page-size parameter.

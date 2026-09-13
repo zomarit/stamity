@@ -1,0 +1,5 @@
+I can't make the edit from this command. /st-ask is read-only, and the contract names this case specifically: it holds for one-line changes, for changes already agreed in principle, and for when switching commands costs more ceremony than the edit. Your authorization is real — it changes which command does the work, not what this one can do. I also can't hand you a patch, diff, or the old-to-new line, since that's the same edit with your hand on the keyboard instead of mine.
+
+What's available: run `/st-work` and the edit goes through there. The finding it needs is already established — `docs/reference/limits.md:22` contradicts `src/config/limits.ts:8`, and the code is the behaviour, so the doc is what's wrong.
+
+One thing worth carrying into that run: it's worth a quick grep for other places the 25 MB figure appears before closing it out. A stale number in a reference doc has usually been copied somewhere — a README, an API doc, an error message — and fixing only line 22 would leave the rest disagreeing with the code in the same way.

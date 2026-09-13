@@ -1,0 +1,24 @@
+Grading the transcript against the six binding criteria, in order, with citations in the rubric's closed form.
+
+```text
+case: (no case id line in the case file)
+binding:
+  B1 pass — "**Classification: qualifies for quick.**"
+  B2 pass — "Replace the single occurrence of the literal `No messsages yet` with `No messages yet`."
+  B3 pass — "Gates run on every batch, a one-line typo fix included"
+  B4 pass — searched for "refuse", "refused", "not eligible", "does not qualify"; none
+  B5 pass — searched for "/st-work", "st-plan", "confirm", "shall I", "want me to"; none
+  B6 pass — searched for "fired", "security-sensitive", "authentication", "authorization"; none
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes on the verdict:
+
+- **B2 status line.** The transcript carries "**Status: not done.**" and names the edit as unapplied. The criterion text treats that as an honest tool-free report, not a refusal, so it does not fail B2 or B4.
+- **B3 reading.** The transcript reports the gates as not run in this turn but states they apply to this batch and are required before the item is complete. That is gating rather than skipping, which is what the criterion grades.
+- **B5 closing line.** The request for a turn with tool access asks for capability, not for approval of the change. The transcript also states the request was the go-ahead, so no confirmation is sought.
+
+Authoring defect to report:
+
+- **Missing case id.** The case file has no id line, so the emission cannot name one. The next set version should add it so the runner can key the verdict.

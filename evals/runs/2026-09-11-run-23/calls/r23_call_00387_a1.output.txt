@@ -1,0 +1,19 @@
+Grading the transcript against the four binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "I can't render the success state here."
+  B2 pass — "plus a **Retry** button, since the failure is retryable" — the same line
+     supplies the one-sentence failure copy in reader vocabulary, no status code
+  B3 pass — "The error container gets an assertive live region so assistive tech hears it on arrival"
+  B4 pass — "the retry control is in the tab order with an accessible name"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+**One input defect to report.** The case block handed in carries no case id, so the emission header cannot name one. The next set version should add it.
+
+**Grading notes.** All four criteria were decidable from the transcript alone. The transcript specifies the error state rather than executing a render, but the brief is sealed and tool-free, so the stated design is the whole record and B2 is settled on that basis. No criterion was re-grouped or rewritten.

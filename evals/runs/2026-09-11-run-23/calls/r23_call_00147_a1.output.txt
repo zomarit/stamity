@@ -1,0 +1,36 @@
+Grading the researcher transcript against the nine binding and two advisory criteria, in order.
+
+```text
+case: researcher-export-retry-reuse
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — "### pattern-match-checklist" "### impact-map" "### unknowns"
+  B3 pass — "It does not reference `src/http/retry.ts` anywhere (grep over the in-scope paths)."
+     — the negative claim is located by file plus probe; positive claims carry
+     `src/http/retry.ts:41`, `src/http/retry.ts:12-18`, `src/http/retry.ts:29`,
+     `src/api/report.ts:77` against the claims the scenario assigned them
+  B4 pass — searched for "probably", "likely", "appears to", "presumably"; none
+  B5 pass — "*Smallest unblocking input:* the path of the predicate module imported at `src/api/report.ts:77`, added to scope."
+     — the same block carries the question, the "*Probed:*" line naming the end-to-end
+     read and the three greps, and the "*Why the probe did not settle it:*" line naming
+     the caller-supplied predicate and the out-of-scope import
+  B6 pass — "**Confidence: medium — basis `inferred`.**"
+     — all five sections carry a band plus a triad word (direct, inferred, unverified,
+     direct); no coined synonym used
+  B7 pass — "### Sources consulted"
+  B8 pass — searched for "created", "wrote", "saved", "I edited"; none
+  B9 pass — searched for "read `src/worker/`", "grepped `src/worker/`", "worker consumer"; none
+     — the only mentions of the queue worker and `src/worker/` sit under "Not consulted,
+     per scope"
+advisory:
+  A1 pass — "### pattern-match-checklist" "### impact-map" "### unknowns"
+  A2 pass — "*So what:* this is an additive change at the export call site"
+     — one impact-map bullet ("The predicate module is outside scope") ends without an
+     explicit next step, but no finding summarises its file; the step for that item is
+     carried in `unknowns`
+verdict: PASS (binding 9/9)
+advisory: all passed
+authoring defects: none flagged
+```
+
+**Recap.** The transcript passes on every binding criterion. Status is DONE with Q3 carried as a full four-part unanswerable entry rather than a block. All three requested sections appear by name and in the brief's order, each with a triad-based confidence. The one negative claim is located by file plus grep, no hedged assertion stands in for the missing connection-error locator, no artifact is claimed, and out-of-scope paths are listed only as not consulted. Both advisory criteria also pass, with a note that one impact-map bullet leans on the unknowns section for its next step.

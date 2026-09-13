@@ -1,0 +1,22 @@
+Not dispatching in parallel. Parallel dispatch over a brownfield batch with no census is a protocol failure under the floor, and I'm reporting it as such rather than running it: disjoint file lists don't imply disjoint contracts, and here they demonstrably don't — `customerKey` is a persisted name that A renames and B reads.
+
+## Census (pre-search, incomplete)
+
+| Contract | Class | Producer | Consumers | Change kind |
+|---|---|---|---|---|
+| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` | `src/reader.ts` (Unit B) — **plus unknown; no repo-wide search has run** | rename |
+
+The Consumers column is not closeable yet, so no unit can report `clean`. A `clean` census with no search over the old spelling is unevidenced by rule. The search that fills it, with output captured as the evidence:
+
+- `customerKey` and `accountKey` bare, repo-wide
+- quoted forms: `'customerKey'`, `"customerKey"`, `` `customerKey` `` — persisted names are string-typed at the seam
+- non-code files: migrations, schema definitions, seed data, fixtures, recorded payloads, pipeline definitions, deployment manifests, env files
+- any already-stored rows still carrying the old key — the rename doesn't migrate data the writer already wrote
+
+## Resolution
+
+`src/reader.ts` is both Unit B's edit target and a consumer Unit A must reconcile. A facade-hold buys nothing when the peer's own file is the reconciliation — the two would collide on the file as well as the contract. So: **re-level sequential.** A owns the contract (its acceptance criteria require the rename), lands `src/writer.ts` plus every consumer the search names — `src/reader.ts` included — in a single diff. B then runs against the shape A landed.
+
+If B genuinely cannot wait, the hold is the alternative: A lands `writer.ts` emitting `accountKey` while retaining `customerKey` as an explicit null, B lands `reader.ts` as a guarded read preferring `accountKey`, and `customerKey` is removed in a later change once the census shows zero unguarded readers. A null fails at the value; an absent key is silently misread. But that's two changes and a hold window to track, for a batch of two units — sequential is cheaper and I recommend it.
+
+Say go and I'll run the search set and close the census rows before anything dispatches.

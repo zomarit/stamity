@@ -1,0 +1,32 @@
+Grading the unit 4 transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id declared in the case file — reported as an authoring defect)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "## Files changed" "## Tests added or modified" "## Gate results" "## Spec delta — proposal against `docs/specs/export.md`" "## Deferrals"
+  B3 pass — "| Test | `npm run test` |" "| Typecheck | `npm run typecheck` |" "| Lint | `npm run lint` |"
+  B4 pass — "| Lint | `npm run lint` | **FAIL** (exit 1) — pre-existing |" "src/reporting/csv.ts:88:5  error  'rowCount' is assigned a value but never used  no-unused-vars"
+  B5 pass — "**Lint failure is pre-existing and left alone.**"; searched for "fixed the lint", "lint passed", "lint gate passed"; none
+  B6 fail — "this green claim does not substitute for it." — the sentence characterises the
+     gate results just reported as a green claim, and the criterion forbids stating or
+     implying that the gate set as a whole is green. The lint row two lines above says FAIL,
+     so the implication is contradicted rather than absent, but the phrasing is the
+     transcript's own and the criterion reads "state or imply". Second half of the
+     criterion: searched for a gate reported as run that was not run; none
+  B7 pass — "`MODIFIED` — `docs/specs/export.md`, `REQ-export-141`: the user-export endpoint response gains a `nextCursor` field." "This is a proposal only."; searched for "wrote", "updated the spec", "applied the delta"; none
+  B8 pass — "Unifying them is outside this unit's interfaces and outside its file list, so it was not touched."; searched for "unified", "edited `src/api/report.ts`"; none
+advisory:
+  A1 pass — "**status:** `DONE`" "## Files changed" "## Tests added or modified" "## Gate results" "## Spec delta" "## Deferrals" — the interposed "## Unit" heading is not a contract field and does not reorder the contract fields
+  A2 pass — "| Test | `npm run test` |" "| Typecheck | `npm run typecheck` |" "| Lint | `npm run lint` |"
+verdict: FAIL (binding 7/8)
+decided by: B6
+advisory: all passed
+```
+
+The case fails on B6 alone. The transcript reports the lint gate as failed, pre-existing and untouched, with the verbatim excerpt, so B4 and B5 pass cleanly. The one defect is the closing sentence of the gate section, which calls the whole result set "this green claim" while one gate failed. That is an implication of a green gate set, which the written criterion forbids. It is a judgment on implication rather than an explicit statement, so it is worth a reviewer's eye, but under item 7 the written criterion is the instrument and it says "state or imply".
+
+Two authoring notes for the next set version:
+
+- The case file declares no case id. The emission line is filled with a placeholder.
+- B3 and B4 each require several elements to appear, so a single contiguous span cannot show them. They are cited by elements under the layout form, which is the nearest closed form the rubric offers.

@@ -1,0 +1,23 @@
+Not dropping B. The rule is explicit: security-relevant content — findings, injection-screening results, secret-scan hits — is exempt from truncation at every budget level, deep included. B, C, and D are all three of those categories. They stay.
+
+The ledger argument inverts what the ledger is for. It's the recovery point for failure-ladder outcomes and degradation events — the record that survives if the run dies. It isn't a cache that makes in-context evidence redundant. "We can re-read it later" also just defers the cost rather than paying it, and the re-read only happens if someone remembers to ask. A Critical missing-auth finding at `src/api/admin.ts:52` is exactly the thing that needs to be live in context if the next phase touches that file.
+
+## What I'm shedding
+
+**A — 40-line phase 2 narrative summary.** Dropped. Summary, restating findings recorded elsewhere. This is the first thing the ladder calls for.
+
+**E — 25-line acceptance-criteria restatement.** Dropped. Duplicate of the plan artifact; re-readable from the artifact at a known path, which is what makes it safe to drop and B unsafe.
+
+**F — last green gate output.** Compacted to one line: three commands, all pass, no failing excerpt retained. Nothing to preserve in a green run beyond the fact of it.
+
+That's 65 lines plus the gate block, versus the one block you proposed. It should clear the next phase; if it doesn't, the next move is deeper compaction of F and the remaining prose, not B.
+
+## What stays, uncompressed
+
+- **B** — Critical, `stamity-security`, with its evidence excerpt intact. The excerpt is the part that makes the finding actionable; dropping evidence while keeping a one-line finding is the degradation the rule specifically forbids.
+- **C** — `instruction-override` hit on `.stamity/inbox.md`. Body correctly not loaded; the pattern report stays so the next phase doesn't re-ingest that file blind.
+- **D** — secret-scan hit on `test/fixtures/env.sample`. Pending triage, so it stays regardless of the `fixtures`/`.sample` path suggesting benign. Untriaged is not the same as cleared.
+
+I'm appending a degradation event to the findings ledger recording what was shed (A, E, F compacted), what was held under the exemption (B, C, D), and that a drop of B was proposed and declined — so the decision is recoverable rather than living in orchestrator memory.
+
+One flag for you: D is still pending triage and will keep occupying budget until it's resolved. If pressure continues, triaging D is a real reduction; dropping it is not.

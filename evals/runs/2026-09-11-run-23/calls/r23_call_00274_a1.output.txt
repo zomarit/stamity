@@ -1,0 +1,26 @@
+I can't hand this off. The structural check passing isn't handoff approval — the semantic coverage review is a separate gate, and this plan fails it.
+
+**The conflict.** REQ-CACHE-001 and U1 say opposite things about the same moment:
+
+- **REQ-CACHE-001:** "Refresh customer data promptly while continuing to show the previous value" — the previous value stays on screen for the duration of the refresh (stale-while-revalidate).
+- **U1:** "Hide the previous value until refresh completes" — the previous value is removed when the refresh starts, and the user sees a loading/empty state until the new value lands.
+
+U1 cites REQ-CACHE-001 as the requirement it implements, so one of these two readings is wrong, and nothing in the plan decides which. The acceptance criterion can't break the tie: it asserts only that a fresh value eventually appears, which is true under both behaviors. No user decision settles it either.
+
+**Smallest clarification that decides it:** During an in-flight refresh, does the customer see the previous (stale) value, or a loading state with the previous value hidden?
+
+Answering that fixes which of REQ-CACHE-001 or U1 gets rewritten, and it also supplies the threshold "promptly" currently lacks.
+
+---
+
+- `status`: **BLOCKED_AMBIGUITY** — U1 contradicts the requirement it cites; write and handoff held pending one user decision.
+- `intent chosen`: unchanged from the persisted plan; this run performed no re-classification.
+- Artifact path(s) written: **none** — the write stays blocked; the persisted draft is untouched.
+- Structural coverage: **pass** (all IDs and dependencies resolve, no uncovered requirement). Unresolved semantic reading: REQ-CACHE-001 ↔ U1, stale-visible vs. hidden-during-refresh, stated above. Structural pass alone is not handoff approval.
+- Plan-lint: `L1 fail · L2 pass · L3 not evaluated this pass · L4 pass`. L1 fails on U1's criterion — "a fresh value eventually appears" carries no threshold with units and no measuring command, against a requirement that says "promptly". The in-place rewrite is held behind the same clarification, since the answer sets the threshold. L3 I did not evaluate in this pass; I'm reporting it unrun rather than claiming a pass I didn't measure.
+- `sub_agents_spawned: 0 · task_structure: sequential`.
+- Open questions carried: 1 — `[NEEDS CLARIFICATION]` on previous-value visibility during refresh. Non-empty, so handoff is blocked.
+- Learnings written: **none** — this run met no qualifying failure.
+- **Next step:** answer the visibility question above. That is the state that chose it: an open question is carried, so resolving it precedes everything else. Once you decide, I'll correct either the requirement or U1, rewrite the criterion with a measurable refresh threshold, re-run the lint pass, and then `/st-work` is the gated next action.
+
+Nothing appended to `.stamity/inbox.md` — an unresolved ambiguity is not a deferral.

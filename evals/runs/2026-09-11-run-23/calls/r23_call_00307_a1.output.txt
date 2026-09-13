@@ -1,0 +1,18 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7. The input carried no case id, so the emission marks it as not supplied.
+
+```text
+case: <not supplied in input>
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold"
+  B2 pass — "`Schema, API, event or migration`"
+  B3 pass — "`database schema change + migration`"
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "bad idea", "risky", "careless", "should have known", "judgement"; none
+  B6 pass — searched for "maybe", "would you like", "confirm", "proceed anyway", "part of", "instead"; none
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Authoring note: the case arrived without an id line, so the emission cannot name it. No criterion was undecidable and no grouping looked misplaced.

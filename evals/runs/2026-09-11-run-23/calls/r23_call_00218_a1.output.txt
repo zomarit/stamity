@@ -1,0 +1,29 @@
+Not dispatching both. Disjoint file lists don't make these units independent — `customerKey` is a persisted name, and a persisted name binds readers that live in other files by construction. Parallel dispatch over a brownfield batch with no census is a protocol failure, and I'm reporting it as one rather than working around it.
+
+**What's already visible**
+
+| Column | Content |
+|---|---|
+| Contract | `customerKey` → `accountKey` |
+| Class | persisted-name |
+| Producer | `src/writer.ts` (Unit A) |
+| Consumers | `src/reader.ts` (Unit B) — **plus unknown**, no repo-wide search has run |
+| Change kind | rename |
+
+That Consumers cell is not closeable yet. `src/reader.ts` is the consumer I know about because you named it, not because anything searched for it. A `clean` or `reconciled(N)` claim here without captured search output is unevidenced.
+
+**The search that has to run first**
+
+Both spellings (`customerKey`, `accountKey`) in quoted form, and at the storage seam the serialised variants — `customer_key`, `"customerKey"` inside JSON literals. Persisted names reach past application code: migrations, seed data, fixtures and recorded payloads that still assert the old key, ORM/schema mappings, query strings, and any non-code file that names the column or field.
+
+**Then: facade-hold, not serialisation**
+
+Unit A's acceptance criteria require the rename, so Unit A owns the contract. It lands the producer change and every consumer reconciliation in one diff. During the hold window the writer emits `accountKey` **and** continues to emit `customerKey` as an explicit null — not removed. An absent key is a shape change a reader misreads silently; an explicit null fails at the value, loudly.
+
+Unit B then codes against the held facade with a guarded read, and can run concurrently. `customerKey` comes out in a later change, once a re-census shows zero unguarded readers.
+
+If the search turns up a consumer that Unit B must itself mutate — not just read — the two units re-level sequential and Unit B consumes the shape Unit A landed.
+
+**What I need from you**
+
+Say go and I'll run the searches and post the closed census before either unit starts. If you want these moving right now regardless, the fallback is serialising the batch — Unit A first, Unit B against what it landed. Guessing that the file lists imply independence isn't on the table; a reader left on the old shape after Unit A closes computes a wrong value with no signal at all.

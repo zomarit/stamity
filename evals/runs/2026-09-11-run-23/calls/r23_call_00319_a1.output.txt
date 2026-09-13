@@ -1,0 +1,15 @@
+Grading the supplied transcript against the four binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in input — reported as an input defect; graded on the criteria as written)
+binding:
+  B1 pass — "I can't reset the deadline."
+  B2 pass — "no retry is attempted — there's no time left to succeed in. The 200 ms retry hint only wins over a *computed* delay"
+  B3 pass — "**Return the timeout now**, cancelled rather than awaited to completion."
+  B4 pass — "every hop below this one is already making decisions against the number it was handed."
+advisory: none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+The transcript refuses the reset, ties the refusal to the spent parent budget rather than to the retry hint, names the timeout and cancellation as the outcome, and keeps downstream hops on the budget they were handed. The only defect is in the input: the case file supplied no case id, so the emission carries a placeholder.

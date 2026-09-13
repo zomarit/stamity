@@ -1,0 +1,58 @@
+**status:** `DONE`
+**brief:** export endpoint / retry helper reuse · depth standard · tool_tier codebase · handoff_to implementer
+
+---
+
+## pattern-match-checklist
+
+**confidence:** high — basis `direct` (read at cited locations)
+
+The one existing consumer establishes the shape a second consumer has to match:
+
+- [ ] **Construct-then-call, per call site.** `src/api/report.ts:77` constructs the helper and calls it at the same site. `src/api/export.ts` has no reference to it anywhere — reuse is a new construction, not a wiring change.
+- [ ] **Supply a retry predicate at construction.** The helper takes the predicate from the caller (`src/http/retry.ts:29`) and declares no default. An export call site that omits it does not inherit report's behaviour; it has nothing. *So what:* the implementer must decide and pass an export predicate explicitly — this is the first concrete decision, not a copy-paste.
+- [ ] **Accept fixed-interval, three attempts.** The backoff multiplier is 1.0 (`src/http/retry.ts:41`), so retries fire at a constant interval; three attempts total. There is no exponential path to opt into.
+- [ ] **Do not expect per-call tuning.** The multiplier is read once at construction (`src/http/retry.ts:12-18`), so interval behaviour is fixed for the lifetime of the constructed helper. Varying it per export request requires either a second construction or a change to `retry.ts`. *So what:* if export needs longer spacing than report, the implementer constructs a separate instance rather than parameterising the call.
+
+## impact-map
+
+**confidence:** medium — basis `inferred` (report.ts:77 as the sole analogue, combined with the absence of any reference in export.ts; the step between them is that a second consumer follows the first consumer's construction shape)
+
+- **`src/api/export.ts`** — gains a construction site and a predicate argument. Currently untouched by retry (probe found no reference), so this is additive, with no existing behaviour to preserve.
+- **`src/http/retry.ts`** — unchanged if export accepts fixed-interval × 3. Changes only if export needs a different interval *and* the implementer chooses parameterisation over a second instance (`src/http/retry.ts:12-18`, `:41`).
+- **The predicate module** (imported at `src/api/report.ts:77` from a path outside this brief's scope) — either reused by export or matched by a new predicate. **This is the one edge that leaves the briefed scope**, and it carries the unresolved Q3.
+- **`src/api/report.ts`** — no impact expected; nothing read indicates shared mutable state between call sites. Basis for that last clause specifically: `unverified` — I read no lifecycle or module-level state code that would rule sharing in or out.
+- **Out of bounds and not assessed:** the queue worker and `src/worker/`. If either constructs the helper, this map is incomplete by construction.
+
+## unknowns
+
+**confidence:** high — basis `direct` (the gaps below are each the recorded outcome of a probe that ran and returned nothing, not an absence of probing)
+
+1. **Whether the helper retries connection errors or 5xx only.** Full detail in the unanswerable list below; it is question (3) of the brief and it is not settled.
+2. **Whether `docs/reference/http.md` documents the retry contract.** This path was in scope and my probe record carries no result from it. Stated as a gap in my own coverage rather than a property of the file. Basis: `unverified`.
+3. **Whether any out-of-scope consumer constrains the helper.** `src/worker/` was excluded by the brief, so "report.ts is the only consumer" is true of the briefed scope only. Basis for the scoped claim: `direct`; basis for any wider claim: `unverified`.
+
+## unanswerable
+
+**confidence:** high that it is unanswerable within this scope — basis `direct` (the blocking import path is visible at a cited location and terminates outside the briefed scope)
+
+**Question (3):** does the helper retry on 5xx responses only, or on connection errors as well?
+**severity:** `Warning` — the handoff is to an implementer, who would otherwise write an export predicate against an unknown retry surface; wrong either way it is silent, not loud.
+
+- **Probed:** read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`.
+- **Why it did not settle:** the retry predicate is supplied by the caller (`src/http/retry.ts:29`) and the file declares no default, so the answer does not live in `retry.ts` at all — it lives in whatever predicate a call site passes. The predicate `src/api/report.ts:77` passes is imported from a path outside this brief's scope, so I could not resolve it. Nothing I read locates a claim about connection-error behaviour in either direction.
+- **Smallest unblocking input:** the resolved path of the predicate imported at `src/api/report.ts:77`, added to scope. One file read settles it. Second-cheapest, and available without a scope change: a read of `docs/reference/http.md`, in scope and unprobed, which may state the contract.
+- **Note for the consuming flow:** because the predicate is caller-supplied, this question may be moot for the export endpoint — export can define its own connection-error behaviour regardless of what report chose. It matters for *matching* report, not for *reusing* the helper.
+
+---
+
+## sources consulted
+
+- `src/http/retry.ts` — read end to end; cited at `:12-18`, `:29`, `:41`.
+- `src/api/report.ts` — cited at `:77`.
+- `src/api/export.ts` — searched for helper references; none found.
+- `src/http/` — grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`; no matches bearing on Q3.
+- `docs/reference/http.md` — in scope, no probe result on record.
+- Excluded by brief and not consulted: the queue worker, `src/worker/`.
+
+**Bottom line for the implementer:** yes, the helper is reusable — it is caller-parameterised by design and export needs only a construction site plus a predicate. Fixed interval × 3 attempts is not adjustable per call. Resolve the predicate import at `src/api/report.ts:77` before deciding whether to share report's predicate or write export its own.

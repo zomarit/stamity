@@ -1,0 +1,18 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of backing off**
+
+`src/http/retry.ts:41` sets the backoff multiplier to `1.0`. The loop scales the wait by that multiplier between attempts, and scaling by one leaves the interval unchanged — so what runs is a constant-delay retry, not exponential backoff. Three attempts land at the same spacing, which upstream sees as a burst rather than a receding one.
+
+`src/http/retry.ts:12-18` shows the multiplier is read once when the retry loop is constructed, not per attempt. Two consequences worth carrying into the fix:
+
+- There is no runtime path to adjust it — no per-call override, no re-read — so the value baked in at construction governs every attempt on that instance.
+- Any change to the constant takes effect only for instances built after the change, which matters if retry loops are constructed at module load or cached on a client.
+
+**Why nothing caught it**
+
+`test/http/retry.test.ts:88` asserts that three attempts occur and asserts nothing about the interval between them. The suite is satisfied by any spacing, including zero, so the constant interval is invisible to CI and would remain invisible after the multiplier changes. A fix that only touches line 41 would be untested.
+
+**Brief for `/st-work`**
+
+Change the multiplier at `src/http/retry.ts:41` to the intended growth factor, and add interval assertions at `test/http/retry.test.ts:88` so the spacing between attempts is actually observed. While in there, confirm whether the construction-time read at lines 12-18 is where the value should live, or whether it belongs in per-attempt configuration — that is a design call the reading does not settle.

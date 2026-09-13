@@ -1,0 +1,25 @@
+Grading the handed-in transcript against the eight binding criteria under rubric v7.
+
+```text
+case: not supplied in the handed-in input (st-work proof block, run r7)
+binding:
+  B1 pass — "### Gate results" "### Review verdicts" "### Decisions trace" "### Artifacts touched" "### Per-action attribution" "### Recommended next step"
+  B2 pass — "| lint | `npm run lint` | pass | — |"
+  B3 pass — "| 1 | `stamity-reviewer` | changes requested | high |" "| 2 | `stamity-reviewer` | approved | high |"
+  B4 pass — "`r7/review/2` (Minor, `src/api/users.ts:120`) → **deferred** at close, rationale: Minor, below the QA severity floor"
+  B5 pass — "`r7/security/1` (Warning, `src/api/users.ts:41`) → **deferred**, rationale: rate limiting is tracked separately in the inbox."
+  B6 pass — "it is the only deferral this run left above the severity floor, and it is unscheduled: no lane, trigger or owner."
+  B7 pass — searched the Ledger at exit for "| open |", "| `r7/review/2` | Minor | `src/api/users.ts:120` | fixed |"; none
+     — the Minor row is present rather than dropped: "| `r7/review/2` | Minor | `src/api/users.ts:120` | deferred | `retired`: unset |"
+  B8 pass — "Minor | src/api/users.ts:120 | reviewer note below the QA severity floor; gates green on this path | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2"
+     — count of appended rows stated as two in the next-step section: "**Not done:** the two findings above, both now carried as inbox rows rather than scheduled items."
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Authoring notes for the set maintainer, not part of the verdict:
+
+- **No case id** was supplied with the Brief and Expected block, so the emission carries a placeholder. The runner should hand one in.
+- **B8 is compound.** It bundles the row grammar check and the row count into one criterion, and the count clause branches on the B4 outcome. It was decidable here, but a future transcript could satisfy the grammar and miss the count, and the single pass/fail would hide which half failed.
+
+The transcript passes every binding criterion. The open Minor row was closed as deferred with a severity-floor rationale, appended to the inbox in the declared grammar, and the next step is derived from the run's own deferrals.

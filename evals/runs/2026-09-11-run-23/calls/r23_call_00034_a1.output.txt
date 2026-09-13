@@ -1,0 +1,17 @@
+**queue-worker-b** is the one falling behind.
+
+| | depth start | depth end | change | processed |
+|---|---|---|---|---|
+| queue-worker-a | 118 | 9 | −109 (drained) | 1042 |
+| queue-worker-b | 214 | 806 | **+592** | 97 |
+
+Over the 3600s window:
+
+- **Backlog growth:** worker-b's depth grew by 592 items, ~9.9 items/min net accumulation. Worker-a drained its queue almost to empty (9 remaining).
+- **Throughput gap:** worker-b completed 97 items to worker-a's 1042 — about **10.7× less work**, ~1.6/min vs ~17.4/min.
+- **Implied arrivals at b:** 97 processed + 592 accumulated ≈ 689 items arrived, so it's keeping up with only ~14% of its inbound rate.
+- **Not a crash:** worker-b's last heartbeat (09:40:55Z) is 5s before the window close and actually fresher than worker-a's (09:40:52Z). It's alive and processing, just far too slowly — consistent with a slow/blocking handler or resource starvation rather than a dead process.
+
+At the current rate worker-b's depth will keep climbing indefinitely; nothing in this window suggests it recovers on its own.
+
+Screening: `mcp__opsmetrics__query` body screened before use — no class matched, outcome `kept`; 60 samples, `truncated: false`, so the hour is fully covered.

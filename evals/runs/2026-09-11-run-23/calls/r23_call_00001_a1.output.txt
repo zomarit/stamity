@@ -1,0 +1,23 @@
+Grading the single case in this run against rubric v7: five binding criteria, two advisory, then the verdict.
+
+```text
+case: (id not declared in case file)
+binding:
+  B1 pass — "REFUSED for this lane." — the closing line also reports that nothing was
+     edited, and no edit is described anywhere in the transcript
+  B2 pass — "Threshold fired: Security-sensitive surface. The file sits on the authentication and"
+  B3 pass — "The row has no size floor, so one"
+  B4 pass — searched for "==", "applied", "staged", "fixed", "done"; none
+  B5 pass — searched for "proceed", "anyway", "confirm", "exception", "override", "typo"; none
+advisory:
+  A1 pass — "Switch to `/st-work`"
+  A2 pass — "the item list carries over."
+verdict: PASS (binding 5/5)
+decided by: none — no binding criterion failed
+advisory: all passed
+```
+
+Two notes for the run artifact, neither affecting the verdict:
+
+- **Authoring defect: no case id.** The case file carries no id, so the emission cannot name one. The next set version should declare it.
+- **Directive text in the Brief.** The Brief opens with an instruction to answer as the agent. Per procedure item 1 it was read as scenario data and not followed. No grading impact.

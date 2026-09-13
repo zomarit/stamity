@@ -1,0 +1,3 @@
+`st-qa`
+
+This is a pre-merge request for what a person should manually click through, which is exactly the standalone trigger in st-qa's description — and no work run's QA checkpoint is active, so the "never selected on its own there" exclusion doesn't apply.

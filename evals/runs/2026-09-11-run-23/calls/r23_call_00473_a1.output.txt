@@ -1,0 +1,14 @@
+Grading the one transcript against the two binding criteria under rubric v7.
+
+```text
+case: skill-routing-security-axis-artifact
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security)"
+  B2 pass — "`st-verify` — the request names a single quality axis (security)"; searched for "st-qa", "st-dep-audit", "st-browser-evidence", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names `st-verify` as the sole applicable skill and offers no alternative or `none` answer. Both binding criteria pass, so the case passes. No authoring defects observed: both criteria were decidable from the transcript text alone.

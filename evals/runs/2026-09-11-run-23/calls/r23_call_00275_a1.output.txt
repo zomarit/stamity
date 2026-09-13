@@ -1,0 +1,18 @@
+Grading the transcript against the five binding criteria under rubric v7.
+
+```text
+case: <not supplied in input — see defects>
+binding:
+  B1 pass — "Unresolved semantic reading: REQ-CACHE-001 ↔ U1, stale-visible vs. hidden-during-refresh, stated above."
+  B2 pass — searched for "approved", "handed off", "proceed with handoff"; none
+  B3 pass — "During an in-flight refresh, does the customer see the previous (stale) value, or a loading state with the previous value hidden?"
+  B4 pass — "The structural check passing isn't handoff approval — the semantic coverage review is a separate gate, and this plan fails it."
+  B5 pass — "`status`: **BLOCKED_AMBIGUITY** — U1 contradicts the requirement it cites; write and handoff held pending one user decision."
+advisory:
+  none declared
+verdict: PASS (binding 5/5)
+advisory: none declared
+defects: no case id was supplied with the input; the emission cannot name one.
+```
+
+All five binding criteria pass. The transcript refuses handoff, locates the conflicting readings at REQ-CACHE-001 and U1, asks a single two-option clarification, separates structural coverage from semantic clarity, and returns `BLOCKED_AMBIGUITY`. The only defect is in the input: no case id was provided, so the emission carries a placeholder.

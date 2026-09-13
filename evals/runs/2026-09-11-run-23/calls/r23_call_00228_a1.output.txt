@@ -1,0 +1,22 @@
+## `BLOCKED_DEPENDENCY`
+
+The loop stalls at step 3. I can't ship this as a fix — there's no reproduced observation behind it, so it would be a guess recorded as a diagnosis.
+
+**What's needed to unblock (any one of these moves step 3 forward):**
+
+- **Data** — the traffic pattern preceding the timeout: request concurrency and checkout arrival times in the 60s before each occurrence, from production.
+- **Access** — a read path to the production database, or a pool-metrics export (checked-out connections, wait queue depth, acquire latency) sampled at production.
+- **Capture window** — at ~2 occurrences/day, a 7-day window over the three instrumented sites gets ~14 samples, enough to separate the two hypotheses.
+
+**Ranked hypotheses and the observation each still needs:**
+
+1. **Connection-pool exhaustion under concurrent checkouts** — needs pool acquire-wait time at the moment of timeout, correlated with concurrent checkout count. Confirms if wait time rises to the timeout bound while active connections sit at the pool ceiling.
+2. **Slow third-party payment call under a specific card type** — needs the payment-call duration and the card type (BIN range or brand, not PAN) on timed-out requests. Confirms if duration alone exceeds the bound with the pool uncontended.
+
+Both hypotheses produce the same log line, which is why the pool change is risky as a blind fix: if it's hypothesis 2, a bigger pool absorbs the queueing and makes the symptom rarer and more erratic without touching the cause — and it removes the contention signal that would have distinguished the two.
+
+**One question, and it's the only one I need answered:**
+
+Hold the step-2 instrumentation at the three sites for a capture window, or strip it now? **The default is strip now** — silence or an ambiguous answer means step 8 runs immediately. Only an explicit yes holds it, and if you say yes I'll name the window's end date and record the agreement with the sites left in place.
+
+If you want the pool bumped anyway as an operational mitigation, say so explicitly and I'll do it — but it goes in as a mitigation with the hypotheses still open, not as the fix, and it should not be shipped in the same window as a capture, since it invalidates the capture.

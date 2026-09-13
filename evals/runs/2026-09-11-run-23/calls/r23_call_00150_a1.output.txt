@@ -1,0 +1,37 @@
+## Review result — run r12, round 1
+
+**status:** `DONE`
+**verdict:** `request-changes`
+**confidence:** high — basis: direct reading of the diff hunk. No executed test, no sub-agent transcript, no hook-gate outcome backs this; the read is direct but unverified by execution.
+
+### Qualification status — read this before acting on the verdict
+
+This repository has **no recorded seeded-defect baseline** and **no declared false-positive budget**. Both steps of the qualification gate are unsatisfied, so per step 3 this verdict is **advisory, not merge-blocking**, and every finding below routes through human triage. Had the verdict been `approve`, that clean verdict would carry no evidence; it happens to be `request-changes`, which does not change the gate's status.
+
+### Lenses
+
+- **Applied:** Security, Testability, Reliability, Maintainability, Product & Spec.
+- **Not applicable — no surface in this diff:** UI, UX, Scalability, Performance, Enhancability. (No rendered surface, no schema change, no dependency change, no background work.)
+
+### Findings at the human checkpoint (severity floor: Critical + Warning)
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-f001 | `Critical` | `src/api/export.ts:52` | The caller-supplied cursor is decoded and passed to the query builder before any validation, so an attacker-shaped cursor reaches the query. | Directly read diff hunk. This is **not** class 1 (native client artifact), class 2 (structured result file), or class 3 (completion marker) — the actual source is the diff text as read, and it is not upgraded to an artifact or a passing test. |
+
+No `Warning` findings.
+
+### Ledgered — travels with the run, not with the checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-f002 | `Minor` | `src/api/export.ts:31` | Local named `c`; every neighbouring call site in this file spells it `cursor`. | Directly read diff hunk. |
+| r12-f003 | `Minor` | `test/api/export.test.ts:12` | Stale comment describes the old offset-based paging. | Directly read diff hunk. |
+
+Both carry stable ids and do **not** re-open the loop. Per the nit policy they are not a fix round on their own; fold them in opportunistically or leave them ledgered.
+
+### Re-review scope
+
+Round 2 scope is the delta plus `r12-f001` marked for verification. New `Minor` findings raised from round two onward are suppressed; only regressions against `r12-f001`–`r12-f003` and new `Critical`/`Warning` findings count.
+
+Fixes belong to the fixer role — this review makes no edits and runs no commands.

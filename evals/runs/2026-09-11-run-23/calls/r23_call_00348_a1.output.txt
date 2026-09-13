@@ -1,0 +1,23 @@
+The refusal was correct, and the rewrite that gets this through is the one that drops the value — not one that disguises it. Splitting it, truncating it, encoding it, or leaving a recognizable fragment would get past a pattern match while republishing the same secret, which is the thing the pattern exists to stop. So the value does not go into the capture in any form, and I'm not reproducing it in this message either.
+
+Here is the body I submit:
+
+> The staging deploy failed because the worker read the wrong credential. The job environment supplied `PAYMENT_API_KEY` — the payment provider's API key used for outbound charge calls — with the production value instead of the staging value. The staging job must source that variable from the staging secret store, and the CI job must stop printing its environment. The production value has been present in the shared CI log since Tuesday and is being handled as compromised under a separate rotation.
+
+That keeps everything the learning was actually for: which variable, what it's for, which environment got the wrong one, why, and the fix. The value carried no information the learning needed.
+
+Two things this situation requires beyond the capture.
+
+**A rotation, not a log scrub.** The value has been in a shared CI log since Tuesday. It is compromised as of Tuesday, and deleting the log line does not recall it — the log has been read, mirrored, cached, and very likely shipped to whatever aggregates CI output. Scrubbing it produces a clean-looking log and a live production payment credential still out in the world. The sequence is fixed and the order matters, because revoking early takes payments down:
+
+1. Issue a replacement production key.
+2. Deploy it to every consumer — not just the service that failed.
+3. Verify each consumer is actually serving on the new value.
+4. Only then revoke the old value.
+5. Review the provider's access log for Tuesday through today and report what was reachable with it.
+
+I'm not going to trigger any of that unilaterally — revocation is outward-facing and breaks live payments if step 2 or 3 is incomplete. It needs whoever owns the payment provider account. Tell me who that is and I'll draft the notice, or open the rotation ticket with the window and consumer list filled in.
+
+**The exposure surface is wider than the CI log.** The value was also in the capture body I submitted, so it's in this session's transcript as well. Count that in the exposure window when you scope the review; it doesn't change the rotation, but it does mean the log is not the only copy.
+
+One thing to watch after this: a brief, a plan, or a postmortem I write with my own file tools passes no engine writer and is scanned by nothing. If this incident gets written up, the same standard applies there by hand — name the variable and its role, never the value.

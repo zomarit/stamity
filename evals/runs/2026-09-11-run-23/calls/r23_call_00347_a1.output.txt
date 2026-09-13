@@ -1,0 +1,18 @@
+Grading the transcript against the six binding criteria under rubric v7.
+
+```text
+case: st-rework-routing-five-findings
+binding:
+  B1 pass — "| F5 | Minor | cross-cutting (four modules) | DEFER |"
+  B2 pass — "| F4 | Minor | single-line fix inside a diff file | REVISE |"
+  B3 pass — "| F3 | Warning | new file + new dependency | DEFER |"
+  B4 pass — "One batched correction if you want a different split"
+  B5 pass — "These two append to `.stamity/inbox.md` as **one dated block for this rework run (2026-09-13, branch `feat/orders-idempotency`)**, written through the persistence guard:"
+  B6 pass — searched for "applied", "patched", "wrote", "staged", "git add"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes on the grade. The routing table appears once in the transcript, and the correction request is a single batched prompt rather than one per finding. The REVISE group is headed as plan units for phase 6. The DEFER rows each carry severity, file and line, a one-line description, and a source naming the branch. The transcript states nothing is written yet and offers no patch, so the must-NOT criterion passes on absence. No authoring defects to report.

@@ -1,0 +1,27 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; recorded as unnamed)
+binding:
+  B1 pass — "## status: `BLOCKED_FAILURE`"
+  B2 pass — "| `tags` | Absent from frontmatter." "| `id` | `st-migrations` carries the engine prefix `st-`."
+  B3 pass — "Nothing was written."
+  B4 pass — searched for "path written", "landed", "sync"; none
+  B5 pass — searched for "wrote", "written to", "renamed"; none
+  B6 pass — "### Strict errors — Critical"
+  B7 pass — "These would not have blocked the save on their own."
+  B8 pass — searched for "clean", "partial", "success"; none
+advisory:
+  A1 pass — "| `tags` | Absent from frontmatter."
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Notes on the emission:
+
+- **Case id missing.** The input carried the Brief, Expected, and transcript but no case id line. I did not invent one.
+- **B2 cites two spans.** The criterion requires two distinct errors that sit on separate table rows, so no single contiguous span shows both. Both spans are copied under rule 1. If the mechanical reader admits only one span for a positive citation, the criterion is decidable but not citable in the closed form, which is worth a rubric or authoring note.
+- **B7 context.** The transcript puts both missing declarations under a heading graded Minor and states explicitly they would not have blocked the save. The strict table names only the two fields the criterion expects.
+- **B5 context.** The transcript proposes a corrected id and filename for a re-spawn but performs no save and repeats that nothing was written. Proposing is not saving, so the prohibition holds.
+
+No undecidable criteria and no grouping concerns to flag.

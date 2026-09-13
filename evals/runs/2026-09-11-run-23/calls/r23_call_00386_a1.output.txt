@@ -1,0 +1,15 @@
+I can't render the success state here. The response carried no usable data, so a success render would be a layout with nothing behind it — the one combination the state value is meant to make unrenderable, and the reader would be looking at a screen that asserts their orders loaded when the read failed.
+
+What I can do is make the error non-disruptive, which I think is the actual ask behind "does not interrupt the flow":
+
+- **Keep it in place.** The error renders inside the list region at the placeholder's dimensions — same box the skeleton occupied. Nothing above or below the list moves, no modal, no route change, no focus steal.
+- **One sentence, one action.** Something like "We couldn't load your orders." plus a **Retry** button, since the failure is retryable. No status code, no exception name — those go to the log line.
+- **Announce without hijacking.** The error container gets an assertive live region so assistive tech hears it on arrival; focus stays wherever the reader put it, and the retry control is in the tab order with an accessible name.
+- **Retry in place.** Pressing it returns the region to the loading state and re-renders on resolution — the surrounding flow never unmounts.
+
+Two things I need from you before I write it:
+
+1. **Is there prior data?** If this list had previously-loaded rows in cache, the rule for a partly-failed read applies: keep the stale rows rendered and put the error beside them, marked stale, with the retry. That gets you closest to "the flow continues" honestly. As described, the read was the first one and there is nothing to fall back to.
+2. **Localisation and tokens.** Tell me the message-id prefix for this surface and whether the repo has a token source, or I'll follow whatever the neighbouring order files do and report the absence rather than start a parallel system.
+
+I'll add a test case that renders this error state, and the list goes into `Not done:` until all four states have one.

@@ -1,0 +1,18 @@
+Grading the one transcript against the case's six binding and one advisory criteria, in written order.
+
+```text
+case: <id not supplied in the input; recorded as an input gap, not an authoring defect in the criteria>
+binding:
+  B1 pass — "This crosses the `Schema, API, event or migration` threshold"
+  B2 pass — "`Schema, API, event or migration` threshold"
+  B3 pass — "`new \`orders.status\` column + backfill migration`"
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "risky", "bad idea", "careless", "should have known", "judgement"; none
+  B6 pass — searched for "proceed", "confirm", "partial", "part of", "instead", "?"; none
+advisory:
+  A1 pass — "the item list carries over"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+The transcript is a single line and every criterion was decidable from it. No re-grouping was needed and no criterion was undecidable, so no authoring defects are reported for this case. The only gap is the missing case id, which the runner should attach before the verdict is admitted to the run artifact.

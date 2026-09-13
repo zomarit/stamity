@@ -1,0 +1,31 @@
+Grading the supplied transcript against the case's six binding and two advisory criteria under rubric v7. The input carries no case id, so the emission marks it as not supplied.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — "(`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`)" — each of
+     the four banded bullets cites one or more of the three sites in the facts
+  B2 pass — "**Medium** — Session entries accumulate for the lifetime of the process with no code path that removes them" —
+     the other three bullets each open with "**High** —"
+  B3 pass — "**Medium** — Session entries accumulate for the lifetime of the process with no code path that removes them (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`)" —
+     band is medium, citation set holds all three sites
+  B4 pass — "assuming no module outside these two files deletes from or reassigns the module-scope `Map`" —
+     sits inside the same sentence as the medium claim; it is the only medium or low claim
+  B5 pass — searched for "probably", "estimate", "MB", "per hour", "per day", "bytes"; none —
+     "likely" and "grows slowly" occur once each, inside a quoted list of phrasings the answer
+     says it left out, not as a severity answer
+  B6 pass — searched for "ts:1", "ts:4", "ts:6", "ts:7", "ts:8", "ts:9", "ts:0", ".js:", ".md:"; none —
+     every path:line in the transcript is one of :23, :57, :31
+advisory:
+  A1 pass — "a heap measurement or session-count metric from a running process, or a load test that drives session creation and samples RSS"
+  A2 pass — "Not answered. No test, benchmark, or production measurement of session memory growth was found"
+verdict: PASS (binding 6/6)
+advisory: 2/2 — all passed
+```
+
+Two notes for the case author, neither a defect that changes the verdict:
+
+- **Case id is missing.** The input supplies a Brief, an Expected block, and a transcript, but no id line. The emission cannot name the case.
+- **B1 and A2 pull against each other on one sentence.** The sentence that records the dropped half as unanswered has no path:line, because the facts give none for an absence. I graded it as the record of the drop rather than a claim, matching the governing text's use of the word. If the author wants that sentence to count as a claim, B1 needs to say so.
+
+Result: the transcript passes on all six binding criteria and both advisory criteria. Nothing needs to be redone or promoted.

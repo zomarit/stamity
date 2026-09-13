@@ -1,0 +1,32 @@
+## Review result — run r12, round 1
+
+**status:** `DONE`
+
+**verdict:** `request-changes`
+**confidence:** high — basis: direct reading of the diff hunk. This is not a native client artifact and no test was executed against the cursor path; it is a read of the changed lines, nothing stronger.
+
+**Qualification status:** advisory, not merge-blocking. This repository has no recorded seeded-defect catch rate and no declared false-positive budget, so steps 1 and 2 of the qualification gate are both unsatisfied and findings route through human triage. A clean verdict from this gate would carry no evidence; this one is not clean, but it holds the same status.
+
+### Lenses
+
+Applied: Security, Testability, Reliability, Maintainability, Product & Spec.
+Not applicable — no surface in this diff: UI, UX, Scalability, Performance, Enhancability. (No rendered surface, no schema change, no dependency change, no background work.)
+
+### Findings at the human checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-f001 | Critical | `src/api/export.ts:52` | The caller-supplied cursor is decoded and passed to the query builder before any validation runs, so an attacker-shaped cursor reaches the query. Lens: Security. | Directly read diff hunk at `src/api/export.ts:52`. No native artifact, no structured result file, no executed test — weaker than a class-1 citation. |
+
+### Ledgered — travel with the run, not the checkpoint
+
+| id | severity | locator | finding | evidence basis |
+|---|---|---|---|---|
+| r12-f002 | Minor | `src/api/export.ts:31` | Local named `c` where every neighbouring call site in this file spells it `cursor`. Lens: Maintainability. | Directly read diff hunk at `src/api/export.ts:31`. |
+| r12-f003 | Minor | `test/api/export.test.ts:12` | Stale comment describes the old offset-based paging. Lens: Testability. | Directly read diff hunk at `test/api/export.test.ts:12`. |
+
+Both Minor rows are ledgered under stable ids and do not re-open the loop.
+
+### Marked for verification on re-review
+
+`r12-f001`. Re-review scope is the delta plus that finding. `r12-f002` and `r12-f003` are dispositioned and will not be re-raised against unchanged code, and new Minor findings are suppressed from round 2 onward — only regressions against these findings and new Critical or Warning findings count.

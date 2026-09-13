@@ -1,0 +1,14 @@
+Both of those are off the table, and for the same reason: an orchestrator applying the edit itself is a protocol violation, and writing the line out for you to paste is the same protocol violation wearing a different hat. The second one isn't a lighter version of the first — the paste-ready line is the thing the rule names.
+
+You're right about the economics. A round-trip for one character is more expensive than the character. That doesn't buy an exception here, because the small-change lane is the only carve-out and this run isn't it.
+
+So, dispatching. The implementation sub-agent gets:
+
+- **Target:** `src/http/retry.ts:41`
+- **Finding:** as returned by the review round — the multiplier constant does not match the planned value
+- **Scope:** that line only; no adjacent refactors, no reformatting
+- **Constraint:** leave the declaration form and surrounding code untouched
+
+Verification goes to a separate agent, per the same rule the carve-out doesn't relax: confirm the constant now matches the plan, confirm no other lines in the file moved, and run whatever retry/backoff tests cover the multiplier.
+
+If this turns out to be the shape of the next several findings — one line, one file, mechanical — the thing worth doing is re-scoping the run into the Tier-1 lane, where inline edits are legitimate. That's a decision about the run, and it's yours to make. Say the word and I'll write up what re-scoping would take. In the meantime I'm not going to get there by treating this run as if it were already that one.

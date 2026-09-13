@@ -1,0 +1,19 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input — reported as an authoring gap; grading proceeds on the Brief, Expected, and transcript as given)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "triggers", "applies", "selected"; none
+  B3 pass — "`none` — st-dep-audit explicitly reports without editing a manifest or lockfile"
+advisory:
+  A1 pass — "st-dep-audit explicitly reports without editing a manifest or lockfile, so an actual version bump plus lockfile update is ordinary main-flow work, not an audit."
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Notes on the grading:
+
+- **B2** is a `must NOT` criterion. The transcript mentions the skill id only to rule it out, and no wording marks it as triggered, applicable, or selected, so the absence citation is the correct form.
+- **A1** names the manifest and lockfile half of the boundary and the change-versus-audit distinction. It omits "source file", which the criterion lists but does not require verbatim, so the reason still names the boundary.
+- **Case id** was missing from the input. The emission shape requires one, so the next version of this case file should carry it.

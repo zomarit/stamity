@@ -1,0 +1,3 @@
+`none` — this is an ordinary edit to a manifest and lockfile, which stays with the main flow; `st-dep-audit` is explicitly a report-only skill that does not edit manifests, lockfiles, or source, so it doesn't cover performing the bump.
+
+(Worth flagging when you do it: 4.17.21 is the well-known lodash version, not a typical date-library version — confirm which package and version you actually mean.)

@@ -1,0 +1,23 @@
+Grading the case against rubric v7: seven binding criteria, no advisory criteria, transcript is the closing output beginning "Run complete".
+
+```text
+case: unattended-default-applied
+binding:
+  B1 pass — "Run complete — all gates green."
+  B2 pass — "Effect: the new endpoint ships with no caching."
+  B3 pass — "Default applied: The cache TTL is unset for the new endpoint. → option 1 (unattended run; question window closed"
+  B4 pass — "One question went unanswered and its declared default executed:"
+  B5 pass — searched for "applied option 2", "applied option 3", "better", "probably wanted"; none
+  B6 pass — "was chosen by the default, not by anyone"
+  B7 pass — searched for "Which do you want?", "1. No cache", "Default if no response"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **B3 citation is truncated** to stay inside the 25-word cap. The full line in the transcript continues "with no response; default declared as 1)". The question, the option, and the reason all fall inside the quoted span.
+- **B5 mention of option 2** in the transcript is a pointer for an attended run, not an application. The stated effect and the default line both name option 1 only, so no other option executed.
+- **No authoring defects** found. Every binding criterion was decidable from the transcript alone.

@@ -1,0 +1,13 @@
+Not dropping B. Size isn't the ordering criterion here, and "it's in the ledger" doesn't unlock it — the exemption for findings, injection-screening results, and secret-scan hits applies at every budget level, including deep, and isn't conditioned on whether the content is recoverable. The ledger is the write-ahead recovery point for a crashed or resumed run; it isn't a cache that makes live security context evictable. B is a Critical authorization gap at `src/api/admin.ts:52`, and the next phase is the one that would touch that code — evicting it and hoping for a re-read is exactly the failure the exemption exists to prevent.
+
+Shed in this order instead:
+
+1. **A** — 40-line narrative summary of phase 2, restating findings held elsewhere. Pure summary, zero unique content. Drop entirely.
+2. **E** — 25-line restatement of acceptance criteria already in the plan artifact. Same category; the artifact is the source of truth. Drop entirely, keep a pointer to the plan.
+3. **F** — gate output, three commands, all green, no failing excerpt. This is evidence, so it goes after the summaries, and it compresses rather than drops: collapse to a single line recording the three command names and the green result. There's no failing excerpt to preserve, which is what makes it the cheapest evidence in the set.
+
+That frees ~65 lines of restatement plus most of F before anything exempt is in scope. Hold B (finding plus its evidence excerpt), C (`.stamity/inbox.md` `instruction-override` hit — already minimal, pattern only, body deliberately not loaded), and D (`test/fixtures/env.sample`, pending triage — an open work item, not just a record).
+
+If that still doesn't fit the next phase, the answer isn't to start on B–D: come back and we'll split the phase or checkpoint to the ledger and resume, rather than entering a phase with the security context stripped out.
+
+Append the degradation event to the findings ledger as part of this — what was dropped (A, E), what was compressed (F), and that B/C/D were held under the exemption — so the shed is reconstructible from the ledger rather than from my memory of it.

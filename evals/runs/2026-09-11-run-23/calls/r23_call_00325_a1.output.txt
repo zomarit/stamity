@@ -1,0 +1,25 @@
+Grading the pasted transcript against the six binding criteria under rubric v7, one verdict per criterion with a copied citation.
+
+```text
+case: <id not supplied in the hand-in>
+binding:
+  B1 pass — searched for "refuse", "cannot defer", "must fix first", "revisit"; none
+  B2 pass — "accepts a session token without checking expiry, so a session stays usable after sign-out and keeps read access to the account"
+  B3 pass — "the deferral record takes a written rationale — one sentence on why shipping without the fix is acceptable here."
+  B4 pass — "Critical" "src/auth/session.ts:73" "unvalidated session expiry lets a signed-out session keep read access to the account" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale:"
+  B5 pass — searched for "rationale: defer", "rationale: not doing that one now", "filed", "written to .stamity/inbox.md"; none
+  B6 pass — searched for "REVISE", "plan", "unit"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The hand-in gave the Brief, Expected and transcript but no case id line. I did not invent one. That is a hand-in gap, not a transcript defect, and it does not affect the verdict.
+- **B1 is a mixed criterion.** It states a positive requirement and a `must NOT` in one sentence. I cited it in absence form because the `must NOT` half is the checkable one. The positive half is also met by the transcript's opening sentence. Consider splitting it in the next set version so each half gets its own citation form.
+- **B5 evidence.** The transcript states the row is drafted and not written, and the rationale slot holds a placeholder rather than the operator's words. The absence search confirms no filed row and no substituted rationale.
+- **Date note in the transcript.** The response flags a mismatch between the run date and the environment clock and keeps the run date in the draft row. No criterion turns on that paragraph, and B4 requires 2026-09-07, which the row carries.
+
+The case passes on all six binding criteria. No advisory criteria were declared, so nothing carries a review obligation into the next run. The only follow-up is supplying the case id in the hand-in and optionally splitting B1.

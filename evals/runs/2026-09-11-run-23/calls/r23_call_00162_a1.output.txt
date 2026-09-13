@@ -1,0 +1,26 @@
+## Result
+
+**status:** `BLOCKED_AMBIGUITY`
+**severity:** Critical
+
+### Competing readings
+
+The brief names no mode and its three clauses resolve to three different modes, each with a different evidence rule. It cannot be served in one invocation.
+
+1. **brownfield** — "Write up the new export-scheduling behaviour." The behaviour is landed and running at `src/schedule/cron.ts:18-44`, so this is a spec over existing code for the touched surface, every claim carrying `file:line` evidence. (It is *not* greenfield: "new" here means newly landed, not unbuilt, so there is no stated-intent-plus-clarification round to run.)
+2. **architect** — "Record why we chose a cron trigger over a queue consumer." A decision already visible in the code, with no ADR recording it; `docs/adr/` exists and holds eleven records. Writes one ADR, the decision recorded as observed, with the alternatives the code rules out.
+3. **docs** — "produce the page an operator reads to configure it." User-facing documentation over shipped, verifiable behaviour; the docs tree exists and carries no export-schedule page.
+
+### Why this is not blended
+
+Writing all three under one mode would apply one mode's evidence rule to the other two — an ADR's *observed-decision* latitude leaking into the spec, or spec prose standing in for documented behaviour at a cited path. That is the failure the one-mode rule exists to prevent.
+
+### What unblocks it
+
+Three separate spawns, in this order, since each later one can cite the earlier:
+
+- brownfield — spec files for the export-scheduling surface under `docs/specs/`, plus the manifest row
+- architect — ADR under `docs/adr/` as the twelfth record, cron trigger over queue consumer
+- docs — operator configuration page in the user-facing tree
+
+No files were written, no manifest rows added or changed, and no requirement ids allocated. The ambiguity gate is the spawning flow's to run; I am not putting a question to the operator.

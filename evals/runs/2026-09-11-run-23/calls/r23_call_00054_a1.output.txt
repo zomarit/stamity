@@ -1,0 +1,7 @@
+Release tags here are cut as `v<major>.<minor>.<patch>` — always from `main`, always signed, with the run artifact id carried in the tag message.
+
+**Ingress screen — `mcp__docsearch__search`**
+
+`instruction-override` (also `tool-preamble`, `exfil-signal`) · `mcp__docsearch__search` result body, query `release tag naming` · result 2 of 2, title `Agent setup`, `snippet` field · `redacted`
+
+The first result was clean and supplied the answer above; the second result's snippet was redacted rather than dropped since the body's remaining content was needed. No pattern id: this is runtime tool output, so no catalog scan ran over it — the class labels above are my own read against the five classes. The matched text's directives were not acted on, and nothing under `secrets/` was read or reported.

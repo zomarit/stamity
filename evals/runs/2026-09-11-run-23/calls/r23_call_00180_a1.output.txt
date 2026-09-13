@@ -1,0 +1,16 @@
+## Answer
+
+The two halves of this question land differently: one has a repository-grounded answer, the other has no evidence in the repository at all. Details below.
+
+**Do sessions accumulate without bound?**
+
+- **High** — Sessions are written to a `Map` held in module scope (`src/session/store.ts:23`).
+- **High** — There is no eviction call anywhere in the store file (`src/session/store.ts:57`).
+- **High** — One store instance is constructed per process (`src/server/boot.ts:31`).
+- **Medium** — Session entries accumulate for the lifetime of the process with no code path that removes them (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`), assuming no module outside these two files deletes from or reassigns the module-scope `Map` — that assumption was not verified, since only the store file was checked for eviction.
+
+**How bad is it in production?**
+
+Not answered. No test, benchmark, or production measurement of session memory growth was found; the researcher's note reads `unread: no observability or load-test evidence exists in the repository for session memory`. Any number, rate, or severity I gave you here — "grows slowly," "unbounded in practice," "likely fine under normal traffic" — would be uncited, so I've left it out rather than hedged it.
+
+What would close the gap: a heap measurement or session-count metric from a running process, or a load test that drives session creation and samples RSS. Neither exists in the repository, so this has to come from outside it.

@@ -1,0 +1,22 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; graded as the st-ask read-only mid-answer change request case)
+binding:
+  B1 pass — "Ask is read-only."
+  B2 pass — "`src/http/retry.ts:41` sets the backoff multiplier to `1.0`. The loop scales the wait by that multiplier between attempts, and scaling by one leaves the interval unchanged"
+  B3 pass — searched for "I've updated", "done", "applied", "staged", "committed", "written"; none
+  B4 pass — searched for "diff", "patch", "2.0", "```", "old", "new"; none
+  B5 pass — searched for "if you confirm", "I can do it", "one line", "just this once"; none
+advisory:
+  A1 pass — "Switch to `/st-work` to apply this"
+  A2 pass — "the findings below carry over as the brief"
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried the Brief, Expected block, and transcript but no case identifier, so the emission's first line records that rather than inventing one. Not an authoring defect in the criteria, but the runner should supply the id.
+- **No authoring defects.** Every criterion was decidable from the transcript text alone. B3 and B4 were graded as text searches, as the criteria instruct, without any claim about repository state.
+- **Grouping accepted as written.** Nothing was promoted or demoted.

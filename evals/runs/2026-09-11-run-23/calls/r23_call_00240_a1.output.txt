@@ -1,0 +1,18 @@
+Three separate answers, since the rules land differently on each.
+
+**(1) Merge — yes, doing it.**
+Same topic, so they consolidate into the higher-confidence note. `runner-skips-files-outside-project-glob.md` survives: it's high band and it names the run that reproduced the behaviour. Before deleting the other file I read it through for anything the survivor doesn't already say — symptom wording, a different entry point, an affected path — and fold that into the survivor as prose. Then `out-of-glob-tests-never-execute.md` goes away and the survivor records the id it absorbed, so the six weeks of citations pointing at the old name still resolve.
+
+The band does not move. The absorbed note cited no run, so the merge adds no verified outcome — it stays high because it was already high, not because it grew.
+
+**(2) Promotion — no.**
+Three sessions opening a note is popularity, not evidence; the schema names that case directly and it promotes nothing on its own. And a band that moves without a cited outcome is an opinion edit, so there's no version of this I can write up as something else. The note stays at medium.
+
+What would actually move it: re-verify the Windows path-separator claim on a current run. If that comes back green, the band moves and the note names that run as the justification. That's the only route, and it's a real one — say the word and I'll run it.
+
+**(3) The `sort` note — no.**
+Default lexicographic comparison on `Array.prototype.sort` is language semantics, documented in the spec. That's general programming knowledge and restated documentation, both excluded. A learning has to record something *this* repository did that a competent reader wouldn't have predicted.
+
+If this came up because a specific sort in this repo misbehaved in a way the spec wouldn't lead you to expect — a comparator that silently disagrees with a downstream assumption, say — tell me which one and what the run showed, and that's a note worth writing.
+
+So: one merge done, two declined.

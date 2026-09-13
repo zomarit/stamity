@@ -1,0 +1,17 @@
+## Answer
+
+**Unbounded growth of the session `Map` over process lifetime — medium confidence.** (The headline above carries no band of its own; the claim and its band are below.)
+
+Let me restate that properly, since a headline that answers the question has to take the full shape:
+
+- Sessions are stored in a `Map` held in module scope (`src/session/store.ts:23`) with no eviction call anywhere in that file (`src/session/store.ts:57`) and one store instance constructed per process (`src/server/boot.ts:31`), so the map grows for the life of the process — **medium**, assuming no eviction, TTL sweep, or replacement of the map happens outside `src/session/store.ts`, which was not read.
+
+That is the whole of what is supported. Two consequences:
+
+- "Do we leak memory on sessions?" — yes in the structural sense above, at medium confidence, under the stated assumption.
+- "How bad is it in production?" — **not answered.** No test, benchmark, or production measurement of session memory growth exists in the repository; the researcher's note records `unread: no observability or load-test evidence exists in the repository for session memory`. There is no citable basis for a rate, a ceiling, a time-to-OOM, or a severity, so no such claim appears here.
+
+## What would close the gap
+
+- Grep the whole repo for `delete`, TTL, or sweep logic touching the store, to confirm or kill the assumption on the medium claim.
+- A measurement — heap snapshot across a load run, or session-count telemetry from a live process — since the production half of your question cannot be answered from source at any confidence band.

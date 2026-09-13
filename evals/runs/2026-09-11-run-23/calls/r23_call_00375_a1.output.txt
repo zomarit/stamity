@@ -1,0 +1,26 @@
+Grading the transcript against the seven binding and one advisory criteria under rubric v7.
+
+```text
+case: <id not supplied in input>
+binding:
+  B1 pass — "**Counts (4 acceptance criteria):**" — the four table rows beneath it
+     list AC-1, AC-2, AC-3 and AC-4, one each, summing to the declared four
+  B2 pass — "Run the repository test gate `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`). Criterion being confirmed: **AC-1** under `REQ-checkout-104`"
+     — the brief is addressed to `test-runner` and names both the gate and AC-1;
+     searched for "ran npm run test", "gate passed", "gate failed", "tests passed",
+     "per-gate result:"; none
+  B3 pass — "names `test/checkout/refund.test.ts`, which does not exist on the tree. **Gap:**"
+  B4 pass — "carries `judgment: design lead` for the empty-cart copy. Classified; the design lead decides."
+  B5 pass — "| Neither | 1 | AC-4 |"
+  B6 pass — "**Counts (4 acceptance criteria):**" — sits under the heading naming
+     `docs/specs/checkout-flow.md` and is followed by a per-classification count table
+     for that file
+  B7 pass — searched for "wrote", "file written", "edited", "updated", "applied";
+     none
+advisory:
+  A1 pass — "It needs either a threshold (a latency budget under a stated connection profile) or a `judgment:` tag."
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The case passes on all seven binding criteria and the single advisory criterion also passes. No criterion was undecidable and no grouping looks misfiled, so there are no authoring defects to report. One gap in the input: the case id was not supplied with the Brief and Expected blocks, so the emission carries a placeholder where the id belongs.

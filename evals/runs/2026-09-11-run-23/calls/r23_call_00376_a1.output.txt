@@ -1,0 +1,32 @@
+## Testability census — `docs/specs/checkout-flow.md` (`check` mode)
+
+**Per-file counts** — 4 acceptance criteria:
+
+| Classification | Count |
+|---|---|
+| Machine-checkable, named test exists | 1 |
+| Machine-checkable, named test missing (gap) | 1 |
+| `judgment:` tagged | 1 |
+| Neither | 1 |
+
+**Per-criterion:**
+
+- **AC-1** (`REQ-checkout-104`) — machine-checkable. Names `test/checkout/decline.test.ts`, which exists on the tree. Confirmation dispatched to `test-runner` (below).
+- **AC-2** (`REQ-checkout-107`) — **gap**. Names `test/checkout/refund.test.ts`, which does not exist on the tree. The criterion points at a test that was never written; it is unconfirmable as it stands.
+- **AC-3** (`REQ-checkout-111`) — satisfied by `judgment: design lead` on the empty-cart copy. The design lead decides; no gate applies.
+- **AC-4** (`REQ-checkout-115`) — **neither**. "The checkout page feels responsive on a slow connection" names no test, no gate command, and no measurable threshold, and carries no `judgment:` tag. It needs either a threshold (e.g. a stated budget at a stated connection profile, checked by a named test) or a `judgment:` tag naming the role that decides.
+
+---
+
+**`test-runner` spawn — issued.**
+
+I do not have the sub-agent available in this session, so the brief goes out in words here, in this turn:
+
+> **Brief to `test-runner`**
+> Gate command: `npm run test`
+> Criteria being confirmed: AC-1 under `REQ-checkout-104` in `docs/specs/checkout-flow.md`, via `test/checkout/decline.test.ts`.
+> Return the structured per-gate result: the gate command, pass or fail, and the verbatim failing excerpt on failure. Apply no edit.
+
+AC-1's confirmation status is therefore **pending the runner's per-gate result** — I have not run `npm run test` and will not run it in this command's context. Once that result lands, the census reads it and records AC-1 as confirmed or failing with the verbatim excerpt.
+
+No files were written; `check` is report-only on both sides. The other three spec files under `docs/specs/` were outside the scope you named — say the word if you want the census extended to them.

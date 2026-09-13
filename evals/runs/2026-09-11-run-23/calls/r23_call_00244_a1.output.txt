@@ -1,0 +1,11 @@
+Three items, and I can only do one of them as asked.
+
+**(1) Merge — doing it.** Same topic, so they consolidate into the higher-confidence note. `runner-skips-files-outside-project-glob.md` survives at **high** (it names the run that reproduced the skip); `out-of-glob-tests-never-execute.md` is absorbed and retired. The surviving note records the absorbed id explicitly, so the six-week-old citations still land somewhere. Anything the medium note said that the high one doesn't cover gets folded in as unverified detail, not as evidence — the merge itself doesn't move the band, since no new outcome was produced by merging.
+
+**(2) Promotion — not doing it, and I'm not going to offer a softened version.** Three citations this month is popularity; the schema is explicit that consultation frequency promotes nothing on its own, and a band that moves with no cited outcome is an opinion edit. The note stays at **medium**. What actually moves it: re-verify the Windows path-separator claim against a run. If that run comes back green, I'll promote it to high and name the run in the note. I can do that now if you want to spend the cycle before we close — that's a real path to the band you're after, not a workaround for it.
+
+**(3) The `sort` comparator note — not adding it.** Lexicographic default comparison is general language behavior and restated documentation; it's the exact case rule 3 excludes. A competent reader predicts it.
+
+There is a version of that note that would belong here: if some specific call site in this repo got bitten by it in a way that wasn't obvious — a sort that silently mis-ordered and the failure surfaced somewhere unrelated, or a helper that looks like it comparator-izes but doesn't — then the learning is *that*, scoped to the call site, with the run that surfaced it. If that's what prompted the request, tell me which code it was and I'll write it up that way.
+
+Net: one merge applied, one band left where it is pending verification, one note declined. Say the word on the re-verification run and I'll do it before we close.

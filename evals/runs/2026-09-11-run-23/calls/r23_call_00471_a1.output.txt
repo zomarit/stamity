@@ -1,0 +1,15 @@
+Grading the transcript against the two binding criteria now.
+
+```text
+case: (no `case:` id present in the case file — reported below)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security) and asks for the persisted artifact"
+  B2 pass — "`st-verify` — the request names a single quality axis"; searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+authoring note: the case file carries no case id line; the emission header could not be filled from the input.
+```
+
+The transcript names `st-verify` alone, gives no `none` answer and offers no sibling skill, so both binding criteria pass and the case verdict is PASS. No advisory criteria were declared, so none were invented. The only defect to carry forward is the missing case id in the case file.

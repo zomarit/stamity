@@ -1,0 +1,15 @@
+Grading the single transcript line against the three binding criteria.
+
+```text
+case: (id not supplied in the input; recorded as unnamed)
+binding:
+  B1 pass — "`none` — writing a README paragraph is an ordinary documentation edit"
+  B2 pass — searched for "st-learn"; none
+  B3 pass — searched for "st-"; none
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answers with the label the case expects and names no skill anywhere in its text. The reason prose lists the skill categories it rejected by description rather than by id, so no id appears at all. The only defect to report is that the input carried no case id line, so the emission above cannot name one.

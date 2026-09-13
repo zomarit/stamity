@@ -1,0 +1,16 @@
+Grading the transcript against the case's binding criteria.
+
+```text
+case: (case id not supplied in the input handed to the judge)
+binding:
+  B1 pass — "`st-qa`"
+  B2 pass — "exactly st-qa's standalone trigger, and no work run's QA checkpoint is invoking it here"; searched for "st-verify", "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names one skill, st-qa, and offers no second skill and no `none` answer.
+
+One authoring note: the case input carries no case id, so the emission's id line cannot be filled from the handed-in material. That is a defect in the run artifact rather than in the criteria, and it does not affect the verdict.

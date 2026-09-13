@@ -1,0 +1,17 @@
+## Answer
+
+Uploads over 5 MB fail because the worker rejects the body before it streams, at `src/worker/upload.ts:52`, comparing against `MAX_UPLOAD_MB = 5` (`src/config/limits.ts:8`). Both claims high confidence, both read at the cited lines. No contradictions — every source read agrees.
+
+One caveat sits in the blocked facet below: this is the behaviour of the worker code at head. Whether staging deploys that config unmodified is the one thing this run could not confirm.
+
+## Work to apply
+
+`docs/reference/limits.md:22` documents the cap as 25 MB, and the same figure is published in nine further places — API reference, SDK README, onboarding guide, two operator-facing error strings in `src/worker/messages.ts`, three fixture payloads, and the request-size constraint in `openapi/upload.yaml:140`. The code is the behaviour, so all ten are wrong.
+
+This is not a quick-lane edit. Three of the quick thresholds fired on it: files, size, and API shape — nine files, ~240 changed lines, and a change to the published API's documented request-size shape. **Switch to `/st-work` to apply.** Carry the cited claims above as the framing brief. Naming the destination is the whole handoff; I am not starting it.
+
+## Recommended next step
+
+Unblock the `staging-env` facet: get read access to `infra/staging` at the current head, or paste the rendered manifest into the session.
+
+That comes ahead of the doc correction. The blocked facet is the one thing that could still move the answer — if staging overrides `MAX_UPLOAD_MB`, the effective cap there is not necessarily 5, and the correction you would otherwise publish across ten places could be wrong in the same direction the current docs are. Resolve the manifest first, then hand the change list to `/st-work`.

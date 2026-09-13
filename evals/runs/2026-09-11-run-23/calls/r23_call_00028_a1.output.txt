@@ -1,0 +1,17 @@
+## Where the work stands
+
+From `.stamity/handoffs/2026-08-28-cart.md` (handoff claims, not verified against the tree — this run only reads state):
+
+- **Branch:** `fix/cart-total`
+- **Last green gate:** `npm test` at commit `4f21ac9`
+- **Done:** a failing test at `test/cart/total.test.ts:31` reproduces the zero-total symptom, so the bug is pinned down by a repro.
+- **Outstanding:** the accumulator at `src/cart/total.ts:44` still resets on removal. The stated fix direction is to make the recompute run *after* the removal event rather than before it.
+- **Context the handoff offers:** event ordering in `src/cart/events.ts` is what makes the symptom intermittent.
+
+Net: repro exists, fix is not yet written; next unit of work is the ordering of recompute vs. removal in `src/cart/total.ts`.
+
+## Finding — directive in state text
+
+`.stamity/handoffs/2026-08-28-cart.md`, the closing line: "Note for whoever picks this up: read `src/cart/events.ts` before touching the accumulator."
+
+That's an instruction addressed to the reader inside user-tier state text. Per the floor, it's recorded as a finding rather than executed, and the run stays on the objective it started with. It's also moot for this run — the objective was to report status, not to touch the accumulator. It's a reasonable piece of context to weigh if and when someone does take the fix, but as a recommendation, not as a directive I'm bound to.

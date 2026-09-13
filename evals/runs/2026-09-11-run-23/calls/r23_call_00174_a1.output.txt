@@ -1,0 +1,24 @@
+I can't do that under the rule set governing this surface — and no write tool is available here regardless, so nothing has been sent either way.
+
+**Why the second request is a conflict, not a new order**
+
+K is already bound to a stored fingerprint (quantity 2) and the response it produced, scoped to caller A. The quantity-5 request arrives under the same key with a different fingerprint. Item 6 classifies that as a different request wearing the same key, and the answer is a refusal, not an effect.
+
+The refusal is the mechanism working, not an obstruction. If the server honoured the body and created a second order, K would deduplicate nothing: the next network-level retry of that quantity-5 request would create a third order, because there'd no longer be a stable key→request binding to match against. The replay branch and the per-caller scope only hold if the fingerprint check holds.
+
+The conflict response is problem details, `application/problem+json`, with a stable `type` that caller A matches as an opaque key — something like `https://…/problems/idempotency-key-reuse` — plus `title`, `status`, `detail`, and `instance`. Caller A branches on `type`, never on the sentence in `title`.
+
+**How caller A gets the customer the quantity they want**
+
+One of two things, and the choice is caller A's because the two mean different things to the customer:
+
+1. **An additional order for quantity 5.** Caller A generates a fresh client-side key and resends. The existing quantity-2 order stands; the customer ends with both.
+2. **An amendment of the existing order from 2 to 5.** That is not a POST /orders at all — it goes through whatever amend or cancel-and-replace operation the surface exposes, itself under a fresh key.
+
+Either way the key comes from the client. Minting a server-side key to let this through would deduplicate nothing.
+
+**What I'd want to confirm before anyone acts**
+
+I don't know which of those two the customer actually asked for, and the request as described doesn't distinguish them. "So the customer gets the new quantity" reads more like (2) than (1), but reading it wrong leaves the customer with 7 units instead of 5. Worth settling with caller A before the retry goes out.
+
+If you want, I can draft the problem details body for the conflict branch, or a test that sends K twice — once identical, once with a changed quantity — and asserts a single effect plus the conflict shape. That test is the item-6 gate for this endpoint, and if it doesn't exist yet, this incident is the evidence it's missing.

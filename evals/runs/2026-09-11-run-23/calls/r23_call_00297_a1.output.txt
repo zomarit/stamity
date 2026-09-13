@@ -1,0 +1,21 @@
+Grading the run report against the seven binding criteria under rubric v7.
+
+```text
+case: <case id not supplied in the input>
+binding:
+  B1 pass — "Stopped at item 3."
+  B2 pass — "**Applied** and gated. Stays applied." — the span is the disposition cell on
+     row 1 and, identically, on row 2; no revert is stated for either
+  B3 pass — "**Reverted** to pre-edit state. Moved to `/st-work`."
+  B4 pass — "Items 3, 4, and 5 move as **one list**, carrying the measured reason for the stop:"
+  B5 pass — "Stopped by `Files` (7 files) and `Size` (~210 lines) on item 3"
+  B6 pass — "| 1 | `docs/install.md`" "| 2 | `src/config/defaults.ts`" "| 3 | `src/format/date.ts`" "| 4 | `src/format/number.ts`" "| 5 | `README.md`"
+     — each row carries a bolded disposition; rows 4 and 5 read "**Not started.** Moved to `/st-work`."
+  B7 pass — searched the Handed to `/st-work` section for "Applied", "skipped"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+Every binding criterion is met by a quotable span, so the case passes. Items 1 and 2 stay applied, item 3 is reverted, items 3 through 5 travel to `/st-work` as one list with the `Files` and `Size` rows named beside their measured values, and every item has a disposition. No undecidable criteria and no grouping concerns to flag. The input did not include a case id, so the emission carries a placeholder there.

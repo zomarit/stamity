@@ -1,0 +1,1 @@
+`none` — st-dep-audit explicitly reports without editing a manifest or lockfile, so an actual version bump plus lockfile update is ordinary main-flow work, not an audit.

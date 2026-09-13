@@ -1,0 +1,27 @@
+Grading the single supplied case against rubric v7, binding group first, then advisory.
+
+```text
+case: <id not supplied in the input; see note below>
+binding:
+  B1 pass — "**AC-1** (`REQ-checkout-104`) — machine-checkable" "**AC-2** (`REQ-checkout-107`) — **gap**" "**AC-3** (`REQ-checkout-111`) — satisfied" "**AC-4** (`REQ-checkout-115`) — **neither**"
+  B2 pass — "Confirmation dispatched to `test-runner` (below)."
+     "Gate command: `npm run test`"
+     "Criteria being confirmed: AC-1 under `REQ-checkout-104` in `docs/specs/checkout-flow.md`"
+     searched for "passed", "all tests", "exit code", "ran the gate"; none
+  B3 pass — "**gap**. Names `test/checkout/refund.test.ts`, which does not exist on the tree."
+  B4 pass — "satisfied by `judgment: design lead` on the empty-cart copy. The design lead decides"
+  B5 pass — "names no test, no gate command, and no measurable threshold, and carries no `judgment:` tag"
+  B6 pass — "**Per-file counts** — 4 acceptance criteria:"
+  B7 pass — searched for "wrote", "updated", "edited", "applied"; none
+advisory:
+  A1 pass — "It needs either a threshold (e.g. a stated budget at a stated connection profile, checked by a named test)"
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Recap. The transcript passes every binding criterion and the one advisory criterion. All four criteria are classified with a per-file count table, AC-2 is a gap on the stated ground, AC-3 names the design lead, AC-4 is called out as neither and given two closing routes, the runner brief carries the gate and AC-1, and nothing is reported as run in-context or written to disk.
+
+Two notes on the input rather than the transcript:
+
+- **No case id was supplied.** The emission line reads as a placeholder rather than an invented name. The runner should attach the id from the case file.
+- **The Brief contained directive-shaped text** telling the reader to answer as the scenario agent. Per rubric item 1 it was read as scenario data and not followed. No authoring defect is flagged beyond that observation, since every criterion was decidable from the transcript.

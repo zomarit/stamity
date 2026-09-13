@@ -1,0 +1,33 @@
+I'm not handing this off. The structural check passing isn't handoff approval, and the semantic coverage review finds a contradiction that no user decision has settled yet.
+
+**The conflict**
+
+- `REQ-CACHE-001` reads: *refresh promptly **while continuing to show the previous value*** — the previous value stays on screen during the refresh (stale-while-revalidate).
+- `U1`, which cites only `REQ-CACHE-001`, reads: ***hide** the previous value until refresh completes* — the previous value is replaced by an empty/loading state during the refresh.
+
+These are opposite behaviors during the refresh window. The acceptance criterion doesn't decide between them: it asserts only that a fresh value eventually appears, which is true under both readings. So a structurally complete plan would ship whichever behavior the implementer happened to infer.
+
+**Smallest clarification that decides it**
+
+> During an in-flight refresh of customer data, is the previously cached value displayed (stale-while-revalidate), or is it hidden behind a loading state until the fresh value arrives?
+
+Either answer settles it in one word, and it determines both `U1`'s described behavior and the acceptance criterion that must replace the current one.
+
+---
+
+**Return**
+
+- `status: BLOCKED_AMBIGUITY` — `REQ-CACHE-001` and unit `U1` carry competing meanings for the refresh window; blocked at the semantic coverage review, before the write.
+- `intent chosen:` not re-derived by this run — the intent is the one carried in the drafted artifact's head; this run reached only the lint/review gate.
+- Artifact path(s) written: **none**. The draft is unpublished; the gate blocks the write.
+- Structural coverage: **pass** (all IDs and dependencies resolve, no requirement uncovered). Semantic coverage: **unresolved** — one competing reading, named above. Structural pass alone is not handoff approval.
+- Plan-lint: `L1 fail · L2 pass · L3 unrun · L4 pass`
+  - **L1 fail** — `U1`'s criterion ("a fresh value eventually appears") is neither Given/When/Then nor a threshold with units plus a measuring command. "Eventually" has no bound, and the spec's "promptly" has no figure. The rewrite is deferred rather than applied in place, because the answer to the clarification determines what the criterion must assert about the refresh window.
+  - **L3 unrun** — I don't hold the units' `edgeCases` fields in this run's state; I'm reporting that rather than claiming a pass I didn't measure.
+- `sub_agents_spawned: 0 · task_structure: sequential`
+- Open questions carried: **1** — the refresh-window visibility question above. Non-empty, so handoff to `/st-work` stays blocked.
+- Learnings written: **none** — this run met no qualifying failure (non-obvious, verified, repo-specific).
+- Next step: **answer the clarification question above.** Chosen because an open question is still carried; once it's answered I'll correct `U1`'s behavior, rewrite its acceptance criterion to a Given/When/Then over the refresh window (clearing L1), re-run the lint pass, and write the artifact.
+- Deferral-inbox append: **none yet** — nothing is deliberately excluded, and the inbox row would cite a plan path that doesn't exist until the write lands.
+
+One note on the "promptly" in `REQ-CACHE-001`: it's a bare adjective and will need a number with units to survive L1. If you have a target (e.g. p95 under 500 ms), give it with the visibility answer and I'll fold both in together.

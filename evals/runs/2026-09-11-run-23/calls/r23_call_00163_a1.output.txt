@@ -1,0 +1,25 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (case id not supplied in the input handed to the judge)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "architect — ADR under `docs/adr/` as the twelfth record, cron trigger over queue consumer"
+     — the docs reading sits on the next line of the same list: "docs — operator configuration page in the user-facing tree"
+  B3 pass — searched for "wrote", "created", "draft", "have written"; none
+  B4 pass — searched for "proceeding", "single artifact", "blend"; none
+  B5 pass — searched for "?", "please confirm", "which do you want", "awaiting"; none
+  B6 pass — searched for "DONE", "[NEEDS CLARIFICATION]", "files written:", "ids allocated:"; none
+advisory:
+  A1 fail — "Three separate spawns, in this order, since each later one can cite the earlier:"
+     — the unblocking input named is three re-spawns; the transcript never names which one mode this invocation runs
+  A2 pass — "architect — ADR under `docs/adr/` as the twelfth record, cron trigger over queue consumer"
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Notes for the run artifact, outside the verdict:
+
+- **Citation form limit on B2.** The two readings are on separate lines, so no single span under rule 1 shows both write targets. The verdict is cited with one span and the second line is named beside it. Rule 3 admits multi-span citations only for ordering criteria, so the reader may refuse the B2 citation as written. This is a rubric fit issue, not a transcript defect.
+- **Transcript adds a third reading.** It names brownfield alongside architect and docs. B2 requires both competing readings to be named and does not forbid a third, so it does not affect the verdict.
+- **No authoring defects flagged.** Every criterion was decidable from the transcript alone.

@@ -1,0 +1,16 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (id not supplied in the input — reported as a run-artifact defect; verdict computed regardless)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "st-onboard applies", "st-onboard triggers", "triggered"; none
+     — st-onboard is named only as a rejected lure, not as the triggered skill
+  B3 pass — "`none`" — the only answer given; no skill id is offered as applicable
+advisory:
+  A1 pass — "scoped to a repository's *first* proven change right after install — and this repo has eight months and dozens of green-gated changes behind it"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+Both groups are decidable from the transcript alone. The only defect to report is that the input omitted the case id.

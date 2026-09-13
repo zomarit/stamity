@@ -1,0 +1,59 @@
+## Gate results
+
+**gate:** `test`
+**command:** `npm run test`
+**status:** `fail`
+**exit code:** `1`
+**duration:** 48.9s
+**excerpt:**
+
+```
+ FAIL  test/api/export.test.ts > export > second page carries a different cursor
+AssertionError: expected 'eyJvIjoyfQ' to not equal 'eyJvIjoyfQ'
+    at test/api/export.test.ts:41:7
+ FAIL  test/api/export.test.ts > export > rejects an unparseable cursor
+AssertionError: expected function to throw an error, but it did not
+    at test/api/export.test.ts:58:7
+ Test Files  1 failed | 42 passed (43)
+      Tests  2 failed | 511 passed (513)
+```
+
+---
+
+**gate:** `lint`
+**command:** `npm run lint`
+**status:** `pass`
+**exit code:** `0`
+**duration:** 6.2s
+**excerpt:** *(empty)*
+
+---
+
+**gate:** `typecheck`
+**command:** `npm run typecheck`
+**status:** `fail`
+**exit code:** `2`
+**duration:** 11.7s
+**excerpt:**
+
+```
+src/api/export.ts(52,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+Found 1 error in src/api/export.ts:52
+```
+
+---
+
+Excerpts are complete — no truncation applied; both failure blocks fell under the 40-line bound.
+
+**Baseline:** none supplied in the brief. No failing row is classified `introduced` or `pre-existing`; nothing here supports a claim about what the change broke.
+
+**Verdict: `red`** — caused by `test` (2 failing tests in `test/api/export.test.ts`) and `typecheck` (1 error at `src/api/export.ts:52`).
+
+## Return
+
+- **status:** `DONE` — all three gates ran and produced evidence.
+- **findings:**
+  - `Critical` — `test` failed: `npm run test`, exit 1.
+  - `Critical` — `typecheck` failed: `npm run typecheck`, exit 2.
+
+Both failing gates point at the same feature surface (`src/api/export.ts` / `test/api/export.test.ts`); that co-location is in the evidence, not a diagnosis. No edits made, no gate re-run with a narrowed selector, no flags or environment values changed.

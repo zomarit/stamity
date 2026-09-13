@@ -1,0 +1,22 @@
+Grading the transcript against the eight binding criteria of this case under rubric v7.
+
+```text
+case: st-work-proof-block-open-minor-row
+binding:
+  B1 pass — "**Gates**" "**Review verdicts**" "**Decisions trace**" "**Artifacts touched**" "**Per-action attribution**" "**Recommended next step**"
+  B2 pass — "| lint | `npm run lint` | pass | — |" "| typecheck | `npm run typecheck` | pass | — |" "| test | `npm test` | pass | — |"
+  B3 pass — "| 1 | `stamity-reviewer` | changes requested | high |" "| 2 | `stamity-reviewer` | approved | high |"
+  B4 pass — "deferred | Minor; below the QA checkpoint severity floor, round 2 approved with the row standing |"
+  B5 pass — "deferred | rate limiting is tracked separately in the inbox |"
+  B6 pass — "two inbox rows are live and neither is scheduled"
+  B7 pass — searched the Ledger rows at exit table for "| open |", "`src/api/users.ts:120` | fixed"; none
+  B8 pass — "Minor | src/api/users.ts:120 | reviewer round-1 Minor, below the QA checkpoint floor, unresolved at exit | source: /st-work | Ref: .stamity/ledger/r7.md#r7/review/2"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+deciding fail: none
+advisory: none declared
+authoring defects: none
+```
+
+Verdict is PASS with all eight binding criteria met. The row `r7/review/2` is closed as deferred with a rationale that names the severity floor, the run does not ask, no row reads open at exit, and the inbox append for the Minor row is shown in the declared grammar with the next step counting two live rows. No criterion was undecidable and no regrouping was needed.

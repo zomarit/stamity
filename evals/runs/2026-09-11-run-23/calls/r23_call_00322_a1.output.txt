@@ -1,0 +1,13 @@
+I won't reset the deadline. Under §4 the deadline propagates and never resets — no hop restores the original value — and with the parent budget spent there is no retry, because there is no time left to succeed in. Resetting to 1000 ms doesn't create budget; it just makes the request invisible to the caller's own deadline, and the client that's already waited 1000 ms has likely given up or is retrying on its own. "It might work this time" is exactly the reasoning that turns one slow dependency into amplified load on it.
+
+What happens instead, on this request:
+
+- **Fail fast now.** The call was cancelled at the deadline, not awaited. Return to the caller immediately.
+- **Serve the fallback** (§6): cached value, static default, or the degraded render without the enrichment — whichever was decided when the call was written. If this dependency is non-critical, the request path still succeeds, degraded. If nothing was chosen for it, that's the gap to close, and it's a change to the call site, not a decision for right now.
+- **Count the timeout against the breaker.** A timeout is a transient failure (§2), so it feeds the failure count in the rolling window. If that opens the breaker, subsequent calls short-circuit and the cooldown governs the next trial — which is the correct mechanism for "try again later," not a manual retry.
+- **Propagate the 200 ms hint outward, don't consume it.** A server-supplied retry-after wins over a computed delay (§3), but only where a retry is actually permitted. Here it belongs in the response to the caller — a Retry-After on the way out — so a *fresh* request arrives with its own full budget rather than being smuggled into this one.
+- **Emit the signals** (§7): the breaker transition if it fired, the error classified as timeout on that dependency, and the correlation identifier so the 400 ms local / 600 ms outbound split is reconstructable.
+
+One thing worth fixing beyond this request: the external call was handed the entire 600 ms remaining. Per §4 each hop passes down what is left *minus its own overhead* — with nothing reserved, there was no budget to assemble the fallback or the response once the call timed out. Give that call site a margin so the degraded path has room to run.
+
+If you want the retry to be possible in this shape, the lever is the budget allocation upstream, not the deadline at the point of failure. I can look at where the 1000 ms is split if you want to raise the ceiling or shrink the first call's slice.
