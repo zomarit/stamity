@@ -32,6 +32,7 @@ import {
 } from "../../src/roster/modelLadder.ts";
 import { PLATFORM_TOOL_MARKER, toCopilotToolsFrontmatter } from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
+import type { RuleDelivery } from "../../src/types/manifest.ts";
 import type { ModelClass, Tool } from "../../src/types/core.ts";
 import type { PackageEntry } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -103,6 +104,7 @@ const FULL_SELECTION: ContentSelection = { items: {} as ContentSelection["items"
 
 interface CtxOptions {
   tools?: Tool[];
+  ruleDelivery?: RuleDelivery;
   contentRoot?: string;
   rootDir?: string;
   selection?: ContentSelection;
@@ -132,6 +134,7 @@ function ctxOf(over: CtxOptions = {}): EmissionContext {
       // `models` is an operator dial persisted after creation, so it is layered
       // on rather than passed in — the same shape `stamity config` writes.
       ...(over.pins === undefined ? {} : { models: { pins: over.pins } }),
+      ...(over.ruleDelivery === undefined ? {} : { ruleDelivery: over.ruleDelivery }),
     },
     engineVersion: ENGINE_VERSION,
     facts: { monorepoPackages: over.packages ?? [] },
@@ -1173,5 +1176,67 @@ describe("ownership and determinism", () => {
       ".github/instructions/stamity-secrets.instructions.md",
       ".github/instructions/stamity-security-patterns.instructions.md",
     ]);
+  });
+});
+
+
+/**
+ * The delivery option on this client: an instructions file with no `applyTo`
+ * globs attaches to EVERY file (`applyTo: "**"`), so a glob-less rule is
+ * always-on here too — and those are exactly the ones `on-demand` moves into
+ * the `.agents/skills/` tree this client reads directly.
+ */
+describe("copilot under ruleDelivery: on-demand", () => {
+  const GLOBLESS = ["question-protocol", "ai-evals"] as const;
+
+  it("writes no instructions file for a glob-less rule, and the core projects it as a skill", async () => {
+    const composed = await planComposed({ ruleDelivery: "on-demand" });
+    const paths = new Set(pathsOf(composed));
+
+    for (const id of GLOBLESS) {
+      expect(paths.has(`.github/instructions/stamity-${id}.instructions.md`), id).toBe(false);
+      expect(paths.has(`.agents/skills/stamity-${id}/SKILL.md`), id).toBe(true);
+    }
+  });
+
+  it("keeps every glob-scoped rule as an instructions file", async () => {
+    const index = await loadCorpusIndex();
+    const globbed = index.items
+      .filter(
+        (item) =>
+          item.type === "rule" && !GLOBLESS.includes(item.id as (typeof GLOBLESS)[number]),
+      )
+      .map((item) => item.id);
+    const paths = new Set(pathsOf(await planComposed({ ruleDelivery: "on-demand" })));
+
+    expect(globbed).toHaveLength(CORPUS_RULE_COUNT - GLOBLESS.length);
+    for (const id of globbed) {
+      expect(paths.has(`.github/instructions/stamity-${id}.instructions.md`), id).toBe(true);
+    }
+  });
+
+  it("carries the rule's description into the projected skill head", async () => {
+    const composed = await planComposed({ ruleDelivery: "on-demand" });
+    const row = rowAt(composed, ".agents/skills/stamity-ai-evals/SKILL.md");
+    const index = await loadCorpusIndex();
+    const rule = index.items.find((item) => item.type === "rule" && item.id === "ai-evals");
+
+    expect(frontmatterValue(row.content, "name")).toBe("stamity-ai-evals");
+    expect(row.content).toContain(rule!.description);
+    expect(row.content).toContain("delivery: on-demand");
+  });
+
+  it("emits exactly today's file set under always-on", async () => {
+    const defaulted = await planComposed();
+    const explicit = await planComposed({ ruleDelivery: "always-on" });
+
+    expect(pathsOf(explicit)).toEqual(pathsOf(defaulted));
+    expect(explicit.map((row) => row.content)).toEqual(defaulted.map((row) => row.content));
+    expect(
+      pathsOf(defaulted).includes(".github/instructions/stamity-ai-evals.instructions.md"),
+    ).toBe(true);
+    expect(pathsOf(defaulted).some((path) => path.includes("stamity-ai-evals/SKILL.md"))).toBe(
+      false,
+    );
   });
 });

@@ -175,6 +175,35 @@ export interface ImportDecision {
 }
 
 /**
+ * How a rule reaches a client: as always-on instruction text, or as a
+ * description-triggered skill the model pulls in when it is relevant.
+ *
+ * `always-on` is the shape every emission had before this key existed —
+ * every selected rule becomes that client's own rule file (and, on Codex,
+ * a section of the inlined appendix). `on-demand` moves the rules a client
+ * cannot attach conditionally out of always-available context and into
+ * `.agents/skills/<prefix><rule-id>/SKILL.md`, where the client loads the
+ * body only once the description matches. Which rules move is per client and
+ * decided by `../content/ruleDelivery.ts` — the engine-wide dial is only the
+ * choice between the two shapes.
+ */
+export type RuleDelivery = "always-on" | "on-demand";
+
+/** The sanctioned {@link RuleDelivery} values, in the order the CLI lists them. */
+export const RULE_DELIVERIES: readonly RuleDelivery[] = ["always-on", "on-demand"];
+
+/**
+ * What binds when a manifest carries no `ruleDelivery` — including every
+ * manifest written before the key existed, which is why the value is a
+ * constant rather than an init-time write.
+ *
+ * `always-on` reproduces the 1.7.0 emission byte for byte: the default is the
+ * shape the goldens, the always-on ratchets and the dogfood tree are pinned
+ * to, so shipping the option moved none of them.
+ */
+export const RULE_DELIVERY_DEFAULT: RuleDelivery = "always-on";
+
+/**
  * Open per-tool option bag. Adapters narrow their own bag; the engine passes
  * it through and never reads unknown keys.
  */
@@ -203,6 +232,16 @@ export interface SetupManifest {
   platform?: Platform;
   /** Investment-calibration dial; never gates content admission. */
   maturityTier?: MaturityTier;
+  /**
+   * How selected rules are delivered (see {@link RuleDelivery}); absent reads
+   * as {@link RULE_DELIVERY_DEFAULT}.
+   *
+   * {@link MANIFEST_VERSION} does NOT move for this field, on the
+   * {@link ModelConfig} precedent: it is additive and optional, a manifest
+   * written before it existed parses unchanged and resolves to the default,
+   * and a migration step would have nothing to transform.
+   */
+  ruleDelivery?: RuleDelivery;
   /** How generated agents talk to the human operator. */
   communicationStyle?: CommunicationStyle;
   /** Resolved content selection. */

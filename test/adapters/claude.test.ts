@@ -32,7 +32,7 @@ import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
 import { toClaudeToolsFrontmatter } from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
-import type { McpConfig, ModelConfig } from "../../src/types/manifest.ts";
+import type { McpConfig, ModelConfig, RuleDelivery } from "../../src/types/manifest.ts";
 import { getMarkersForPath, stampMarkerVersion } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -103,6 +103,7 @@ interface PlanOverrides {
   models?: ModelConfig;
   contentRoot?: string;
   rootDir?: string;
+  ruleDelivery?: RuleDelivery;
 }
 
 /** Every rule, agent and command of the real corpus, selected by bare catalog id. */
@@ -131,6 +132,9 @@ async function ctxOf(over: PlanOverrides = {}): Promise<EmissionContext> {
   // `createManifest` takes no `models` option — the operator dials are written
   // by `stamity config`, so a test that needs them assigns the persisted shape.
   if (over.models !== undefined) manifest.models = over.models;
+  // Same shape a repo carries after `stamity config set ruleDelivery …`; absent
+  // means the engine default, which is what every other case in this file runs.
+  if (over.ruleDelivery !== undefined) manifest.ruleDelivery = over.ruleDelivery;
   return {
     rootDir: over.rootDir ?? getTemp().path("repo"),
     manifest,
@@ -1187,5 +1191,86 @@ describe("hook argv joining", () => {
     const warnings = core.hooks.warnings.join("\n");
     expect(warnings).toContain("[INLINE_CODE_FLAG]");
     expect(warnings).toContain("[LAUNCHER_NOT_ALLOWED]");
+  });
+});
+
+
+/**
+ * The delivery option on this client: a rule with no globs is loaded
+ * unconditionally at launch here (the module header's citation), so `on-demand`
+ * moves exactly those out of `.claude/rules/` and into the skills tree this
+ * adapter already re-targets.
+ */
+describe("claude under ruleDelivery: on-demand", () => {
+  /** The two glob-less rules of the shipped corpus. */
+  const GLOBLESS = ["question-protocol", "ai-evals"] as const;
+
+  it("writes no rule file for a glob-less rule and emits it as a native skill instead", async () => {
+    const { rows } = await planned({ ruleDelivery: "on-demand" });
+    const paths = new Set(rows.map((row) => row.path));
+
+    for (const id of GLOBLESS) {
+      expect(paths.has(`.claude/rules/stamity-${id}.md`), id).toBe(false);
+      expect(paths.has(`${CLAUDE_SKILLS_DIR}/stamity-${id}/SKILL.md`), id).toBe(true);
+    }
+  });
+
+  it("keeps every glob-scoped rule as a rule file — the demotion is not a deselection", async () => {
+    const index = await buildContentIndex(CONTENT_ROOT);
+    const globbed = index.items
+      .filter((item) => item.type === "rule" && !GLOBLESS.includes(item.id as (typeof GLOBLESS)[number]))
+      .map((item) => item.id);
+    const { rows } = await planned({ ruleDelivery: "on-demand" });
+    const paths = new Set(rows.map((row) => row.path));
+
+    expect(globbed.length).toBeGreaterThan(0);
+    for (const id of globbed) {
+      expect(paths.has(`.claude/rules/stamity-${id}.md`), id).toBe(true);
+      expect(paths.has(`${CLAUDE_SKILLS_DIR}/stamity-${id}/SKILL.md`), id).toBe(false);
+    }
+  });
+
+  it("carries the demoted rule's body into the skill file, description and all", async () => {
+    const { rows } = await planned({ ruleDelivery: "on-demand" });
+    const row = byPath(rows).get(`${CLAUDE_SKILLS_DIR}/stamity-question-protocol/SKILL.md`);
+    const index = await buildContentIndex(CONTENT_ROOT);
+    const rule = index.items.find((item) => item.type === "rule" && item.id === "question-protocol");
+
+    expect(row).toBeDefined();
+    const head = parseFrontmatter(row!.content, row!.path).frontmatter;
+    expect(head.name).toBe("stamity-question-protocol");
+    expect(head.description).toBe(rule!.description);
+    expect(row!.content).toContain("Sub-agents do not ask");
+    // The ledger still attributes the file to the RULE, so deselecting the rule
+    // reclaims it.
+    expect(row!.owner.artifactType).toBe("rule");
+    expect(row!.owner.artifactId).toBe("question-protocol");
+  });
+
+  it("leaves the vendor-neutral tree and the native copy byte-identical", async () => {
+    const { rows, core } = await planned({ ruleDelivery: "on-demand" });
+    const neutral = core.skills.find(
+      (row) => row.path === `${SKILLS_PROJECTION_DIR}/stamity-ai-evals/SKILL.md`,
+    );
+    const native = byPath(rows).get(`${CLAUDE_SKILLS_DIR}/stamity-ai-evals/SKILL.md`);
+
+    expect(neutral).toBeDefined();
+    expect(native?.content).toBe(neutral?.content);
+  });
+
+  it("emits exactly today's file set under the default — always-on moves nothing", async () => {
+    const defaulted = await planned();
+    const explicit = await planned({ ruleDelivery: "always-on" });
+
+    expect(explicit.rows.map((row) => row.path)).toEqual(defaulted.rows.map((row) => row.path));
+    expect(explicit.rows.map((row) => row.content)).toEqual(
+      defaulted.rows.map((row) => row.content),
+    );
+    expect(defaulted.rows.some((row) => row.path === ".claude/rules/stamity-ai-evals.md")).toBe(
+      true,
+    );
+    expect(
+      defaulted.rows.some((row) => row.path.includes("stamity-ai-evals/SKILL.md")),
+    ).toBe(false);
   });
 });

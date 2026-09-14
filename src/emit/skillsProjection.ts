@@ -78,11 +78,12 @@ import {
   type ContentRoots,
 } from "../content/catalog.ts";
 import { composeFrontmatter, parseFrontmatter } from "../content/frontmatter.ts";
+import { RULE_SKILL_DIR_PREFIX, NO_DEMOTED_RULES } from "../content/ruleDelivery.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { verificationGatesFor } from "../detect/verificationGates.ts";
 import { PLATFORM_TOOL_MARKER, buildAskUserPlatformTable } from "../tools/translator.ts";
 import type { ContentClass } from "../types/content.ts";
-import type { Tool } from "../types/core.ts";
+import { TOOLS, type Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import type { SetupManifest } from "../types/manifest.ts";
 import {
@@ -218,6 +219,26 @@ export interface ProjectSkillsOptions {
   contentRoot?: string | ContentRoots;
   /** Filesystem override for corpus reads; defaults to `node:fs/promises`. */
   fs?: CatalogFs;
+  /**
+   * The selected RULES, for the delivery option: a rule demoted on at least one
+   * selected client is projected here as a skill instead of being carried as
+   * that client's always-on rule text (`../content/ruleDelivery.ts`).
+   *
+   * Passed in rather than read off this module's own index, because the answer
+   * to "which rules are demoted" is per client and the caller
+   * (`./planner.ts` → `buildCoreEmissionPlan`) is the one holding the manifest's
+   * tool selection. Omitted — every direct caller that is not the core plan —
+   * no rule is projected, which is also exactly what `always-on` produces.
+   */
+  ruleItems?: readonly CatalogItem[];
+  /**
+   * Demoted rule ids PER TOOL, as {@link demotedRuleIds} answered for each
+   * selected client. The union decides which rules get a row at all; the
+   * per-tool sets are what the row's own `metadata.stamity.tools` names, so a
+   * reader of one emitted file can see which clients are actually reaching the
+   * rule through it. Defaults to no demotions anywhere.
+   */
+  demotedRules?: Readonly<Record<Tool, ReadonlySet<string>>>;
 }
 
 /**
@@ -281,7 +302,66 @@ export async function projectSkills(
     ),
   );
 
-  return perSkill.flat().toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const demoted = options.demotedRules ?? NO_DEMOTED_RULES;
+  const ruleRows = (options.ruleItems ?? []).flatMap((item) => {
+    const tools = TOOLS.filter((tool) => demoted[tool].has(item.id));
+    return tools.length === 0 ? [] : [projectRuleAsSkill(item, tools, detection, gates)];
+  });
+
+  return [...perSkill.flat(), ...ruleRows].toSorted((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  );
+}
+
+/**
+ * One demoted rule as a skill row: `.agents/skills/stamity-<id>/SKILL.md`.
+ *
+ * The rule does not become a skill — it stays a rule, with its own catalog id,
+ * its own ledger identity (`artifactType: "rule"`, so deselecting the rule
+ * reclaims this path) and its authored body unchanged. What changes is the DOOR
+ * it arrives through: a description-triggered skill file the client loads when
+ * the description matches, instead of instruction text every session pays for.
+ * The frontmatter is therefore the skills spec's shape with the engine's own
+ * vocabulary under `metadata.stamity` — the same six-key ceiling every other
+ * file in this tree is held to, since the strict validator that rejects an
+ * unexpected top-level key does not care which class the content came from.
+ *
+ * `tools` names the clients that demoted it, which is the one fact a reader of
+ * the emitted file cannot derive: the same rule can be delivered here for codex
+ * and as a `.cursor/rules/` file for cursor in one run, and a file that did not
+ * say so would read as "no client attaches this natively".
+ */
+function projectRuleAsSkill(
+  item: CatalogItem,
+  tools: readonly Tool[],
+  detection: ReturnType<typeof detectionContextFromManifest>,
+  gates: VerificationGateSet,
+): ProjectedSkillFile {
+  const skillDir = `${RULE_SKILL_DIR_PREFIX}${item.id}`;
+  assertSafePath(posix.join(skillDir, SKILL_FILE), `rule "${item.id}" projection`);
+  const head: Record<string, unknown> = {
+    name: skillDir.toLowerCase().replaceAll(SPEC_NAME_PATTERN, "-").slice(0, 64),
+    description: item.description,
+    metadata: {
+      stamity: {
+        id: item.id,
+        type: item.type,
+        tags: item.tags,
+        load: item.frontmatter["load"],
+        obsolete_when: item.frontmatter["obsolete_when"],
+        delivery: "on-demand",
+        tools: [...tools],
+      },
+    },
+  };
+  return {
+    path: posix.join(SKILLS_PROJECTION_DIR, skillDir, SKILL_FILE),
+    content: composeFrontmatter(head, substituteBody(item.body, detection, gates)),
+    artifactId: item.id,
+    artifactType: item.type,
+    artifactPath: item.relativePath,
+    origin: item.origin ?? "corpus",
+  };
 }
 
 /** `skills/<dir>/SKILL.md` → `<dir>`; the catalog validated the whole path. */
@@ -427,11 +507,20 @@ function renderSkillBody(
   detection: ReturnType<typeof detectionContextFromManifest>,
   gates: VerificationGateSet,
 ): string {
-  const shaped = toSpecFrontmatter(raw, skillDir, source);
-  const substituted = substituteVerificationGateTokens(
-    substituteRepoTokens(shaped, detection),
-    gates,
-  );
+  return substituteBody(toSpecFrontmatter(raw, skillDir, source), detection, gates);
+}
+
+/**
+ * Emission-time substitution over one document — shared by the skill lane and
+ * the demoted-rule lane, so a rule delivered as a skill says what this
+ * repository's gate commands actually are exactly as a skill does.
+ */
+function substituteBody(
+  raw: string,
+  detection: ReturnType<typeof detectionContextFromManifest>,
+  gates: VerificationGateSet,
+): string {
+  const substituted = substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates);
   if (!substituted.includes(PLATFORM_TOOL_MARKER)) return substituted;
   return substituted.split(PLATFORM_TOOL_MARKER).join(buildAskUserPlatformTable());
 }

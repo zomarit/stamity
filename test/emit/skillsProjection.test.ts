@@ -14,8 +14,11 @@ import {
   type ProjectedFile,
   type ProjectSkillsOptions,
 } from "../../src/emit/skillsProjection.ts";
+import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
+import { NO_DEMOTED_RULES } from "../../src/content/ruleDelivery.ts";
 import { PLATFORM_TOOL_MARKER, buildAskUserPlatformTable } from "../../src/tools/translator.ts";
 import type { ContentSelection } from "../../src/types/content.ts";
+import type { Tool } from "../../src/types/core.ts";
 import type { DetectedSummary } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { makeVolume } from "../support/vfs.ts";
@@ -1257,5 +1260,150 @@ describe("retargetProjection", () => {
 
     expect(pathsOf(native)).toEqual([`${NATIVE_DIR}/stamity-Alpha_1/SKILL.md`]);
     expect(native[0]?.content).toContain("name: stamity-alpha-1");
+  });
+});
+
+
+// ── Rules delivered as skills ────────────────────────────────────
+
+/**
+ * The delivery option's half of this projection: a rule a client stops
+ * carrying always-on is rendered here instead.
+ *
+ * The demotion ANSWER is not computed here — `../content/ruleDelivery.ts` owns
+ * it and `buildCoreEmissionPlan` hands it over — so these cases pass it
+ * explicitly, which is also the proof that nothing is rendered without one: the
+ * default options produce the pre-option tree, file for file.
+ */
+/** A demotion record naming `ids` on `tools` and nothing on the others. */
+const demotedOn = (
+  tools: readonly Tool[],
+  ...ids: string[]
+): Record<Tool, ReadonlySet<string>> => {
+  const record = {
+    claude: new Set<string>(),
+    cursor: new Set<string>(),
+    copilot: new Set<string>(),
+    codex: new Set<string>(),
+  };
+  for (const tool of tools) record[tool] = new Set(ids);
+  return record;
+};
+
+/** A detection summary whose gates are not the npm defaults, so substitution is visible. */
+const RULE_DETECTION: DetectedSummary = {
+  languages: ["python"],
+  linters: ["eslint", "oxlint"],
+  testFrameworks: ["pytest"],
+  ciProviders: [],
+};
+
+/** Named rules of the shipped corpus, as the catalog resolves them. */
+async function corpusRules(...ids: string[]): Promise<CatalogItem[]> {
+  const index = await buildContentIndex();
+  return index.items.filter((item) => item.type === "rule" && ids.includes(item.id));
+}
+
+describe("projectSkills over demoted rules", () => {
+  it("renders no rule row at all when nothing is demoted — the always-on tree, unchanged", async () => {
+    const baseline = await projectSkills(contextOf(ALL_SKILL_IDS));
+    const withRules = await projectSkills(contextOf(ALL_SKILL_IDS), {
+      ruleItems: await corpusRules("question-protocol", "ai-evals"),
+      demotedRules: NO_DEMOTED_RULES,
+    });
+
+    expect(pathsOf(withRules)).toEqual(pathsOf(baseline));
+    expect(withRules.map((row) => row.content)).toEqual(baseline.map((row) => row.content));
+  });
+
+  it("renders one SKILL.md per demoted rule under stamity-<id>, leaving the st- surface untouched", async () => {
+    const baseline = new Set(
+      pathsOf(await projectSkills(contextOf(ALL_SKILL_IDS))).map((path) => path.split("/")[2] ?? ""),
+    );
+    const rows = await projectSkills(contextOf(ALL_SKILL_IDS), {
+      ruleItems: await corpusRules("question-protocol", "ai-evals"),
+      demotedRules: demotedOn(["claude", "copilot"], "question-protocol", "ai-evals"),
+    });
+    const dirs = new Set(pathsOf(rows).map((path) => path.split("/")[2] ?? ""));
+
+    expect([...dirs].filter((dir) => dir.startsWith("st-")).toSorted()).toEqual(
+      [...baseline].toSorted(),
+    );
+    expect([...dirs].filter((dir) => dir.startsWith("stamity-")).toSorted()).toEqual([
+      "stamity-ai-evals",
+      "stamity-question-protocol",
+    ]);
+    expect(
+      pathsOf(rows).filter((path) => path.includes("stamity-question-protocol")),
+    ).toEqual([`${SKILLS_PROJECTION_DIR}/stamity-question-protocol/SKILL.md`]);
+    // Still one deterministic order over the merged set.
+    expect(pathsOf(rows)).toEqual([...pathsOf(rows)].toSorted());
+  });
+
+  it("carries the rule's own head into the spec shape, with the engine vocabulary under metadata.stamity", async () => {
+    const [rule] = await corpusRules("question-protocol");
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [rule!],
+      demotedRules: demotedOn(["claude", "codex"], "question-protocol"),
+    });
+    const row = rows.find((candidate) =>
+      candidate.path.endsWith("stamity-question-protocol/SKILL.md"),
+    );
+
+    expect(row).toBeDefined();
+    const head = parse(row!.content.split("---")[1]!) as Record<string, unknown>;
+    expect(head.name).toBe("stamity-question-protocol");
+    expect(head.description).toBe(rule!.description);
+    expect(head.metadata).toEqual({
+      stamity: {
+        id: "question-protocol",
+        type: "rule",
+        tags: rule!.tags,
+        load: rule!.frontmatter["load"],
+        obsolete_when: rule!.frontmatter["obsolete_when"],
+        delivery: "on-demand",
+        // Exactly the clients that demoted it: cursor keeps its own .mdc rule.
+        tools: ["claude", "codex"],
+      },
+    });
+    // The head is the SIX-key spec shape: no authored key leaks to the top level.
+    expect(Object.keys(head).toSorted()).toEqual(["description", "metadata", "name"]);
+    // The rule's body ships whole, under its own title.
+    expect(row!.content).toContain("# Question Protocol");
+    expect(row!.artifactType).toBe("rule");
+    expect(row!.artifactId).toBe("question-protocol");
+  });
+
+  it("substitutes the repo's gate commands in a demoted rule body, exactly as in a skill body", async () => {
+    const ruleWithTokens: CatalogItem = {
+      type: "rule",
+      id: "alpha-rule",
+      filePath: "/corpus/rules/stamity-alpha-rule.md",
+      relativePath: "rules/stamity-alpha-rule.md",
+      description: "Fixture rule.",
+      tags: ["review"],
+      body: "\nRun ${STAMITY:VERIFY_GATE_TEST} with ${STAMITY:LINTER}.\n",
+      frontmatter: { id: "alpha-rule", load: "on-demand", obsolete_when: "never" },
+    };
+    const rows = await projectSkills(contextOf([], RULE_DETECTION), {
+      ruleItems: [ruleWithTokens],
+      demotedRules: demotedOn(["codex"], "alpha-rule"),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.path).toBe(`${SKILLS_PROJECTION_DIR}/stamity-alpha-rule/SKILL.md`);
+    expect(rows[0]?.content).toContain("Run pytest with eslint, oxlint.");
+    expect(rows[0]?.content).not.toContain("${STAMITY:");
+  });
+
+  it("renders nothing for a rule no selected client demoted", async () => {
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: await corpusRules("secrets", "question-protocol"),
+      demotedRules: demotedOn(["claude"], "question-protocol"),
+    });
+
+    expect(pathsOf(rows)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/stamity-question-protocol/SKILL.md`,
+    ]);
   });
 });

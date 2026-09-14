@@ -381,8 +381,16 @@ export const claudeResiduePlanner: ResiduePlanner = {
         });
       }
     }
+    // A demoted rule is NOT written here: the core projected it as a skill
+    // under `.agents/skills/stamity-<id>/`, re-targeted into this client's own
+    // skills directory a few lines above, and a second copy under
+    // `.claude/rules/` would be the always-on load the demotion exists to
+    // reclaim (`../content/ruleDelivery.ts`).
+    const demoted = core.demotedRules[TOOL];
     for (const item of items) {
-      if (item.type === "rule") rows.push(buildRuleFile(item, render.rule));
+      if (item.type === "rule") {
+        if (!demoted.has(item.id)) rows.push(buildRuleFile(item, render.rule));
+      }
       else if (item.type === "command") rows.push(buildCommandFile(item, render.command));
       else {
         rows.push(buildAgentFile(item, grantFor(item), modelFrontmatter(item, ctx), render.agent));

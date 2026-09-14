@@ -336,6 +336,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/manifest/manifest.ts": { unit: "p1-29", wave: 4 },
   "src/tools/translator.ts": { unit: "p1-30", wave: 4 },
   "src/content/selection.ts": { unit: "p1-31", wave: 4 },
+  // Over the catalog (wave 3) and under the plan composer that reads it: the
+  // delivery predicate answers for the core plan AND for the codex adapter, so
+  // it sits at its true depth rather than at either consumer's wave.
+  "src/content/ruleDelivery.ts": { unit: "p11-u2a", wave: 4 },
   "src/content/mdcCompanions.ts": { unit: "p1-31", wave: 4 },
   "src/learnings/store.ts": { unit: "p1-32", wave: 4 },
   "src/handoffs/store.ts": { unit: "p1-33", wave: 4 },

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CODEX_AGENTS_DIR,
   CODEX_AGENTS_MD_BUDGET_BYTES,
+  CODEX_SKILLS_LIST_BUDGET_CHARS,
   CODEX_COMMANDS_DIR,
   CODEX_CONFIG_FILE,
   CODEX_HOOKS_FILE,
@@ -10,8 +11,10 @@ import {
   codexResiduePlanner,
   composeConfigToml,
   downConvertRules,
+  skillsListCharacters,
 } from "../../src/adapters/codex.ts";
 import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
+import { NO_DEMOTED_RULES } from "../../src/content/ruleDelivery.ts";
 import { resolveBundledContentRoot } from "../../src/content/contentRoot.ts";
 import { LIVE_CAPABILITY_INPUTS } from "../../src/emit/capabilityMatrix.ts";
 import {
@@ -31,7 +34,7 @@ import { MODEL_CLASSES, type Tool } from "../../src/types/core.ts";
 import type { PackageEntry } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
-import type { McpConfig, ModelConfig } from "../../src/types/manifest.ts";
+import type { McpConfig, ModelConfig, RuleDelivery } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -169,6 +172,7 @@ async function seedCorpus(): Promise<string> {
 
 interface CtxOptions {
   contentRoot: string;
+  ruleDelivery?: RuleDelivery;
   tools?: Tool[];
   agents?: string[];
   rules?: readonly string[];
@@ -199,7 +203,11 @@ function ctxOf(options: CtxOptions): EmissionContext {
     // `models` is a persisted manifest field with no `createManifest` argument
     // (that constructor belongs to the manifest unit); attaching it here is the
     // same shape a repo carries after `stamity config` writes a pin.
-    manifest: options.models === undefined ? manifest : { ...manifest, models: options.models },
+    manifest: {
+      ...manifest,
+      ...(options.models === undefined ? {} : { models: options.models }),
+      ...(options.ruleDelivery === undefined ? {} : { ruleDelivery: options.ruleDelivery }),
+    },
     engineVersion: ENGINE_VERSION,
     facts: { monorepoPackages: options.packages ?? [] },
     contentRoot: options.contentRoot,
@@ -353,6 +361,9 @@ function coreWithHooks(hooks: CoreHooksPlan): CoreEmissionPlan {
   return {
     agentsMd: { root: { content: "", byteLength: 0, lineCount: 0 }, nestedFor: () => [] },
     skills: [],
+    // No delivery option in play: every rule reaches this client as appendix
+    // text, which is what every case outside the on-demand suite asserts.
+    demotedRules: NO_DEMOTED_RULES,
     hooks,
     // No installed packs in this fixture, so the composed config resolves its
     // ids against the curated catalog alone.
@@ -1473,5 +1484,180 @@ describe("codex honours the tools: restriction", () => {
     const shared = plan.find((row) => row.path === "AGENTS.md");
     expect(shared).toBeDefined();
     expect(shared!.content).not.toContain("Guidance nobody outside claude should read.");
+  });
+});
+
+
+// ── 8. The delivery option ───────────────────────────────────────
+
+/**
+ * `ruleDelivery: "on-demand"` on the client with no conditional rule layer.
+ *
+ * This is the one client where the option changes what is DELIVERED rather than
+ * only where it is delivered from: the appendix was dropping eight rules for
+ * budget, and the rules it now folds are exactly the ones a floor argument
+ * keeps in front of the model unconditionally. The pins below are the record of
+ * that — inlined set, skills set, and dropped set, all three asserted in one
+ * case, because a rule that left the appendix and reached no skill directory
+ * would otherwise look like a budget saving.
+ */
+describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
+  /** The rules that stay inlined: critical, or floor-tagged. */
+  const FOLDED = ["injection-screening", "secrets", "security-patterns"] as const;
+
+  async function shipped(delivery: RuleDelivery): Promise<AdapterOutput[]> {
+    const index = await buildContentIndex();
+    const ctx = ctxOf({
+      contentRoot: resolveBundledContentRoot(),
+      rules: index.items.filter((item) => item.type === "rule").map((item) => item.id),
+      agents: ["reviewer"],
+      ruleDelivery: delivery,
+    });
+    const core = await buildCoreEmissionPlan(ctx);
+    const residue = (await codexResiduePlanner.planResidue(core, ctx)).outputs;
+    // Core rows carry no per-tool owner; this client reads them from the
+    // vendor-neutral tree, so they are folded in as-is with a placeholder owner.
+    const coreRows: AdapterOutput[] = [];
+    for (const row of core.skills) {
+      coreRows.push({
+        path: row.path,
+        content: row.content,
+        owner: { adapter: "codex", artifactId: row.artifactId, artifactType: row.artifactType },
+      });
+    }
+    return [...coreRows, ...residue];
+  }
+
+  it("inlines only the floor rules and drops nothing, with every other rule reachable as a skill", async () => {
+    const rows = await shipped("on-demand");
+    const root = rows.find((row) => row.path === "AGENTS.md");
+    expect(root, "the root AGENTS.md replacement row").toBeDefined();
+    const { inlined, omitted } = deliveredAndOmitted(root!.content);
+
+    // `Verification gates` is an H3 of the charter head, not a rule section.
+    expect(inlined).toEqual(["Verification gates", ...FOLDED]);
+    expect(omitted).toEqual([]);
+
+    const index = await buildContentIndex();
+    const demoted = index.items
+      .filter((item) => item.type === "rule" && !FOLDED.includes(item.id as (typeof FOLDED)[number]))
+      .map((item) => item.id)
+      .toSorted();
+    expect(demoted).toHaveLength(9);
+    const skillPaths = new Set(rows.map((row) => row.path));
+    for (const id of demoted) {
+      expect(skillPaths.has(`.agents/skills/stamity-${id}/SKILL.md`), id).toBe(true);
+    }
+    // ...and nothing folded is ALSO a skill: one rule, one door.
+    for (const id of FOLDED) {
+      expect(skillPaths.has(`.agents/skills/stamity-${id}/SKILL.md`), id).toBe(false);
+    }
+  });
+
+  it("measures a skills list well under the client's cap on the shipped corpus", async () => {
+    const rows = await shipped("on-demand");
+    const total = skillsListCharacters(rows.filter((row) => row.path.startsWith(".agents/skills/")));
+
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThanOrEqual(CODEX_SKILLS_LIST_BUDGET_CHARS);
+  });
+
+  it("emits byte-identically to today under always-on", async () => {
+    const defaulted = await shipped("always-on");
+    const explicit = await shipped("on-demand");
+
+    expect(defaulted.map((row) => row.path)).not.toEqual(explicit.map((row) => row.path));
+    const root = defaulted.find((row) => row.path === "AGENTS.md")!;
+    const { inlined, omitted } = deliveredAndOmitted(root.content);
+    expect(inlined).toEqual([
+      "Verification gates",
+      "ai-evals",
+      "injection-screening",
+      "secrets",
+      "security-patterns",
+    ]);
+    expect(omitted).toHaveLength(8);
+  });
+});
+
+/** One projected SKILL.md row whose description is `descriptionLength` characters. */
+function skillRow(
+  index: number,
+  descriptionLength: number,
+): { path: string; content: string; artifactId: string; artifactType: "skill" } {
+  const name = `st-fixture-${index}`;
+  return {
+    path: `.agents/skills/${name}/SKILL.md`,
+    content: `---\nname: ${name}\ndescription: ${"d".repeat(descriptionLength)}\n---\n\nBody.\n`,
+    artifactId: `fixture-${index}`,
+    artifactType: "skill",
+  };
+}
+
+describe("the skills-list budget", () => {
+  it("sums name + description + 3 over every projected SKILL.md, support files excluded", () => {
+    const rows = [
+      skillRow(1, 100),
+      skillRow(2, 200),
+      { path: ".agents/skills/st-fixture-1/references/deep.md", content: "x".repeat(5_000), artifactId: "fixture-1", artifactType: "skill" as const },
+    ];
+
+    // 2 rows: ("st-fixture-1".length = 12) + 100 + 3, and the same with 200.
+    expect(skillsListCharacters(rows)).toBe(12 + 100 + 3 + (12 + 200 + 3));
+  });
+
+  it("refuses a 9,000-character skills list on codex, naming the total and the cap", async () => {
+    const rows = Array.from({ length: 20 }, (_, index) => skillRow(index, 435));
+    const total = skillsListCharacters(rows);
+    expect(total).toBeGreaterThan(9_000);
+
+    const core: CoreEmissionPlan = { ...coreWithHooks(hooksPlan([], [])), skills: rows };
+    const ctx = ctxOf({ contentRoot: await seedCorpus(), ruleDelivery: "on-demand" });
+
+    await expect(codexResiduePlanner.planResidue(core, ctx)).rejects.toThrow(EngineError);
+    await expect(codexResiduePlanner.planResidue(core, ctx)).rejects.toThrow(
+      new RegExp(`${total} characters; this setup caps it at ${CODEX_SKILLS_LIST_BUDGET_CHARS}`),
+    );
+  });
+
+  it("admits a list exactly at the cap — the refusal is past it, not at it", async () => {
+    const rows = [skillRow(1, CODEX_SKILLS_LIST_BUDGET_CHARS - 12 - 3)];
+    expect(skillsListCharacters(rows)).toBe(CODEX_SKILLS_LIST_BUDGET_CHARS);
+
+    const core: CoreEmissionPlan = { ...coreWithHooks(hooksPlan([], [])), skills: rows };
+    const ctx = ctxOf({ contentRoot: await seedCorpus(), ruleDelivery: "on-demand" });
+
+    await expect(codexResiduePlanner.planResidue(core, ctx)).resolves.toBeDefined();
+  });
+});
+
+describe("the omission notice under on-demand", () => {
+  it("names the on-demand home of a dropped rule that has a skill row", () => {
+    // An over-budget root, so the shaper has to drop: two big rules, one of them
+    // also projected as a skill (the shape a floor-tagged glob-less rule takes
+    // when claude demotes it and codex keeps it).
+    const fat = "F".repeat(CODEX_AGENTS_MD_BUDGET_BYTES);
+    const items = [
+      ruleItem("kept", { tags: ["floor:security"], body: fat }),
+      ruleItem("elsewhere", { body: fat }),
+    ];
+
+    const { rootReplacement } = downConvertRules(items, "# Charter\n", [], new Set(["elsewhere"]));
+
+    expect(rootReplacement).toContain("`elsewhere` (on demand at .agents/skills/stamity-elsewhere/)");
+    expect(rootReplacement).not.toContain("`kept` (on demand");
+  });
+
+  it("names a dropped rule plainly when nothing projected it", () => {
+    const fat = "F".repeat(CODEX_AGENTS_MD_BUDGET_BYTES);
+    const items = [
+      ruleItem("kept", { tags: ["floor:security"], body: fat }),
+      ruleItem("gone", { body: fat }),
+    ];
+
+    const { rootReplacement } = downConvertRules(items, "# Charter\n", []);
+
+    expect(rootReplacement).toContain("`gone`");
+    expect(rootReplacement).not.toContain("on demand at");
   });
 });

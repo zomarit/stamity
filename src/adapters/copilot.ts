@@ -266,14 +266,19 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // fall back to (`../roster/modelLadder.ts`).
     const pins = ctx.manifest.models?.pins ?? {};
 
-    const rows = items.map((item) => {
+    // A demoted rule is NOT written here: the core projected it as a skill
+    // under `.agents/skills/stamity-<id>/`, which this client reads directly,
+    // and an instructions file beside it would restore the always-on load the
+    // demotion exists to reclaim (`../content/ruleDelivery.ts`).
+    const demoted = core.demotedRules[TOOL];
+    const rows = items.flatMap((item): AdapterOutput[] => {
       switch (item.type) {
         case "rule":
-          return buildInstructionsFile(item, render);
+          return demoted.has(item.id) ? [] : [buildInstructionsFile(item, render)];
         case "agent":
-          return buildAgentFile(item, grantFor(item), render, pins);
+          return [buildAgentFile(item, grantFor(item), render, pins)];
         default:
-          return buildPromptFile(item, render, pins);
+          return [buildPromptFile(item, render, pins)];
       }
     });
 

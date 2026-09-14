@@ -34,11 +34,14 @@ import {
   MANIFEST_FILE,
   MANIFEST_VERSION,
   PACK_OWNER_PREFIX,
+  RULE_DELIVERIES,
+  RULE_DELIVERY_DEFAULT,
   type ImportDecision,
   type LearningsConfig,
   type LedgerEntry,
   type ManifestMigration,
   type McpConfig,
+  type RuleDelivery,
   type SetupManifest,
 } from "../types/manifest.ts";
 import { STATE_DIR } from "../types/markers.ts";
@@ -183,6 +186,7 @@ const MANIFEST_FIELD_ORDER: Record<keyof SetupManifest, true> = {
   platform: true,
   maturityTier: true,
   communicationStyle: true,
+  ruleDelivery: true,
   selection: true,
   ledger: true,
   mcp: true,
@@ -206,6 +210,9 @@ const PLATFORM_MEMBERS: Record<Platform, true> = {
   gitlab: true,
 };
 const VALID_PLATFORMS = new Set(Object.keys(PLATFORM_MEMBERS));
+
+/** Rule-delivery membership set, from the sanctioned list the types leaf publishes. */
+const VALID_RULE_DELIVERIES = new Set<string>(RULE_DELIVERIES);
 
 /** Ledger `artifactType` values: the content classes plus the infra bucket. */
 const VALID_ARTIFACT_TYPES = new Set<string>([...CONTENT_CLASSES, "infra"]);
@@ -638,6 +645,7 @@ export function collectManifestErrors(data: unknown): string[] {
   collectEnumError(data.platform, VALID_PLATFORMS, "platform", errors);
   collectEnumError(data.maturityTier, VALID_MATURITY_TIERS, "maturityTier", errors);
   collectEnumError(data.communicationStyle, VALID_COMMUNICATION_STYLES, "communicationStyle", errors);
+  collectEnumError(data.ruleDelivery, VALID_RULE_DELIVERIES, "ruleDelivery", errors);
 
   collectSelectionErrors(data.selection, errors);
   collectLedgerErrors(data.ledger, errors);
@@ -917,6 +925,22 @@ export function applyPreservedManifestFields(
 export function readMaturityTier(manifest: SetupManifest | null | undefined): MaturityTier {
   const value = manifest?.maturityTier;
   return value !== undefined && VALID_MATURITY_TIERS.has(value) ? value : DEFAULT_MATURITY_TIER;
+}
+
+/**
+ * Resolve how rules are delivered, defaulting on absence — the one reader the
+ * planner, the always-on measurement and `stamity config` all go through, so a
+ * manifest written before the key existed cannot resolve one way here and
+ * another way there. Same re-check as {@link readMaturityTier}: a hand-edited
+ * value outside the sanctioned set falls back to the default rather than
+ * reaching emission as an unknown mode (the persistence boundary refuses it in
+ * {@link collectManifestErrors}).
+ */
+export function readRuleDelivery(manifest: SetupManifest | null | undefined): RuleDelivery {
+  const value = manifest?.ruleDelivery;
+  return value !== undefined && VALID_RULE_DELIVERIES.has(value)
+    ? value
+    : RULE_DELIVERY_DEFAULT;
 }
 
 /**
