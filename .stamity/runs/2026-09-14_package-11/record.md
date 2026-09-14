@@ -64,3 +64,50 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
 - Phase 3 — close and cut.
 
 (Sections below are appended as the run proceeds.)
+
+## Phase 0 — Frame (2026-09-14T21:50Z)
+
+- Outcome sentence: every item of Package 11 tracks D, A and C lands implemented, gated and recorded
+  tonight, the eval set is versioned so the always-on demotion is measured before the ratchets move,
+  and 1.8.0 is cut on a green measurement; Track B stays scheduled.
+- Intensity: **deep** (wide diff across emission, corpus, evals, docs and hooks; public contracts;
+  security-sensitive surfaces; new dependencies on the site). `--effort` not given.
+- Model plan (class → roles): frontier → the whole-branch review before the QA checkpoint; advanced →
+  implementers, spec-author, the security lens, the reviewer each round; standard → researchers, the
+  performance lens; economy → the test-runner. Spawned so far: 9 researchers, 1 spec-author.
+- Build isolation, declared before the first Phase 3 dispatch: the client's own primitive — one git
+  worktree per parallel implementer (the Agent tool's `worktree` isolation), each unit committed on its
+  worktree branch and cherry-picked into `feat/package-11-prove-behavior-and-value` in dependency
+  order; serial units run in the main checkout; the private checkout takes one writer at a time.
+- Deferral inbox: no rows overlap (the inbox is empty).
+- Plan: `docs/plans/007-prove-behavior-and-value.md` (committed as `4774d01`). Plan-lint, inline by
+  the writer: L1 pass (every criterion names an observable and its command or test) · L2 pass (every
+  `depends_on` names a unit in the plan; every path in `reads:` exists at the stamp) · L3 pass (every
+  unit lists an edge case) · L4 pass (REQ-PROVE-001…021 cited; the two private units state `spec
+  carries no ids`). Structural coverage: run after the spec lands (recorded below).
+- Contract census (before the first parallel dispatch), one row per shared contract:
+  `SetupManifest` (producer U2a; consumers config/sync/check — U2a owns all) · `CoreEmissionPlan`
+  (producer U2a; consumers the four adapters — U2a) · `composeAlwaysOnLoad` signature (U2b, after
+  U1's edit of the same file) · `evals/SET-v7.md` index (U0a creates; U1 → U4 → U2c edit in sequence)
+  · `evals/README.md` (U0b, then U4's one paragraph) · `test/docsPages.test.ts` (U8 → U9 → U6) ·
+  `README.md` and the hand pages (U8's two map rows, then U6) · the goldens snapshot (U1 refresh, then
+  U2b, then U12) · `.stamity/manifest.json` and the dogfood tree (each syncing unit in sequence) ·
+  `scripts/eval/instrument.mjs` and `test/evals/manualRunner.test.ts` (U0a → U4 → U2c). Every row
+  closes `clean` or `reconciled(1)` by sequencing; no row left unreconciled.
+- Decision 6 executed at 21:53Z: the fetch-only `archive` remote (push disabled) holds
+  `94a40ba` at its `main`, so the commit is preserved outside this checkout; the local tag
+  `pre-rename-94a40ba` was deleted and the remote pruned; nothing pushed.
+
+## Phase 3 — Build dispatch log
+
+- 21:45Z B0: U0a (eval-set cutover), U0b (eval docs currency) — worktrees.
+- 21:50Z B1 (no B0 dependency): U2a (rule-delivery engine, default always-on), U3 (carried defects),
+  U5 (spec status gate), U7 (QA harness), U8 (measurement report) — worktrees; U10 (private
+  currency) — private checkout, single writer.
+- 22:19Z spec landed: `docs/specs/prove-behavior-and-value.md` (21 requirements, `status: design`); one
+  `[NEEDS CLARIFICATION]` on REQ-PROVE-015 (does the win32 rename ceiling rise again?) resolved by the
+  plan's U3 under reading B (four more 800 ms steps; ceiling ≥ 7 000 ms and < 9 000 ms), returned to
+  the spec-author to close. Structural coverage (`spec-plan-coverage.mjs`): two findings in the plan
+  (a `REMOVED: none` line read as a removal; one shorthand id list) fixed → **pass**, 16 units,
+  `semanticReview: required` — done inline by the plan's writer: each requirement maps to exactly one
+  implementing unit and back; the only competing reading found (REQ-PROVE-015) is the one above.

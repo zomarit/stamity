@@ -64,7 +64,7 @@ Stated against `docs/specs/prove-behavior-and-value.md` (new, `status: design`, 
 spec-author from this plan's requirement list; `/st-work` marks it `shipped-with-1.8.0` at the
 close). ADDED: REQ-PROVE-001 … REQ-PROVE-021, one per numbered requirement in that file, each with
 Given/When/Then criteria. MODIFIED: none of the existing specs' requirements; three existing specs
-change only their `status` line (REQ-PROVE-016). REMOVED: none.
+change only their `status` line (REQ-PROVE-016). No requirement is retired by this plan.
 
 ## Units
 
@@ -259,7 +259,7 @@ the dogfood sync. One writer per file: where two units name one file, the later 
 | Field | Content |
 |---|---|
 | `id` | u11-driver-pins |
-| `requirements` | spec carries no ids (the driver is private; it consumes REQ-PROVE-009/010/011/013 artifacts) |
+| `requirements` | spec carries no ids (the driver is private; it consumes the artifacts of REQ-PROVE-009, REQ-PROVE-010, REQ-PROVE-011 and REQ-PROVE-013) |
 | `files` | private checkout `runs/2026-09-11-package-10-readiness/claude-run/driver/run.mjs`, `runs/…/claude-run/profile-amendment-10.json`, the deterministic canaries K3/K4 re-run under the final driver |
 | `interfaces` | `PUBLIC_INPUTS`: `evals/SET-v7.md`, `evals/coverage-exemptions-v6.md` (v6/v5 entries replaced); `EXPECTED` hashes recomputed for SET-v7 and model-profiles-v1.json; `gitList(... 'evals/cases-v6')` (cases-v4 stays for calibration); `parse('evals/cases-v6')`; `expectCensus` = the counts the roster test derives at the candidate (100 cases · 69 historical · 5 fixtures · 52 golden · 18 adversarial · 30 probes · floors and binding/advisory counts from the SET-v7 file); the `--set-sha256` override key → `evals/SET-v7.md`; RESULTS renderer: set name `SET-v7`, the counts, `cases-v6/** (100)`, a new section "6b. Ordering criteria cited out of order" from `aggregate().orderedFalseOnOrdering`, "3. Why the run happened" → "Hard trigger 2 (the 1.8.0 release) and hard trigger 1 (content edits: the charter, three agents/commands); the run measures the rule-delivery demotion through the eighteen rule-skill probes and the four charter-floor twins"; `profile-amendment-10.json` in amendment 9's shape (amends 9; scope names this run's decision; `unchanged` lists the pair, effort, rubric v7 hash, thresholds, the SET-v6 rule; `changed` lists the set path/hash and the census). `node --test driver/inspect.test.mjs` green; `node run.mjs canary --id K3 …` and K4 re-run so `prepare` accepts the driver hashes. |
 | `testCriteria` | `node --test driver/inspect.test.mjs` exits 0; `prepare` on the candidate succeeds (no census mismatch, canaries accepted) — executed by the orchestrator at Phase 2 |
