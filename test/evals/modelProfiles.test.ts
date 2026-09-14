@@ -76,7 +76,13 @@ describe("eval model profiles", () => {
   });
 
   it("preserves the grading procedure and every calibration label when adding a model-neutral rubric", () => {
-    const legacy = readRepoFile(RUBRIC_FILE);
+    // Behaviour moved, not weakened: this assertion is about the v4 -> v5 derivation, where
+    // the model-neutral rubric first carried the legacy grading procedure over verbatim. It
+    // read the legacy side through RUBRIC_FILE while the default profile still selected
+    // rubric-v4; the maintainer's recorded rubric decision moved that default to rubric-v7,
+    // whose grading core states a closed citation form, so the historical pair is now named
+    // by its own literal.
+    const legacy = readRepoFile("evals/rubric-v4.md");
     const alternate = readRepoFile("evals/rubric-v5.md");
     expect(alternate).toContain("## Verdict vocabulary\n");
     expect(grading(alternate)).toBe(grading(legacy));

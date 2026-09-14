@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "set": "evals/SET-v6.md",
+  "set": "evals/SET-v7.md",
   "defaultProfile": "claude",
   "profiles": {
     "claude": {
       "harness": "claude-code",
-      "rubric": "evals/rubric-v4.md",
+      "rubric": "evals/rubric-v7.md",
       "scenario": { "model": "claude-opus-5", "reasoningEffort": null },
       "judge": { "model": "claude-fable-5-1", "reasoningEffort": null }
     },

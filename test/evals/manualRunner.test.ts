@@ -1294,8 +1294,8 @@ describe("committed inputs and manual entry point", () => {
   });
   it("requires committed bytes for every current and calibration input, then detects midrun edits", () => {
     const root = temp();
-    for (const path of ["evals/cases-v4", "evals/cases-v5", "content", "scripts/eval", "scripts/eval-run.mjs", "scripts/native-typescript.mjs",
-      "evals/SET-v6.md", "evals/model-profiles-v1.json", "evals/rubric-v7.md", ".stamity/overrides/skills/st-eval-run/SKILL.md"]) {
+    for (const path of ["evals/cases-v4", "evals/cases-v6", "content", "scripts/eval", "scripts/eval-run.mjs", "scripts/native-typescript.mjs",
+      "evals/SET-v7.md", "evals/model-profiles-v1.json", "evals/rubric-v7.md", ".stamity/overrides/skills/st-eval-run/SKILL.md"]) {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       cpSync(join(REPO_ROOT, path), join(root, path), { recursive: true });
     }

@@ -1,21 +1,22 @@
 # Eval model profiles v1
 
-This extends `SET-v6.md` with explicit model choices. The machine-readable source is
+This extends `SET-v7.md` with explicit model choices. The machine-readable source is
 [`model-profiles-v1.json`](model-profiles-v1.json), committed at the run's repository sha.
-The case roster, sealed briefs, expected criteria and thresholds remain those of `SET-v6`.
+The case roster, sealed briefs, expected criteria and thresholds remain those of `SET-v7`.
 No profile starts a model call or changes Stamity's product-level `models.pins` settings.
 
 | Profile | Model under test | Judge | Rubric |
 |---|---|---|---|
-| `claude` (default) | `claude-opus-5` | `claude-fable-5-1` | `rubric-v4.md` |
+| `claude` (default) | `claude-opus-5` | `claude-fable-5-1` | `rubric-v7.md` |
 | `codex-astra` | `gpt-6-astra` | `gpt-5.6-sol` | `rubric-v7.md` |
 | `codex-astra-judge` | `gpt-5.6-sol` | `gpt-6-astra` | `rubric-v7.md` |
 
 Ask the runner to **run the full eval set with profile `codex-astra`** to measure Astra,
 or select `codex-astra-judge` to have Astra grade Sol. With no profile named, `claude`
-remains the default. A Codex session does not silently select a Codex profile: the harness
-checks the selected profile's availability before spending calls. Both Codex roles declare
-`high` reasoning effort. A null effort on the Claude profile means the harness default;
+remains the default, and it selects `rubric-v7.md`, the rubric the maintainer's recorded
+decision moved that default to. A Codex session does not silently select a Codex profile:
+the harness checks the selected profile's availability before spending calls. Both Codex
+roles declare `high` reasoning effort. A null effort on the Claude profile means the harness default;
 it does not claim a controllable or known effort value.
 
 ## Selection and isolation
@@ -43,7 +44,7 @@ request and records attestation as unavailable. Do not prepend this profile docu
 model-role instructions to the Brief.
 Model and reasoning selection belong to the dispatch controls, not the sealed prompt.
 
-The profiles declare tool-free scenarios, as `SET-v6` already does. If the harness can
+The profiles declare tool-free scenarios, as `SET-v7` already does. If the harness can
 remove tools and repository access, do so. If it exposes them despite the sealed Brief's
 instruction to use none, record that as instruction-only isolation and inspect the tool
 trace. Any scenario tool use or extra repository/context read invalidates that sample;
@@ -85,5 +86,5 @@ Keep results and advisory-repeat tracking separate by the full model/rubric/harn
 configuration. A new profile starts a new baseline; cross-profile numbers may be shown as
 separate measurements, never pooled or presented as a regression against the Claude run.
 
-Current-case selection is v5. Retained rubric calibration witnesses still resolve
+Current-case selection is v6. Retained rubric calibration witnesses still resolve
 against cases-v4, keeping their original Brief/Expected inputs and labels intact.

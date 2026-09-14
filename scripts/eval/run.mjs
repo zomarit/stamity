@@ -5,7 +5,7 @@ import { aggregate, calibrationMatches, EvalBlocked, parseCase, parseGrade, pars
 import { boundedMap, callWithRetries, CONTROLS, HARNESS, makeRequest, responsesTransport } from './transport.mjs'
 
 const PROFILE_PATH = 'evals/model-profiles-v1.json'
-const CURRENT_SET = 'evals/SET-v6.md'
+const CURRENT_SET = 'evals/SET-v7.md'
 const RUNNER_FILES = ['scripts/eval-run.mjs', 'scripts/eval/instrument.mjs', 'scripts/eval/transport.mjs',
   'scripts/eval/run.mjs', 'scripts/native-typescript.mjs', '.stamity/overrides/skills/st-eval-run/SKILL.md']
 const git = (root, args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
@@ -41,7 +41,7 @@ export function loadInputs(root, profileName) {
       const logical = `${directory}/${path.replaceAll('\\', '/')}`
       return parseCase(read(logical), logical)
     })
-  const cases = loadCases('evals/cases-v5')
+  const cases = loadCases('evals/cases-v6')
   const historical = loadCases('evals/cases-v4')
   requireEvidence(cases.length === 78 && new Set(cases.map(item => item.id)).size === 78, 'set-roster')
   for (const scenario of cases) {
@@ -108,7 +108,7 @@ function previousRun(root, configurationHash) {
 function markdown(summary) {
   const lines = [`# Eval ${summary.runId}`, '', `Status: **${summary.status}**`, '',
     `Trigger: ${summary.trigger}. Candidate: \`${summary.candidate ?? 'unavailable'}\`.`,
-    `Profile: \`${summary.profile}\`. Set: \`SET-v6\`. Samples: three; a case passes on two of three, and on all three for its non-negotiable rows.`,
+    `Profile: \`${summary.profile}\`. Set: \`SET-v7\`. Samples: three; a case passes on two of three, and on all three for its non-negotiable rows.`,
     `Configuration: \`${summary.configurationHash ?? 'unavailable'}\`; exact input/provider evidence is in \`inputs.json\` and each call receipt.`,
     'Model/effort values in receipts are provider metadata. Agent attestation is unavailable; no attestation text was added.', '',
     '## Calibration', '']
