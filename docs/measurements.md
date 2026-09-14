@@ -7,10 +7,14 @@ title: Measurements
 # Measurements
 
 What this repository can prove about its own output, as of 2026-09-10 — the newest
-run record's date, which is what this page is stamped with rather than the day it was
-rendered. Every number below is computed from a committed artifact by
-`scripts/merge-ready-rate.mjs` and the renderer behind it, so a claim here can be checked
-by re-running the script rather than believed.
+closed run record's date, which is what this page is stamped with rather than the day it was
+rendered. Every number below is computed from a committed artifact, so a claim here can be
+checked rather than believed.
+
+The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-09-15.json`](../evals/measurements/merge-ready-2026-09-15.json), the frozen
+measurement committed beside this page. Refreshed per release by `node scripts/merge-ready-rate.mjs --write`
+(the release checklist's record-currency line); the snapshot named above is the input, and a
+run record written after it is not on this page until the next refresh.
 
 ## Verified merge-ready rate
 

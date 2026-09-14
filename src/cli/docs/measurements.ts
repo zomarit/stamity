@@ -36,10 +36,21 @@
  * not evidence of failure, and burying it in the denominator would understate
  * the rate as dishonestly as dropping it would overstate it.
  *
- * **Clock-free.** `generated` is the newest run record's own date, so two
- * renders of one tree are byte-identical and the page can be byte-compared by
- * the suite. The reach snapshot beside it is a committed fetch artifact with
- * its own `accessed` stamp; nothing here reaches the network.
+ * **The page renders from a committed snapshot, not from the live records.**
+ * {@link computeMergeReadyRate} reads `.stamity/runs/` and is what
+ * `scripts/merge-ready-rate.mjs --write` freezes into
+ * `evals/measurements/merge-ready-<date>.json`; {@link renderMeasurements}
+ * reads the newest such file and nothing else. The seam is not ceremony: a run
+ * in flight writes its record throughout the run, so a page rendered live goes
+ * stale mid-run and every later run would have to regenerate a documentation
+ * page in the same commit as its own record. With the snapshot, the page moves
+ * when someone refreshes it, and the page says which snapshot it came from.
+ *
+ * **Clock-free.** `generated` is the newest closed run record's own date, and
+ * the snapshot's filename date is supplied by the caller rather than read here,
+ * so two renders of one tree are byte-identical and the page can be
+ * byte-compared by the suite. The reach snapshot beside it is a committed fetch
+ * artifact with its own `accessed` stamp; nothing here reaches the network.
  *
  * The computation lives beside the renderer rather than inside
  * `scripts/merge-ready-rate.mjs` because the page and the script must not be
@@ -47,7 +58,7 @@
  * the same way `scripts/generate-docs.mjs` is thin over the renderers.
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findPackageRoot } from "../../shared/paths.ts";
@@ -62,6 +73,12 @@ export const MEASUREMENTS_REGENERATE_COMMAND = `${REGENERATE_COMMAND} --page mea
 
 /** Repo-relative directory holding one directory per work run. */
 export const RUNS_DIR = ".stamity/runs";
+
+/** Repo-relative directory holding the frozen measurement snapshots. */
+export const SNAPSHOT_DIR = "evals/measurements";
+
+/** The command that refreshes the snapshot this page renders from. */
+export const SNAPSHOT_REFRESH_COMMAND = "node scripts/merge-ready-rate.mjs --write";
 
 /** Repo-relative path of the committed reach fetch artifact. */
 export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
@@ -161,6 +178,22 @@ const RELEASE_RUN = /_release-(\d+\.\d+\.\d+)$/;
 /** A run directory's date prefix. */
 const RUN_DATE = /^(\d{4}-\d{2}-\d{2})_/;
 
+/** A snapshot file, with its date captured. */
+const SNAPSHOT_FILE = /^merge-ready-(\d{4}-\d{2}-\d{2})\.json$/;
+
+/** A date a snapshot filename may carry. */
+const SNAPSHOT_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A record that says the run is still going.
+ *
+ * A record is written THROUGHOUT its run, not at the end of it, so an open run
+ * has a record with half a proof block. Reading one would put a run that has
+ * not finished into the denominator and move the page's date to a day the work
+ * was not done on.
+ */
+const IN_PROGRESS = /^status:.*\bin progress\b/im;
+
 /** A ledger row left open — the run-exit invariant every record closes. */
 const OPEN_ROW = /"state"\s*:\s*"open"/;
 
@@ -202,6 +235,15 @@ export interface MergeReadyReport {
   readonly excluded: readonly ExcludedRun[];
   /** `d` counts the numerator and denominator lists together. */
   readonly rate: { readonly n: number; readonly d: number; readonly value: number };
+  /** What the run read, so a stale snapshot can be told from a current one. */
+  readonly computedFrom: {
+    /** How many run directories carried a `record.md`. */
+    readonly records: number;
+    /** The newest closed record's date — the same value as {@link MergeReadyReport.generated}. */
+    readonly newestRecordDate: string;
+    /** The newest released version the changelog carries. */
+    readonly changelogHead: string;
+  };
 }
 
 /** This checkout's root, resolved the way the sibling renderers resolve theirs. */
@@ -399,6 +441,7 @@ export function computeMergeReadyRate(root: string = repoRoot()): MergeReadyRepo
   const denominator: DenominatedRun[] = [];
   const excluded: ExcludedRun[] = [];
   const dates: string[] = [];
+  let records = 0;
 
   for (const run of runs) {
     const recordPath = join(runsDir, run, "record.md");
@@ -407,6 +450,13 @@ export function computeMergeReadyRate(root: string = repoRoot()): MergeReadyRepo
       continue;
     }
     const record = readFileSync(recordPath, "utf-8");
+    records += 1;
+    if (IN_PROGRESS.test(record)) {
+      // Before the date is taken, on purpose: an open run neither enters the
+      // measure nor stamps the page with a day its work was not finished on.
+      excluded.push({ run, reason: "run in progress" });
+      continue;
+    }
     const date = RUN_DATE.exec(run)?.[1];
     if (date !== undefined) dates.push(date);
 
@@ -477,7 +527,79 @@ export function computeMergeReadyRate(root: string = repoRoot()): MergeReadyRepo
     numerator,
     excluded,
     rate: { n: numerator.length, d, value: Number((numerator.length / d).toFixed(3)) },
+    computedFrom: {
+      records,
+      newestRecordDate: generated,
+      changelogHead: [...versions].toSorted().at(-1) ?? "",
+    },
   };
+}
+
+/** A frozen measurement, with the file it was read from. */
+export interface MeasurementSnapshot {
+  /** Repo-relative path, which the page names so a reader can open the input. */
+  readonly path: string;
+  readonly report: MergeReadyReport;
+}
+
+/** Every committed snapshot, newest filename date last. */
+function snapshotFiles(root: string): readonly string[] {
+  const dir = join(root, SNAPSHOT_DIR);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => SNAPSHOT_FILE.test(name))
+    .toSorted();
+}
+
+/**
+ * The newest committed measurement snapshot.
+ *
+ * Newest by the date IN THE FILENAME rather than by mtime: the filename is
+ * committed and a checkout's timestamps are not, so two clones agree on which
+ * snapshot the page renders from.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) when no snapshot exists, naming the
+ * command that writes one — a page rendered from nothing is the failure this
+ * whole seam exists to prevent.
+ */
+export function readMeasurementSnapshot(root: string = repoRoot()): MeasurementSnapshot {
+  const newest = snapshotFiles(root).at(-1);
+  if (newest === undefined) {
+    fail(
+      `No measurement snapshot under ${SNAPSHOT_DIR}. Write one with \`${SNAPSHOT_REFRESH_COMMAND}\` ` +
+        `and commit it beside the page it renders.`,
+    );
+  }
+  const path = `${SNAPSHOT_DIR}/${newest}`;
+  return { path, report: JSON.parse(readFileSync(join(root, path), "utf-8")) as MergeReadyReport };
+}
+
+/**
+ * Freeze today's measurement into `evals/measurements/merge-ready-<date>.json`.
+ *
+ * `date` is passed in rather than read from a clock here: this module renders a
+ * byte-compared page and must stay clock-free, so the caller
+ * (`scripts/merge-ready-rate.mjs`) is where the wall clock lives.
+ *
+ * Refuses to overwrite. A snapshot is the input a published number was computed
+ * from; rewriting one in place erases the record of what the page said, which is
+ * the same failure as editing a retained eval baseline.
+ */
+export function writeMeasurementSnapshot(root: string, date: string): string {
+  if (!SNAPSHOT_DATE.test(date)) {
+    fail(`A snapshot is dated YYYY-MM-DD; ${JSON.stringify(date)} is not.`);
+  }
+  const path = `${SNAPSHOT_DIR}/merge-ready-${date}.json`;
+  const target = join(root, path);
+  if (existsSync(target)) {
+    fail(
+      `${path} already exists. A snapshot is the input a published number was computed from, so ` +
+        `it is never rewritten in place — delete it deliberately, or take the next one tomorrow.`,
+    );
+  }
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, `${JSON.stringify(computeMergeReadyRate(root), null, 2)}\n`, "utf-8");
+  return path;
 }
 
 /** One npm downloads point response, as the registry returns it. */
@@ -538,7 +660,8 @@ function runTable(
  * suite holding each one to that file.
  */
 export function renderMeasurements(root: string = repoRoot()): string {
-  const report = computeMergeReadyRate(root);
+  const snapshot = readMeasurementSnapshot(root);
+  const report = snapshot.report;
   const reach = readReachSnapshot(root);
   const daily = reach.daily.downloads;
   const total = daily.reduce((sum, row) => sum + row.downloads, 0);
@@ -555,10 +678,14 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "# Measurements",
     "",
     `What this repository can prove about its own output, as of ${report.generated} — the newest`,
-    "run record's date, which is what this page is stamped with rather than the day it was",
-    "rendered. Every number below is computed from a committed artifact by",
-    `\`scripts/merge-ready-rate.mjs\` and the renderer behind it, so a claim here can be checked`,
-    "by re-running the script rather than believed.",
+    "closed run record's date, which is what this page is stamped with rather than the day it was",
+    "rendered. Every number below is computed from a committed artifact, so a claim here can be",
+    "checked rather than believed.",
+    "",
+    `The merge-ready figures are rendered from [\`${snapshot.path}\`](../${snapshot.path}), the frozen`,
+    `measurement committed beside this page. Refreshed per release by \`${SNAPSHOT_REFRESH_COMMAND}\``,
+    "(the release checklist's record-currency line); the snapshot named above is the input, and a",
+    "run record written after it is not on this page until the next refresh.",
     "",
     "## Verified merge-ready rate",
     "",

@@ -1,12 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,9 +14,13 @@ import {
   REACH_SNAPSHOT_PATH,
   RUNS_DIR,
   RUN_OF_RECORD_PATH,
+  SNAPSHOT_DIR,
+  SNAPSHOT_REFRESH_COMMAND,
   computeMergeReadyRate,
+  readMeasurementSnapshot,
   readReachSnapshot,
   renderMeasurements,
+  writeMeasurementSnapshot,
   type DenominatedRun,
   type ExcludedRun,
   type MergeReadyReport,
@@ -46,6 +43,14 @@ import { EngineError } from "../../../src/types/errors.ts";
  * runs that pass, runs that fail one clause each, and a run whose record calls
  * itself verified in prose and proves nothing, which is the case the whole
  * anti-gaming constraint exists for.
+ *
+ * The seam between the two halves is the snapshot. The page renders from
+ * `evals/measurements/merge-ready-<date>.json`, never from the live records, so
+ * a run in flight cannot make a committed page stale — which is why the cases
+ * below assert the page against the COMMITTED snapshot and assert the rule
+ * against fixture trees, and why the one property that used to be checked
+ * against this repository's live records (every run exactly once) is now
+ * checked where it can be made to fail on purpose.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -141,9 +146,6 @@ function fixture(runs: Record<string, Record<string, string>>): string {
 /** The window a downloads point covers, as one readable range. */
 const window = (point: ReachPoint): string => `${point.start} to ${point.end}`;
 
-/** The run ids of a set-aside list, in the order the report publishes them. */
-const idsOf = (runs: readonly ExcludedRun[]): string[] => runs.map((entry) => entry.run);
-
 /** The reason one run was set aside, or `undefined` when it was not. */
 const reasonFor = (notes: readonly DenominatedRun[], run: string): string | undefined =>
   notes.find((note) => note.run === run)?.reason;
@@ -182,12 +184,28 @@ describe("renderMeasurements — drift gate", () => {
     expect(page).not.toContain("\r");
   });
 
-  it("reads no clock — the stamp is the newest record's date", () => {
+  it("reads no clock — the stamp comes from the snapshot, never from today", () => {
+    // The wall clock lives in `scripts/merge-ready-rate.mjs`, which names the
+    // snapshot file; nothing the byte-compared page renders may read one.
     const source = readFileSync(MODULE_SOURCE_PATH, "utf-8");
     expect(source).not.toMatch(/\bnew Date\b/);
     expect(source).not.toMatch(/\bDate\.(now|UTC|parse)\(/);
     expect(source).not.toMatch(/toISOString\(/);
-    expect(renderMeasurements()).toContain(computeMergeReadyRate().generated);
+    expect(renderMeasurements()).toContain(readMeasurementSnapshot().report.generated);
+  });
+
+  it("names the snapshot it rendered from, and how that snapshot is refreshed", () => {
+    // A number whose input is not named is a number nobody can recompute — and
+    // the refresh sentence is what keeps a reader from reading a frozen page as
+    // a live one.
+    const snapshot = readMeasurementSnapshot();
+    const page = renderMeasurements();
+    expect(snapshot.path.startsWith(`${SNAPSHOT_DIR}/`)).toBe(true);
+    expect(page).toContain(`[\`${snapshot.path}\`](../${snapshot.path})`);
+    expect(page).toContain(SNAPSHOT_REFRESH_COMMAND);
+    expect(page).toContain(
+      "run record written after it is not on this page until the next refresh",
+    );
   });
 
   it("names its own regeneration command in the page banner", () => {
@@ -292,53 +310,38 @@ describe("the restated figures are held to the artifacts they come from", () => 
   });
 });
 
-describe("computeMergeReadyRate over this repository", () => {
-  it("lists every run directory exactly once across the three lists", () => {
-    const runs = listed(measured());
+describe("the committed snapshot the page renders from", () => {
+  it("parses, and states a rate that matches the lists it carries", () => {
+    const { path, report } = readMeasurementSnapshot();
+    expect(path).toMatch(/^evals\/measurements\/merge-ready-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(report.rule).toBe(MERGE_READY_RULE);
+    expect(report.rate.n).toBe(report.numerator.length);
+    expect(report.rate.d).toBe(report.numerator.length + report.denominator.length);
+    expect(report.rate.value).toBe(Number((report.rate.n / report.rate.d).toFixed(3)));
+    expect(report.rate.d, "a rate over an empty denominator states nothing").toBeGreaterThan(0);
+  });
+
+  it("records what it was computed from, so a stale snapshot can be told from a current one", () => {
+    const { report } = readMeasurementSnapshot();
+    expect(report.computedFrom.records).toBeGreaterThan(10);
+    expect(report.computedFrom.newestRecordDate).toBe(report.generated);
+    expect(report.computedFrom.changelogHead).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(
+      readFileSync(join(REPO_ROOT, "CHANGELOG.md"), "utf-8"),
+      "the changelog no longer carries the head the snapshot recorded",
+    ).toContain(`## [${report.computedFrom.changelogHead}]`);
+  });
+
+  it("names a run only once across its three lists, and gives each a reason", () => {
+    const { report } = readMeasurementSnapshot();
+    const runs = listed(report);
     expect(new Set(runs).size, "a run appears in two lists").toBe(runs.length);
-    expect(runs.length).toBeGreaterThan(10);
-
-    // Against the directory, not against a literal: the measure covers every run
-    // on disk or it is a rate over a subset nobody declared.
-    const onDisk = readdirSync(join(REPO_ROOT, RUNS_DIR), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-    expect(onDisk.length, "the runs directory walk found almost nothing").toBeGreaterThan(10);
-    for (const run of onDisk) {
-      expect(runs, `${run} is measured by nothing`).toContain(run);
-    }
-  });
-
-  it("states the rate over the numerator and denominator lists it publishes", () => {
-    expect(measured().rule).toBe(MERGE_READY_RULE);
-    expect(measured().rate.n).toBe(measured().numerator.length);
-    expect(measured().rate.d).toBe(measured().numerator.length + measured().denominator.length);
-    expect(measured().rate.value).toBe(Number((measured().rate.n / measured().rate.d).toFixed(3)));
-  });
-
-  it("gives every excluded and denominated run exactly one stated reason", () => {
-    for (const entry of [...measured().excluded, ...measured().denominator]) {
+    const setAside: readonly ExcludedRun[] = [...report.excluded, ...report.denominator];
+    for (const entry of setAside) {
       expect(entry.reason.trim().length, `${entry.run} is set aside for no reason`).toBeGreaterThan(
         5,
       );
     }
-  });
-
-  it("stamps the report with the newest date a record carries, not the newest directory", () => {
-    // The two differ today, which is the point: the newest run directories hold a
-    // plan and a handoff and no record, and a page stamped from a directory that
-    // proves nothing claims currency it does not have.
-    const withoutRecord = new Set(
-      measured().excluded.filter((entry) => entry.reason === "no record").map((entry) => entry.run),
-    );
-    expect(withoutRecord.size).toBeGreaterThan(0);
-    expect(idsOf(measured().excluded)).toEqual([...idsOf(measured().excluded)].toSorted());
-    const dated = listed(measured())
-      .filter((run) => !withoutRecord.has(run))
-      .map((run) => /^(\d{4}-\d{2}-\d{2})_/.exec(run)?.[1] ?? "")
-      .filter((date) => date !== "");
-    expect(measured().generated).toBe(dated.toSorted().at(-1));
-    expect(listed(measured()).toSorted().at(-1)?.startsWith(measured().generated)).toBe(false);
   });
 });
 
@@ -507,6 +510,33 @@ describe("the rule, exercised against fixture trees", () => {
     expect(evidenceFor(report.numerator, "2026-01-03_unreleased")).toBe(MERGE_EVIDENCE_NONE);
   });
 
+  it("excludes a run whose record says it is still in progress", () => {
+    // A record is written THROUGHOUT its run. Reading an open one would put work
+    // that has not finished into the denominator and stamp the page with a date
+    // the run had not reached — which is exactly what happens on a branch where
+    // tonight's run is writing its record while this page is byte-compared.
+    const open = [
+      "# A run",
+      "",
+      "Status: in progress — closed after the release freeze.",
+      "",
+      record({}),
+    ].join("\n");
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-09_open-run": { "record.md": open, "ledger.jsonl": CLOSED_LEDGER },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(report.excluded).toEqual([{ run: "2026-01-09_open-run", reason: "run in progress" }]);
+    expect(report.numerator.map((entry) => entry.run)).toEqual(["2026-01-02_release-2.0.0"]);
+    // The open run's date never becomes the page's stamp, even though it is the
+    // newest record on disk and its directory sorts last.
+    expect(report.generated).toBe("2026-01-02");
+    expect(report.computedFrom.records).toBe(2);
+  });
+
   it("excludes a run with no record and one with no proof block, by name", () => {
     const root = fixture({
       "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
@@ -547,6 +577,92 @@ describe("the rule, exercised against fixture trees", () => {
     writeFileSync(join(empty, "CHANGELOG.md"), "# Changelog\n");
     expect(() => computeMergeReadyRate(empty)).toThrow(/carries the proof block/);
     rmSync(empty, { recursive: true, force: true });
+  });
+});
+
+describe("the snapshot seam", () => {
+  it("freezes the live computation and reads it back byte-for-byte", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-03_red-gate": {
+        "record.md": record({ gates: "| Final | pass | pass | 1 failed of 120 |" }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+    });
+    const path = writeMeasurementSnapshot(root, "2026-02-01");
+    const snapshot = readMeasurementSnapshot(root);
+
+    expect(path).toBe(`${SNAPSHOT_DIR}/merge-ready-2026-02-01.json`);
+    expect(snapshot.path).toBe(path);
+    expect(snapshot.report).toEqual(computeMergeReadyRate(root));
+    expect(snapshot.report.rate).toEqual({ n: 1, d: 2, value: 0.5 });
+    expect(readFileSync(join(root, path), "utf-8").endsWith("\n")).toBe(true);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("refuses to overwrite a snapshot, and refuses a filename that is not a date", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    writeMeasurementSnapshot(root, "2026-02-01");
+
+    // A snapshot is the input a published number was computed from; rewriting one
+    // erases the record of what the page said.
+    expect(() => writeMeasurementSnapshot(root, "2026-02-01")).toThrow(EngineError);
+    expect(() => writeMeasurementSnapshot(root, "2026-02-01")).toThrow(/never rewritten in place/);
+    expect(() => writeMeasurementSnapshot(root, "yesterday")).toThrow(/dated YYYY-MM-DD/);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("reads the newest snapshot by filename date, not by write order", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    // Written newest-first on purpose: mtime order and filename order disagree
+    // here, and a checkout's timestamps are not committed.
+    writeMeasurementSnapshot(root, "2026-03-09");
+    writeMeasurementSnapshot(root, "2026-02-01");
+    expect(readMeasurementSnapshot(root).path).toBe(
+      `${SNAPSHOT_DIR}/merge-ready-2026-03-09.json`,
+    );
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("renders the page from the snapshot, not from the records beside it", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    writeMeasurementSnapshot(root, "2026-02-01");
+    // A second run lands AFTER the snapshot — the case the seam exists for.
+    const later = join(root, RUNS_DIR, "2026-02-14_later-run");
+    mkdirSync(later, { recursive: true });
+    writeFileSync(join(later, "record.md"), record({}));
+    writeFileSync(join(later, "ledger.jsonl"), CLOSED_LEDGER);
+
+    // The reach snapshot is read from the real tree, so render against a root
+    // that carries both: copy the committed reach artifact into the fixture.
+    mkdirSync(dirname(join(root, REACH_SNAPSHOT_PATH)), { recursive: true });
+    writeFileSync(
+      join(root, REACH_SNAPSHOT_PATH),
+      readFileSync(join(REPO_ROOT, REACH_SNAPSHOT_PATH), "utf-8"),
+    );
+
+    const page = renderMeasurements(root);
+    expect(computeMergeReadyRate(root).rate.d, "the live tree moved, as the case intends").toBe(2);
+    expect(page).toContain("**1 of 1 runs** (1.000)");
+    expect(page).not.toContain("2026-02-14_later-run");
+    expect(page).toContain("merge-ready-2026-02-01.json");
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("refuses to render a page when no snapshot is committed", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    expect(() => readMeasurementSnapshot(root)).toThrow(EngineError);
+    expect(() => renderMeasurements(root)).toThrow(/No measurement snapshot/);
+    expect(() => renderMeasurements(root)).toThrow(new RegExp(SNAPSHOT_REFRESH_COMMAND));
+    rmSync(root, { recursive: true, force: true });
   });
 });
 
