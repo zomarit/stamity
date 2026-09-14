@@ -9,12 +9,14 @@
  * byte-identical across every project so drift detection compares like with
  * like.
  *
- * Two token families, two entry points, because they resolve from different
- * inputs: repo facts — detection lists plus the maturity dial — come off the
- * persisted manifest ({@link substituteRepoTokens}), while verification-gate
+ * Three token families, three entry points, because they resolve from
+ * different inputs: repo facts — detection lists plus the maturity dial — come
+ * off the persisted manifest ({@link substituteRepoTokens}); verification-gate
  * commands are resolved upstream from the project's language and package
  * manager and arrive here already computed
- * ({@link substituteVerificationGateTokens}).
+ * ({@link substituteVerificationGateTokens}); and the invariants version comes
+ * off the charter's own frontmatter, so only that one artifact can resolve it
+ * ({@link substituteCharterTokens}).
  *
  * Unresolved values never leave a raw token in the output — an empty
  * detection list renders {@link DETECTION_UNKNOWN}, which generated content
@@ -64,6 +66,19 @@ export const VERIFY_GATE_TYPECHECK_TOKEN = "${STAMITY:VERIFY_GATE_TYPECHECK}";
 export const VERIFY_GATE_ALL_TOKEN = "${STAMITY:VERIFY_GATE_ALL}";
 
 /**
+ * Resolves to the charter's invariants version, rendered with the dates it was
+ * ratified and last amended ({@link substituteCharterTokens}).
+ *
+ * A third family, and its own pass, because its input is neither a detection
+ * fact nor a resolved gate command: it comes off the charter's OWN frontmatter,
+ * so only the one artifact that declares those keys can resolve it. Emission
+ * runs this pass on the charter body alone — a rule or skill body carrying the
+ * token would leave it standing, which is the visible failure the module's
+ * unknown-token policy is built for.
+ */
+export const INVARIANTS_VERSION_TOKEN = "${STAMITY:INVARIANTS_VERSION}";
+
+/**
  * Every token the emission layer resolves. Validators and content-authoring
  * gates read the wire format from here rather than restating the literals; a
  * token absent from this list is unwired by definition.
@@ -77,6 +92,7 @@ export const REPO_SUBSTITUTION_TOKENS: readonly string[] = [
   VERIFY_GATE_LINT_TOKEN,
   VERIFY_GATE_TYPECHECK_TOKEN,
   VERIFY_GATE_ALL_TOKEN,
+  INVARIANTS_VERSION_TOKEN,
 ];
 
 /** Detection facts that feed {@link substituteRepoTokens}. */
@@ -91,6 +107,22 @@ export interface DetectedRepoContext {
    * {@link DEFAULT_MATURITY_TIER}.
    */
   maturityTier?: MaturityTier;
+}
+
+/**
+ * The charter's declared invariants version, as {@link substituteCharterTokens}
+ * reads it. Declared here rather than beside the charter loader because this
+ * module is below it: a pass owns the shape of its own input, the way
+ * {@link DetectedRepoContext} and {@link VerificationGateSet} do, and the loader
+ * validates the frontmatter into this shape on the way up.
+ */
+export interface CharterInvariants {
+  /** Semver, `MAJOR.MINOR.PATCH` — the ratified version of the invariants text. */
+  version: string;
+  /** ISO date the versioned block was first ratified. */
+  ratified: string;
+  /** ISO date of the most recent amendment; never earlier than {@link ratified}. */
+  amended: string;
 }
 
 /** Resolved verification commands that feed {@link substituteVerificationGateTokens}. */
@@ -196,5 +228,30 @@ export function substituteVerificationGateTokens(
       [VERIFY_GATE_TYPECHECK_TOKEN, gates.typecheck],
       [VERIFY_GATE_ALL_TOKEN, gates.all],
     ]),
+  );
+}
+
+/**
+ * The rendered value of {@link INVARIANTS_VERSION_TOKEN}: the version and both
+ * dates on one line, because the template spends one always-on line on it and
+ * a reader who sees only a bare semver cannot tell a fresh ratification from a
+ * block amended three times since.
+ */
+export function renderInvariantsVersion(invariants: CharterInvariants): string {
+  return `${invariants.version} · ratified ${invariants.ratified} · last amended ${invariants.amended}`;
+}
+
+/**
+ * Resolve the charter-only tokens in `content`. Composes in any order with the
+ * other two passes — the three token sets are disjoint — and is a no-op on a
+ * body that carries none, which is every body but the charter's.
+ */
+export function substituteCharterTokens(
+  content: string,
+  invariants: CharterInvariants,
+): string {
+  return substituteTokens(
+    content,
+    new Map([[INVARIANTS_VERSION_TOKEN, renderInvariantsVersion(invariants)]]),
   );
 }

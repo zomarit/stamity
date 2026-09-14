@@ -4,6 +4,8 @@ import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
+import { readCharterTemplate } from "../../content/charter.ts";
+import { renderInvariantsVersion } from "../../emit/substitution.ts";
 import {
   extractManagedBlock,
   hasManagedBlock,
@@ -30,7 +32,7 @@ import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts"
  *
  * Three parts, one exit code:
  *
- * 1. **DOCTOR** — ten environment and state probes, each a
+ * 1. **DOCTOR** — eleven environment and state probes, each a
  *    {@link DoctorCheck} row. Every probe is total: it answers, or it warns
  *    about why it could not, but it never takes the command down with it.
  * 2. **DRIFT** — {@link runDriftGate} runs the sync engine's read-only PLAN
@@ -625,6 +627,30 @@ async function checkPackIntegrity(
 }
 
 /**
+ * Which version of the floor invariants this install's corpus carries.
+ *
+ * A `pass` row with no failing case of its own: the values are validated at
+ * load ({@link readCharterTemplate}), so an unreadable or malformed charter
+ * cannot reach here as a wrong version — it arrives as a throw, which
+ * {@link guarded} turns into a `warn` naming the key. What the row buys is
+ * ATTRIBUTION: the emitted always-on file states a version, and an operator
+ * comparing two repos needs one command that says which version the installed
+ * engine would render, without opening the generated file and trusting it.
+ */
+async function checkInvariants(): Promise<DoctorCheck> {
+  const id = "invariants";
+  const charter = await readCharterTemplate();
+  if (charter.invariants === null) {
+    return {
+      id,
+      status: "warn",
+      detail: "the installed charter declares no `invariants_version`; it predates versioning",
+    };
+  }
+  return { id, status: "pass", detail: `invariants ${renderInvariantsVersion(charter.invariants)}` };
+}
+
+/**
  * Every doctor probe, in report order.
  *
  * The manifest is read once, up front, because five probes are conditioned on
@@ -644,7 +670,7 @@ export async function runDoctor(
   const state = await readManifestState(rootDir, engine);
   const { manifest } = state;
 
-  const [range, learnings, tmpHygiene, envMcp, preservedDuplicate, packIntegrity] =
+  const [range, learnings, tmpHygiene, envMcp, preservedDuplicate, packIntegrity, invariants] =
     await Promise.all([
       requiredNodeRange(),
       guarded("learnings", () => checkLearnings(rootDir, engine, manifest)),
@@ -652,6 +678,7 @@ export async function runDoctor(
       guarded("env-mcp", () => checkEnvMcp(rootDir, engine, manifest)),
       guarded("preserved-duplicate", () => checkPreservedDuplicate(rootDir, manifest)),
       guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
+      guarded("invariants", checkInvariants),
     ]);
 
   return [
@@ -665,6 +692,10 @@ export async function runDoctor(
     checkToolTraces(manifest),
     preservedDuplicate,
     packIntegrity,
+    // Last, and read off the installed corpus rather than the repo: every row
+    // above answers about THIS repository's state, and this one answers about
+    // the engine's own content — the version of the floors a sync would write.
+    invariants,
   ];
 }
 

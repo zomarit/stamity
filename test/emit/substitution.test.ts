@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CI_PROVIDER_TOKEN,
   DETECTION_UNKNOWN,
+  INVARIANTS_VERSION_TOKEN,
   LINTER_TOKEN,
   MATURITY_TIER_TOKEN,
   REPO_SUBSTITUTION_TOKENS,
@@ -12,8 +13,11 @@ import {
   VERIFY_GATE_TYPECHECK_TOKEN,
   detectionContextFromManifest,
   renderDetectionList,
+  renderInvariantsVersion,
+  substituteCharterTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
+  type CharterInvariants,
   type DetectedRepoContext,
   type VerificationGateSet,
 } from "../../src/emit/substitution.ts";
@@ -287,6 +291,14 @@ describe("token enumeration drift guard", () => {
   // the charter's maturity line is tokenised instead of hard-coding "solo"
   // while the manifest dial is live. The guard grows with the set it guards;
   // no prior token changed.
+  //
+  // TEST CHANGE, justified (2026-09-15): INVARIANTS_VERSION_TOKEN joined the
+  // same set, and with it a THIRD resolving pass. The charter's invariants
+  // version is declared by the charter's own frontmatter, so it resolves from
+  // neither detection nor gates — the wiring case below therefore composes all
+  // three passes instead of two. Nothing was loosened: the same "every
+  // enumerated token resolves" claim now has one more token and one more pass
+  // to satisfy it with, and both count literals moved 8 -> 9 rather than away.
   const EXPECTED = [
     LINTER_TOKEN,
     TEST_FRAMEWORK_TOKEN,
@@ -296,17 +308,26 @@ describe("token enumeration drift guard", () => {
     VERIFY_GATE_LINT_TOKEN,
     VERIFY_GATE_TYPECHECK_TOKEN,
     VERIFY_GATE_ALL_TOKEN,
+    INVARIANTS_VERSION_TOKEN,
   ];
 
-  it("enumerates exactly the eight exported tokens, without duplicates", () => {
+  const INVARIANTS: CharterInvariants = {
+    version: "2.3.4",
+    ratified: "2026-01-02",
+    amended: "2026-03-04",
+  };
+
+  it("enumerates exactly the nine exported tokens, without duplicates", () => {
     expect(REPO_SUBSTITUTION_TOKENS).toEqual(EXPECTED);
-    expect(new Set(REPO_SUBSTITUTION_TOKENS).size).toBe(8);
+    expect(new Set(REPO_SUBSTITUTION_TOKENS).size).toBe(9);
   });
 
   it("pins the wire format of every token", () => {
     expect([...REPO_SUBSTITUTION_TOKENS].toSorted()).toEqual(
       [
         "${STAMITY:CI_PROVIDER}",
+        // Justified extension: wire format of the new invariants token.
+        "${STAMITY:INVARIANTS_VERSION}",
         "${STAMITY:LINTER}",
         // Justified extension: wire format of the new maturity token.
         "${STAMITY:MATURITY_TIER}",
@@ -329,11 +350,47 @@ describe("token enumeration drift guard", () => {
     });
 
     for (const token of REPO_SUBSTITUTION_TOKENS) {
-      const resolved = substituteVerificationGateTokens(
-        substituteRepoTokens(`prefix ${token} suffix`, detection),
-        gates(),
+      const resolved = substituteCharterTokens(
+        substituteVerificationGateTokens(
+          substituteRepoTokens(`prefix ${token} suffix`, detection),
+          gates(),
+        ),
+        INVARIANTS,
       );
       expect(resolved, token).not.toContain(token);
     }
+  });
+
+  it("renders the invariants version as one line carrying both dates", () => {
+    const rendered = substituteCharterTokens(
+      `Invariants version ${INVARIANTS_VERSION_TOKEN}`,
+      INVARIANTS,
+    );
+
+    expect(rendered).toBe(
+      "Invariants version 2.3.4 · ratified 2026-01-02 · last amended 2026-03-04",
+    );
+    expect(renderInvariantsVersion(INVARIANTS)).toBe(
+      "2.3.4 · ratified 2026-01-02 · last amended 2026-03-04",
+    );
+  });
+
+  it("leaves the other two families alone, so the three passes compose in any order", () => {
+    const document = `${LINTER_TOKEN} ${VERIFY_GATE_TEST_TOKEN} ${INVARIANTS_VERSION_TOKEN}`;
+
+    // The charter pass resolves exactly one of the three...
+    const charterOnly = substituteCharterTokens(document, INVARIANTS);
+    expect(charterOnly).toContain(LINTER_TOKEN);
+    expect(charterOnly).toContain(VERIFY_GATE_TEST_TOKEN);
+    expect(charterOnly).not.toContain(INVARIANTS_VERSION_TOKEN);
+
+    // ...and the other two leave the charter token standing, which is what a
+    // rule or skill body would carry if it ever grew one: visible, not silent.
+    const others = substituteVerificationGateTokens(
+      substituteRepoTokens(document, ctx({ linters: ["eslint"] })),
+      gates(),
+    );
+    expect(others).toContain(INVARIANTS_VERSION_TOKEN);
+    expect(others).toContain("eslint");
   });
 });

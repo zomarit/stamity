@@ -3588,6 +3588,7 @@ Run before declaring any change done.
 - Full gate: \`npx tsc --noEmit && npx eslint . && npx vitest run\`
 
 ## Invariants
+Invariants version 4.5.6 · ratified 2026-02-03 · last amended 2026-04-05
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -3621,8 +3622,7 @@ Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client
 surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
 so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
 
-- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`;
-  greenfield and brownfield auto-detected.
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
 - \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
 - \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
@@ -3634,18 +3634,18 @@ so this index is all that ships — ask there for the outcome in plain words and
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather
-  than a count kept here, because selection and installed packs both change what landed.
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
+  here, because selection and installed packs both change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
-  client with no glob-rule layer, where it is inlined into the always-on file of the directory
-  those globs anchor to. A description-scoped rule declares no globs, so what it costs depends on
-  the client: one that supports description-pull loads it on relevance, and one that does not
-  loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs
-  here, not in a rule that three clients out of four would have to load unconditionally to honour.
-- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native
-  copy where the client reads its own location. Named invocation beats waiting for a trigger match —
-  call a skill whenever its description fits the job.
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
+  to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
+  supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
+  that three clients out of four would have to load unconditionally to honour.
+- A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
+  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
+  description fits the job.
 "
 `;
 

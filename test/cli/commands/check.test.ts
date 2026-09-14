@@ -65,6 +65,13 @@ const CHARTER_FIXTURE = [
   "tags: [orchestration]",
   "load: always",
   "obsolete_when: fixture trigger",
+  // The doctor's `invariants` row reads these three off the installed corpus,
+  // which the content-root seam points at this fixture. Deliberately NOT the
+  // shipped charter's values: a row that repeated the real version would pass
+  // against a hard-coded string as readily as against a real read.
+  "invariants_version: 4.5.6",
+  "invariants_ratified: 2026-02-03",
+  "invariants_amended: 2026-04-05",
   "---",
   "",
   "# Test Charter",
@@ -72,6 +79,11 @@ const CHARTER_FIXTURE = [
   "Charter guidance body.",
   "",
 ].join("\n");
+
+/** The same fixture with no version at all — a template that predates versioning. */
+const UNVERSIONED_CHARTER_FIXTURE = CHARTER_FIXTURE.split("\n")
+  .filter((line) => !line.startsWith("invariants_"))
+  .join("\n");
 
 interface DriftDoc {
   clean: boolean;
@@ -278,7 +290,7 @@ describe("check — a healthy repository", () => {
     expect(result.stderr).toBe("");
   });
 
-  it("returns the ten doctor rows in a fixed order", async () => {
+  it("returns the eleven doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root }));
@@ -288,6 +300,13 @@ describe("check — a healthy repository", () => {
     // sits beside `tool-traces` because both answer off the ledger, and
     // `pack-integrity` stays last — it is the row whose cost scales with what
     // the repo installed, and reading order puts the environment probes first.
+    //
+    // TEST CHANGE, justified (2026-09-15): `invariants` appended, after
+    // `pack-integrity` rather than beside it. Every row above answers about
+    // THIS repository's state; this one answers about the installed corpus —
+    // which version of the floor invariants a sync would write. The pin is a
+    // literal array, so it moves with the surface it guards rather than
+    // silently agreeing with a shorter one.
     expect(doctor.map((entry) => entry.id)).toEqual([
       "node-version",
       "git-available",
@@ -299,7 +318,36 @@ describe("check — a healthy repository", () => {
       "tool-traces",
       "preserved-duplicate",
       "pack-integrity",
+      "invariants",
     ]);
+  });
+
+  it("reports the installed charter's invariants version, read rather than restated", async () => {
+    const root = await seedRepo(getRepo());
+
+    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root }));
+    const invariantsRow = doctor.find((entry) => entry.id === "invariants");
+
+    // The fixture's own values, not the shipped charter's: the row is a read.
+    expect(invariantsRow).toEqual({
+      id: "invariants",
+      status: "pass",
+      detail: "invariants 4.5.6 · ratified 2026-02-03 · last amended 2026-04-05",
+    });
+  });
+
+  it("warns, rather than failing, when the installed charter predates versioning", async () => {
+    const repo = getRepo();
+    const root = await seedRepo(repo);
+    await repo.seedFiles({ "corpus/charter/stamity-charter.md": UNVERSIONED_CHARTER_FIXTURE });
+
+    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root }));
+    const invariantsRow = doctor.find((entry) => entry.id === "invariants");
+
+    expect(invariantsRow?.status).toBe("warn");
+    expect(invariantsRow?.detail).toContain("invariants_version");
+    // A warn alone does not take the command down: the exit rule is fails only.
+    expect(doctor.filter((entry) => entry.status === "fail")).toEqual([]);
   });
 
   it("notes engine-version skew on the manifest row without failing it", async () => {

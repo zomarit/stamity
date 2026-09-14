@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CHARTER_MAX_LINES,
   CHARTER_RELATIVE_PATH,
+  type CharterTemplate,
   readCharterTemplate,
 } from "../../src/content/charter.ts";
 import {
@@ -17,8 +18,10 @@ import { scanAntiSlop, scanForDeniedPatterns } from "../../src/denyscan/denyScan
 import {
   DETECTION_UNKNOWN,
   REPO_SUBSTITUTION_TOKENS,
+  substituteCharterTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
+  type CharterInvariants,
 } from "../../src/emit/substitution.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -75,11 +78,28 @@ function sectionOf(body: string, heading: string): string {
 
 /**
  * A syntactically valid charter fixture with an exact physical line count.
- * The head is 8 lines, so `totalLines` also fixes the body's share — which is
- * what the over-cap case exploits: at 151 total the body alone is 143 lines,
+ * The head is 11 lines, so `totalLines` also fixes the body's share — which is
+ * what the over-cap case exploits: at 151 total the body alone is 140 lines,
  * under the cap, proving the budget binds the physical file, not the body.
+ *
+ * TEST CHANGE, justified (2026-09-15): the head grew the three invariants keys,
+ * because a charter that declares any one of them must declare all three and
+ * must carry them well-formed — that refusal is the behaviour under test in the
+ * cases below, and a fixture carrying a partial head would turn every unrelated
+ * case in this file into an assertion about the new keys. `overrides` sets one
+ * key to a bad value, or to `null` to drop it, while the rest stay valid.
  */
-function charterFixture(totalLines: number, marker = "fixture body"): string {
+function charterFixture(
+  totalLines: number,
+  marker = "fixture body",
+  overrides: Record<string, string | null> = {},
+): string {
+  const invariants: Record<string, string | null> = {
+    invariants_version: "1.0.0",
+    invariants_ratified: "2026-08-31",
+    invariants_amended: "2026-09-13",
+    ...overrides,
+  };
   const head = [
     "---",
     "id: charter",
@@ -88,12 +108,31 @@ function charterFixture(totalLines: number, marker = "fixture body"): string {
     "tags: [orchestration]",
     "load: always",
     "obsolete_when: fixture trigger",
+    ...Object.entries(invariants)
+      .filter(([, value]) => value !== null)
+      .map(([key, value]) => `${key}: ${value}`),
     "---",
   ];
   const bodyLines = totalLines - head.length;
   if (bodyLines < 1) throw new Error(`charterFixture: ${totalLines} leaves no room for a body`);
   const body = Array.from({ length: bodyLines }, (_, i) => `${marker} line ${i + 1}`);
   return `${[...head, ...body].join("\n")}\n`;
+}
+
+/**
+ * The shipped charter's invariants, proven present. `null` is reserved for a
+ * template that predates versioning; the SHIPPED one is versioned, so reading
+ * it as null here is the regression rather than a case to handle.
+ */
+function shippedInvariants(charter: CharterTemplate): CharterInvariants {
+  const { invariants } = charter;
+  if (invariants === null) {
+    throw new Error(
+      "the shipped charter declares no invariants version — both the frontmatter keys and " +
+        "`${STAMITY:INVARIANTS_VERSION}` have left the template",
+    );
+  }
+  return invariants;
 }
 
 async function captureRejection(promise: Promise<unknown>): Promise<EngineError> {
@@ -146,20 +185,69 @@ describe("corpus charter", () => {
     expect(body.split("${STAMITY:").length - 1).toBe(tokens.length);
   });
 
-  it("exercises all seven wired tokens, and full substitution leaves none behind", async () => {
-    const { body } = await readCharterTemplate(CORPUS_ROOT);
+  it("exercises all nine wired tokens, and full substitution leaves none behind", async () => {
+    // TEST CHANGE, justified (2026-09-15): the charter gained a ninth token,
+    // `${STAMITY:INVARIANTS_VERSION}`, and it resolves from the charter's OWN
+    // frontmatter rather than from detection or gates — so the render below
+    // composes the third pass as emission does. The claim is unchanged and the
+    // coverage is strictly wider: every wired token appears in this body, and a
+    // full render leaves no token behind.
+    const charter = await readCharterTemplate(CORPUS_ROOT);
+    const { body } = charter;
+    const invariants = shippedInvariants(charter);
 
     for (const token of REPO_SUBSTITUTION_TOKENS) {
       expect(body).toContain(token);
     }
 
     const rendered = substituteVerificationGateTokens(
-      substituteRepoTokens(body, { linters: ["eslint"], testFrameworks: ["vitest"], ciProviders: ["gha"] }),
+      substituteRepoTokens(substituteCharterTokens(body, invariants), {
+        linters: ["eslint"],
+        testFrameworks: ["vitest"],
+        ciProviders: ["gha"],
+      }),
       { test: "npm test", lint: "npm run lint", typecheck: "npm run typecheck", all: "npm run check" },
     );
     expect(rendered).not.toContain("${STAMITY:");
     expect(rendered).toContain("`npm test`");
     expect(rendered).toContain("Linter: eslint");
+    // The version line renders as one line under the heading it versions.
+    expect(rendered).toContain(
+      "## Invariants\nInvariants version 1.0.0 · ratified 2026-08-31 · last amended 2026-09-13\n",
+    );
+  });
+
+  it("states the ai-evals floor in exactly one physical line of the conditional layer", async () => {
+    const { body, lineCount } = await readCharterTemplate(CORPUS_ROOT);
+    const conditional = sectionOf(body, "Conditional layer");
+
+    // One line, not a paragraph: the floor is stated where a session already
+    // pays for the always-on file, so its cost is one line or it belongs in the
+    // `ai-evals` rule that carries the procedure.
+    const floorLines = conditional
+      .split("\n")
+      .filter((line) => /golden-and-adversarial eval set/.test(line));
+    expect(floorLines).toHaveLength(1);
+    expect(floorLines[0]).toMatch(/^- A model-backed feature ships with a versioned /);
+    expect(floorLines[0]).toMatch(/thresholds declared before the run\.$/);
+    // And the whole body carries it once — not restated in another section.
+    expect(body.split("golden-and-adversarial eval set").length - 1).toBe(1);
+    expect(lineCount).toBeLessThanOrEqual(CHARTER_MAX_LINES);
+  });
+
+  it("declares the three invariants keys, read typed off the frontmatter", async () => {
+    const charter = await readCharterTemplate(CORPUS_ROOT);
+    const invariants = shippedInvariants(charter);
+
+    expect(invariants).toEqual({
+      version: "1.0.0",
+      ratified: "2026-08-31",
+      amended: "2026-09-13",
+    });
+    // The typed read and the raw map agree — no second spelling of the keys.
+    expect(charter.frontmatter["invariants_version"]).toBe(invariants.version);
+    expect(charter.frontmatter["invariants_ratified"]).toBe(invariants.ratified);
+    expect(charter.frontmatter["invariants_amended"]).toBe(invariants.amended);
   });
 
   it("renders sensibly when detection resolved to nothing", async () => {
@@ -398,7 +486,7 @@ describe("readCharterTemplate", () => {
 
   it("throws VALIDATION_ERROR naming the cap for an over-cap file — physical lines, not body lines", async () => {
     const temp = getTemp();
-    // 151 physical lines total; the body alone is 143 (< 150). Only whole-file
+    // 151 physical lines total; the body alone is 140 (< 150). Only whole-file
     // counting rejects this fixture — body-only counting would accept it.
     await temp.seedFiles({ [CHARTER_RELATIVE_PATH]: charterFixture(CHARTER_MAX_LINES + 1) });
 
@@ -418,6 +506,111 @@ describe("readCharterTemplate", () => {
 
     expect(charter.lineCount).toBe(CHARTER_MAX_LINES);
     expect(charter.frontmatter["load"]).toBe("always");
+  });
+
+  it.each(["invariants_version", "invariants_ratified", "invariants_amended"])(
+    "refuses a charter that declares no %s, naming the key",
+    async (key) => {
+      const temp = getTemp();
+      // The template still carries the token that key resolves, so the
+      // alternative to refusing is emitting a broken template variable into
+      // every client's always-on file.
+      await temp.seedFiles({
+        [CHARTER_RELATIVE_PATH]: charterFixture(20, "fixture body", { [key]: null }),
+      });
+
+      const error = await captureRejection(readCharterTemplate(temp.dir));
+
+      expect(error.code).toBe("VALIDATION_ERROR");
+      expect(error.message).toContain(key);
+      expect(error.message).toContain(join(temp.dir, "charter", "stamity-charter.md"));
+    },
+  );
+
+  it.each([
+    ["invariants_version", "1.0"],
+    ["invariants_version", "v1.0.0"],
+    ["invariants_ratified", "31-08-2026"],
+    ["invariants_amended", "2026-9-13"],
+  ])("refuses a malformed %s (%s)", async (key, value) => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      [CHARTER_RELATIVE_PATH]: charterFixture(20, "fixture body", { [key]: value }),
+    });
+
+    const error = await captureRejection(readCharterTemplate(temp.dir));
+
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain(key);
+  });
+
+  it("refuses an amendment dated before the ratification it amends", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      [CHARTER_RELATIVE_PATH]: charterFixture(20, "fixture body", {
+        invariants_ratified: "2026-08-31",
+        invariants_amended: "2026-08-30",
+      }),
+    });
+
+    const error = await captureRejection(readCharterTemplate(temp.dir));
+
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain("invariants_amended");
+    expect(error.message).toContain("2026-08-30");
+    expect(error.message).toContain("2026-08-31");
+  });
+
+  it("refuses a body that asks for a version its head does not declare", async () => {
+    const temp = getTemp();
+    // The pair that would otherwise emit `${STAMITY:INVARIANTS_VERSION}` raw
+    // into every client's always-on file.
+    const withToken = charterFixture(20, "Invariants version ${STAMITY:INVARIANTS_VERSION}", {
+      invariants_version: null,
+      invariants_ratified: null,
+      invariants_amended: null,
+    });
+    await temp.seedFiles({ [CHARTER_RELATIVE_PATH]: withToken });
+
+    const error = await captureRejection(readCharterTemplate(temp.dir));
+
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain("invariants_version");
+  });
+
+  it("loads a template that predates versioning — no keys, no token — as unversioned", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      [CHARTER_RELATIVE_PATH]: charterFixture(20, "fixture body", {
+        invariants_version: null,
+        invariants_ratified: null,
+        invariants_amended: null,
+      }),
+    });
+
+    const charter = await readCharterTemplate(temp.dir);
+
+    expect(charter.invariants).toBeNull();
+    expect(charter.body).not.toContain("${STAMITY:INVARIANTS_VERSION}");
+  });
+
+  it("accepts an amendment on the ratification date itself", async () => {
+    const temp = getTemp();
+    // The boundary the comparison is written against: equal is not earlier.
+    await temp.seedFiles({
+      [CHARTER_RELATIVE_PATH]: charterFixture(20, "fixture body", {
+        invariants_ratified: "2026-08-31",
+        invariants_amended: "2026-08-31",
+      }),
+    });
+
+    const charter = await readCharterTemplate(temp.dir);
+
+    expect(charter.invariants).toEqual({
+      version: "1.0.0",
+      ratified: "2026-08-31",
+      amended: "2026-08-31",
+    });
   });
 
   it("counts a final line without a trailing newline", async () => {

@@ -3,10 +3,11 @@ title: Doctrine
 ---
 
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit b801fe5. -->
-<!-- Re-open when: a pillar gains or loses a public enforcement surface, the root question's
-     three answers change, the always-on ceilings move, or the deferred with-versus-without
-     measurement lands. `test/docsPages.test.ts` holds this page to the hand-page contract;
-     `../src/content/charter.ts` owns the budgets and `../evals/runs/` owns what is red. -->
+<!-- Re-open when: an invariant's text changes, a pillar gains or loses a public enforcement
+     surface, the root question's three answers change, the always-on ceilings move, or the
+     deferred with-versus-without measurement lands. `test/docsPages.test.ts` holds this page to
+     the hand-page contract; `../src/content/charter.ts` owns the budgets and `../evals/runs/`
+     owns what is red. -->
 
 # Doctrine
 
@@ -142,3 +143,25 @@ is a floor that stopped binding. `ALWAYS_ON_BUDGET_LINES` in
 invariant suite measures the real load against them, and
 [the capability matrix](capability-matrix.md) carries the figures. Read those rather than a
 sentence here: they move, and only they are checked.
+
+## Amendments
+
+The charter's seven invariants carry a version, because a floor that can be reworded without a
+record is a floor nobody can cite. It moves under three rules: **MAJOR** is a backward-incompatible
+removal or redefinition of an invariant, **MINOR** is a new invariant or materially expanded
+guidance, **PATCH** is a clarification, a wording change, or a non-semantic refinement — and every
+amendment carries a sync-impact note, because the text is rendered into every generated repo's
+always-on file and a repo that does not re-sync keeps the old floor. [GOVERNANCE](../GOVERNANCE.md)
+states who bumps it and when; `test/content/invariantsVersion.test.ts` hashes the block and fails an
+edit that arrives without a bump and a row here.
+
+| Version | Date | Invariant(s) | Class | Sync impact |
+|---|---|---|---|---|
+| — (`c2489db`) | 2026-09-07 | 7 | MINOR-equivalent | handing the operator a line, diff or file body to paste is named as the same violation; recorded, no bump — versioning begins at 1.0.0 |
+| — (`5a49b93`) | 2026-09-07 | 1 | MINOR-equivalent | a hand-off framed so the operator can close without the floor is named as the relaxation; recorded, no bump — versioning begins at 1.0.0 |
+| — (`a9074f1`) | 2026-09-13 | 1, 7 | MINOR-equivalent | offering a subset, a lighter pass or a deferral is the same relaxation, and a refusal calls the act a protocol violation in those words; recorded, no bump — versioning begins at 1.0.0 |
+| — (`33e13a1`) | 2026-09-13 | 1 | MINOR-equivalent | the `Not done:` report is the whole exit — no context block, no closing summary beside it; recorded, no bump — versioning begins at 1.0.0 |
+| 1.0.0 | 2026-09-15 | all seven | ratification | the version line is rendered in every client's charter; hash pinned in `test/content/invariantsVersion.test.ts` |
+
+The block as ratified at 1.0.0 is the 2026-08-31 text plus the four amendments above; nothing was
+reworded to ratify it, which is why the first version records no diff of its own.

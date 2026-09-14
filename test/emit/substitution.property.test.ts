@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   CI_PROVIDER_TOKEN,
   DETECTION_UNKNOWN,
+  INVARIANTS_VERSION_TOKEN,
   LINTER_TOKEN,
   MATURITY_TIER_TOKEN,
   REPO_SUBSTITUTION_TOKENS,
@@ -12,8 +13,11 @@ import {
   VERIFY_GATE_TEST_TOKEN,
   VERIFY_GATE_TYPECHECK_TOKEN,
   renderDetectionList,
+  renderInvariantsVersion,
+  substituteCharterTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
+  type CharterInvariants,
   type DetectedRepoContext,
   type VerificationGateSet,
 } from "../../src/emit/substitution.ts";
@@ -146,12 +150,31 @@ const tokenFreeSegmentsArb = fc.array(
 
 const join = (segments: readonly string[]): string => segments.join("\n");
 
-/** Both passes, in emission order. */
+/**
+ * TEST CHANGE, justified (2026-09-15): the invariants version is a third token
+ * family with a third pass, so "a full render" is now three passes and this
+ * seam had to grow one. It is fixed rather than generated because the charter's
+ * frontmatter is the only source of these values — there is no arbitrary over
+ * them the way there is over detection lists and gate commands — and the
+ * property under test is structural: that the pass resolves its token whatever
+ * the surrounding document looks like.
+ */
+const INVARIANTS: CharterInvariants = {
+  version: "9.8.7",
+  ratified: "2026-01-02",
+  amended: "2026-03-04",
+};
+
+/** All three passes, in emission order. */
 const render = (
   document: string,
   ctx: DetectedRepoContext,
   gates: VerificationGateSet,
-): string => substituteVerificationGateTokens(substituteRepoTokens(document, ctx), gates);
+): string =>
+  substituteVerificationGateTokens(
+    substituteRepoTokens(substituteCharterTokens(document, INVARIANTS), ctx),
+    gates,
+  );
 
 /**
  * What each live token must resolve to, composed from the module's own public
@@ -172,6 +195,7 @@ function expectedValues(
     [VERIFY_GATE_LINT_TOKEN, gates.lint],
     [VERIFY_GATE_TYPECHECK_TOKEN, gates.typecheck],
     [VERIFY_GATE_ALL_TOKEN, gates.all],
+    [INVARIANTS_VERSION_TOKEN, renderInvariantsVersion(INVARIANTS)],
   ]);
 }
 

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { INVARIANTS_VERSION_TOKEN, type CharterInvariants } from "../emit/substitution.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { resolveBundledContentRoot } from "./contentRoot.ts";
@@ -127,13 +128,23 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // this client — which pays the charter alone — measures four lines lighter.
   // 93 -> 92 on 2026-09-12: the run-20 repairs rewrapped the opening and repo-facts
   // paragraphs to the same width and spent one of the two lines on invariant 1.
-  cursor: 92,
+  // 92 -> 95 on 2026-09-15, and UP, which this table otherwise never goes. Five
+  // lines land: three frontmatter keys (invariants_version/_ratified/_amended),
+  // the `Invariants version` line under the heading, and the ai-evals floor line
+  // in the conditional layer. Two are paid back by rewrapping the touchpoint
+  // index and the conditional layer at the file's own widest line — same words,
+  // fewer lines — and the remaining three are the frontmatter, which the
+  // accounting counts because a session loads the whole file. The alternative
+  // was to reword an invariant to buy the lines, which is the one edit the
+  // block's hash pin exists to make deliberate. Net +3 on every client below.
+  cursor: 95,
   // 240 -> 236 on 2026-09-12: same four charter lines. These two clients pay the
   // charter plus the two glob-less rules, and neither of those grew a line.
   // Held at 236 on 2026-09-12: the run-20 charter saving funds ai-evals' net +1,
   // so the measured load is unchanged.
-  claude: 236,
-  copilot: 236,
+  // 236 -> 239 on 2026-09-15: the charter's net +3 above, unchanged rules.
+  claude: 239,
+  copilot: 239,
   // 1065 -> 1063 on 2026-09-10: Package 10 removes repeated security-reporting
   // prose while preserving the rule floors and repaired behavior. This client
   // loads the whole rule set, so its measured reduction tightens the ratchet.
@@ -142,7 +153,9 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // measured load is unchanged and the ratchet has nothing to give back. Held
   // again for run 20: every rule repair was paid inside its own file by an
   // identical-words rewrap, and the charter's -1 funds ai-evals' +1.
-  codex: 1063,
+  // 1063 -> 1066 on 2026-09-15: the charter's net +3, same as above. This client
+  // pays the whole rule set beside it, and no rule moved.
+  codex: 1066,
 };
 
 /**
@@ -178,7 +191,9 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // same edits — the charter gave back five lines to pay for its own sentences and
 // for ai-evals — but this disclosure is measured bytes, not a cap, so it follows
 // the golden up.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_935;
+// 29_935 -> 30_123 on 2026-09-15: the invariants version line and the ai-evals
+// floor line, +188 bytes of charter in a file whose rule appendix did not move.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 30_123;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -189,7 +204,10 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 29_935;
 // invariant 1's refusal of a subset, a lighter pass, a deferral or a closing
 // summary, and invariant 7's restated violation. The rule edits land in the
 // appendix, which is exactly what this figure leaves out.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_004;
+// 5_004 -> 5_192 on 2026-09-15: the invariants version line and the ai-evals
+// floor line — the same +188, which is the whole of the change on this figure
+// because nothing but the charter feeds it.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_192;
 
 /**
  * The composite always-on line count one client pays for a plan: the charter,
@@ -220,6 +238,22 @@ export function composeAlwaysOnLoad(tool: Tool, plan: AlwaysOnPlan): number {
 export interface CharterTemplate {
   /** Parsed frontmatter map; field validation is the corpus contract's job. */
   frontmatter: Record<string, unknown>;
+  /**
+   * The three invariants-version keys, read typed and validated here rather
+   * than left in {@link frontmatter} as `unknown`. They are the exception to
+   * this loader's "shape is the corpus suite's contract" rule because emission
+   * RESOLVES them: `${STAMITY:INVARIANTS_VERSION}` renders into every client's
+   * always-on file, so a missing or malformed key would ship a leaked template
+   * variable — or a wrong version stamped on the floors themselves — to every
+   * generated repo. Refusing at load is the only place that cannot be skipped.
+   *
+   * `null` only for a template that declares NO version and carries no token
+   * to render one — a charter that never entered the versioning scheme. The
+   * moment either appears, all three keys are required: a body that asks for a
+   * version it cannot get is the failure this refuses, and a head that names a
+   * version nothing renders is the same defect from the other side.
+   */
+  invariants: CharterInvariants | null;
   /** Markdown body with the frontmatter block removed. */
   body: string;
   /** Physical line count of the whole file, frontmatter included (`wc -l` semantics). */
@@ -271,10 +305,95 @@ export async function readCharterTemplate(contentRoot?: string): Promise<Charter
   const parsed = parseFrontmatter(raw, filePath);
   return {
     frontmatter: parsed.frontmatter,
+    invariants: readInvariants(parsed.frontmatter, parsed.body, filePath),
     body: parsed.body,
     lineCount,
     relativePath: CHARTER_RELATIVE_PATH,
   };
+}
+
+/** The frontmatter keys that carry the invariants version; all three or none. */
+const INVARIANTS_KEYS = [
+  "invariants_version",
+  "invariants_ratified",
+  "invariants_amended",
+] as const;
+
+/** `MAJOR.MINOR.PATCH`, digits only — the shape `GOVERNANCE.md` bumps. */
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
+
+/** ISO calendar date, `YYYY-MM-DD`; ordering below is plain string comparison. */
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Read the three invariants keys off the frontmatter, refusing anything the
+ * emitted line could not honestly carry.
+ *
+ * The keys are required of a charter that PARTICIPATES in versioning — one
+ * whose body carries {@link INVARIANTS_VERSION_TOKEN}, or whose head names any
+ * one of the three keys. A template with neither predates the scheme and loads
+ * unversioned; there is nothing for it to render and nothing to be wrong. What
+ * that rules out is the only dangerous pair: a body asking for a version its
+ * head does not declare, which would emit a raw template variable into every
+ * client's always-on file.
+ *
+ * Every rejection names the KEY, not just the file: the charter is one file
+ * with ten head fields, and "malformed frontmatter" sends the reader looking
+ * at all of them. The date comparison is lexical, which is exact for a
+ * zero-padded ISO calendar date and needs no date parsing — an `amended`
+ * earlier than `ratified` is a transcription slip, and it would publish an
+ * amendment history that runs backwards.
+ */
+function readInvariants(
+  frontmatter: Record<string, unknown>,
+  body: string,
+  filePath: string,
+): CharterInvariants | null {
+  const declared = INVARIANTS_KEYS.some((key) => Object.hasOwn(frontmatter, key));
+  if (!declared && !body.includes(INVARIANTS_VERSION_TOKEN)) return null;
+
+  const version = requireField(frontmatter, "invariants_version", SEMVER_PATTERN, filePath);
+  const ratified = requireField(frontmatter, "invariants_ratified", ISO_DATE_PATTERN, filePath);
+  const amended = requireField(frontmatter, "invariants_amended", ISO_DATE_PATTERN, filePath);
+  if (amended < ratified) {
+    throw new EngineError(
+      `Charter template ${filePath}: invariants_amended (${amended}) is earlier than ` +
+        `invariants_ratified (${ratified}). An amendment cannot predate the ratification it ` +
+        `amends; fix whichever date is wrong.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  return { version, ratified, amended };
+}
+
+/** One frontmatter field as a string matching `pattern`, or a named refusal. */
+function requireField(
+  frontmatter: Record<string, unknown>,
+  key: string,
+  pattern: RegExp,
+  filePath: string,
+): string {
+  const value = Object.hasOwn(frontmatter, key) ? frontmatter[key] : undefined;
+  if (value === undefined) {
+    throw new EngineError(
+      `Charter template ${filePath} declares no \`${key}\`. The invariants version is rendered ` +
+        `into every client's always-on file, so the key is required; add it to the frontmatter ` +
+        `and record the amendment in docs/doctrine.md.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  // A bare `1.0` version or an unquoted date can reach here as a number or a
+  // Date depending on the YAML scalar, so the shape check runs on the rendered
+  // string rather than on `typeof value === "string"` alone.
+  const text = typeof value === "string" ? value : String(value);
+  if (!pattern.test(text)) {
+    throw new EngineError(
+      `Charter template ${filePath}: \`${key}\` is \`${text}\`, which does not match ` +
+        `${pattern.source}. Fix the frontmatter value.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  return text;
 }
 
 /**
