@@ -27,7 +27,7 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
 
 1. Always-on budget: build the demoted delivery behind an emission option, ship it ON in the candidate,
    measure in the Phase 2 run (trigger probes + charter-floor-line twins); floors hold → ratchets drop
-   and a row superseding AD-083 goes to the handoff; a floor falls → the option is reverted, the
+   and a row superseding the always-on ratchet decision of 2026-09-02 goes to the handoff; a floor falls → the option is reverted, the
    evidence stays under `evals/runs/`, the set re-runs. The 150-line anchor is re-verified tonight and
    re-anchored by a decision-row proposal only; doctrine text is not edited tonight.
 2. Charter invariants version 1.0.0, ratified 2026-08-31, last amended from git history (2026-09-13).
@@ -35,8 +35,8 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
    client fixtures and the QA form prepared against the Phase 2 candidate; rows that stay human are
    accepted UNPERFORMED for 1.8.0 by the instruction and reopen only when their inputs change.
 4. Record currency: public gates, every named public carrier fixed, hand pages re-attested at the
-   candidate tree; private carriers as listed (dashboard fact 4, AL-008, AL-018, the two L2 rows, the
-   kickoff prompt, EV-161 with the "~48%" figure dropped, the untracked verifier bulk hashed then
+   candidate tree; private carriers as listed (dashboard fact 4, the st-learn trigger ledger row, the peers-brief ledger row, the two L2 rows, the
+   kickoff prompt, the unlocated always-review evidence row with the "~48%" figure dropped, the untracked verifier bulk hashed then
    deleted with an ignore rule; the app-server-schema scratch kept).
 5. Codex eval profiles: option 1 — kept, marked "documented, unproven, no run of record", control gap
    named beside them.
@@ -115,7 +115,7 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   new win32 rename ceiling computes to about 8 688 ms with the 0.25 jitter (base 6 950 ms), inside the
   declared 7 000–9 000 ms band; the plan's "≈ 7.9 s" was an estimate, the band is the criterion.
 - 22:06Z U0b DONE → cherry-picked d4f504f (eval docs currency; readmeCurrency gate; route of record; Codex profiles marked). Two Minor rows ledgered to U2c and U4.
-- 22:07Z U10 DONE (private): currency helper built; dry run at v1.7.0 flagged DR-026, fact 4, the kickoff prompt, the constitution's SET-v2 citation, P6 (5 stale); after the fixes 4 remain (DR-026 and the kickoff prompt → the close; the constitution citation and P6 → Package 12C). 18,535 regenerable files (317,765,053 bytes) hashed and deleted; ignore rules added; committed in the private checkout (not pushed yet).
+- 22:07Z U10 DONE (private): currency helper built; dry run at v1.7.0 flagged the Package 10 directive row, fact 4, the kickoff prompt, the constitution's SET-v2 citation, P6 (5 stale); after the fixes 4 remain (the Package 10 directive row and the kickoff prompt → the close; the constitution citation and P6 → Package 12C). 18,535 regenerable files (317,765,053 bytes) hashed and deleted; ignore rules added; committed in the private checkout (not pushed yet).
 - 22:36Z U5 DONE → cherry-picked 1f5fafc (spec-status gate; three specs restamped; red-check flagged draft and worktree-lane; workspace-surface restamped on the CHANGELOG 1.1.0 evidence because its plan's stamp is unreachable). Tier-1: overlay-layers → shipped-with-1.1.0. Three Minor rows closed (2 rejected with reasoning, 1 fixed). Three heavy-suite timeouts seen on a loaded worktree, all green in isolation — environmental, the integration gate is the record.
 - 22:44Z U0a DONE → cherry-picked 17c915f (cases-v6 byte-identical; SET-v7; profile claude→rubric-v7; successor test v5→v6 with red-check). Tier-1: eval-run.mjs --help names SET-v7 (5925b5c). Merged eval suites: 9 files, 1080 tests green. U1 (charter) dispatched in a worktree.
 - 22:49Z U3 DONE → cherry-picked cbff030 (commondir-race retry; win32 rename budget 12 steps, ceiling 8,687.5 ms; the hook script's copy reconciled; learning recorded). Manifest conflict with U0b's sync resolved by regenerating (build+sync, check clean). One Warning open: the exhaustion test's real waits — follow-up round running.
