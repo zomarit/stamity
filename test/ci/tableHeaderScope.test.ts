@@ -1,13 +1,22 @@
 import { describe, expect, it } from "vitest";
+// @ts-expect-error — the plugin is a plain .mjs with no type declarations, and stays that way on
+// purpose: it has to load in a runner that installs the root project only, exactly as
+// `scripts/apm-install-smoke.mjs` does. Its JSDoc types are read by the site's own `tsc`, which
+// has `allowJs`; this program does not. One line, because the directive covers the line that
+// follows it and a wrapped import puts the specifier out of reach.
+import plugin from "../../website/src/rehype/tableHeaderScope.mjs";
 
 /**
  * The docs site's header-cell association, checked where it is decided.
  *
  * The site has no test runner of its own — `website/package.json` carries `build`, `start`,
  * `serve`, `clear` and `typecheck`, and nothing else — so this suite is where a plugin of its
- * own writing gets proved. The plugin is deliberately dependency-free (it declares the slice of
- * hast it reads, the way `website/src/remark/repoLinks.ts` declares its link node), so importing
- * it here pulls in nothing from `website/node_modules`, which this runner never installs.
+ * own writing gets proved. That is why the plugin is plain ESM with JSDoc types rather than the
+ * TypeScript its `repoLinks` neighbour is written in: this runner installs the ROOT project only
+ * — so does CI's `check` job — and a `.ts` file under `website/` sends its transformer to
+ * `website/tsconfig.json`, which fails with `[TSCONFIG_ERROR] Failed to load tsconfig
+ * '@docusaurus/tsconfig'` wherever the site's dependencies are absent. A `.mjs` needs no
+ * transform, no tsconfig and nothing out of `website/node_modules`.
  *
  * What is under test is an accessibility floor, not a preference: a `th` with no `scope` heads
  * nothing a screen reader can attach a value to (WCAG 1.3.1), and it is the QA harness's
@@ -24,22 +33,10 @@ interface HastNode {
 }
 
 /**
- * The plugin under test, loaded by URL rather than through a static import.
- *
- * `website/` declares no `"type": "module"` and cannot: Docusaurus loads `docusaurus.config.ts`
- * as CommonJS, which is the reason that config's own `SITE_DIR` reads `__dirname`. So the root
- * `tsc --noEmit` — `module: nodenext`, which decides a file's format from the nearest
- * package.json — reads every `.ts` under `website/` as CommonJS and rejects its `export default`
- * under `verbatimModuleSyntax` (TS1287). The file is correct where it is compiled, by the site's
- * own `tsc` and by its webpack build; it is the ROOT program that cannot hold it, and the
- * "fix" that would let it — a `"type"` key in the site's package.json — would break the config
- * load. Loading by URL keeps the module out of the root type program while the assertions below
- * still run against the real file rather than a copy that could drift from it.
+ * The plugin under its declared shape, so the assertions below are typed against the contract
+ * unified calls rather than against the `any` the untyped import hands back.
  */
-const PLUGIN_URL = new URL("../../website/src/rehype/tableHeaderScope.ts", import.meta.url).href;
-const tableHeaderScope = (
-  (await import(/* @vite-ignore */ PLUGIN_URL)) as { default: () => (tree: HastNode) => void }
-).default;
+const tableHeaderScope = plugin as () => (tree: HastNode) => void;
 
 /** An element node, spelled the way hast spells it. */
 function element(tagName: string, children: HastNode[], properties?: Record<string, unknown>): HastNode {

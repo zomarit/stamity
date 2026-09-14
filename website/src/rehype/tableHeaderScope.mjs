@@ -15,6 +15,16 @@
  * change there would be a guess about what the renderer will emit. Here the `th` elements are the
  * ones the build writes.
  *
+ * WHY PLAIN JAVASCRIPT, WHERE `repoLinks.ts` BESIDE IT IS TYPESCRIPT. This module is the one file
+ * under `website/` that something outside the site imports: `test/ci/tableHeaderScope.test.ts`
+ * proves it, because the site has no test runner of its own. A `.ts` file here made that suite
+ * depend on `website/node_modules` — the repository-root vitest hands a `.ts` under `website/` to
+ * its transformer, which reads `website/tsconfig.json` and fails with
+ * `[TSCONFIG_ERROR] Failed to load tsconfig '@docusaurus/tsconfig': Tsconfig not found` wherever
+ * the site's dependencies are not installed. CI's `check` job installs the root project only, so
+ * the test was red on every leg. Plain ESM with JSDoc types needs no transform and no tsconfig,
+ * and the site's own `tsc` still reads the annotations below through `allowJs`.
+ *
  * WHAT IT DECIDES, AND WHAT IT DELIBERATELY DOES NOT.
  *
  *   `th` in a header row   `scope="col"` — it heads the column beneath it. This is the only shape
@@ -34,33 +44,54 @@
  * annotated in its own right, with its own sections, never with the outer table's.
  */
 
-/** Which half of a table a row sits in: the one fact that decides a header cell's scope. */
-type Section = 'head' | 'body';
+/**
+ * Which half of a table a row sits in: the one fact that decides a header cell's scope.
+ *
+ * @typedef {'head' | 'body'} Section
+ */
 
-/** The `type` of a hast section element, mapped to the section it opens. */
-const SECTION_OF: Readonly<Record<string, Section>> = {
+/**
+ * The part of a hast node this plugin reads. Declared here, so the site's build is the only
+ * consumer of hast's own types.
+ *
+ * @typedef {object} HastNode
+ * @property {string} type
+ * @property {string} [tagName]
+ * @property {Record<string, unknown>} [properties]
+ * @property {HastNode[]} [children]
+ */
+
+/**
+ * The `tagName` of a hast section element, mapped to the section it opens.
+ *
+ * @type {Readonly<Record<string, Section>>}
+ */
+const SECTION_OF = {
   thead: 'head',
   tbody: 'body',
   tfoot: 'body',
 };
 
-/** The part of a hast node this plugin reads. Declared locally, so the site's build is the only consumer of hast's own types. */
-interface HastNode {
-  type: string;
-  tagName?: string;
-  properties?: Record<string, unknown>;
-  children?: HastNode[];
-}
-
-/** `true` when an attribute is present with something in it — hast carries `headers` as a list. */
-function isSet(value: unknown): boolean {
+/**
+ * `true` when an attribute is present with something in it — hast carries `headers` as a list.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isSet(value) {
   if (typeof value === 'string') return value.trim() !== '';
   if (Array.isArray(value)) return value.length > 0;
   return false;
 }
 
-/** One row: the header cells that take a scope from their position take it here. */
-function annotateRow(row: HastNode, section: Section): void {
+/**
+ * One row: the header cells that take a scope from their position take it here.
+ *
+ * @param {HastNode} row
+ * @param {Section} section
+ * @returns {void}
+ */
+function annotateRow(row, section) {
   let cell = 0;
   for (const child of row.children ?? []) {
     if (child.type !== 'element') continue;
@@ -79,11 +110,22 @@ function annotateRow(row: HastNode, section: Section): void {
   }
 }
 
-/** Every row of one table, paired with the section it belongs to. Rows of a nested table are not this table's. */
-function annotateTable(table: HastNode): void {
+/**
+ * Every row of one table, paired with the section it belongs to. Rows of a nested table are not
+ * this table's.
+ *
+ * @param {HastNode} table
+ * @returns {void}
+ */
+function annotateTable(table) {
   let sectionless = 0;
 
-  const walk = (node: HastNode, section: Section | undefined): void => {
+  /**
+   * @param {HastNode} node
+   * @param {Section | undefined} section
+   * @returns {void}
+   */
+  const walk = (node, section) => {
     if (node !== table && node.type === 'element' && node.tagName === 'table') return;
 
     if (node.type === 'element' && node.tagName === 'tr') {
@@ -97,17 +139,25 @@ function annotateTable(table: HastNode): void {
       return;
     }
 
-    const inner =
-      node.type === 'element' ? (SECTION_OF[node.tagName ?? ''] ?? section) : section;
+    const inner = node.type === 'element' ? (SECTION_OF[node.tagName ?? ''] ?? section) : section;
     for (const child of node.children ?? []) walk(child, inner);
   };
 
   walk(table, undefined);
 }
 
+/**
+ * The plugin, in the shape unified calls: a factory returning the transformer.
+ *
+ * @returns {(tree: HastNode) => void}
+ */
 export default function tableHeaderScope() {
-  return function transformer(tree: HastNode): void {
-    const walk = (node: HastNode): void => {
+  return function transformer(tree) {
+    /**
+     * @param {HastNode} node
+     * @returns {void}
+     */
+    const walk = (node) => {
       if (node.type === 'element' && node.tagName === 'table') annotateTable(node);
       for (const child of node.children ?? []) walk(child);
     };

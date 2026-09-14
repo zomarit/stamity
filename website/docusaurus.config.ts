@@ -2,7 +2,11 @@ import {resolve} from 'node:path';
 import type * as Preset from '@docusaurus/preset-classic';
 import type {Config} from '@docusaurus/types';
 import {themes as prismThemes, type PrismTheme} from 'prism-react-renderer';
-import tableHeaderScope from './src/rehype/tableHeaderScope';
+// Plain ESM, extension and all, where its `repoLinks` neighbour is TypeScript: the repository's
+// own test suite imports this one, and a `.ts` under `website/` drags `website/tsconfig.json` —
+// and so the site's whole dependency tree — into a runner that installs the root project only.
+// The reason is written out at the head of the module.
+import tableHeaderScope from './src/rehype/tableHeaderScope.mjs';
 import repoLinks from './src/remark/repoLinks';
 
 /**
