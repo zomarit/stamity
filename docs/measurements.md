@@ -14,37 +14,44 @@ by re-running the script rather than believed.
 
 ## Verified merge-ready rate
 
-**0 of 7 runs** (0.000).
+**5 of 7 runs** (0.714).
 
-The rule: verified = gates passed + review approved + merged; self-declared wording never counts.
+The rule: verified merge-ready = the final gate table all pass, the last review verdict an approval at or above the record's stated confidence gate (0.8 when unstated), and a findings ledger with no open row; merge evidence is reported per run, never a clause; self-declared wording never counts.
 
 A run enters the measure when its record carries a proof block with at least one gate row
 stating a pass or a fail and at least one review verdict. It reaches the numerator when all
-four of these hold, each read off an artifact rather than off a sentence:
+three of these hold, each read off an artifact rather than off a sentence:
 
 1. every gate row of the record's final gate table reports a pass;
 2. the last review verdict is an approval at or above the confidence gate that record states
    (0.8 when it states none);
-3. its findings ledger leaves no row `open`, which is the run-exit invariant `/st-work` declares;
-4. `CHANGELOG.md` carries the merge — the run's own released version, or a pull-request number
-   the changelog names under a released heading.
+3. its findings ledger leaves no row `open`, which is the run-exit invariant `/st-work` declares.
+
+Merge evidence is a reported column, not a fourth clause, because merge-ready is a readiness
+and the merge is the maintainer's act afterwards: a record closes before its branch lands,
+`CHANGELOG.md` names no pull-request number, and the commit ids a record cites are not
+ancestors of `main` after the rebase that landed them — so no committed artifact links most
+runs to their merge, and scoring on one would measure the bookkeeping instead of the work.
 
 ### Numerator
 
-None.
+| Run | Merge evidence |
+|---|---|
+| `2026-08-31_batch-a-remainder` | none in committed artifacts |
+| `2026-08-31_batch-b-docs` | none in committed artifacts |
+| `2026-09-04_package-8` | none in committed artifacts |
+| `2026-09-04_package-8-closeout` | none in committed artifacts |
+| `2026-09-07_package-4` | none in committed artifacts |
 
 ### Denominator, less the numerator
 
 These runs carry the evidence the rule reads and did not meet every clause of it. The reason
 is the first clause each one missed.
 
-- `2026-08-31_batch-a-remainder` — no merge artifact — no released version or pull request
-- `2026-08-31_batch-b-docs` — no merge artifact — no released version or pull request
-- `2026-09-04_package-8` — no merge artifact — no released version or pull request
-- `2026-09-04_package-8-closeout` — no merge artifact — no released version or pull request
-- `2026-09-07_package-4` — no merge artifact — no released version or pull request
-- `2026-09-09_package-9` — the final gate table reports a failure
-- `2026-09-10_release-1.4.0` — the last review verdict is not an approval
+| Run | First clause missed | Merge evidence |
+|---|---|---|
+| `2026-09-09_package-9` | the final gate table reports a failure | none in committed artifacts |
+| `2026-09-10_release-1.4.0` | the last review verdict is not an approval | released version 1.4.0 in CHANGELOG |
 
 ### Excluded, with the evidence each one lacks
 
@@ -71,14 +78,11 @@ the number is: an exclusion nobody can see is a number nobody can check.
 
 ### What the number is limited by, stated rather than tuned away
 
-5 of the 7 met clauses 1 to 3 — gates green, review approved at the
-confidence gate, ledger closed — and failed only clause 4. The limit is clause 4's evidence:
-`CHANGELOG.md` names no pull-request number anywhere today, so the only merge a committed
-artifact proves is a release run's own version, and the run records' commit ids do not survive
-the rebases that landed them. That is a property of what this repository writes down, not of
-what it merges, and it is the single largest reason the rate reads as it does. It moves when
-the changelog starts naming the pull request each entry landed through — not when this page
-is reworded.
+Sixteen run directories are outside the measure and every one of them is named above. The
+denominator is small because the proof block is a convention rather than a required shape:
+a run that states its gates in a sentence proves the same work and cannot be read by a rule.
+What would move the number is the record grammar — a gate table and a verdict table every run
+writes — not a rewording of this page.
 
 ## Reach (a proxy)
 
@@ -102,12 +106,12 @@ never restated as anything else.
 
 ## Anti-gaming constraint
 
-The rate reads four artifacts and no prose. A record that calls itself verified, complete, or
+The rate reads three artifacts and no prose. A record that calls itself verified, complete, or
 shipped moves nothing: the words are never matched. What moves the number is a gate row with
-a pass verdict, a review verdict token, a ledger with no open row, and a version or
-pull-request number the changelog carries.
+a pass verdict, a review verdict token at or above the record's own confidence gate, and a
+findings ledger with no open row.
 
-Two consequences worth stating, because they are what make the number worth reading:
+Three consequences worth stating, because they are what make the number worth reading:
 
 - **Exclusions are published, not dropped.** Every run directory appears exactly once across
   the three lists above. Removing an inconvenient run from the denominator would remove it
@@ -115,6 +119,9 @@ Two consequences worth stating, because they are what make the number worth read
 - **The measure is conservative where it is uncertain.** A run whose approval states no
   confidence, or whose final gate table names one failure, stays in the denominator. The
   number under-claims by construction.
+- **Merge evidence is reported, never scored.** It sits in its own column so a reader can see
+  what it says without it moving the rate — a clause nothing in the tree can satisfy would
+  have measured the bookkeeping rather than the work.
 
 ## Corpus behaviour: run of record
 

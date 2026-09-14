@@ -16,18 +16,19 @@ import {
   DEFAULT_CONFIDENCE_GATE,
   MEASUREMENTS_DOC_PATH,
   MEASUREMENTS_REGENERATE_COMMAND,
+  MERGE_EVIDENCE_NONE,
   MERGE_READY_RULE,
-  NO_MERGE_ARTIFACT,
   REACH_SNAPSHOT_PATH,
   RUNS_DIR,
   RUN_OF_RECORD_PATH,
   computeMergeReadyRate,
   readReachSnapshot,
   renderMeasurements,
+  type DenominatedRun,
+  type ExcludedRun,
   type MergeReadyReport,
-  type MergedRun,
   type ReachPoint,
-  type RunNote,
+  type VerifiedRun,
 } from "../../../src/cli/docs/measurements.ts";
 import { LLMS_INDEX_SECTIONS } from "../../../src/cli/docs/llmsIndex.ts";
 import { EngineError } from "../../../src/types/errors.ts";
@@ -140,13 +141,16 @@ function fixture(runs: Record<string, Record<string, string>>): string {
 /** The window a downloads point covers, as one readable range. */
 const window = (point: ReachPoint): string => `${point.start} to ${point.end}`;
 
+/** The run ids of a set-aside list, in the order the report publishes them. */
+const idsOf = (runs: readonly ExcludedRun[]): string[] => runs.map((entry) => entry.run);
+
 /** The reason one run was set aside, or `undefined` when it was not. */
-const reasonFor = (notes: readonly RunNote[], run: string): string | undefined =>
+const reasonFor = (notes: readonly DenominatedRun[], run: string): string | undefined =>
   notes.find((note) => note.run === run)?.reason;
 
-/** The merge artifact one run was credited with. */
-const evidenceFor = (runs: readonly MergedRun[], run: string): string | undefined =>
-  runs.find((entry) => entry.run === run)?.evidence;
+/** The merge column reported beside one verified run. */
+const evidenceFor = (runs: readonly VerifiedRun[], run: string): string | undefined =>
+  runs.find((entry) => entry.run === run)?.mergeEvidence;
 
 /**
  * This repository's own measurement, computed per case rather than once at
@@ -197,6 +201,22 @@ describe("renderMeasurements — drift gate", () => {
     const page = renderMeasurements();
     expect(page).toContain(MERGE_READY_RULE);
     expect(page).toContain(`${DEFAULT_CONFIDENCE_GATE} when it states none`);
+  });
+
+  it("reports merge evidence per run and says why it is not a clause", () => {
+    // The clause that was dropped is not silently gone: it is a column, and the
+    // page states the three facts that made scoring on it measure bookkeeping.
+    const page = renderMeasurements();
+    expect(page).toContain("| Run | Merge evidence |");
+    expect(page).toContain("not a fourth clause");
+    expect(page).toContain("a record closes before its branch lands");
+    expect(page).toContain("names no pull-request number");
+    expect(page).toContain("are not\nancestors of `main`");
+    for (const run of measured().numerator) {
+      expect(page, `${run.run} has no merge column`).toContain(
+        `| \`${run.run}\` | ${run.mergeEvidence} |`,
+      );
+    }
   });
 
   it("is indexed for agents, so the page is reachable without the sidebar", () => {
@@ -312,6 +332,7 @@ describe("computeMergeReadyRate over this repository", () => {
       measured().excluded.filter((entry) => entry.reason === "no record").map((entry) => entry.run),
     );
     expect(withoutRecord.size).toBeGreaterThan(0);
+    expect(idsOf(measured().excluded)).toEqual([...idsOf(measured().excluded)].toSorted());
     const dated = listed(measured())
       .filter((run) => !withoutRecord.has(run))
       .map((run) => /^(\d{4}-\d{2}-\d{2})_/.exec(run)?.[1] ?? "")
@@ -322,7 +343,7 @@ describe("computeMergeReadyRate over this repository", () => {
 });
 
 describe("the rule, exercised against fixture trees", () => {
-  it("counts a run that passes every clause, by release tag and by pull request", () => {
+  it("counts a run that passes every clause, and reports its merge evidence", () => {
     const root = fixture({
       "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
       "2026-01-03_feature": {
@@ -337,8 +358,12 @@ describe("the rule, exercised against fixture trees", () => {
       "2026-01-02_release-2.0.0",
       "2026-01-03_feature",
     ]);
-    expect(evidenceFor(report.numerator, "2026-01-02_release-2.0.0")).toContain("[2.0.0]");
-    expect(evidenceFor(report.numerator, "2026-01-03_feature")).toContain("#42");
+    expect(evidenceFor(report.numerator, "2026-01-02_release-2.0.0")).toBe(
+      "released version 2.0.0 in CHANGELOG",
+    );
+    expect(evidenceFor(report.numerator, "2026-01-03_feature")).toBe(
+      "pull request #42 in CHANGELOG",
+    );
     expect(report.rate).toEqual({ n: 2, d: 2, value: 1 });
     expect(report.generated).toBe("2026-01-03");
   });
@@ -371,24 +396,41 @@ describe("the rule, exercised against fixture trees", () => {
         "record.md": record({ merge: "Landed as pull request #42." }),
         "ledger.jsonl": OPEN_LEDGER,
       },
-      "2026-01-07_unmerged": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      // No merge artifact anywhere, and it is still verified: merge-ready is a
+      // readiness. This case fails the moment the merge column becomes a clause.
+      "2026-01-07_no-merge-artifact": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
     });
     const report = computeMergeReadyRate(root);
     rmSync(root, { recursive: true, force: true });
 
-    expect(report.numerator.map((entry) => entry.run)).toEqual(["2026-01-02_release-2.0.0"]);
+    expect(report.numerator).toEqual([
+      { run: "2026-01-02_release-2.0.0", mergeEvidence: "released version 2.0.0 in CHANGELOG" },
+      { run: "2026-01-07_no-merge-artifact", mergeEvidence: MERGE_EVIDENCE_NONE },
+    ]);
     expect(report.denominator).toEqual([
-      { run: "2026-01-03_red-gate", reason: "the final gate table reports a failure" },
+      {
+        run: "2026-01-03_red-gate",
+        reason: "the final gate table reports a failure",
+        mergeEvidence: "pull request #42 in CHANGELOG",
+      },
       {
         run: "2026-01-04_changes-requested",
         reason: "the last review verdict is not an approval",
+        mergeEvidence: "pull request #42 in CHANGELOG",
       },
-      { run: "2026-01-05_under-gate", reason: "the approval at 0.6 is under the 0.8 gate" },
-      { run: "2026-01-06_open-ledger", reason: "the findings ledger still carries an open row" },
-      { run: "2026-01-07_unmerged", reason: NO_MERGE_ARTIFACT },
+      {
+        run: "2026-01-05_under-gate",
+        reason: "the approval at 0.6 is under the 0.8 gate",
+        mergeEvidence: "pull request #42 in CHANGELOG",
+      },
+      {
+        run: "2026-01-06_open-ledger",
+        reason: "the findings ledger still carries an open row",
+        mergeEvidence: "pull request #42 in CHANGELOG",
+      },
     ]);
     expect(reasonFor(report.denominator, "2026-01-03_red-gate")).toContain("failure");
-    expect(report.rate).toEqual({ n: 1, d: 6, value: 0.167 });
+    expect(report.rate).toEqual({ n: 2, d: 6, value: 0.333 });
   });
 
   it("reads the confidence gate a record states over the fallback", () => {
@@ -406,7 +448,11 @@ describe("the rule, exercised against fixture trees", () => {
     // case fails the moment the stated gate stops being read.
     expect(report.numerator).toEqual([]);
     expect(report.denominator).toEqual([
-      { run: "2026-01-02_release-2.0.0", reason: "the approval at 0.86 is under the 0.9 gate" },
+      {
+        run: "2026-01-02_release-2.0.0",
+        reason: "the approval at 0.86 is under the 0.9 gate",
+        mergeEvidence: "released version 2.0.0 in CHANGELOG",
+      },
     ]);
   });
 
@@ -440,9 +486,10 @@ describe("the rule, exercised against fixture trees", () => {
     expect(report.rate).toEqual({ n: 1, d: 1, value: 1 });
   });
 
-  it("does not count a pull request the changelog names only above its first release", () => {
+  it("credits no merge evidence to a pull request named only above the first release", () => {
     // The unreleased section is where a merge that has not shipped is written
-    // down. Counting it would make "merged" mean "written in the changelog".
+    // down. Reading it as evidence would make the column mean "written in the
+    // changelog" — which is the self-declaration the whole rule refuses.
     const root = fixture({
       "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
       "2026-01-03_unreleased": {
@@ -453,8 +500,11 @@ describe("the rule, exercised against fixture trees", () => {
     const report = computeMergeReadyRate(root);
     rmSync(root, { recursive: true, force: true });
 
-    expect(report.numerator.map((entry) => entry.run)).toEqual(["2026-01-02_release-2.0.0"]);
-    expect(reasonFor(report.denominator, "2026-01-03_unreleased")).toBe(NO_MERGE_ARTIFACT);
+    expect(report.numerator.map((entry) => entry.run)).toEqual([
+      "2026-01-02_release-2.0.0",
+      "2026-01-03_unreleased",
+    ]);
+    expect(evidenceFor(report.numerator, "2026-01-03_unreleased")).toBe(MERGE_EVIDENCE_NONE);
   });
 
   it("excludes a run with no record and one with no proof block, by name", () => {

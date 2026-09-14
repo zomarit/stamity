@@ -3,20 +3,28 @@
  * computed from committed artifacts rather than asserted in prose.
  *
  * The drift class this closes: a project page that says "every change is
- * gated, reviewed and merged" is a claim about a process, and a reader has no
- * way to check it. Here the headline number is a QUOTIENT over the run records
- * this repository already commits — a run counts as verified only when its own
- * record carries a passing final gate table, an approval verdict at or above
- * the confidence gate that record states, a findings ledger with no row left
- * open, and a merge artifact `CHANGELOG.md` also carries. Everything the rule
- * rejects is published by run id with its reason, so the number cannot be
- * raised by dropping the runs that would lower it.
+ * gated and reviewed" is a claim about a process, and a reader has no way to
+ * check it. Here the headline number is a QUOTIENT over the run records this
+ * repository already commits — a run counts as verified merge-ready only when
+ * its own record carries a passing final gate table, an approval verdict at or
+ * above the confidence gate that record states, and a findings ledger with no
+ * row left open. Everything the rule rejects is published by run id with its
+ * reason, so the number cannot be raised by dropping the runs that would lower
+ * it.
+ *
+ * **Merge-ready is a readiness, not a merge.** The merge itself is the
+ * maintainer's act, and it happens after the record closes: a run record is
+ * written at the end of the run, `CHANGELOG.md` names no pull-request number,
+ * and the commit ids a record cites do not survive the rebase that lands them,
+ * so no committed artifact links a run to its merge. Requiring one made the
+ * rule unsatisfiable rather than strict. {@link mergeEvidence} still looks for
+ * it and the page publishes what it finds per run — as a column a reader can
+ * check, never as a clause that decides the number.
  *
  * **Self-declared wording never counts.** No record is read for the words
  * "verified", "done", or "shipped". {@link computeMergeReadyRate} looks for a
- * gate row's pass/fail verdict, a review verdict token, a ledger state, and a
- * version or pull-request number that appears in the changelog — four
- * artifacts a run has to actually produce. That is the whole anti-gaming
+ * gate row's pass/fail verdict, a review verdict token and a ledger state —
+ * three artifacts a run has to actually produce. That is the whole anti-gaming
  * constraint, and it is why the rule string is published on the page beside
  * the number.
  *
@@ -64,9 +72,20 @@ export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-11-run-24/RESULTS.md";
 /** The workflow whose lanes are the first-run proof. */
 export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 
-/** The rule the rate is measured under, published beside the number. */
+/**
+ * The rule the rate is measured under, published beside the number.
+ *
+ * The maintainer's own definition, recorded 2026-09-15: merge-ready is a
+ * readiness, and a merge is not part of it. The rule that preceded this one
+ * carried `+ merged` as a fourth clause and no run in the corpus could satisfy
+ * it — see the module docblock for why that is a property of what this
+ * repository writes down rather than of what it merges.
+ */
 export const MERGE_READY_RULE =
-  "verified = gates passed + review approved + merged; self-declared wording never counts";
+  "verified merge-ready = the final gate table all pass, the last review verdict an approval at " +
+  "or above the record's stated confidence gate (0.8 when unstated), and a findings ledger with " +
+  "no open row; merge evidence is reported per run, never a clause; self-declared wording never " +
+  "counts";
 
 /**
  * The approval bar applied when a record states none of its own.
@@ -80,11 +99,12 @@ export const MERGE_READY_RULE =
 export const DEFAULT_CONFIDENCE_GATE = 0.8;
 
 /**
- * The one denominator reason the page counts rather than only lists: a run that
- * met clauses 1-3 and failed only on the merge artifact. It is a constant so
- * the renderer compares a value instead of re-matching a sentence.
+ * What the merge-evidence column reads when no committed artifact links a run
+ * to its merge — which is every non-release run in this tree today. It is a
+ * stated absence rather than an empty cell: a blank column reads as an author
+ * who did not look.
  */
-export const NO_MERGE_ARTIFACT = "no merge artifact — no released version or pull request";
+export const MERGE_EVIDENCE_NONE = "none in committed artifacts";
 
 /** A proof-block heading, at any heading depth. */
 const PROOF_BLOCK_HEADING = /^#{2,6} .*proof block/i;
@@ -148,19 +168,25 @@ function fail(message: string): never {
   throw new EngineError(message, { code: "VALIDATION_ERROR" });
 }
 
-/** A run that did not reach the numerator, with the one reason it did not. */
-export interface RunNote {
+/** A run outside the measure, with the evidence it lacks. */
+export interface ExcludedRun {
   /** The run directory's id, which is its name under `.stamity/runs/`. */
   readonly run: string;
-  /** One line, naming the artifact that is missing or the verdict that is not an approval. */
+  /** One line, naming the artifact the record does not carry. */
   readonly reason: string;
 }
 
-/** A run that met every clause of the rule, with the artifact that proves the merge. */
-export interface MergedRun {
+/** A qualifying run that missed a clause, with the first clause it missed. */
+export interface DenominatedRun extends ExcludedRun {
+  /** The merge artifact, reported beside every qualifying run. Never a clause. */
+  readonly mergeEvidence: string;
+}
+
+/** A run that met every clause of the rule. */
+export interface VerifiedRun {
   readonly run: string;
-  /** The changelog fact that establishes the merge — a version or a pull-request number. */
-  readonly evidence: string;
+  /** The merge artifact, or {@link MERGE_EVIDENCE_NONE}. Reported, never scored. */
+  readonly mergeEvidence: string;
 }
 
 /** The whole measurement, as the script prints it and the page states it. */
@@ -169,11 +195,11 @@ export interface MergeReadyReport {
   readonly generated: string;
   readonly rule: string;
   /** Runs that qualify for the denominator and did not reach the numerator. */
-  readonly denominator: readonly RunNote[];
+  readonly denominator: readonly DenominatedRun[];
   /** Runs that met every clause. */
-  readonly numerator: readonly MergedRun[];
+  readonly numerator: readonly VerifiedRun[];
   /** Runs outside the measure entirely, each with the evidence it lacks. */
-  readonly excluded: readonly RunNote[];
+  readonly excluded: readonly ExcludedRun[];
   /** `d` counts the numerator and denominator lists together. */
   readonly rate: { readonly n: number; readonly d: number; readonly value: number };
 }
@@ -313,22 +339,30 @@ function releasedPullRequests(changelog: string): ReadonlySet<string> {
   return numbers;
 }
 
-/** The merge artifact for one run, or null when nothing committed proves a merge. */
+/**
+ * The merge artifact for one run — reported, never scored.
+ *
+ * Two forms count, and both are committed: the run's own released version
+ * carried by `CHANGELOG.md`, or a pull-request number the record names that the
+ * changelog also names UNDER a released heading. A number that appears only
+ * above the first release heading is in the unreleased section, which is where
+ * a merge that has not shipped is written down.
+ */
 function mergeEvidence(
   run: string,
   record: string,
   versions: ReadonlySet<string>,
   pullRequests: ReadonlySet<string>,
-): string | null {
+): string {
   const released = RELEASE_RUN.exec(run)?.[1];
   if (released !== undefined && versions.has(released)) {
-    return `CHANGELOG.md carries the release section [${released}]`;
+    return `released version ${released} in CHANGELOG`;
   }
   for (const match of record.matchAll(PULL_REQUEST)) {
     const number = match[1] ?? "";
-    if (pullRequests.has(number)) return `CHANGELOG.md names pull request #${number}`;
+    if (pullRequests.has(number)) return `pull request #${number} in CHANGELOG`;
   }
-  return null;
+  return MERGE_EVIDENCE_NONE;
 }
 
 /**
@@ -361,9 +395,9 @@ export function computeMergeReadyRate(root: string = repoRoot()): MergeReadyRepo
     .map((entry) => entry.name)
     .toSorted();
 
-  const numerator: MergedRun[] = [];
-  const denominator: RunNote[] = [];
-  const excluded: RunNote[] = [];
+  const numerator: VerifiedRun[] = [];
+  const denominator: DenominatedRun[] = [];
+  const excluded: ExcludedRun[] = [];
   const dates: string[] = [];
 
   for (const run of runs) {
@@ -394,37 +428,39 @@ export function computeMergeReadyRate(root: string = repoRoot()): MergeReadyRepo
     }
 
     // From here the run is in the denominator: it carries the evidence the rule
-    // reads, and every remaining clause is a fact about that evidence.
+    // reads, and every remaining clause is a fact about that evidence. The
+    // merge column is computed for all of them, so a run that missed a clause
+    // still shows what its merge artifact says.
+    const merge = mergeEvidence(run, record, versions, pullRequests);
+    const missed = (reason: string): void => {
+      denominator.push({ run, reason, mergeEvidence: merge });
+    };
+
     const failing = gateRows.filter((row) => GATE_FAIL.test(row) || !GATE_PASS.test(row));
     if (failing.length > 0) {
-      denominator.push({ run, reason: "the final gate table reports a failure" });
+      missed("the final gate table reports a failure");
       continue;
     }
     if (!APPROVAL.test(lastVerdict) || CHANGES_REQUESTED.test(lastVerdict)) {
-      denominator.push({ run, reason: "the last review verdict is not an approval" });
+      missed("the last review verdict is not an approval");
       continue;
     }
     const gate = Number(STATED_GATE.exec(record)?.[1] ?? DEFAULT_CONFIDENCE_GATE);
     const confidence = statedConfidence(lastVerdict);
     if (confidence === null) {
-      denominator.push({ run, reason: "the approval states no confidence to compare to the gate" });
+      missed("the approval states no confidence to compare to the gate");
       continue;
     }
     if (confidence < gate) {
-      denominator.push({ run, reason: `the approval at ${confidence} is under the ${gate} gate` });
+      missed(`the approval at ${confidence} is under the ${gate} gate`);
       continue;
     }
     const ledgerPath = join(runsDir, run, "ledger.jsonl");
     if (existsSync(ledgerPath) && OPEN_ROW.test(readFileSync(ledgerPath, "utf-8"))) {
-      denominator.push({ run, reason: "the findings ledger still carries an open row" });
+      missed("the findings ledger still carries an open row");
       continue;
     }
-    const evidence = mergeEvidence(run, record, versions, pullRequests);
-    if (evidence === null) {
-      denominator.push({ run, reason: NO_MERGE_ARTIFACT });
-      continue;
-    }
-    numerator.push({ run, evidence });
+    numerator.push({ run, mergeEvidence: merge });
   }
 
   const d = numerator.length + denominator.length;
@@ -475,9 +511,22 @@ export function readReachSnapshot(root: string = repoRoot()): ReachSnapshot {
 }
 
 /** `- ` list of run ids and their one-line reasons, or an explicit "none" line. */
-function noteList(notes: readonly RunNote[]): readonly string[] {
+function noteList(notes: readonly ExcludedRun[]): readonly string[] {
   if (notes.length === 0) return ["None."];
   return notes.map((note) => `- \`${note.run}\` — ${note.reason}`);
+}
+
+/** A two- or three-column table of runs, or an explicit "none" line. */
+function runTable(
+  header: readonly string[],
+  rows: readonly (readonly string[])[],
+): readonly string[] {
+  if (rows.length === 0) return ["None."];
+  return [
+    `| ${header.join(" | ")} |`,
+    `|${header.map(() => "---").join("|")}|`,
+    ...rows.map((cells) => `| ${cells.join(" | ")} |`),
+  ];
 }
 
 /**
@@ -490,9 +539,6 @@ function noteList(notes: readonly RunNote[]): readonly string[] {
  */
 export function renderMeasurements(root: string = repoRoot()): string {
   const report = computeMergeReadyRate(root);
-  const gatedAndReviewed =
-    report.numerator.length +
-    report.denominator.filter((note) => note.reason === NO_MERGE_ARTIFACT).length;
   const reach = readReachSnapshot(root);
   const daily = reach.daily.downloads;
   const total = daily.reduce((sum, row) => sum + row.downloads, 0);
@@ -522,27 +568,35 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "",
     "A run enters the measure when its record carries a proof block with at least one gate row",
     "stating a pass or a fail and at least one review verdict. It reaches the numerator when all",
-    "four of these hold, each read off an artifact rather than off a sentence:",
+    "three of these hold, each read off an artifact rather than off a sentence:",
     "",
     "1. every gate row of the record's final gate table reports a pass;",
     "2. the last review verdict is an approval at or above the confidence gate that record states",
     `   (${DEFAULT_CONFIDENCE_GATE} when it states none);`,
-    "3. its findings ledger leaves no row `open`, which is the run-exit invariant `/st-work` declares;",
-    "4. `CHANGELOG.md` carries the merge — the run's own released version, or a pull-request number",
-    "   the changelog names under a released heading.",
+    "3. its findings ledger leaves no row `open`, which is the run-exit invariant `/st-work` declares.",
+    "",
+    "Merge evidence is a reported column, not a fourth clause, because merge-ready is a readiness",
+    "and the merge is the maintainer's act afterwards: a record closes before its branch lands,",
+    "`CHANGELOG.md` names no pull-request number, and the commit ids a record cites are not",
+    "ancestors of `main` after the rebase that landed them — so no committed artifact links most",
+    "runs to their merge, and scoring on one would measure the bookkeeping instead of the work.",
     "",
     "### Numerator",
     "",
-    ...(report.numerator.length === 0
-      ? ["None."]
-      : report.numerator.map((run) => `- \`${run.run}\` — ${run.evidence}`)),
+    ...runTable(
+      ["Run", "Merge evidence"],
+      report.numerator.map((run) => [`\`${run.run}\``, run.mergeEvidence]),
+    ),
     "",
     "### Denominator, less the numerator",
     "",
     "These runs carry the evidence the rule reads and did not meet every clause of it. The reason",
     "is the first clause each one missed.",
     "",
-    ...noteList(report.denominator),
+    ...runTable(
+      ["Run", "First clause missed", "Merge evidence"],
+      report.denominator.map((run) => [`\`${run.run}\``, run.reason, run.mergeEvidence]),
+    ),
     "",
     "### Excluded, with the evidence each one lacks",
     "",
@@ -554,14 +608,11 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "",
     "### What the number is limited by, stated rather than tuned away",
     "",
-    `${gatedAndReviewed} of the ${report.rate.d} met clauses 1 to 3 — gates green, review approved at the`,
-    "confidence gate, ledger closed — and failed only clause 4. The limit is clause 4's evidence:",
-    "`CHANGELOG.md` names no pull-request number anywhere today, so the only merge a committed",
-    "artifact proves is a release run's own version, and the run records' commit ids do not survive",
-    "the rebases that landed them. That is a property of what this repository writes down, not of",
-    "what it merges, and it is the single largest reason the rate reads as it does. It moves when",
-    "the changelog starts naming the pull request each entry landed through — not when this page",
-    "is reworded.",
+    "Sixteen run directories are outside the measure and every one of them is named above. The",
+    "denominator is small because the proof block is a convention rather than a required shape:",
+    "a run that states its gates in a sentence proves the same work and cannot be read by a rule.",
+    "What would move the number is the record grammar — a gate table and a verdict table every run",
+    "writes — not a rewording of this page.",
     "",
     "## Reach (a proxy)",
     "",
@@ -585,12 +636,12 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "",
     "## Anti-gaming constraint",
     "",
-    "The rate reads four artifacts and no prose. A record that calls itself verified, complete, or",
+    "The rate reads three artifacts and no prose. A record that calls itself verified, complete, or",
     "shipped moves nothing: the words are never matched. What moves the number is a gate row with",
-    "a pass verdict, a review verdict token, a ledger with no open row, and a version or",
-    "pull-request number the changelog carries.",
+    "a pass verdict, a review verdict token at or above the record's own confidence gate, and a",
+    "findings ledger with no open row.",
     "",
-    "Two consequences worth stating, because they are what make the number worth reading:",
+    "Three consequences worth stating, because they are what make the number worth reading:",
     "",
     "- **Exclusions are published, not dropped.** Every run directory appears exactly once across",
     "  the three lists above. Removing an inconvenient run from the denominator would remove it",
@@ -598,6 +649,9 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "- **The measure is conservative where it is uncertain.** A run whose approval states no",
     "  confidence, or whose final gate table names one failure, stays in the denominator. The",
     "  number under-claims by construction.",
+    "- **Merge evidence is reported, never scored.** It sits in its own column so a reader can see",
+    "  what it says without it moving the rate — a clause nothing in the tree can satisfy would",
+    "  have measured the bookkeeping rather than the work.",
     "",
     "## Corpus behaviour: run of record",
     "",

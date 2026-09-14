@@ -8,7 +8,8 @@
 // src/cli/docs/measurements.ts, which is also what renders docs/measurements.md,
 // so the page and this command cannot disagree about the number. The inputs are
 // committed artifacts only — .stamity/runs/*/record.md, each run's ledger.jsonl,
-// and CHANGELOG.md — and nothing here reaches the network or reads the clock.
+// and CHANGELOG.md, which supplies the reported merge-evidence column rather
+// than a clause — and nothing here reaches the network or reads the clock.
 //
 // The re-exec below is the same tolerance generate-docs.mjs carries: the module
 // is TypeScript and Node strips the types itself from v22.18 onward, so a HOST
@@ -43,9 +44,13 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
       console.log(`Generated for: ${report.generated} (the newest run record's date)`)
       console.log('')
       console.log(`Numerator (${report.numerator.length}):`)
-      for (const run of report.numerator) console.log(`  ${run.run} — ${run.evidence}`)
+      for (const run of report.numerator) {
+        console.log(`  ${run.run} — merge evidence: ${run.mergeEvidence}`)
+      }
       console.log(`Denominator, less the numerator (${report.denominator.length}):`)
-      for (const run of report.denominator) console.log(`  ${run.run} — ${run.reason}`)
+      for (const run of report.denominator) {
+        console.log(`  ${run.run} — ${run.reason} (merge evidence: ${run.mergeEvidence})`)
+      }
       console.log(`Excluded (${report.excluded.length}):`)
       for (const run of report.excluded) console.log(`  ${run.run} — ${run.reason}`)
     }
