@@ -144,6 +144,38 @@ export const CODEX_SKILLS_LIST_BUDGET_CHARS = 8_000;
 /** The upstream gap that makes glob down-conversion necessary, cited in every notice. */
 const LOSSY_GAP = "open codex#34002";
 
+/** The vendor page carrying the `features.hooks` key and its default, with its read date. */
+const CONFIG_REFERENCE_PAGE =
+  "learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15)";
+
+/**
+ * The three steps between an emitted `hooks.json` and a hook the client runs.
+ *
+ * Emitting the file was never the whole contract, and reading it as if it were
+ * cost a QA lane a false negative: the harness saw zero hook invocations and
+ * had no way to tell "the client ignores the file" from "the client never
+ * loaded the layer". Each step is a different gate, owned by a different
+ * surface — a config key this engine writes, a trust record in the operator's
+ * Codex home, and a per-hook hash review that only the interactive client can
+ * take — so the operator is told all three wherever the subject comes up, in
+ * {@link buildHooksJson}'s `description` and in the `[features]` comment of
+ * {@link composeConfigToml}.
+ */
+const HOOK_TRUST_STEPS = [
+  "Three steps stand between this file and a hook the client runs.",
+  "1. Feature flag: `features.hooks = true`. The client defaults it OFF (deprecated alias",
+  `   \`features.codex_hooks\`), so this file is not read until it is on. ${CODEX_CONFIG_FILE}`,
+  "   carries it; the per-invocation equivalent is `codex exec --enable hooks`, which is",
+  "   shorthand for `-c features.hooks=true`.",
+  "2. Project trust: a project `.codex/` layer loads only when it is trusted. Record",
+  '   `projects.<path>.trust_level = "trusted"` in the Codex home config (`~/.codex/config.toml`),',
+  "   which is the operator's file and not one this engine writes.",
+  "3. Per-hook review: each hook is trusted by hash through the interactive `/hooks` command.",
+  "   Automation that cannot take that step runs `--dangerously-bypass-hook-trust`, which runs",
+  "   enabled hooks with no persisted trust.",
+  `Key set and default: ${CONFIG_REFERENCE_PAGE}.`,
+] as const;
+
 /** The one transformable file in a projected skill directory. */
 const SKILL_FILE = "SKILL.md";
 
@@ -550,6 +582,18 @@ function bodyRenderer(ctx: EmissionContext): (raw: string) => string {
 
 // ── 1. Hook configuration ────────────────────────────────────────
 
+/**
+ * {@link HOOK_TRUST_STEPS} as one line, for the JSON `description` field.
+ *
+ * JSON carries no comments, so the only channel this file has to the operator
+ * is that one string — and it is the file they open when a hook did not fire.
+ * Collapsing the TOML comment block rather than writing a second copy keeps the
+ * two renderings from drifting apart; a step added above appears in both.
+ */
+function hookTrustSentence(): string {
+  return HOOK_TRUST_STEPS.join(" ").replaceAll(/\s+/gu, " ");
+}
+
 /** Native Codex configuration: string commands and runtime-managed trust. */
 export function buildHooksJson(core: CoreEmissionPlan): string {
   const hooks: Record<string, { matcher?: string; hooks: { type: string; command: string; commandWindows: string; timeout?: number }[] }[]> = {};
@@ -568,7 +612,11 @@ export function buildHooksJson(core: CoreEmissionPlan): string {
       ...(row.timeoutMs === undefined ? {} : { timeout: Math.min(row.event === "session_end" ? 3 : Infinity, Math.ceil(row.timeoutMs / 1000)) }),
     });
   }
-  return `${JSON.stringify({ description: "Stamity hooks. Review and trust with /hooks; stamity check detects emitted-file drift. The role guard is telemetry because PreToolUse carries no agent identity.", hooks }, null, 2)}\n`;
+  const description =
+    `Stamity hooks. ${hookTrustSentence()} ` +
+    "stamity check detects emitted-file drift. " +
+    "The role guard is telemetry because PreToolUse carries no agent identity.";
+  return `${JSON.stringify({ description, hooks }, null, 2)}\n`;
 }
 
 // ── 2. Subagent definitions ──────────────────────────────────────
@@ -681,6 +729,13 @@ export function buildAgentToml(
  * An empty server selection still emits the file: the emitter's documented
  * empty-map spelling is written, so the hooks and subagents that reference this
  * configuration never point at a file that is not there.
+ *
+ * `[features] hooks = true` is the adapter-level table. It is not decoration:
+ * the client defaults the flag OFF, so every byte of {@link CODEX_HOOKS_FILE}
+ * was inert without it — the emission looked complete and enforced nothing.
+ * The other two gates ({@link HOOK_TRUST_STEPS}) are the operator's to close,
+ * and the comment above the key says so rather than leaving the flag to read
+ * as the whole story.
  */
 export function composeConfigToml(core: CoreEmissionPlan, ctx: EmissionContext): string {
   const reserved = core.mcpFor(TOOL);
@@ -707,7 +762,27 @@ export function composeConfigToml(core: CoreEmissionPlan, ctx: EmissionContext):
     tables: [],
   });
 
-  return `${header}\n${emitCodexToml(ctx.manifest.mcp?.servers ?? [], {
+  // `[features]` is its own serialized document, not a table appended to the
+  // header: this writer renders one comment preamble per document, and the
+  // three-step notice has to sit directly above the key it explains rather than
+  // at the top of the file behind the MCP prose.
+  const features = serializeTomlDocument({
+    comments: [
+      "Lifecycle hooks: OFF by default in the client, so an emitted hooks.json does nothing",
+      "until this key turns it on. Enabling it here is step 1 of 3.",
+      "",
+      ...HOOK_TRUST_STEPS,
+      "",
+      "One writer: this whole file is generated, so a `[features]` table of your own does not",
+      "belong in it — TOML reads a second [features] header as a redefinition, not a merge, and",
+      "a regeneration would drop the keys anyway. Your own keys are never clobbered: the engine",
+      "refuses to overwrite a file it does not own (sync reports an unmanaged-name collision),",
+      "so keep your file and add `hooks = true` INTO your existing [features] table.",
+    ],
+    tables: [{ header: "features", entries: [["hooks", true]] }],
+  });
+
+  return `${header}\n${features}\n${emitCodexToml(ctx.manifest.mcp?.servers ?? [], {
     packServers: core.packMcpServers,
   })}`;
 }

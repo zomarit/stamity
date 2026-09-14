@@ -35,8 +35,20 @@ const RUN_TIMEOUT_MS = 300_000
  * the tool calls and the hook's refusal visible in the transcript; `--verbose` is required
  * alongside it. `CLAUDE_CONFIG_DIR` is inherited rather than set, because the run has to use the
  * operator's real credentials and the fixture supplies the only configuration under test.
- * `codex` — `exec` is the non-interactive lane, and `--dangerously-bypass-hook-trust` is the flag
- * the vendor documents for running enabled hooks without the interactive trust step.
+ * `codex` — no runner, after the lane was measured rather than assumed. `exec` is the documented
+ * non-interactive entry point and `--dangerously-bypass-hook-trust` is the documented way to run
+ * enabled hooks without the interactive trust step, so this row used to drive it. Three runs on
+ * codex-cli 0.154.0 (2026-09-15), in a fixture built by this module's own `createFixture`, produced
+ * ZERO observations: with `features.hooks = true` emitted into `.codex/config.toml`, with
+ * `--enable hooks` added, and with the project marked `trust_level = "trusted"`. `RUST_LOG=debug`
+ * showed the session feature list carrying `CodexHooks` (so the flag IS read — the same run with
+ * `-c features.hooks=false` does not carry it) and the bypass warning printed, but no hook
+ * discovery line at all, while the client's own shell calls executed. The vendor pages read
+ * 2026-09-15 — learn.chatgpt.com/docs/hooks and
+ * learn.chatgpt.com/docs/config-file/config-reference — document the flag, the project-trust
+ * requirement and the per-hook `/hooks` review, and do not state whether `exec` loads the project
+ * hook layer at all. So the honest row is `not-run` with that reason: driving `exec` here would
+ * record a `failed` row about the client's headless behaviour and read as a defect in the emission.
  * `cursor` and `copilot` carry no runner here; their rows are `not-run` with the reason the run
  * records, which is a fact about this machine and not about the client.
  */
@@ -46,8 +58,12 @@ export const CLIENT_RUNNERS = {
     args: ['-p', PROMPT, '--output-format', 'stream-json', '--verbose'],
   },
   codex: {
-    binary: 'codex',
-    args: ['exec', '--dangerously-bypass-hook-trust', PROMPT],
+    binary: null,
+    notRun:
+      'codex exec on codex-cli 0.154.0 loads no project hook layer headlessly (features.hooks on, ' +
+      'project trusted, hook trust bypassed; RUST_LOG=debug shows no hook discovery; the vendor ' +
+      'pages read 2026-09-15 do not state whether exec runs hooks) — the interactive /hooks trust ' +
+      'and the TUI observation stay human',
   },
   cursor: {
     binary: null,

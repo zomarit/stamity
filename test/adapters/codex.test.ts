@@ -324,6 +324,27 @@ describe("hooks.json — native command strings and trust controls", () => {
       }
     }
   });
+  it("states all three loading steps in the one field JSON gives the operator", async () => {
+    const core = await buildCoreEmissionPlan(ctxOf({ contentRoot: await seedCorpus() }));
+    const document = JSON.parse(buildHooksJson(core));
+
+    // JSON carries no comments, so `description` is the only channel this file
+    // has to the person who opens it after a hook did not fire. Naming `/hooks`
+    // and stopping there was the gap: it left the feature flag — the step that
+    // makes every other byte here inert — unmentioned.
+    expect(document.description).toContain("`features.hooks = true`");
+    expect(document.description).toContain("defaults it OFF");
+    expect(document.description).toContain('`projects.<path>.trust_level = "trusted"`');
+    expect(document.description).toContain("`/hooks`");
+    expect(document.description).toContain("`--dangerously-bypass-hook-trust`");
+    expect(document.description).toContain(
+      "learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15)",
+    );
+    // One line, not the comment block's line breaks leaking into JSON.
+    expect(document.description).not.toContain("\n");
+    expect(document.description).not.toMatch(/ {2}/u);
+  });
+
   it("preserves user argv, matcher and millisecond timeout behind the native seconds request", () => {
     const row: HookInterchange = { event: "pre_tool_use", command: ["node", "--enable-source-maps", "scripts/with space.mjs", "$(literal)"], matcher: "Bash", timeoutMs: 1501 };
     const document = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [row]))));
@@ -788,6 +809,43 @@ describe("config.toml — one composed document, one writer", () => {
     // The row is planned too: hooks and subagents reference this path.
     const rows = byPath((await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs);
     expect(rows.get(CODEX_CONFIG_FILE)?.content).toBe(content);
+  });
+
+  it("turns lifecycle hooks on, because the client defaults the feature off", async () => {
+    const contentRoot = await seedCorpus();
+    // Two servers, so the MCP tables the feature table sits beside are real:
+    // an empty selection would prove nothing about the two blocks coexisting.
+    const ctx = ctxOf({ contentRoot, mcp: { servers: ["github", "context7"] } });
+
+    const content = composeConfigToml(await buildCoreEmissionPlan(ctx), ctx);
+
+    expect(content).toContain("[features]\nhooks = true\n");
+    // Exactly one table, or TOML reads the second header as a redefinition.
+    expect(content.match(/^\[features\]$/gmu)).toHaveLength(1);
+    // The flag sits ahead of the MCP tables, and both survive composition.
+    expect(content.indexOf("[features]")).toBeLessThan(content.indexOf("[mcp_servers."));
+    expect(content).toContain("[mcp_servers.github]");
+    // Why the key is here at all: the vendor default, on the page that states it.
+    expect(content).toContain("OFF by default in the client");
+    expect(content).toContain("learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15)");
+    expect(content).toContain("`features.codex_hooks`");
+    expect(content).toContain("`codex exec --enable hooks`");
+    // A user's own [features] table is not clobbered, and the comment says how.
+    expect(content).toContain("add `hooks = true` INTO your existing [features] table");
+  });
+
+  it("names all three hook-loading steps above the flag, not the flag alone", async () => {
+    const contentRoot = await seedCorpus();
+    const ctx = ctxOf({ contentRoot, mcp: { servers: ["github"] } });
+
+    const content = composeConfigToml(await buildCoreEmissionPlan(ctx), ctx);
+
+    // Step 1 is this file's; steps 2 and 3 are the operator's, and a comment
+    // that stopped at step 1 would read as "hooks are now enforced".
+    expect(content).toContain("Three steps stand between this file and a hook the client runs.");
+    expect(content).toContain('`projects.<path>.trust_level = "trusted"`');
+    expect(content).toContain("`/hooks`");
+    expect(content).toContain("`--dangerously-bypass-hook-trust`");
   });
 
   it("refuses to compose when the core plan also placed a codex MCP document", async () => {
