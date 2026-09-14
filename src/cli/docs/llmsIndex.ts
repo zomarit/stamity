@@ -12,7 +12,7 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the eight guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the ten guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
  * The guides are held to the same dated hand-page contract as three of those
  * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
@@ -201,6 +201,13 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Packs and trust",
         description:
           "what a pack is, the four-rung trust ladder, what a verified signature does and does not prove, the org policy, and how to remove one.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/security-mapping.md",
+        title: "Security mapping",
+        description:
+          "the version-pinned crosswalk from this repository's own controls to the OWASP agentic, LLM and web lists, the joint guidance and the NIST AI RMF — seven surfaces, their residuals, and the gaps.",
         regenerateCommand: null,
       },
       {

@@ -14,11 +14,11 @@ import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 
 /**
- * The gate on the twelve hand-written pages: three at the root, nine guides
+ * The gate on the thirteen hand-written pages: three at the root, ten guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * twelve are typed by a human, so the only guard is this file.
+ * thirteen are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -50,7 +50,7 @@ import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all twelve pages because the hand bucket is
+ * Two properties are asserted on all thirteen pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -114,15 +114,16 @@ const ENTERPRISE_FORKS = "docs/enterprise-forks.md";
 const GETTING_STARTED = "docs/getting-started.md";
 const MIGRATION = "docs/migration.md";
 const PACKS_AND_TRUST = "docs/packs-and-trust.md";
+const SECURITY_MAPPING = "docs/security-mapping.md";
 const TROUBLESHOOTING = "docs/troubleshooting.md";
 const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 const WORKSPACES = "docs/workspaces.md";
 
 /**
- * The nine hand-written guides under `docs/`.
+ * The ten hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these nine are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these ten are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  *
  * `docs/specs/` is outside the bucket and outside the site: five engineering
@@ -140,6 +141,10 @@ const GUIDES: readonly string[] = [
   ENTERPRISE_FORKS,
   PACKS_AND_TRUST,
   TROUBLESHOOTING,
+  // Appended rather than filed beside the security-adjacent guides on purpose: the ordinals in
+  // the comment above index into this literal, so an insertion in the middle moves every entry
+  // after it and the note goes stale the same day.
+  SECURITY_MAPPING,
 ];
 
 /**
@@ -188,8 +193,14 @@ const MAX_LINES = 150;
  * every page the docs script writes), which pays for nothing — that paragraph wraps to the same
  * nine lines with the new path in it. So the budget moves by exactly the row, and by nothing
  * else: the page gained no prose it did not need.
+ *
+ * TEST CHANGE, justified: 156 to 157, the cost of ONE more map row, on the same reasoning.
+ * `docs/security-mapping.md` is a new hand page, and a guide the map does not name is one only
+ * the index knows about — which is precisely what `MAPPED_GUIDES` above refuses to allow. The
+ * `llms.txt` row's guide count moved from nine to ten in the same change, in place, and paid
+ * for nothing. So again the budget moves by exactly the row.
  */
-const README_MAX_LINES = 156;
+const README_MAX_LINES = 157;
 
 /**
  * The product, its installable package, and the owner the pages name.
@@ -442,7 +453,7 @@ describe("hand pages", () => {
   // eight" when the customization guide did, "all nine" when the workspaces guide did, "all
   // twelve" when the enterprise-forks guide did: the name states the membership count, and the
   // loop below is unchanged through all of them and still runs over every member.
-  it("all twelve exist and carry real content", () => {
+  it("all thirteen exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -977,7 +988,18 @@ describe("SECURITY.md", () => {
     // 1.0.0 and is asserted as a table above; the rest are still ledgered, and
     // a page that quietly drops the ledger reads as one that met them.
     expect(text).toMatch(/standards mapping/i);
-    expect(text).toMatch(/no threat-model document exists to re-run/i);
+
+    // TEST CHANGE, justified: the mapping obligation MOVED rather than lapsed, so the
+    // assertion moves with it. The page used to be held to admitting that "no threat-model
+    // document exists to re-run" — an assertion that can only pass while the document is
+    // missing, and that would have failed the change that wrote it. What replaces it is the
+    // same obligation from the other side: the mapping exists, and SECURITY.md reaches it. The
+    // "re-run a pass" negative below is untouched — the failure it was written for (promising
+    // to re-run something nobody wrote) is still a failure, and a page that links the mapping
+    // while promising that re-run still fails here.
+    expect(text, "SECURITY.md does not link the standards mapping it says is written").toContain(
+      `](${SECURITY_MAPPING})`,
+    );
     expect(text).not.toMatch(/re-run a threat-model pass/i);
   });
 
@@ -1012,6 +1034,113 @@ describe("SECURITY.md", () => {
     expect(text).toMatch(/allowlist/i);
     expect(text).toMatch(/atomic rename/i);
     expect(text).toMatch(/does not defend/i);
+  });
+});
+
+/**
+ * Every backticked `src/…` address on a page, held to the check SECURITY.md's own control table
+ * is held to: a `file::symbol` address whose file exists and whose symbol is DECLARED there,
+ * and never a `file:line` address, which drifts with the edit above it and cannot be checked.
+ *
+ * Written as a helper rather than folded into the SECURITY case above, because the two pages
+ * make different claims with the same addresses. SECURITY.md's table claims a control the
+ * engine RUNS, so its case also holds each address to the call graph. The mapping page states
+ * controls and gaps side by side, and a gap row's whole point is an address nothing calls — so
+ * holding that page to the call graph would refuse exactly the rows it exists to publish.
+ */
+function assertSymbolAddressesResolve(page: string, text: string, minimum: number): void {
+  const pointers = [...text.matchAll(/`([^`]+)`/g)]
+    .map((match) => match[1] ?? "")
+    .filter((span) => span.startsWith("src/"));
+
+  let symbolsChecked = 0;
+  for (const pointer of new Set(pointers)) {
+    expect(pointer, `${page} cites ${pointer} by line number`).not.toMatch(/:\d+$/);
+    const [file = "", symbol] = pointer.split("::");
+    expect(existsSync(join(REPO_ROOT, file)), `${page} cites missing ${file}`).toBe(true);
+    if (symbol === undefined) continue;
+    symbolsChecked += 1;
+    const declared = new RegExp(
+      `\\b(?:function|const|class|interface|type|enum)\\s+${symbol}\\b|\\b${symbol}\\s*[(:=]`,
+    );
+    expect(declared.test(read(file)), `${file} declares no ${symbol}`).toBe(true);
+  }
+  expect(symbolsChecked, `${page} names no enclosing symbols`).toBeGreaterThanOrEqual(minimum);
+}
+
+/** `ASI01`…`ASI10` — a catalogue's ten ids, built from its prefix rather than typed out. */
+const decade = (prefix: string): string[] =>
+  Array.from({ length: 10 }, (_, index) => `${prefix}${String(index + 1).padStart(2, "0")}`);
+
+/**
+ * The standards mapping — the page SECURITY.md's "Standards mapping" section used to stand in
+ * for with an admission that it was unwritten.
+ *
+ * What is asserted here is what makes a crosswalk checkable rather than decorative: every
+ * control address resolves the way the security page's do, every catalogue it maps to is pinned
+ * to an edition (a mapping to "OWASP ASI" with no edition maps to a moving target), and the
+ * structure a reader navigates by — one heading per surface, and the gaps under a heading of
+ * their own rather than dissolved into the rows they qualify.
+ */
+describe("docs/security-mapping.md", () => {
+  const text = read(SECURITY_MAPPING);
+
+  /** The surface section alone, so a `###` elsewhere on the page is not counted as a surface. */
+  const surfaces = (): string => {
+    const start = text.indexOf("## The surfaces");
+    const end = text.indexOf("## Gaps");
+    expect(start, "the mapping page has no `## The surfaces` section").toBeGreaterThanOrEqual(0);
+    expect(end, "the mapping page has no `## Gaps` section").toBeGreaterThan(start);
+    return text.slice(start, end);
+  };
+
+  it("addresses every control by a symbol that exists in the file it names", () => {
+    assertSymbolAddressesResolve(SECURITY_MAPPING, text, 20);
+  });
+
+  it("carries one heading per surface, and states its gaps under their own heading", () => {
+    const headings = [...surfaces().matchAll(/^### (.+)$/gm)].map((match) => match[1] ?? "");
+    // Seven: the six engine surfaces plus the release publish path, which is a surface of this
+    // repository rather than of the emitted setup and is labelled as one.
+    expect(headings, "the surface count moved without this pin moving").toHaveLength(7);
+    for (const heading of headings) {
+      expect(heading.trim().length, "a surface heading is empty").toBeGreaterThan(0);
+    }
+    expect(text, "the mapping page states no gaps section").toMatch(/^## Gaps/m);
+  });
+
+  it("pins every catalogue it maps to an edition", () => {
+    // The ids ARE the mapping — a row mapping to a catalogue while naming none of its ids maps
+    // to nothing — so each catalogue's full id set is asserted rather than a sample.
+    for (const id of [...decade("ASI"), ...decade("LLM"), ...decade("A")]) {
+      expect(text, `the mapping page never names ${id}`).toContain(id);
+    }
+    for (const subcategory of [
+      "GOVERN 1.1",
+      "GOVERN 1.6",
+      "MAP 1.1",
+      "MEASURE 2.7",
+      "MANAGE 2.1",
+      "MANAGE 3.1",
+      "MANAGE 3.2",
+    ]) {
+      expect(text, `the mapping page never names ${subcategory}`).toContain(subcategory);
+    }
+    // And the editions those ids belong to. A crosswalk with no edition is a crosswalk to
+    // whatever the catalogue says today, which is the failure this page was written against.
+    for (const edition of [
+      "2025-12-09",
+      "OWASP Top 10 for LLM Applications 2025",
+      "OWASP Top 10:2021",
+      "NIST AI 100-1",
+      "NIST AI 600-1",
+      "2024-04-15",
+      "2025-05-22",
+    ]) {
+      expect(text, `the mapping page cites ${edition} without an edition`).toContain(edition);
+    }
+    // The read date is what makes every one of those falsifiable.
+    expect(text, "the mapping page states no catalogue read date").toContain("read on 2026-09-14");
   });
 });
 

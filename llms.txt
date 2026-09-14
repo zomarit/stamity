@@ -28,6 +28,7 @@ hand-written or corpus source. Nothing here links outside this tree.
 - [Workspaces](docs/workspaces.md): one policy across several repositories — the manifest, the init offer, the status rows, and the cascade.
 - [Enterprise forks](docs/enterprise-forks.md): taking upstream releases into a customized fork — the config, the verbs, conflicts, the gates that decide, landing, and the opt-in workflow.
 - [Packs and trust](docs/packs-and-trust.md): what a pack is, the four-rung trust ladder, what a verified signature does and does not prove, the org policy, and how to remove one.
+- [Security mapping](docs/security-mapping.md): the version-pinned crosswalk from this repository's own controls to the OWASP agentic, LLM and web lists, the joint guidance and the NIST AI RMF — seven surfaces, their residuals, and the gaps.
 - [Troubleshooting](docs/troubleshooting.md): the exit model, every doctor row and its remedy, the common failures, and where to report one.
 
 ## Generated reference

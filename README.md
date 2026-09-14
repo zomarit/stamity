@@ -102,7 +102,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the `config` command's key registry, each row's unset value measured against a probe manifest. |
 | [`docs/measurements.md`](docs/measurements.md) | Generated: the verified merge-ready rate over this repository's own run records, the npm reach proxy, the eval run of record, and the first-run proof lanes. |
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class projected from artifact frontmatter, plus the pack inventory and the MCP server reference. |
-| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the nine guides, the charter and every generated reference page. |
+| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the ten guides, the charter and every generated reference page. |
 | [`plugin.json`](plugin.json) | Generated: the plugin surfaces — this Agent Plugins manifest, [`.claude-plugin/`](.claude-plugin/) and [`.cursor-plugin/`](.cursor-plugin/). |
 | [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus — the package `apm install zomarit/stamity` installs, served from this repository. |
 | [`website/`](website/) | The Docusaurus site that renders the `docs/` pages above directly from the tree. It holds one page of its own, the landing page at `website/src/pages/index.tsx`, and no docs page. |
@@ -117,6 +117,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — the manifest, the init offer, the status rows, and the cascade. |
 | [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking upstream releases into a customized fork — the config, the verbs, conflicts, the `fork/` layer a fork authors in, the gates that decide, and the opt-in workflow. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
+| [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
 
 Hook scripts are absent from that row because they are not corpus content: the three portable
