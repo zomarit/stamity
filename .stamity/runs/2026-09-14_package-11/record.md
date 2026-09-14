@@ -111,3 +111,10 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   (a `REMOVED: none` line read as a removal; one shorthand id list) fixed → **pass**, 16 units,
   `semanticReview: required` — done inline by the plan's writer: each requirement maps to exactly one
   implementing unit and back; the only competing reading found (REQ-PROVE-015) is the one above.
+- 22:05Z spec committed as `17a32c9` (258 lines, no open marker). Note from the spec-author: the
+  new win32 rename ceiling computes to about 8 688 ms with the 0.25 jitter (base 6 950 ms), inside the
+  declared 7 000–9 000 ms band; the plan's "≈ 7.9 s" was an estimate, the band is the criterion.
+- 22:06Z U0b DONE → cherry-picked d4f504f (eval docs currency; readmeCurrency gate; route of record; Codex profiles marked). Two Minor rows ledgered to U2c and U4.
+- 22:07Z U10 DONE (private): currency helper built; dry run at v1.7.0 flagged DR-026, fact 4, the kickoff prompt, the constitution's SET-v2 citation, P6 (5 stale); after the fixes 4 remain (DR-026 and the kickoff prompt → the close; the constitution citation and P6 → Package 12C). 18,535 regenerable files (317,765,053 bytes) hashed and deleted; ignore rules added; committed in the private checkout (not pushed yet).
+- 22:36Z U5 DONE → cherry-picked 1f5fafc (spec-status gate; three specs restamped; red-check flagged draft and worktree-lane; workspace-surface restamped on the CHANGELOG 1.1.0 evidence because its plan's stamp is unreachable). Tier-1: overlay-layers → shipped-with-1.1.0. Three Minor rows closed (2 rejected with reasoning, 1 fixed). Three heavy-suite timeouts seen on a loaded worktree, all green in isolation — environmental, the integration gate is the record.
+- 22:44Z U0a DONE → cherry-picked 17c915f (cases-v6 byte-identical; SET-v7; profile claude→rubric-v7; successor test v5→v6 with red-check). Tier-1: eval-run.mjs --help names SET-v7 (5925b5c). Merged eval suites: 9 files, 1080 tests green. U1 (charter) dispatched in a worktree.
