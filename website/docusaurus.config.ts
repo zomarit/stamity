@@ -2,6 +2,7 @@ import {resolve} from 'node:path';
 import type * as Preset from '@docusaurus/preset-classic';
 import type {Config} from '@docusaurus/types';
 import {themes as prismThemes, type PrismTheme} from 'prism-react-renderer';
+import tableHeaderScope from './src/rehype/tableHeaderScope';
 import repoLinks from './src/remark/repoLinks';
 
 /**
@@ -172,6 +173,15 @@ const config: Config = {
             // routes is rewritten to the repository file rather than reported as broken.
             [repoLinks, {docsDir: DOCS_DIR, repoRoot: REPO_ROOT, repoUrl: REPO_URL, excluded: ['specs', 'plans']}],
           ],
+
+          // AFTER the markdown has become HTML, because the attribute it adds exists only there.
+          // Docusaurus renders every markdown table's header cell as a bare `<th>`, which is a
+          // header no screen reader can attach to the values under it — WCAG 1.3.1 asks for the
+          // association the layout gives a sighted reader to be present in the markup, and the QA
+          // harness's accessibility-tree row (H2) measures exactly that: every `th` carries
+          // `scope` or is referenced through `headers=`. See src/rehype/tableHeaderScope.ts for
+          // which cells it decides and the one it deliberately leaves for the page to state.
+          rehypePlugins: [tableHeaderScope],
         },
         blog: false,
         theme: {
