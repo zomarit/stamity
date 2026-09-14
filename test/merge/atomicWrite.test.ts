@@ -150,10 +150,18 @@ describe("rename retry schedule", () => {
     // refuses that — a concurrent reader, or the on-access scanner that opens
     // every freshly written file on a CI runner. 750ms was spent in full there;
     // seconds, not milliseconds, is the unit that outlasts such a hold.
+    // Bounds moved 2026-09-14 with the schedule they measure, and the reason is
+    // the behaviour moving, not the test: CI run 34771471163 (the 1.7.0 release
+    // commit's Windows leg) failed the real-disk concurrent-reader case with
+    // `EPERM` after 4463 ms, spending the 8-retry / 4687 ms budget in full. The
+    // schedule is now 12 retries over 6950 ms of base delay, so the assertion
+    // that budget-is-seconds-not-milliseconds is restated against the widened
+    // one; what is pinned is unchanged — a floor a scanner pass outlasts, and a
+    // ceiling a failing write still reports inside.
     await importForPlatform("win32", (mod) => {
-      expect(mod.RENAME_RETRY_COUNT).toBe(8);
-      expect(mod.RENAME_RETRY_CEILING_MS).toBeGreaterThan(3_000);
-      expect(mod.RENAME_RETRY_CEILING_MS).toBeLessThan(5_000);
+      expect(mod.RENAME_RETRY_COUNT).toBe(12);
+      expect(mod.RENAME_RETRY_CEILING_MS).toBeGreaterThan(7_000);
+      expect(mod.RENAME_RETRY_CEILING_MS).toBeLessThan(9_000);
     });
   });
 
@@ -1185,6 +1193,80 @@ describe("failure paths that need a stubbed filesystem", () => {
     // entry to a handle held without `FILE_SHARE_DELETE`. Read off the compiled
     // constant so the count and the schedule cannot drift apart.
     expect(attempts).toBe(RENAME_RETRY_COUNT + 1);
+    expect(await readdir(dir.dir)).toEqual([]);
+  });
+
+  it("rides out three EPERM refusals on win32 and leaves no temp file behind", async () => {
+    // The flake this covers, at its own errno and platform: CI run 34771471163
+    // (the 1.7.0 release commit's Windows leg) failed the real-disk
+    // concurrent-reader case with `EPERM ... rename payload.md.tmp.stamity-… ->
+    // payload.md` after 4463 ms. A Windows sharing violation is not
+    // reproducible on demand — no portable fixture opens a handle without
+    // `FILE_SHARE_DELETE` — so the refusal is injected at the fs seam and the
+    // platform is declared; what is asserted is ours: the write still lands,
+    // and the temp name it landed from is gone.
+    process.env.STAMITY_LOCK = "0";
+    const dir = getDir();
+    const target = dir.path("payload.md");
+    let attempts = 0;
+    const realPlatform = process.platform;
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    try {
+      const mod = await importWithFs({
+        rename: async (from: string, to: string) => {
+          attempts += 1;
+          if (attempts <= 3) throw errnoError("EPERM");
+          return realFsPromises.rename(from, to);
+        },
+      });
+
+      await mod.atomicWriteFile(target, "survived the hold");
+    } finally {
+      Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
+    }
+
+    expect(attempts).toBe(4);
+    expect(await readFile(target, "utf8")).toBe("survived the hold");
+    // Not just "the target exists": a temp file left beside it would mean the
+    // sweep has work the writer should have done.
+    expect(await readdir(dir.dir)).toEqual(["payload.md"]);
+  });
+
+  it("names the write target when win32's widened budget is spent in full", async () => {
+    // Spends the whole 12-retry schedule on purpose — the message the operator
+    // reads after a hold outlasts the budget is only reachable there, and it is
+    // the half of this repair that a wider budget does not fix. `EACCES` is the
+    // win32 sharing refusal that the errno table maps, so the raised error is
+    // the actionable `FS_ERROR` rather than a bare errno.
+    process.env.STAMITY_LOCK = "0";
+    const dir = getDir();
+    const target = dir.path("contended.md");
+    let attempts = 0;
+    let retryCount = 0;
+    const realPlatform = process.platform;
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    try {
+      const mod = await importWithFs({
+        rename: async () => {
+          attempts += 1;
+          throw errnoError("EACCES");
+        },
+      });
+      retryCount = mod.RENAME_RETRY_COUNT;
+
+      // Matched by shape, not by `instanceof`: the subject is re-imported into a
+      // fresh module registry, so its `EngineError` is a different class object
+      // from this file's import even though it is the same declaration.
+      await expect(mod.atomicWriteFile(target, "never lands")).rejects.toMatchObject({
+        code: "FS_ERROR",
+        message: expect.stringContaining(target),
+      });
+    } finally {
+      Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
+    }
+
+    expect(retryCount).toBe(12);
+    expect(attempts).toBe(retryCount + 1);
     expect(await readdir(dir.dir)).toEqual([]);
   });
 

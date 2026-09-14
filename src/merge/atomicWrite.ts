@@ -956,10 +956,20 @@ const RENAME_RETRY_ERRNOS: ReadonlySet<string> =
  * `EPERM` having spent the 750 ms budget in full, which is a budget sized just
  * under the wait rather than an unlucky test. Eight retries over 3750 ms of base
  * delay outlast a scanner pass; the schedule flattens at 800 ms rather than
- * doubling, to keep the ceiling inside ~4.7 s with jitter.
+ * doubling, to keep the ceiling bounded.
+ *
+ * 2026-09-14: four more 800 ms steps, for the same reason a second time. CI run
+ * 34771471163 (the 1.7.0 release commit's Windows leg) failed the real-disk
+ * concurrent-reader case with `EPERM` after 4463 ms — the 4687 ms ceiling spent
+ * in full, again a budget sized just under the hold rather than a missing errno
+ * (`EPERM` was already retried). Twelve retries over 6950 ms of base delay
+ * (8687 ms with jitter) roughly doubles the room; the schedule stays flat at
+ * 800 ms so the growth is in duration, not in the length of any one wait.
  */
 const RENAME_RETRY_DELAYS_MS: readonly number[] =
-  process.platform === "win32" ? [50, 100, 200, 400, 600, 800, 800, 800] : [50, 100, 200, 400];
+  process.platform === "win32"
+    ? [50, 100, 200, 400, 600, 800, 800, 800, 800, 800, 800, 800]
+    : [50, 100, 200, 400];
 
 /**
  * Fraction of a scheduled wait added at random on top of it.
@@ -975,7 +985,8 @@ const RENAME_RETRY_JITTER = process.platform === "win32" ? 0.25 : 0;
 /**
  * Longest a rename can spend on retries before giving up: every scheduled wait
  * plus its maximum jitter. Derived rather than written down, so the two cannot
- * drift. 750 ms on POSIX, 4687 ms on win32.
+ * drift. 750 ms on POSIX, 8687.5 ms on win32 (6950 ms of base delay plus the
+ * 25% jitter every step of it can carry).
  */
 export const RENAME_RETRY_CEILING_MS: number = RENAME_RETRY_DELAYS_MS.reduce(
   (total, wait) => total + wait * (1 + RENAME_RETRY_JITTER),

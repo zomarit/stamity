@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.7.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-14T21:55:46.251Z",
+  "updatedAt": "2026-09-14T22:49:11.369Z",
   "tools": [
     "claude"
   ],
@@ -505,7 +505,7 @@
       "adapter": "claude",
       "artifactId": "claude-review-gate",
       "artifactType": "infra",
-      "contentHash": "feb658d7423155051746c32b2f9dc77c8a9e548d3ee34cc0a09e7d2f16f96c02",
+      "contentHash": "3b28dbc5a37805f5cfd086061f2cf900ef94697fbc7a93544a622cfe2fd30d87",
       "path": ".stamity/generated/hooks/claude/stamity-review-gate.mjs"
     },
     {

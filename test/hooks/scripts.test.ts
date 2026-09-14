@@ -1885,7 +1885,7 @@ describe("buildReviewGateScript", () => {
   it("counts every round while a live holder spends part of its rename budget", async () => {
     // Five EBUSYs on the windows schedule: 50+100+200+400+600 ms of pauses plus
     // up to a quarter of jitter, so the holder publishes at ~1.4-1.7s — inside
-    // the 4,687 ms the script's own schedule allots, and past the 1,000 ms idle
+    // the 8,687 ms the script's own schedule allots, and past the 1,000 ms idle
     // window the waiters used to give up on. Pre-fix, measured here: 1 stored
     // of 30, STATE_LOCKED 29 times, every writer exiting 0.
     const gate = await placeFaultingGate("publish-rename", "EBUSY", { times: 5, platform: "win32" });
@@ -2037,7 +2037,7 @@ describe("buildReviewGateScript", () => {
     // first attempt is the dropped round the retry exists to prevent. Here the
     // hold never lifts (the shim raises for 1,000 attempts), which is the worst
     // case the tolerance can cost: the waiter polls, sees no hand-off, and gives
-    // up after the idle window — LOCK_IDLE_MS, 5,588 ms on the win32 branch as
+    // up after the idle window — LOCK_IDLE_MS, 9,588 ms on the win32 branch as
     // these budgets stand, not LOCK_CEILING_MS (25s) or LOCK_STALE_MS (30s).
     //
     // Bounded on both sides for that reason. The floor is what separates this
@@ -2059,14 +2059,20 @@ describe("buildReviewGateScript", () => {
     expect(elapsed, "a win32 sharing fault on the lock create was read as an answer").toBeGreaterThan(
       3_000,
     );
-    expect(elapsed, "the win32 wait outran the idle window it is derived from").toBeLessThan(15_000);
+    // Ceiling raised 15,000 → 18,000 on 2026-09-15 with the window it brackets:
+    // LOCK_IDLE_MS is derived from the rename schedule, which widened with the
+    // engine's (5,588 → 9,588 ms). Still an order below LOCK_CEILING_MS (25s),
+    // so what it rules out is unchanged — a poll loop that never gave up.
+    expect(elapsed, "the win32 wait outran the idle window it is derived from").toBeLessThan(18_000);
     // Same landing as the posix leg: the round is reported, dropped fail-open,
     // and nothing is written or stranded. Only the wall clock differs.
     expect(result.code).toBe(0);
     expect(refusal(result)).toMatchObject({ blocked: false, reasonCode: "STATE_LOCKED" });
     expect(String(refusal(result)["message"])).toContain("the gate is open");
     expect(existsSync(getRepo().path(REVIEW_GATE_STATE_FILE))).toBe(false);
-  });
+    // This case forces the win32 branch on every host, so it now spends the
+    // derived 9,588 ms window everywhere, not only on the windows leg.
+  }, 30_000);
 
   it("reports a counter it cannot parse from under the lock, and never overwrites it", async () => {
     // The reviewer's round is now counted before the unlocked read that used to
@@ -2248,8 +2254,14 @@ describe("buildReviewGateScript", () => {
     // operator and never stored, which is the same lost round the lock exists
     // to prevent, reached by the other door.
     const schedule = body.split("\n").find((line) => line.startsWith("const RENAME_WAITS_MS = "));
+    // Literal moved 2026-09-15 with the engine's own schedule, which is the
+    // drift this pin exists to force rather than a weakening of it: CI run
+    // 34771471163 spent the 8-retry / 4,687 ms win32 budget in full and still
+    // lost the rename, so `src/merge/atomicWrite.ts` went to twelve retries and
+    // this carried copy followed in the same change. The length check below is
+    // what proves they are still the same decision.
     expect(schedule).toBe(
-      "const RENAME_WAITS_MS = IS_WINDOWS ? [50, 100, 200, 400, 600, 800, 800, 800] : [50, 100, 200, 400];",
+      "const RENAME_WAITS_MS = IS_WINDOWS ? [50, 100, 200, 400, 600, 800, 800, 800, 800, 800, 800, 800] : [50, 100, 200, 400];",
     );
     expect(body).toContain("const RENAME_JITTER = IS_WINDOWS ? 0.25 : 0;");
 
@@ -2258,7 +2270,7 @@ describe("buildReviewGateScript", () => {
     // src/merge/atomicWrite.ts's schedule, and a pin that only restated the
     // literal above would let the two drift apart on the next widening. Whichever
     // branch this platform takes is the one compared — on the windows leg that
-    // is the eight-wait row, here the four-wait one.
+    // is the twelve-wait row, here the four-wait one.
     const branches = [...String(schedule).matchAll(/\[[^\]]*\]/g)].map(
       (match) => JSON.parse(match[0]) as number[],
     );
@@ -2313,19 +2325,27 @@ describe("buildReviewGateScript", () => {
 
     // Timed, because the other half of this change bought the live holder its
     // window out of this one. Nothing here hands the lock on and nothing beats
-    // on it, so the verdict is the IDLE window — 1,650 ms on POSIX, 5,588 ms on
+    // on it, so the verdict is the IDLE window — 1,650 ms on POSIX, 9,588 ms on
     // win32, derived from the retry budgets — and not LOCK_CEILING_MS (25s) or
-    // LOCK_STALE_MS (30s). Bounded loosely, at roughly twice the window plus a
-    // node start: what would go red here is a fix that stopped separating a
-    // holder that died from a queue that is draining, which is the whole design.
+    // LOCK_STALE_MS (30s). Bounded loosely, at the window plus a node start and
+    // slack: what would go red here is a fix that stopped separating a holder
+    // that died from a queue that is draining, which is the whole design.
+    //
+    // The win32 bound moved 12,000 → 16,000 on 2026-09-15 because the window it
+    // measures moved: LOCK_IDLE_MS is derived from the rename schedule, and that
+    // schedule widened with the engine's (5,588 → 9,588 ms). The assertion is
+    // the same one — the wait is attributable to the idle detector and not to
+    // the 25s ceiling or the 30s stale timeout, both still far above this bound.
     expect(elapsed, "a dead holder was waited on past its idle window").toBeLessThan(
-      process.platform === "win32" ? 12_000 : 3_500,
+      process.platform === "win32" ? 16_000 : 3_500,
     );
     expect(result.code).toBe(0);
     expect(refusal(result)).toMatchObject({ blocked: false, reasonCode: "STATE_LOCKED" });
     expect(String(refusal(result)["message"])).toContain("the gate is open");
     expect(existsSync(getRepo().path(REVIEW_GATE_STATE_FILE))).toBe(false);
-  });
+    // Sized for the win32 leg, where this case now spends the derived 9,588 ms
+    // window plus a node start inside the default 20s budget.
+  }, 30_000);
 
   it("ignores a counter root the environment points outside the working directory", async () => {
     const gate = await placeGate();
