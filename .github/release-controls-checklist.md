@@ -200,3 +200,10 @@ the candidate tree and restamped `verified against the tree at the X.Y.Z release
 and `RELEASE_CUT_DATE` in that suite moves with it; a stale stamp is a currency defect the
 suite catches, a stale claim under a fresh stamp is the one a person catches. (Added
 2026-09-15, when the sweep found stamps from 1.5.0 under 1.7.0.)
+
+A fifth line rides the cut with the fourth: the measurements page's input is refreshed —
+`node scripts/merge-ready-rate.mjs --write` freezes the verified merge-ready rate over the committed run
+records into `evals/measurements/merge-ready-<date>.json`, then `node scripts/generate-docs.mjs --page
+measurements` re-renders `docs/measurements.md` from it; both are committed before the tag. A run record
+written after the snapshot is not on the page until the next refresh, which is the page's own contract.
+(Added 2026-09-15, with the page.)
