@@ -53,6 +53,7 @@ import {
   CAPABILITY_MATRIX_DOC_PATH,
   REGENERATE_COMMAND as CAPABILITY_MATRIX_REGENERATE_COMMAND,
 } from "../../emit/capabilityMatrix.ts";
+import { MEASUREMENTS_DOC_PATH } from "./measurements.ts";
 import {
   REFERENCE_PAGES,
   REGENERATE_COMMAND as DOCS_REGENERATE_COMMAND,
@@ -226,6 +227,15 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Configuration reference",
         description:
           "every addressable config key, what it accepts, and what binds when it is unset.",
+        regenerateCommand: DOCS_REGENERATE_COMMAND,
+      },
+      {
+        path: MEASUREMENTS_DOC_PATH,
+        title: "Measurements",
+        description:
+          "the verified merge-ready rate over this repository's own run records, the npm reach proxy, the eval run of record, and the first-run proof lanes.",
+        // The page names the narrower `--page measurements` in its own banner;
+        // the command declared here is the whole-lane one, which writes it too.
         regenerateCommand: DOCS_REGENERATE_COMMAND,
       },
       {

@@ -100,6 +100,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/capability-matrix.md`](docs/capability-matrix.md) | Generated: what each client supports, rendered from adapter code. |
 | [`docs/cli-reference.md`](docs/cli-reference.md) | Generated: every command, flag and exit code, rendered from the program. |
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the `config` command's key registry, each row's unset value measured against a probe manifest. |
+| [`docs/measurements.md`](docs/measurements.md) | Generated: the verified merge-ready rate over this repository's own run records, the npm reach proxy, the eval run of record, and the first-run proof lanes. |
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class projected from artifact frontmatter, plus the pack inventory and the MCP server reference. |
 | [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the nine guides, the charter and every generated reference page. |
 | [`plugin.json`](plugin.json) | Generated: the plugin surfaces — this Agent Plugins manifest, [`.claude-plugin/`](.claude-plugin/) and [`.cursor-plugin/`](.cursor-plugin/). |
@@ -122,15 +123,15 @@ Hook scripts are absent from that row because they are not corpus content: the t
 bodies are generated from `src/hooks/scripts.ts` for every selected client, and Claude Code takes
 a fourth — the review gate — from its own adapter.
 
-Seven rows above are marked Generated, and they come from four different generators: the capability
-matrix from `node scripts/generate-capability-matrix.mjs`; the four docs pages —
-`docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` — from `node
-scripts/generate-docs.mjs`; the plugin surfaces from `node scripts/generate-plugin-manifests.mjs`;
-and the APM package from `node scripts/generate-apm-package.mjs`. CONTRIBUTING.md's regeneration
-table is the one home for that split. Each generator's own suite existence-checks the paths it
-lists; this page's test resolves every link target and holds the corpus counts above to what the
-content catalog indexes. Every link on this page is repo-relative — the docs are read from the
-tree.
+Eight rows above are marked Generated, and they come from four different generators: the capability
+matrix from `node scripts/generate-capability-matrix.mjs`; the five docs pages —
+`docs/cli-reference.md`, `docs/configuration.md`, `docs/measurements.md`, `docs/reference/`,
+`llms.txt` — from `node scripts/generate-docs.mjs`; the plugin surfaces from `node
+scripts/generate-plugin-manifests.mjs`; and the APM package from `node
+scripts/generate-apm-package.mjs`. CONTRIBUTING.md's regeneration table is the one home for that
+split. Each generator's own suite existence-checks the paths it lists; this page's test resolves
+every link target and holds the corpus counts above to what the content catalog indexes. Every link
+on this page is repo-relative — the docs are read from the tree.
 
 ## Tests
 

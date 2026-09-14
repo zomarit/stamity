@@ -34,6 +34,7 @@ hand-written or corpus source. Nothing here links outside this tree.
 
 - [CLI reference](docs/cli-reference.md): every command, argument, flag and exit status, rendered from the program itself. Regenerate with `node scripts/generate-docs.mjs`.
 - [Configuration reference](docs/configuration.md): every addressable config key, what it accepts, and what binds when it is unset. Regenerate with `node scripts/generate-docs.mjs`.
+- [Measurements](docs/measurements.md): the verified merge-ready rate over this repository's own run records, the npm reach proxy, the eval run of record, and the first-run proof lanes. Regenerate with `node scripts/generate-docs.mjs`.
 - [Client capability matrix](docs/capability-matrix.md): what each supported client can do, rendered from the adapters' declared dialect facts. Regenerate with `node scripts/generate-capability-matrix.mjs`.
 
 ## Content corpus

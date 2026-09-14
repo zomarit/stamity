@@ -1,0 +1,546 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterAll, describe, expect, it } from "vitest";
+import {
+  CI_WORKFLOW_PATH,
+  DEFAULT_CONFIDENCE_GATE,
+  MEASUREMENTS_DOC_PATH,
+  MEASUREMENTS_REGENERATE_COMMAND,
+  MERGE_READY_RULE,
+  NO_MERGE_ARTIFACT,
+  REACH_SNAPSHOT_PATH,
+  RUNS_DIR,
+  RUN_OF_RECORD_PATH,
+  computeMergeReadyRate,
+  readReachSnapshot,
+  renderMeasurements,
+  type MergeReadyReport,
+  type MergedRun,
+  type ReachPoint,
+  type RunNote,
+} from "../../../src/cli/docs/measurements.ts";
+import { LLMS_INDEX_SECTIONS } from "../../../src/cli/docs/llmsIndex.ts";
+import { EngineError } from "../../../src/types/errors.ts";
+
+/**
+ * The gate on the measurements page and on the rule behind it.
+ *
+ * Two halves, and the second is the one that matters. The first is the drift
+ * gate every generated page in this lane carries: the render byte-matches the
+ * committed file, twice over, reading no clock. The second is the RULE — the
+ * four clauses a run passes to count as verified — and that half is exercised
+ * against fixture trees rather than against this repository's own history,
+ * because a rule asserted only over the tree it was written against is a
+ * snapshot of today's records with an `expect` around it. The fixtures carry
+ * runs that pass, runs that fail one clause each, and a run whose record calls
+ * itself verified in prose and proves nothing, which is the case the whole
+ * anti-gaming constraint exists for.
+ */
+
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+const MODULE_SOURCE_PATH = join(REPO_ROOT, "src/cli/docs/measurements.ts");
+const SCRIPT_PATH = join(REPO_ROOT, "scripts/generate-docs.mjs");
+const RATE_SCRIPT_PATH = join(REPO_ROOT, "scripts/merge-ready-rate.mjs");
+
+const STALE_MESSAGE =
+  `${MEASUREMENTS_DOC_PATH} is stale — the render no longer matches the committed page. ` +
+  `Regenerate it with \`${MEASUREMENTS_REGENERATE_COMMAND}\` and commit the diff. The page is ` +
+  `rendered from committed artifacts, so a new run record makes it stale the same way a code ` +
+  `change makes the CLI reference stale.`;
+
+const committedPage = (): string => readFileSync(join(REPO_ROOT, MEASUREMENTS_DOC_PATH), "utf-8");
+
+/** A record body with every clause satisfied, parameterised where a case needs it. */
+function record(options: {
+  readonly gates?: string;
+  readonly verdict?: string;
+  readonly merge?: string;
+}): string {
+  const gates = options.gates ?? "| Final authoritative | pass | pass | pass — 120 passed |";
+  const verdict = options.verdict ?? "| 2 | approve | high / 0.90 | none in scope |";
+  return [
+    "# A run",
+    "",
+    options.merge ?? "",
+    "",
+    "## Proof block",
+    "",
+    "### Gate results",
+    "",
+    "| Pass | lint | typecheck | test |",
+    "|---|---|---|---|",
+    gates,
+    "",
+    "### Review verdicts, per round",
+    "",
+    "| Round | Verdict | Confidence | Findings |",
+    "|---|---|---|---|",
+    "| 1 | request-changes | high / 0.85 | two warnings |",
+    verdict,
+    "",
+    "## Next",
+    "",
+    "Nothing deferred.",
+    "",
+  ].join("\n");
+}
+
+/** A closed ledger — the run-exit invariant every record is supposed to leave behind. */
+const CLOSED_LEDGER = `${JSON.stringify({ id: "r/prove/1", state: "fixed" })}\n`;
+const OPEN_LEDGER = `${JSON.stringify({ id: "r/prove/1", state: "open" })}\n`;
+
+/**
+ * A tree with one changelog and the runs a case needs.
+ *
+ * Fixtures, not mocks: the module reads a directory of markdown and a
+ * changelog, and a temporary directory IS that dependency — there is nothing
+ * to fake.
+ */
+function fixture(runs: Record<string, Record<string, string>>): string {
+  const root = mkdtempSync(join(tmpdir(), "stamity-measure-"));
+  writeFileSync(
+    join(root, "CHANGELOG.md"),
+    [
+      "# Changelog",
+      "",
+      "## [Unreleased]",
+      "",
+      "- Pull request #99 is named here, above every released heading.",
+      "",
+      "## [2.0.0] - 2026-01-09",
+      "",
+      "- Landed through pull request #42, which this line names on purpose.",
+      "",
+      "## [1.0.0] - 2026-01-01",
+      "",
+      "- Initial release. Pull request #7 is named only in this released section.",
+      "",
+    ].join("\n"),
+  );
+  for (const [run, files] of Object.entries(runs)) {
+    for (const [name, body] of Object.entries(files)) {
+      const target = join(root, RUNS_DIR, run, name);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, body);
+    }
+  }
+  return root;
+}
+
+/** The window a downloads point covers, as one readable range. */
+const window = (point: ReachPoint): string => `${point.start} to ${point.end}`;
+
+/** The reason one run was set aside, or `undefined` when it was not. */
+const reasonFor = (notes: readonly RunNote[], run: string): string | undefined =>
+  notes.find((note) => note.run === run)?.reason;
+
+/** The merge artifact one run was credited with. */
+const evidenceFor = (runs: readonly MergedRun[], run: string): string | undefined =>
+  runs.find((entry) => entry.run === run)?.evidence;
+
+/**
+ * This repository's own measurement, computed per case rather than once at
+ * describe scope: a refusal is then a named test failure instead of a suite
+ * that fails to load with no case to point at.
+ */
+const measured = (): MergeReadyReport => computeMergeReadyRate();
+
+/** The three lists, flattened to the run ids they name. */
+function listed(report: MergeReadyReport): string[] {
+  return [
+    ...report.numerator.map((entry) => entry.run),
+    ...report.denominator.map((entry) => entry.run),
+    ...report.excluded.map((entry) => entry.run),
+  ];
+}
+
+describe("renderMeasurements — drift gate", () => {
+  it("byte-matches the committed page", () => {
+    expect(STALE_MESSAGE).toContain(MEASUREMENTS_REGENERATE_COMMAND);
+    expect(renderMeasurements(), STALE_MESSAGE).toBe(committedPage());
+  });
+
+  it("renders byte-identically twice, and ends with exactly one newline", () => {
+    const page = renderMeasurements();
+    expect(renderMeasurements()).toBe(page);
+    expect(page.endsWith("\n")).toBe(true);
+    expect(page.endsWith("\n\n")).toBe(false);
+    expect(page).not.toContain("\r");
+  });
+
+  it("reads no clock — the stamp is the newest record's date", () => {
+    const source = readFileSync(MODULE_SOURCE_PATH, "utf-8");
+    expect(source).not.toMatch(/\bnew Date\b/);
+    expect(source).not.toMatch(/\bDate\.(now|UTC|parse)\(/);
+    expect(source).not.toMatch(/toISOString\(/);
+    expect(renderMeasurements()).toContain(computeMergeReadyRate().generated);
+  });
+
+  it("names its own regeneration command in the page banner", () => {
+    expect(renderMeasurements()).toContain(
+      `<!-- GENERATED FILE — do not edit by hand. Rewrite it with \`${MEASUREMENTS_REGENERATE_COMMAND}\`. -->`,
+    );
+  });
+
+  it("publishes the rule it measured under and the gate it falls back to", () => {
+    // A number with its rule on a different page is a number nobody can argue with.
+    const page = renderMeasurements();
+    expect(page).toContain(MERGE_READY_RULE);
+    expect(page).toContain(`${DEFAULT_CONFIDENCE_GATE} when it states none`);
+  });
+
+  it("is indexed for agents, so the page is reachable without the sidebar", () => {
+    const indexed = LLMS_INDEX_SECTIONS.flatMap((section) =>
+      section.entries.map((entry) => entry.path),
+    );
+    expect(indexed).toContain(MEASUREMENTS_DOC_PATH);
+  });
+});
+
+describe("the reach proxy is labelled as one", () => {
+  it("carries the sentence that says what an npm download is not", () => {
+    const page = renderMeasurements();
+    // The whole reason the number is publishable: without this sentence a
+    // download count reads as an install count, which reads as users.
+    expect(page).toContain("npm downloads count package fetches");
+    expect(page).toContain("It is not");
+    expect(page).toContain("weekly active installations");
+    expect(page).toContain("Real-use data is unmeasured");
+    expect(page).toContain("proxy");
+  });
+
+  it("states the snapshot's own numbers and its access stamp, not a fetched one", () => {
+    const snapshot = readReachSnapshot();
+    const page = renderMeasurements();
+    expect(page).toContain(snapshot.accessed);
+    expect(page).toContain(REACH_SNAPSHOT_PATH);
+    expect(page).toContain(`| Last week | ${snapshot.lastWeek.downloads} |`);
+    expect(page).toContain(`| Last month | ${snapshot.lastMonth.downloads} |`);
+    expect(page).toContain(window(snapshot.lastWeek));
+    expect(page).toContain(window(snapshot.lastMonth));
+
+    // The daily total is computed from the committed series rather than typed, so
+    // a hand-edited row cannot leave the page's total agreeing with nothing.
+    const total = snapshot.daily.downloads.reduce((sum, row) => sum + row.downloads, 0);
+    expect(snapshot.daily.downloads.length).toBeGreaterThan(1);
+    expect(page).toContain(`| Daily range | ${total} |`);
+  });
+
+  it("agrees with the registry's own week window, which is the snapshot's self-check", () => {
+    // The daily series and the last-week point are two separate responses. Their
+    // overlap has to add up, or one of them was transcribed wrong.
+    const snapshot = readReachSnapshot();
+    const week = snapshot.daily.downloads.filter(
+      (row) => row.day >= snapshot.lastWeek.start && row.day <= snapshot.lastWeek.end,
+    );
+    expect(week.length).toBe(7);
+    expect(week.reduce((sum, row) => sum + row.downloads, 0)).toBe(snapshot.lastWeek.downloads);
+  });
+});
+
+describe("the restated figures are held to the artifacts they come from", () => {
+  it("quotes run 24's four metric scores as that run's results file states them", () => {
+    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
+    const page = renderMeasurements();
+    for (const figure of ["**1.000** (48/48)", "**1.000** (14/14)", "**0.000** (0/4)", "**1.000** (12/12)"]) {
+      expect(results, `run 24 does not state ${figure}`).toContain(figure);
+      expect(page, `the page does not restate ${figure}`).toContain(figure);
+    }
+    expect(results).toContain("floors 21/21");
+    expect(page).toContain("21/21");
+  });
+
+  it("names first-run lanes the workflow actually declares", () => {
+    const workflow = readFileSync(join(REPO_ROOT, CI_WORKFLOW_PATH), "utf-8");
+    const page = renderMeasurements();
+    for (const lane of ["Tarball smoke (publish shape)", "apm-install", "Dogfood check"]) {
+      expect(workflow, `${CI_WORKFLOW_PATH} declares no ${lane}`).toContain(lane);
+      expect(page, `the page does not name ${lane}`).toContain(lane);
+    }
+    expect(page).toContain(`(../${CI_WORKFLOW_PATH})`);
+    expect(page).toContain(`(../${RUN_OF_RECORD_PATH})`);
+  });
+});
+
+describe("computeMergeReadyRate over this repository", () => {
+  it("lists every run directory exactly once across the three lists", () => {
+    const runs = listed(measured());
+    expect(new Set(runs).size, "a run appears in two lists").toBe(runs.length);
+    expect(runs.length).toBeGreaterThan(10);
+
+    // Against the directory, not against a literal: the measure covers every run
+    // on disk or it is a rate over a subset nobody declared.
+    const onDisk = readdirSync(join(REPO_ROOT, RUNS_DIR), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+    expect(onDisk.length, "the runs directory walk found almost nothing").toBeGreaterThan(10);
+    for (const run of onDisk) {
+      expect(runs, `${run} is measured by nothing`).toContain(run);
+    }
+  });
+
+  it("states the rate over the numerator and denominator lists it publishes", () => {
+    expect(measured().rule).toBe(MERGE_READY_RULE);
+    expect(measured().rate.n).toBe(measured().numerator.length);
+    expect(measured().rate.d).toBe(measured().numerator.length + measured().denominator.length);
+    expect(measured().rate.value).toBe(Number((measured().rate.n / measured().rate.d).toFixed(3)));
+  });
+
+  it("gives every excluded and denominated run exactly one stated reason", () => {
+    for (const entry of [...measured().excluded, ...measured().denominator]) {
+      expect(entry.reason.trim().length, `${entry.run} is set aside for no reason`).toBeGreaterThan(
+        5,
+      );
+    }
+  });
+
+  it("stamps the report with the newest date a record carries, not the newest directory", () => {
+    // The two differ today, which is the point: the newest run directories hold a
+    // plan and a handoff and no record, and a page stamped from a directory that
+    // proves nothing claims currency it does not have.
+    const withoutRecord = new Set(
+      measured().excluded.filter((entry) => entry.reason === "no record").map((entry) => entry.run),
+    );
+    expect(withoutRecord.size).toBeGreaterThan(0);
+    const dated = listed(measured())
+      .filter((run) => !withoutRecord.has(run))
+      .map((run) => /^(\d{4}-\d{2}-\d{2})_/.exec(run)?.[1] ?? "")
+      .filter((date) => date !== "");
+    expect(measured().generated).toBe(dated.toSorted().at(-1));
+    expect(listed(measured()).toSorted().at(-1)?.startsWith(measured().generated)).toBe(false);
+  });
+});
+
+describe("the rule, exercised against fixture trees", () => {
+  it("counts a run that passes every clause, by release tag and by pull request", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-03_feature": {
+        "record.md": record({ merge: "Landed as pull request #42 on the maintainer's merge." }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(report.numerator.map((entry) => entry.run)).toEqual([
+      "2026-01-02_release-2.0.0",
+      "2026-01-03_feature",
+    ]);
+    expect(evidenceFor(report.numerator, "2026-01-02_release-2.0.0")).toContain("[2.0.0]");
+    expect(evidenceFor(report.numerator, "2026-01-03_feature")).toContain("#42");
+    expect(report.rate).toEqual({ n: 2, d: 2, value: 1 });
+    expect(report.generated).toBe("2026-01-03");
+  });
+
+  it("holds a run back on each clause it misses, one reason each", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-03_red-gate": {
+        "record.md": record({
+          gates: "| Final authoritative | pass | pass | 1 failed of 120 |",
+          merge: "Landed as pull request #42.",
+        }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+      "2026-01-04_changes-requested": {
+        "record.md": record({
+          verdict: "| 2 | request-changes | high / 0.90 | one warning open |",
+          merge: "Landed as pull request #42.",
+        }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+      "2026-01-05_under-gate": {
+        "record.md": record({
+          verdict: "| 2 | approve | medium / 0.60 | none in scope |",
+          merge: "Landed as pull request #42.",
+        }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+      "2026-01-06_open-ledger": {
+        "record.md": record({ merge: "Landed as pull request #42." }),
+        "ledger.jsonl": OPEN_LEDGER,
+      },
+      "2026-01-07_unmerged": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(report.numerator.map((entry) => entry.run)).toEqual(["2026-01-02_release-2.0.0"]);
+    expect(report.denominator).toEqual([
+      { run: "2026-01-03_red-gate", reason: "the final gate table reports a failure" },
+      {
+        run: "2026-01-04_changes-requested",
+        reason: "the last review verdict is not an approval",
+      },
+      { run: "2026-01-05_under-gate", reason: "the approval at 0.6 is under the 0.8 gate" },
+      { run: "2026-01-06_open-ledger", reason: "the findings ledger still carries an open row" },
+      { run: "2026-01-07_unmerged", reason: NO_MERGE_ARTIFACT },
+    ]);
+    expect(reasonFor(report.denominator, "2026-01-03_red-gate")).toContain("failure");
+    expect(report.rate).toEqual({ n: 1, d: 6, value: 0.167 });
+  });
+
+  it("reads the confidence gate a record states over the fallback", () => {
+    const stated = record({ verdict: "| 2 | approve | high / 0.86 | none |" });
+    const root = fixture({
+      "2026-01-02_release-2.0.0": {
+        "record.md": `${stated}\nConfidence gate: approvals count at high/>=0.90 — not met.\n`,
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    // 0.86 clears the 0.8 fallback and misses the record's own 0.9 bar, so this
+    // case fails the moment the stated gate stops being read.
+    expect(report.numerator).toEqual([]);
+    expect(report.denominator).toEqual([
+      { run: "2026-01-02_release-2.0.0", reason: "the approval at 0.86 is under the 0.9 gate" },
+    ]);
+  });
+
+  it("excludes a record that declares itself verified and proves nothing", () => {
+    const prose = [
+      "# A run",
+      "",
+      "Landed as pull request #42.",
+      "",
+      "## Proof block",
+      "",
+      "Gates: all green. Review: approved at high confidence. Verified, complete and merged.",
+      "",
+    ].join("\n");
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-08_self-declared": { "record.md": prose, "ledger.jsonl": CLOSED_LEDGER },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    // The anti-gaming constraint, as a case: every word a run could write about
+    // itself is in that record, and it moves neither the numerator nor the
+    // denominator.
+    expect(report.excluded).toEqual([
+      {
+        run: "2026-01-08_self-declared",
+        reason: "gates in prose only — no gate row carries a pass or fail",
+      },
+    ]);
+    expect(report.rate).toEqual({ n: 1, d: 1, value: 1 });
+  });
+
+  it("does not count a pull request the changelog names only above its first release", () => {
+    // The unreleased section is where a merge that has not shipped is written
+    // down. Counting it would make "merged" mean "written in the changelog".
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-03_unreleased": {
+        "record.md": record({ merge: "Landed as pull request #99." }),
+        "ledger.jsonl": CLOSED_LEDGER,
+      },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(report.numerator.map((entry) => entry.run)).toEqual(["2026-01-02_release-2.0.0"]);
+    expect(reasonFor(report.denominator, "2026-01-03_unreleased")).toBe(NO_MERGE_ARTIFACT);
+  });
+
+  it("excludes a run with no record and one with no proof block, by name", () => {
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-03_no-record": { "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-04_no-proof": { "record.md": "# A run\n\nA plan, and nothing proved.\n" },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(report.excluded).toEqual([
+      { run: "2026-01-03_no-record", reason: "no record" },
+      { run: "2026-01-04_no-proof", reason: "no proof block" },
+    ]);
+    // The newest date comes from a record, never from a directory with none:
+    // the run dated 2026-01-04 carries one, the 2026-01-03 directory does not.
+    expect(report.generated).toBe("2026-01-04");
+  });
+
+  it("reads the proof block's subheadings as part of it", () => {
+    // The `### Gate results` shape is what half the records use; a section cut
+    // at the first subheading reports every one of them as having no gates.
+    const root = fixture({
+      "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+    expect(report.numerator).toHaveLength(1);
+  });
+
+  it("refuses a tree with no runs directory and one with no changelog", () => {
+    const empty = mkdtempSync(join(tmpdir(), "stamity-measure-empty-"));
+    expect(() => computeMergeReadyRate(empty)).toThrow(EngineError);
+    expect(() => computeMergeReadyRate(empty)).toThrow(/no run records to measure/);
+
+    mkdirSync(join(empty, RUNS_DIR), { recursive: true });
+    expect(() => computeMergeReadyRate(empty)).toThrow(/no merge can be proved/);
+
+    writeFileSync(join(empty, "CHANGELOG.md"), "# Changelog\n");
+    expect(() => computeMergeReadyRate(empty)).toThrow(/carries the proof block/);
+    rmSync(empty, { recursive: true, force: true });
+  });
+});
+
+describe("scripts/merge-ready-rate.mjs", () => {
+  it("prints the same report the page renders from", () => {
+    const stdout = execFileSync(process.execPath, [RATE_SCRIPT_PATH, "--json"], {
+      encoding: "utf-8",
+    });
+    expect(JSON.parse(stdout)).toEqual(JSON.parse(JSON.stringify(computeMergeReadyRate())));
+  });
+
+  it("prints a human summary naming the rule, the rate and every list", () => {
+    const stdout = execFileSync(process.execPath, [RATE_SCRIPT_PATH], { encoding: "utf-8" });
+    const report = computeMergeReadyRate();
+    expect(stdout).toContain(`${report.rate.n} of ${report.rate.d}`);
+    expect(stdout).toContain(report.rule);
+    for (const run of listed(report)) expect(stdout).toContain(run);
+  });
+
+  it("refuses an unknown argument with the usage line and status 2", () => {
+    const result = spawnSync(process.execPath, [RATE_SCRIPT_PATH, "--nonsense"], {
+      encoding: "utf-8",
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("Unknown argument: --nonsense");
+    expect(result.stderr).toContain("Usage: node scripts/merge-ready-rate.mjs");
+  });
+});
+
+describe("scripts/generate-docs.mjs --page measurements", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "stamity-measurements-page-"));
+  afterAll(() => rmSync(workspace, { recursive: true, force: true }));
+
+  it("writes the rendered page, and a second run produces zero diff", () => {
+    const run = (): string => {
+      execFileSync(
+        process.execPath,
+        [SCRIPT_PATH, "--page", "measurements", "--out-dir", workspace],
+        { encoding: "utf-8" },
+      );
+      return readFileSync(join(workspace, MEASUREMENTS_DOC_PATH), "utf-8");
+    };
+    const first = run();
+    expect(first).toBe(renderMeasurements());
+    expect(run()).toBe(first);
+  });
+});

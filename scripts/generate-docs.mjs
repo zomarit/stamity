@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Rewrite every generated documentation page from code.
 //
-// Usage: node scripts/generate-docs.mjs [--page <cli|config|reference|llms|all>] [--out-dir <dir>]
-//        --page  renders one family instead of all four.
+// Usage: node scripts/generate-docs.mjs [--page <cli|config|reference|llms|measurements|all>]
+//                                        [--out-dir <dir>]
+//        --page  renders one family instead of all five.
 //        --out-dir redirects every write under that directory, keeping the
 //                  repo-relative layout; tests use it to prove idempotency
 //                  without touching the committed pages.
@@ -31,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 
 const SELF = fileURLToPath(import.meta.url)
 const ROOT = resolve(SELF, '..', '..')
-const PAGES = ['cli', 'config', 'reference', 'llms', 'all']
+const PAGES = ['cli', 'config', 'reference', 'llms', 'measurements', 'all']
 const USAGE = `Usage: node scripts/generate-docs.mjs [--page <${PAGES.join('|')}>] [--out-dir <dir>]`
 
 if (prepareNativeTypescriptCli(import.meta.url)) {
@@ -62,6 +63,9 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   )
   const { renderReferencePages } = await import('../src/cli/docs/referencePages.ts')
   const { LLMS_INDEX_DOC_PATH, renderLlmsIndex } = await import('../src/cli/docs/llmsIndex.ts')
+  const { MEASUREMENTS_DOC_PATH, renderMeasurements } = await import(
+    '../src/cli/docs/measurements.ts'
+  )
   const { atomicWriteFile } = await import('../src/merge/atomicWrite.ts')
 
   /** Repo-relative path -> page bytes, for the requested family. */
@@ -73,6 +77,13 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     }
     if (which === 'reference' || which === 'all') {
       for (const [path, bytes] of await renderReferencePages()) pages.set(path, bytes)
+    }
+    // Rendered from committed artifacts rather than from code — the run
+    // records, their ledgers, the changelog and the reach snapshot — so it is
+    // stale whenever one of those moves, exactly like the pages above are
+    // stale when their source module moves.
+    if (which === 'measurements' || which === 'all') {
+      pages.set(MEASUREMENTS_DOC_PATH, renderMeasurements())
     }
     // The index lists the other pages, so it renders last — after anything that
     // would have refused has already refused.

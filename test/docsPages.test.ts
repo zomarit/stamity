@@ -180,8 +180,16 @@ const MAX_LINES = 150;
  * and which do not (`validate` runs with or without one, `learn` and `handoff` want only
  * `.stamity/`), and the prerequisite sentence now carries `worktree`'s `git`-on-PATH
  * requirement. The guide's 150 is untouched; README's figure moved with the sentences.
+ *
+ * TEST CHANGE, justified: 155 to 156, the cost of ONE map row. `docs/measurements.md` is a new
+ * generated page, and the map is what makes a page reachable from README — a row is not optional
+ * polish, it is the thing `README_LINK_TARGETS` below pins. The paragraph under the table was
+ * rewrapped in the same change (it had to move anyway: it counts the generated rows and names
+ * every page the docs script writes), which pays for nothing — that paragraph wraps to the same
+ * nine lines with the new path in it. So the budget moves by exactly the row, and by nothing
+ * else: the page gained no prose it did not need.
  */
-const README_MAX_LINES = 155;
+const README_MAX_LINES = 156;
 
 /**
  * The product, its installable package, and the owner the pages name.
@@ -297,6 +305,10 @@ const README_LINK_TARGETS: readonly string[] = [
   "docs/capability-matrix.md",
   "docs/cli-reference.md",
   "docs/configuration.md",
+  // The measurements page joined the map when it shipped. Pinned here for the reason every other
+  // generated page is: the row is what a reader navigates by, and a page the README does not name
+  // is one only the index knows about.
+  "docs/measurements.md",
   "docs/reference/",
   "llms.txt",
   SECURITY,

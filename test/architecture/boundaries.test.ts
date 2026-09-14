@@ -112,9 +112,10 @@ function scanImports(files: FileMap): ImportEdge[] {
 const ENTRYPOINTS: readonly string[] = ["src/index.ts", "src/cli.ts"];
 
 /**
- * The docs generator's roots (p6-u03). `scripts/generate-docs.mjs` imports
- * these four renderers directly, and the shipped CLI deliberately never loads
- * them — a reference page has no business costing startup time on
+ * The docs generator's roots (p6-u03, plus `measurements` at u8).
+ * `scripts/generate-docs.mjs` imports these renderers directly — and
+ * `scripts/merge-ready-rate.mjs` imports the last one for its rule — and the
+ * shipped CLI deliberately never loads them — a reference page has no business costing startup time on
  * `stamity --help`, and the CLI has no reason to hold a markdown renderer.
  *
  * They are roots of a second program, so they belong in the reachability
@@ -130,6 +131,7 @@ const GENERATOR_ENTRYPOINTS: readonly string[] = [
   "src/cli/docs/configReference.ts",
   "src/cli/docs/referencePages.ts",
   "src/cli/docs/llmsIndex.ts",
+  "src/cli/docs/measurements.ts",
 ];
 
 /** Every root the reachability walk starts from. */
@@ -522,6 +524,13 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/docs/configReference.ts": { unit: "p6-u03", wave: 17 },
   "src/cli/docs/cliReference.ts": { unit: "p6-u03", wave: 17 },
   "src/cli/docs/llmsIndex.ts": { unit: "p6-u03", wave: 17 },
+  // The measurements renderer landed later (the measurements page's own unit)
+  // and belongs to THIS family's layer, which is what the entry records: it
+  // sits on `referencePages` for the shared page primitives and `llmsIndex`
+  // lists it, exactly like its three siblings, so a unit of its own at this
+  // wave would report those two edges as layering violations rather than as
+  // the intra-family chain they are.
+  "src/cli/docs/measurements.ts": { unit: "p6-u03", wave: 17 },
 };
 
 /**
