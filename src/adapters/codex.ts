@@ -131,14 +131,13 @@ export const CODEX_AGENTS_MD_BUDGET_BYTES = 32_768;
  * fail-closed: past it, emission refuses and names the measured total, exactly
  * as {@link CODEX_AGENTS_MD_BUDGET_BYTES} refuses rather than truncating.
  *
- * 8,000 characters is THIS ENGINE's declared bound, not a number read off a
- * platform document — no citation is offered because none was found, and an
- * invented one would be worse than an honest engine-owned limit. It was
- * declared before the option shipped (the rule-delivery decision of
- * 2026-09-14) so it measures the design rather than whatever the corpus
- * happened to weigh, and it is measured over the WHOLE projection, content
+ * 8,000 characters is the client's own published figure: "this list uses at
+ * most 2% of the model's context window, or 8,000 characters when the context
+ * window is unknown" (learn.chatgpt.com/docs/build-skills, accessed
+ * 2026-09-14). The engine takes the character bound because the context size
+ * is not known at emission, and it measures the WHOLE projection, content
  * skills included, because the client does not distinguish where a skill came
- * from. Replace it with a platform figure the day one is published.
+ * from. Re-read the page per release; the figure moves with the client.
  */
 export const CODEX_SKILLS_LIST_BUDGET_CHARS = 8_000;
 
