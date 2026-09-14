@@ -168,11 +168,11 @@ regenerate its kickoff prompt — so the record never trails the registry. (Adde
 day the record was found two releases stale.)
 
 A second line rides the same cut and lands *before* the tag rather than after it: the full eval set
-runs per `evals/SET-v5.md`, and the release carries its run artifact under `evals/runs/`. The corpus
+runs per `evals/SET-v7.md`, and the release carries its run artifact under `evals/runs/`. The corpus
 is model-executed prose, so a version cut with no run behind it ships behaviour nobody measured — no
 artifact, no tag, and a release without one is blocked by this checklist rather than by anyone's
 memory. (Added 2026-09-01, with the set; repointed to `SET-v3.md` on 2026-09-02, and to
-`SET-v4.md` on 2026-09-04, and to `SET-v5.md` on 2026-09-10.)
+`SET-v4.md` on 2026-09-04, and to `SET-v5.md` on 2026-09-10, and to `SET-v7.md` on 2026-09-15.)
 
 Name the model profile from `evals/MODEL-PROFILES-v1.md` before dispatch; the existing
 Claude profile remains the default. The artifact records the selected pair, rubric,
@@ -193,3 +193,10 @@ release ships — and review the admin roster, so the set of accounts holding ad
 and publish rights on the registry is a set someone looked at this release rather than one that
 accumulated. Both are console state that no file in this tree can assert, which is why they sit in
 this checklist beside the three platform controls rather than in a test. (Added 2026-09-02.)
+
+A fourth line rides the same cut, before the tag: every hand page — the twelve in
+`test/docsPages.test.ts`'s bucket plus `GOVERNANCE.md` — is re-attested claim by claim against
+the candidate tree and restamped `verified against the tree at the X.Y.Z release cut (DATE)`,
+and `RELEASE_CUT_DATE` in that suite moves with it; a stale stamp is a currency defect the
+suite catches, a stale claim under a fresh stamp is the one a person catches. (Added
+2026-09-15, when the sweep found stamps from 1.5.0 under 1.7.0.)

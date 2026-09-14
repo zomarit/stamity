@@ -27,12 +27,18 @@ route changes the default profile or establishes a passing run by its existence.
 
 ## 1. Preconditions
 
-Read `evals/SET-v6.md` first for the case roster, thresholds and run-artifact
+Read `evals/SET-v7.md` first for the case roster, thresholds and run-artifact
 shape. Resolve the operator's named profile from `evals/model-profiles-v1.json`
 (its `defaultProfile` is `claude` when none was named), following
 `evals/MODEL-PROFILES-v1.md`. Read the selected profile's `rubric` next for the
 grading rules and calibration fixtures. The profile contract defines each pair
 and its effort controls, including Astra in either role.
+
+Route of record: `stamity-claude-cli-v1` — one fresh `claude -p` subprocess per scenario,
+judge and calibration call, started by a private deterministic driver from the committed
+bytes, exact model ids proved at the CLI init, the assistant metadata and the captured
+request; the session-native and stateless-API routes below remain documented alternatives
+with no run of record since run 14.
 
 Then pin the run:
 
@@ -102,7 +108,7 @@ configuration before scoring; a different profile's calibration never transfers.
 
 ## 3. Scenario fan-out
 
-Three independent fresh samples per case file under `evals/cases-v5/**`.
+Three independent fresh samples per case file under `evals/cases-v6/**`.
 Queue independent calls together up to the recorded capacity; the stateless runner
 allows 1–16 concurrent calls, default 4. A queue slot is a resource limit, never
 shared model context. A release measures the full 78-case roster (234 scenarios).
@@ -174,7 +180,7 @@ them. Position preference alone can flip a verdict.
 
 ## 5. Aggregate
 
-Compute exactly the metrics `evals/SET-v6.md` declares, by its own definitions:
+Compute exactly the metrics `evals/SET-v7.md` declares, by its own definitions:
 
 A case passes only when all three admitted samples pass every binding criterion.
 The artifact lists each floor and per-skill recall, binding/advisory citations,
@@ -197,7 +203,7 @@ and a score with no decoding note beside it cannot be reproduced or compared.
 ## 6. Run artifact
 
 Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
-`evals/SET-v6.md` declares for it. At minimum it records:
+`evals/SET-v7.md` declares for it. At minimum it records:
 
 - the set/rubric versions and repo sha,
 - the selected model profile, profile document version/path/hash, and exact

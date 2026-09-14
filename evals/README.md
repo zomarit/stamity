@@ -5,30 +5,43 @@ under `content/`, which is prose executed by a model at a user's site. `src/` is
 vitest, where a failure is a red test. `content/` is proven here, where a failure is a score
 under a declared threshold.
 
-**Current set: `SET-v6.md`.** v5, v4, v3, v2 and v1 are retained beside it, all unchanged,
-as baselines. v6 keeps v5's cases, criteria, floors and metric numbers and changes only how
-three samples of a case become a verdict.
+**Current set: `SET-v7.md`.** v6, v5, v4, v3, v2 and v1 are retained beside it, all
+unchanged, as baselines. v7 keeps v6's scoring rule, criteria, floors and metric numbers;
+what moves is the corpus — `cases-v6/` carries v5's 78 cases byte-identical, plus the cases
+v7 adds.
 
 | Path | What it is |
 |---|---|
-| `SET-v6.md` | **The current set document** — scope, versioned inputs, the scoring rule, the run-artifact contract, the hard triggers, the case index, the coverage table and the appendix of non-negotiable rows. Read it first. |
+| `SET-v7.md` | **The current set document** — scope, versioned inputs, the scoring rule, the run-artifact contract, the hard triggers, the case index, the coverage table and the appendix of non-negotiable rows. Read it first. |
+| `SET-v6.md` | **Retained baseline, do not edit** — the two-class rule's document; runs 22–24 were scored under it. |
 | `SET-v5.md` | **Retained baseline, do not edit.** The strict three-of-three rule runs 19–21 were scored under. |
-| `rubric-v4.md` | **The default Claude judge rubric**: verdict vocabulary, the binding/advisory grouping, grading procedure, the judge's four inputs, and the calibration protocol with its fixtures. |
+| `rubric-v4.md` | **Retained: the rubric runs 1–14 graded with.** Verdict vocabulary, the binding/advisory grouping, grading procedure, the judge's four inputs, and the calibration protocol with its fixtures. |
 | `MODEL-PROFILES-v1.md`, `model-profiles-v1.json` | Explicit model/rubric profiles: the original Claude default, Astra scenarios with Sol judging, or Sol scenarios with Astra judging. |
 | `session-native-v1.md` | Opt-in session protocol accepting recorded ambient client/repository instructions, with fresh native agents and unchanged calibration and scoring bars. |
 | `rubric-v5.md` | The alternate profiles' model-neutral rubric; grading rules and calibration fixtures are retained verbatim from v4. |
 | `MODEL-PROFILES-v2.md`, `model-profiles-v2.json`, `session-native-v2.md` | Prospective native configuration retaining the same models, effort, default and ambient baseline; `codex-astra` selects v6, with mechanically checked staged task transfer and the final manual-transfer limit disclosed. |
-| `rubric-v7.md` | **The current rubric** — rubric v6 with a closed **Citation form** under the grading procedure; the verdict vocabulary, emission shape, calibration protocol, five fixtures and every `calibration-labels-v1` key are v6's, byte-for-byte. |
+| `rubric-v7.md` | **The current rubric — selected by the default `claude` profile**: rubric v6 with the closed **Citation form** under the grading procedure; the verdict vocabulary, emission shape, calibration protocol, five fixtures and every `calibration-labels-v1` key are v6's, byte-for-byte. |
 | `rubric-v6.md` | Explicit complete calibration keys and the independently assessed C3 B1 correction; all fixture transcripts, case criteria, grading rules, floors and thresholds remain. Historical keys and blocked runs are preserved. |
-| `cases-v5/golden/` | Cases pinning the behaviour the corpus promises. |
-| `cases-v5/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
-| `cases-v5/probes/` | Skill-selection classification cases: eight that should trigger, four that should not. |
-| `coverage-exemptions-v5.md` | The written exemption list the coverage gate reads: every content artifact with no case, its reason, and the trigger under which a case must land. |
+| `cases-v6/golden/` | Cases pinning the behaviour the corpus promises. |
+| `cases-v6/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
+| `cases-v6/probes/` | Skill-selection classification cases: the ones that should trigger a skill, and the near misses that should not. |
+| `cases-v5/**`, `coverage-exemptions-v5.md` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files byte-identical. |
+| `coverage-exemptions-v6.md` | The written exemption list the coverage gate reads: every content artifact with no case, its reason, and the trigger under which a case must land. |
 | `SET-v4.md`, `cases-v4/**`, `coverage-exemptions-v4.md` | **Retained baseline, do not edit.** Includes the original calibration case inputs. |
 | `SET-v3.md`, `rubric-v3.md`, `cases-v3/**`, `coverage-exemptions-v3.md` | **Retained baseline, do not edit.** The instrument runs 3 and 4 were produced with. |
 | `SET-v2.md`, `rubric-v2.md`, `cases-v2/**` | **Retained baseline, do not edit** — with one recorded exception: four `cases-v2` files were re-inlined at `fbf548c` after run 2 had scored them, under v2's own hard trigger 1. Read the run-2 numbers for those four against `fbf548c^`. The exception is set out under "The baselines stay put". |
 | `SET-v1.md`, `rubric-v1.md`, `cases/**` | **Retained baseline, do not edit.** The instrument run 1 was produced with. Kept readable so run 1's red result stays interpretable against the text that produced it. |
+| `runs/2026-09-11-run-24/PROTOCOL.md` | **The route of record, `stamity-claude-cli-v1`** — one fresh `claude -p` subprocess per scenario, judge and calibration call, started by a private deterministic driver from the committed bytes; the exact model ids (`claude-opus-5` for scenarios, `claude-fable-5-1` for judges and calibration) proved at the CLI init, in the assistant metadata and in the captured provider request; the harness tools removed; ambient context fingerprinted per role. Runs 15–24 were produced through it. |
 | `runs/` | Run artifacts, one directory per run: `runs/<date>-run-<n>/RESULTS.md`. |
+
+## What v7 changes
+
+v7 keeps v6's scoring rule, its four metrics and their declared thresholds; the rule itself
+keeps the name SET-v6, because that name is how a scored run says which rule decided it. What
+moves is the corpus and the pointers into it: `cases-v6/` carries v5's 78 cases byte-identical
+plus the cases v7 adds — those additions, and every count they move, are documented in
+`SET-v7.md` under "What v7 adds". The coverage gate reads `coverage-exemptions-v6.md`, and the
+default `claude` profile selects `rubric-v7.md`.
 
 ## What v5 changes
 
@@ -57,7 +70,7 @@ golden, 16 adversarial (12 guardrail, 4 benign twins), 12 probes, with 20 carryi
 
 ## The judge is pinned to an explicit id, and its inputs are stated
 
-The default `claude` profile retains `rubric-v4.md`, judge **`claude-fable-5-1`** and model
+The default `claude` profile selects `rubric-v7.md`, judge **`claude-fable-5-1`** and model
 under test `claude-opus-5`, the same two ids v3 declared. Every verdict role runs at an
 explicit model id — a tier alias is never sufficient — and the run records the id each agent attests rather
 than the id the harness requested. Run 1 is why: it measured an alias that resolved to a
@@ -65,6 +78,10 @@ different model than the set declared.
 
 For Codex, explicitly select `codex-astra` to measure `gpt-6-astra` with `gpt-5.6-sol`
 judging, or `codex-astra-judge` to reverse them. Both roles use `high` reasoning effort.
+`codex-astra` and `codex-astra-judge` are **documented, unproven, no run of record**: runs 11,
+13 and 14 ended terminal before scoring, and the control they need — a supported,
+independently proved native task-transfer control — has not been established; selecting a
+profile establishes no measurement.
 The v1 profile document selects `rubric-v5.md` for both Codex profiles. The prospective
 [v2 profile document](MODEL-PROFILES-v2.md) selects `rubric-v6.md` for `codex-astra` alone;
 unselected profiles and all model/effort controls remain unchanged. Both configurations
@@ -84,10 +101,10 @@ undecidable — and an undecidable criterion is graded `fail`.
 A judge-model change is a calibration event, and so is an edit to the rubric. Calibration runs
 against five fixtures today, and that number is not a literal maintained in this file: it is
 the count of `### Fixture` headings in the selected profile's rubric. The default uses
-`evals/rubric-v4.md`, and `rubric-v5.md` retains the same fixtures verbatim. v6 retains
-their transcripts and original Brief/Expected blocks, with its explicit prospective key.
-`test/evals/fixtureCount.test.ts` derives it and fails if this page, `SET-v6.md`, or the
-runner skill states a different one.
+`evals/rubric-v7.md`, and `rubric-v4.md` and `rubric-v5.md` retain the same fixtures verbatim.
+v6 retains their transcripts and original Brief/Expected blocks, with its explicit prospective
+key, and v7 carries v6's unchanged. `test/evals/fixtureCount.test.ts` derives it and fails if
+this page, `SET-v7.md`, or the runner skill states a different one.
 
 ## What the citation reader accepts as presentation
 
@@ -289,7 +306,7 @@ the rule was reporting sampling luck rather than whether the corpus is followed.
 
 - **Non-negotiable rows stay all-or-nothing.** A binding criterion whose text says `must NOT`,
   on a case tagged `floor: true` or an adversarial case that is not a benign twin — 75 rows
-  across 25 cases, listed in SET-v6's appendix and recomputed from the case files by
+  across 25 cases, listed in SET-v7's appendix and recomputed from the case files by
   `test/evals/roster.test.ts`. All three samples must pass every one of them.
 - **Everything else gets a rate.** A case passes when at least two of its three samples pass
   every binding criterion.
@@ -347,7 +364,7 @@ two instruments over two different rosters, not two versions of the product.
 Every artifact the engine emits as model-executed prose — `content/charter/*.md`,
 `content/commands/*.md`, `content/agents/*.md`, `content/skills/*/SKILL.md`,
 `content/rules/*.md` — is named by at least one case's `source:` field, or listed with a
-written reason in `coverage-exemptions-v5.md`. `test/evals/coverage.test.ts` derives both
+written reason in `coverage-exemptions-v6.md`. `test/evals/coverage.test.ts` derives both
 sides from the files and fails when an artifact is in neither column, and also when an
 exemption row names an artifact a case now covers, so the list cannot go stale in either
 direction. `test/evals/locators.test.ts` holds the other half: a case's `source:` range must
@@ -375,7 +392,7 @@ Process obligations, written where the person doing the work reads them — text
 automation.
 
 1. **A `content/` edit re-runs the affected cases.** Find them by the `source` field in
-   `cases-v5/**`; a claim that moved takes its case's `source` and inlined brief with it in
+   `cases-v6/**`; a claim that moved takes its case's `source` and inlined brief with it in
    the same diff. Stated in `CONTRIBUTING.md` under "Changing the corpus".
 2. **Every release runs the full set.** Before the tag is cut, and the release carries the
    run artifact. Wired into `.github/release-controls-checklist.md` under "Per-release
@@ -388,7 +405,7 @@ automation.
 
 ## How to run
 
-Invoke the `st-eval-run` skill by name in a session, with `SET-v6.md` as the contract it
+Invoke the `st-eval-run` skill by name in a session, with `SET-v7.md` as the contract it
 works to. The skill calibrates the judge against every fixture the rubric declares, fans out
 one scenario agent per case, grades each transcript against that case's `## Expected`
 criteria, aggregates the per-metric scores beside their declared thresholds, and writes the
@@ -471,12 +488,12 @@ a blocked artifact with no aggregate scores. These artifacts never replace human
 
 Two things to get right before starting one.
 
-- **The runner and both hard-trigger pointers name v5.** The skill's preconditions,
+- **The runner and both hard-trigger pointers name v7.** The skill's preconditions,
   calibration and fan-out steps, the contributing guide's corpus-edit trigger, and the
-  release checklist all point at `evals/SET-v6.md` and `evals/cases-v5/**`;
-  the selected profile document supplies the rubric. `model-profiles-v1.json` retains
-  `rubric-v4.md`/`rubric-v5.md`; the explicitly selected v2 native configuration uses
-  `rubric-v6.md` for `codex-astra`. Pin each version together,
+  release checklist all point at `evals/SET-v7.md` and `evals/cases-v6/**`;
+  the selected profile document supplies the rubric. `model-profiles-v1.json` selects
+  `rubric-v7.md` for the default `claude` profile; the explicitly selected v2 native
+  configuration uses `rubric-v6.md` for `codex-astra`. Pin each version together,
   because a runner naming one version while a trigger names another scores one instrument
   and labels the result with the other's name.
   v1's, v2's and v3's own documents still name their own paths, which is correct: they
@@ -485,7 +502,7 @@ Two things to get right before starting one.
   measured an alias resolving to a different model than the set declares, and recorded the
   per-agent attested id rather than the id requested. Do the same, for every role.
 
-Read `SET-v6.md` before starting one. The thresholds are declared there, before any run, and
+Read `SET-v7.md` before starting one. The thresholds are declared there, before any run, and
 a run that discovers its threshold afterwards has measured the author's tolerance instead of
 the product.
 
@@ -493,7 +510,7 @@ the product.
 
 `runs/<date>-run-<n>/RESULTS.md`, committed with the change that caused the run — a run
 whose numbers live only in a transcript is not a result. The directory contract is unchanged
-from v2. `SET-v6.md` names the eleven things the artifact records; the short version is that
+from v2. `SET-v7.md` names the eleven things the artifact records; the short version is that
 a reader who has never seen the session can tell what was measured, against what, on which
 inputs, and how many times — which advisory criteria a passing case missed, and which model
 id every agent in the run attested.
