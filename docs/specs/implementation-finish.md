@@ -1,6 +1,6 @@
 ---
 id: implementation-finish
-status: draft
+status: shipped-with-1.7.0
 obsolete_when: these requirements are superseded by named client, authoring, signing, distribution and evaluation contracts
 ---
 
