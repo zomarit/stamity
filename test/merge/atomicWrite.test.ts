@@ -71,6 +71,36 @@ function errnoError(code: string): NodeJS.ErrnoException {
   return Object.assign(new Error(`synthetic ${code}`), { code });
 }
 
+/**
+ * Runs `body` with the rename loop's own pauses collapsed to nothing, and
+ * returns the delays it ASKED for, in order.
+ *
+ * Substituted rather than waited out, and not for speed alone: what the widened
+ * win32 schedule promises is which delays are requested and what the writer
+ * does once they are spent, and both are assertable from the recorded list.
+ * Sleeping them for real proves the same thing ~8.7 s later — inside a 20 s test
+ * timeout on a runner that is already the slowest of the three legs, which is a
+ * flake with a date on it rather than a stronger test. Only `setTimeout` is
+ * replaced, only for the duration of one call, and the callback still runs
+ * through the real one, so the loop's ordering and its await points are
+ * untouched; the timer is the one thing here that no real dependency can make
+ * deterministic.
+ */
+async function recordRetryWaits(body: () => Promise<unknown>): Promise<number[]> {
+  const waits: number[] = [];
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((handler: TimerHandler, ms?: number, ...rest: unknown[]) => {
+    waits.push(Number(ms ?? 0));
+    return realSetTimeout(handler as () => void, 0, ...rest);
+  }) as typeof globalThis.setTimeout;
+  try {
+    await body();
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+  return waits;
+}
+
 /** Silences console.error for the current test and returns the spy. */
 function captureConsoleError(): ReturnType<typeof vi.spyOn> {
   return vi.spyOn(console, "error").mockImplementation(() => {});
@@ -1209,6 +1239,7 @@ describe("failure paths that need a stubbed filesystem", () => {
     const dir = getDir();
     const target = dir.path("payload.md");
     let attempts = 0;
+    let waits: number[] = [];
     const realPlatform = process.platform;
     Object.defineProperty(process, "platform", { value: "win32", configurable: true });
     try {
@@ -1220,12 +1251,14 @@ describe("failure paths that need a stubbed filesystem", () => {
         },
       });
 
-      await mod.atomicWriteFile(target, "survived the hold");
+      waits = await recordRetryWaits(() => mod.atomicWriteFile(target, "survived the hold"));
     } finally {
       Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
     }
 
     expect(attempts).toBe(4);
+    // One pause per refusal, none after the attempt that landed.
+    expect(waits).toHaveLength(3);
     expect(await readFile(target, "utf8")).toBe("survived the hold");
     // Not just "the target exists": a temp file left beside it would mean the
     // sweep has work the writer should have done.
@@ -1233,16 +1266,20 @@ describe("failure paths that need a stubbed filesystem", () => {
   });
 
   it("names the write target when win32's widened budget is spent in full", async () => {
-    // Spends the whole 12-retry schedule on purpose — the message the operator
-    // reads after a hold outlasts the budget is only reachable there, and it is
-    // the half of this repair that a wider budget does not fix. `EACCES` is the
-    // win32 sharing refusal that the errno table maps, so the raised error is
-    // the actionable `FS_ERROR` rather than a bare errno.
+    // Spends the whole 12-retry schedule — the message the operator reads once a
+    // hold outlasts the budget is only reachable there, and it is the half of
+    // this repair that a wider budget does not fix. `EACCES` is the win32
+    // sharing refusal the errno table maps, so the raised error is the
+    // actionable `FS_ERROR`. `EPERM` deliberately stays unmapped: its raw error
+    // already names the syscall and both paths, and mapping it would relabel
+    // POSIX `EPERM`, which is an answer rather than a hold.
     process.env.STAMITY_LOCK = "0";
     const dir = getDir();
     const target = dir.path("contended.md");
     let attempts = 0;
     let retryCount = 0;
+    let ceilingMs = 0;
+    let waits: number[] = [];
     const realPlatform = process.platform;
     Object.defineProperty(process, "platform", { value: "win32", configurable: true });
     try {
@@ -1253,13 +1290,16 @@ describe("failure paths that need a stubbed filesystem", () => {
         },
       });
       retryCount = mod.RENAME_RETRY_COUNT;
+      ceilingMs = mod.RENAME_RETRY_CEILING_MS;
 
-      // Matched by shape, not by `instanceof`: the subject is re-imported into a
-      // fresh module registry, so its `EngineError` is a different class object
-      // from this file's import even though it is the same declaration.
-      await expect(mod.atomicWriteFile(target, "never lands")).rejects.toMatchObject({
-        code: "FS_ERROR",
-        message: expect.stringContaining(target),
+      waits = await recordRetryWaits(async () => {
+        // Matched by shape, not by `instanceof`: the subject is re-imported into
+        // a fresh module registry, so its `EngineError` is a different class
+        // object from this file's import even though it is the same declaration.
+        await expect(mod.atomicWriteFile(target, "never lands")).rejects.toMatchObject({
+          code: "FS_ERROR",
+          message: expect.stringContaining(target),
+        });
       });
     } finally {
       Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
@@ -1268,6 +1308,16 @@ describe("failure paths that need a stubbed filesystem", () => {
     expect(retryCount).toBe(12);
     expect(attempts).toBe(retryCount + 1);
     expect(await readdir(dir.dir)).toEqual([]);
+
+    // The whole budget was REQUESTED, not merely counted: one pause per retry,
+    // and a total that lands between the schedule's base sum and its ceiling.
+    // Both bounds come off the compiled constant — the ceiling IS the base sum
+    // plus the quarter of jitter win32 adds — so no copy of the schedule lives
+    // here to drift against the one in the module.
+    expect(waits).toHaveLength(retryCount);
+    const requested = waits.reduce((total, wait) => total + wait, 0);
+    expect(requested).toBeLessThanOrEqual(ceilingMs);
+    expect(requested).toBeGreaterThanOrEqual(ceilingMs / 1.25);
   });
 
   it("retries a rename refused with EACCES on win32, where the errno is a sharing refusal", async () => {
