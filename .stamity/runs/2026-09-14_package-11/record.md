@@ -36,7 +36,7 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
    accepted UNPERFORMED for 1.8.0 by the instruction and reopen only when their inputs change.
 4. Record currency: public gates, every named public carrier fixed, hand pages re-attested at the
    candidate tree; private carriers as listed (dashboard fact 4, the st-learn trigger ledger row, the peers-brief ledger row, the two L2 rows, the
-   kickoff prompt, the unlocated always-review evidence row with the "~48%" figure dropped, the untracked verifier bulk hashed then
+   kickoff prompt, the unlocated always-review evidence row with the unlocated figure dropped, the untracked verifier bulk hashed then
    deleted with an ignore rule; the app-server-schema scratch kept).
 5. Codex eval profiles: option 1 — kept, marked "documented, unproven, no run of record", control gap
    named beside them.
@@ -141,3 +141,6 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
 - 00:52Z Hand-page attestation: four read-only attestors, 187 claims — README 25 clear; CONTRIBUTING 31 clear; GOVERNANCE 16 clear + stale date; SECURITY 28 clear + the Codex hook clause stale; security-mapping 23 clear; packs-and-trust 15 clear; enterprise-forks 15 clear (+1 platform claim unverifiable in-tree); getting-started 13 clear + probe count stale; working-with-stamity 9 clear; customization 8 clear + a delivery sentence to add + a dateline; workspaces 9 clear; doctrine 10 clear + 2 false (ratchet direction; eight guides); troubleshooting 13 clear; migration 24 clear. U6 writer dispatched.
 - 01:04Z U2b follow-up → cherry-picked f10eb0c (native skills tree per client; shared-tree duplicates disclosed). Regenerated on the merged tree; 24 suites, 765 tests green; check all green.
 - 01:07Z U6 DONE → cherry-picked b34a864 (fourteen pages restamped at the 1.8.0 cut; doctrine, getting-started, SECURITY, customization, CONTRIBUTING, GOVERNANCE corrected; RELEASE_CUT_DATE 2026-09-15; full gate twice green). Tier-1: check.ts comment.
+- 01:09Z Phase 4 Prove opened: the full gate (test-runner), the whole-branch review (frontier class) and the security lens dispatched in parallel; the spec merge is in flight.
+- 01:15Z Full gate green (15 gates; 236 files, 47 commits). Spec merged at Prove (297 lines; structural coverage pass after REQ-PROVE-022 joined U7).
+- 01:15Z Security lens: approve (0.86), four Minor findings ledgered for the fixer round; nine surfaces examined with no finding (the trust chain, the floors, fixture isolation, the lock window, the retry, the page inputs, the published controls, the rehype plugin, the checklist lines).
