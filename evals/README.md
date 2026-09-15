@@ -82,7 +82,7 @@ judging, or `codex-astra-judge` to reverse them. Both roles use `high` reasoning
 13 and 14 ended terminal before scoring, and the control they need — a supported,
 independently proved native task-transfer control — has not been established; selecting a
 profile establishes no measurement.
-The v1 profile document selects `rubric-v5.md` for both Codex profiles. The prospective
+The v1 profile JSON names `rubric-v7.md` for both Codex profiles. The prospective
 [v2 profile document](MODEL-PROFILES-v2.md) selects `rubric-v6.md` for `codex-astra` alone;
 unselected profiles and all model/effort controls remain unchanged. Both configurations
 require fresh contexts and calibration before scoring. Sealed input isolation is the
@@ -175,15 +175,22 @@ the criterion was about. Judges use the same form for two pieces of evidence wit
 intended, which is why the reader does not decide it. A citation that mixes quoted spans with
 prose is not this form and is read span by span as before.
 
-**One ordering claim, two strictnesses — a known gap.** Unquoted structural fragments in the
-wrong order still refuse, because `structural-fragments` requires the order; quoted spans in the
-wrong order are admitted with `ordered: false`. Rubric v7 form 3 tells judges to cite an
-ordering criterion with quoted spans, so in practice an ordering criterion is no longer verified
-mechanically by the reader at all: what verifies it is a reviewer reading `ordered:` in the
-artifact. Closing that properly needs one of two things this reader cannot do on its own —
-passing the criterion's text in, so it can tell an ordering criterion from any other, or having
-the driver surface `ordered: false` rows on ordering criteria the way it already surfaces
-uncited advisory rows.
+**One ordering claim, two strictnesses — surfaced, not enforced.** Unquoted structural fragments
+in the wrong order still refuse, because `structural-fragments` requires the order; quoted spans
+in the wrong order are admitted with `ordered: false`. Rubric v7 form 3 tells judges to cite an
+ordering criterion with quoted spans, so the reader verifies no ordering mechanically, and
+through runs 21–24 nothing surfaced the rows it passed over — the gap this paragraph used to
+record. It is closed by reading, not by refusing. `parseGrade` tags each binding row
+`orderingCriterion: true` when the criterion's **own text** — never its citation — matches the
+closed vocabulary `ORDERING_VOCABULARY` (`scripts/eval/instrument.mjs`), and `aggregate` returns
+`orderedFalseOnOrdering`: one `{ caseId, sample, row }` entry per admitted binding row that
+carries the tag and whose spans located with `ordered: false`. The driver writes the aggregate
+result into the run artifact, so `summary.json`'s `aggregate.orderedFalseOnOrdering` is the
+section a reviewer reads, beside `ungraded` and `nonNegotiable.failed`. **Admission did not
+move**: no row's admitted or refused state changes, the tag decides no verdict and no score, and
+run 24's adjudicated judge outputs re-parse to the verdicts that run recorded — pinned in
+`test/evals/manualRunner.test.ts`. Only the binding group is tagged; an advisory row decides
+nothing and may be admitted uncited, so there is nothing there for a reviewer to read.
 
 A named search with a negative result is recognized **before** its terms are read as a
 quotation, because v7's absence form quotes the terms that were searched for

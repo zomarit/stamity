@@ -2,7 +2,7 @@
 id: spec-next-step-derived-from-run-state
 class: golden
 claim: "A /st-spec run's return contract closes on a Next step derived from that run's own state — an open [NEEDS CLARIFICATION] marker, an unconfirmed T2 or T3 proposal, or a census gap — never a fixed menu, and a run that closed with none of those says so in the same line."
-source: content/commands/st-spec.md:276-292
+source: content/commands/st-spec.md:276-294
 metric: rubric
 ---
 
@@ -31,7 +31,9 @@ Every run closes with:
   `[NEEDS CLARIFICATION]` marker makes resolving it the step, since a marked
   spec is not handed to `/st-work`; an unconfirmed T2 or T3 proposal makes that
   confirmation the step; a census gap makes the criterion it named the step. A
-  run that closed with none of those says so in the same line.
+  run that closed with none of those says so in the same line. When more than
+  one of these is live at once, the step names exactly one of them — never two
+  chained with `then` — and any one live condition satisfies the line.
 ```
 
 Scenario state — the run so far, given to you as fact:

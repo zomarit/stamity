@@ -844,6 +844,13 @@ function emissionBlock(raw) {
   return emission ? emission[2] : raw.trim().replace(/^```(?:text)?\s*\n([\s\S]*?)\n```$/, '$1')
 }
 
+/** The closed vocabulary that marks a binding criterion as being *about* an ordering. Held in
+ *  one place so the set document, the reader and the run artifact all mean the same list. Word
+ *  boundaries are load-bearing: `order` inside `border`, `reorder` or `recorded` is not an
+ *  ordering claim, and a reader that matched them would tag half the set. The tag reads the
+ *  criterion's own text, never the citation, and it decides nothing — see `aggregate`. */
+export const ORDERING_VOCABULARY = /\b(?:order|ordered|before|after|first|last|then|sequence|closes? on|ends? with|opens? with)\b/i
+
 /** Parse the committed rubric's text shape; do not append a new output schema to the judge input. */
 export function parseGrade(raw, scenario, transcript) {
   const text = emissionBlock(raw)
@@ -877,7 +884,7 @@ export function parseGrade(raw, scenario, transcript) {
       }
     }
     requireEvidence(rows.length === count && rows.every((row, index) => row[1] === prefix && Number(row[2]) === index + 1), 'grade-criteria', true)
-    return rows.map(row => {
+    return rows.map((row, index) => {
       const citation = row[4].trim()
       const evidence = locateCitation(citation, transcript, row[3])
       // A binding criterion decides the case, so an unlocatable citation refuses the grade.
@@ -885,8 +892,12 @@ export function parseGrade(raw, scenario, transcript) {
       // admitted uncited, and `cited` is what a reader counts — an uncited advisory verdict
       // is never a verified pass, and never a verified fail either.
       requireEvidence(evidence || prefix === 'A', 'grade-citation', true)
-      return { id: `${prefix}${row[2]}`, verdict: row[3], citation,
+      const parsed = { id: `${prefix}${row[2]}`, verdict: row[3], citation,
         evidence: evidence ?? null, cited: Boolean(evidence) }
+      // Only the binding group carries the tag: advisory rows decide nothing and may be
+      // admitted uncited, so there is nothing for a reviewer to read on them.
+      if (prefix === 'B') parsed.orderingCriterion = ORDERING_VOCABULARY.test(scenario.binding[index] ?? '')
+      return parsed
     })
   }
   const bindingEnd = closingNone ? verdictMatches[0].index : advisoryAt.index
@@ -975,7 +986,9 @@ export function nonNegotiableRows(scenario) {
  *  admitted grades and `passes`/`graded`/`nonNegotiable` added); `cases[]` the same cases in
  *  the driver's flat shape; `metrics[]`, `floors[]`, `perSkillRecall[]` and `pass` unchanged;
  *  `nonNegotiable` counting the rows and cases and listing every failed or unverified sample;
- *  and `ungraded[]`, every sample with no admitted grade. Missing samples no longer throw. */
+ *  `ungraded[]`, every sample with no admitted grade; and `orderedFalseOnOrdering[]`, every
+ *  admitted binding row whose criterion names an ordering and whose quoted spans located out of
+ *  it. Missing samples no longer throw. */
 export function aggregate(cases, samples) {
   const identity = samples.map(sample => `${sample.caseId}:${sample.sample}`)
   requireEvidence(new Set(identity).size === identity.length &&
@@ -1022,6 +1035,14 @@ export function aggregate(cases, samples) {
   const perSkillRecall = rows.filter(row => row.group === 'probe' && !row.caseId.startsWith('probe-none-'))
     .map(row => ({ skill: row.caseId.replace(/^probe-/, 'st-').replace(/-select$/, ''), correct: Number(row.pass), total: 1 }))
   const guarded = rows.filter(row => row.nonNegotiable.rows.length > 0)
+  // REQ-PROVE-013. An ordering criterion cited as a list of quoted spans is admitted whether or
+  // not the spans located in the citation's order — the list form records the order rather than
+  // requiring it. That is deliberate, and it left the ordering unread by anything. These rows
+  // are the ones a reviewer has to read: the criterion is about an ordering, and the spans it
+  // cites did not run in that order. Listing them moves no admission and no score.
+  const orderedFalseOnOrdering = rows.flatMap(row => row.samples.flatMap(sample =>
+    sample.grade.binding.filter(item => item.orderingCriterion && item.evidence?.kind === 'ordered-spans' &&
+      item.evidence.ordered === false).map(item => ({ caseId: row.caseId, sample: sample.sample, row: item.id }))))
   return { rule: 'SET-v6', rows,
     cases: rows.map(row => ({ caseId: row.caseId, passes: row.passes, samples: 3, graded: row.graded,
       pass: row.pass, nonNegotiable: { rows: row.nonNegotiable.rows, pass: row.nonNegotiable.pass,
@@ -1036,5 +1057,6 @@ export function aggregate(cases, samples) {
     },
     ungraded: rows.flatMap(row => row.held.filter(item => item.state === 'unverified')
       .map(item => ({ caseId: row.caseId, sample: item.sample }))),
+    orderedFalseOnOrdering,
     pass: metrics.every(row => row.pass) && floors.every(row => row.pass) }
 }

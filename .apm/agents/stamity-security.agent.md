@@ -107,7 +107,9 @@ run.
 - **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
 - **severity** for findings: `Critical` | `Warning` | `Minor`.
 - Every behaviour claim cites `path:line`. A claim that cannot be located is rewritten as a
-  question or dropped — posting it spends a fix round on an assertion nobody can check.
+  question or dropped — posting it spends a fix round on an assertion nobody can check. A
+  file path with no line number is a bare path, not a citation — the same defect as no
+  citation at all.
 - Only `Critical` and `Warning` findings reach the human checkpoint; `Minor` rows are
   ledgered and travel with the run.
 - `DONE` carries the surfaces examined, the findings with their locators and OWASP ids, how

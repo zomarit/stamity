@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.7.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-14T23:49:54.481Z",
+  "updatedAt": "2026-09-15T00:11:10.369Z",
   "tools": [
     "claude"
   ],
@@ -92,7 +92,7 @@
       "adapter": "claude",
       "artifactId": "performance",
       "artifactType": "agent",
-      "contentHash": "7e4af73d1483c1e26e5d7ab4daa70cb1d21d0a600219ddb2adb8f0a552878d34",
+      "contentHash": "e550bbc77e68eb495f01895a2e7aed46c1766aa39c7f847b962589f78a206fbf",
       "path": ".claude/agents/stamity-performance.md"
     },
     {
@@ -113,7 +113,7 @@
       "adapter": "claude",
       "artifactId": "security",
       "artifactType": "agent",
-      "contentHash": "c9b70589b551a2d5bdf3ff19cf17b6f2bb77f20df5cbe2b037dd27d73273ee39",
+      "contentHash": "f8702d8121bd61c330b9bacacb58ae91737caab3fda0f132f07e42cafcc30068",
       "path": ".claude/agents/stamity-security.md"
     },
     {
@@ -183,7 +183,7 @@
       "adapter": "claude",
       "artifactId": "cmd-spec",
       "artifactType": "command",
-      "contentHash": "505a4e14a769f0ca998877d65dc0951ba512691525c42d004a06976915034758",
+      "contentHash": "aec2fb4f8d2c5a2bcbd747618416fe8afa8f9f0fb4436d1256e7717bed14eba1",
       "path": ".claude/commands/st-spec.md"
     },
     {

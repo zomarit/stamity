@@ -120,7 +120,10 @@ run.
   binds every behaviour and cost claim in the return, not only the block the result labels as
   cited — the surfaces list, the finding bodies, and the prose between them. A finding's opening
   sentence is a behaviour claim like any other and carries its line, or it is rewritten as a
-  question. An unmeasured claim is rewritten as a question or dropped.
+  question. An unmeasured claim is rewritten as a question or dropped. A finding body that
+  restates a fact from the brief about a file outside the surfaces-list exemption — which
+  file calls which, for instance — still carries its own `path:line`; restating the brief's
+  words does not inherit the exemption.
 - Only `Critical` and `Warning` findings reach the human checkpoint; `Minor` rows are
   ledgered and travel with the run.
 - `DONE` carries the surfaces examined, the budgets found and the budget classes absent, the

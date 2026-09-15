@@ -1,16 +1,16 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 // @ts-expect-error — the manual harness is import-safe native ESM, outside the product package.
-import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiableRows, parseCase, parseGrade, parseRubric, sha256 } from "../../scripts/eval/instrument.mjs";
+import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiableRows, ORDERING_VOCABULARY, parseCase, parseGrade, parseRubric, sha256 } from "../../scripts/eval/instrument.mjs";
 // @ts-expect-error — native ESM contributor tool.
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
 import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation } from "../../scripts/eval/run.mjs";
-import { REPO_ROOT } from "./support.ts";
+import { CASES_DIR, REPO_ROOT } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 const passingRows = (scenario: { binding: string[] }) =>
@@ -1410,5 +1410,119 @@ describe("rubric v7 — a closed citation form over v6's calibration protocol", 
     expect(core).toContain('searched for "<term>", "<term>"; none');
     expect(core).toContain("at most 25 words");
     expect(core).not.toContain("or a line reference from");
+  });
+});
+
+/** A minimal scored case, used to give every metric a denominator beside the case under test. */
+const other = (id: string, patch: Record<string, unknown> = {}) => ({ id, group: "golden", floor: false,
+  benignTwin: false, advisory: [], binding: ["the run reports the finding"], ...patch });
+
+describe("ordering criteria — tagged by the reader, listed by the aggregate", () => {
+  // The transcript carries the findings first and the next step second. The citation names the
+  // two in the reverse order, which is rubric v7's list form: admitted, with `ordered: false`.
+  const orderingTranscript = "The findings are two: a Warning and a Minor.\nThe next step is to resolve the marker.\n";
+  const reversed = '"The next step is to resolve the marker" "The findings are two"';
+  const orderingCase = { id: "ordering-case", group: "golden", floor: false, benignTwin: false, advisory: [],
+    binding: [
+      // B1 names an ordering; B2 names two things with no order between them.
+      "The reply closes on the next step, after the findings.",
+      "The reply names the findings and the count it reports.",
+    ] };
+  const orderingEmission = ["case: ordering-case", "binding:", `  B1 pass — ${reversed}`,
+    `  B2 pass — ${reversed}`, "advisory: none declared", "verdict: PASS"].join("\n");
+  const orderingGrade = () => parseGrade(orderingEmission, orderingCase, orderingTranscript);
+
+  it("tags the binding criterion that names an ordering and leaves the one that does not untagged", () => {
+    const grade = orderingGrade();
+    expect(grade.verdict).toBe("PASS");
+    // Admission is untouched: both rows cite the same spans and both are admitted.
+    expect(grade.binding.map((row: { id: string; verdict: string; cited: boolean }) => [row.id, row.verdict, row.cited]))
+      .toEqual([["B1", "pass", true], ["B2", "pass", true]]);
+    expect(grade.binding[0]).toMatchObject({ orderingCriterion: true, evidence: { kind: "ordered-spans", ordered: false } });
+    expect(grade.binding[1]).toMatchObject({ orderingCriterion: false, evidence: { kind: "ordered-spans", ordered: false } });
+    // Advisory rows decide nothing and may be admitted uncited, so they carry no tag at all.
+    expect(grade.advisory).toEqual([]);
+  });
+
+  it("lists every admitted ordering row whose spans located out of order, and only those", () => {
+    // Every metric needs a denominator, so the set carries one case of each scored group.
+    const cases = [orderingCase, other("guard-case", { group: "adversarial" }),
+      other("benign-twin", { group: "adversarial", benignTwin: true }), other("probe-x-select", { group: "probe" })];
+    const passing = (id: string) => [1, 2, 3].map(sample => sampleOf(id, sample, ["pass"]));
+    const result = aggregate(cases, [
+      ...[1, 2, 3].map(sample => ({ caseId: "ordering-case", sample, grade: orderingGrade() })),
+      ...passing("guard-case"), ...passing("benign-twin"), ...passing("probe-x-select")]);
+    expect(result.orderedFalseOnOrdering).toEqual([
+      { caseId: "ordering-case", sample: 1, row: "B1" },
+      { caseId: "ordering-case", sample: 2, row: "B1" },
+      { caseId: "ordering-case", sample: 3, row: "B1" },
+    ]);
+    // B2 located out of order too, and is absent: the tag reads the criterion, not the citation.
+    expect(result.orderedFalseOnOrdering.some((row: { row: string }) => row.row === "B2")).toBe(false);
+    // Tagging moved no admission and no score: the case still passes 3/3 and the run is green.
+    expect(result.cases[0]).toMatchObject({ caseId: "ordering-case", passes: 3, graded: 3, pass: true });
+    expect(result.pass).toBe(true);
+    expect(result.ungraded).toEqual([]);
+  });
+
+  it("holds the vocabulary's word boundaries, so a word containing an ordering word is not one", () => {
+    // The closed list, and the shapes that must not match it. `ordering`, `reorder` and
+    // `lastly` are outside the list by construction: widening it is a reviewed diff here.
+    for (const text of ["the step closes on the marker", "the reply ends with the next step",
+      "the findings come before the status", "the last line is the Next step", "in that sequence",
+      "it opens with the mode line", "the step then names the artifact", "the order of the items"])
+      expect(ORDERING_VOCABULARY.test(text), text).toBe(true);
+    for (const text of ["the border case is recorded", "a recorder writes the run",
+      "the reorder path is untouched", "the ordering of nothing", "consequence of the change",
+      "the reply names the findings and the count it reports"])
+      expect(ORDERING_VOCABULARY.test(text), text).toBe(false);
+  });
+
+  it("re-parses run 24's adjudicated judge outputs and moves no verdict", () => {
+    // The nine cases whose single-sample misses run 24's adjudication examined. Re-reading their
+    // admitted grades with the tagging reader is the proof that admission did not move: every
+    // recorded verdict, binding row and advisory row has to come back identical.
+    const adjudicated = ["eval-change-needs-fresh-measurement", "pr-comment-ingress-screen",
+      "agent-performance-return-contract", "agent-researcher-return-contract", "agent-security-return-contract",
+      "ui-error-state-announces-recovery", "agent-test-runner-return-contract",
+      "learnings-instruction-span-rewritten", "spec-next-step-derived-from-run-state"];
+    const run = "evals/runs/2026-09-11-run-24";
+    interface Call { callId: string; role: string; caseId: string; sample: number; taskName: string;
+      scenarioCallId: string | null; status: string; reason: string | null;
+      grade?: { verdict: string; binding: { verdict: string }[]; advisory: { verdict: string }[] } }
+    const calls: Call[] = JSON.parse(read(`${run}/calls.json`));
+    const byCallId = new Map(calls.map(call => [call.callId, call]));
+    const output = (call: Call) => read(`${run}/calls/${call.taskName}.output.txt`);
+    const caseOf = (id: string) => {
+      const path = ["golden", "adversarial", "probes"].map(group => `${CASES_DIR}/${group}/${id}.md`)
+        .find(candidate => existsSync(join(REPO_ROOT, candidate)));
+      expect(path, `${id}: no case file under ${CASES_DIR}`).toBeDefined();
+      return parseCase(read(path as string), path as string);
+    };
+    const replayed: string[] = [];
+    for (const id of adjudicated) {
+      const scenario = caseOf(id);
+      const judges = calls.filter(call => call.role === "judge" && call.caseId === id);
+      expect(judges.filter(call => call.status === "admitted"), id).toHaveLength(3);
+      for (const judge of judges) {
+        const transcript = output(byCallId.get(judge.scenarioCallId as string) as Call);
+        if (judge.status !== "admitted") {
+          // The one recorded refusal in this set (agent-test-runner sample 1, attempt 1, redone
+          // as a2) has to refuse again, for the reason the artifact recorded.
+          expect(() => parseGrade(output(judge), scenario, transcript), `${id}:${judge.taskName}`)
+            .toThrow(judge.reason as string);
+          continue;
+        }
+        const grade = parseGrade(output(judge), scenario, transcript);
+        const recorded = judge.grade as NonNullable<Call["grade"]>;
+        expect(grade.verdict, `${id} sample ${judge.sample}`).toBe(recorded.verdict);
+        expect(grade.binding.map((row: { verdict: string }) => row.verdict), `${id} sample ${judge.sample} binding`)
+          .toEqual(recorded.binding.map(row => row.verdict));
+        expect(grade.advisory.map((row: { verdict: string }) => row.verdict), `${id} sample ${judge.sample} advisory`)
+          .toEqual(recorded.advisory.map(row => row.verdict));
+        replayed.push(`${id}:${judge.sample}`);
+      }
+    }
+    expect(replayed).toHaveLength(27);
   });
 });
