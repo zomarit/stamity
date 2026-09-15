@@ -449,3 +449,20 @@ always-on budget item stays open until the measurement lands.
       security agent states that a path with no line number is a bare path, the same defect as no
       citation; the spec command states that with several next-step conditions live, the step names
       exactly one of them and never two chained with `then`.
+
+## Resume — 2026-09-15T08:16Z, on the maintainer's word
+
+- The maintainer re-authenticated the route of record's client with an account whose windows are
+  fresh (probe: five-hour 0.02, seven-day 0.00) and instructed: "limits are reset, continue." A
+  maintainer decision, not a default: the capacity guard's policy is unchanged; what changed is the
+  account behind it.
+- Run 26 could not resume under the new login: the client's ambient block carries the account
+  email, and the driver's ambient-fingerprint policy treats a changed line it cannot mask as a
+  material instruction change that ends a run. It was stopped at its hold with nothing in flight
+  (`SIGTERM`, exit 130, 266 admitted samples retained in the private run directory, an operator note
+  in its journal), never rescored or reused.
+- **Run 27** prepared at 08:19Z on the same candidate `f2b90dc` and the same pins (SET-v7
+  `cb2eae0a…`, instrument `421b250b…`, rubric v7, claude profile, CLI 2.1.268, capacity 4) from a
+  detached worktree at the candidate, because the branch head now carries record-only commits and
+  the driver binds every command to the candidate's tree. Calibration first; it is the third and last
+  run of tonight's budget.
