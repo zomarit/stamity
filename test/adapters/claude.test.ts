@@ -19,7 +19,10 @@ import {
   type CoreEmissionPlan,
   type EmissionContext,
 } from "../../src/emit/planner.ts";
+import { ADAPTER_REGISTRY } from "../../src/adapters/registry.ts";
+import { LIVE_CAPABILITY_INPUTS } from "../../src/emit/capabilityMatrix.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
+import { TOOLS, type Tool } from "../../src/types/core.ts";
 import { CLIENT_EXTENSION_EVENTS } from "../../src/hooks/model.ts";
 import {
   REVIEW_GATE_FILE,
@@ -104,6 +107,14 @@ interface PlanOverrides {
   contentRoot?: string;
   rootDir?: string;
   ruleDelivery?: RuleDelivery;
+  /**
+   * Co-selected clients. Added 2026-09-15: the shared `.agents/skills/` tree
+   * holds the union of every selected client's rule demotions, so the one case
+   * about what this client's NATIVE tree filters out needs a second client in
+   * the manifest to have anything to filter. Every other case here is about
+   * claude alone and takes the default.
+   */
+  tools?: Tool[];
 }
 
 /** Every rule, agent and command of the real corpus, selected by bare catalog id. */
@@ -123,7 +134,7 @@ async function fullCorpusSelection(): Promise<ContentSelection> {
 
 async function ctxOf(over: PlanOverrides = {}): Promise<EmissionContext> {
   const manifest = createManifest({
-    tools: ["claude"],
+    tools: over.tools ?? ["claude"],
     selection: over.selection ?? (await fullCorpusSelection()),
     generatorVersion: ENGINE_VERSION,
     now: FIXED_NOW,
@@ -155,6 +166,13 @@ async function planned(
 
 const byPath = (rows: readonly AdapterOutput[]): Map<string, AdapterOutput> =>
   new Map(rows.map((row) => [row.path, row]));
+
+/** The `stamity-<id>` skill directories one path set holds under `prefix`, sorted. */
+const ruleSkillDirs = (paths: readonly string[], prefix: string): string[] =>
+  paths
+    .filter((path) => path.startsWith(`${prefix}/stamity-`) && path.endsWith("/SKILL.md"))
+    .map((path) => path.slice(prefix.length + 1).split("/")[0] ?? "")
+    .toSorted();
 
 function settingsOf(rows: readonly AdapterOutput[]): SettingsShape {
   const row = byPath(rows).get(CLAUDE_SETTINGS_PATH);
@@ -1253,6 +1271,83 @@ describe("claude under ruleDelivery: on-demand", () => {
     // reclaims it.
     expect(row!.owner.artifactType).toBe("rule");
     expect(row!.owner.artifactId).toBe("question-protocol");
+  });
+
+  it("copies only the rule-skills THIS client demoted into its native tree", async () => {
+    // The residue of the delivery option, closed here. `.agents/skills/` holds
+    // the union of every selected client's demotions, because cursor, copilot
+    // and codex all read that one directory; `.claude/skills/` has one reader,
+    // so copying the union put a second copy of seven rules beside the
+    // `.claude/rules/` files claude already receives.
+    const { rows, core } = await planned({ tools: ["claude", "codex"] });
+    const shared = ruleSkillDirs(
+      core.skills.map((row) => row.path),
+      SKILLS_PROJECTION_DIR,
+    );
+    const native = ruleSkillDirs(
+      rows.map((row) => row.path),
+      CLAUDE_SKILLS_DIR,
+    );
+
+    // Non-degenerate on both sides: codex demotes nine, claude two, and the
+    // native tree takes exactly claude's two — a filter that kept everything or
+    // nothing fails here.
+    expect(shared).toHaveLength(9);
+    expect(native).toEqual(["stamity-ai-evals", "stamity-question-protocol"]);
+    expect(core.demotedRules.codex.size).toBe(9);
+    expect([...core.demotedRules.claude].toSorted()).toEqual(["ai-evals", "question-protocol"]);
+
+    // One door per rule on this client: what the native tree left out arrives as
+    // a rule file, and what it took does not.
+    const paths = new Set(rows.map((row) => row.path));
+    for (const dir of shared.filter((entry) => !native.includes(entry))) {
+      const id = dir.slice("stamity-".length);
+      expect(paths.has(`.claude/rules/stamity-${id}.md`), id).toBe(true);
+    }
+    for (const dir of native) {
+      const id = dir.slice("stamity-".length);
+      expect(paths.has(`.claude/rules/stamity-${id}.md`), id).toBe(false);
+    }
+  });
+
+  it("holds the matrix's published shared-tree duplicate counts to the real emission", async () => {
+    // The residual the filter above does NOT remove, and the matrix discloses:
+    // `.agents/skills/` is one directory and cannot be client-specific, so a
+    // rule codex demoted lands there for cursor and copilot too, beside the
+    // `.mdc` rule or `.instructions.md` file they already receive. Derived from
+    // the plan and the clients' own `readsAgentsSkillsDir` fact rather than
+    // typed, so a client that gains or loses that fact moves the number with it.
+    const { core } = await planned({ tools: [...TOOLS] });
+    const sharedRuleSkills = new Set(
+      core.skills
+        .filter(
+          (row) =>
+            row.artifactType === "rule" &&
+            row.path.startsWith(`${SKILLS_PROJECTION_DIR}/`) &&
+            row.path.endsWith("/SKILL.md"),
+        )
+        .map((row) => row.artifactId),
+    );
+    expect(sharedRuleSkills.size).toBeGreaterThan(0);
+
+    const measured = Object.fromEntries(
+      TOOLS.map((tool) => [
+        tool,
+        ADAPTER_REGISTRY[tool].facts.readsAgentsSkillsDir
+          ? [...sharedRuleSkills].filter((id) => !core.demotedRules[tool].has(id)).length
+          : 0,
+      ]),
+    );
+
+    expect(
+      LIVE_CAPABILITY_INPUTS.alwaysOn.sharedTreeDuplicateRules,
+      "docs/capability-matrix.md publishes how many rules the shared skills tree duplicates per " +
+        "client; update `sharedTreeDuplicateRules` in src/emit/capabilityMatrix.ts and " +
+        "regenerate the page.",
+    ).toEqual(measured);
+    // Non-degenerate: the four clients do NOT all answer the same, which is the
+    // whole reason the figure is per client rather than one number.
+    expect(new Set(Object.values(measured)).size).toBeGreaterThan(1);
   });
 
   it("leaves the vendor-neutral tree and the native copy byte-identical", async () => {

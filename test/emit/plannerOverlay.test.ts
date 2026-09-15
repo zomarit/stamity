@@ -353,13 +353,14 @@ describe("override layer under an installed pack", () => {
     // MOVED 2026-09-15 with the `on-demand` default. Codex used to down-convert
     // this rule into the root appendix; the fixture carries no floor tag, no
     // `critical` precedence and no anchorable glob set, so under the shipped
-    // default it is projected as a skill instead (`.agents/skills/`, plus the
-    // native copy claude reads). The claim here is the layer's REACH before and
-    // after a pack install, which is the `toEqual(carrying(before))` below.
+    // default it is projected as a skill into the shared `.agents/skills/` tree
+    // instead; claude's native skills tree takes no copy, because claude did not
+    // demote it and already has it under `.claude/rules/`. The claim here is the
+    // layer's REACH before and after a pack install, which is the
+    // `toEqual(carrying(before))` below.
     expect(carrying(before)).toEqual([
       ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
-      ".claude/skills/stamity-testing/SKILL.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
     ]);
@@ -547,7 +548,6 @@ describe("the fork layer through the composed planner", () => {
     expect(pathsCarrying(before, FORK_MARKER)).toEqual([
       ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
-      ".claude/skills/stamity-testing/SKILL.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
     ]);

@@ -463,16 +463,17 @@ describe("override content layer", () => {
     // MOVED 2026-09-15 with the `on-demand` default. Codex used to down-convert
     // this rule into the root appendix; it carries no floor tag, no `critical`
     // precedence and no anchorable glob set, so under the shipped default codex
-    // receives it as a projected skill instead — `.agents/skills/`, plus the
-    // native copy claude reads. The claim is unchanged: the AUTHORED body
-    // reaches every selected client, through whatever door that client has.
+    // receives it as a projected skill instead, in the shared `.agents/skills/`
+    // tree it reads. Claude's own native skills tree takes no copy: claude did
+    // not demote this rule and already has it under `.claude/rules/`. The claim
+    // is unchanged — the AUTHORED body reaches every selected client, through
+    // whatever door that client has, and through exactly one of them.
     expect(byPath.get(".agents/skills/stamity-testing/SKILL.md")).toContain(USER_MARKER);
 
     const carrying = rows.filter((row) => row.content.includes(USER_MARKER));
     expect(carrying.map((row) => row.path).toSorted()).toEqual([
       ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
-      ".claude/skills/stamity-testing/SKILL.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
     ]);
@@ -647,7 +648,6 @@ describe("override content layer", () => {
     expect(carrying.map((row) => row.path).toSorted()).toEqual([
       ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
-      ".claude/skills/stamity-testing/SKILL.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
     ]);
@@ -759,11 +759,13 @@ describe("override content layer", () => {
     // `critical` — so the authored rule is demoted on codex and delivered as a
     // projected skill. That is the delivery predicate reading the rule in front
     // of it rather than the id's reputation, which is the behaviour an override
-    // is for; the shipped `security-patterns` would still be folded.
+    // is for; the shipped `security-patterns` would still be folded. Claude's
+    // own native skills tree takes no copy, because claude did not demote this
+    // rule — it has globs, so claude attaches it conditionally as a rule file,
+    // and the projected skill exists for codex, which reads the shared tree.
     expect(rows.filter((row) => row.path.includes(FLOOR_ID)).map((row) => row.path).toSorted()).toEqual([
       `.agents/skills/stamity-${FLOOR_ID}/SKILL.md`,
       `.claude/rules/stamity-${FLOOR_ID}.md`,
-      `.claude/skills/stamity-${FLOOR_ID}/SKILL.md`,
       `.cursor/rules/stamity-${FLOOR_ID}.mdc`,
       `.github/instructions/stamity-${FLOOR_ID}.instructions.md`,
     ]);
@@ -1118,7 +1120,6 @@ describe("fork content layer", () => {
     expect(carrying.map((row) => row.path).toSorted()).toEqual([
       ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
-      ".claude/skills/stamity-testing/SKILL.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
     ]);
@@ -1137,10 +1138,13 @@ describe("fork content layer", () => {
 
     const rows = await getEmissionPlanner().plan(repoContext(repo.dir));
 
-    // 4 -> 5 on 2026-09-15: the same five doors as the case above, under the
-    // `on-demand` default. What this case is about is the PRECEDENCE — the
-    // override tree wins over the fork layer — and that is the second line.
-    expect(rows.filter((row) => row.content.includes(USER_MARKER))).toHaveLength(5);
+    // Held at 4 on 2026-09-15, through both halves of the delivery change: the
+    // shared skills tree gained codex's door and claude's native tree lost the
+    // copy it never needed, so the door COUNT is unchanged and the doors are not
+    // the same four. The case above enumerates them; what this one is about is
+    // the PRECEDENCE — the override tree wins over the fork layer — which is the
+    // second line.
+    expect(rows.filter((row) => row.content.includes(USER_MARKER))).toHaveLength(4);
     expect(rows.filter((row) => row.content.includes(FORK_MARKER))).toEqual([]);
   });
 
@@ -1292,7 +1296,6 @@ describe("overlay content layer", () => {
     expect(carrying.map((row) => row.path).toSorted()).toEqual([
       `.agents/skills/stamity-${PATCHED_ID}/SKILL.md`,
       `.claude/rules/stamity-${PATCHED_ID}.md`,
-      `.claude/skills/stamity-${PATCHED_ID}/SKILL.md`,
       `.cursor/rules/stamity-${PATCHED_ID}.mdc`,
       `.github/instructions/stamity-${PATCHED_ID}.instructions.md`,
     ]);

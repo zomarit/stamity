@@ -417,6 +417,47 @@ export function retargetProjection<Row extends ProjectedFile>(
 }
 
 /**
+ * The rows ONE client's native skills directory should receive — content skills
+ * plus only the rule-skills that client itself demoted — already re-targeted
+ * onto {@link NATIVE_SKILL_DIRS}. An empty list for a client that reads the
+ * vendor-neutral tree directly and needs no copy.
+ *
+ * The filter exists because the projection's rule-skill rows are the UNION over
+ * selected tools and cannot be anything else: {@link SKILLS_PROJECTION_DIR} is
+ * one directory read by cursor, copilot and codex alike, so a rule demoted by
+ * any of them has to be in it. A native directory has exactly one reader, so
+ * the same union there is a different thing — a rule this client still receives
+ * as its own rule file, copied a second time as a skill. On a four-client
+ * selection that was seven rules delivered twice to claude: `.claude/rules/
+ * stamity-testing.md` beside `.claude/skills/stamity-testing/SKILL.md`, both
+ * carrying the same body, neither of them wrong on its own.
+ *
+ * What it costs the client nothing to lose: codex is the client that demoted
+ * those rules, and codex reads {@link SKILLS_PROJECTION_DIR}. The row is still
+ * emitted, still delivered, still ledgered — it is only the second copy under a
+ * root no demoting client reads that goes.
+ *
+ * A CONTENT skill is never filtered: it is selected content with no delivery
+ * question attached, and its support files ride with it. The test is
+ * `artifactType`, which the projection sets from the catalog item, so a rule
+ * delivered as a skill is still a rule here — the same fact the emitted file
+ * states under `metadata.stamity.tools`.
+ */
+export function nativeSkillRows<Row extends ProjectedFile>(
+  rows: readonly Row[],
+  tool: Tool,
+  demotedRules: Readonly<Record<Tool, ReadonlySet<string>>> = NO_DEMOTED_RULES,
+): Row[] {
+  const dir = NATIVE_SKILL_DIRS[tool];
+  if (dir === undefined || dir === "") return [];
+  const demoted = demotedRules[tool];
+  return retargetProjection(
+    rows.filter((row) => row.artifactType !== "rule" || demoted.has(row.artifactId)),
+    dir,
+  );
+}
+
+/**
  * The six top-level keys the Agent Skills spec permits, in the order a reader
  * expects them (code.claude.com/docs/en/skills § "Frontmatter reference" and
  * § "Using skill frontmatter outside Claude Code", accessed 2026-08-16).

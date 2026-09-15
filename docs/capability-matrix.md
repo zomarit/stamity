@@ -73,6 +73,16 @@ critical or carries a `floor:*` tag, and a floor that loads on relevance is a fl
 binding the moment the model does not notice it applies. The other 9 rules are projected as
 `.agents/skills/stamity-<rule-id>/SKILL.md` instead, one directory each.
 
+**What that costs the clients beside it.** Those directories sit in the SHARED
+`.agents/skills/` tree, which cursor, copilot and codex all read — a directory cannot be made
+client-specific, so it holds the union of every selected client's demotions. Co-selecting
+`codex` therefore hands `cursor` 9 and `copilot` 7 rules a second time: each is already
+delivered to that client as its own `.mdc` rule or `.instructions.md` file, and is now also
+description-pullable as a skill. The duplicate is pulled on relevance and never loaded at
+launch, so it moves none of the line figures above — and a selection without `codex` does not
+pay it at all. `claude` is absent from that list because it reads no shared tree: its native
+skills directory carries only the rules it demoted itself.
+
 That trade is paid in a second budget, so it is measured too. The client holds every skill's
 name and description for the whole session in order to decide when to open one, and caps that
 list at 8000 characters when the context window is unknown. The full selection measures 5570 —

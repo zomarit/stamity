@@ -166,6 +166,23 @@ export interface AlwaysOnDisclosure {
   readonly codexSkillsListChars: number;
   /** The client's own published ceiling on that list. */
   readonly codexSkillsListCap: number;
+  /**
+   * Per client, how many rule-skills in the SHARED `.agents/skills/` tree
+   * duplicate a rule that client still receives as a rule of its own.
+   *
+   * The residual of the delivery option, and the one cost co-selection creates
+   * rather than reclaims. The shared tree holds the UNION of every selected
+   * client's demotions because it is one directory that cursor, copilot and
+   * codex all read — a directory cannot be made client-specific — so a rule
+   * codex demoted arrives for cursor too, beside the `.mdc` rule cursor already
+   * has. Zero for a client that reads no shared tree (its native copy is
+   * filtered to its own demotions) and zero for the client whose demotions the
+   * union is made of.
+   *
+   * Needs an emission, like the two figures above, so it is pinned here and
+   * held to the real one by `test/adapters/claude.test.ts`.
+   */
+  readonly sharedTreeDuplicateRules: Readonly<Record<Tool, number>>;
 }
 
 /**
@@ -282,6 +299,13 @@ const LIVE_ALWAYS_ON: AlwaysOnDisclosure = {
   // adding its own skills spends into.
   codexSkillsListChars: 5_570,
   codexSkillsListCap: CODEX_SKILLS_LIST_BUDGET_CHARS,
+  // Measured on the full four-client selection. `cursor` demotes nothing of its
+  // own, so all nine rule-skills in the shared tree duplicate an `.mdc` rule it
+  // already has; `copilot` demoted two of the nine itself, so seven are
+  // duplicates of its instruction files. `codex` is the client the union is made
+  // of, and `claude` reads no shared tree — its native copy carries only its own
+  // two demotions.
+  sharedTreeDuplicateRules: { claude: 0, cursor: 9, copilot: 7, codex: 0 },
 };
 
 /** What the shipped page is made of: the live declarations, nothing else. */
@@ -387,6 +411,24 @@ function requireAlwaysOnFigures(alwaysOn: AlwaysOnDisclosure): void {
         `floors are what that appendix is for, so an empty set is a stale reading rather than a ` +
         `client that stopped needing them.`,
     );
+  }
+  for (const tool of TOOLS) {
+    const duplicates = alwaysOn.sharedTreeDuplicateRules[tool];
+    // A negative or fractional count is a reading nobody took; a count over the
+    // projected set would claim more duplicates than there are directories.
+    if (!Number.isInteger(duplicates) || duplicates < 0) {
+      fail(
+        `The always-on disclosure puts \`${tool}\`'s shared-tree duplicate count at ` +
+          `${duplicates}, which is not a number of directories anyone counted.`,
+      );
+    }
+    if (duplicates > alwaysOn.codexRuleSkillCount) {
+      fail(
+        `The always-on disclosure says \`${tool}\` receives ${duplicates} duplicated rules from a ` +
+          `shared tree holding ${alwaysOn.codexRuleSkillCount} rule-skills. A client cannot be ` +
+          `handed more copies than the tree contains.`,
+      );
+    }
   }
 }
 
@@ -757,6 +799,22 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
         "is a floor that stops binding the moment the model does not notice it applies. The " +
         `other ${alwaysOn.codexRuleSkillCount} rules are projected as ` +
         "`.agents/skills/stamity-<rule-id>/SKILL.md` instead, one directory each.",
+    ),
+    "",
+    ...paragraph(
+      "**What that costs the clients beside it.** Those directories sit in the SHARED " +
+        "`.agents/skills/` tree, which cursor, copilot and codex all read — a directory cannot " +
+        "be made client-specific, so it holds the union of every selected client's demotions. " +
+        "Co-selecting `codex` therefore hands " +
+        TOOLS.filter((tool) => alwaysOn.sharedTreeDuplicateRules[tool] > 0)
+          .map((tool) => `${code(tool)} ${alwaysOn.sharedTreeDuplicateRules[tool]}`)
+          .join(" and ") +
+        " rules a second time: each is already delivered to that client as its own `.mdc` rule " +
+        "or `.instructions.md` file, and is now also description-pullable as a skill. The " +
+        "duplicate is pulled on relevance and never loaded at launch, so it moves none of the " +
+        "line figures above — and a selection without `codex` does not pay it at all. `claude` " +
+        "is absent from that list because it reads no shared tree: its native skills directory " +
+        "carries only the rules it demoted itself.",
     ),
     "",
     ...paragraph(

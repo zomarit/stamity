@@ -17,11 +17,14 @@
  *    (`src/merge/managedBlocks.ts`).
  * 2. **Skills → `.claude/skills/<skill>/…`** ({@link CLAUDE_SKILLS_DIR}), the
  *    client's project-level skills location — re-targeted from the core's
- *    already-rendered rows ({@link retargetProjection}), so the native copy is
+ *    already-rendered rows (`nativeSkillRows`), so the native copy is
  *    byte-identical to the vendor-neutral one by construction rather than by
  *    two renders agreeing. These rows are ADAPTER-owned, unlike the co-owned
  *    tree they came from: the copy exists because THIS client cannot read that
- *    tree, so it is reclaimed when the tool is deselected.
+ *    tree, so it is reclaimed when the tool is deselected. A rule delivered as
+ *    a skill is copied here only when THIS client demoted it; one demoted by a
+ *    co-selected client reaches that client through the shared tree and is
+ *    already emitted under `.claude/rules/` for this one.
  * 3. **Rules → `.claude/rules/<id>.md`** with frontmatter `description` and
  *    `paths:` — a YAML LIST of the canonical globs (a comma inside one glob
  *    survives, which the predecessor's CSV form could not promise). A rule
@@ -101,7 +104,7 @@ import type {
   ResiduePlanner,
 } from "../emit/planner.ts";
 import { HOOKS_GENERATED_DIR } from "../emit/hooksInfra.ts";
-import { NATIVE_SKILL_DIRS, retargetProjection } from "../emit/skillsProjection.ts";
+import { NATIVE_SKILL_DIRS, nativeSkillRows } from "../emit/skillsProjection.ts";
 import {
   detectionContextFromManifest,
   substituteRepoTokens,
@@ -372,14 +375,21 @@ export const claudeResiduePlanner: ResiduePlanner = {
     // under the one root this client reads. Two paths, two owners, identical
     // content — the composer dedups by PATH, so both trees are written and the
     // native one is reclaimed with the tool.
-    if (CLAUDE_SKILLS_DIR !== "") {
-      for (const file of retargetProjection(core.skills, CLAUDE_SKILLS_DIR)) {
-        rows.push({
-          path: file.path,
-          content: file.content,
-          owner: owner(file.artifactId, file.artifactType),
-        });
-      }
+    //
+    // FILTERED as well as re-targeted since 2026-09-15. The core's rule-skill
+    // rows are the union over selected tools, because `.agents/skills/` is one
+    // directory three clients read; this directory has one reader, so it takes
+    // only the rule-skills THIS client demoted. A rule another client demoted
+    // still reaches that client through the vendor-neutral tree, and copying it
+    // here would put a second copy of a rule already emitted under
+    // `.claude/rules/` in front of the one client that does not need it
+    // (`../emit/skillsProjection.ts`, `nativeSkillRows`).
+    for (const file of nativeSkillRows(core.skills, TOOL, core.demotedRules)) {
+      rows.push({
+        path: file.path,
+        content: file.content,
+        owner: owner(file.artifactId, file.artifactType),
+      });
     }
     // A demoted rule is NOT written here: the core projected it as a skill
     // under `.agents/skills/stamity-<id>/`, re-targeted into this client's own

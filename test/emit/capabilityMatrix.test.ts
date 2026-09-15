@@ -735,6 +735,64 @@ describe("always-on cost section", () => {
     expect(codexSkillsListChars).toBeLessThan(codexSkillsListCap);
   });
 
+  it("discloses what co-selecting codex duplicates into the shared skills tree", () => {
+    const { sharedTreeDuplicateRules, codexRuleSkillCount } = LIVE_CAPABILITY_INPUTS.alwaysOn;
+    const flat = page.replaceAll(/\s+/g, " ");
+
+    expect(flat).toContain("Those directories sit in the SHARED `.agents/skills/` tree");
+    // Every client with a non-zero residual is named WITH its count; a page that
+    // stated the mechanism and no number would disclose nothing measurable.
+    for (const tool of TOOLS) {
+      const duplicates = sharedTreeDuplicateRules[tool];
+      if (duplicates === 0) continue;
+      expect(flat, tool).toContain(`\`${tool}\` ${duplicates}`);
+    }
+    // The three qualifications that keep the sentence honest: it is a pull, not
+    // an always-on load; it moves none of the line figures; a selection without
+    // codex does not pay it.
+    expect(flat).toContain("pulled on relevance and never loaded at launch");
+    expect(flat).toContain("moves none of the line figures above");
+    expect(flat).toContain("a selection without `codex` does not pay it at all");
+    // And the client the filter took to zero is named as absent rather than
+    // silently missing from the list.
+    expect(sharedTreeDuplicateRules.claude).toBe(0);
+    expect(flat).toContain("`claude` is absent from that list because it reads no shared tree");
+    // Non-degenerate: at least one client is over zero and under the tree size,
+    // so the sentence is about a real partial overlap rather than all-or-nothing.
+    const nonZero = TOOLS.filter((tool) => sharedTreeDuplicateRules[tool] > 0);
+    expect(nonZero.length).toBeGreaterThan(0);
+    expect(Math.max(...nonZero.map((tool) => sharedTreeDuplicateRules[tool]))).toBeLessThanOrEqual(
+      codexRuleSkillCount,
+    );
+  });
+
+  it("refuses a shared-tree duplicate count no emission could produce", () => {
+    const negative = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: {
+        ...LIVE_CAPABILITY_INPUTS.alwaysOn,
+        sharedTreeDuplicateRules: {
+          ...LIVE_CAPABILITY_INPUTS.alwaysOn.sharedTreeDuplicateRules,
+          cursor: -1,
+        },
+      },
+    };
+    expect(() => renderCapabilityMatrixFrom(negative)).toThrowError(EngineError);
+    expect(() => renderCapabilityMatrixFrom(negative)).toThrowError(/`cursor`/);
+
+    const overTree = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: {
+        ...LIVE_CAPABILITY_INPUTS.alwaysOn,
+        sharedTreeDuplicateRules: {
+          ...LIVE_CAPABILITY_INPUTS.alwaysOn.sharedTreeDuplicateRules,
+          copilot: LIVE_CAPABILITY_INPUTS.alwaysOn.codexRuleSkillCount + 1,
+        },
+      },
+    };
+    expect(() => renderCapabilityMatrixFrom(overTree)).toThrowError(/more copies than the tree/);
+  });
+
   it("refuses a skills-list total that was never measured or that the emission would reject", () => {
     const unmeasured = {
       ...LIVE_CAPABILITY_INPUTS,
