@@ -698,6 +698,8 @@ always-on budget item stays open until the measurement lands.
   naming run 29 as the prior and, through it, run 27 as the baseline; nothing rescored. This is the
   1.8.0 release run. The set was measured by 604 + 77 + 11 calls across the chain instead of three
   full runs; the two terminal runs and the checks are recorded beside it.
-- Advisory repeats against run 29 (§ 8): three rows carry forward and, by SET-v7's rule, need a
-  promote-or-delete disposition before the next run of this configuration — named at the close as
-  the next run's obligation, not this release's.
+- Run 30's § 8 lists three advisory "repeats" against run 29; all three are carried cases, so the
+  ledger compared the prior run's rows with themselves (run 29's § 8 did the same against run 27).
+  They are not repeats and carry no disposition obligation. The set now says so under its incremental
+  rule, and the private driver compares only re-measured cases from the next run on (canaries K3v/K4v).
+  The two exported artifacts stand as exported, bound to their driver.

@@ -10,17 +10,19 @@ const historical = join(REPO_ROOT, "evals/cases-v4");
 const files = readdirSync(historical, { recursive: true, encoding: "utf8" }).filter((path) => path.endsWith(".md"));
 
 describe("REQ-FINISH-009 — successor inputs preserve historical contracts", () => {
-  it("retains every Expected block that carries no reviewed disposition, across all 69", () => {
+  it("retains every Expected block that carries no reviewed disposition or amendment, across all 69", () => {
     expect(files).toHaveLength(69);
     for (const path of files) {
       const previous = readFileSync(join(historical, path), "utf8");
       const current = readFileSync(join(REPO_ROOT, CASES_DIR, path), "utf8");
-      // A reviewed advisory disposition or a reviewed expectation amendment is how an Expected block moves, and
+      // A reviewed advisory disposition or a reviewed expectation amendment is how an
+      // Expected block moves, and
       // `EXPECTED_MOVES` below is where it is recorded with its reason. This gate ran
       // against cases-v4 before that ledger existed, so it read every move as an
       // overwrite; it now honours the same ledger the cases-v5 gate honours, and holds
       // every case with no row there to the byte it held before. Moved here on
-      // 2026-09-15 by the eight run-27 dispositions, which land on seven v4 cases.
+      // 2026-09-15 by the eight run-27 dispositions and the one expectation amendment,
+      // which land on eight v4 cases.
       // A disposition moves only the `## Expected` block's sha; it moves no frontmatter field,
       // so the four-field loop below runs unconditionally, ledgered case or not.
       if (EXPECTED_MOVES[caseId(previous)] === undefined) {
