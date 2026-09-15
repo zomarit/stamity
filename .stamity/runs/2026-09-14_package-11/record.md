@@ -162,3 +162,14 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   (page markers moved to the pages this release changes: security mapping, measurements, doctrine
   amendments, capability matrix, and the two new pages in `llms.txt`); the usage probe is a scratchpad
   script; five-hour window 0.16 and seven-day 0.50 at 02:19Z — no capacity hold before run 25.
+
+### Fixer B, rounds two and three — merged 2026-09-15T02:52Z
+
+- `f38679c` relativizes every QA evidence `inputHashes` key to the repository-relative POSIX path
+  (qa/1 closed). `ad2294c` closes review/22 (N1: a `tools:`-restricted rule is never demoted on a
+  shared-tree client unless its `tools:` names every shared-tree reader; new export
+  `SHARED_SKILLS_TREE_READERS` in the content layer), review/23 (N2: the APM glob reader goes through
+  `declaredRuleGlobs`; `.apm/` byte-identical) and review/27 (M-d: a failed version probe no longer
+  reads as present). Targeted suites after the cherry-picks: 58 files, 2,089 tests green; build and
+  `stamity check` green; the sixteen leftover agent worktrees removed and pruned.
+- Next: a round-three read of the N1 fix, the QA harness re-run at this tree, then the candidate.
