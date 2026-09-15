@@ -150,3 +150,4 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
 - 02:06Z QA harness run at 2a24500: H1a passed (1 denied, 1 allowed); H1b not-run (codex exec loads no project hooks — measured); H1c not-run (cursor-agent: ENOENT); H1d not-run (copilot: ENOENT); H2 passed on five pages (axe 0 violations); H3a–d passed. Defect: inputHashes keys absolute (25 home-path occurrences) → fixer round; the harness re-runs at the corrected tree.
 - 02:09Z Review round 2: request-changes (medium) — 21 of 22 round-one dispositions verified; one regression (N1: a tools-restricted rule could be delivered nowhere on a shared-tree client), one contested rejection (N2), four Minors (M-a..M-d) → round-three fixes dispatched to both fixers.
 - 02:12Z Fixer A round 2 → cherry-picked 9e030ff (M-a, M-b, M-c; binding 503).
+- 02:14Z U11 round 4 DONE: driver pinned to binding 503 and SET-v7 cb2eae0a…; canaries K3j/K4j; committed privately.
