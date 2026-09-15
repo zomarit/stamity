@@ -20,7 +20,13 @@ import {
 } from "../../../src/roster/reviewCaps.ts";
 import { MODEL_CLASSES } from "../../../src/types/core.ts";
 import { CONTENT_CLASSES, type ContentSelection } from "../../../src/types/content.ts";
-import { MANIFEST_FILE, MANIFEST_VERSION, type SetupManifest } from "../../../src/types/manifest.ts";
+import {
+  MANIFEST_FILE,
+  MANIFEST_VERSION,
+  RULE_DELIVERIES,
+  RULE_DELIVERY_DEFAULT,
+  type SetupManifest,
+} from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
@@ -1355,11 +1361,19 @@ describe("config — ruleDelivery", () => {
 
     const result = await run(handle, ["get", "ruleDelivery"]);
 
+    // DERIVED 2026-09-15, from a literal `always-on`. The default moved to
+    // `on-demand` that day, and a typed spelling of it here is a pin that can
+    // silently disagree with the constant the engine actually resolves — which
+    // is the one thing this case exists to check.
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("(default: always-on)");
+    expect(result.stdout).toContain(`(default: ${RULE_DELIVERY_DEFAULT})`);
     expect(rowFor((await run(handle, ["list"])).stdout, "ruleDelivery")).toMatch(
-      /always-on\s+\(default\)/,
+      new RegExp(String.raw`${RULE_DELIVERY_DEFAULT}\s+\(default\)`),
     );
+    // The two modes are distinguishable, so this case cannot pass by matching a
+    // value that happens to be printed for another reason.
+    expect(RULE_DELIVERIES).toContain(RULE_DELIVERY_DEFAULT);
+    expect(RULE_DELIVERIES.length).toBeGreaterThan(1);
   });
 
   it("persists on-demand and reads it back as set", async () => {

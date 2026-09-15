@@ -275,9 +275,28 @@ describe("deselection reclaim", () => {
     const queued = planned.reclaim.map((candidate) => candidate.entry.path);
 
     expect(queued.length).toBeGreaterThan(0);
+    // WIDENED 2026-09-15, from "every candidate belongs to the deselected
+    // adapter" to the two shapes below. Under the `on-demand` default a rule is
+    // projected as a skill when SOME selected client demotes it, so seven of
+    // those directories exist only because codex is selected: removing codex
+    // stops the engine emitting them, and the surviving clients' ledger rows on
+    // those same paths have to be swept too or the files are orphaned in the
+    // tree. Those rows come back under `path-renamed` — the reason the reclaim
+    // planner uses for a row whose path the current plan no longer produces —
+    // and their adapter is the surviving client that held the row, which is
+    // exactly what the old assertion forbade. The claim underneath is unchanged
+    // and is asserted below: nothing the engine STILL emits is queued.
     for (const candidate of planned.reclaim) {
-      expect(candidate.entry.adapter).toBe(DESELECTED);
-      expect(candidate.reason).toBe("adapter-removed");
+      if (candidate.entry.adapter === DESELECTED) {
+        expect(candidate.reason).toBe("adapter-removed");
+        continue;
+      }
+      expect(
+        candidate.entry.path,
+        `${candidate.entry.adapter} row queued for a reason other than a rule-skill directory ` +
+          `the deselection stopped producing`,
+      ).toMatch(new RegExp(String.raw`^${SKILLS_PROJECTION_DIR}/stamity-|^\.claude/skills/stamity-`));
+      expect(candidate.reason).toBe("path-renamed");
     }
     expect(queued).toContain(CODEX_CONFIG_FILE);
     expect(queued).toContain(CODEX_HOOKS_FILE);
@@ -294,7 +313,24 @@ describe("deselection reclaim", () => {
     for (const survivor of [AGENTS_MD_FILE, AGENT_TOOL_POLICIES_PATH]) {
       expect(queued).not.toContain(survivor);
     }
-    expect(queued.filter((path) => path.startsWith(`${SKILLS_PROJECTION_DIR}/`))).toEqual([]);
+    // NARROWED 2026-09-15, from "no projected skill is ever queued". The
+    // shipped `st-` skills are still the whole of that claim — they are selected
+    // content and nothing about deselecting a client unselects them — but the
+    // rule-skill directories are not: seven of them exist only while codex is
+    // selected. Asserting both halves keeps the seam this line was written for
+    // (a co-owned path is not swept because one owner left) while stating the
+    // one class where the path genuinely stops being emitted.
+    const projected = queued.filter((path) => path.startsWith(`${SKILLS_PROJECTION_DIR}/`));
+    expect(projected.filter((path) => !path.startsWith(`${SKILLS_PROJECTION_DIR}/stamity-`))).toEqual(
+      [],
+    );
+    expect(projected.length).toBeGreaterThan(0);
+    // The two rules claude and copilot demote on their own account keep their
+    // directories, because those clients are still selected: the sweep follows
+    // the delivery predicate rather than the deselected client's whole share.
+    for (const id of ["question-protocol", "ai-evals"]) {
+      expect(queued, id).not.toContain(`${SKILLS_PROJECTION_DIR}/stamity-${id}/SKILL.md`);
+    }
   });
 
   it("sweeps the deselected tool's files and leaves the shared set byte-intact", async () => {
@@ -343,8 +379,32 @@ describe("deselection reclaim", () => {
     // shared charter, which legitimately loses the deselected client's appendix
     // (the shared-path replacement contract stops applying) while keeping its
     // remaining owners.
-    for (const path of Object.keys(before).filter((key) => key.startsWith(`${SKILLS_PROJECTION_DIR}/`))) {
-      expect(after[path]).toBe(before[path]);
+    // NARROWED 2026-09-15 to the CONTENT skills. Under the `on-demand` default
+    // the projection also carries rule-skill directories, and those are a
+    // function of which clients are selected twice over: seven exist only
+    // because codex demotes those rules (swept, asserted above), and the two
+    // that survive carry a `tools:` list naming the clients that demote them —
+    // so `stamity-ai-evals/SKILL.md` legitimately loses its `- codex` line here,
+    // the same way the shared charter legitimately loses codex's appendix. A
+    // byte-identity assertion over those files would be asserting that a
+    // per-client metadata list does not track the client set.
+    const contentSkills = Object.keys(before).filter(
+      (key) =>
+        key.startsWith(`${SKILLS_PROJECTION_DIR}/`) &&
+        !key.startsWith(`${SKILLS_PROJECTION_DIR}/stamity-`),
+    );
+    expect(contentSkills.length).toBeGreaterThan(0);
+    for (const path of contentSkills) {
+      expect(after[path], path).toBe(before[path]);
+    }
+    // The two surviving rule skills stay on disk and keep their bodies; what
+    // moves is only the demoting-tools list in their heads.
+    for (const id of ["question-protocol", "ai-evals"]) {
+      const path = `${SKILLS_PROJECTION_DIR}/stamity-${id}/SKILL.md`;
+      expect(after[path], path).toBeDefined();
+      expect(before[path]).toContain("- codex");
+      expect(after[path]).not.toContain("- codex");
+      expect(after[path]).toContain("- claude");
     }
     // TEST CHANGE, justified: a maintainer ruling deleted the Agent-Plugins
     // container, so this line can no longer assert that path survived the

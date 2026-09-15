@@ -289,7 +289,13 @@ describe("rules → .github/instructions", () => {
   });
 
   it("round-trips every shipped rule's declared glob set through its emitted applyTo", async () => {
-    const plan = await planResidue();
+    // MODE PINNED 2026-09-15, explicitly `always-on`. The claim is the instruction
+    // dialect over EVERY shipped rule — the glob-less ones included, which is the
+    // `applyTo: "**"` branch below. The engine default is now `on-demand`, which
+    // delivers those two as skills, so under the default this case would stop
+    // covering that branch while still passing. The default's own file set has
+    // its own case at the foot of this file.
+    const plan = await planResidue({ ruleDelivery: "always-on" });
     const instructions = plan.filter((row) => row.path.endsWith(".instructions.md"));
     const rules = (await loadCorpusIndex()).items.filter((item) => item.type === "rule");
 
@@ -414,7 +420,11 @@ describe("rules → .github/instructions", () => {
   });
 
   it("emits one instruction file per shipped rule, through the real pipeline", async () => {
-    const plan = await planResidue();
+    // MODE PINNED 2026-09-15, same reason as the round-trip case above: one file
+    // per rule is the `always-on` shape, and `CORPUS_RULE_COUNT` is the count of
+    // rules in the corpus rather than the count this client receives as rules
+    // under the shipped default.
+    const plan = await planResidue({ ruleDelivery: "always-on" });
 
     const instructions = pathsOf(plan).filter((path) => path.endsWith(".instructions.md"));
     expect(instructions).toHaveLength(CORPUS_RULE_COUNT);
@@ -1226,17 +1236,27 @@ describe("copilot under ruleDelivery: on-demand", () => {
     expect(row.content).toContain("delivery: on-demand");
   });
 
-  it("emits exactly today's file set under always-on", async () => {
+  // FLIPPED 2026-09-15 with the engine default, which moved from `always-on` to
+  // `on-demand`. The old assertion — an absent key emits the pre-option file set
+  // — was true of the old default and is exactly what would have kept passing on
+  // the wrong half of the option. The claim is unchanged in shape: an absent key
+  // resolves to one named mode, and both modes are still reachable.
+  it("reads an absent ruleDelivery key as on-demand, and always-on restores the instruction files", async () => {
     const defaulted = await planComposed();
-    const explicit = await planComposed({ ruleDelivery: "always-on" });
+    const onDemand = await planComposed({ ruleDelivery: "on-demand" });
+    const alwaysOn = await planComposed({ ruleDelivery: "always-on" });
 
-    expect(pathsOf(explicit)).toEqual(pathsOf(defaulted));
-    expect(explicit.map((row) => row.content)).toEqual(defaulted.map((row) => row.content));
+    expect(pathsOf(onDemand)).toEqual(pathsOf(defaulted));
+    expect(onDemand.map((row) => row.content)).toEqual(defaulted.map((row) => row.content));
+
+    // The two modes disagree about this rule, so neither half passes by accident.
     expect(
       pathsOf(defaulted).includes(".github/instructions/stamity-ai-evals.instructions.md"),
-    ).toBe(true);
-    expect(pathsOf(defaulted).some((path) => path.includes("stamity-ai-evals/SKILL.md"))).toBe(
-      false,
+    ).toBe(false);
+    expect(pathsOf(defaulted).some((path) => path.includes("stamity-ai-evals/SKILL.md"))).toBe(true);
+    expect(pathsOf(alwaysOn).includes(".github/instructions/stamity-ai-evals.instructions.md")).toBe(
+      true,
     );
+    expect(pathsOf(alwaysOn).some((path) => path.includes("stamity-ai-evals/SKILL.md"))).toBe(false);
   });
 });

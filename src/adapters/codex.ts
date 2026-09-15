@@ -221,7 +221,9 @@ const CODEX_FACTS: AdapterDialectFacts = {
     { name: "AGENTS.md budget", value: `${CODEX_AGENTS_MD_BUDGET_BYTES} bytes (32 KiB)` },
     {
       name: "hook enforcement",
-      value: "exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement.",
+      value:
+        "exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. " +
+        "Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes into .codex/config.toml and the client defaults OFF; `projects.<path>.trust_level = \"trusted\"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step — and with all three in place headless `codex exec` on codex-cli 0.154.0 still loaded no project hook layer at all in this repository's 2026-09-15 measurement, so a hook is enforcement in the interactive client and nothing in that lane.",
     },
     {
       name: "per-agent tool allowlist",

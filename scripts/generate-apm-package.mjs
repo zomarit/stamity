@@ -39,6 +39,16 @@
 //   command -> .apm/prompts/<id>.prompt.md              basename becomes /<id>
 //   agent   -> .apm/agents/<id>.agent.md                a callable persona
 //
+// ONE EXCEPTION, and it is the rule-delivery option rather than a fifth class.
+// A rule that declares NO globs has no scope to attach on, so an instruction
+// would carry `applyTo: "**"` — every file, on every session. Since 2026-09-15
+// the engine's default delivery for exactly that shape is a skill the consumer
+// opens when its description matches, so this package follows it: such a rule
+// lands at `.apm/skills/stamity-<id>/SKILL.md` and emits no instruction file.
+// The predicate is the engine's own (`../src/content/ruleDelivery.ts`), read
+// rather than restated. Glob-scoped rules are untouched — they were always
+// conditional, which is what an instruction is for.
+//
 // `<id>` is the EMITTED id — bundled skills keep their directory, new fork
 // skills keep their bare directory, commands take `st-` and other classes take
 // `stamity-`, following the catalog/CLI identity contract. An APM consumer
@@ -418,6 +428,8 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   // ── Corpus projection ────────────────────────────────────────────
 
   const { assertSafePath, buildContentIndex, COMMAND_ID_PREFIX, replacedClaimantOf, typeIdKey } = await import('../src/content/catalog.ts')
+  const { demotedRuleIds, ruleDeliveryInputOf } = await import('../src/content/ruleDelivery.ts')
+  const { RULE_DELIVERY_DEFAULT } = await import('../src/types/manifest.ts')
   const { composeFrontmatter } = await import('../src/content/frontmatter.ts')
   const { contentPrefixFor } = await import('../src/types/markers.ts')
   const { CONTENT_CLASSES } = await import('../src/types/content.ts')
@@ -437,6 +449,33 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   const items = index.items.filter((item) =>
     ['corpus', 'fork'].includes(item.origin ?? 'corpus') &&
     index.byKey.get(typeIdKey(item.type, item.id)) === item,
+  )
+
+  /**
+   * Rules this package ships as SKILLS rather than as instructions.
+   *
+   * The engine's rule-delivery option is not a per-client preference — it is the
+   * answer to "can this client attach the rule conditionally, and if not, is the
+   * rule's whole body worth a permanent seat in launch context". An APM
+   * instruction is glob-attached (`applyTo`), exactly like the Copilot surface
+   * this generator already shares its `applyTo` derivation with, and a rule with
+   * no globs takes `**` there — which is not a scope, it is every file, i.e. the
+   * unconditional load the option exists to reclaim. So the same predicate that
+   * decides the point for Copilot decides it here, read from
+   * `../src/content/ruleDelivery.ts` rather than restated: a second reading is
+   * how a rule ends up demoted on one surface and loaded on another while both
+   * claim to ship the same corpus.
+   *
+   * `copilot` is the tool passed because APM's instruction layer is the one this
+   * package's consumers compile to, and `RULE_DELIVERY_DEFAULT` because an APM
+   * consumer has no manifest of this engine's to select a mode in — it receives
+   * the shape the engine ships. A repository that wants the other shape installs
+   * through a channel that carries a manifest.
+   */
+  const demotedRules = demotedRuleIds(
+    'copilot',
+    items.filter((item) => item.type === 'rule').map(ruleDeliveryInputOf),
+    RULE_DELIVERY_DEFAULT,
   )
 
   const missingClasses = CONTENT_CLASSES.filter((type) => !items.some((item) => item.type === type))
@@ -570,6 +609,18 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     await Promise.all(
       items.map(async (item) => {
         const id = emittedId(item)
+
+        // A demoted rule takes the skills home and the skills head — `name` equal
+        // to the directory, which `emittedId` already spells `stamity-<id>` for a
+        // rule. It ships no companion files, because a rule is one document.
+        if (item.type === 'rule' && demotedRules.has(item.id)) {
+          add(
+            posix.join(APM_DIR, APM_SUBDIR.skill, id, SKILL_FILE),
+            primitive({ name: id, description: item.description }, item),
+          )
+          return
+        }
+
         const dir = posix.join(APM_DIR, APM_SUBDIR[item.type])
 
         if (item.type !== 'skill') {

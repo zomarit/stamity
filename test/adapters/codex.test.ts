@@ -34,7 +34,12 @@ import { MODEL_CLASSES, type Tool } from "../../src/types/core.ts";
 import type { PackageEntry } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
-import type { McpConfig, ModelConfig, RuleDelivery } from "../../src/types/manifest.ts";
+import {
+  RULE_DELIVERY_DEFAULT,
+  type McpConfig,
+  type ModelConfig,
+  type RuleDelivery,
+} from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -176,6 +181,12 @@ interface CtxOptions {
   tools?: Tool[];
   agents?: string[];
   rules?: readonly string[];
+  /**
+   * Content skills. Added 2026-09-15 for the one case that measures the
+   * skills-list budget over the FULL selection: every other case here is about
+   * rules, so the default stays the empty list it always was.
+   */
+  skills?: readonly string[];
   commands?: readonly string[];
   packages?: PackageEntry[];
   mcp?: McpConfig;
@@ -189,7 +200,7 @@ function ctxOf(options: CtxOptions): EmissionContext {
     selection: {
       items: {
         agent: options.agents ?? ["reviewer"],
-        skill: [],
+        skill: [...(options.skills ?? [])],
         rule: [...(options.rules ?? RULE_IDS)],
         command: [...(options.commands ?? [])],
       },
@@ -1072,12 +1083,24 @@ function deliveredAndOmitted(root: string): { inlined: string[]; omitted: string
 }
 
 describe("the shipped Codex emission, rule by rule", () => {
-  async function shippedRoot(): Promise<string> {
+  /**
+   * The root `AGENTS.md` this client receives under one delivery mode.
+   *
+   * The mode became an ARGUMENT on 2026-09-15, when `RULE_DELIVERY_DEFAULT`
+   * flipped to `on-demand`. Most cases in this block are about BUDGET SHAPING —
+   * which rules the 32 KiB ceiling drops, in what order, and what the omission
+   * notice says — and that is a property of the `always-on` appendix: under the
+   * default, three floor-class rules reach the appendix and nothing is dropped,
+   * so those cases would pass over an empty set and cover nothing. They pass the
+   * mode they are about; the default's own behaviour has its own cases below.
+   */
+  async function shippedRoot(delivery: RuleDelivery = "always-on"): Promise<string> {
     const index = await buildContentIndex();
     const ctx = ctxOf({
       contentRoot: resolveBundledContentRoot(),
       rules: index.items.filter((item) => item.type === "rule").map((item) => item.id),
       agents: ["reviewer"],
+      ruleDelivery: delivery,
     });
     const rows = (await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs;
     const root = rows.find((row) => row.path === "AGENTS.md");
@@ -1114,15 +1137,32 @@ describe("the shipped Codex emission, rule by rule", () => {
       "ui-states",
     ]);
 
-    // The capability matrix publishes this count as the cross-client cost of
-    // co-selecting codex, and it is the one figure on that page with no
-    // constant behind it — the renderer is synchronous and cannot run an
-    // emission. This is the pin that keeps the published number honest.
+    // MOVED 2026-09-15 to its own case below, which measures under the mode the
+    // page actually describes. Leaving the pin here would have held the
+    // published figure to the `always-on` appendix while the page disclosed the
+    // default — the exact drift the pin exists to stop, in the other direction.
+  });
+
+  it("holds the matrix's published drop count to the emission under the shipped default", async () => {
+    const { inlined, omitted } = deliveredAndOmitted(await shippedRoot(RULE_DELIVERY_DEFAULT));
+
+    // `docs/capability-matrix.md` publishes this count as part of the
+    // cross-client cost of co-selecting codex, and it is one of two figures on
+    // that page with no constant behind it — both need an emission, and that
+    // renderer is synchronous. Measured under `RULE_DELIVERY_DEFAULT` because
+    // that is the mode the page states it measured; the `always-on` case above
+    // pins the shaping itself.
     expect(
       LIVE_CAPABILITY_INPUTS.alwaysOn.codexDroppedRuleCount,
       "docs/capability-matrix.md states how many rules the appendix drops; update " +
         "`codexDroppedRuleCount` in src/emit/capabilityMatrix.ts and regenerate the page.",
     ).toBe(omitted.length);
+    // Non-degenerate: the appendix is not empty, it is SHAPED — the floors the
+    // page names by id are in it, so a zero drop count means "everything that
+    // reached it fitted", not "nothing reached it".
+    expect(inlined).toEqual(
+      expect.arrayContaining([...LIVE_CAPABILITY_INPUTS.alwaysOn.codexFoldedRuleIds]),
+    );
   });
 
   it("records that the rerouted rule itself is delivered nowhere", async () => {
@@ -1185,6 +1225,18 @@ describe("the shipped Codex emission, rule by rule", () => {
       "rules marked critical are kept longest, then floor-tagged rules, then by declared " +
         "precedence, then by id",
     );
+
+    // ADDED 2026-09-15: the same property under the shipped default, where the
+    // floors are what REACHES the appendix rather than what survives it. The
+    // notice is absent there because nothing is dropped, so the two halves are
+    // asserted apart — the property holds under both modes, the notice only
+    // where there is something to notice.
+    const defaulted = await shippedRoot(RULE_DELIVERY_DEFAULT);
+    const underDefault = deliveredAndOmitted(defaulted);
+    for (const id of floorTagged) {
+      expect(underDefault.inlined, `${id} carries a floor tag and is never demoted`).toContain(id);
+    }
+    expect(underDefault.omitted).toEqual([]);
   });
 });
 
@@ -1412,7 +1464,13 @@ describe("budget drops are ordered by risk before alphabet", () => {
 describe("residue planning", () => {
   it("owns every row as codex and flags only the root charter as a shared-path replacement", async () => {
     const contentRoot = await seedCorpus();
-    const ctx = ctxOf({ contentRoot, mcp: { servers: ["context7"] } });
+    // MODE PINNED 2026-09-15, explicitly `always-on`. The claim is about
+    // OWNERSHIP of the root replacement row, so the fixture has to produce one.
+    // None of this fixture's five rules is critical, floor-tagged or unanchored-
+    // but-mandatory, so under the shipped default every rule either anchors into
+    // a nested file or becomes a skill, the root appendix is empty and no root
+    // row exists to own. That case is asserted on its own below.
+    const ctx = ctxOf({ contentRoot, mcp: { servers: ["context7"] }, ruleDelivery: "always-on" });
 
     const rows = (await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs;
 
@@ -1447,7 +1505,9 @@ describe("residue planning", () => {
 
   it("substitutes the root charter through the composer: one AGENTS.md row, owners unioned", async () => {
     const contentRoot = await seedCorpus();
-    const ctx = ctxOf({ contentRoot, tools: ["claude", "codex"] });
+    // MODE PINNED 2026-09-15, same reason as the case above: the union of owners
+    // on the root replacement row is only observable while there IS one.
+    const ctx = ctxOf({ contentRoot, tools: ["claude", "codex"], ruleDelivery: "always-on" });
     const core = await buildCoreEmissionPlan(ctx);
 
     const plan = await composeEmissionPlanner({ codex: codexResiduePlanner }).plan(ctx);
@@ -1458,6 +1518,33 @@ describe("residue planning", () => {
     expect(charter.content.startsWith(core.agentsMd.root.content)).toBe(true);
     expect(charter.content).toContain("## Conditional rules (Codex down-conversion)");
     expect(outputOwners(charter).map((owner) => owner.adapter)).toEqual(["claude", "codex"]);
+  });
+
+  it("emits no root replacement under the default when every rule anchors or demotes", async () => {
+    // ADDED 2026-09-15, the other half of the two cases above. Under
+    // `on-demand` this fixture's glob-less and unanchorable rules are delivered
+    // as skills and the anchorable ones as nested files, so the root appendix
+    // has nothing to carry — and a root `AGENTS.md` replacement with an empty
+    // appendix would be this client rewriting a SHARED file for no content.
+    const contentRoot = await seedCorpus();
+    const ctx = ctxOf({ contentRoot, ruleDelivery: "on-demand" });
+
+    const core = await buildCoreEmissionPlan(ctx);
+    const rows = (await codexResiduePlanner.planResidue(core, ctx)).outputs;
+
+    expect(rows.some((row) => row.path === "AGENTS.md")).toBe(false);
+    expect(rows.some((row) => row.replacesSharedPath === true)).toBe(false);
+    // Non-degenerate: the nested anchors still land, and the two rules that
+    // could not anchor are delivered — as skills, not dropped.
+    expect(rows.map((row) => row.path)).toEqual(
+      expect.arrayContaining(["src/db/AGENTS.md", "packages/a/AGENTS.md"]),
+    );
+    const skillDirs = core.skills
+      .filter((row) => row.path.endsWith("/SKILL.md"))
+      .map((row) => row.path.split("/").at(-2));
+    expect(skillDirs).toEqual(
+      expect.arrayContaining(["stamity-ask-first", "stamity-auth-guard"]),
+    );
   });
 
   it("keeps one row for a package AGENTS.md the core already emits, appendix rerouted to the root", async () => {
@@ -1617,6 +1704,45 @@ describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
     const total = skillsListCharacters(rows.filter((row) => row.path.startsWith(".agents/skills/")));
 
     expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThanOrEqual(CODEX_SKILLS_LIST_BUDGET_CHARS);
+  });
+
+  it("holds the matrix's published skills-list total to the FULL selection", async () => {
+    // ADDED 2026-09-15. `docs/capability-matrix.md` publishes this total against
+    // the cap as the budget the rule-delivery option spends, and the renderer
+    // cannot run an emission to take the reading itself. The case above selects
+    // no content skills, so its total is the projected rules alone; the page
+    // says "the full selection", and the client does not distinguish where a
+    // skill came from, so the pin is taken over everything the corpus offers.
+    const index = await buildContentIndex();
+    const idsOf = (type: string): string[] =>
+      index.items.filter((item) => item.type === type).map((item) => item.id);
+    const ctx = ctxOf({
+      contentRoot: resolveBundledContentRoot(),
+      rules: idsOf("rule"),
+      skills: idsOf("skill"),
+      agents: idsOf("agent"),
+      commands: idsOf("command"),
+      ruleDelivery: RULE_DELIVERY_DEFAULT,
+    });
+    const core = await buildCoreEmissionPlan(ctx);
+    const total = skillsListCharacters(core.skills);
+
+    // Non-degenerate: the full selection carries BOTH classes of skill, so a
+    // projection that lost the rules or lost the content skills fails here
+    // rather than quietly measuring half the list.
+    const dirs = core.skills
+      .filter((row) => row.path.endsWith("/SKILL.md"))
+      .map((row) => row.path.split("/").at(-2) ?? "");
+    expect(dirs.filter((dir) => dir.startsWith("stamity-")).length).toBe(9);
+    expect(dirs.filter((dir) => dir.startsWith("st-")).length).toBeGreaterThan(0);
+
+    expect(
+      LIVE_CAPABILITY_INPUTS.alwaysOn.codexSkillsListChars,
+      "docs/capability-matrix.md publishes the measured skills-list total; update " +
+        "`codexSkillsListChars` in src/emit/capabilityMatrix.ts and regenerate the page.",
+    ).toBe(total);
+    expect(LIVE_CAPABILITY_INPUTS.alwaysOn.codexSkillsListCap).toBe(CODEX_SKILLS_LIST_BUDGET_CHARS);
     expect(total).toBeLessThanOrEqual(CODEX_SKILLS_LIST_BUDGET_CHARS);
   });
 

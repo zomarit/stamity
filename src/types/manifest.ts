@@ -197,11 +197,23 @@ export const RULE_DELIVERIES: readonly RuleDelivery[] = ["always-on", "on-demand
  * manifest written before the key existed, which is why the value is a
  * constant rather than an init-time write.
  *
- * `always-on` reproduces the 1.7.0 emission byte for byte: the default is the
- * shape the goldens, the always-on ratchets and the dogfood tree are pinned
- * to, so shipping the option moved none of them.
+ * `always-on` reproduces the 1.7.0 emission byte for byte, and it was the
+ * default for exactly as long as the option needed to land without moving a
+ * golden. On 2026-09-15 the default became `on-demand`, which is the flip the
+ * measurement was for: the glob-less rules leave claude's and copilot's launch
+ * context, codex's appendix keeps only its floors, and every ceiling in
+ * `ALWAYS_ON_BUDGET_LINES` drops to the load that remains (95 / 95 / 95 / 407,
+ * measured that day). `always-on` stays selectable for a repo that wants the
+ * old shape back — one `stamity config set ruleDelivery always-on` — so the
+ * flip is reversible per repo rather than a removal.
+ *
+ * A manifest written before the key existed therefore reads as `on-demand`
+ * too: the default is what the engine emits today, not what it emitted when
+ * that manifest was written. The reclaimed rule files show up in `sync` as
+ * reclaims of paths this setup no longer owns, which is the same path any
+ * other de-selected artifact takes.
  */
-export const RULE_DELIVERY_DEFAULT: RuleDelivery = "always-on";
+export const RULE_DELIVERY_DEFAULT: RuleDelivery = "on-demand";
 
 /**
  * Open per-tool option bag. Adapters narrow their own bag; the engine passes

@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { INVARIANTS_VERSION_TOKEN, type CharterInvariants } from "../emit/substitution.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
+import { RULE_DELIVERY_DEFAULT, type RuleDelivery } from "../types/manifest.ts";
 import { resolveBundledContentRoot } from "./contentRoot.ts";
 import { parseFrontmatter } from "./frontmatter.ts";
+import { demotedRuleIds, type RuleDeliveryInput } from "./ruleDelivery.ts";
 
 /**
  * Charter loader — the one reader for the single `load: always` artifact.
@@ -56,41 +58,59 @@ export const CHARTER_MAX_LINES = 150;
 // ── The composite always-on slice ────────────────────────────────
 
 /**
- * Clients that pull a description-scoped rule (no globs) on relevance rather
- * than loading it every session.
+ * Clients whose RULE LAYER pulls a description-scoped rule (no globs) on
+ * relevance rather than loading it every session.
  *
  * Cursor's apply-intelligently mode reads the rule `description` and pulls the
  * body in when the conversation matches (cursor.com/docs/context/rules,
  * accessed 2026-08-13), so a glob-less rule costs that client nothing until it
- * is relevant. No other supported client has the primitive: on claude and
- * copilot a rule with no attach trigger is simply loaded, and codex has no
- * per-rule mechanism at all — see {@link composeAlwaysOnLoad}.
+ * is relevant. It is still the only client with that primitive IN ITS RULE
+ * LAYER, and that is what this set says.
+ *
+ * It is no longer the only client that defers such a rule, which is a
+ * different sentence. Under the `on-demand` delivery mode claude and copilot
+ * reach the same place through the skills layer instead: the rule is projected
+ * as `.agents/skills/stamity-<id>/SKILL.md` and its body is loaded when the
+ * description matches. So this set answers "can the client's rule layer defer
+ * it", `../content/ruleDelivery.ts` answers "does this run defer it", and
+ * {@link composeAlwaysOnLoad} reads both — the second one first, because a
+ * demoted rule is not in the always-on slice on any client whatever its rule
+ * layer can do.
  */
 export const DESCRIPTION_PULL_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["cursor"]);
 
 /**
- * Clients with no per-rule attach mechanism, which therefore carry every
- * selected rule in their always-on slice.
+ * Clients with no per-rule attach mechanism, which therefore carry every rule
+ * they still receive as a rule in their always-on slice.
  *
- * Codex reads one `AGENTS.md`; the adapter down-converts the whole rule set
- * into an appendix on that file, so every rule is unconditional for codex and —
- * because the root `AGENTS.md` is SHARED — the appendix is paid by every
- * co-selected client too. {@link ALWAYS_ON_SHARED_BYTES_WITH_CODEX} is that
- * cross-client cost in bytes.
+ * Codex reads one `AGENTS.md`; the adapter down-converts the rule set into an
+ * appendix on that file, so every rule it receives that way is unconditional
+ * for codex and — because the root `AGENTS.md` is SHARED — the appendix is
+ * paid by every co-selected client too. {@link ALWAYS_ON_SHARED_BYTES_WITH_CODEX}
+ * is that cross-client cost in bytes.
+ *
+ * Under `on-demand` the set it receives that way is no longer the whole
+ * corpus: `demotedRuleIds` leaves codex the rules that have to be in front of
+ * the model unconditionally — `critical`, floor-tagged, or anchored to a
+ * nested `AGENTS.md` — and projects the rest as skills. This set is unchanged
+ * by that, because what it states is still true: whatever codex receives as a
+ * rule, it loads every session.
  */
 export const RULE_APPENDIX_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["codex"]);
 
-/** One rule, as the always-on computation reads it off the emission plan. */
-export interface AlwaysOnRule {
-  /** Rule id, so an over-budget message can name what is spending the budget. */
-  id: string;
+/**
+ * One rule, as the always-on computation reads it off the emission plan.
+ *
+ * The four delivery facts are {@link RuleDeliveryInput}'s, shared with the
+ * predicate that decides demotion rather than restated here: this measurement
+ * and the emission have to agree about which rules a client carries, and two
+ * copies of the rule for that would be two chances to disagree — a slice
+ * measured heavier than it is, or lighter, and the lighter one is the ratchet
+ * silently passing a load nobody paid down.
+ */
+export interface AlwaysOnRule extends RuleDeliveryInput {
   /** Physical file lines, `wc -l` semantics — the same accounting as {@link CHARTER_MAX_LINES}. */
   lineCount: number;
-  /**
-   * True when the rule declares globs and therefore attaches on paths. False is
-   * the description-scoped rule, which only cursor can defer.
-   */
-  globScoped: boolean;
 }
 
 /**
@@ -117,10 +137,22 @@ export interface AlwaysOnPlan {
  * therefore a today-measurement, and lowering one as the slice shrinks is the
  * only edit this table should ever take.
  *
- * Read them against {@link CHARTER_MAX_LINES}: cursor pays the charter alone,
- * claude and copilot pay it plus the description-scoped rules they cannot
- * defer, and codex pays it plus the entire rule set — an order of magnitude
- * over the cap that binds the template.
+ * Read them against {@link CHARTER_MAX_LINES}, and read them under a DELIVERY
+ * MODE, because that is what the numbers below now depend on:
+ *
+ * - Under `on-demand`, the shipped default since 2026-09-15, cursor, claude
+ *   and copilot all pay the charter alone — cursor because its rule layer
+ *   defers a glob-less rule natively, the other two because the same rules are
+ *   projected as skills instead. Codex pays the charter plus the three rules
+ *   it must keep unconditionally (`injection-screening`, `secrets`,
+ *   `security-patterns`); the other nine are skills.
+ * - Under `always-on`, still selectable per repo, the old shape holds: cursor
+ *   the charter alone, claude and copilot plus every glob-less rule, codex
+ *   plus the entire rule set — an order of magnitude over the template's cap.
+ *
+ * The ceilings are pinned to the DEFAULT mode, which is the load a repo
+ * actually gets. A repo that selects `always-on` opts back into the larger
+ * slice knowingly; this table does not describe that repo and does not try to.
  */
 export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // 97 -> 93 on 2026-09-12: the run-19 corpus repairs paid for their new charter
@@ -137,14 +169,24 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // accounting counts because a session loads the whole file. The alternative
   // was to reword an invariant to buy the lines, which is the one edit the
   // block's hash pin exists to make deliberate. Net +3 on every client below.
+  // Held at 95 on 2026-09-15 under the `on-demand` flip: this client demotes
+  // nothing — its own rule layer already defers a glob-less rule — so the
+  // delivery change moves no line here. It is the control for the three below:
+  // they now measure the same number for a different reason.
   cursor: 95,
   // 240 -> 236 on 2026-09-12: same four charter lines. These two clients pay the
   // charter plus the two glob-less rules, and neither of those grew a line.
   // Held at 236 on 2026-09-12: the run-20 charter saving funds ai-evals' net +1,
   // so the measured load is unchanged.
   // 236 -> 239 on 2026-09-15: the charter's net +3 above, unchanged rules.
-  claude: 239,
-  copilot: 239,
+  // 239 -> 95 on 2026-09-15, the same day, on the `on-demand` flip: the two
+  // glob-less rules (`question-protocol` 74 lines, `ai-evals` 70) are projected
+  // as `.agents/skills/stamity-<id>/SKILL.md` instead of loaded every session,
+  // and they were the whole of what these clients paid beside the charter. What
+  // remains is the charter alone — 239 - 144 = 95. Reclaimed, not deleted: the
+  // bodies still reach the model, through a description the client matches.
+  claude: 95,
+  copilot: 95,
   // 1065 -> 1063 on 2026-09-10: Package 10 removes repeated security-reporting
   // prose while preserving the rule floors and repaired behavior. This client
   // loads the whole rule set, so its measured reduction tightens the ratchet.
@@ -155,7 +197,14 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // identical-words rewrap, and the charter's -1 funds ai-evals' +1.
   // 1063 -> 1066 on 2026-09-15: the charter's net +3, same as above. This client
   // pays the whole rule set beside it, and no rule moved.
-  codex: 1066,
+  // 1066 -> 407 on 2026-09-15, the same day, on the `on-demand` flip, and this
+  // is the reclaim the whole option was for. Codex keeps only the rules that
+  // have to be unconditional — `injection-screening` (109 lines, floor:security),
+  // `secrets` (101, precedence: critical) and `security-patterns` (102,
+  // floor:security) — so the slice is 95 + 312 = 407. The other nine rules are
+  // projected as skills; the appendix, which used to drop eight rules to fit
+  // 32 KiB, now drops none.
+  codex: 407,
 };
 
 /**
@@ -193,7 +242,12 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // the golden up.
 // 29_935 -> 30_123 on 2026-09-15: the invariants version line and the ai-evals
 // floor line, +188 bytes of charter in a file whose rule appendix did not move.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 30_123;
+// 30_123 -> 24_904 on 2026-09-15, the same day, on the `on-demand` flip. The
+// appendix now carries three rules instead of the four that fitted, and the
+// nine it no longer carries are projected as skills — so this is a real 5_219
+// bytes off what every co-selected client reads, not bytes moved to another
+// always-on file. The ratio against the figure below falls from ≈5.8x to ≈4.8x.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 24_904;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -207,26 +261,57 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 30_123;
 // 5_004 -> 5_192 on 2026-09-15: the invariants version line and the ai-evals
 // floor line — the same +188, which is the whole of the change on this figure
 // because nothing but the charter feeds it.
+// Held at 5_192 on 2026-09-15 through the `on-demand` flip, and deliberately so:
+// this file is the charter alone, delivery moves rules and not the charter, so a
+// movement here would have meant the flip reached something it had no business
+// reaching. Re-measured off the refreshed golden, unchanged.
 export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_192;
 
 /**
- * The composite always-on line count one client pays for a plan: the charter,
- * plus every rule that client cannot attach conditionally.
+ * The composite always-on line count one client pays for a plan under a
+ * delivery mode: the charter, plus every rule the client still receives as a
+ * rule and cannot attach conditionally.
  *
- * - {@link DESCRIPTION_PULL_TOOLS} pay the charter alone.
- * - Clients without that primitive add every description-scoped (glob-less)
- *   rule, which has no attach trigger and so loads every session.
- * - {@link RULE_APPENDIX_TOOLS} add EVERY rule, glob-scoped included, because
- *   the client has no per-rule mechanism and the adapter folds the set into the
- *   always-on document.
+ * Two filters, in this order, because the second only makes sense over what
+ * survives the first:
+ *
+ * 1. **Delivery.** `demotedRuleIds(tool, rules, mode)` removes the rules this
+ *    client does not receive as rule text at all — they are projected as
+ *    skills. Under `always-on` it removes nothing and the rest of this function
+ *    is the pre-option behaviour exactly.
+ * 2. **Attachment**, over what is left:
+ *    - {@link DESCRIPTION_PULL_TOOLS} pay the charter alone.
+ *    - Clients without that primitive add every description-scoped (glob-less)
+ *      rule, which has no attach trigger and so loads every session.
+ *    - {@link RULE_APPENDIX_TOOLS} add EVERY remaining rule, glob-scoped
+ *      included, because the client has no per-rule mechanism and the adapter
+ *      folds the set into the always-on document.
+ *
+ * The demotion filter is READ from `ruleDelivery.ts`, never re-derived: the
+ * adapters skip exactly these ids and the projection emits exactly these
+ * skills, so a second predicate here would let the measurement and the
+ * emission disagree — and the disagreement that matters is the silent one,
+ * a slice measured lighter than what the client actually loads.
  *
  * The appendix figure is an upper bound: that client caps its single document
  * at 32 KiB and the adapter drops the tail of the rule set to fit. Counting the
  * dropped rules is deliberate — a rule silently dropped is a floor that stopped
- * binding, which is a loss to report, not a budget saving to bank.
+ * binding, which is a loss to report, not a budget saving to bank. Under
+ * `on-demand` on the shipped corpus the shaper drops nothing, because what
+ * reaches the appendix is three floor-class rules.
+ *
+ * `mode` defaults to {@link RULE_DELIVERY_DEFAULT} so a caller measuring "what
+ * a repo gets" needs no argument, and a caller measuring a specific manifest
+ * passes that manifest's value.
  */
-export function composeAlwaysOnLoad(tool: Tool, plan: AlwaysOnPlan): number {
+export function composeAlwaysOnLoad(
+  tool: Tool,
+  plan: AlwaysOnPlan,
+  mode: RuleDelivery = RULE_DELIVERY_DEFAULT,
+): number {
+  const demoted = demotedRuleIds(tool, plan.rules, mode);
   const unconditional = plan.rules.filter((rule) => {
+    if (demoted.has(rule.id)) return false;
     if (RULE_APPENDIX_TOOLS.has(tool)) return true;
     if (DESCRIPTION_PULL_TOOLS.has(tool)) return false;
     return !rule.globScoped;

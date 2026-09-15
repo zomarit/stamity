@@ -1,6 +1,17 @@
 ---
 description: "When a request is ambiguous, irreversible, or missing acceptance criteria: ask one question with numbered options and a declared default; sub-agents return BLOCKED_AMBIGUITY."
-applyTo: "**"
+name: stamity-question-protocol
+metadata:
+  stamity:
+    id: question-protocol
+    type: rule
+    tags:
+      - orchestration
+    load: on-demand
+    obsolete_when: clients natively enforce clarify-before-execute with declared defaults
+    delivery: on-demand
+    tools:
+      - claude
 ---
 
 # Question Protocol

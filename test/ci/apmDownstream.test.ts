@@ -79,7 +79,14 @@ describe("downstream APM content", () => {
 
   it("refuses projected paths that collide on case-insensitive consumer filesystems", () => {
     const root = checkout();
-    write(join(root, "fork/rules/SOURCE-RULE.md"), "---\nid: SOURCE-RULE\ndescription: Fixture\n---\nDifferent identity.\n");
+    // `globs:` added 2026-09-15 to match the fixture it must collide WITH: a
+    // rule with no globs is delivered as a skill under the shipped rule-delivery
+    // default, so an unscoped twin would land in a different primitive home and
+    // collide with nothing. The case is about case-folding, not about delivery.
+    write(
+      join(root, "fork/rules/SOURCE-RULE.md"),
+      '---\nid: SOURCE-RULE\ndescription: Fixture\nglobs: ["**/*.md"]\n---\nDifferent identity.\n',
+    );
     const result = generate(root);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("project onto");

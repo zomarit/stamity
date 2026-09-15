@@ -1,5 +1,6 @@
 ---
 description: "When a request is ambiguous, irreversible, or missing acceptance criteria: ask one question with numbered options and a declared default; sub-agents return BLOCKED_AMBIGUITY."
+name: stamity-question-protocol
 ---
 
 # Question Protocol

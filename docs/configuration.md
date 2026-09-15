@@ -45,7 +45,7 @@ clients your own manifest selects.
 | `tools` | a comma-separated subset of claude, cursor, copilot, codex | always set — the manifest schema requires it |
 | `platform` | one of github \| azure-devops \| gitlab | `none` |
 | `maturityTier` | one of solo \| team \| scaleup \| enterprise | `solo` |
-| `ruleDelivery` | one of always-on \| on-demand | `always-on` |
+| `ruleDelivery` | one of always-on \| on-demand | `on-demand` |
 | `communicationStyle` | one of plain \| technical | `plain` |
 | `learnings.maxCount` | a positive integer | `150` |
 | `hooks.userHooksDir` | a repo-relative directory path | `none` |

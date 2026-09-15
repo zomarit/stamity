@@ -266,7 +266,15 @@ describe("claude residue over the real corpus", () => {
   });
 
   it("emits every corpus rule under .claude/rules with canonical globs as a paths list", async () => {
-    const { rows } = await planned();
+    // MODE PINNED 2026-09-15, explicitly `always-on`. This case is about the
+    // RULE-FILE dialect — one file per rule, canonical globs round-tripped into
+    // `paths` — and it needs both authoring shapes present to mean anything
+    // (the `withoutPaths` branch below). The engine default is now `on-demand`,
+    // which delivers the glob-less rules as skills, so under the default this
+    // case would exercise one branch and pass. Pinning the mode keeps the
+    // assertion the one it was written for; the default's own file set is
+    // asserted by its own case at the foot of this file.
+    const { rows } = await planned({ ruleDelivery: "always-on" });
     const index = await buildContentIndex(CONTENT_ROOT);
     const canonical = index.items.filter((item) => item.type === "rule");
     expect(canonical).toHaveLength(12);
@@ -1258,19 +1266,30 @@ describe("claude under ruleDelivery: on-demand", () => {
     expect(native?.content).toBe(neutral?.content);
   });
 
-  it("emits exactly today's file set under the default — always-on moves nothing", async () => {
+  // FLIPPED 2026-09-15 with the engine default. This case used to assert that a
+  // manifest with no `ruleDelivery` key emitted the pre-option file set — true
+  // while `RULE_DELIVERY_DEFAULT` was `always-on`, and the assertion that would
+  // have quietly kept passing on the wrong half of the option had it been left
+  // asserting "the default is the old shape". What it asserts now is the same
+  // claim the old one made, against the new default: an absent key is exactly
+  // one of the two modes, and BOTH are still reachable.
+  it("reads an absent ruleDelivery key as on-demand, and always-on restores the rule files", async () => {
     const defaulted = await planned();
-    const explicit = await planned({ ruleDelivery: "always-on" });
+    const onDemand = await planned({ ruleDelivery: "on-demand" });
+    const alwaysOn = await planned({ ruleDelivery: "always-on" });
 
-    expect(explicit.rows.map((row) => row.path)).toEqual(defaulted.rows.map((row) => row.path));
-    expect(explicit.rows.map((row) => row.content)).toEqual(
-      defaulted.rows.map((row) => row.content),
+    expect(defaulted.rows.map((row) => row.path)).toEqual(onDemand.rows.map((row) => row.path));
+    expect(defaulted.rows.map((row) => row.content)).toEqual(
+      onDemand.rows.map((row) => row.content),
     );
+
+    // The glob-less rule is a skill under the default and a rule file under the
+    // other mode — the two answers differ, so neither can pass by accident.
     expect(defaulted.rows.some((row) => row.path === ".claude/rules/stamity-ai-evals.md")).toBe(
-      true,
+      false,
     );
-    expect(
-      defaulted.rows.some((row) => row.path.includes("stamity-ai-evals/SKILL.md")),
-    ).toBe(false);
+    expect(defaulted.rows.some((row) => row.path.includes("stamity-ai-evals/SKILL.md"))).toBe(true);
+    expect(alwaysOn.rows.some((row) => row.path === ".claude/rules/stamity-ai-evals.md")).toBe(true);
+    expect(alwaysOn.rows.some((row) => row.path.includes("stamity-ai-evals/SKILL.md"))).toBe(false);
   });
 });

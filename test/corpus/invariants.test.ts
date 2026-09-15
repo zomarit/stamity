@@ -12,14 +12,17 @@ import {
   composeAlwaysOnLoad,
   readCharterTemplate,
   type AlwaysOnPlan,
+  type AlwaysOnRule,
 } from "../../src/content/charter.ts";
 import { frontmatterField } from "../../src/content/frontmatter.ts";
 import { cursorCompanionFrontmatter } from "../../src/content/mdcCompanions.ts";
-import { isContextTag } from "../../src/content/tags.ts";
+import { ruleAnchor } from "../../src/content/ruleDelivery.ts";
+import { isContextTag, isFloorTag } from "../../src/content/tags.ts";
 import { REGENERATE_COMMAND } from "../../src/emit/capabilityMatrix.ts";
 import { REPO_SUBSTITUTION_TOKENS } from "../../src/emit/substitution.ts";
 import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
 import { TOOLS } from "../../src/types/core.ts";
+import { RULE_DELIVERY_DEFAULT } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 import {
   CORPUS_ROOT,
@@ -519,18 +522,39 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
    * rule added or re-scoped moves the number without anything here being
    * edited.
    */
+  /**
+   * The five delivery facts of one rule, read off the corpus file. The two
+   * DERIVED ones call the engine's own helpers — `ruleAnchor` for the nested
+   * `AGENTS.md` question, `isFloorTag` for the floor question — rather than
+   * re-implementing them here: a second reading of "is this rule anchorable"
+   * would let this measurement believe codex defers a rule the adapter still
+   * inlines, and the composite would then come out under a load the client
+   * really pays.
+   */
+  const ruleFactsOf = (file: CorpusFile): AlwaysOnRule => {
+    const declaredGlobs = frontmatterField(file.parsed, "globs");
+    const globs = Array.isArray(declaredGlobs)
+      ? declaredGlobs.filter((glob): glob is string => typeof glob === "string")
+      : [];
+    const declaredTags = frontmatterField(file.parsed, "tags");
+    const tags = Array.isArray(declaredTags)
+      ? declaredTags.filter((tag): tag is string => typeof tag === "string")
+      : [];
+    return {
+      id: declaredId(file),
+      lineCount: fileLines(file),
+      globScoped: globs.length > 0,
+      critical: frontmatterField(file.parsed, "precedence") === "critical",
+      floorTagged: tags.some(isFloorTag),
+      anchored: ruleAnchor(globs) !== null,
+    };
+  };
+
   const alwaysOnPlan = async (): Promise<AlwaysOnPlan> => {
     const charter = await readCharterTemplate(CORPUS_ROOT);
     const rules = artifacts(await corpus)
       .filter((file) => classOf(file.relPath) === "rule")
-      .map((file) => {
-        const globs = frontmatterField(file.parsed, "globs");
-        return {
-          id: declaredId(file),
-          lineCount: fileLines(file),
-          globScoped: Array.isArray(globs) && globs.length > 0,
-        };
-      });
+      .map(ruleFactsOf);
     return { charterLines: charter.lineCount, rules };
   };
 
@@ -553,51 +577,128 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
     await expect(readCharterTemplate(t.dir)).rejects.toThrow(/always-on budget/);
   });
 
-  it("every client's composite always-on slice fits its ceiling", async () => {
+  // CHANGED 2026-09-15, from `toBeLessThanOrEqual` to `toBe`. The behaviour the
+  // gate guards moved: until the rule-delivery option shipped, the ceilings were
+  // ratchets a slice could sit under, and a shrink was free to go unrecorded.
+  // REQ-PROVE-005 makes each ceiling the MEASURED load under the default
+  // delivery mode, so the two directions now fail for two different reasons —
+  // over means the slice grew and the ratchet was not authorised to move, under
+  // means the slice shrank and nobody wrote the saving down. Weakened in neither
+  // direction: `<=` accepted everything `==` accepts and more.
+  it("every client's composite always-on slice equals its pinned measurement", async () => {
     const plan = await alwaysOnPlan();
 
     for (const tool of TOOLS) {
       const measured = composeAlwaysOnLoad(tool, plan);
       expect(
         measured,
-        `${tool} loads ${measured} always-on lines against a ceiling of ` +
-          `${ALWAYS_ON_BUDGET_LINES[tool]}. The ceiling is a ratchet pinned at the measured ` +
-          `load, so it may only come down: cut the slice, or move content to a rule this ` +
-          `client can attach conditionally.`,
-      ).toBeLessThanOrEqual(ALWAYS_ON_BUDGET_LINES[tool]);
+        `${tool} loads ${measured} always-on lines against a pinned ` +
+          `${ALWAYS_ON_BUDGET_LINES[tool]}. The number is the measured load under the default ` +
+          `delivery mode (${RULE_DELIVERY_DEFAULT}), and it is a ratchet: over it, cut the ` +
+          `slice or move content to a rule this client can attach conditionally; under it, ` +
+          `lower the constant in src/content/charter.ts and say in its comment what paid for ` +
+          `the saving.`,
+      ).toBe(ALWAYS_ON_BUDGET_LINES[tool]);
     }
   });
 
-  it("the composite is bigger than the charter wherever the client cannot defer a rule", async () => {
+  it("under the default delivery mode only the appendix client pays more than the charter", async () => {
     const plan = await alwaysOnPlan();
 
-    // The point of the whole invariant: on three of four clients the charter is
-    // NOT the always-on slice, so a green charter cap says nothing about them.
-    expect(composeAlwaysOnLoad("cursor", plan)).toBe(plan.charterLines);
-    for (const tool of ["claude", "copilot", "codex"] as const) {
-      expect(composeAlwaysOnLoad(tool, plan)).toBeGreaterThan(CHARTER_MAX_LINES);
+    // REWRITTEN 2026-09-15. This case used to assert the opposite for claude and
+    // copilot — that their composite EXCEEDED the charter cap — which was the
+    // truth under `always-on` and is the cost `on-demand` reclaims. The claim
+    // moved, so its gate moved with it, and the non-degenerate half is kept: one
+    // client still pays far more than the charter, so the case cannot pass by
+    // everything collapsing to one number.
+    for (const tool of ["cursor", "claude", "copilot"] as const) {
+      expect(composeAlwaysOnLoad(tool, plan)).toBe(plan.charterLines);
     }
-    // Codex carries the glob-scoped rules too, so it is strictly the largest.
+    expect(composeAlwaysOnLoad("codex", plan)).toBeGreaterThan(CHARTER_MAX_LINES);
     expect(composeAlwaysOnLoad("codex", plan)).toBeGreaterThan(composeAlwaysOnLoad("claude", plan));
+
+    // The reclaim is a delivery choice, not a corpus one: the same corpus under
+    // `always-on` still puts all three over the charter, which is what makes the
+    // numbers above a measurement of the mode rather than of a shrunken corpus.
+    for (const tool of ["claude", "copilot", "codex"] as const) {
+      expect(composeAlwaysOnLoad(tool, plan, "always-on")).toBeGreaterThan(CHARTER_MAX_LINES);
+    }
+    expect(composeAlwaysOnLoad("cursor", plan, "always-on")).toBe(plan.charterLines);
   });
 
   it("fixture: a rule that no client can defer pushes the composite over its ceiling", () => {
+    const greedy: AlwaysOnRule = {
+      id: "greedy",
+      lineCount: 1,
+      globScoped: false,
+      critical: true,
+      floorTagged: true,
+      anchored: false,
+    };
+    const ceiling = ALWAYS_ON_BUDGET_LINES.codex;
     const overBudget: AlwaysOnPlan = {
-      charterLines: ALWAYS_ON_BUDGET_LINES.claude,
-      rules: [{ id: "greedy", lineCount: 1, globScoped: false }],
+      charterLines: ceiling,
+      // Critical AND floor-tagged, so codex keeps it under either mode: this
+      // fixture is about the ATTACHMENT filter, and a rule the delivery filter
+      // removed first would prove nothing about it.
+      rules: [greedy],
     };
 
     // Non-degenerate on both axes: cursor defers the same rule and stays inside
     // its ceiling, so the failure is the per-client rule firing, not arithmetic.
-    expect(composeAlwaysOnLoad("claude", overBudget)).toBeGreaterThan(ALWAYS_ON_BUDGET_LINES.claude);
-    expect(composeAlwaysOnLoad("cursor", overBudget)).toBe(ALWAYS_ON_BUDGET_LINES.claude);
+    expect(composeAlwaysOnLoad("codex", overBudget)).toBeGreaterThan(ceiling);
+    expect(composeAlwaysOnLoad("cursor", overBudget)).toBe(ceiling);
+    // claude has no floor exemption — a glob-less rule is demoted there whatever
+    // it is tagged — so its over-budget case is the `always-on` mode, where the
+    // attachment filter is the only one that runs.
+    expect(composeAlwaysOnLoad("claude", overBudget, "always-on")).toBeGreaterThan(ceiling);
+    expect(composeAlwaysOnLoad("claude", overBudget, "on-demand")).toBe(ceiling);
 
     const globScoped: AlwaysOnPlan = {
       charterLines: 10,
-      rules: [{ id: "scoped", lineCount: 40, globScoped: true }],
+      rules: [
+        { id: "scoped", lineCount: 40, globScoped: true, critical: false, floorTagged: true, anchored: false },
+      ],
     };
     expect(composeAlwaysOnLoad("claude", globScoped)).toBe(10);
     expect(composeAlwaysOnLoad("codex", globScoped)).toBe(50);
+  });
+
+  it("fixture: the delivery filter, not the attachment filter, is what the flip changed", () => {
+    // Two rules of the same size, identical but for the facts `demotedRuleIds`
+    // reads: one is a floor codex must keep, one is an ordinary glob-less rule.
+    // Both are 40 lines, so a mode that dropped neither and a mode that dropped
+    // both would each produce a number this case distinguishes.
+    const floorRule: AlwaysOnRule = {
+      id: "floor",
+      lineCount: 40,
+      globScoped: false,
+      critical: false,
+      floorTagged: true,
+      anchored: false,
+    };
+    const ordinary: AlwaysOnRule = {
+      id: "ordinary",
+      lineCount: 40,
+      globScoped: false,
+      critical: false,
+      floorTagged: false,
+      anchored: false,
+    };
+    const plan: AlwaysOnPlan = { charterLines: 100, rules: [floorRule, ordinary] };
+
+    // always-on: every client that cannot defer a glob-less rule pays both.
+    expect(composeAlwaysOnLoad("claude", plan, "always-on")).toBe(180);
+    expect(composeAlwaysOnLoad("codex", plan, "always-on")).toBe(180);
+
+    // on-demand: claude demotes every glob-less rule and is left with the
+    // charter; codex demotes only the one that is neither floor, critical nor
+    // anchored, so it keeps the floor — the two answers differ, which is the
+    // per-client half of the predicate firing.
+    expect(composeAlwaysOnLoad("claude", plan, "on-demand")).toBe(100);
+    expect(composeAlwaysOnLoad("codex", plan, "on-demand")).toBe(140);
+    // Cursor's rule layer defers both under either mode.
+    expect(composeAlwaysOnLoad("cursor", plan, "on-demand")).toBe(100);
   });
 
   it("pins the codex cross-client byte cost against the committed golden", () => {

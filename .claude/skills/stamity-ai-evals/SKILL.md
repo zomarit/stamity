@@ -1,6 +1,17 @@
 ---
 description: Floor for shipping a feature whose behaviour comes from a language model — a golden and adversarial eval set before ship, a regression run on every prompt or model change, offline measurement before traffic, and results committed as artifacts.
-applyTo: "**"
+name: stamity-ai-evals
+metadata:
+  stamity:
+    id: ai-evals
+    type: rule
+    tags:
+      - ai
+    load: on-demand
+    obsolete_when: model providers ship per-feature regression measurement that gates deploys without a project-owned eval set
+    delivery: on-demand
+    tools:
+      - claude
 ---
 
 # AI Evals

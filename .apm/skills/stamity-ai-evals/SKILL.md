@@ -1,5 +1,6 @@
 ---
-description: "Floor for shipping a feature whose behaviour comes from a language model — a golden and adversarial eval set before ship, a regression run on every prompt or model change, offline measurement before traffic, and results committed as artifacts."
+description: Floor for shipping a feature whose behaviour comes from a language model — a golden and adversarial eval set before ship, a regression run on every prompt or model change, offline measurement before traffic, and results committed as artifacts.
+name: stamity-ai-evals
 ---
 
 # AI Evals
