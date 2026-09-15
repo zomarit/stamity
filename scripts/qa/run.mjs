@@ -33,7 +33,7 @@ import { extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { carryForward, hashFile, inputHashMap, rowHash } from './bind.mjs'
 import { QA_ROWS } from './form.mjs'
-import { runHookClients } from './hook-runs.mjs'
+import { exitDescription, runHookClients } from './hook-runs.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
@@ -508,7 +508,7 @@ export async function main(argv) {
         buildRow({
           id: definition.id,
           status: result.status,
-          reason: `${versionNote}${result.command === undefined ? '' : `${result.command} → exit ${result.exitCode}; `}${result.reason}${missingNote}`,
+          reason: `${versionNote}${result.command === undefined ? '' : `${result.command} → ${exitDescription({ status: result.exitCode, signal: result.signal })}; `}${result.reason}${missingNote}`,
           inputs,
         }),
       )

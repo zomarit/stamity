@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { CLIENT_RUNNERS, binaryVersion, runClient } from "../../scripts/qa/hook-runs.mjs";
+import { CLIENT_RUNNERS, binaryVersion, exitDescription, runClient } from "../../scripts/qa/hook-runs.mjs";
 
 /**
  * W6: `cursor` and `copilot` used to carry a constant, never-probed "not on PATH" reason. This
@@ -123,4 +123,16 @@ describe("runClient — a binary probed present with no measured invocation", ()
     },
     30_000,
   );
+});
+
+describe("exitDescription — the one renderer of a process exit in the evidence", () => {
+  // The client-row reason in run.mjs used to inline `exit ${exitCode}`, which rendered the literal
+  // "exit null" for a signal-killed or timed-out client — the shape N-5 removed from the probe
+  // reason. Both reasons now go through this helper, so the null shape has one owner.
+  it("renders a signal, a status and the residual case distinctly", () => {
+    expect(exitDescription({ status: null, signal: "SIGTERM" })).toBe("killed by signal SIGTERM");
+    expect(exitDescription({ status: 0, signal: null })).toBe("exit 0");
+    expect(exitDescription({ status: null, signal: null })).toBe("exit unknown");
+    expect(exitDescription({})).toBe("exit unknown");
+  });
 });

@@ -114,7 +114,7 @@ export function binaryVersion(binary) {
  * "killed by signal <signal>" when the probe carries one, "exit unknown" for the residual case
  * where the shape carries neither (undocumented, but not a case to render as if it were a signal).
  */
-function exitDescription(probe) {
+export function exitDescription(probe) {
   if (probe.signal !== undefined && probe.signal !== null) return `killed by signal ${probe.signal}`
   if (probe.status !== undefined && probe.status !== null) return `exit ${probe.status}`
   return 'exit unknown'
@@ -230,6 +230,7 @@ export function runClient({ client, repoRoot, fixturesDir }) {
     binaryVersion: probe.version,
     command: [runner.binary, ...runner.args].join(' '),
     exitCode: result.status,
+    signal: result.signal ?? null,
     timedOut: result.error?.code === 'ETIMEDOUT',
     observations,
     status: verdict.status,
