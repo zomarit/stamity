@@ -202,3 +202,21 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   ratchet constants unmoved; the worktree removed.
 - The QA evidence measured at `a523958` is withdrawn (the probe-reason wording it carries is the old
   one); the harness re-runs at this tree and the candidate carries that file.
+
+## Phase 1 closed — the candidate — 2026-09-15T03:12Z
+
+- Review round four (2026-09-15T03:08Z): **approve**, medium-high — every round-three finding closed
+  with `path:line` evidence; two Minors, both fixed inline in the small-change lane before this
+  commit: the client row's exit now renders through the one helper that owns the null shape (commit
+  `fix(qa): the client row's exit renders through the shared helper`), and the ledger's closure
+  rationales cite the cherry-picked hashes. `Default applied: fix the two round-four Minors before
+  the candidate or record them → fix (the run files no "Minor, later").`
+- QA harness at `850ff8d` (this tree minus that rendering fix and the records): six rows passed
+  (H1a, H2, H3a–d), three not-run and human (H1b Codex, H1c Cursor, H1d Copilot), every row bound
+  to its input hashes; evidence `.stamity/evidence/qa-850ff8d2727760f1cf54eac779788e61c15652f3.json`
+  is committed here; the rendered form is filed privately with the human rows UNPERFORMED per
+  decision 3. The `/st-work` QA checkpoint (the walk-through table, auto-prove pass and the open
+  sign-off) is appended to this record when its pass returns; it changes no file in the tree.
+- Freeze: from this commit nothing under `content/`, `evals/`, `scripts/eval/`, `src/`, `docs/`,
+  `website/` or the workflows changes; Phase 2 measures this tree — run 25 on the route of record,
+  the release dry run, the pack signing rehearsal, CI on every leg, the full local gate.
