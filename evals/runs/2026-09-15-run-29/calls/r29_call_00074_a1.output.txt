@@ -1,3 +1,0 @@
-`none`
-
-The request lands inside the `/st-work` QA checkpoint, which explicitly answers "what should I check by hand?" itself — `st-qa` still gets invoked, but by name as step 2 of the running command, never as a trigger match here.

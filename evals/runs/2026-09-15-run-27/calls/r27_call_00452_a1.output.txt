@@ -1,1 +1,0 @@
-`none` — this is an ordinary edit to a manifest and lockfile, which is main-flow work; `st-dep-audit` is explicitly read-only and would only apply if the request asked for the resulting risk to be stated rather than the bump performed.

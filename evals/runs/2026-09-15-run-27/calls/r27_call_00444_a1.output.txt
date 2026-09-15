@@ -1,1 +1,0 @@
-`st-learn` — the request is to persist a verified, repo-specific constraint just discovered through debugging so it isn't rediscovered, which is exactly that skill's capture path.

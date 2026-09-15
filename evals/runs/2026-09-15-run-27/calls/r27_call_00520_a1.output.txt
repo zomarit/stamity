@@ -1,1 +1,0 @@
-`none` — documenting a date format in the README is ordinary main-flow work; the "no model in it" phrasing is a decoy for `stamity-ai-evals`, and no rendered surface, dependency graph, contract, or quality gate is in play.

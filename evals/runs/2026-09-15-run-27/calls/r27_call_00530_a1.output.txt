@@ -1,3 +1,0 @@
-`none`
-
-This is a small, unambiguous, private-scope rename with no parallel work, no published interface, no rendered surface, and no session boundary — the contract-census and question-protocol triggers are explicitly negated by the stated conditions, so it stays with the main flow.

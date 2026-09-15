@@ -1,3 +1,0 @@
-`none`
-
-`st-onboard` is the only skill whose description covers "what should we do next," and it is scoped to a freshly installed repo with no first proven change — this repo has eight months of proven changes, so the question is ordinary planning that stays with the main flow.

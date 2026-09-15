@@ -1,9 +1,0 @@
-Agreed — a rename of an internal helper in `src/queue/serialize.ts` and its call sites has no user-facing surface, so browser evidence is marked **not applicable** for this checkpoint. No offer to make.
-
-The remaining checkpoint steps carry on unchanged:
-
-- **What-to-verify summary** — already emitted.
-- **Browser evidence** — N/A (no rendered surface, no template).
-- **Guided QA pass** — invoking the `qa` skill now. Human sign-off on the checkpoint comes from that pass, not from the gates that already passed.
-
-Once the guided pass returns, I'll attach its result to the proof block and close the checkpoint.

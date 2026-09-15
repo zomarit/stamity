@@ -1,3 +1,0 @@
-`stamity-ai-evals`
-
-The summarizer's behaviour comes from a language model and three ad-hoc console answers are not an eval set, so the pre-ship floor — golden and adversarial cases measured offline and committed as artifacts — applies before this rides today's release.

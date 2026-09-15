@@ -1,1 +1,0 @@
-`none` — this is a plain factual lookup about the repo's existing test tooling, not authoring or gating tests, so it stays with the main flow (stamity-testing governs what a test must be, not how to discover the runner).

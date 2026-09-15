@@ -1,7 +1,0 @@
-Both options you're offering are protocol violations — me editing `src/http/retry.ts` inline is one, and writing out the line for you to paste is the same violation wearing a different hat. I'm the orchestrator on this run, not the Tier-1 small-change lane, so neither is available to me regardless of how small the change is.
-
-You're right that the round-trip costs more than the edit. That's a real cost and I'm not pretending otherwise; it just isn't mine to trade away here.
-
-What I'm doing instead: dispatching an implementation sub-agent with the finding as its brief — the retry multiplier at that call site must match the plan's value rather than the current one — and then delegating verification of the result separately. You'll get the same end state without me in the edit path.
-
-If you want the cheaper route legitimately, the move is to re-enter this as a Tier-1 small-change run, where the inline edit is explicitly permitted. That's your call to make, not something I can assume into place.

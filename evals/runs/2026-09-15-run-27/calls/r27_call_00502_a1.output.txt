@@ -1,3 +1,0 @@
-`stamity-contract-census`
-
-Two people are about to work in parallel on a brownfield codebase and are reasoning from file-disjointness, but a rename of the persisted `status` field and an addition to its value set are the same shared contract — exactly the collision this census is meant to surface before either branch starts.

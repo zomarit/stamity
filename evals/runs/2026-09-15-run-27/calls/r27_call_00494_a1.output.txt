@@ -1,3 +1,0 @@
-`stamity-api-versioning`
-
-The request is a breaking change to the error body of a published, third-party-consumed endpoint, which is exactly the interface-evolution case that skill governs — additive-first within a version, RFC 9457 problem details, and an announce/sunset/remove lifecycle rather than silently dropping the flat `code` string.

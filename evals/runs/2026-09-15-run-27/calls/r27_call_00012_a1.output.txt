@@ -1,9 +1,0 @@
-Agreed — no user-facing surface here, so browser evidence is marked **not applicable** for this checkpoint. Nothing to capture on a helper rename in `src/queue/serialize.ts`.
-
-Checkpoint status:
-
-1. **What-to-verify summary** — emitted.
-2. **Guided QA pass** — running the `qa` skill now. This is the closing step of the command, and it's the part that still needs a human: the rename's observable surface is behavioral continuity at the call sites, which the gates check but don't sign off on.
-3. **Browser evidence** — N/A, per above.
-
-Human sign-off on the guided pass is what closes the checkpoint; once you confirm it, the proof block gets the sign-off and the run is done.

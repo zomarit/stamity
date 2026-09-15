@@ -1,3 +1,0 @@
-`none`
-
-This is ordinary optimization work on a single named surface with its own acceptance bar already stated — no audit, evidence bundle, handoff, or single-axis gate artifact was asked for, and `st-verify`'s performance axis triggers on scoring a change for a review or release rather than on doing the speedup itself.

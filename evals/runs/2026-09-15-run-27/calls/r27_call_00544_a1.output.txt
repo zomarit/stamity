@@ -1,3 +1,0 @@
-`none`
-
-This is a read-only explanation request about existing schema — no change is being made, so `stamity-migrations` (which governs schema *change*) doesn't apply, and nothing else on the surface covers explaining a table.

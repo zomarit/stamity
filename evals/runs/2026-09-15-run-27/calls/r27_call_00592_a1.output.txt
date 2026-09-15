@@ -1,3 +1,0 @@
-`stamity-ui-states`
-
-The request is exactly the four-state contract for a data-reading surface — the orders table is missing loading and empty (and presumably error) states, which is what that skill governs.

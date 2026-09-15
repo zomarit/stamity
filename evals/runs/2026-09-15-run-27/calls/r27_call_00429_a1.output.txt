@@ -1,9 +1,0 @@
-```text
-case: (no case id supplied in the input; flagged below)
-binding:
-  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the installed dependency graph"
-  B2 pass — searched for "st-browser-evidence", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none", "or"; none
-verdict: PASS (binding 2/2)
-advisory: none declared
-authoring note: the case file header carries no case id, so the emission cannot name one; the criteria themselves are decidable and no grouping defect is present.
-```

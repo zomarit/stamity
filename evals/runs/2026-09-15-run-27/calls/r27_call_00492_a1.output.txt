@@ -1,3 +1,0 @@
-`stamity-api-versioning`
-
-This is a breaking change to the error shape of a published, third-party-consumed interface, which is exactly the floor that skill governs — additive-first change within a version, RFC 9457 problem details, and an announce-sunset-remove lifecycle rather than a silent removal of the flat `code` string.
