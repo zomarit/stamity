@@ -513,3 +513,16 @@ always-on budget item stays open until the measurement lands.
   instruction allows three full runs, run 27 is the first full one (25 ended at calibration, 26 at
   266 of 599).` Run 28 will be the second and, given the account's five-hour window, will hold once
   around its 570th call and resume at the reset.
+- 14:20Z — repair round one merged (`23c2dcf` content, `a589658` dispositions): the injection-screening
+  report says the run continues on its objective (line count held; shared bytes with Codex 24,904 →
+  24,952, the pin and the capability matrix moved with it); the pull-request screen's class
+  descriptions use the taxonomy's own definitions; the performance agent's finding rows carry a
+  `method:` slot. Six repeats disposed: two promoted (spec-author A1 → B7, touchpoints-delegate A1 →
+  B5, each on a quoted source sentence), four deleted with reasons; roster 505 binding / 51 advisory;
+  every disposition in its case file, in `EXPECTED_MOVES` and in SET-v7. The run-24 replay test now
+  reads `cases-v5`, the directory run 24 scored, so a disposition in the live set cannot move a
+  historical replay. Three findings from the implementer opened round two: run 27 lists eight
+  repeats, not six; the promoted spec-author row rests on text outside its case's quoted range, so
+  the return contract's `BLOCKED_AMBIGUITY` line is repaired to state what the rule requires; and
+  the public runner's disposition guard could never be satisfied once a repeat existed (a repeat now
+  counts as disposed when its case file carries the dated note).
