@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.7.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-15T14:49:51.716Z",
+  "updatedAt": "2026-09-15T15:02:04.442Z",
   "tools": [
     "claude"
   ],
@@ -162,7 +162,7 @@
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "90af214e187f72b4d9e17783afb861ddb8a622a518fece387031e32041bd8a3f",
+      "contentHash": "f0c53f53e5ef52bd8a9c08e9a987f09d96da9698b9b92d4f3af50902170f146c",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
