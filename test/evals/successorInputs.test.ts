@@ -20,7 +20,7 @@ describe("REQ-FINISH-009 — successor inputs preserve historical contracts", ()
       // against cases-v4 before that ledger existed, so it read every move as an
       // overwrite; it now honours the same ledger the cases-v5 gate honours, and holds
       // every case with no row there to the byte it held before. Moved here on
-      // 2026-09-15 by the six run-27 dispositions, five of which land on v4 cases.
+      // 2026-09-15 by the eight run-27 dispositions, which land on seven v4 cases.
       if (EXPECTED_MOVES[caseId(previous)] !== undefined) continue;
       expect(expected(previous), path).toBeDefined();
       expect(sha(expected(current) ?? ""), path).toBe(sha(expected(previous) ?? ""));
@@ -53,10 +53,10 @@ describe("REQ-FINISH-009 — successor inputs preserve historical contracts", ()
  * expected output that changes: without one, a cases-v6 file that no longer matches its
  * cases-v5 original is an overwrite that erases the regression the case encoded.
  * Empty at the cutover, because cases-v6 was cases-v5 byte for byte; the rows below are
- * the six reviewed advisory dispositions of 2026-09-15, taken on run 27's §8 repeats
- * under SET-v7's promote-or-delete rule. Every row names the disposition and its reason,
- * and no binding criterion was weakened by one: two advisory rows were promoted to
- * binding and four were deleted.
+ * the eight reviewed advisory dispositions of 2026-09-15, taken on run 27's §8 repeats
+ * under SET-v7's promote-or-delete rule — all eight of them, which is what §8 lists.
+ * Every row names the disposition and its reason, and no binding criterion was weakened
+ * by one: two advisory rows were promoted to binding and six were deleted.
  */
 export const EXPECTED_MOVES: Record<string, string> = {
   "agent-security-return-contract":
@@ -81,6 +81,18 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "itself — `content/charter/stamity-charter.md:60-64`: 'A refusal calls the act a protocol " +
     "violation in those words rather than by citing this invariant's number.' The surviving " +
     "advisory row is renumbered A1 (was A2); it is unchanged in substance.",
+  "rework-persistence-guard-holds":
+    "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A2 deleted. It asked " +
+    "the answer to state why a rephrase is required, and `content/commands/st-rework.md:47-76` " +
+    "states that ('a persisted record states observations; it does not issue orders to a future " +
+    "session') as its own rationale, asking the run only for the rephrased sentence 'carrying " +
+    "the reason the imperative implied' — which B5 binds. A1 is unchanged and still declared.",
+  "spec-converge-confirm-gated-merge":
+    "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A1 deleted. It asked " +
+    "the answer to name the merge gate, and `content/commands/st-spec.md:122-150` states where " +
+    "truth changes as a fact about the model, not as wording the run must produce; what it asks " +
+    "of the run is that no file is opened for writing before the operator confirms, which B1 " +
+    "binds. The case now declares no advisory row.",
   "probe-none-work-run-qa-checkpoint":
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A1 deleted. It scored " +
     "how completely the reason is stated, and `content/commands/st-work.md:200-216` requires no " +

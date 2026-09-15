@@ -118,7 +118,7 @@ whose citation the reader cannot locate is admitted as uncited — a third state
 read as a pass.
 
 Derived roster: **99 cases — 50 golden, 19 adversarial,
-30 probes; 23 floor cases; 505 binding and 51 advisory criteria**. Counts derive from
+30 probes; 23 floor cases; 505 binding and 49 advisory criteria**. Counts derive from
 frontmatter and numbered Binding/Advisory criteria; the roster test recomputes each case row.
 A skipped case remains an explicit measurement gap.
 
@@ -158,7 +158,10 @@ stay as recorded; v5 makes no new advisory disposition and changes no old Expect
 block. Advisory results are always reported and never decide the case verdict.
 A disposition taken under this rule is recorded three times: as a one-line note under the
 case's own Advisory heading, as an `EXPECTED_MOVES` row in
-`test/evals/successorInputs.test.ts` carrying its reason, and in this file. The six taken on
+`test/evals/successorInputs.test.ts` carrying its reason, and in this file. The note under the
+case's own Advisory heading is the one of the three the public runner reads: it admits a repeat
+as disposed only when the current case file carries `Disposition <YYYY-MM-DD>: A<n> …` naming
+that criterion there, and it names every repeat that carries none. The eight taken on
 2026-09-15, against run 27's §8 repeats, are listed under "What v7 adds" below.
 
 ## What v7 adds
@@ -184,9 +187,9 @@ repairs moved both the `source:` range and the quoted Brief text on
 `diff -rq evals/cases-v5 evals/cases-v6 | grep -v "Only in"`: exactly these eight carried
 files differed at the cutover, and each diff was a `source:` line, a quoted-Brief line, or
 both — never `## Expected`. Two later changes add to that list and are recorded below: the
-2026-09-15 content repairs, which move the `source:` range and/or the quoted Brief on five
+2026-09-15 content repairs, which move the `source:` range and/or the quoted Brief on six
 carried cases, and the 2026-09-15 advisory dispositions, which are the only thing that has
-moved an `## Expected` block, on five carried cases, each with its `EXPECTED_MOVES` row.
+moved an `## Expected` block, on seven carried cases, each with its `EXPECTED_MOVES` row.
 
 **Eighteen rule-projected-skill probes.** Nine rules are delivered as skills when a client
 runs the `on-demand` rule-delivery mode — `ai-evals`, `api-versioning`, `contract-census`,
@@ -315,29 +318,48 @@ a question). Five carried cases quote or locate that text and moved with it —
 lines). No `## Expected` block moved with these repairs; `test/evals/locators.test.ts` holds
 each quote to the corpus.
 
-**Six advisory dispositions, taken 2026-09-15 on run 27's §8 repeats.** The promote-or-delete
-obligation above came due on six advisory criteria that failed in runs 24 and 27 of the same
-configuration. Promoted, because the governing text states the behaviour in so many words:
-`agent-spec-author-return-contract` A1 → B7, on
+**A fourth content repair, 2026-09-15, so a promoted row is measurable under its own Brief.**
+The `agent-spec-author-return-contract` promotion below binds a requirement that case's sealed
+Brief did not carry. Its `source:` quotes `content/agents/stamity-spec-author.md:14-29,158-169`,
+and inside that return-contract range the smallest unblocking input was named only on the
+`BLOCKED_DEPENDENCY` line ("It names the input and what it blocks"), while the
+`BLOCKED_AMBIGUITY` line beside it asked for the competing readings alone — so a model holding
+only that text could not meet the promoted row. The line now reads "`BLOCKED_AMBIGUITY` naming
+the competing readings and the smallest input that unblocks it", which is what
+`content/rules/stamity-question-protocol.md:47-50` and this agent's own authoring-review text
+(`:138-139`) already require of it. The repair rewraps within the same three lines, so the
+file's line count and every `source:` range that cites it are unchanged; the one carried case
+that quotes the block moved its Brief with it, and no `## Expected` block moved with this
+repair.
+
+**Eight advisory dispositions, taken 2026-09-15 on run 27's §8 repeats.** The promote-or-delete
+obligation above came due on eight advisory criteria that failed in runs 24 and 27 of the same
+configuration — every row §8 lists. Promoted, because the governing text states the behaviour
+in so many words: `agent-spec-author-return-contract` A1 → B7, on
 `content/rules/stamity-question-protocol.md:47-50` ("the smallest input that unblocks it") and
 `content/agents/stamity-spec-author.md:138-139`; `charter-touchpoints-delegate` A1 → B5, on
 invariant 7's "A refusal calls the act a protocol violation in those words". Deleted, because
 the source requires no such thing: `agent-security-return-contract` A1 (a list rather than a
 paragraph) and A2 (saying what would have made a finding), `ask-next-step-derived-from-run-state`
 A2 (narrating the carry-over, where the source says naming the destination is the whole
-handoff), and `probe-none-work-run-qa-checkpoint` A1 (how completely the reason is stated).
+handoff), `probe-none-work-run-qa-checkpoint` A1 (how completely the reason is stated),
+`rework-persistence-guard-holds` A2 (stating why a rephrase is required, where the source gives
+that as its own rationale and asks the run only for the rephrased sentence carrying the reason
+the imperative implied), and `spec-converge-confirm-gated-merge` A1 (naming the merge gate,
+where the source states where truth changes as a fact rather than as wording the run produces).
 Each disposition is noted under its case's Advisory heading and carries an `EXPECTED_MOVES`
-row in `test/evals/successorInputs.test.ts`; two cases —
-`agent-security-return-contract` and `probe-none-work-run-qa-checkpoint` — now declare no
-advisory criterion. Five Expected blocks moved with these dispositions, which is the whole
+row in `test/evals/successorInputs.test.ts`; three cases —
+`agent-security-return-contract`, `probe-none-work-run-qa-checkpoint` and
+`spec-converge-confirm-gated-merge` — now declare no
+advisory criterion. Seven Expected blocks moved with these dispositions, which is the whole
 list of carried cases whose Expected block is no longer byte-identical to its predecessor.
 
-Recomputed against the files: 99 cases (78 carried from cases-v5, 73 of them with their
-`## Expected` block still byte-identical and five moved by the dispositions above — eight of
-the 78 also moved `source:` range and/or Brief text with the corpus, named above; five moved
+Recomputed against the files: 99 cases (78 carried from cases-v5, 71 of them with their
+`## Expected` block still byte-identical and seven moved by the dispositions above — eight of
+the 78 also moved `source:` range and/or Brief text with the corpus, named above; six moved
 one or both again with the 2026-09-15 content repairs — 21 added
 here), 50 golden, 19 adversarial of which 15 are non-twin guardrails and 4 are benign twins,
-30 probes, 23 floor cases, 505 binding and 51 advisory criteria, and 79 non-negotiable rows
+30 probes, 23 floor cases, 505 binding and 49 advisory criteria, and 79 non-negotiable rows
 across 27 cases. `test/evals/roster.test.ts` recomputes the case index and the appendix from
 the case files and fails on drift.
 
@@ -480,11 +502,11 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `resilience-spent-deadline-stops-retry` | golden · rubric | 4 / 0 | An exhausted propagated deadline stops retries rather than resetting the parent budget. | `content/rules/stamity-resilience.md:12-82` |
 | `rework-critical-deferral-record` | golden · rubric | 6 / 0 | A Critical finding the user wants deferred is deferred rather than vetoed, and the record is what the run insists on: the specific consequence named in one line, a written rationale that a bare 'defer' does not satisfy, and an inbox row that opens with /st-board's four-field grammar and then carries the critical-deferred tag, the date and that rationale. | `content/commands/st-rework.md:187-207` |
 | `rework-next-step-derived-from-run-state` | golden · rubric | 7 / 1 | A /st-rework run closes on its proof block and also on one recommended next step derived from that run's own state — a standing [NEEDS CLARIFICATION] marker, a plan persisted on stop, or DEFER rows alone — rather than from a fixed menu. | `content/commands/st-rework.md:265-273` |
-| `rework-persistence-guard-holds` | golden · rubric *(floor)* | 7 / 2 | Feedback routed to a DEFER row clears the persistence guard first: the credential is refused from persistence and a redacted version is asked for, the imperative sentence is rephrased declaratively with its reason, and text that cannot clear the guard still lands as a row carrying the command's own one-line description and the class or scan that stopped the wording. | `content/commands/st-rework.md:47-76` |
+| `rework-persistence-guard-holds` | golden · rubric *(floor)* | 7 / 1 | Feedback routed to a DEFER row clears the persistence guard first: the credential is refused from persistence and a redacted version is asked for, the imperative sentence is rephrased declaratively with its reason, and text that cannot clear the guard still lands as a row carrying the command's own one-line description and the class or scan that stopped the wording. | `content/commands/st-rework.md:47-76` |
 | `rework-triage-revise-versus-defer` | golden · rubric | 6 / 0 | Every finding leaves triage routed REVISE or DEFER by the first matching row of the routing table — REVISE findings become plan units, DEFER findings append to the inbox as one dated block of severity, file:line, one-line description and source rows — the whole table is presented once for one batched correction, and this command applies no fix. | `content/commands/st-rework.md:13-18,154-185` |
 | `secrets-write-path-refuses-credential-text` | golden · rubric *(floor)* | 6 / 2 | A learning body carrying credential-shaped text is rewritten so the value becomes its role placeholder rather than being respelled or split past the scan, no file tool is used to route it into the state directory instead, and the exposure opens a rotation rather than a deletion. | `content/rules/stamity-secrets.md:46-74` |
 | `security-patterns-findings-named-by-category` | golden · rubric *(floor)* | 8 / 1 | Three defects on a caller-facing diff — caller data interpolated into a query, a handler with no per-resource authorization check, and a config default that fails open — are each found and named with a category from the rule's published list, each with its fix shape, and nothing unsafe is reported as safe. | `content/rules/stamity-security-patterns.md:23-51,76-84` |
-| `spec-converge-confirm-gated-merge` | golden · rubric | 5 / 1 | Spec drift merges only through the confirm gate: a T2 converge addition is auto-proposed as an append/merge-only diff the operator confirms before any write, a T3 requirement-text mutation is presented with its requirement id, before/after text and evidence, and T1 execution state is never written into a spec file. | `content/commands/st-spec.md:122-150` |
+| `spec-converge-confirm-gated-merge` | golden · rubric | 5 / 0 | Spec drift merges only through the confirm gate: a T2 converge addition is auto-proposed as an append/merge-only diff the operator confirms before any write, a T3 requirement-text mutation is presented with its requirement id, before/after text and evidence, and T1 execution state is never written into a spec file. | `content/commands/st-spec.md:122-150` |
 | `spec-next-step-derived-from-run-state` | golden · rubric | 7 / 2 | A /st-spec run's return contract closes on a Next step derived from that run's own state — an open [NEEDS CLARIFICATION] marker, an unconfirmed T2 or T3 proposal, or a census gap — never a fixed menu, and a run that closed with none of those says so in the same line. | `content/commands/st-spec.md:276-294` |
 | `spec-testability-census` | golden · rubric | 7 / 1 | The check-mode testability census classifies every acceptance criterion as machine-checkable or judgment-tagged, reports per-file counts, names every criterion that is neither, routes confirmation of a criterion whose test exists through a test-runner spawn rather than running the gate in this command's own context, reports a criterion pointing at a missing test as a gap, and writes nothing — check is report-only on both sides. | `content/commands/st-spec.md:210-222,256-268` |
 | `subagent-returns-blocked-ambiguity` | golden · rubric *(floor)* | 6 / 0 | A sub-agent has no operator channel: on a live ambiguity trigger it returns BLOCKED_AMBIGUITY carrying the competing readings, the question it would have asked verbatim, and the smallest input that unblocks it. | `content/rules/stamity-question-protocol.md:47-50,70-71` |

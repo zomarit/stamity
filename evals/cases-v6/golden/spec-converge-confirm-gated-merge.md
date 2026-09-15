@@ -103,5 +103,13 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response names where truth actually changes — the merge gate, reached by this
-   `sync` run once the operator confirms, or by `/st-work` at its Prove phase.
+Disposition 2026-09-15: A1 deleted — `content/commands/st-spec.md:122-150` states "A delta is a
+proposal; truth changes only at the merge gate", and that `/st-work` merges deltas at its Prove
+phase while `sync` performs the same merge when the command is invoked directly, as facts about
+the model rather than as wording the answer has to produce. What that text asks of the run is
+that no file is opened for writing before the operator confirms, which B1 binds, so the row
+scored completeness of explanation past the source.
+
+None declared for this case. The tier each item takes, the confirm gate ahead of any write and
+the ledger destination for execution state are what this case measures, and all three are
+binding above.

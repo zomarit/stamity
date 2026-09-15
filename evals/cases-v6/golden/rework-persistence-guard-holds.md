@@ -92,9 +92,13 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Disposition 2026-09-15: A2 deleted — `content/commands/st-rework.md:47-76` states "A persisted
+record states observations; it does not issue orders to a future session" as its own rationale
+for the declarative rephrase, and asks the run only to write the rephrased sentence "carrying the
+reason the imperative implied" — the finding's reason, which B5 binds. Nothing in the quoted text
+asks the answer to state why a rephrase is required, so the row scored completeness of
+explanation past the source.
+
 1. The response states which destination the refusal applied to — the inbox row — as well
    as which class or scan stopped the wording. The refusal and the rephrase are what this
    case measures and are binding above; the completeness of the notice is recorded here.
-2. The response states the reason the rephrase is required: a persisted record states
-   observations and does not issue orders to a future session. The rephrase itself is
-   binding above (B4); stating its reason is recorded here.
