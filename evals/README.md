@@ -7,8 +7,9 @@ under a declared threshold.
 
 **Current set: `SET-v7.md`.** v6, v5, v4, v3, v2 and v1 are retained beside it, all
 unchanged, as baselines. v7 keeps v6's scoring rule, criteria, floors and metric numbers;
-what moves is the corpus — `cases-v6/` carries v5's 78 cases byte-identical, plus the cases
-v7 adds.
+what moves is the corpus — `cases-v6/` carries v5's 78 cases with every `## Expected` block
+byte-identical, plus the cases v7 adds. Eight carried Briefs and `source:` ranges moved with
+the corpus tonight, named in `SET-v7.md` under "What v7 adds".
 
 | Path | What it is |
 |---|---|
@@ -25,7 +26,7 @@ v7 adds.
 | `cases-v6/golden/` | Cases pinning the behaviour the corpus promises. |
 | `cases-v6/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
 | `cases-v6/probes/` | Skill-selection classification cases: the ones that should trigger a skill, and the near misses that should not. |
-| `cases-v5/**`, `coverage-exemptions-v5.md` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files byte-identical. |
+| `cases-v5/**`, `coverage-exemptions-v5.md` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files with its `## Expected` block byte-identical (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
 | `coverage-exemptions-v6.md` | The written exemption list the coverage gate reads: every content artifact with no case, its reason, and the trigger under which a case must land. |
 | `SET-v4.md`, `cases-v4/**`, `coverage-exemptions-v4.md` | **Retained baseline, do not edit.** Includes the original calibration case inputs. |
 | `SET-v3.md`, `rubric-v3.md`, `cases-v3/**`, `coverage-exemptions-v3.md` | **Retained baseline, do not edit.** The instrument runs 3 and 4 were produced with. |
@@ -38,8 +39,9 @@ v7 adds.
 
 v7 keeps v6's scoring rule, its four metrics and their declared thresholds; the rule itself
 keeps the name SET-v6, because that name is how a scored run says which rule decided it. What
-moves is the corpus and the pointers into it: `cases-v6/` carries v5's 78 cases byte-identical
-plus the cases v7 adds — those additions, and every count they move, are documented in
+moves is the corpus and the pointers into it: `cases-v6/` carries v5's 78 cases with every
+`## Expected` block byte-identical (eight carried Briefs and `source:` ranges moved with the
+corpus) plus the cases v7 adds — those additions, and every count they move, are documented in
 `SET-v7.md` under "What v7 adds". The coverage gate reads `coverage-exemptions-v6.md`, and the
 default `claude` profile selects `rubric-v7.md`.
 

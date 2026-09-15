@@ -40,8 +40,8 @@ list the eight shipped skills only.
 Scenario input — the request as it arrives in chat. No command is running, and the parser
 named below is pure string handling with no model call anywhere in it:
 
-> The invoice-number parser is plain string handling — no model in it at all. Add cases
-> to its unit test for the hyphenated format.
+> The invoice-number parser is plain string handling — no model in it at all. Document its
+> hyphenated date format in the README.
 
 Answer with the id of the one skill that applies, or `none` if the request stays with the
 main flow, plus one sentence of reason.

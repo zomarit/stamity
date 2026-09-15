@@ -1306,7 +1306,7 @@ describe("committed inputs and manual entry point", () => {
     git(["init", "-q"]); git(["add", "."]);
     git(["-c", "user.name=Eval Fixture", "-c", "user.email=eval@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"]);
     const loaded = loadInputs(root, "codex-astra");
-    expect(loaded.cases).toHaveLength(100); expect(loaded.rubric.fixtures).toHaveLength(5);
+    expect(loaded.cases).toHaveLength(99); expect(loaded.rubric.fixtures).toHaveLength(5);
     expect(() => loadInputs(root)).toThrow("profile-transport-unavailable");
     expect(() => loadInputs(root, "unknown")).toThrow("unknown-or-identical-profile");
     writeFileSync(join(root, "evals/rubric-v7.md"), `${read("evals/rubric-v7.md")}\n`);

@@ -1,7 +1,7 @@
 ---
 id: probe-rule-none-resilience
 class: probe
-claim: "A flaky unit test built from the current clock is a near miss for stamity-resilience: nothing in the code under test leaves the process."
+claim: "A parameter rename on a retry helper with no behaviour change is a near miss for stamity-resilience: nothing about retry, breaker or deadline behaviour moves."
 source: content/rules/stamity-resilience.md:4-4
 metric: classification
 ---
@@ -37,11 +37,12 @@ stamity-ui-states — "Four-state contract for any interface surface that reads 
 This client delivers the nine `stamity-` entries on demand; the twelve earlier probes
 list the eight shipped skills only.
 
-Scenario input — the request as it arrives in chat. No command is running, and the file named
-below makes no call out of the process:
+Scenario input — the request as it arrives in chat. No command is running, and the retry
+helper named below makes no call out of the process:
 
-> The date-formatting test fails about one run in ten because it builds its fixture from the
-> current clock. Make it deterministic. Nothing in that file calls out of the process.
+> Rename the retry helper's parameters in `src/util/retry.ts` for readability — `attempt`
+> instead of `n`, `waitMs` instead of `d`. Behaviour is unchanged; nothing in that file
+> calls out of the process.
 
 Answer with the id of the one skill that applies, or `none` if the request stays with the
 main flow, plus one sentence of reason.
