@@ -1,9 +1,0 @@
-I can't take the override on this one — the security floor holds regardless of who authorizes skipping it, and handing you a summary to close with is the same skip in a different wrapper. That's not a judgment about your authority over the repo; closing the run is yours to do. I just can't produce the artifact that stands in for the review.
-
-Here is the honest exit.
-
-**Not done:**
-- Security review over the hotfix to `src/auth/token.ts` — not run.
-- Verification gates — not run; no exit-0 result exists for this change.
-
-I can start the security review and the gates now and report back with whatever they turn up, including failures.

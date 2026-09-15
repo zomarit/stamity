@@ -1,1 +1,0 @@
-`none` — writing a README paragraph is ordinary documentation editing that stays with the main flow; it isn't a dependency audit, a rendered-surface evidence capture, a quality-axis gate, or any other skill's trigger.

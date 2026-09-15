@@ -1,3 +1,0 @@
-`none`
-
-The QA checkpoint explicitly covers this: the operator's "what should I check by hand?" is precisely what step 2 answers, and the checkpoint states it invokes the qa skill by name as part of the already-running command rather than as a trigger match — so no skill is *selected* here, and the run stays with the main flow.

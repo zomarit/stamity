@@ -1,1 +1,0 @@
-`st-handoff` — the request is mid-work state being carried across a session and tool boundary, which is exactly its prepare mode trigger ("when a session ends mid-task, when work moves to another client").

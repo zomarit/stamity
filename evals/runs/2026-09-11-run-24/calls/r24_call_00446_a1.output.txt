@@ -1,1 +1,0 @@
-`none` — this is a plain documentation edit to a README, which stays with the main flow; no skill covers writing prose about an existing version pin (st-dep-audit reports on the installed graph rather than authoring docs, and it explicitly doesn't edit source files).

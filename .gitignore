@@ -16,6 +16,25 @@ website/.docusaurus/
 # under here, on its own branch, so a merge in progress never touches the operator's tree.
 .stamity/upstream-work/
 
+# Per-session state and scratch; generated hooks and evidence records stay tracked.
+/.claude/worktrees/
+/.claude/settings.local.json
+/.stamity/review-gate.json
+/.stamity/review-gate.json.lock
+/.stamity/review-gate.json.tmp-*
+/.stamity/_scratch/
+/.stamity/_runtime/
+
+# Eval runners retain raw evidence locally for Release archives. Compact run
+# records stay tracked; these rules do not remove already tracked history.
+/evals/runs/*/calls/
+/evals/runs/*/calls.json
+/evals/runs/*/samples.jsonl
+/evals/runs/*/*-attempt-*.json
+/evals/runs/*/sample-*.json
+/evals/runs/*/isolation-*.json
+/evals/runs/*/provider-responses.jsonl
+
 # Root-level session scratch. The leak gate walks tracked AND
 # untracked-but-not-ignored files (scripts/leak-gate.mjs, `listFromGit`), so a local
 # note holding names the gate reserves keeps every run red until the path leaves that

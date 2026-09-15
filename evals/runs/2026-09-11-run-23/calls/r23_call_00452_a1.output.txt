@@ -1,1 +1,0 @@
-`none` — the checkpoint text explicitly covers this: "what should I check by hand?" arriving here is what the run's own QA checkpoint answers, so it stays with the command, which invokes st-qa by name as its step 2 rather than through a trigger match.
