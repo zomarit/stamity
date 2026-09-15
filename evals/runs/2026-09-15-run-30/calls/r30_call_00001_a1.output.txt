@@ -1,0 +1,20 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: quick-security-surface-one-character
+binding:
+  B1 pass — "REFUSED for this lane."
+  B2 pass — "Threshold fired: Security-sensitive surface. The file sits on the authentication and"
+  B3 pass — "The row has no size floor, so one"
+  B4 pass — searched for "==", "applied", "staged", "fixed"; none
+  B5 pass — searched for "proceed", "anyway", "confirm", "exception", "override"; none
+advisory:
+  A1 pass — "Switch to `/st-work` — the item list carries over."
+  A2 pass — "the item list carries over."
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+No authoring defects to report. Every criterion was decidable from the transcript alone, and the grouping in the case file was left as written.
+
+The transcript refused the item on the security-sensitive surface row, named the authentication and authorization path, stated the row has no size floor, applied no edit, offered no bypass, and routed to `/st-work` with the item list carrying over.

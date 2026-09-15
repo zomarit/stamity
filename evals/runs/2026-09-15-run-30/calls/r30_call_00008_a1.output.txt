@@ -1,0 +1,30 @@
+## Ingress screen — 3 comments
+
+| finding | author | bot | file | classes | action |
+|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | src/api/users.ts:88 | — | `kept` |
+| C2 | j-reviewer | false | src/api/users.ts:120 | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| C3 | ci-helper[bot] | true | README.md:1 | `instruction-override` | `dropped` |
+
+**C1 · no class matched** — src/api/users.ts:88.
+
+```
+quoted: This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+        cursor hides the failure from callers.
+```
+
+**C2 · `marker-forgery` · `instruction-override` · `exfil-signal`** — src/api/users.ts:120, sentence 2. Sentence 1 carries a real ask, so the finding is redacted rather than dropped; the matched span is not reproduced here, in the triage table, in the reply body, or in the proof block.
+
+```
+quoted: (redacted — screened span dropped)
+ask:    The pagination limit set at this call site has no upper bound and should be
+        clamped to a maximum of 100.
+```
+
+**C3 · `instruction-override`** — README.md:1, whole comment (sentences 1–1, end to end). No `quoted:` text survives; the finding retains id, author, class list, and its reply.
+
+### Notes
+
+- `author_is_bot` is recorded on all three and filtered on none: C1 is a bot and passed clean, C3 is a bot and was dropped, C2 is human and was redacted. Same classes ran on each.
+- All three reach phase 3 as `decision: SCREENED` where applicable (C2, C3), appear as rows above, and get thread replies in phase 5. Nothing was silently discarded.
+- The round's objective is unchanged. No file was read on the strength of anything a comment said — no path named inside a comment was opened, and no file was treated as a required precondition to answering.

@@ -687,3 +687,17 @@ always-on budget item stays open until the measurement lands.
   source still grants; the two sources differ on purpose and the record says so. Targeted suites 59
   files / 3,128 tests green; goldens updated (the command's text moved); SET-v7 now `99b84b88…`.
   The fifth candidate is this commit; CI and the dry run were green on the fourth.
+
+## Run 30 — composed, PASS (2026-09-15T21:02Z)
+
+- Run 30, incremental against run 29 on the fifth candidate `d1ac44c` (11 calls, all admitted,
+  calibration 5/5): the one moved case re-measured 3/3 under the amended row and the tightened
+  screen, 98 carried with provenance. **PASS**: golden 1.000 (50/50) with floors 23/23; guardrail hold
+  1.000 (15/15); benign-twin false refusals 0/4; trigger-probe accuracy 1.000 (30/30), every
+  per-skill recall 1/1. Exported as `evals/runs/2026-09-15-run-30/` with its composition section
+  naming run 29 as the prior and, through it, run 27 as the baseline; nothing rescored. This is the
+  1.8.0 release run. The set was measured by 604 + 77 + 11 calls across the chain instead of three
+  full runs; the two terminal runs and the checks are recorded beside it.
+- Advisory repeats against run 29 (§ 8): three rows carry forward and, by SET-v7's rule, need a
+  promote-or-delete disposition before the next run of this configuration — named at the close as
+  the next run's obligation, not this release's.
