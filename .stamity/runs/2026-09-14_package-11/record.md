@@ -300,3 +300,11 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   capacity for run 26's remaining 333 calls. Nothing else is missing: the dry run, the signing
   rehearsal, the full gate and the QA harness are green; the CHANGELOG section, the version restamp,
   the spec-status flip and the morning sequence are prepared and wait for the run's PASS.
+- 03:50Z — CI 34924889728 on `412e1aa`: the measurements case green on Windows; the four hook-probe
+  cases still red there, because a shell-less `spawnSync` on Windows resolves only `.exe`/`.com` — a
+  `.cmd` fixture, like the `.cmd` shims npm installs for the real clients, is invisible to it. The
+  honest repair is in the harness, outside the freeze: on win32 the ENOENT reason now names that
+  limitation (`WINDOWS_PROBE_LIMIT`) instead of reading as "absent"; the four fixture-executing
+  cases skip on win32 with the reason, a win32-only case pins the statement against a `.cmd` shim on
+  PATH, and a platform-injected case covers the branch everywhere. macOS evidence is unaffected (the
+  suffix applies to win32 only). Small-change lane; verification delegated to the suite and CI.
