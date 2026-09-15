@@ -313,3 +313,139 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   the legacy `closed` state, a vocabulary the suite confines to three named ledgers. The rows now read
   `fixed` (eleven) and `rejected` (one, the fixture-directory note); the records suite is green
   locally and CI re-runs on this head.
+
+## Close — 2026-09-15T04:20Z
+
+**Status: built, gated and reviewed; not cut.** Every item touched tonight ended implemented, gated
+and recorded; the tag waits on one input, capacity for run 26 (see Phase 2's outcome). The PR stays
+open and green except where the last CI line below says otherwise; the roadmap's Package 11 boxes for
+tracks C and D carry their evidence lines, track A's run line stays open with the reason, and the
+always-on budget item stays open until the measurement lands.
+
+- CI on the PR head `fe0b596`: run 34926892499 success on every leg, Windows included (the docs-site deploy leg skips on a pull request by design).
+- Not done tonight, by the instruction's own boundary, each pointing at its unchanged line: Track B
+  (its trigger unchanged); the constitution-side set citation and the audit cycle's mirror probe
+  (Package 12C); `evals/SET-v7.md:251`'s "fourth twin" sentence (the file is bound to run 26; a
+  versioned prose correction after the export); the signing rehearsal workflow's pin to a deleted
+  branch (a workflow edit, frozen tonight); the work command's proof-block grammar observation
+  (build/15, rejected as a finding on this change).
+- Decision-row proposals A (re-anchor the 150-line evidence row to the vendors' budgets), B (supersede
+  the per-client ratchet with the measured on-demand delivery — its numbers wait for run 26) and C
+  (the QA rows bound and accepted UNPERFORMED) are filed privately for ratification; no doctrine text
+  moved tonight.
+- The handoff `.stamity/handoffs/` entry carries the morning sequence; the private layer's kickoff
+  prompt is regenerated for the resume; the private records are re-synced and pushed, and the
+  currency helper names only the two Package 12C carriers.
+
+### The CHANGELOG section prepared for the cut (verbatim; the release-run bullet is filled from run 26)
+
+    ## [1.8.0] - 2026-09-15
+    
+    ### Added
+    
+    - **Rules can be delivered on demand instead of loaded every session.** The setup manifest gains
+      `ruleDelivery`, `"always-on"` or `"on-demand"`, read and written through `stamity config`, and a
+      manifest without the key — including every manifest written before it existed — reads as
+      `on-demand`. Claude Code and Copilot emit a glob-less rule that is neither `precedence: critical`
+      nor floor-tagged as `.agents/skills/stamity-<rule-id>/SKILL.md`, plus that client's own native
+      skills copy for the rules it demoted, rather than as a rule file; Codex folds only its critical,
+      floor-tagged and nested-`AGENTS.md`-anchored rules into the always-on appendix and projects the
+      rest as skills; Cursor keeps its Apply-Intelligently rules, which already defer a glob-less rule
+      natively. `always-on` reproduces the 1.7.0 emission and stays selectable per repository.
+    - **Codex emission refuses a skills list past the client's published bound.** The name and
+      description of every projected skill are summed at emission when Codex is selected and refused
+      past 8,000 characters, with the measured total, the cap and the `always-on` alternative in the
+      message. The capability matrix discloses the measured characters beside the cap.
+    - **The charter states the eval floor for model-backed features in one line.** Every emitted
+      charter's conditional layer says that a model-backed feature ships with a versioned golden and
+      adversarial eval set whose thresholds are declared before the run. The template stays inside its
+      own line cap with the line added.
+    - **Every emitted charter states which version of the invariants it carries.** The charter template
+      declares `invariants_version`, `invariants_ratified` and `invariants_amended`, and each client's
+      charter renders `Invariants version 1.0.0 · ratified 2026-08-31 · last amended 2026-09-13` under
+      `## Invariants`; `stamity check` prints an `invariants` row stating what the installed engine
+      would render. A template with a missing or malformed key fails validation naming it, and one
+      declaring none loads unversioned. `docs/doctrine.md` carries the amendments table and
+      `GOVERNANCE.md` the bump rules the suite enforces against the block's text.
+    - **A security standards mapping and threat model.** `docs/security-mapping.md` crosswalks this
+      project's controls to version-pinned catalogue editions — OWASP for agentic applications 2026,
+      for LLM applications 2025 and the 2021 web list, NSA/CISA joint guidance, and the NIST AI RMF
+      with its generative-AI profile — each named with its publisher, edition and read date. It carries
+      an actor, vector, control, residual and mapped-id table over six engine surfaces plus the release
+      publish path, every control traced to a `path:line`, above a section stating the gaps and the
+      items that do not apply. `SECURITY.md` links it.
+    - **A measurements page.** `docs/measurements.md` publishes the verified merge-ready rate over the
+      committed run records — 5 of 7 (0.714) — with the rule it reads, its denominator, and the
+      seventeen excluded run directories each named with the evidence it lacks. Beside it is a
+      committed npm-download snapshot, labelled a reach proxy: downloads count CI runs, mirrors and
+      re-installs, and this project collects no telemetry. The page renders from a frozen snapshot
+      committed next to it, refreshed per release.
+    
+    ### Changed
+    
+    - **The always-on load ceilings drop to the measured composite.** Under the `on-demand` default the
+      slice a client loads unconditionally measures 95 physical lines on Cursor, Claude Code and
+      Copilot and 407 on Codex, against 92, 236, 236 and 1,063 before; the shared root `AGENTS.md` is
+      24,904 bytes when Codex is selected and 5,192 without it, against 29,935 and 5,004. Codex keeps
+      `injection-screening`, `secrets` and `security-patterns` unconditional and receives the other
+      nine rules as skills, so the appendix that used to drop eight rules to fit its 32 KiB budget now
+      drops none. Each ceiling fails in both directions: over is an unratified slice, under is a saving
+      nobody wrote down.
+    - **The eval set moves to `cases-v6` under `SET-v7`.** The four thresholds and the scoring rule
+      carry over from SET-v6 verbatim, and SET-v6, `cases-v5` and earlier stay retained and unchanged.
+      The set is 99 cases — 50 golden, 19 adversarial, 30 probes — adding eighteen trigger probes for
+      the rules now delivered as skills, whose briefs carry the extended skill surface and whose recall
+      labels derive from the case's source, and three charter-only twins governed by a floor line
+      alone. The release checklist's eval line points at `SET-v7.md`.
+    - **The two open security proof rows cite the runs that closed them.** Pack-author signing names the
+      authenticated rehearsal on the 1.7.0 candidate, which signed with a real identity and passed its
+      negative controls; release egress names the 1.7.0 release run, which published over OIDC with
+      provenance and was confirmed by the post-publication verifier. The threat model has come off the
+      same list and is now a written page.
+    - **Every hand-written page is re-attested at the 1.8.0 cut.** The pages in the documentation
+      suite's bucket plus `GOVERNANCE.md` were checked claim by claim against the candidate tree and
+      restamped `verified against the tree at the 1.8.0 release cut (2026-09-15)`. Corrections landed
+      in the doctrine, getting-started, customization, contribution, governance and security pages;
+      the suite holds the stamp date and refuses one later than the cut.
+    - **The Codex eval profiles are marked documented but unproven.** `codex-astra` and
+      `codex-astra-judge` read "documented, unproven, no run of record" in the eval README and the
+      profile document, with the control they lack named beside them; selecting one establishes no
+      measurement. The Claude profile remains the default and now selects `rubric-v7.md`, and the
+      README's current-rubric row is derived from the selected profile rather than from prose.
+    - **Two more lines ride every release cut.** Before the tag, every hand page is re-attested against
+      the candidate tree and the suite's release-cut date moves with it; and the measurements page's
+      input is refreshed — the rate is frozen into a dated snapshot, the page re-rendered from it, and
+      both committed — so a run record written after the snapshot is not on the page until the next
+      refresh.
+    - **A QA harness covers the vendor-documented halves of the manual walk-through.** It is a
+      repository surface rather than a shipped one — the published package carries `dist` alone — and
+      it runs keyboard journeys at 375 and 1440 in both themes with accessibility-tree and axe
+      snapshots against the built site, plus headless hook deny and allow runs per client, writing one
+      evidence row per QA item bound to its input hashes so a performed human row carries forward while
+      its inputs are unchanged and reopens when they change.
+    <!-- RUN-25: filled at the cut -->
+    
+    ### Fixed
+    
+    - **Codex setups enable the hooks feature they emit.** The generated `.codex/config.toml` carries
+      `[features] hooks = true`; the client defaults the flag off, so every emitted hook was inert
+      without it. The emitted hooks description and that table's comment both state the three steps
+      between the file and a hook the client runs — the feature flag, project trust in the operator's
+      own Codex home config, and per-hook trust by hash.
+    - **`worktree add` survives the Windows commondir race.** When git exits 128 reporting that it
+      failed to read a sibling worktree's `commondir`, the same command is retried exactly once after
+      250 ms. Any other exit 128 is git answering the request and is reported as before; a second
+      failure of the same shape is reported as a real failure.
+    - **The atomic-write rename schedule outlasts a longer Windows hold.** The win32 schedule gains
+      four more 800 ms steps, twelve in all, so its ceiling is 8,687.5 ms including jitter against
+      4,687 ms before, after a Windows leg spent the old budget in full and still lost the rename.
+      POSIX keeps its four retries and 750 ms, and the generated hook script's copy of the schedule
+      moves with it, pinned to the engine's compiled retry count.
+    - **Documentation tables associate every header cell with the cells it labels.** Each rendered
+      header cell carries an explicit scope — a header row's cells to their column, a body row's first
+      cell to its row — and a cell already associated through `headers=` is left alone.
+    - **Three governing obligations are stated where the artifact is produced.** The performance agent
+      states that a brief fact restated in a finding body still carries its own `path:line`; the
+      security agent states that a path with no line number is a bare path, the same defect as no
+      citation; the spec command states that with several next-step conditions live, the step names
+      exactly one of them and never two chained with `then`.
