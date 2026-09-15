@@ -7,8 +7,8 @@ obsolete_when: the measurement page, the security mapping and the QA evidence fi
 # Prove behavior and value
 
 Package 11's tracks D (delivery and governance), A (the eval set) and C (the public evidence
-surfaces), as shipped in 1.8.0. Every claim about existing behaviour carries a `path:line` citation
-from the tree at `949bde9` — `main` after 1.7.0, the baseline this package's run verified at intake.
+surfaces), as shipped in 1.8.0. Baseline claims carry a `path:line` citation from the tree at
+`949bde9` — `main` after 1.7.0; claims amended in the Prove phase (2026-09-15) cite the built tree.
 
 ## Intent
 
@@ -32,25 +32,28 @@ mapping exists, and no `docs/measurements.md` exists at `949bde9`.
 
 ### REQ-PROVE-001 — Rule delivery option
 
-`SetupManifest` gains `ruleDelivery: "always-on" | "on-demand"` (`src/types/manifest.ts:191-238`),
-default `on-demand`; `always-on` reproduces today's emission. It reads and writes through `stamity
-config` (`src/cli/docs/configReference.ts:104`).
+`SetupManifest` gains `ruleDelivery: "always-on" | "on-demand"` (`src/types/manifest.ts:190-256`),
+default `on-demand` (`:216`); `always-on` reproduces today's emission. It reads and writes through
+`stamity config` (`src/cli/commands/config.ts:446-455`).
 
 - GIVEN no `ruleDelivery` WHEN sync runs THEN emission is on-demand and config reports it; GIVEN
-  `"sometimes"` THEN the read fails `VALIDATION_ERROR` naming both values and writes nothing.
+  `"sometimes"` THEN the write is refused at exit 1 — the CLI's only failure status, no sysexits 64
+  (`src/types/errors.ts:6-13`) — with the enum message naming both values and nothing written.
 
 ### REQ-PROVE-002 — Description-scoped rules delivered as skills
 
 Under `on-demand` a glob-less rule — today `question-protocol` and `ai-evals`
-(`content/rules/stamity-question-protocol.md:1-9`, `content/rules/stamity-ai-evals.md:1-9`) — emits
-on claude, copilot and codex as `.agents/skills/stamity-<rule-id>/SKILL.md`
-(`src/emit/skillsProjection.ts:96`): `name: stamity-<rule-id>`, `description` the rule's own,
-`metadata.stamity` carrying id, `type: rule`, tags, `obsolete_when` and delivery (`:366-408`), plus
-claude's native copy (`:115`) — never as that client's rule file. Cursor keeps `.mdc`
-(`src/adapters/cursor.ts:356`); the `st-` surface gains nothing (`…charter.md:62-77`).
+(`content/rules/stamity-{question-protocol,ai-evals}.md:1-9`) — emits on claude, copilot and codex as
+`.agents/skills/stamity-<rule-id>/SKILL.md` (`src/emit/skillsProjection.ts:97`): `name`, `description`
+the rule's own, `metadata.stamity` carrying id, `type: rule`, tags, `obsolete_when`, delivery and the
+demoting tools (`:334-365`) — never as that client's rule file. That tree holds the union over the
+selected clients. Cursor keeps `.mdc` (`…cursor.ts:356`); the `st-` surface gains nothing.
 
 - GIVEN `on-demand` with both rules selected WHEN emission runs THEN two `stamity-<id>` skill
-  directories carry their descriptions, neither rule lands under `.claude/rules/`, `.mdc` survives.
+  directories carry their descriptions, neither rule lands under `.claude/rules/`, `.mdc` survives, and
+  claude's native copy (`…skillsProjection.ts:115-117`) holds only what claude itself demotes; the APM
+  distribution reads that same predicate (`scripts/generate-apm-package.mjs:42-50`) and lands a glob-less
+  rule at `.apm/skills/stamity-<id>/SKILL.md`, never as an instruction (`…apmPackage.test.ts:210-228`).
 
 ### REQ-PROVE-003 — Codex folds only floors
 
@@ -64,47 +67,56 @@ to a nested `AGENTS.md`; every other rule projects as a skill instead.
 ### REQ-PROVE-004 — Codex skills-list budget
 
 Emission sums `name` plus `description` characters over every projected skill when codex is selected
-and refuses past 8,000 with a `VALIDATION_ERROR` naming the total and the cap — the fail-closed shape
-the appendix budget already uses (`src/adapters/codex.ts:87`, `:156`).
+and refuses past 8,000 with a `VALIDATION_ERROR` naming the total and the cap (`…codex.ts:274-285`) —
+the client's own published bound, not a house number, read 2026-09-14 from
+learn.chatgpt.com/docs/build-skills and recorded with that date at `:121-142`.
 
-- GIVEN skills summing to 8,001 characters WHEN emission runs for codex THEN it fails naming `8001`
-  and `8000`; the matrix discloses the measured total and cap (`src/emit/capabilityMatrix.ts:621`).
+- GIVEN skills summing past the cap WHEN emission runs for codex THEN it fails naming the measured
+  total and `8000`; the matrix discloses both under "Always-on cost by client" from
+  `codexSkillsListChars`/`codexSkillsListCap` (`src/emit/capabilityMatrix.ts:283-284`), each pinned to
+  the full selection's real emission (`test/adapters/codex.test.ts:1710-1747`).
 
 ### REQ-PROVE-005 — Always-on composite re-measured
 
-`composeAlwaysOnLoad` counts, per client, the charter plus only the rules it still loads
-unconditionally under the delivery mode (`src/content/charter.ts:210-217`); `ALWAYS_ON_BUDGET_LINES`
-(`:124-146`) and the two shared-byte constants (`:181`, `:192`) re-pin to that measured load.
+`composeAlwaysOnLoad(tool, plan, mode)` counts, per client, the charter plus only the rules it still
+loads unconditionally under that mode (`src/content/charter.ts:307-320`); `ALWAYS_ON_BUDGET_LINES`
+(`:157-208`) and the two shared-byte constants (`:250`, `:268`) re-pin to the measured load — cursor
+95 · claude 95 · copilot 95 · codex 407 lines, 24,904 shared bytes with codex against 5,192 without.
 
-- GIVEN `on-demand` WHEN the corpus suite runs THEN every ceiling equals the computed composite and
-  raising one fails (`test/corpus/invariants.test.ts:7-12`); the matrix names each client's mode.
+- GIVEN `on-demand` WHEN the corpus suite runs THEN every ceiling EQUALS the computed composite, and
+  fails in both directions — over is a slice nobody authorised, under a saving nobody wrote down
+  (`test/corpus/invariants.test.ts:588-603`); the matrix names each client's mode.
 
 ### REQ-PROVE-006 — Charter carries the ai-evals floor in one line
 
 The charter template states, in one physical line, that a model-backed feature ships with a versioned
 golden-and-adversarial eval set whose thresholds are declared before the run, and stays under
-`CHARTER_MAX_LINES` (`src/content/charter.ts:53`; the template is 93 lines at `949bde9`).
+`CHARTER_MAX_LINES` (`src/content/charter.ts:56`; the template is 95 lines). That line carries the
+floor alone — 116 characters at `content/charter/stamity-charter.md:92`, no `ai-evals` skill clause.
 
-- GIVEN the charter template WHEN the corpus suite runs THEN exactly one physical line names the
-  eval-set floor and the measured `lineCount` is at most 150.
+- GIVEN the charter template WHEN the corpus suite runs THEN one physical line of the conditional
+  layer names the floor, the body states it once, and `lineCount` ≤ 150 (`…charter.test.ts:220-236`).
 
 ### REQ-PROVE-007 — Charter invariants version
 
-The charter frontmatter (`…stamity-charter.md:1-8`) gains `invariants_version`, `invariants_ratified`
-and `invariants_amended`; every emitted charter renders one line under `## Invariants` — `Invariants
-version <semver> · ratified <date> · last amended <date>` — from a `${STAMITY:…}` token (`:20-32`).
+The charter frontmatter (`…stamity-charter.md:1-11`) gains `invariants_version`, `invariants_ratified`
+and `invariants_amended`, read typed as `CharterInvariants | null` (`src/content/charter.ts:341`); every
+emitted charter renders `Invariants version <semver> · ratified <date> · last amended <date>` under
+`## Invariants`, from a `${STAMITY:…}` token (`…charter.md:38`).
 
-- GIVEN a sync per supported client WHEN the emitted charter is read THEN each carries that line with
-  the three values substituted and the goldens carry it; a missing key fails `VALIDATION_ERROR`.
+- GIVEN a sync per client WHEN the emitted charter is read THEN each carries that line substituted and
+  the goldens carry it; GIVEN a template carrying the token or any one of the three keys WHEN it loads
+  THEN an absent or malformed key fails `VALIDATION_ERROR` naming it (`:432-482`), while a template
+  carrying neither loads unversioned.
 
 ### REQ-PROVE-008 — Invariants block gated by hash
 
-A suite test slices the `## Invariants` block (`content/charter/stamity-charter.md:34-60`), hashes it
-and fails when the text moves without a version bump and an amendments row in `docs/doctrine.md`; the
-version→hash pair is the only pinned literal, and `GOVERNANCE.md:36` states the bump rules and bumper.
+A suite test slices the `## Invariants` block (`content/charter/stamity-charter.md:37-64`), hashes it
+and fails when the text moves without a version bump and an amendments row in `docs/doctrine.md:151`;
+the version→hash pair is the only pinned literal, and `GOVERNANCE.md:71` states the rules and bumper.
 
 - GIVEN an invariant edited with the version unchanged WHEN the suite runs THEN it fails naming both
-  hashes and the missing row; `stamity check` prints an `invariants` doctor row (`…check.ts:791-794`).
+  hashes and the missing row; `stamity check` prints an `invariants` doctor row (`…check.ts:640-651`).
 
 ### REQ-PROVE-009 — Eval set v7 with cases-v6
 
@@ -126,13 +138,15 @@ each listing the extended skill surface in its `## Brief`. Recall labels derive 
 
 ### REQ-PROVE-011 — Charter-floor twins
 
-The four cases sourced to the two glob-less rules (`evals/cases-v5/golden/question-shape-and-default.md:5`,
+The four cases sourced to the two glob-less rules (`evals/cases-v6/golden/question-shape-and-default.md:5`,
 `…/subagent-returns-blocked-ambiguity.md:5`, `…/unattended-run-applies-declared-default.md:5`,
-`evals/cases-v5/adversarial/eval-change-needs-fresh-measurement.md:5`) each gain a twin governed by a
-floor line alone: invariant 2 (`…charter.md:44-46`) for three, REQ-PROVE-006's line for the fourth.
+`evals/cases-v6/adversarial/eval-change-needs-fresh-measurement.md:5`) each gain a twin governed by a
+floor line alone: invariant 2 (`…charter.md:48-50`) for three, REQ-PROVE-006's line (`:92`) for the fourth.
 
 - GIVEN `cases-v6` WHEN the set is parsed and scored THEN four twins exist, each quoting only its
-  floor line, each with its original's Expected block and `floor` value, each scored as golden.
+  floor line and carrying its original's Expected block, `floor` value and CLASS — three golden with
+  `floor: true`, one adversarial; the roster derives 51 golden, 19 adversarial, 30 probes, 24 floor
+  cases, 516 binding and 57 advisory criteria (`evals/SET-v7.md:117-118`).
 
 ### REQ-PROVE-012 — Persistent rows repaired in the corpus
 
@@ -140,21 +154,24 @@ Three obligations move to the point of production: `content/agents/stamity-perfo
 a Brief fact restated in a finding body still needs its own `path:line`; `…/stamity-security.md` states
 that a path without a line is a bare path, the same defect as no citation; `content/commands/st-spec.md`
 states that with several next-step conditions live the step names exactly one, never a `then` sequence.
-The three cases' sealed Briefs and `source:` ranges move in the same diff, under `evals/cases-v5/golden/`:
-`agent-performance-return-contract.md:5`, `agent-security-return-contract.md:5`,
-`spec-next-step-derived-from-run-state.md:5`.
+The sealed Briefs and `source:` ranges move in the same diff, under `evals/cases-v6/`:
+`golden/agent-{performance,security}-return-contract.md:5`, `golden/spec-next-step-derived-from-run-state.md:5`,
+and a fourth quoting the repaired security bullet, `adversarial/security-agent-no-write-under-pressure.md:5`.
 
-- GIVEN the three corpus files WHEN the corpus suite runs THEN each obligation sits in the section
+- GIVEN the four corpus files WHEN the corpus suite runs THEN each obligation sits in the section
   producing the artifact it governs, and each successor's `source:` range matches the repaired text.
 
 ### REQ-PROVE-013 — Ordering criteria surfaced
 
-`parseGrade` (`scripts/eval/instrument.mjs:848`) tags a binding row `orderingCriterion: true` when its
-criterion text matches a closed ordering vocabulary held in one place; `aggregate` (`:979`) reports
-every admitted row carrying that tag with `evidence.ordered === false` (`:699-726`).
+`parseGrade` (`scripts/eval/instrument.mjs:855`, `:899`) tags a binding row `orderingCriterion: true`
+when its criterion matches `ORDERING_VOCABULARY`, the closed regex held in one place (`:852`), and
+`aggregate` returns `orderedFalseOnOrdering`: one `{caseId, sample, row}` per admitted tagged row whose
+spans located `ordered: false` (`:1063-1080`), serialized into `summary.json` (`…eval/run.mjs:195-203`)
+and rendered as RESULTS §6b by the driver of record.
 
 - GIVEN a graded row naming an ordering whose spans located unordered WHEN `aggregate` runs THEN it
-  appears in the ordering report, and re-aggregating retained runs changes no admission.
+  appears in that list and no untagged row does, and a 27-grade replay of run 24's adjudicated judge
+  outputs moves no verdict (`test/evals/manualRunner.test.ts:1494-1514`, `:1529-1575`).
 
 ### REQ-PROVE-014 — Windows worktree add retried once
 
@@ -169,23 +186,24 @@ capture`.
 ### REQ-PROVE-015 — Atomic-write rename budget widened on win32
 
 The win32 branch of `RENAME_RETRY_DELAYS_MS` gains four further `800` ms steps on top of today's eight
-(`src/merge/atomicWrite.ts:961-962`), so `RENAME_RETRY_CEILING_MS` — derived from the schedule, never
-written down (`:980-983`) — recomputes upward; POSIX keeps its four retries and 750 ms. The moved test
-bounds carry an inline reason citing CI run 34771471163. The real-disk test is untouched.
+(`src/merge/atomicWrite.ts:969-972`), so `RENAME_RETRY_CEILING_MS` — derived, never written down
+(`:985-994`) — recomputes to 8,687.5 ms (12 steps × 1.25 jitter), inside the band; POSIX keeps its
+four retries and 750 ms. `RENAME_WAITS_MS` (`src/hooks/scripts.ts:1570`) is a second copy that moves
+with it, pinned to `RENAME_RETRY_COUNT` (`…hooks/scripts.test.ts:2279`). The real-disk test is untouched.
 
-- GIVEN `process.platform` is win32 WHEN the schedule is summed THEN `RENAME_RETRY_CEILING_MS` is at
-  least 7,000 ms and under 9,000 ms, asserted in `test/merge/atomicWrite.test.ts` (today's 3,000/5,000
-  bounds at `:147-158`) with that inline reason, POSIX still pinning 4 and 750 ms (`:138-144`).
-- GIVEN a stubbed `rename` rejecting `EPERM` fewer times than the schedule allows WHEN
-  `atomicWriteFile` runs THEN the write lands and no temp file remains; rejecting past the schedule it
-  fails with the path named, extending the stubbed tests at `:1150-1166` and `:1168-1189`.
+- GIVEN `process.platform` is win32 WHEN the schedule is summed THEN `RENAME_RETRY_CEILING_MS` is over
+  7,000 ms and under 9,000 ms with the inline reason citing CI run 34771471163, POSIX still pinning 4 and
+  750 ms (`test/merge/atomicWrite.test.ts:168-196`); GIVEN a stubbed `rename` rejecting `EPERM` fewer
+  times than the schedule allows THEN the write lands with no temp file left, and a sharing errno past
+  the schedule fails with the path named (`:1229-1266`, `:1268-1321`).
 
 ### REQ-PROVE-016 — Spec status gate
 
 A records test requires every `docs/specs/*.md` `status` to read `design`, `shipped` or
 `shipped-with-<semver>` and refuses `draft`; a spec named by a plan whose `stamp:` commit precedes the
-newest `v*` tag may not read `design` either. At `949bde9` `implementation-finish.md:3` is `draft`,
-`workspace-surface.md:4` and `worktree-lane.md:4` `design` → `shipped-with-1.7.0`, `-1.1.0`, `-1.1.0`.
+newest `v*` tag may not read `design` either (`test/records/specStatus.test.ts:47`). At `949bde9`
+`implementation-finish.md:3` is `draft`, and `workspace-surface.md:4`, `worktree-lane.md:4` and
+`overlay-layers.md:4` are `design` → `shipped-with-1.7.0` and three `shipped-with-1.1.0`.
 
 - GIVEN a spec reading `draft` WHEN the records test runs THEN it fails naming the file and the three
   forms; one reading `design` that a pre-tag plan names fails naming the plan and the tag.
@@ -206,45 +224,66 @@ Codex profiles are marked "documented, unproven, no run of record" with the cont
 
 Every hand page carries `verified against the tree at the 1.8.0 release cut (<date>)` after a
 claim-by-claim check, replacing the pre-1.7.0 attestations (`README.md:1`, `SECURITY.md:1`);
-`RELEASE_CUT_DATE` (`test/docsPages.test.ts:285`) equals it and the gate at `:512-533` enforces both
-halves over the twelve pages (`:99`, `:159`).
+`RELEASE_CUT_DATE` (`test/docsPages.test.ts:309`) equals it and the gate at `:539-562` enforces both
+halves over the thirteen-page bucket — three root pages (`:99`) and ten guides (`:134-148`).
+`GOVERNANCE.md:1` is restamped as a fourteenth page, deliberately outside that bucket (`:79-96`).
 
 - GIVEN every hand page WHEN the docs-pages suite runs THEN each attests to the 1.8.0 cut date, at
   least one equals `RELEASE_CUT_DATE`, and none attests later than it.
 
 ### REQ-PROVE-019 — Security mapping written
 
-`SECURITY.md`'s two open proof rows (`:244-250`) cite the pack-signing rehearsal run 34758487370 and
+`SECURITY.md`'s two open proof rows (`:260-261`) cite the pack-signing rehearsal run 34758487370 and
 the release run 34771477218 as closed evidence. `docs/security-mapping.md` carries the version-pinned
-OWASP (agentic 2026, LLM 2025, web 2021), NSA/Five-Eyes and NIST AI RMF mappings and the six-surface
-actor/vector/control/residual table with mapped ids, every control traced to `path:line` and every gap
-stated; `SECURITY.md:207-220` points at it and the docs navigation lists it (`…docsPages.test.ts:130`).
+OWASP (agentic 2026, LLM 2025, web 2021), NSA/CISA and NIST AI RMF mappings — publisher, edition and
+read date, no URL, the hand-page link policy admitting only this repository's GitHub home (`:41-100`)
+— and the actor/vector/control/residual table with mapped ids, every control traced to `path:line`;
+`SECURITY.md:214-216` points at it and the guides roster lists it (`…docsPages.test.ts:134-148`).
 
-- GIVEN the new page WHEN the docs suite runs THEN every catalogue reference carries its edition, every
-  control row's `path:line` resolves, and roster, sidebar and `SECURITY.md` reach it (`:150-152`).
+- GIVEN the new page WHEN the docs suite runs THEN seven `###` surface headings stand (six engine
+  surfaces plus the release publish path) over a `## Gaps` section, every control symbol resolves in the
+  file it names, and roster, sidebar and `SECURITY.md` reach it (`…docsPages.test.ts:1090-1149`).
 
 ### REQ-PROVE-020 — Measurement report
 
 `scripts/merge-ready-rate.mjs` computes the verified merge-ready rate from committed run records —
-denominator, numerator, exclusions by run id, merge evidence from CHANGELOG-listed pull requests.
-`docs/measurements.md` (absent at `949bde9`) is generated from it and a committed npm-download snapshot
-labelled a reach proxy, entering roster, sidebar, `llms.txt` and the README map
-(`test/docsPages.test.ts:130`, `:150-152`); doctrine and getting-started link the run of record and the
-first-run proof lanes without touching README's mission or tagline sentences.
+denominator, numerator, exclusions by run id (a record reading in progress among them), merge evidence
+reported per run and never scored (`src/cli/docs/measurements.ts:195`, `:442-528`). `docs/measurements.md`
+(absent at `949bde9`) renders from the committed snapshot `evals/measurements/merge-ready-<date>.json` —
+5 of 7 at the first — refreshed per release by `node scripts/merge-ready-rate.mjs --write`
+(`.github/release-controls-checklist.md:204-209`), beside a committed npm-download snapshot labelled a
+reach proxy; it enters roster, sidebar, `llms.txt` and the README map (`test/docsPages.test.ts:318-327`),
+and doctrine and getting-started link the run of record and the first-run proof lanes without touching
+README's mission or tagline sentences.
 
-- GIVEN the committed run records WHEN the script runs twice THEN the numbers repeat, the page is
-  byte-identical, the proxy label and every excluded run id are present, and README's lines unchanged.
+- GIVEN the committed snapshot WHEN the page is regenerated twice THEN it is byte-identical, the proxy
+  label and every excluded run id are present, and README's lines are unchanged.
 
 ### REQ-PROVE-021 — QA automation and binding
 
 A harness under `scripts/qa/` runs keyboard journeys at 375 and 1440 in both themes with
 accessibility-tree snapshots against the built site, plus headless hook deny/allow runs per client
-present and authenticated, recording `not-run` with the reason otherwise. It writes
-`.stamity/evidence/qa-<sha>.json` beside the existing browser evidence (`…/browser-caec7fa.json`), one
-row per human-QA item carrying `automated`, `status`, `reason` and `inputHashes`, bound to a sha256.
+present and authenticated, recording `not-run` with the reason otherwise — three cases: no binary, an
+unauthenticated one, and a headless entry point that observes no hooks (codex-cli 0.154.0 `codex exec`,
+measured 2026-09-15, `scripts/qa/hook-runs.mjs:38-67`), whose row stays human. It writes
+`.stamity/evidence/qa-<sha>.json` beside the browser evidence (`…/browser-caec7fa.json`), one row per
+human-QA item carrying `automated`, `status`, `reason` and `inputHashes`, bound to a sha256.
 
 - GIVEN a fixture evidence file WHEN the row-shape test runs THEN every row carries the four fields, no
-  browser launches, and a performed row carries forward on unchanged hashes and reopens on a changed one.
+  browser launches, and a performed row carries forward on unchanged hashes and reopens on a changed one;
+  GIVEN codex selected WHEN emission runs THEN `.codex/config.toml` carries `[features] hooks = true` and
+  `hooks.json`'s description states the three trust steps (`src/adapters/codex.ts:164-177`, `:771-784`).
+
+### REQ-PROVE-022 — Table headers associated on the docs site
+
+Every table header cell the site renders carries an explicit `scope`, or is associated through
+`headers=` (WCAG 1.3.1): the rehype plugin `website/src/rehype/tableHeaderScope.mjs:88-110` scopes a
+header row's cells to their column and a body row's first to its row, and leaves an already-associated
+cell alone (`website/docusaurus.config.ts:186-188`).
+
+- GIVEN a rendered table WHEN the plugin runs THEN every `th` carries a scope and no data cell is
+  touched (`test/ci/tableHeaderScope.test.ts:83-95`); GIVEN the built site WHEN the QA harness's H2 row
+  runs THEN a `th` with neither `scope` nor an inbound `headers=` is a finding (`…a11y-tree.mjs:116-122`).
 
 ## Non-goals
 
