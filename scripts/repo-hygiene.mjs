@@ -13,7 +13,7 @@ const LARGE_FILE_EXCEPTIONS = new Map()
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
 const RUNNER_PAYLOAD = /^(?:[^/]*-attempt-[^/]*|sample-[^/]*|isolation-[^/]*)\.json$/
-const PAYLOAD = /(?:^|\/)(?:calls|captures)\/|\.(?:input|output)\.txt$|\.(?:tar\.gz|tgz|zip|zst)$/
+const PAYLOAD = /(?:^|\/)(?:calls|captures)\/|\.(?:input|output)\.txt$|\.(?:tar(?:\.gz)?|tgz|zip|zst)$/
 const PID = /(?:^|\/)[^/]+\.pid(?:\.lock)?(?:\/|$)/
 const paths = output => output.split('\0').filter(Boolean)
 const relative = path => typeof path === 'string' && path.length > 0 &&
@@ -26,7 +26,9 @@ function runtime(path, kind) {
     /^\.claude\/(?:worktrees\/|settings\.local\.json$)/.test(path) ||
     /^\.stamity\/(?:upstream-work\/|_(?:scratch|runtime)\/|review-gate\.json(?:$|\.lock(?:\/|$)|\.tmp-))/.test(path) ||
     PID.test(path) ||
-    (kind === 'governance' && /^(?:runs\/.*\/_(?:scratch|runtime)\/|runs\/.*\/claude-run\/run[^/]*\/(?:lock(?:\/|$)|detached\.log$))/.test(path))
+    (kind === 'governance' && (
+      /^runs\/(?:[^/]+\/)*app-server-schema\//.test(path) ||
+      /^(?:runs\/.*\/_(?:scratch|runtime)\/|runs\/.*\/claude-run\/run[^/]*\/(?:lock(?:\/|$)|detached\.log$))/.test(path)))
 }
 
 function rawEvidence(path, kind) {
@@ -37,6 +39,10 @@ function rawEvidence(path, kind) {
   if (PAYLOAD.test(path) || RAW_NAME.test(name) || RUNNER_PAYLOAD.test(name)) return true
   return privateRun && (
     /\/claude-run\/run[^/]*\/(?:state\.json|(?:stdout|stdin)\.jsonl|(?:task|transcript|ambient|system)\.txt)$/.test(path) ||
+    /\/driver\/(?:raw\/|(?:state|input-snapshot)\.json$|(?:[^/]+\/)*[^/]+\.state-before\.json$)/.test(path) ||
+    /\/preflight\/(?:[^/]+\/)*(?:before-files\/|coverage-tests\.json$)/.test(path) ||
+    /^runs\/[^/]+\/(?:closeout\/)?[^/]+\.journal\.jsonl$/.test(path) ||
+    /^runs\/[^/]+\/eval-run-[^/]+\.json$/.test(path) ||
     /\/(?:a11y(?:-final)?|screenshots)\/(?:axe[^/]*\.json|[^/]+\.png)$/.test(path))
 }
 

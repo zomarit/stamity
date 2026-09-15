@@ -192,6 +192,62 @@ describe("repository hygiene over the Git index", () => {
     for (const path of [...raw, "lock"]) expect(result.stderr).toContain(`${runRoot}/${path}`);
     expect(run(root, "--kind", "governance").status).toBe(1);
   });
+
+  it("rejects force-added generated governance schemas even without a comparison base", () => {
+    const root = fixture();
+    write(root, ".gitignore", "runs/\n");
+    const paths = ["runs/new/app-server-schema/v2/protocol.json",
+      "runs/new/nested/app-server-schema/v2/Message.ts"];
+    for (const path of paths) write(root, path, "{}\n");
+    git(root, "add", "--force", ".");
+    const result = run(root, "--kind", "governance");
+    expect(result.status, result.stderr).toBe(1);
+    for (const path of paths) expect(result.stderr).toContain(JSON.stringify(path));
+    expect(run(root, "--kind", "public", "--base", "HEAD").status).toBe(0);
+  });
+
+  it("rejects small force-added closed driver and CI payloads while grandfathering originals", () => {
+    const root = fixture();
+    const historical = "runs/old/driver/state.json";
+    write(root, historical, "{}\n");
+    git(root, "add", ".");
+    git(root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "-qm", "historical driver evidence");
+    write(root, ".gitignore", "runs/\n");
+    const paths = ["runs/new/driver/raw/parent.jsonl", "runs/new/driver/state.json",
+      "runs/new/driver/input-snapshot.json", "runs/new/driver/amendments/0001.state-before.json",
+      "runs/new/driver/adjudications/0002.state-before.json",
+      "runs/new/preflight/incident/before-files/driver/state.json",
+      "runs/new/preflight/windows/final-gates/coverage-tests.json",
+      "runs/new/eval-run-3.json", "runs/new/eval-run-3.journal.jsonl",
+      "runs/new/closeout/build-fleet.journal.jsonl",
+      "runs/new/published-verification/docs-pages-artifact/artifact.tar"];
+    for (const path of paths) write(root, path, "{}\n");
+    git(root, "add", "--force", ".");
+    expect(run(root, "--kind", "governance").status).toBe(0);
+    const result = run(root, "--kind", "governance", "--base", "HEAD");
+    expect(result.status, result.stderr).toBe(1);
+    for (const path of paths) expect(result.stderr).toContain(JSON.stringify(path));
+    expect(result.stderr).not.toContain(historical);
+  });
+
+  it("keeps governance reader source, schemas, regression fixtures and compact records", () => {
+    const root = fixture();
+    const paths = ["schemas/protocol.json", "src/app-server-schema/v2/Message.ts",
+      "test/fixtures/runs/new/app-server-schema/v2/protocol.json",
+      "test/fixtures/runs/new/driver/raw/parent.jsonl", "test/fixtures/artifact.tar",
+      "runs/new/driver/queue.mjs", "runs/new/driver/config.json", "runs/new/driver/journal.jsonl",
+      "runs/new/driver/events.jsonl", "runs/new/driver/README.md", "runs/new/driver/state.schema.json",
+      "runs/new/config.json", "runs/new/journal.jsonl", "runs/new/DECISIONS.jsonl",
+      "runs/new/signing-red.log", "runs/new/site-image.png",
+      "runs/new/preflight/windows/final-gates/execution-analysis.json",
+      "runs/new/published-verification/sha256-manifest.json",
+      "runs/new/platform-final/signing-artifacts/download-receipts.json"];
+    for (const path of paths) write(root, path);
+    git(root, "add", ".");
+    const result = run(root, "--kind", "governance", "--base", "HEAD");
+    expect(result.status, result.stderr).toBe(0);
+  });
 });
 
 function manifest(): string {
