@@ -91,10 +91,17 @@ export const CLIENT_RUNNERS = {
  * universally a zero-exit flag — so that case still counts, and the version string is what proves
  * it). Anything else is reported, never silently upgraded to a version.
  */
-export function binaryVersion(binary) {
+export const WINDOWS_PROBE_LIMIT =
+  'the hook lane spawns the client without a shell, which on Windows cannot resolve an npm `.cmd` shim; run the harness on a POSIX host, or put the client\'s `.exe` on PATH'
+
+export function binaryVersion(binary, { platform = process.platform } = {}) {
   const probe = spawnSync(binary, ['--version'], { encoding: 'utf8', timeout: 60_000 })
   if (probe.error !== undefined && probe.error !== null) {
-    return { present: false, reason: `${binary}: not on PATH (${probe.error.message})` }
+    // A shell-less spawn finds `.exe`/`.com` on Windows and nothing else, so an ENOENT there may be
+    // a client that IS installed, as npm's `.cmd` shim. The reason says so rather than reading as
+    // "absent": a person deciding whether to install the client must not be told it is missing.
+    const limit = platform === 'win32' ? ` — ${WINDOWS_PROBE_LIMIT}` : ''
+    return { present: false, reason: `${binary}: not on PATH (${probe.error.message})${limit}` }
   }
   const version = (probe.stdout ?? '').trim().split('\n')[0] ?? ''
   if (probe.status === 0 || version !== '') {

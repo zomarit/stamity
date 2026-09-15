@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { CLIENT_RUNNERS, binaryVersion, exitDescription, runClient } from "../../scripts/qa/hook-runs.mjs";
+import { CLIENT_RUNNERS, WINDOWS_PROBE_LIMIT, binaryVersion, exitDescription, runClient } from "../../scripts/qa/hook-runs.mjs";
 
 /**
  * W6: `cursor` and `copilot` used to carry a constant, never-probed "not on PATH" reason. This
@@ -93,14 +93,14 @@ describe("binaryVersion", () => {
     expect(probe.reason).toContain("stamity-qa-hookruns-nonexistent-binary");
   });
 
-  it("reports present with the probed version for a binary that is on PATH", () => {
+  it.skipIf(WINDOWS)("reports present with the probed version for a binary that is on PATH", () => {
     pathDirWith("stamity-qa-hookruns-fixture-binary", { echo: "fixture-1.2.3" });
     const probe = binaryVersion("stamity-qa-hookruns-fixture-binary");
     expect(probe.present).toBe(true);
     expect(probe.version).toBe("fixture-1.2.3");
   });
 
-  it("reports present with the probed version for a non-zero exit that still prints one", () => {
+  it.skipIf(WINDOWS)("reports present with the probed version for a non-zero exit that still prints one", () => {
     // `--version` is not universally a zero-exit flag; a version line on stdout is evidence of
     // presence on its own, exit code or not.
     pathDirWith("stamity-qa-hookruns-nonzero-version", { echo: "fixture-2.0.0", exitCode: 3 });
@@ -112,7 +112,7 @@ describe("binaryVersion", () => {
   // M-d: a binary found on PATH is not the same claim as a binary that answered — a shim that
   // exits non-zero with nothing on stdout used to be reported `present: true, version: ""`, which
   // a caller then printed as "‹binary› " with nothing to show for it.
-  it("reports present: false when the probe exits non-zero with nothing on stdout", () => {
+  it.skipIf(WINDOWS)("reports present: false when the probe exits non-zero with nothing on stdout", () => {
     pathDirWith("stamity-qa-hookruns-broken-binary", { exitCode: 1 });
     const probe = binaryVersion("stamity-qa-hookruns-broken-binary");
     expect(probe.present).toBe(false);
@@ -149,7 +149,7 @@ describe("binaryVersion", () => {
 });
 
 describe("runClient — a binary probed present with no measured invocation", () => {
-  it(
+  it.skipIf(WINDOWS)(
     "stays not-run and names the probed version rather than guessing at flags",
     () => {
       pathDirWith("cursor-agent", { echo: "fixture-9.9.9" });
@@ -170,6 +170,26 @@ describe("runClient — a binary probed present with no measured invocation", ()
     },
     30_000,
   );
+});
+
+describe("binaryVersion on Windows — a shell-less spawn cannot resolve an npm .cmd shim", () => {
+  // The four cases above execute a fixture from PATH, which a Windows `spawnSync` without a shell
+  // cannot do for anything but `.exe`/`.com` — the same reason the real client shims npm installs
+  // there (`claude.cmd`, `codex.cmd`, …) are invisible to the probe. That is a limitation of the
+  // hook lane, stated in the evidence rather than read as "the client is absent"; this case pins
+  // the statement, on the platform where it applies and through the injectable platform elsewhere.
+  it.runIf(WINDOWS)("names the limitation beside the ENOENT when only a .cmd shim is on PATH", () => {
+    pathDirWith("stamity-qa-hookruns-shim", { echo: "fixture-9.9.9" });
+    const result = binaryVersion("stamity-qa-hookruns-shim");
+    expect(result.present).toBe(false);
+    expect(result.reason).toContain("not on PATH (");
+    expect(result.reason).toContain(WINDOWS_PROBE_LIMIT);
+  });
+  it("names the limitation only for win32", () => {
+    const missing = "stamity-qa-hookruns-absent-binary";
+    expect(binaryVersion(missing, { platform: "win32" }).reason).toContain(WINDOWS_PROBE_LIMIT);
+    expect(binaryVersion(missing, { platform: "linux" }).reason).not.toContain(WINDOWS_PROBE_LIMIT);
+  });
 });
 
 describe("exitDescription — the one renderer of a process exit in the evidence", () => {
