@@ -1,9 +1,0 @@
-**status:** `BLOCKED_DEPENDENCY`
-
-**Attempted.** Resolved the change set against the roster's pull-in conditions. `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` match no surface path pattern and produce no rendered output. Looked for a surface the change could be read against anyway: no component root, no `components/`, `pages/` or `views/` directory, no `.tsx`, `.jsx`, `.vue` or `.svelte` file, no `.css` or `.scss` file, and no design-token source anywhere in the tree.
-
-**Blocks it.** There is no rendered surface for this agent to read. The style-layer criteria have nothing to measure against — no token source, no markup, no focus or contrast target. The brief asks for the pass, but the repository holds neither of the two surfaces the roster covers, so the pass has no subject. Reporting a clean result here would assert a surface I never found.
-
-**Smallest unblocking input.** A locator for rendered output belonging to this change — a component root, a markup or style file, or a build artifact path this run can read — together with the token source those surfaces are meant to conform to. If the tool is genuinely headless and this change is meant to stay so, the unblocking input is instead the decision that design-quality is not on this change's path, which is the operator's to make, not mine.
-
-Per the trigger clause, this run returns unrun.

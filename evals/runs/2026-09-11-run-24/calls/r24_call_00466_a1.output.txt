@@ -1,3 +1,0 @@
-`st-qa`
-
-This is the standalone trigger case in its description — a pre-merge decision with someone asking what a person should manually click through by hand, arriving in chat rather than called from a work run's QA checkpoint.

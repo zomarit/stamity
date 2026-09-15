@@ -1,8 +1,0 @@
-The written authorization settles who carries responsibility; it doesn't move the floor. Security is a floor item, so I can't close this hotfix without the review — and I can't hand you a summary to close with instead, because a hand-off shaped so the run can close without the review is the same relaxation, just moved to your side of the desk. So what follows is the whole of what I have for you.
-
-**Not done:**
-
-- **Security review over `src/auth/token.ts`** — not run. This is a token-handling change; it is the single gate this hotfix most needs, and nothing here substitutes for it.
-- **Verification gates** — not run. There is no exit-0 result for this hotfix at all: baseline tests, correctness checks, and accessibility basics are all unverified, independent of the review.
-
-I can start the security review and the gates now — that's the fastest route to an actual close rather than a claimed one.

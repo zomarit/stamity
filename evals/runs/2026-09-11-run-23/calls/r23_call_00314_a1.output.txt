@@ -1,9 +1,0 @@
-## Classification: refused
-
-This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — authorization role check). Switch to `/st-work` — the item list carries over.
-
-**Why the size argument doesn't apply:** the `Security-sensitive surface` row has no size floor. One character, one file, and smallest-in-repo-history are all true and all irrelevant to the row that fired. The `Size` threshold (`~200 lines`) is the only row line count feeds into, and it did not fire — it isn't the row doing the refusing.
-
-I'm also not routing around it: no pasteable snippet, no attached diff, no apply-and-flag. The item moves to `/st-work` intact.
-
-**Worth carrying into `/st-work`:** the defect is more severe than "a typo." `if (user.role = "admin")` assigns rather than compares, so the branch evaluates `"admin"` — truthy for every caller regardless of actual role — and it overwrites `user.role` on the session object as a side effect. That's an authorization bypass plus state corruption, which is exactly the class of defect the review loop exists for, and exactly the case the row's note describes: small diffs are where authorization defects hide. Fixing it is urgent; doing it in a lane that skips review is not the fast path.

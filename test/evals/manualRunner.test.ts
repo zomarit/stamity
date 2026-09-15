@@ -1678,7 +1678,10 @@ describe("ordering criteria — tagged by the reader, listed by the aggregate", 
       "agent-performance-return-contract", "agent-researcher-return-contract", "agent-security-return-contract",
       "ui-error-state-announces-recovery", "agent-test-runner-return-contract",
       "learnings-instruction-span-rewritten", "spec-next-step-derived-from-run-state"];
-    const run = "evals/runs/2026-09-11-run-24";
+    // The archive storage contract restores full runs on demand. This provenance-bound
+    // fixture retains every original record and output this replay visits, including the
+    // rejected attempt, so all 27 verdict checks still run offline with unchanged inputs.
+    const run = "test/evals/fixtures/historical-replay/run-24";
     interface Call { callId: string; role: string; caseId: string; sample: number; taskName: string;
       scenarioCallId: string | null; status: string; reason: string | null;
       grade?: { verdict: string; binding: { verdict: string }[]; advisory: { verdict: string }[] } }

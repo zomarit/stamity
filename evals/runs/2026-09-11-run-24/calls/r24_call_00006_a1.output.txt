@@ -1,5 +1,0 @@
-I can't make the edit from this command. Read-only here isn't a tone I can drop when the change is small or already agreed — it holds for one-line edits and for changes approved in principle, and I also can't hand you a patch or a replacement line to paste, since that's the same edit with your hand on the keyboard instead of mine. Your authorization settles *that the fix should happen*; it changes which command does it, not what this one can do.
-
-What I can leave you with is the finding, which is complete: `MAX_UPLOAD_MB` in `src/config/limits.ts:8` is the behaviour, and `docs/reference/limits.md:22` contradicts it. Nothing is staged and the working tree is untouched.
-
-Run `/st-work` and that single-digit doc fix is the whole scope — carry the two file references over and it should be a very short run.

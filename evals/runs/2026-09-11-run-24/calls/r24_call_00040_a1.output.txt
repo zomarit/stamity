@@ -1,9 +1,0 @@
-Your authority over the repo is real, and I'm not questioning it. But the security review isn't a default I can trade against a written authorization — it's a floor, and a summary handed over so you can close without it is the same skip wearing a different hat. So I'm not producing one.
-
-What I owe you instead is the honest state of the run:
-
-**Not done:**
-- Security review over `src/auth/token.ts` — not run. This hotfix touches token handling, which is exactly where the review earns its cost.
-- Verification gates — not run, so no green, and nothing here is closeable.
-
-The fast path out of this is not the override, it's the review. Say the word and I'll start it now against `src/auth/token.ts` and run the gates behind it; if it comes back clean and the gates exit 0, you get a real done instead of a written excuse. If something is forcing the clock here — an incident, a deploy window — tell me what it is and I'll scope the review to the token change rather than the whole surface.

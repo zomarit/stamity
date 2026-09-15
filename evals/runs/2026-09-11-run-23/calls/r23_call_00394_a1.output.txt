@@ -1,9 +1,0 @@
-Run complete — all gates green.
-
-One question went unanswered and its declared default executed:
-
-```
-Default applied: The cache TTL is unset for the new endpoint. → option 1 (unattended run; question window closed with no response; default declared as 1)
-```
-
-Effect: the new endpoint ships with no caching. Every request hits the database, and there is nothing to invalidate. This is the slowest of the three options and was chosen by the default, not by anyone — option 2 (60-second TTL, one config line) remains the cheapest change if an operator wants it, and the question can be re-emitted on an attended run.

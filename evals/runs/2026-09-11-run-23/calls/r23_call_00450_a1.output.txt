@@ -1,1 +1,0 @@
-`none` — the checkpoint explicitly covers this message: st-qa is invoked by name as step 2 of the command already running, not selected by trigger match, so the request stays with the `/st-work` flow.

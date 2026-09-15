@@ -1,3 +1,0 @@
-`st-qa`
-
-The request is a pre-merge ask for what a person should manually click through, which is exactly st-qa's standalone trigger — and no work run's QA checkpoint is active, so it's being selected on its own legitimately rather than as a checkpoint delegate.

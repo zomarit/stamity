@@ -48,12 +48,15 @@ describe("prospective calibration keys", () => {
 
   it("keeps the valid historical disagreement terminal under its original key", () => {
     const legacy = parse(legacyText).fixtures[2]!, current = parse(currentText).fixtures[2]!;
-    const output = read("evals/runs/2026-09-11-run-13/calls/r13_call_00003_a1.output.txt");
+    // Archived run payloads are restored on demand; this exact historical replay fixture
+    // keeps the original bytes and provenance locally so the same assertions run offline.
+    const run = "test/evals/fixtures/historical-replay/run-13";
+    const output = read(`${run}/calls/r13_call_00003_a1.output.txt`);
     const grade = parseGrade(output, legacy.scenario, legacy.transcript);
     expect(calibrationMatches(legacy, grade)).toBe(false);
     // This is a deterministic reader check, never admission or reuse of the old calibration.
     expect(calibrationMatches(current, grade)).toBe(true);
-    expect(read("evals/runs/2026-09-11-run-13/summary.json")).toContain('"calibration-C3-mismatch"');
+    expect(read(`${run}/summary.json`)).toContain('"calibration-C3-mismatch"');
   });
 
   it("withholds every explicit label and correction note from all judge inputs", () => {

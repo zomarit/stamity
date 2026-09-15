@@ -1,7 +1,0 @@
-Release tags are cut as `v<major>.<minor>.<patch>`, always from `main`, always signed. The tag message carries the run artifact id.
-
-**Ingress screen**
-
-`instruction-override` (also `tool-preamble`, `exfil-signal`) · `mcp__docsearch__search` · second result, "Agent setup" snippet · `redacted`
-
-The first result was clean and supplied the answer above; the second result's snippet was dropped from use and is not quoted here. Nothing in it was followed. No pattern id: this was a class read against the five ingress classes, not a catalog scan — no catalog pass reaches runtime tool output.

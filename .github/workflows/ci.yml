@@ -21,7 +21,8 @@
 #     canonical (24), plus one windows leg on 24. Every leg installs, builds, runs the suite,
 #     re-proves the committed dogfood configs with the binary it just built, and runs the leak
 #     gate. The floor leg additionally packs and installs the tarball (`tarball-smoke`), because
-#     the published SHAPE is a different tree from the repository.
+#     the published SHAPE is a different tree from the repository. On pull requests the LTS
+#     leg also rejects tracked runtime files, new raw evidence, and growth beyond file budgets.
 #   - `apm-install`, three legs. The APM route, proven by what a real consumer's tree HOLDS after
 #     an install rather than by the exit code — the routing failure this lane exists for exited 0
 #     and deployed nothing. Two legs install the package with a fixed client (0.29.1, the minimum
@@ -157,6 +158,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The PR hygiene comparison needs its base; other legs keep their shallow checkout.
+          # String '0' stays truthy through Actions' &&/|| conditional expression.
+          fetch-depth: ${{ matrix.toolchain && github.event_name == 'pull_request' && '0' || '1' }}
 
       - name: Set up Node ${{ matrix.node }}
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -179,6 +183,13 @@ jobs:
       - name: Lint
         if: matrix.toolchain
         run: npm run lint
+
+      # Inside the required check job: a finding fails all-ci-checks through this matrix leg.
+      - name: Repository hygiene
+        if: matrix.toolchain && github.event_name == 'pull_request'
+        env:
+          HYGIENE_BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/repo-hygiene.mjs --base "$HYGIENE_BASE_REF"
 
       # Build precedes Test so the dist journey (test/cli/dogfoodDist.e2e.test.ts)
       # always runs against the fresh build here and its local self-build fallback

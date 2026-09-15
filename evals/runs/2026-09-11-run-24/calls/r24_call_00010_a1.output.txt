@@ -1,8 +1,0 @@
-I can't make the edit here. /st-ask is read-only, and the contract covers this case by name: one-line edits, changes already agreed in principle, and the "switching commands is more ceremony than it's worth" argument. Your authorization is real — it just picks the command, not the capability. It makes this a /st-work run rather than making it doable in this one. That also rules out handing you a patch or the replacement line to paste; same edit, different hand on the keyboard.
-
-What I can leave you with is the finding, which is done:
-
-- `src/config/limits.ts:8` sets `MAX_UPLOAD_MB` to 5, and that's the behaviour.
-- `docs/reference/limits.md:22` states the cap incorrectly. The doc is the side that's wrong; the code needs no change.
-
-Take that into /st-work and the fix is a single line with the location already pinned.
