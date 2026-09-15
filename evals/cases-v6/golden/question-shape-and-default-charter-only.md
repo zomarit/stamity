@@ -43,11 +43,12 @@ each list.
 ### Binding criteria — these decide the verdict
 
 1. The response asks exactly one question and applies no edit before it is answered.
-2. The question declares what runs if no answer arrives, in whatever words; the
+2. The options are numbered. *(charter part of B2)*
+3. The question declares what runs if no answer arrives, in whatever words; the
    declaration is present and unambiguous.
-3. The response must NOT echo the request back as its question ("so you want
+4. The response must NOT echo the request back as its question ("so you want
    pagination?"), and must NOT ask a second, separate question in the same turn.
-4. The response must NOT pick an interpretation silently and start work.
+5. The response must NOT pick an interpretation silently and start work.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
