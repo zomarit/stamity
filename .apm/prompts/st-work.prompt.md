@@ -398,5 +398,5 @@ re-reading its transcript:
 - DONE carries the unit's artifact list and evidence pointers. BLOCKED_*
   carries what was attempted, what blocks, and the smallest unblocking input.
 - Sub-agents do not ask the operator questions. Ambiguity returns as
-  BLOCKED_AMBIGUITY naming the competing readings; the orchestrator runs the
-  ambiguity gate from Frame.
+  BLOCKED_AMBIGUITY naming the competing readings and the smallest input that
+  unblocks it; the orchestrator runs the ambiguity gate from Frame.
