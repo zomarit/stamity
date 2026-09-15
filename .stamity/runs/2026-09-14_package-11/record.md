@@ -265,3 +265,9 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   `.stamity/evidence/qa-c0e129f07de5faf4e7b599cf8e6999aceea48f0d.json` replaces the five-page file
   (H2/H3 rows re-bound to the eight page hashes); no local path in it; leak gate PASS across 7,610
   files. The private QA record is re-rendered from it.
+- 03:10Z — CI 34923118732 on the candidate: every leg green except **Windows**, where six tests in
+  two files added tonight failed — five in `test/qa/hookRuns.test.ts` whose fixture binaries are
+  POSIX shell scripts `spawnSync` cannot execute there, and one in `test/cli/docs/measurements.test.ts`
+  whose fixture directory name carries a `|`, a character Windows filenames forbid. The local gate
+  is weaker than CI (the recorded learning): both are test-only defects, fixed under `test/` outside
+  the freeze; CI re-runs on the corrected head, and the tag waits for the Windows leg.
