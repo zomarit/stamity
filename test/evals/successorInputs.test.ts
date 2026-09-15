@@ -21,9 +21,12 @@ describe("REQ-FINISH-009 — successor inputs preserve historical contracts", ()
       // overwrite; it now honours the same ledger the cases-v5 gate honours, and holds
       // every case with no row there to the byte it held before. Moved here on
       // 2026-09-15 by the eight run-27 dispositions, which land on seven v4 cases.
-      if (EXPECTED_MOVES[caseId(previous)] !== undefined) continue;
-      expect(expected(previous), path).toBeDefined();
-      expect(sha(expected(current) ?? ""), path).toBe(sha(expected(previous) ?? ""));
+      // A disposition moves only the `## Expected` block's sha; it moves no frontmatter field,
+      // so the four-field loop below runs unconditionally, ledgered case or not.
+      if (EXPECTED_MOVES[caseId(previous)] === undefined) {
+        expect(expected(previous), path).toBeDefined();
+        expect(sha(expected(current) ?? ""), path).toBe(sha(expected(previous) ?? ""));
+      }
       for (const key of ["id", "class", "metric", "floor"]) {
         const field = new RegExp(`^${key}:.*$`, "m");
         expect(current.match(field)?.[0], `${path}: ${key}`).toBe(previous.match(field)?.[0]);
@@ -52,9 +55,10 @@ describe("REQ-FINISH-009 — successor inputs preserve historical contracts", ()
  * expectation moved. A row here is the reviewed diff the AI-evals floor demands for an
  * expected output that changes: without one, a cases-v6 file that no longer matches its
  * cases-v5 original is an overwrite that erases the regression the case encoded.
- * Empty at the cutover, because cases-v6 was cases-v5 byte for byte; the rows below are
- * the eight reviewed advisory dispositions of 2026-09-15, taken on run 27's §8 repeats
- * under SET-v7's promote-or-delete rule — all eight of them, which is what §8 lists.
+ * Empty at the cutover, because cases-v6 was cases-v5 byte for byte; the seven rows below
+ * carry the eight reviewed advisory dispositions of 2026-09-15, taken on run 27's §8 repeats
+ * under SET-v7's promote-or-delete rule — every one §8 lists; one row (agent-security-return-
+ * contract) carries two dispositions, so seven rows account for all eight.
  * Every row names the disposition and its reason, and no binding criterion was weakened
  * by one: two advisory rows were promoted to binding and six were deleted.
  */
@@ -132,11 +136,14 @@ describe("cases-v6 preserves cases-v5", () => {
     it(`preserves the Expected block and contract lines of ${path}`, () => {
       const previous = readFileSync(join(REPO_ROOT, "evals/cases-v5", path), "utf8");
       const successor = readFileSync(join(REPO_ROOT, CASES_DIR, path), "utf8");
-      // A row in EXPECTED_MOVES is the reviewed diff that lets one case's contract move.
-      if (EXPECTED_MOVES[caseId(previous)] !== undefined) return;
-      expect(expected(previous), path).toBeDefined();
-      expect(sha(expected(successor) ?? ""), `${path}: the \`## Expected\` block moved with no EXPECTED_MOVES row`)
-        .toBe(sha(expected(previous) ?? ""));
+      // A row in EXPECTED_MOVES is the reviewed diff that lets one case's contract move — its
+      // `## Expected` block only; a disposition moves no frontmatter field, so the loop below
+      // runs unconditionally, ledgered case or not.
+      if (EXPECTED_MOVES[caseId(previous)] === undefined) {
+        expect(expected(previous), path).toBeDefined();
+        expect(sha(expected(successor) ?? ""), `${path}: the \`## Expected\` block moved with no EXPECTED_MOVES row`)
+          .toBe(sha(expected(previous) ?? ""));
+      }
       for (const key of ["id", "class", "metric", "floor"]) {
         expect(frontmatterLine(successor, key), `${path}: ${key}`).toBe(frontmatterLine(previous, key));
       }

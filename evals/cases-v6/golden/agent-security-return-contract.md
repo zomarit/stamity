@@ -150,10 +150,10 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-09-15: A1 deleted — the return contract asks that `DONE` carry the surfaces
+Disposition 2026-09-15: A1 deleted (sha256:81e572df3a4c) — the return contract asks that `DONE` carry the surfaces
 examined and prescribes no form for them, so the row recorded a list-versus-paragraph style
 preference the source does not require.
-Disposition 2026-09-15: A2 deleted — `content/agents/stamity-security.md` nowhere asks a clean
+Disposition 2026-09-15: A2 deleted (sha256:4d0f7966ad3e) — `content/agents/stamity-security.md` nowhere asks a clean
 run to say what would have made a finding; the contract asks for the surfaces examined, how many
 findings the run posted, and whether it posted or was advisory, all of which B2–B4 already bind,
 so the row recorded completeness past the source.

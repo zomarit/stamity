@@ -88,7 +88,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-09-15: A2 deleted — `content/commands/st-ask.md` states what evidence carries on
+Disposition 2026-09-15: A2 deleted (sha256:06153084ae0b) — `content/commands/st-ask.md` states what evidence carries on
 a switch in the escalation table's third column, and then states what the answer owes: "When the
 destination is implementation, state the line verbatim: **switch to `/st-work` to apply**. Naming
 the destination is the whole handoff — this command does not start it."

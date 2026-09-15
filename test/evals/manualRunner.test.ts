@@ -10,7 +10,7 @@ import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiab
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
 import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
-import { REPO_ROOT } from "./support.ts";
+import { CASES_DIR, REPO_ROOT } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 const passingRows = (scenario: { binding: string[] }) =>
@@ -1201,20 +1201,66 @@ describe("bounded execution and artifact safety", () => {
 // because the summary that reported the repeat is a historical artifact that never changes.
 // Two summary shapes reach it: the runner's own writer joins `caseId:criterion` into a string
 // (`advisoryRepeats`), and the driver's export carries an object with `previousSamples`.
-const expectedBlock = (note: string) => ["",
+//
+// `criteria()` (`instrument.mjs`) requires advisory numbers to run 1..N with no gaps, so a
+// deleted or promoted row's slot is always reassigned to the next survivor — the guard cannot
+// trust the label alone (a later run's genuinely new failure of the renumbered survivor would
+// misread as the disposition of the row that used to sit there). It instead reads the disposed
+// criterion's OWN text from the prior run's committed case file (`git show <candidate>:<path>`)
+// and admits the repeat only when the current note's embedded hash matches that text.
+const caseMarkdown = (id: string, advisory: string) => ["---", `id: ${id}`, "class: golden",
+  "source: content/x.md", "---", "", "## Brief", "", "Do the thing.", "", "## Expected", "",
   "### Binding criteria — these decide the verdict", "", "1. The response answers.", "",
-  "### Advisory criteria — recorded, never scored into the verdict", "", note, "",
-  "1. The response is complete.", ""].join("\n");
-const NOTE = "Disposition 2026-09-15: A2 deleted — the governing text asks no such thing.";
-const dispositioned = [
-  { id: "case-disposed", expected: expectedBlock(NOTE) },
-  { id: "case-open", expected: expectedBlock("Nothing has been dispositioned on this case.") },
-];
-const priorRun = (root: string, repeats: unknown[], runId = "2026-09-14-run-1") => {
+  "### Advisory criteria — recorded, never scored into the verdict", "", advisory, ""].join("\n");
+const gitFixture = (root: string) => {
+  execFileSync("git", ["init", "-q"], { cwd: root, stdio: "pipe" });
+  const commit = (message: string) => {
+    execFileSync("git", ["add", "."], { cwd: root, stdio: "pipe" });
+    execFileSync("git", ["-c", "user.name=Eval Fixture", "-c", "user.email=eval@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "-qm", message], { cwd: root, stdio: "pipe" });
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+  };
+  return { write: (path: string, content: string) => { mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), content); }, commit };
+};
+// case-disposed's A2 was deleted and its survivor was already A1 before the edit, so this fixture
+// alone would pass even under the old label-only guard; case-recycled below is the one the old
+// guard admitted wrongly.
+const disposedPath = `${CASES_DIR}/golden/case-disposed.md`;
+const recycledPath = `${CASES_DIR}/golden/case-recycled.md`;
+const openPath = `${CASES_DIR}/golden/case-open.md`;
+const priorDisposedAdvisory = "1. The response is complete.\n2. The response also restates its reasons in full.";
+const priorRecycledAdvisory = "1. The row that gets promoted away.\n2. The row that survives and gets renumbered.";
+const openAdvisory = "1. Nothing has been dispositioned on this case.";
+const disposedHash = sha256(parseCase(caseMarkdown("case-disposed", priorDisposedAdvisory), disposedPath).advisory[1]).slice(0, 12);
+const recycledHash = sha256(parseCase(caseMarkdown("case-recycled", priorRecycledAdvisory), recycledPath).advisory[0]).slice(0, 12);
+const disposedNote = `Disposition 2026-09-15: A2 deleted (sha256:${disposedHash}) — the governing text asks no such thing.\n\n1. The response is complete.`;
+const recycledNote = `Disposition 2026-09-15: A1 promoted to B5 (sha256:${recycledHash}) — reason.\n\n1. The row that survives and gets renumbered.`;
+const priorRun = (root: string, repeats: unknown[], candidate: string, runId = "2026-09-14-run-1") => {
   mkdirSync(join(root, "evals", "runs", runId), { recursive: true });
   writeFileSync(join(root, "evals", "runs", runId, "summary.json"), JSON.stringify({
-    runId, startedAt: "2026-09-14T00:00:00.000Z", status: "FAIL",
+    runId, startedAt: "2026-09-14T00:00:00.000Z", status: "FAIL", candidate,
     configurationHash: "fixture-only", advisory: { failures: [], repeats } }));
+};
+// The `.expected` slice alone (no frontmatter/Brief), for overriding a scenario object in place
+// rather than parsing a committed file — the two remaining tests exercise both shapes.
+const expectedBlock = (advisory: string) => ["",
+  "### Binding criteria — these decide the verdict", "", "1. The response answers.", "",
+  "### Advisory criteria — recorded, never scored into the verdict", "", advisory, ""].join("\n");
+const buildDispositioned = (root: string) => {
+  const fixture = gitFixture(root);
+  fixture.write(disposedPath, caseMarkdown("case-disposed", priorDisposedAdvisory));
+  fixture.write(recycledPath, caseMarkdown("case-recycled", priorRecycledAdvisory));
+  fixture.write(openPath, caseMarkdown("case-open", openAdvisory));
+  const priorCandidate = fixture.commit("prior");
+  const disposedCaseDisposed = caseMarkdown("case-disposed", disposedNote);
+  const disposedCaseRecycled = caseMarkdown("case-recycled", recycledNote);
+  fixture.write(disposedPath, disposedCaseDisposed);
+  fixture.write(recycledPath, disposedCaseRecycled);
+  const disposedCandidate = fixture.commit("disposed");
+  const cases = [parseCase(disposedCaseDisposed, disposedPath), parseCase(disposedCaseRecycled, recycledPath),
+    parseCase(caseMarkdown("case-open", openAdvisory), openPath)];
+  return { cases, priorCandidate, disposedCandidate };
 };
 
 describe("full run admission and strict aggregation", () => {
@@ -1306,33 +1352,46 @@ describe("full run admission and strict aggregation", () => {
     expect(result.summary.aggregate.rows[0].samples[0].outputType).toBe("refusal");
   });
 
-  it("admits a repeat as disposed only when the current case file carries its note, in either summary shape", () => {
+  it("admits a repeat as disposed only when the note's hash matches the criterion the prior run reported, defeating slot recycling", () => {
+    const root = temp();
+    const { cases: dispositioned, priorCandidate, disposedCandidate } = buildDispositioned(root);
     // The driver's export shape, both rows non-empty so the filter has to discriminate.
-    expect(undisposedRepeats({ advisory: { repeats: [
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: [
       { caseId: "case-disposed", criterion: "A2", previousSamples: [1], samples: [3] },
       { caseId: "case-open", criterion: "A1", previousSamples: [2], samples: [1] },
-    ] } }, dispositioned)).toEqual(["case-open:A1"]);
+    ] } }, dispositioned, root)).toEqual(["case-open:A1"]);
     // The runner's own writer shape, same two rows.
-    expect(undisposedRepeats({ advisory: { repeats: ["case-disposed:A2", "case-open:A1"] } }, dispositioned))
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-disposed:A2", "case-open:A1"] } }, dispositioned, root))
       .toEqual(["case-open:A1"]);
     // The note names A2, so it disposes A2 and nothing else — not A1 beside it, and not A22.
-    expect(undisposedRepeats({ advisory: { repeats: ["case-disposed:A1"] } }, dispositioned)).toEqual(["case-disposed:A1"]);
-    expect(undisposedRepeats({ advisory: { repeats: ["case-disposed:A22"] } }, dispositioned)).toEqual(["case-disposed:A22"]);
-    // A repeat naming a case the current roster no longer carries has no note to read.
-    expect(undisposedRepeats({ advisory: { repeats: ["case-gone:A1"] } }, dispositioned)).toEqual(["case-gone:A1"]);
-    expect(undisposedRepeats(null, dispositioned)).toEqual([]);
-    expect(undisposedRepeats({ advisory: { failures: ["case-open:A1"], repeats: [] } }, dispositioned)).toEqual([]);
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-disposed:A1"] } }, dispositioned, root)).toEqual(["case-disposed:A1"]);
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-disposed:A22"] } }, dispositioned, root)).toEqual(["case-disposed:A22"]);
+    // A repeat naming a case the current roster no longer carries is disposed by the case's own
+    // removal: nothing can repeat what no longer runs.
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-gone:A1"] } }, dispositioned, root)).toEqual([]);
+    expect(undisposedRepeats(null, dispositioned, root)).toEqual([]);
+    expect(undisposedRepeats({ advisory: { failures: ["case-open:A1"], repeats: [] } }, dispositioned, root)).toEqual([]);
+    // The promotion renumbered case-recycled's survivor into A1 — the slot the promoted-away row
+    // used to hold. A repeat of that ORIGINAL A1, as the run at priorCandidate reported it, is
+    // disposed by the note's hash.
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-recycled:A1"] } }, dispositioned, root)).toEqual([]);
+    // A later run reporting a genuinely new failure of the renumbered SURVIVOR (itself A1 as of
+    // disposedCandidate) is not disposed by that same note: a label-only guard would admit this
+    // wrongly, because the note still reads "A1 promoted…" and the label alone cannot tell the
+    // two rows apart.
+    expect(undisposedRepeats({ candidate: disposedCandidate, advisory: { repeats: ["case-recycled:A1"] } }, dispositioned, root)).toEqual(["case-recycled:A1"]);
     // Every one of run 27's eight §8 repeats is disposed by the corpus as it stands.
-    const roster = readdirSync(join(REPO_ROOT, "evals/cases-v6"), { recursive: true, encoding: "utf8" })
-      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`evals/cases-v6/${path}`), path));
+    const roster = readdirSync(join(REPO_ROOT, CASES_DIR), { recursive: true, encoding: "utf8" })
+      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`${CASES_DIR}/${path}`), `${CASES_DIR}/${path}`));
     const run27 = JSON.parse(read("evals/runs/2026-09-15-run-27/summary.json"));
     expect(run27.advisory.repeats).toHaveLength(8);
-    expect(undisposedRepeats(run27, roster)).toEqual([]);
+    expect(undisposedRepeats(run27, roster, REPO_ROOT)).toEqual([]);
   });
 
   it("blocks the next run on an undisposed repeat, naming it, and lets a disposed one through", async () => {
     const blocked = temp();
-    priorRun(blocked, [{ caseId: "case-open", criterion: "A1", previousSamples: [2], samples: [1] }]);
+    const { cases: dispositioned, priorCandidate: blockedCandidate } = buildDispositioned(blocked);
+    priorRun(blocked, [{ caseId: "case-open", criterion: "A1", previousSamples: [2], samples: [1] }], blockedCandidate);
     const withOpenRow = () => Object.assign(loaded(), { cases: dispositioned });
     const stopped = await runEvaluation({ root: blocked, runId: "2026-09-15-run-2", profileName: "codex-astra",
       trigger: "release", load: withOpenRow, transport: vi.fn() });
@@ -1341,10 +1400,14 @@ describe("full run admission and strict aggregation", () => {
     expect(readdirSync(stopped.directory).some(path => path.startsWith("isolation-"))).toBe(false);
 
     const allowed = temp();
-    priorRun(allowed, ["case-0:A2"]);
+    const allowedFixture = gitFixture(allowed);
+    const case0Path = `${CASES_DIR}/golden/case-0.md`;
+    allowedFixture.write(case0Path, caseMarkdown("case-0", priorDisposedAdvisory));
+    const allowedCandidate = allowedFixture.commit("prior");
+    priorRun(allowed, ["case-0:A2"], allowedCandidate);
     // The same roster the run scores, with the note this repeat's disposition landed under.
     const withNote = () => { const base = loaded(); return Object.assign(base, { cases: base.cases.map(
-      (scenario, index) => index === 0 ? Object.assign({}, scenario, { expected: expectedBlock(NOTE) }) : scenario) }); };
+      (scenario, index) => index === 0 ? Object.assign({}, scenario, { path: case0Path, expected: expectedBlock(disposedNote) }) : scenario) }); };
     const transport = vi.fn(async (input: Request) => {
       if (input.input[0]!.content.length === 1) return receipt(input);
       const fixture = (rubric.fixtures as Fixture[]).find(item => item.transcript === input.input[0]!.content[3]!.text)!;

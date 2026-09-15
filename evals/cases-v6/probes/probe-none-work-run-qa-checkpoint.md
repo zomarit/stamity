@@ -70,7 +70,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-09-15: A1 deleted — the row scored how completely the reason is stated, in its
+Disposition 2026-09-15: A1 deleted (sha256:11575f27636d) — the row scored how completely the reason is stated, in its
 own words, and `content/commands/st-work.md:200-216` requires no wording of the reason at all: it
 states that the checkpoint's step invokes the qa skill by name and that a request arriving there
 "stays with this command". The classification, which is what the source states, is bound by B1–B3.

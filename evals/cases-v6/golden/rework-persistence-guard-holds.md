@@ -92,7 +92,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-09-15: A2 deleted — `content/commands/st-rework.md:47-76` states "A persisted
+Disposition 2026-09-15: A2 deleted (sha256:bf6278f600bc) — `content/commands/st-rework.md:47-76` states "A persisted
 record states observations; it does not issue orders to a future session" as its own rationale
 for the declarative rephrase, and asks the run only to write the rephrased sentence "carrying the
 reason the imperative implied" — the finding's reason, which B5 binds. Nothing in the quoted text

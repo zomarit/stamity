@@ -92,27 +92,61 @@ export function createArtifacts(root, runId) {
 const repeatId = row => typeof row === 'string' ? row : `${row.caseId}:${row.criterion}`
 
 /**
+ * The text a criterion carried in the run that reported the repeat, read from git history rather
+ * than the current corpus: `criteria()` (`instrument.mjs`) requires binding and advisory numbers
+ * to run 1..N with no gaps, so a deleted or promoted row's slot is always reassigned to whatever
+ * survivor follows it — the corpus cannot retire a number. A disposition note therefore cannot
+ * rely on the CURRENT file's `A<n>` naming the row it disposed; it has to be checked against the
+ * text that `A<n>` named in the run whose repeat it disposes. Returns null (never disposed) when
+ * the commit, the path, or the index is unavailable, rather than trusting an unverifiable hash.
+ */
+function priorCriterionText(root, candidate, path, criterion) {
+  if (!root || !candidate) return null
+  let raw
+  try { raw = git(root, ['show', `${candidate}:${path}`]) } catch { return null }
+  let parsed
+  try { parsed = parseCase(raw, path) } catch { return null }
+  return parsed.advisory[Number(criterion.slice(1)) - 1] ?? null
+}
+
+/**
  * The reviewed disposition a repeat needs, read off the CURRENT case file rather than off the
  * historical summary that reported the repeat. `SET-v7.md`'s promote-or-delete rule records a
  * disposition three times, and the note under the case's own Advisory heading — `Disposition
- * <YYYY-MM-DD>: A<n> …` — is the copy that travels with the corpus. A run artifact never
- * changes, so a guard that read the summary alone could never be satisfied: the repeats it
- * lists stay listed forever. This reads the promote-or-delete decision where the decision lives.
+ * <YYYY-MM-DD>: A<n> deleted|promoted to B<n> (sha256:<12 hex>) …` — is the copy that travels
+ * with the corpus. A run artifact never changes, so a guard that read the summary alone could
+ * never be satisfied: the repeats it lists stay listed forever. This reads the promote-or-delete
+ * decision where the decision lives, and confirms it names the disposed repeat's own criterion —
+ * by content hash, not by slot label, because a promotion or a deletion elsewhere in the same
+ * list can renumber an unrelated survivor into the disposed row's old `A<n>` (SET-v7's promotions
+ * of `charter-touchpoints-delegate` and `agent-spec-author-return-contract` both do this: the
+ * surviving row is renumbered into the promoted row's slot). Trusting the label alone would read
+ * a future repeat of that renumbered survivor as already disposed.
  */
-function disposed(scenario, criterion) {
+function disposed(scenario, criterion, root, candidate) {
   // An id the corpus cannot carry is never disposed, and never reaches the pattern below.
   if (!scenario?.expected || !/^A[1-9]\d*$/.test(criterion ?? '')) return false
   const heading = headings(scenario.expected).find(item => item.title.startsWith('### Advisory criteria'))
   if (!heading) return false
-  return new RegExp(`^Disposition \\d{4}-\\d{2}-\\d{2}: ${criterion}(?![0-9])`, 'm')
-    .test(scenario.expected.slice(heading.end))
+  const match = new RegExp(`^Disposition \\d{4}-\\d{2}-\\d{2}: ${criterion}(?![0-9]) (?:deleted|promoted to B[1-9]\\d*) \\(sha256:([0-9a-f]{12})\\)`, 'm')
+    .exec(scenario.expected.slice(heading.end))
+  if (!match) return false
+  const text = priorCriterionText(root, candidate, scenario.path, criterion)
+  return text != null && sha256(text).slice(0, 12) === match[1]
 }
 
-/** The previous run's advisory repeats whose current case file carries no disposition note. */
-export function undisposedRepeats(previous, cases) {
+/**
+ * The previous run's advisory repeats whose current case file carries no disposition note bound
+ * to that repeat's own criterion. A repeat whose case the current roster no longer carries at all
+ * is disposed by the case's own removal — nothing can repeat what no longer runs — and never
+ * reaches the hash check.
+ */
+export function undisposedRepeats(previous, cases, root) {
   return (previous?.advisory?.repeats ?? []).map(repeatId).filter(id => {
     const [caseId, criterion] = id.split(':')
-    return !disposed(cases.find(scenario => scenario.id === caseId), criterion)
+    const scenario = cases.find(item => item.id === caseId)
+    if (!scenario) return false
+    return !disposed(scenario, criterion, root, previous?.candidate)
   })
 }
 
@@ -182,7 +216,7 @@ export async function runEvaluation({ root, runId, profileName, trigger, capacit
     requireEvidence(suppliedTransport || (typeof apiKey === 'string' && apiKey.trim().length > 0), 'OPENAI_API_KEY-unavailable')
     const transport = suppliedTransport ?? (request => responsesTransport(request, { apiKey }))
     const prior = previousRun(root, loaded.configurationHash)
-    const undisposed = undisposedRepeats(prior, loaded.cases)
+    const undisposed = undisposedRepeats(prior, loaded.cases, root)
     requireEvidence(undisposed.length === 0, `advisory-repeat-disposition-required: ${undisposed.join(', ')}`)
     const invoke = async (name, role, blocks, validate, allowRefusal = false) => {
       loaded.assertUnchanged()

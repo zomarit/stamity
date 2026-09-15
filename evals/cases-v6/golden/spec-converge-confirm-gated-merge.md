@@ -103,7 +103,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-09-15: A1 deleted — `content/commands/st-spec.md:122-150` states "A delta is a
+Disposition 2026-09-15: A1 deleted (sha256:3614a982ba14) — `content/commands/st-spec.md:122-150` states "A delta is a
 proposal; truth changes only at the merge gate", and that `/st-work` merges deltas at its Prove
 phase while `sync` performs the same merge when the command is invoked directly, as facts about
 the model rather than as wording the answer has to produce. What that text asks of the run is

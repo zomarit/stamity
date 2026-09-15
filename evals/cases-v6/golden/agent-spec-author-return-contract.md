@@ -93,7 +93,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-09-15: A1 promoted to B7 — the source states it in so many words. The
+Disposition 2026-09-15: A1 promoted to B7 (sha256:80f48c292bc2) — the source states it in so many words. The
 question-protocol rule's sub-agent shape: "It returns status `BLOCKED_AMBIGUITY` carrying the
 competing readings, the question it would have asked verbatim, and the smallest input that
 unblocks it" (`content/rules/stamity-question-protocol.md:47-50`), and this agent's own

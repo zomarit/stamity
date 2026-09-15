@@ -58,7 +58,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-09-15: A1 promoted to B5 — the charter states the wording in so many words:
+Disposition 2026-09-15: A1 promoted to B5 (sha256:d5fb45a2df94) — the charter states the wording in so many words:
 "an orchestrator editing product files inline is a protocol violation, and so is handing the
 operator the line, diff, or file body to paste. A refusal calls the act a protocol violation in
 those words rather than by citing this invariant's number."
