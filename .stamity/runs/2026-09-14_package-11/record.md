@@ -258,3 +258,10 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   and the dry-run summary green, publish skipped as designed. Pack signing rehearsal 34923283007:
   success; the transient ref deleted. CI 34923118732: every leg green except the Windows leg still
   running at this line.
+- 03:09Z — the harness re-measured at `c0e129f` over eight pages (the three this release adds
+  included): H2 accessibility tree and scanner — every structural check holds and zero violations on
+  all eight; H3a–d keyboard journeys at 375 and 1440 in both themes — every focus stop visible and in
+  DOM order; H1a passed; H1b–d not-run and human, unchanged. Evidence
+  `.stamity/evidence/qa-c0e129f07de5faf4e7b599cf8e6999aceea48f0d.json` replaces the five-page file
+  (H2/H3 rows re-bound to the eight page hashes); no local path in it; leak gate PASS across 7,610
+  files. The private QA record is re-rendered from it.
