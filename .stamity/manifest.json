@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.7.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-15T13:40:03.051Z",
+  "updatedAt": "2026-09-15T14:13:59.468Z",
   "tools": [
     "claude"
   ],
@@ -120,7 +120,7 @@
       "adapter": "claude",
       "artifactId": "spec-author",
       "artifactType": "agent",
-      "contentHash": "2f7153c2d405e4bfe6f86229a94eb861aee6e56dac582b43dd782848eeac0ba2",
+      "contentHash": "00936843f2c5440bc2447660a5fd45b8616f2d5319b45217082d9fb511e13427",
       "path": ".claude/agents/stamity-spec-author.md"
     },
     {

@@ -165,5 +165,5 @@ truth. Retired IDs retain their successor pointers.
   promised and did not carry, or a code-form artifact of record that could not
   be read. It names the input and what it blocks.
 - Sub-agents do not put questions to the operator. Ambiguity returns as
-  `BLOCKED_AMBIGUITY` naming the competing readings; the spawning flow runs the
-  ambiguity gate and re-spawns.
+  `BLOCKED_AMBIGUITY` naming the competing readings and the smallest input that
+  unblocks it; the spawning flow runs the ambiguity gate and re-spawns.
