@@ -194,8 +194,8 @@ and publish rights on the registry is a set someone looked at this release rathe
 accumulated. Both are console state that no file in this tree can assert, which is why they sit in
 this checklist beside the three platform controls rather than in a test. (Added 2026-09-02.)
 
-A fourth line rides the same cut, before the tag: every hand page — the twelve in
-`test/docsPages.test.ts`'s bucket plus `GOVERNANCE.md` — is re-attested claim by claim against
+A fourth line rides the same cut, before the tag: every hand page — the whole hand bucket
+`test/docsPages.test.ts` declares, plus `GOVERNANCE.md` — is re-attested claim by claim against
 the candidate tree and restamped `verified against the tree at the X.Y.Z release cut (DATE)`,
 and `RELEASE_CUT_DATE` in that suite moves with it; a stale stamp is a currency defect the
 suite catches, a stale claim under a fresh stamp is the one a person catches. (Added
