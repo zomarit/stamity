@@ -250,3 +250,11 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   `7260652`, the harness re-measures at this tree once the full gate completes — `scripts/qa/` is
   outside the freeze), and the spec's REQ-PROVE-011 roster sentence reads four twins where the tree
   holds three (corrected in the cut commit with the spec's status, a record of what shipped).
+- 03:05Z — full local gate at `f2b90dc` (the test runner): lint, typecheck, `npm run test -- --coverage`
+  (208 files, 8,404 tests passed, 2 skipped; statements 96.48 %, branches 89.84 %, functions 98.72 %,
+  lines 97.34 %; every per-file floor held), build within both size budgets, leak gate PASS across
+  7,609 files, knip clean, `sync` 0 created / 0 updated and `check` all green, website typecheck and
+  build green, `npm run check` exit 0. Release dry run 34923118084: gates and pack, APM route smoke
+  and the dry-run summary green, publish skipped as designed. Pack signing rehearsal 34923283007:
+  success; the transient ref deleted. CI 34923118732: every leg green except the Windows leg still
+  running at this line.
