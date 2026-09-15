@@ -612,3 +612,26 @@ always-on budget item stays open until the measurement lands.
   span, the row that broke run 27 and that the repair round's sentence did not stop; six other cases
   missed one sample each on ordinary rows, and `agent-researcher-return-contract` missed two on B3
   (a golden, non-floor case: the rate absorbs it). Every other fully graded case passed 3/3.
+
+## The maintainer's decision at 19:15Z: incremental runs
+
+- Asked why a follow-up run re-measures cases whose inputs did not move, the maintainer decided:
+  one full run per release as the baseline, every later run within the release re-measures only the
+  changed cases and composes with the baseline — now and for future releases. Recorded as a maintainer
+  decision. The rule is declared in `evals/SET-v7.md` before any run uses it (a case re-measures when
+  its file bytes or the text of any cited source range moved since the prior complete run's candidate,
+  or when the operator names it; every other case carries its three admitted samples from the prior
+  run's public artifact, named per case with hashes; calibration always fresh; thresholds and the
+  scoring rule unchanged; nothing rescored), the release checklist's eval line reads "measured", and
+  the README says the route of record implements it.
+- The private driver composes it: `prepare --prior-run <id>` reads the prior artifact from the
+  candidate tree (its `summary.json` for coverage and status, its `inputs.json` for the configuration
+  it must share), plans carry-or-remeasure per case with the reason, dispatches only the re-measured
+  cases; `export` carries the prior rows verbatim, aggregates the whole set under the unchanged rule
+  and writes a "Composition" section with every carried case's sha and compared ranges. Pure planner
+  tests; canaries K3q–K3r/K4q–K4r. A dry plan on the second candidate against run 27: 12 cases
+  re-measure (the six repaired Briefs, the seven dispositions minus overlap), 87 carry, 77 calls
+  instead of 604.
+- The third candidate carries one content change: the pull-request screen's class description is the
+  class label and the locator and nothing else (runs 27 and 28 each echoed a four-word run of the
+  span inside a description written "in generic terms"); the case's Brief mirrors it verbatim.
