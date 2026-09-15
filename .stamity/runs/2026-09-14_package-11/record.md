@@ -271,3 +271,11 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   whose fixture directory name carries a `|`, a character Windows filenames forbid. The local gate
   is weaker than CI (the recorded learning): both are test-only defects, fixed under `test/` outside
   the freeze; CI re-runs on the corrected head, and the tag waits for the Windows leg.
+- 03:25Z — `412e1aa` (test-only): the hook-probe fixtures are `.cmd` batch files on win32 and shell
+  scripts elsewhere (the probe spawns without a shell, so Windows resolves through PATHEXT and never
+  runs a shebang script); the signal-killed probe case is skipped on win32 with its reason, the render
+  being covered by the pure `exitDescription` test on every platform; the measurements rule's
+  code-span case uses a backtick-only name legal on every filesystem and its table-cell case proves
+  the pipe against the pattern through a mocked directory read. A branch-wide sweep for the two
+  hazards found no other unguarded instance. Local suites 9 files / 224 tests green; pushed; CI
+  34924889728 runs on this head.
