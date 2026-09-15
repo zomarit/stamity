@@ -767,7 +767,7 @@ type DriftOutcome =
  * them was being reported as "the manifest has to be readable first".
  *
  * Everything else is CAPTURED, not swallowed and not re-thrown. Capturing keeps
- * the eight other probes on screen, which a diagnostic command exists to
+ * the ten other probes on screen, which a diagnostic command exists to
  * produce, while the message — the engine's own, naming the pack and the cause,
  * the same sentence `sync` prints in this state — becomes the drift verdict and
  * gates the exit. Re-throwing would have replaced the whole report with one
