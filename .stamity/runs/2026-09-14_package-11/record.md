@@ -675,3 +675,15 @@ always-on budget item stays open until the measurement lands.
   (sha256 `5c396cca…`); runs 27's and 28's content echoes still fail the amended row. No threshold,
   no rule, no floor moved; nothing historical rescored.
 - Next: run 30, incremental against run 29 — the one moved case re-measures (11 calls), 98 carry.
+- 21:10Z — the amendment's review: request-changes on mechanical points, all applied: the set's three
+  tallies of moved Expected blocks read eight (seven dispositions and the amendment) and 70 carried
+  cases byte-identical; the row's attribution names the comment ids B1–B3 spell and the locators the
+  governing text's report requires; the ledger's header describes eight rows and the one amendment;
+  run 28 is cited as retained privately. The one substantive point, that the amended row read more
+  permissively than the sentence the Brief quotes, is closed at the point of production: the
+  pull-request screen's three-word rule now says it is counted over the span's own wording with any
+  name the report carries anyway struck out first, six lines for six, the Brief mirrored — the row and
+  the source say one thing. The sibling MCP case keeps its own definition-table latitude, which its
+  source still grants; the two sources differ on purpose and the record says so. Targeted suites 59
+  files / 3,128 tests green; goldens updated (the command's text moved); SET-v7 now `99b84b88…`.
+  The fifth candidate is this commit; CI and the dry run were green on the fourth.

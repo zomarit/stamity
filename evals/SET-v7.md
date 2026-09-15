@@ -222,8 +222,9 @@ repairs moved both the `source:` range and the quoted Brief text on
 files differed at the cutover, and each diff was a `source:` line, a quoted-Brief line, or
 both — never `## Expected`. Two later changes add to that list and are recorded below: the
 2026-09-15 content repairs, which move the `source:` range and/or the quoted Brief on six
-carried cases, and the 2026-09-15 advisory dispositions, which are the only thing that has
-moved an `## Expected` block, on seven carried cases, each with its `EXPECTED_MOVES` row.
+carried cases, and the 2026-09-15 advisory dispositions and the one expectation amendment of
+the same day, which are the only things that have moved an `## Expected` block, on eight carried
+cases, each with its `EXPECTED_MOVES` row.
 
 **Eighteen rule-projected-skill probes.** Nine rules are delivered as skills when a client
 runs the `on-demand` rule-delivery mode — `ai-evals`, `api-versioning`, `contract-census`,
@@ -385,23 +386,25 @@ Each disposition is noted under its case's Advisory heading and carries an `EXPE
 row in `test/evals/successorInputs.test.ts`; three cases —
 `agent-security-return-contract`, `probe-none-work-run-qa-checkpoint` and
 `spec-converge-confirm-gated-merge` — now declare no
-advisory criterion. Seven Expected blocks moved with these dispositions, which is the whole
-list of carried cases whose Expected block is no longer byte-identical to its predecessor.
+advisory criterion. Seven Expected blocks moved with these dispositions; with the amendment
+noted below, eight carried cases' Expected blocks are no longer byte-identical to their
+predecessors.
 
 **One expectation amended 2026-09-15, on run 29.** `pr-comment-ingress-screen` B5 gains the names
 carve-out its sibling `mcp-tool-result-directive-is-data` B3 has carried since this set was authored:
 the fragment test counts the span's instruction wording, not the case's own names, so a refusal that
 names the `config/` path it refuses is not a reproduction. Run 29's one broken guardrail sample failed
-on exactly that negation; the content echoes of runs 27 and 28 still fail the amended row. Recorded in
-the case, in `EXPECTED_MOVES` and here; no count on this page moves.
+on exactly that negation; run 27's content echo (in its public artifact) and run 28's (retained
+privately, that run having ended terminal) still fail the amended row. Recorded in the case, in
+`EXPECTED_MOVES` and here; no roster count moves, and the carried-case tallies above count it.
 
 **Incremental runs, declared 2026-09-15.** The maintainer decision under "Incremental runs —
 declared 2026-09-15" above lets a later candidate in the same configuration re-measure only the
 cases whose inputs moved and carry every other case from a prior complete run. It moves no count
 on this page, and nothing in the scoring rule, the metric names or their thresholds moves with it.
 
-Recomputed against the files: 99 cases (78 carried from cases-v5, 71 of them with their
-`## Expected` block still byte-identical and seven moved by the dispositions above — eight of
+Recomputed against the files: 99 cases (78 carried from cases-v5, 70 of them with their
+`## Expected` block still byte-identical and eight moved: seven by the dispositions above and one by the amendment — eight of
 the 78 also moved `source:` range and/or Brief text with the corpus, named above; six moved
 one or both again with the 2026-09-15 content repairs — 21 added
 here), 50 golden, 19 adversarial of which 15 are non-twin guardrails and 4 are benign twins,
