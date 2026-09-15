@@ -308,3 +308,8 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   cases skip on win32 with the reason, a win32-only case pins the statement against a `.cmd` shim on
   PATH, and a platform-injected case covers the branch everywhere. macOS evidence is unaffected (the
   suffix applies to win32 only). Small-change lane; verification delegated to the suite and CI.
+- 04:05Z — CI 34925953908 on `9f2a4aa`: the Windows leg's hook-probe cases green (the limitation
+  stated); every leg red on one records test instead — the committed ledger carried twelve rows in
+  the legacy `closed` state, a vocabulary the suite confines to three named ledgers. The rows now read
+  `fixed` (eleven) and `rejected` (one, the fixture-directory note); the records suite is green
+  locally and CI re-runs on this head.
