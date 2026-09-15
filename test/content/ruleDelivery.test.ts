@@ -147,31 +147,45 @@ describe("demotedRuleIds", () => {
       ).toEqual([everyReader.id]);
     });
 
-    it("claude carries no such guard: its own native path is unaffected by other clients' tools: coverage", () => {
-      // Claude reaches a demoted rule through its own re-targeted copy, not
-      // through the shared file codex and copilot read, so its demotion
-      // answer does not depend on `sharedTreeReaders` at all — it demotes a
-      // glob-less, non-critical, non-floor rule exactly the same whether or
-      // not `sharedTreeReaders` is passed, and whatever the rule's `tools:`
-      // says. (Real callers already exclude a rule from claude's own list
-      // whenever `tools:` names other clients and not claude —
-      // `planner.ts`'s per-tool filter — so this scenario is a property of
-      // the PREDICATE, not one `planRuleDelivery` actually drives.)
+    it("claude also refuses to demote its own tools:[claude]-only rule when sharedTreeReaders is passed", () => {
+      // Claude reaches a demoted rule through its own re-targeted copy, but
+      // that copy is filtered from the SAME shared-tree projection rows codex
+      // and copilot read (`nativeSkillRows`, `../../src/emit/skillsProjection.ts`)
+      // — a row the projection refuses to write never reaches claude's native
+      // tree either, so the guard has to hold on claude's branch too, not just
+      // on codex's and copilot's.
       const claudeOnly: RuleDeliveryInput = { ...GLOBLESS, tools: ["claude"] };
-      expect(idsOf(demotedRuleIds("claude", [claudeOnly], "on-demand", sharedTreeReaders))).toEqual([
-        claudeOnly.id,
-      ]);
-      expect(idsOf(demotedRuleIds("claude", [claudeOnly], "on-demand"))).toEqual([claudeOnly.id]);
+      expect(
+        idsOf(demotedRuleIds("claude", [claudeOnly], "on-demand", sharedTreeReaders)),
+      ).toEqual([]);
     });
 
     it("defaults sharedTreeReaders to empty when the caller passes none, so the guard never fires", () => {
       // A caller that does not pass `sharedTreeReaders` (the pre-N1 call
-      // shape) gets the pre-N1 answer back: `projectableToSharedTree` is
-      // vacuously true over an empty set, so codex and copilot demote a
-      // `tools:`-restricted rule exactly as they did before this fix. Every
-      // real caller (`planner.ts`, `charter.ts`) now passes the real set;
-      // this pins the fallback's own shape rather than a caller's choice.
+      // shape) gets the pre-N1 answer back: `projectable` is vacuously true
+      // over an empty set, so every demoting tool demotes a `tools:`-restricted
+      // rule exactly as it did before this fix. Every real caller
+      // (`planner.ts`, `charter.ts`) now passes the real set; this pins the
+      // fallback's own shape rather than a caller's choice.
       expect(idsOf(demotedRuleIds("codex", [codexOnly], "on-demand"))).toEqual([codexOnly.id]);
+      const claudeOnly: RuleDeliveryInput = { ...GLOBLESS, tools: ["claude"] };
+      expect(idsOf(demotedRuleIds("claude", [claudeOnly], "on-demand"))).toEqual([claudeOnly.id]);
+    });
+
+    // The guard is attached structurally (every non-cursor branch runs
+    // `projectable(rule)`), not by literal tool name — so a glob-less,
+    // non-critical, non-floor, non-projectable rule is demoted on NONE of
+    // `TOOLS`, cursor included (cursor demotes nothing regardless). A fifth
+    // client added to `TOOLS` without its own opt-in inherits this guard by
+    // construction; a per-tool-name guard would leave it unprotected.
+    it("demotes a non-projectable rule on none of TOOLS", () => {
+      const nonProjectable: RuleDeliveryInput = { ...GLOBLESS, tools: ["claude"] };
+      for (const tool of TOOLS) {
+        expect(
+          idsOf(demotedRuleIds(tool, [nonProjectable], "on-demand", sharedTreeReaders)),
+          tool,
+        ).toEqual([]);
+      }
     });
   });
 });

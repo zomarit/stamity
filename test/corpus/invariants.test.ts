@@ -14,7 +14,7 @@ import {
   type AlwaysOnPlan,
   type AlwaysOnRule,
 } from "../../src/content/charter.ts";
-import { frontmatterField } from "../../src/content/frontmatter.ts";
+import { extractToolsFrontmatter, frontmatterField } from "../../src/content/frontmatter.ts";
 import { cursorCompanionFrontmatter } from "../../src/content/mdcCompanions.ts";
 import { ruleAnchor } from "../../src/content/ruleDelivery.ts";
 import { isContextTag, isFloorTag } from "../../src/content/tags.ts";
@@ -523,12 +523,15 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
    * edited.
    */
   /**
-   * The five delivery facts of one rule, read off the corpus file. The two
+   * The six delivery facts of one rule, read off the corpus file. The three
    * DERIVED ones call the engine's own helpers — `ruleAnchor` for the nested
-   * `AGENTS.md` question, `isFloorTag` for the floor question — rather than
-   * re-implementing them here: a second reading of "is this rule anchorable"
-   * would let this measurement believe codex defers a rule the adapter still
-   * inlines, and the composite would then come out under a load the client
+   * `AGENTS.md` question, `isFloorTag` for the floor question, and
+   * `extractToolsFrontmatter` for the `tools:` restriction — rather than
+   * re-implementing them here: a second reading of "is this rule anchorable",
+   * or of what `tools:` declares, would let this measurement believe a client
+   * defers a rule the adapter still inlines (or believe a `tools:`-restricted
+   * rule demoted when N1's guard (`../../src/content/ruleDelivery.ts`) keeps it
+   * always-on), and the composite would then come out under a load the client
    * really pays.
    */
   const ruleFactsOf = (file: CorpusFile): AlwaysOnRule => {
@@ -540,6 +543,7 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
     const tags = Array.isArray(declaredTags)
       ? declaredTags.filter((tag): tag is string => typeof tag === "string")
       : [];
+    const tools = extractToolsFrontmatter(file.raw, file.relPath);
     return {
       id: declaredId(file),
       lineCount: fileLines(file),
@@ -547,6 +551,7 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
       critical: frontmatterField(file.parsed, "precedence") === "critical",
       floorTagged: tags.some(isFloorTag),
       anchored: ruleAnchor(globs) !== null,
+      ...(tools === undefined ? {} : { tools }),
     };
   };
 
@@ -714,6 +719,30 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
     expect(composeAlwaysOnLoad("codex", plan, "on-demand")).toBe(180);
     // Cursor's rule layer defers both under either mode.
     expect(composeAlwaysOnLoad("cursor", plan, "on-demand")).toBe(100);
+  });
+
+  it("fixture: a tools:-restricted glob-less rule is measured always-on, not demoted", () => {
+    // N-1: `ruleFactsOf` used to hand-build the `AlwaysOnRule` input without
+    // reading `tools:` off the corpus file, so a `tools:`-restricted rule
+    // always looked unrestricted to this measurement — the ratchet could
+    // never see N1's guard (`../../src/content/ruleDelivery.ts`) keep such a
+    // rule always-on, because `demotedRuleIds` here always received
+    // `tools: undefined` and so always saw the rule as projectable and
+    // demoted it, undercounting the slice the client actually loads.
+    const restricted = corpusFileOf(
+      "rules/stamity-claude-only.md",
+      doc([...head("claude-only", "rule"), "tools: [claude]"], "Claude-only body."),
+    );
+    const facts = ruleFactsOf(restricted);
+    expect(facts.tools).toEqual(["claude"]);
+
+    const plan: AlwaysOnPlan = { charterLines: 100, rules: [facts] };
+    // N1: this rule's `tools:` does not name every SHARED_SKILLS_TREE_READERS
+    // reader, so `demotedRuleIds` refuses to demote it on claude — the
+    // composite must still carry its lines, not just the charter's.
+    expect(composeAlwaysOnLoad("claude", plan, "on-demand")).toBe(
+      plan.charterLines + facts.lineCount,
+    );
   });
 
   it("pins the codex cross-client byte cost against the committed golden", () => {

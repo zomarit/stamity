@@ -126,17 +126,19 @@ export const NO_DEMOTED_RULES: Readonly<Record<Tool, ReadonlySet<string>>> = Obj
  *   skill the client pulls when its description matches than as another
  *   section of an appendix the 32 KiB budget is already dropping rules from.
  *
- * **N1: codex and copilot additionally refuse to demote a `tools:`-restricted
- * rule that does not name every `sharedTreeReaders` tool.** Both reach a
- * demoted rule through the shared `.agents/skills/` projection, which refuses
- * to place a `tools:`-scoped rule's body where a client it never named could
- * load it (`../emit/skillsProjection.ts`, W3) — so demoting such a rule for
- * codex or copilot without this guard would leave it delivered through NO
- * door there: not always-on (demoted), not projected (W3 refuses the shared
- * row). Claude carries no such guard on purpose: it reaches a demoted rule
- * through its own re-targeted NATIVE copy, not through the tools other
- * clients would read the shared file from, so its demotion answer is
- * unaffected by which OTHER clients a rule's `tools:` does or does not name.
+ * **N1: every demoting tool refuses to demote a `tools:`-restricted rule that
+ * does not name every `sharedTreeReaders` tool.** A demoted rule's body is
+ * projected once, as a row in the shared `.agents/skills/` projection
+ * (`../emit/skillsProjection.ts`), which refuses to place a `tools:`-scoped
+ * rule's body where a client it never named could load it (W3). That row is
+ * also the ONLY source claude's own re-targeted native copy draws from
+ * (`nativeSkillRows` filters the same projection's rows) — so a rule the
+ * projection refuses to place is delivered through no door to claude either,
+ * not just to codex or copilot. The guard therefore applies to every branch
+ * below, not to the two tools that read the shared tree directly: a rule this
+ * predicate would demote with nowhere left to land is never demoted at all,
+ * on any tool, structurally — a client added to this function later inherits
+ * the guard instead of needing its own opt-in.
  */
 export function demotedRuleIds(
   tool: Tool,
@@ -147,18 +149,16 @@ export function demotedRuleIds(
   if (mode === "always-on" || tool === "cursor") return new Set();
   // Never demote a rule that would be demoted with nowhere left to land: the
   // shared-tree projection (W3) refuses a `tools:`-scoped rule whose `tools:`
-  // does not cover every reader of that tree, so a codex/copilot demotion
-  // that ignored the same fact would strand the rule with no delivery door.
-  const projectableToSharedTree = (rule: RuleDeliveryInput): boolean =>
+  // does not cover every reader of that tree, so a demotion that ignored the
+  // same fact would strand the rule with no delivery door.
+  const projectable = (rule: RuleDeliveryInput): boolean =>
     rule.tools === undefined || [...sharedTreeReaders].every((reader) => rule.tools!.includes(reader));
   const demotes =
     tool === "codex"
       ? (rule: RuleDeliveryInput) =>
-          !rule.critical && !rule.floorTagged && !rule.anchored && projectableToSharedTree(rule)
-      : tool === "copilot"
-        ? (rule: RuleDeliveryInput) =>
-            !rule.critical && !rule.floorTagged && !rule.globScoped && projectableToSharedTree(rule)
-        : (rule: RuleDeliveryInput) => !rule.critical && !rule.floorTagged && !rule.globScoped;
+          !rule.critical && !rule.floorTagged && !rule.anchored && projectable(rule)
+      : (rule: RuleDeliveryInput) =>
+          !rule.critical && !rule.floorTagged && !rule.globScoped && projectable(rule);
   return new Set(rules.filter((rule) => demotes(rule)).map((rule) => rule.id));
 }
 

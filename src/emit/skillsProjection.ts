@@ -316,19 +316,16 @@ export async function projectSkills(
   // of the tools it names: placing it anyway is how a `tools:`-scoped rule's
   // body reaches a client it never named (W3, N1).
   //
-  // N1: this skip is now mostly DEFENSIVE rather than load-bearing, for codex
-  // and copilot — `demotedRuleIds` (`../content/ruleDelivery.ts`) refuses to
-  // demote a `tools:`-restricted rule for either of them unless it names
-  // every {@link SHARED_SKILLS_TREE_READERS} tool, so `tools` below never
-  // contains codex or copilot for a rule this branch would otherwise drop,
-  // and their always-on delivery is what carries the rule instead. Claude is
-  // the one exception, by design: its demotion answer carries no such guard
-  // (claude reaches this rule through its own re-targeted native copy, not
-  // through this shared file, so the guard belongs to codex and copilot's
-  // shared door, not to claude's private one) — if claude alone demoted a
-  // rule this restrictive, this branch still drops the row, and claude's own
-  // native copy (filtered from the same {@link ruleRows} by `nativeSkillRows`)
-  // loses it too. That remaining gap is accepted, not fixed here.
+  // N1: this skip is now DEFENSIVE rather than load-bearing — `demotedRuleIds`
+  // (`../content/ruleDelivery.ts`) refuses to demote a `tools:`-restricted
+  // rule on ANY tool (codex, copilot, or claude) unless it names every
+  // {@link SHARED_SKILLS_TREE_READERS} tool, so `tools` below never contains
+  // a tool that demoted a rule this branch would otherwise drop, and that
+  // tool's always-on delivery is what carries the rule instead. Claude reaches
+  // a demoted rule through its own re-targeted native copy (filtered from
+  // these same rows by `nativeSkillRows`), not through this shared file, but
+  // it draws from the SAME row set, so the guard has to hold for claude's
+  // demotion answer too — and it does, structurally, in `demotedRuleIds`.
   const ruleRows = (options.ruleItems ?? []).flatMap((item) => {
     const tools = TOOLS.filter((tool) => demoted[tool].has(item.id));
     if (tools.length === 0) return [];

@@ -1522,6 +1522,32 @@ describe("projectSkills over demoted rules", () => {
     expect(pathsOf(rows)).toEqual([]);
   });
 
+  // N1: the claude twin. Claude is not a {@link SHARED_SKILLS_TREE_READERS}
+  // member, but its native copy is filtered from these SAME shared-tree rows
+  // (`nativeSkillRows`), so a rule the shared tree refuses must be absent from
+  // this projection even when claude is the only tool that demoted it —
+  // otherwise `nativeSkillRows` would have no row left to filter and claude
+  // would lose the rule entirely rather than keep it always-on.
+  it("skips the shared skill row for a tools:[claude]-only demoted rule, the claude twin", async () => {
+    const claudeOnly: CatalogItem = {
+      type: "rule",
+      id: "claude-only-demoted-rule",
+      filePath: "/corpus/rules/stamity-claude-only-demoted-rule.md",
+      relativePath: "rules/stamity-claude-only-demoted-rule.md",
+      description: "Fixture rule, claude-only.",
+      tags: ["review"],
+      body: "\nClaude-only content.\n",
+      frontmatter: { id: "claude-only-demoted-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["claude"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [claudeOnly],
+      demotedRules: demotedOn(["claude"], "claude-only-demoted-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([]);
+  });
+
   // M6: a demoted rule whose id an override tree also claims must project the
   // OVERRIDE's body as a skill, not the shipped one — the same "replacement,
   // not a filter" rule `projectSkills over an override tree` pins for skills,
