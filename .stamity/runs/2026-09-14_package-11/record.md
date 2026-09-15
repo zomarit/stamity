@@ -541,3 +541,23 @@ always-on budget item stays open until the measurement lands.
   export note fix, pins at 505/49 and the new set hash; driver tests 22/22; deterministic canaries
   K3k–K3m/K4k–K4m passed with no model call. The maintainer's decision at 14:05Z: a cheap
   affected-case check (the five touched cases, three samples, calibration first) gates the full run.
+- 15:20Z — review fixer round merged (`fa7057e` the work command's ambiguity return names the smallest
+  unblocking input; `fd86a34` the disposition guard keys each note to the sha256 of the criterion text it
+  disposed and reads the prior run's case file from git at that run's candidate — the instrument's
+  `criteria()` requires gap-free numbering, so retiring a slot was not available — the predecessor gate
+  pins the four frontmatter fields for every case again, a removed case counts as disposed by its
+  removal, and the three Minors). The one finding the fixer declined on a constraint I had overstated
+  is fixed inline (`b50a79d`): the pull-request screen's class description asks for the label and, in
+  generic terms, the shape it names — never table wording the case's Brief does not carry — and the
+  Brief's verbatim quote moved with it, line counts unchanged, no Expected change. Whole suite green
+  after it (208 files, 8,408 tests); goldens updated; leak gate PASS.
+
+## Phase 1' closed — the second candidate — 2026-09-15T15:25Z
+
+- This commit is the second candidate: run 27's three single-sample failures repaired in the corpus
+  (five content sentences across four files), the eight advisory repeats disposed under SET-v7's
+  rule (505 binding, 49 advisory; SET-v7 `0500b90b…`), the manual runner's guard made satisfiable,
+  every review finding closed, CI green on the repaired head `a970d0a` on every leg. Freeze as
+  before. Phase 2': the affected-case check (five cases × three samples, calibration first, never
+  exported) gates the full run 28; the release dry run, the signing rehearsal and CI re-run on this
+  commit.
