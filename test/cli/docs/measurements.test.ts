@@ -1,9 +1,25 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import type { Dirent } from "node:fs";
+import type * as NodeFs from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+
+/**
+ * S-3's guard is exercised at two characters, and `|` is not a legal Windows filename
+ * character — a fixture directory literally named with one cannot exist on that platform, which
+ * is exactly the CI failure this mock avoids. `readdirSync` is the one seam `computeMergeReadyRate`
+ * uses to learn a run's directory name, so wrapping it (delegating to the real implementation for
+ * every other path) lets the pipe case be proved by injecting a synthetic directory entry rather
+ * than by writing a file no Windows checkout could hold. The backtick case stays a real fixture
+ * on disk — a backtick is legal in a filename on every platform this suite runs on.
+ */
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>();
+  return { ...actual, readdirSync: vi.fn(actual.readdirSync) };
+});
 import {
   CI_WORKFLOW_PATH,
   DEFAULT_CONFIDENCE_GATE,
@@ -579,17 +595,50 @@ describe("the rule, exercised against fixture trees", () => {
     rmSync(empty, { recursive: true, force: true });
   });
 
-  it("refuses a run directory name that would break out of a code span or table cell", () => {
-    // S-3: run ids are interpolated unescaped into `` `${run.run}` `` and
-    // `| ${run.run} |` on the rendered page; a name carrying a backtick or a
-    // pipe must be refused before it reaches that template rather than
-    // rendered as broken or injected Markdown.
+  it("refuses a run directory name that would break out of a code span", () => {
+    // S-3: run ids are interpolated unescaped into `` `${run.run}` `` on the
+    // rendered page; a name carrying a backtick must be refused before it
+    // reaches that template rather than rendered as broken Markdown. A
+    // backtick alone is legal in a filename on every platform this suite
+    // runs on, unlike the pipe case below.
     const root = fixture({
-      "2026-01-02_ok | pwned`": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      "2026-01-02_ok`pwned": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
     });
     expect(() => computeMergeReadyRate(root)).toThrow(EngineError);
-    expect(() => computeMergeReadyRate(root)).toThrow(/2026-01-02_ok \| pwned`/);
+    expect(() => computeMergeReadyRate(root)).toThrow(/2026-01-02_ok`pwned/);
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it("refuses a run directory name that would break out of a table cell", () => {
+    // S-3's other half: run ids are also interpolated unescaped into
+    // `| ${run.run} |` on the rendered page, so a name carrying a pipe must
+    // be refused the same way. `|` is not a legal Windows filename
+    // character, so this case is proved against the exported rule
+    // (`computeMergeReadyRate`'s own `RUN_ID_PATTERN` check) by injecting a
+    // synthetic directory entry into its `readdirSync` listing, rather than
+    // by creating a fixture directory no Windows checkout could hold.
+    const root = fixture({
+      "2026-01-02_ok-real-run": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    const runsDir = join(root, RUNS_DIR);
+    const injectedName = "2026-01-02_ok | pwned";
+    const fakeEntry = { name: injectedName, isDirectory: () => true } as unknown as Dirent;
+
+    const mockedReaddir = vi.mocked(readdirSync);
+    const passthrough = mockedReaddir.getMockImplementation();
+    if (passthrough === undefined) throw new Error("readdirSync mock has no default implementation");
+    mockedReaddir.mockImplementation(((path: unknown, options?: unknown) => {
+      const entries = (passthrough as unknown as (...args: unknown[]) => Dirent[])(path, options);
+      return path === runsDir ? [...entries, fakeEntry] : entries;
+    }) as typeof readdirSync);
+
+    try {
+      expect(() => computeMergeReadyRate(root)).toThrow(EngineError);
+      expect(() => computeMergeReadyRate(root)).toThrow(/2026-01-02_ok \| pwned/);
+    } finally {
+      mockedReaddir.mockImplementation(passthrough as typeof readdirSync);
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
