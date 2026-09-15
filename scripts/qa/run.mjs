@@ -56,9 +56,13 @@ export function repoRelativeLabel(absolute) {
 /**
  * The pages under test, as site routes paired with the file the build writes for each.
  *
- * Five, chosen for what each one contributes rather than for coverage: the home page (the only
- * hand-built React surface), two prose guides, the trust page (the densest link set), and the
- * capability matrix (the only wide table, and the only page with a grid contract to check).
+ * Eight, chosen for what each one contributes rather than for coverage: the home page (the only
+ * hand-built React surface), two prose guides, the trust page (the densest link set), the
+ * capability matrix (the only wide table, and the only page with a grid contract to check), and
+ * the three pages the 1.8.0 release added or restructured — the security mapping (the widest
+ * hand-written tables, every header cell scoped by the rehype plugin), the measurements page
+ * (rendered from a snapshot) and the doctrine page (the amendments table) — so a release's own
+ * new pages never ship measured by nobody.
  */
 export const PAGES = [
   { route: '/', file: 'index.html' },
@@ -66,6 +70,9 @@ export const PAGES = [
   { route: '/docs/customization', file: 'docs/customization/index.html' },
   { route: '/docs/packs-and-trust', file: 'docs/packs-and-trust/index.html' },
   { route: '/docs/capability-matrix', file: 'docs/capability-matrix/index.html' },
+  { route: '/docs/security-mapping', file: 'docs/security-mapping/index.html' },
+  { route: '/docs/measurements', file: 'docs/measurements/index.html' },
+  { route: '/docs/doctrine', file: 'docs/doctrine/index.html' },
 ]
 
 /** Where the browser lane's dependencies live: the docs site owns them, not the published package. */
