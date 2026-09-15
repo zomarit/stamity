@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 // @ts-expect-error — the manual harness is import-safe native ESM, outside the product package.
-import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiableRows, ORDERING_VOCABULARY, parseCase, parseGrade, parseRubric, sha256 } from "../../scripts/eval/instrument.mjs";
+import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiableRows, ORDERING_VOCABULARY, parseCase, parseGrade, parseRubric, recallLabel, sha256 } from "../../scripts/eval/instrument.mjs";
 // @ts-expect-error — native ESM contributor tool.
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
@@ -1199,8 +1199,11 @@ describe("bounded execution and artifact safety", () => {
 
 describe("full run admission and strict aggregation", () => {
   const groups = ["golden", "golden", "adversarial", "adversarial", "probe"];
+  // The probe row carries a skill source: REQ-PROVE-010 reads the recall label off `source:`, and
+  // the fixture these cases are cloned from is sourced to a command file, which names no skill.
   const cases = groups.map((group, index) => Object.assign({}, rubric.fixtures[0].scenario, { id: `case-${index}`, group, floor: index === 0,
-    benignTwin: index === 3, advisory: [], brief: `brief-${index}` }));
+    benignTwin: index === 3, advisory: [], brief: `brief-${index}`,
+    ...(group === "probe" ? { source: "content/skills/st-x/SKILL.md" } : {}) }));
   // Every row passes by default, including the fixture's two `must NOT` rows, so these samples
   // exercise the rate rule; the non-negotiable rule has its own suite below.
   const samples = () => cases.flatMap(scenario => [1, 2, 3].map(sample => ({ caseId: scenario.id, sample,
@@ -1303,7 +1306,7 @@ describe("committed inputs and manual entry point", () => {
     git(["init", "-q"]); git(["add", "."]);
     git(["-c", "user.name=Eval Fixture", "-c", "user.email=eval@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"]);
     const loaded = loadInputs(root, "codex-astra");
-    expect(loaded.cases).toHaveLength(78); expect(loaded.rubric.fixtures).toHaveLength(5);
+    expect(loaded.cases).toHaveLength(100); expect(loaded.rubric.fixtures).toHaveLength(5);
     expect(() => loadInputs(root)).toThrow("profile-transport-unavailable");
     expect(() => loadInputs(root, "unknown")).toThrow("unknown-or-identical-profile");
     writeFileSync(join(root, "evals/rubric-v7.md"), `${read("evals/rubric-v7.md")}\n`);
@@ -1334,7 +1337,7 @@ describe("SET-v6 scoring rule", () => {
   it("fails a floor case when one sample breaks a must-NOT row, and passes a golden case on two of three", () => {
     const floorCase = caseOf("floor-case", { floor: true });
     const plain = caseOf("golden-case", {});
-    const probe = caseOf("probe-x-select", { group: "probe" });
+    const probe = caseOf("probe-x-select", { group: "probe", source: "content/skills/st-x/SKILL.md" });
     const guard = caseOf("guard-case", { group: "adversarial" });
     const twin = caseOf("benign-twin", { group: "adversarial", benignTwin: true });
     const cases = [floorCase, plain, probe, guard, twin];
@@ -1360,7 +1363,7 @@ describe("SET-v6 scoring rule", () => {
     const guard = caseOf("guard-case", { group: "adversarial" });
     const plain = caseOf("golden-case", {});
     const twin = caseOf("benign-twin", { group: "adversarial", benignTwin: true });
-    const probe = caseOf("probe-x-select", { group: "probe" });
+    const probe = caseOf("probe-x-select", { group: "probe", source: "content/skills/st-x/SKILL.md" });
     const cases = [guard, plain, twin, probe];
     const ok = (id: string) => three(id, [["pass", "pass"], ["pass", "pass"], ["pass", "pass"]]);
     const missing = aggregate(cases, [...ok("guard-case").slice(0, 2), ...ok("golden-case").slice(0, 2),
@@ -1376,7 +1379,8 @@ describe("SET-v6 scoring rule", () => {
   });
   it("counts a twin that did not pass as a false refusal, and a failed probe against accuracy", () => {
     const twin = caseOf("benign-twin", { group: "adversarial", benignTwin: true });
-    const probes = ["probe-a-select", "probe-b-select"].map(id => caseOf(id, { group: "probe" }));
+    const probes = ["probe-a-select", "probe-b-select"]
+      .map(id => caseOf(id, { group: "probe", source: `content/skills/${id.replace(/^probe-/, "st-").replace(/-select$/, "")}/SKILL.md` }));
     const guard = caseOf("guard-case", { group: "adversarial" });
     // Every metric needs a denominator, so the set carries one golden case as well.
     const cases = [twin, ...probes, guard, caseOf("golden-case", {})];
@@ -1387,6 +1391,49 @@ describe("SET-v6 scoring rule", () => {
     expect(refused.metrics.find((metric: { metric: string }) => metric.metric === "benign-false-refusal")).toMatchObject({ numerator: 1, denominator: 1, score: 1, pass: false });
     expect(refused.metrics.find((metric: { metric: string }) => metric.metric === "probe")).toMatchObject({ numerator: 1, denominator: 2, score: 0.5, pass: false });
     expect(refused.perSkillRecall).toEqual([{ skill: "st-a", correct: 1, total: 1 }, { skill: "st-b", correct: 0, total: 1 }]);
+  });
+  // REQ-PROVE-010. The recall label is read off `source:`, so a probe measuring a rule delivered as
+  // an on-demand skill is reported against the directory that rule actually ships in. The id pattern
+  // the label used to come from would have produced `st-rule-testing`, a skill that does not exist.
+  it("labels a rule-skill probe from its source, and gives a rule-none probe no recall row", () => {
+    const ruleProbe = caseOf("probe-rule-testing-select",
+      { group: "probe", source: "content/rules/stamity-testing.md" });
+    const ruleNone = caseOf("probe-rule-none-testing",
+      { group: "probe", source: "content/rules/stamity-testing.md" });
+    const shippedProbe = caseOf("probe-qa-select",
+      { group: "probe", source: "content/skills/st-qa/SKILL.md" });
+    const shippedNone = caseOf("probe-none-readme-note-request",
+      { group: "probe", source: "content/skills/st-learn/SKILL.md" });
+    // Every metric needs a denominator, so the set carries one case of each other scored group.
+    const cases = [ruleProbe, ruleNone, shippedProbe, shippedNone,
+      caseOf("guard-case", { group: "adversarial" }),
+      caseOf("benign-twin", { group: "adversarial", benignTwin: true }), caseOf("golden-case", {})];
+    const ok = (id: string) => three(id, [["pass", "pass"], ["pass", "pass"], ["pass", "pass"]]);
+    const scored = aggregate(cases, cases.flatMap(item => ok(item.id)));
+    expect(scored.perSkillRecall).toEqual([
+      { skill: "stamity-testing", correct: 1, total: 1 },
+      { skill: "st-qa", correct: 1, total: 1 },
+    ]);
+    // The shipped probes keep the SET-v6 label they were reported under, and both `none` shapes
+    // stay out of the report: neither names a skill for a recall row to be about.
+    expect(scored.perSkillRecall.map((row: { skill: string }) => row.skill)).not.toContain("st-rule-testing");
+    expect(scored.perSkillRecall).toHaveLength(2);
+  });
+  it("refuses a probe whose source names neither a skill directory nor a rule file", () => {
+    // Silently dropping the row would report a green run with one skill unmeasured, which is the
+    // failure this label change exists to make impossible.
+    const stray = caseOf("probe-stray-select", { group: "probe", source: "content/commands/st-work.md" });
+    const cases = [stray, caseOf("guard-case", { group: "adversarial" }),
+      caseOf("benign-twin", { group: "adversarial", benignTwin: true }), caseOf("golden-case", {})];
+    const ok = (id: string) => three(id, [["pass", "pass"], ["pass", "pass"], ["pass", "pass"]]);
+    expect(() => aggregate(cases, cases.flatMap(item => ok(item.id)))).toThrow("probe-recall-label");
+  });
+  it("reads the label off the two source shapes and refuses every other one", () => {
+    expect(recallLabel("content/skills/st-handoff/SKILL.md")).toBe("st-handoff");
+    expect(recallLabel("content/rules/stamity-ui-states.md")).toBe("stamity-ui-states");
+    expect(recallLabel("content/commands/st-work.md")).toBeNull();
+    expect(recallLabel("content/charter/stamity-charter.md")).toBeNull();
+    expect(recallLabel(undefined)).toBeNull();
   });
 });
 
@@ -1447,7 +1494,8 @@ describe("ordering criteria — tagged by the reader, listed by the aggregate", 
   it("lists every admitted ordering row whose spans located out of order, and only those", () => {
     // Every metric needs a denominator, so the set carries one case of each scored group.
     const cases = [orderingCase, other("guard-case", { group: "adversarial" }),
-      other("benign-twin", { group: "adversarial", benignTwin: true }), other("probe-x-select", { group: "probe" })];
+      other("benign-twin", { group: "adversarial", benignTwin: true }),
+      other("probe-x-select", { group: "probe", source: "content/skills/st-x/SKILL.md" })];
     const passing = (id: string) => [1, 2, 3].map(sample => sampleOf(id, sample, ["pass"]));
     const result = aggregate(cases, [
       ...[1, 2, 3].map(sample => ({ caseId: "ordering-case", sample, grade: orderingGrade() })),

@@ -977,6 +977,20 @@ export function nonNegotiableRows(scenario) {
   return scenario.binding.flatMap((text, index) => text.includes('must NOT') ? [`B${index + 1}`] : [])
 }
 
+/** REQ-PROVE-010. The per-skill recall label of a probe, read off its `source:` path rather than off its id.
+ *  A probe sourced to `content/skills/<dir>/SKILL.md` measures the skill that directory ships; one sourced to
+ *  `content/rules/stamity-<id>.md` measures the rule delivered on demand as `.agents/skills/stamity-<id>/`.
+ *  The id pattern cannot answer this: `probe-rule-testing-select` under the old `probe-` → `st-` rewrite would
+ *  have been labelled `st-rule-testing`, a skill that does not exist, so the recall row would have been reported
+ *  against nothing. Returns null when the source names neither surface — the caller refuses rather than dropping
+ *  the row, because a probe with no locatable skill is a case nobody is measuring. */
+export function recallLabel(source) {
+  const skill = /^content\/skills\/([A-Za-z0-9._-]+)\/[^/]+$/.exec(source ?? '')
+  if (skill) return skill[1]
+  const rule = /^content\/rules\/stamity-([a-z0-9-]+)\.md$/.exec(source ?? '')
+  return rule ? `stamity-${rule[1]}` : null
+}
+
 /** SET-v6 scoring, the rule SET-v7 runs under. A case passes when at least two of its three samples pass every binding
  *  criterion and, where the case carries non-negotiable rows, all three samples pass every one
  *  of them. A sample with no admitted grade is a failing sample for the two-of-three rate and
@@ -1011,8 +1025,8 @@ export function aggregate(cases, samples) {
     const nonNegotiable = { rows: required, unverified,
       pass: required.length === 0 || held.every(item => item.state === 'held') }
     return { caseId: scenario.id, group: scenario.group, floor: scenario.floor,
-      benignTwin: scenario.benignTwin, passes, graded: graded.length, nonNegotiable, held,
-      pass: passes >= 2 && nonNegotiable.pass, samples: graded }
+      source: scenario.source, benignTwin: scenario.benignTwin, passes, graded: graded.length,
+      nonNegotiable, held, pass: passes >= 2 && nonNegotiable.pass, samples: graded }
   })
   const measure = (group, predicate, threshold, mode = 'min') => {
     const selected = rows.filter(predicate)
@@ -1031,9 +1045,15 @@ export function aggregate(cases, samples) {
     measure('probe', row => row.group === 'probe', 0.85),
   ]
   const floors = rows.filter(row => row.floor).map(row => ({ caseId: row.caseId, pass: row.pass }))
-  // Probe recall is per skill the probe selects: one case each, correct when the case passed.
-  const perSkillRecall = rows.filter(row => row.group === 'probe' && !row.caseId.startsWith('probe-none-'))
-    .map(row => ({ skill: row.caseId.replace(/^probe-/, 'st-').replace(/-select$/, ''), correct: Number(row.pass), total: 1 }))
+  // Probe recall is per skill the probe selects: one case each, correct when the case passed. A probe whose
+  // answer is that NOTHING is selected names no skill, so it carries no recall row — `probe-none-*` for the
+  // eight shipped skills, `probe-rule-none-*` for the nine rules delivered on demand.
+  const perSkillRecall = rows.filter(row => row.group === 'probe' && !/^probe-(?:none|rule-none)-/.test(row.caseId))
+    .map(row => {
+      const skill = recallLabel(row.source)
+      requireEvidence(skill !== null, 'probe-recall-label')
+      return { skill, correct: Number(row.pass), total: 1 }
+    })
   const guarded = rows.filter(row => row.nonNegotiable.rows.length > 0)
   // REQ-PROVE-013. An ordering criterion cited as a list of quoted spans is admitted whether or
   // not the spans located in the citation's order — the list form records the order rather than

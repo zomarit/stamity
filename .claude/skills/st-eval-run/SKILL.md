@@ -114,9 +114,9 @@ configuration before scoring; a different profile's calibration never transfers.
 Three independent fresh samples per case file under `evals/cases-v6/**`.
 Queue independent calls together up to the recorded capacity; the stateless runner
 allows 1–16 concurrent calls, default 4. A queue slot is a resource limit, never
-shared model context. A release measures the full 78-case roster (234 scenarios).
+shared model context. A release measures the full 100-case roster (300 scenarios).
 The session-native protocol uses two concurrent fresh children and five calibration
-judges before the 468 scenario/scoring-judge calls.
+judges before the 600 scenario/scoring-judge calls.
 
 Each scenario task contains exactly what the case seals and no more.
 
