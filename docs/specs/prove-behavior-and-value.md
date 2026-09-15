@@ -1,7 +1,7 @@
 ---
 id: prove-behavior-and-value
 # A design document, authored outside the spec command and excluded from the site build.
-status: design
+status: shipped-with-1.8.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
 # Prove behavior and value

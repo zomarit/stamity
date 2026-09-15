@@ -113,7 +113,7 @@ export async function verify(root, context, options = {}) {
   const { createManifest, writeManifest } = await import('../src/manifest/manifest.ts')
   const project = join(root, 'consumer')
   await mkdir(project)
-  const setup = createManifest({ tools: ['claude'], generatorVersion: '1.7.0', now: new Date(0),
+  const setup = createManifest({ tools: ['claude'], generatorVersion: '1.8.0', now: new Date(0),
     selection: { items: { agent: [], skill: [], rule: [], command: [] } } })
   let installed = setup
   const results = []
