@@ -526,3 +526,18 @@ always-on budget item stays open until the measurement lands.
   the return contract's `BLOCKED_AMBIGUITY` line is repaired to state what the rule requires; and
   the public runner's disposition guard could never be satisfied once a repeat existed (a repeat now
   counts as disposed when its case file carries the dated note).
+- 14:35Z — repair round two merged (`7df7cae` spec-author return contract, `3fe1587` the last two
+  repeats deleted with quoted reasons, `6d445c1` the runner's guard reads dispositions off the case
+  files); roster 505 binding / 49 advisory; SET-v7 sha256 `0500b90b…`. Full local gate green on
+  `6d445c1` (208 files, 8,408 tests; statements 96.48 %, branches 89.84 %, functions 98.72 %, lines
+  97.34 %; leak gate, knip, sync/check, site all exit 0). Review of the whole repair: request-changes
+  on three Warnings — the guard keyed on criterion numbers the promotions recycled, the predecessor
+  gate loosened past what a disposition needs, and the pull-request screen's sentence pointing at
+  table wording its case Brief does not carry — plus five Minors (a count in a docstring, a lost
+  newline, a hard-coded cases directory, the work command's ambiguity return, a retired case wedging
+  the guard). A fixer round is dispatched for all eight; the review found no Critical, no forbidden
+  surface touched, every disposition recorded three ways.
+- Private driver: the affected-case check mode (`--cases`, id carries `check`, never exported), the
+  export note fix, pins at 505/49 and the new set hash; driver tests 22/22; deterministic canaries
+  K3k–K3m/K4k–K4m passed with no model call. The maintainer's decision at 14:05Z: a cheap
+  affected-case check (the five touched cases, three samples, calibration first) gates the full run.
