@@ -255,7 +255,14 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // nine it no longer carries are projected as skills — so this is a real 5_219
 // bytes off what every co-selected client reads, not bytes moved to another
 // always-on file. The ratio against the figure below falls from ≈5.8x to ≈4.8x.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 24_904;
+// 24_904 -> 24_952 on 2026-09-15, the run-27 content repair: the injection-
+// screening rule's item 2 now says the report states that the run continues on
+// its original objective. The rule is in codex's appendix, so its bytes land
+// here; +48 bytes and NOT one line, because that item was rewrapped inside the
+// twelve lines it already had — `ALWAYS_ON_BUDGET_LINES` is pinned on this rule
+// and did not move, and the figure below, which is the charter alone, did not
+// move either.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 24_952;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.

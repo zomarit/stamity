@@ -117,9 +117,11 @@ run.
 - **status:** `DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`.
 - **severity** for findings: `Critical` | `Warning` | `Minor`. `Critical` requires a
   breached declared budget; without one the run's ceiling is `Warning`.
-- Every behaviour claim cites `path:line`, and every cost claim carries its measurement and
-  the method that produced it. A bare path is not a citation: a sentence saying what the change
-  does at a file carries the line it read that from, restated change-set rows included. This
+- Every behaviour claim cites `path:line`, and every cost claim carries its measurement and the
+  method that produced it, named in that finding's own `method:` slot below — a `path:line` says
+  where the code is, never how its cost was established. A bare path is not a citation: a
+  sentence saying what the change does at a file carries the line it read that from, restated
+  change-set rows included. This
   binds every behaviour and cost claim in the return, not only the block the result labels as
   cited — the surfaces list, the finding bodies, and the prose between them. A finding's opening
   sentence is a behaviour claim like any other and carries its line, or it is rewritten as a
@@ -127,12 +129,18 @@ run.
   restates a fact from the brief about a file outside the surfaces-list exemption — which
   file calls which, for instance — still carries its own `path:line`; restating the brief's
   words does not inherit the exemption.
+- **Finding row shape.** Each finding is returned as a row carrying `severity:`, `surface:`,
+  `path:line`, `claim:`, and `method:` — how this claim was established, named as one of: a
+  static read of the cited lines, a count this run executed, a benchmark this run ran, or a
+  budget file it read. `method:` has no empty form and no implied default: a cost claim with
+  nothing to put there is written as a question, not returned as a finding. The slot exists
+  because a cost claim carrying `path:line` and no method reads as measured when it was not.
 - Only `Critical` and `Warning` findings reach the human checkpoint; `Minor` rows are
   ledgered and travel with the run.
 - `DONE` carries the surfaces examined, the budgets found and the budget classes absent, the
-  findings with their locators and measurements, how many findings this run posted, and
-  whether the run posted or was advisory. No rate is reported: nothing computes one, and a
-  number invented here would read as a measurement.
+  findings with their locators, their `method:` rows and their measurements, how many findings
+  this run posted, and whether the run posted or was advisory. No rate is reported: nothing
+  computes one, and a number invented here would read as a measurement.
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking input
   — a benchmark harness that does not run here, a budget declared in a file this run cannot
   read, a schema with no row-count evidence anywhere in the tree.

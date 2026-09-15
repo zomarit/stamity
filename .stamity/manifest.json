@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.7.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-15T02:00:20.707Z",
+  "updatedAt": "2026-09-15T13:40:03.051Z",
   "tools": [
     "claude"
   ],
@@ -92,7 +92,7 @@
       "adapter": "claude",
       "artifactId": "performance",
       "artifactType": "agent",
-      "contentHash": "e550bbc77e68eb495f01895a2e7aed46c1766aa39c7f847b962589f78a206fbf",
+      "contentHash": "f90b465efdb73912852f9ab34070cc45ebacf30edc793a17f6df5e6b241ea083",
       "path": ".claude/agents/stamity-performance.md"
     },
     {
@@ -162,7 +162,7 @@
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "36118e4a06af00cbd63c93784abb6e09fa7cee9dbeeccecaed38ccac65675007",
+      "contentHash": "90af214e187f72b4d9e17783afb861ddb8a622a518fece387031e32041bd8a3f",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
@@ -211,7 +211,7 @@
       "adapter": "claude",
       "artifactId": "injection-screening",
       "artifactType": "rule",
-      "contentHash": "f40d09641c213b804f5ad89fb4e8f448a6e2db8736fbf758c5232c37c084b0df",
+      "contentHash": "0248e5bb77ee02f2738bf33eb42db91666bec24dde21d6fe5ace16e5c0fa7aab",
       "path": ".claude/rules/stamity-injection-screening.md"
     },
     {
