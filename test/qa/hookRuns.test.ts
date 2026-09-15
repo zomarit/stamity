@@ -78,6 +78,27 @@ describe("binaryVersion", () => {
     expect(probe.reason).toContain("stamity-qa-hookruns-broken-binary");
     expect(probe.reason).toContain("present but its version probe failed (exit 1)");
   });
+
+  // N-4: the ENOENT reason used to be `runClient`'s raw `spawnSync` error message verbatim
+  // (`cursor-agent: spawnSync cursor-agent ENOENT`), which reads as an internal error rather than
+  // the plain-language framing every other absent-binary reason carries.
+  it("frames an absent binary's reason as 'not on PATH', not the raw spawnSync error", () => {
+    const probe = binaryVersion("stamity-qa-hookruns-nonexistent-binary");
+    expect(probe.present).toBe(false);
+    expect(probe.reason).toContain("stamity-qa-hookruns-nonexistent-binary: not on PATH (");
+    // The underlying error message survives too — this is a framing fix, not an information loss.
+    expect(probe.reason).toContain("ENOENT");
+  });
+
+  // N-5: a probe killed by a signal leaves `spawnSync`'s `status` null, which the old
+  // `exit ${probe.status}` render turned into the literal, unhelpful "exit null".
+  it("reports 'killed by signal <signal>' rather than 'exit null' when the probe is signal-killed", () => {
+    pathDirWith("stamity-qa-hookruns-signal-killed", '#!/bin/sh\nkill -TERM $$\n');
+    const probe = binaryVersion("stamity-qa-hookruns-signal-killed");
+    expect(probe.present).toBe(false);
+    expect(probe.reason).toContain("killed by signal SIGTERM");
+    expect(probe.reason).not.toContain("exit null");
+  });
 });
 
 describe("runClient — a binary probed present with no measured invocation", () => {

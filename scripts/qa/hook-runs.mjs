@@ -94,7 +94,7 @@ export const CLIENT_RUNNERS = {
 export function binaryVersion(binary) {
   const probe = spawnSync(binary, ['--version'], { encoding: 'utf8', timeout: 60_000 })
   if (probe.error !== undefined && probe.error !== null) {
-    return { present: false, reason: `${binary}: ${probe.error.message}` }
+    return { present: false, reason: `${binary}: not on PATH (${probe.error.message})` }
   }
   const version = (probe.stdout ?? '').trim().split('\n')[0] ?? ''
   if (probe.status === 0 || version !== '') {
@@ -102,8 +102,22 @@ export function binaryVersion(binary) {
   }
   return {
     present: false,
-    reason: `${binary}: present but its version probe failed (exit ${probe.status})`,
+    reason: `${binary}: present but its version probe failed (${exitDescription(probe)})`,
   }
+}
+
+/**
+ * N-5: a probe killed by a signal leaves `child_process.spawnSync`'s `status` field `null`
+ * (Node's own documented shape — the process never exited, it was terminated), which the old
+ * `exit ${probe.status}` render turned into the literal, unhelpful string "exit null". `signal`
+ * is set exactly when `status` is not, so the two are reported as the distinct causes they are:
+ * "killed by signal <signal>" when the probe carries one, "exit unknown" for the residual case
+ * where the shape carries neither (undocumented, but not a case to render as if it were a signal).
+ */
+function exitDescription(probe) {
+  if (probe.signal !== undefined && probe.signal !== null) return `killed by signal ${probe.signal}`
+  if (probe.status !== undefined && probe.status !== null) return `exit ${probe.status}`
+  return 'exit unknown'
 }
 
 /**

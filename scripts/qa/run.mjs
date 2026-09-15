@@ -88,6 +88,28 @@ export function isOutsideRoot(root, candidate) {
 }
 
 /**
+ * Refuse a `--site` whose resolved directory has no relative path under `root` at all (N-6).
+ *
+ * {@link repoRelativeLabel} computes `relative(REPO_ROOT, absolute)`, which itself returns an
+ * ABSOLUTE path when no relative path exists — a `--site` on another Windows drive, or any root
+ * genuinely disjoint from the repository. `isOutsideRoot`'s `..`-prefix check alone misses that
+ * shape (M5's own finding, reused here), so a `--site` outside the repository could still land an
+ * absolute path straight into a committed evidence file's `inputHashes` keys, the exact leak this
+ * module's own `repoRelativeLabel` doc comment says never happens. The refusal fires before any
+ * row is measured — an evidence file half-built against a site this harness was about to refuse is
+ * worse than no file at all. `root` is a parameter (not `REPO_ROOT` read directly) so a test can
+ * drive it against a fake root without touching this checkout's own paths.
+ */
+export function assertSiteWithinRoot(root, siteDir) {
+  if (isOutsideRoot(root, siteDir)) {
+    throw new Error(
+      `--site ${siteDir} is not under the repository root (${root}); the --site directory must ` +
+        'live inside the repository so its evidence-file labels stay repo-relative.',
+    )
+  }
+}
+
+/**
  * Fixture files whose bytes decide what a hook row measures.
  *
  * Selected rather than swept, and the selection is the point. A whole-tree hash would fold in
@@ -243,8 +265,13 @@ function hashEntries(entries) {
  * home directory on most machines. Each hook row (`H1a`–`H1d`) owns its own `inputHashes` map, so
  * dropping the per-client qualifier this label used to carry (`fixture(${client})/…`) does not
  * collide two rows' keys — it only drops information the row id already carries.
+ *
+ * Exported (N-2) so a test can drive the label directly against a fake fixture directory: every
+ * H1 case in this file's own suite passes `--skip-hooks`, which leaves `inputHashes` empty and
+ * lets the assertion loop that checks label shape skip every H1 row silently — this export is
+ * what closes that gap without wiring a real client binary into the suite.
  */
-function hashFixtureInputs(client, fixtureDir) {
+export function hashFixtureInputs(client, fixtureDir) {
   if (fixtureDir === undefined) return { inputs: [], missing: [] }
   const relatives = [
     ...(HOOK_INPUT_PATTERNS[client] ?? []),
@@ -373,6 +400,7 @@ export async function main(argv) {
     return null
   }
   const siteDir = resolve(REPO_ROOT, options.site ?? 'website/build')
+  assertSiteWithinRoot(REPO_ROOT, siteDir)
   const sha = options.sha ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim()
   const out = resolve(REPO_ROOT, options.out ?? `.stamity/evidence/qa-${sha.slice(0, 7)}.json`)
 
