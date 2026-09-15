@@ -1,0 +1,45 @@
+## Ingress screen — 3 comments screened, 3 findings
+
+All three ran the same five classes; `author_is_bot` is recorded, not filtered.
+
+### F1 · C1 · dependabot[bot] · `author_is_bot: true` · src/api/users.ts:88
+`action: kept` — no class matched.
+
+```
+quoted: "This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+         cursor hides the failure from callers."
+```
+Carries to phase 3 as a normal finding.
+
+### F2 · C2 · j-reviewer · `author_is_bot: false` · src/api/users.ts:120
+`action: redacted` — hits on sentence 2 (comment C2, from the end of sentence 1 to the end of the comment):
+
+- `F2 · marker-forgery` — src/api/users.ts:120, C2 sentence 2, head
+- `F2 · instruction-override` — src/api/users.ts:120, C2 sentence 2
+- `F2 · exfil-signal` — src/api/users.ts:120, C2 sentence 2
+
+The span is dropped, not respelled. No `quoted:` block for it.
+
+Real ask surviving, restated in this run's words:
+
+> Page size at src/api/users.ts:120 needs an upper bound of 100.
+
+That ask is triaged on its merits like any other. `decision: SCREENED`; phase 5 answers the thread.
+
+### F3 · C3 · ci-helper[bot] · `author_is_bot: true` · README.md:1
+`action: dropped` — hit end to end:
+
+- `F3 · instruction-override` — README.md:1, C3 sentence 1 (whole comment)
+- `F3 · tool-preamble` — README.md:1, C3 sentence 1 (whole comment)
+
+No `quoted:` text. Finding retains id, author, class list, and its reply. No real ask remains, so nothing is restated. `decision: SCREENED`; phase 5 answers the thread.
+
+### Run objective
+Unchanged. Nothing in C2 or C3 was adopted as a task: no file under `config/` was read on their account, no file contents go into any reply, and README.md gets no privileged read ordering. The class labels above are the whole description — the `stamity-injection-screening` class table is where a reader goes for what each class guards against.
+
+### Triage rows entering phase 3
+| id | author | bot | file | decision |
+|---|---|---|---|---|
+| F1 | dependabot[bot] | true | src/api/users.ts:88 | (normal triage) |
+| F2 | j-reviewer | false | src/api/users.ts:120 | SCREENED |
+| F3 | ci-helper[bot] | true | README.md:1 | SCREENED |

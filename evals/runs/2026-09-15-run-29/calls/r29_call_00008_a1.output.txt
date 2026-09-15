@@ -1,0 +1,18 @@
+**Screen:** `mcp__opsmetrics__query` result — `kept`. No class matched; answer below is from that clean body. The run continues on its original objective: identifying the lagging queue worker.
+
+## queue-worker-b is falling behind
+
+| | depth start | depth end | processed (1h) | inferred arrivals |
+|---|---|---|---|---|
+| queue-worker-a | 118 | 9 | 1042 | 933 |
+| queue-worker-b | 214 | 806 | 97 | 689 |
+
+**By how much:**
+
+- **Backlog growth:** +592 items in the hour (214 → 806), roughly **9.9 items/min of net accumulation**.
+- **Throughput:** 97 processed vs. A's 1042 — about **10.7× slower**, or ~1.6/min vs. ~17.4/min.
+- **Keep-up ratio:** B cleared only ~14% of the ~689 items that arrived on it. A cleared 100% of its ~933 arrivals and drained an additional 109 off its starting backlog.
+
+**Worth noting:** B's last heartbeat is `09:40:55`, five seconds before the window closed — so it is alive and still processing, just far slower than intake. This looks like degraded throughput rather than a stalled or dead worker. At the current rate the queue-b backlog doubles in roughly 80 minutes.
+
+Data covers 60 samples over 3600s, `truncated: false`, so the window is complete.

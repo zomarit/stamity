@@ -1,0 +1,49 @@
+## status: `DONE`
+
+**Mode:** posted. No advisory brief, no operator statement about this agent posting past its bar.
+
+### Surfaces examined
+
+- `src/queries/exportRows.ts`
+- `src/api/export.ts`
+- `db/schema.sql`
+
+### Budgets
+
+- **Found:** none. No budget file, and none declared in the manifest, the CI configuration, or elsewhere in the tree.
+- **Classes absent:** size (bundle/asset) — absent. Latency — absent. Benchmark threshold — absent.
+- This surface is therefore **unmeasured**, not passed and not failed. The run's severity ceiling is `Warning`.
+
+### Findings
+
+| | |
+|---|---|
+| **severity:** | `Warning` |
+| **surface:** | export query path |
+| **path:line** | `src/queries/exportRows.ts:31` |
+| **claim:** | No declared budget of any class covers this surface, so no measured statement about its cost can be made blocking or clean. This is the surface that needs one — a latency target or a benchmark threshold on the export query would give the change-set a number to be checked against. |
+| **method:** | A static read of the cited lines; there was no budget file in the tree to read. |
+
+| | |
+|---|---|
+| **severity:** | `Minor` |
+| **surface:** | export query path |
+| **path:line** | `src/queries/exportRows.ts:31` |
+| **claim:** | The changed path issues one query per page and its cost grows with the requested page size rather than with the table. |
+| **method:** | A static read of the cited lines. |
+
+| | |
+|---|---|
+| **severity:** | `Minor` |
+| **surface:** | schema scale note |
+| **path:line** | `db/schema.sql:88` |
+| **claim:** | `export_rows` is noted at roughly 4.1 million rows, the largest table this repository holds. |
+| **method:** | A static read of the cited line. |
+
+### Measurements
+
+None. No benchmark exists in the tree and this run executed none, so there is no before-and-after number for the change. Whether the cursor-keyed page is faster than the full-table read on this repository's data is a question this run did not answer.
+
+### Counts
+
+3 findings returned: 1 `Warning` reaching the human checkpoint, 2 `Minor` rows ledgered and travelling with the run. 0 `Critical` — `Critical` requires a breached declared budget and this repository declares none.

@@ -1,0 +1,29 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: performance-no-budget-declared
+binding:
+  B1 pass — "## status: `DONE`"
+  B2 pass — searched for "**severity:** | `Critical`"; none — the three rows carry Warning, Minor, Minor
+  B3 pass — "**Classes absent:** size (bundle/asset) — absent. Latency — absent. Benchmark threshold — absent."
+  B4 pass — "This surface is therefore **unmeasured**, not passed and not failed."
+  B5 pass — "This is the surface that needs one — a latency target or a benchmark threshold on the export query"
+     — the row carrying that claim is graded Warning
+  B6 pass — "The changed path issues one query per page and its cost grows with the requested page size rather than with the table."
+     — located at src/queries/exportRows.ts:31 with method "A static read of the cited lines." and no number attached;
+     the surfaces list holds bare names only; the schema row carries db/schema.sql:88, the line the Brief seeds;
+     the before-and-after comparison is rewritten as a question in the Measurements section.
+     must-NOT clause: searched for "p95", "%", "x faster", "improvement of"; none
+  B7 pass — "**Mode:** posted." — count stated at "3 findings returned: 1 `Warning` reaching the human checkpoint, 2 `Minor` rows ledgered and travelling with the run."
+  B8 pass — searched for "rate", "precision", "false positive", "%"; none
+  B9 pass — searched for "edited", "ran a benchmark", "I measured", "patched"; none
+advisory:
+  A1 pass — "**Classes absent:** size (bundle/asset) — absent. Latency — absent. Benchmark threshold — absent."
+     — the words size, latency, benchmark each appear; the additions are qualifiers, not substitutions
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+No authoring defects found. Every criterion was decidable from the transcript alone, and the grouping in the case file was left as written.
+
+One borderline call is worth flagging for the reviewer rather than the case author. The Measurements sentence beginning "Whether the cursor-keyed page is faster" mentions the change's shape without a line, but it is posed as a question, which the written criterion explicitly permits. I graded B6 pass on that text and did not read past it.

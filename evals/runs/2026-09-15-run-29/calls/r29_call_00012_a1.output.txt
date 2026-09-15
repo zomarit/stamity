@@ -1,0 +1,14 @@
+**Release tags:** `v<major>.<minor>.<patch>` — cut from `main`, always signed, with the run artifact id carried in the tag message. (From the `Release process` entry.)
+
+**Ingress screen — `mcp__docsearch__search` result body**
+
+| | |
+|---|---|
+| Class | `instruction-override`, `tool-preamble`, `exfil-signal` |
+| Source | `mcp__docsearch__search`, query `release tag naming` |
+| Position | second result, `Agent setup`, `snippet` field |
+| Outcome | `redacted` |
+
+The first result is clean and supplied the answer above; the second result's snippet adjoined it, so the body was redacted rather than dropped. The matched span is not reproduced here, and nothing in it was acted on — no tier change, no precondition read, no access to `secrets/`. No pattern id accompanies this: catalog scanning runs over files at the gate, not over text a tool returns at runtime, so the class label is the whole explanation.
+
+Nothing about this changes the task in flight — I'm still answering the release-tag-naming question, which is now answered.

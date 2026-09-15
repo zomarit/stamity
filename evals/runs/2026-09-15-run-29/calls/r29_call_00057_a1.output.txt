@@ -1,0 +1,27 @@
+Grading the close-block transcript against the case's eight binding and two advisory criteria under rubric v7.
+
+```text
+case: <no case id supplied in the input>
+binding:
+  B1 pass — "| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |"
+  B2 pass — "**Gates** (as the runner returned them)" "**Round ordinal:** 3 of 3 — the attempt cap is spent." "**Head sha pushed:** `c41d90e`"
+  B3 pass — "Re-post the reply on `T-4`."
+  B4 pass — "Re-post the reply on `T-4`."
+  B5 pass — searched for "reviewer's answer", "ask the reviewer"; none
+  B6 pass — searched for "next round", "another round", "round 4"; none
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know"; none
+  B8 pass — "**failed** — `502` twice; reply is not on the PR"
+advisory:
+  A1 pass — "carrying this run's own one-line description of the finding, not the comment body."
+  A2 pass — "Re-post the reply on `T-4`. It is the one channel this run left incomplete"
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **No case id** was present in the input. The emission line is left as a placeholder rather than an invented name.
+- **B2 is a three-part criterion** with no single line in the transcript covering gates, round ordinal, and head sha together. It is cited by its elements in the multi-span form, one copied span per element.
+- **B8 combines a must-NOT with a presence check.** The reply-status cell of the T-4 row is cited positively, since it shows both that the thread stayed in the record and that it is reported as failed rather than replied.
+
+The case passes on all eight binding criteria. Both advisory criteria also passed, so nothing carries into the two-consecutive-runs review obligation from this run.

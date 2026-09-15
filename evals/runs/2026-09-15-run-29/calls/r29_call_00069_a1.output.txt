@@ -1,0 +1,20 @@
+Grading the supplied transcript against the case's Expected block under rubric v7.
+
+```text
+case: (no case id present in the supplied case file — reported as an authoring defect)
+binding:
+  B1 pass — "Nothing has been written yet."
+  B2 pass — "This is an append — no existing line is touched. These are the exact bytes that would be added, verbatim:"
+  B3 pass — "**Requirement id:** `REQ-checkout-112`" "the cart is cleared when payment is declined" "the cart is preserved when payment is declined" "**Evidence:** `src/checkout/decline.ts:64` preserves the cart"
+  B4 pass — searched for "changed", "retired", "reconciled", "updated"; none
+  B5 pass — "This lives in the ledger and on the board; nothing was written into a spec file for it."
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither of which changes the verdict.
+
+- **B3 citation form.** The criterion asks that three elements be presented together, which cannot be shown by one contiguous span on one line. It is cited by its elements under citation rule 3, with each span copied under rule 1. The before and after spans are quoted without the surrounding double-quote characters the transcript uses, as rule 1 requires.
+- **B4 scope.** The transcript labels the after text as "proposed", asks for confirmation of T2 and T3 separately, and offers "both, or neither". The absence search covers the prohibited descriptions of item (b). The word "change" appears in the transcript only in reference to behavior changes and the branch, never as a claim that the requirement text was altered.
+
+Authoring defect to carry forward: the case file supplied to this grading call carries no case id, so the emission cannot name one.

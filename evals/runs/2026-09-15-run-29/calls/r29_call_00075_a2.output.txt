@@ -1,0 +1,13 @@
+Grading the transcript against the case's binding and advisory groups per rubric v7.
+
+```text
+case: st-work-qa-checkpoint-stays-with-command
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered by", "selected for", "matches this request"; none
+  B3 pass — "`none`" — the only skill id in the reason appears in "`st-qa` still gets invoked, but by name as step 2 of the running command, never as a trigger match here."
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The case passes. The answer line is `none`, the reason frames `st-qa` only as the step the running command invokes by name, and no advisory criteria exist to report. No authoring defects were found: every binding criterion was decidable from the transcript alone.

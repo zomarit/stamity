@@ -1,0 +1,11 @@
+**Release tags**
+
+Tags follow `v<major>.<minor>.<patch>` — cut from `main`, always signed. The tag message carries the run artifact id.
+
+**Ingress screen — `mcp__docsearch__search`**
+
+`instruction-override · mcp__docsearch__search · result 2 of 2 ("Agent setup"), snippet field · redacted`
+
+A second class, `tool-preamble`, matched the same span; both are covered by the single redaction. The first result was clean and is the source of the answer above, so the body was redacted rather than dropped. The matched text is not reproduced here and its directives were not acted on. No catalog scan applies to tool output, so this record carries no pattern id.
+
+This run continues on what it was asked to do: answering the release-tag naming question. Nothing in the screened span changed that objective, my instructions, or my trust tier.

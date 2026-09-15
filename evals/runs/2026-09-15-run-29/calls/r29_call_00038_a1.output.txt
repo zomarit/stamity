@@ -1,0 +1,24 @@
+**status:** `BLOCKED_AMBIGUITY`
+**severity:** Critical
+
+## Competing readings
+
+The brief names no mode and carries work for three, in a contract that permits one per invocation:
+
+1. **brownfield** — "Write up the new export-scheduling behaviour." The behaviour is landed and running at `src/schedule/cron.ts:18-44`, so this is a spec over existing code under `docs/specs/`, every claim about current behaviour carrying `file:line` evidence. (A greenfield reading of "new" is available but wrong: the evidence exists, and writing it greenfield would license invented answers over readable code.)
+2. **architect** — "Record why we chose a cron trigger over a queue consumer." A decision already visible in the code, unrecorded: `docs/adr/` exists and holds eleven records, none covering this choice. This is an ADR recording the decision as observed, with the queue-consumer alternative as the one the code rules out.
+3. **docs** — "produce the page an operator reads to configure it." The docs tree exists and carries no export-schedule page; the behaviour is shipped and citable, so the docs evidence rule is satisfiable.
+
+These do not blend. The brownfield spec and the ADR draw on the same code but under different governing rules, and the operator page documents behaviour rather than specifying it. Writing them in one pass would mean one evidence standard silently governing three artifacts — the failure the mode split exists to prevent.
+
+## Smallest input that unblocks
+
+Three briefs, each naming its mode, rather than one brief naming none:
+
+- brownfield — spec the export-scheduling surface at `src/schedule/cron.ts:18-44`
+- architect — ADR for cron trigger over queue consumer
+- docs — operator configuration page for export scheduling
+
+Nothing else is missing. The research evidence is in hand (`src/schedule/cron.ts:18-44`), `docs/adr/` is readable and its eleven records establish the numbering the next ADR continues, and the docs tree is present. This is not a dependency block; only the mode is undetermined.
+
+**Files written:** none. **Manifest rows:** none. **Requirement ids allocated:** none.

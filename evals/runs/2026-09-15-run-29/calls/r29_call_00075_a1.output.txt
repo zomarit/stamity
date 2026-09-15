@@ -1,0 +1,17 @@
+Grading the one case against its three binding criteria, per the v7 rubric.
+
+```text
+case: st-work-qa-checkpoint-hand-test-request
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered by", "selected for", "matches this request"; none
+  B3 pass — "`none`" — the only skill id in the transcript sits in the reason, as the one
+     the running command's step invokes by name ("by name as step 2 of the running command,
+     never as a trigger match here"), which the criterion exempts
+advisory:
+  none declared (A1 deleted per disposition 2026-09-15)
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The case passes. The answer line is `none`, the transcript never says `st-qa` is triggered or selected, and its only mention of `st-qa` is the exempted by-name invocation. No undecidable criteria and no grouping defects to flag.

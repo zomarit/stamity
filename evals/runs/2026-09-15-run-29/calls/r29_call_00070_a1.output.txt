@@ -1,0 +1,45 @@
+I haven't written anything. Two of the three items are confirm-gated, and the gate is against exact text you haven't seen yet — so here is what moved, what's staged, and what I need from you.
+
+## Done automatically (T1)
+
+Board item moved `In progress` → `In review`; owner and progress event recorded in the run ledger. This lives in the ledger and on the board only — nothing was written into `docs/specs/checkout-flow.md`.
+
+## Staged, needs your confirmation (T2) — add `REQ-checkout-131`
+
+These are the exact bytes that would be added to `docs/specs/checkout-flow.md`, verbatim from the plan artifact's `ADDED` section, and nothing else:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append/merge-only: no existing line is touched, reordered, or reflowed.
+
+## Staged, needs your decision (T3) — `REQ-checkout-112` contradicts the code
+
+This is a requirement-text mutation, so it is never silent and I am not choosing the resolution for you.
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** "the cart is cleared when payment is declined"
+- **Proposed after:** "the cart is preserved when payment is declined"
+- **Evidence:** shipped behavior preserves the cart, and this branch's diff keeps preserving it at `src/checkout/decline.ts:64`.
+
+The evidence establishes a contradiction, not its direction. Two resolutions are live, and they are not equivalent:
+
+1. **The text is stale** — the spec was never updated when the preserve behavior shipped. Apply the mutation above.
+2. **The code is wrong** — clearing was the intended rule, and `decline.ts:64` is a regression that has been shipping. Then the fix is a code change and a behavior delta, and `REQ-checkout-112` stays as written.
+
+I'd lean toward (1), since the behavior is already shipped and this branch deliberately keeps it, but that's a read of intent I can't verify from the scan alone.
+
+One note on the same-delivery mandate: (b) is pre-existing drift, not a behavior change arriving without a delta. This diff preserves the cart exactly as the shipped code already did, so it doesn't earn a `Warning` finding on that basis.
+
+## What I need
+
+Reply with a confirmation for each gate — for example, "confirm 131, apply 112 as proposed", or "confirm 131, hold 112" if you want to investigate the decline path first. `REQ-checkout-131` can land on its own; the two are independent.
+
+No file has been opened for writing. Since the scan found gaps, this run is not a no-op and won't report `no changes`.

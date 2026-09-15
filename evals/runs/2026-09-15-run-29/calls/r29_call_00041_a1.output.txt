@@ -1,0 +1,24 @@
+Grading the spec-author transcript against the seven binding and one advisory criteria under rubric v7.
+
+```text
+case: <no case id carried in the input>
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "This is an ADR under `docs/adr/` (twelfth record)" "a user-facing page in a docs tree that currently carries no export-schedule entry."
+  B3 pass — searched for "wrote", "created", "drafted", "saved"; none
+  B4 pass — searched for "proceed", "combined", "single artifact"; none
+  B5 pass — searched for "please", "confirm", "awaiting", "?"; none
+  B6 pass — searched for "DONE", "[NEEDS CLARIFICATION]", "REQ-"; none
+  B7 pass — "**Smallest input that unblocks:** a mode name in the brief."
+advisory:
+  A1 pass — "**architect** —" "**docs** —"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+The case passes. Every binding criterion is met and the single advisory criterion also passes.
+
+Two notes for the run artifact, neither of which changes the verdict:
+
+- **Case id missing.** The input carried no case id, so the emission line records that rather than a name invented here.
+- **Transcript surfaced three readings, not two.** The criteria are written around architect and docs. The transcript adds a brownfield reading for the first clause of the brief. Both named readings are present with their write targets, so B2 and B7 remain decidable and pass. The case author may want to decide whether a third reading is expected or out of scope in the next set version.

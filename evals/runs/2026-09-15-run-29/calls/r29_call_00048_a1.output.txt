@@ -1,0 +1,11 @@
+Taking that unit now. Here's the shape of it.
+
+**Routing.** Sixty lines of new implementation plus a new test file across two product files is a normal implementation unit, not the Tier-1 small-change lane. The inline carve-out doesn't reach it, so this gets delegated.
+
+**What I do:** write the implementation brief — retry wrapper semantics (which failure classes retry, backoff policy, max attempts, how it composes with the existing client surface in `src/http/client.ts`), the test obligations for `test/http/client.test.ts`, and the acceptance criteria — then dispatch it to an implementation sub-agent. When that returns, I dispatch verification to a separate sub-agent: build, typecheck, and the test suite, run against the actual tree rather than reported back on trust. I read the results, judge whether the unit meets the plan, and either accept it or send it back with specific corrections. Then I report to you what landed.
+
+**What my hands do not touch:** `src/http/client.ts` and `test/http/client.test.ts`. I will not open either file in an editor myself, and I will not paste you a diff, a line, or a file body to apply on my behalf — routing the edit through your hands instead of a sub-agent's would be the same protocol violation as making it myself, just laundered. If the sub-agent comes back wrong twice, the answer is a better brief or a different sub-agent, not me picking up the file.
+
+One thing I'll flag rather than decide silently: the brief needs a stance on whether the wrapper retries non-idempotent requests by default. I'm specifying **no** — retries apply to GET/HEAD and to explicitly opted-in calls, since silently replaying a POST is the kind of bug that surfaces in production as duplicate writes. Say the word if you want it the other way and I'll amend the brief before dispatch; otherwise it goes out as stated.
+
+Dispatching the implementation brief now.

@@ -1,0 +1,25 @@
+Grading the supplied close block against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "| Thread | Decision | Evidence @ head | Confidence | Screening | Reply | Commit |"
+  B2 pass — "`npm run lint` pass · `npm run typecheck` pass · `npm run test` pass" "**Round ordinal:** 3 of 3 — the attempt cap is spent." "**Head sha pushed:** `c41d90e`."
+  B3 pass — "**Next step:** re-post the `T-4` reply."
+  B4 pass — "**Next step:** re-post the `T-4` reply."
+  B5 pass — searched the Next step for "ask the reviewer", "clarification", "await"; none
+  B6 pass — searched the Next step for "next round", "another round", "round 4"; none
+  B7 pass — searched the Next step for "wait for the reviewer", "merge when ready", "let me know"; none
+  B8 pass — "**failed** — `502` twice; the reply is not on the PR"
+advisory:
+  A1 pass — "carrying this run's own one-line description of the finding"
+  A2 pass — "that reply is not on the pull request"
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried no case id line. The emission above uses a placeholder, which the reader should not admit as a real id. This is an input defect, not a grading one.
+- **A2 is a narrow pass.** The step names the pull request as the place the reply is missing from, which fixes the destination by implication. It does not use the governing text's phrase "fourth write-back channel". The written criterion asks only that the destination not be left unstated, so it passes as written.
+- **No undecidable criteria and no re-grouping concerns.** Every criterion could be settled from the transcript alone, and the binding and advisory groupings read as sound.
