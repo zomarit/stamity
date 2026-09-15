@@ -476,3 +476,6 @@ always-on budget item stays open until the measurement lands.
   `agent-performance-return-contract` B6 — the row that also missed one sample in runs 21–24 —
   and `agent-researcher-return-contract` B3), each case still passing two of three; guardrail hold
   15/15; the one graded charter-only twin 3/3. The rule probes had not been reached.
+- 09:20Z — run 27 at 567 admitted of 599 (572 attempts, no capacity signal rejected) when the guard
+  held on the five-hour window at 0.97 → 0.98; hold until 13:10Z, the window's reset, after which the
+  driver resumes by itself for the remaining calls. Respected, as decision 8 requires.
