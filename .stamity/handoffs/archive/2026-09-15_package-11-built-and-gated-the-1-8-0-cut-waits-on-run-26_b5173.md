@@ -1,6 +1,6 @@
 ---
 id: 2026-09-15_package-11-built-and-gated-the-1-8-0-cut-waits-on-run-26_b5173
-status: active
+status: archived
 created: 2026-09-15T04:08:00.915Z
 expires: 2026-10-15T04:08:00.915Z
 summary: "Package 11 D/A/C built, reviewed and gated on candidate f2b90dc (PR #36, CI green); run 26 held on capacity at 266/599; no tag. Next: capacity, export, the scripted cut, then the morning script."
