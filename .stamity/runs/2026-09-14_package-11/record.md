@@ -582,3 +582,15 @@ always-on budget item stays open until the measurement lands.
   candidate red on one new test that read run 27's candidate through `git show` in a depth-one checkout
   (the guard fails closed there, which is right for a runner); the assertion now skips without the commit
   in history (`23823bd`, test-only; the candidate's frozen paths byte-identical).
+- Check 2 (`check-run-281`, 15:39Z–15:44Z, 17 calls, calibration 5/5, no control failure):
+  `charter-touchpoints-delegate` 2/3 (its promoted B5 missed one sample); `agent-performance-return-contract`
+  2/3 (B6 missed one, against 1/3 in run 27). Every case of both checks passes under the two-of-three
+  rule; the two promoted rows each miss about one sample in three, so a floor could still fail in the
+  full run. Put to the maintainer at 16:00Z with that estimate and two alternatives (re-dispose the
+  promotions as deletions, or stop); decision: **run 28 now**, and on a floor failing on a promoted
+  row the run stops and the disposition returns to the maintainer rather than a run 29.
+- CI 34989892593 on the branch head `89ecabf` green on every leg. **Run 28** prepared and launched
+  16:01Z from the candidate worktree (`d7e19a8`, SET-v7 `0500b90b…`, 505/49, 599 calls, CLI 2.1.268,
+  capacity 4; five-hour window 0.35 at launch, so one hold at the guard and the tail after the 18:10Z
+  reset). The private driver it pins admits the client's non-streamed fallback; the check's two
+  lost samples replay as admitted under it.
