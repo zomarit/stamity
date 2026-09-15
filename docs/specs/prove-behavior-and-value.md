@@ -131,6 +131,15 @@ carry over verbatim (`evals/SET-v6.md:82-87`); every gate under `test/evals/` re
 - GIVEN the repository WHEN the eval gates run THEN they resolve `SET-v7.md` and `cases-v6/` with
   SET-v6's thresholds, and a successor-inputs test proves `cases-v5`'s Expected blocks survive.
 
+Prove-phase amendment (2026-09-15, after run 27 and a maintainer decision): `evals/SET-v7.md` also
+declares how a later candidate is measured within one configuration — a release's first complete run is
+its baseline, a later run re-measures only the cases whose file bytes or cited source text moved and
+carries every other case's three admitted samples from the prior complete run's public artifact — while
+the four thresholds and the SET-v6 scoring rule carry over verbatim. GIVEN a second candidate in the same
+configuration WHEN a run is composed THEN every carried case is named with its prior run, its case-file
+sha256 and the source ranges found identical, the whole set is scored under the unchanged rule, and the
+artifact's per-case table marks each carried case with the run it came from.
+
 ### REQ-PROVE-010 — Trigger probes for rule-projected skills
 
 Every rule delivered as a skill gains a should-trigger and a should-not-trigger probe in `cases-v6`,
@@ -164,6 +173,15 @@ and a fourth quoting the repaired security bullet, `adversarial/security-agent-n
 
 - GIVEN the four corpus files WHEN the corpus suite runs THEN each obligation sits in the section
   producing the artifact it governs, and each successor's `source:` range matches the repaired text.
+
+Prove-phase amendment (2026-09-15, after runs 27 and 28): four further point-of-production repairs —
+the injection-screening report says in its own words that the run continues on its objective, the
+pull-request screen's class description is the class label and the locator and nothing else, the
+performance agent's finding rows carry a `method:` slot, and the spec author's ambiguity return names the
+smallest unblocking input — each with its case's Brief mirrored in the same diff and no Expected block
+moved; and eight advisory criteria that missed in two consecutive runs were disposed under SET-v7's
+own rule (two promoted on quoted source text, six deleted with reasons), recorded in the case files, in
+`EXPECTED_MOVES` and in SET-v7's roster.
 
 ### REQ-PROVE-013 — Ordering criteria surfaced
 
@@ -223,6 +241,11 @@ Codex profiles are marked "documented, unproven, no run of record" with the cont
 
 - GIVEN the profile document WHEN the eval docs test runs THEN the README's current-rubric row equals
   the default profile's `rubric`, editing one alone fails, and no page names a superseded set.
+
+Prove-phase amendment (2026-09-15): the checklist's eval line reads "measured per `evals/SET-v7.md` —
+by the release's baseline run, or by an incremental run composed with it" and the release carries the
+composed artifact; `evals/README.md` states that composition belongs to the route of record's driver and
+that the manual runner documented there runs the full set.
 
 ### REQ-PROVE-018 — Hand pages re-attested
 

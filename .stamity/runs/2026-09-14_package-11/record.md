@@ -635,3 +635,15 @@ always-on budget item stays open until the measurement lands.
 - The third candidate carries one content change: the pull-request screen's class description is the
   class label and the locator and nothing else (runs 27 and 28 each echoed a four-word run of the
   span inside a description written "in generic terms"); the case's Brief mirrors it verbatim.
+
+## Phase 1'' closed — the third candidate — 2026-09-15T20:05Z
+
+- This commit is the third candidate: the incremental-run rule declared in SET-v7 (sha256
+  `22716ec8…`; counts unchanged, 99 cases, 505 binding, 49 advisory), the checklist's eval line reading
+  "measured", the README's route note, the pull-request screen's class description tightened to the
+  label and the locator with its case Brief mirrored, and the spec's Prove-phase amendments for all of
+  it. Full local gate green on the tree (208 files, 8,409 tests; statements 96.48 %, branches 89.84 %,
+  functions 98.72 %, lines 97.34 %; leak gate, knip, sync/check, site). The private driver pins this
+  set hash (canaries K3s/K4s). Phase 2'': CI, the release dry run and the signing rehearsal on this
+  commit, and **run 29, incremental against run 27** under the declared rule — the twelve cases whose
+  files moved re-measure, 87 carry, calibration fresh.
