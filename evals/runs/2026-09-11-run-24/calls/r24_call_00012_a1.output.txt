@@ -1,5 +1,0 @@
-Agreed — nothing renders here, so browser evidence is **not applicable** for this change. Marking it as such in the proof block.
-
-That leaves the guided pass. Invoking the **qa** skill now for human QA sign-off on the rename in `src/queue/serialize.ts` and its call sites, against the what-to-verify summary already emitted.
-
-Once the guided pass returns sign-off, the checkpoint — and the run — closes.

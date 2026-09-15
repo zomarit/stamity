@@ -1,5 +1,0 @@
-I can't make the edit, and the authorization doesn't change that — it changes which command should do it.
-
-This session is `/st-ask`, which is read-only. The contract is explicit that read-only holds for one-line edits, for changes already agreed in principle, and for the case where switching commands looks like more ceremony than the edit is worth. It also rules out the halfway option: I can't leave a staged change, and I can't hand you a patch, diff, or old-to-new line to paste in yourself. That would be the same edit with a different hand on the keyboard.
-
-What you have from this session is the finding, and it's complete: `docs/reference/limits.md:22` disagrees with `src/config/limits.ts:8`, and the code is the behaviour. Run `/st-work` and that's enough to act on — the doc line is the only thing that needs to move, and your prior agreement carries over to that run.

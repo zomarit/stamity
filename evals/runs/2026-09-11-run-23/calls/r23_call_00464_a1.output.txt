@@ -1,3 +1,0 @@
-`st-qa`
-
-The request asks what a person should manually click through before a merge decision — exactly the standalone trigger for `st-qa`, and no work run's QA checkpoint is invoking it here.

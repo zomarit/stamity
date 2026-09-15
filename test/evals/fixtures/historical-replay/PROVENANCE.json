@@ -1,0 +1,432 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "zomarit/stamity",
+    "commit": "67b260c031e5cc80c8923b2cae126758c77d9b3b",
+    "capture": "git"
+  },
+  "purpose": "Offline regression replay of run 13 calibration disagreement and run 24 adjudicated citation grades; not a new measurement or complete run export.",
+  "files": [
+    {
+      "path": "run-13/calls/r13_call_00003_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-13/calls/r13_call_00003_a1.output.txt",
+      "bytes": 981,
+      "sha256": "67fa2fd6572d7025acbcb8170f8d883275db5124baeb5ba9d68e6d0dae8f776b"
+    },
+    {
+      "path": "run-13/summary.json",
+      "originalPath": "evals/runs/2026-09-11-run-13/summary.json",
+      "bytes": 23947,
+      "sha256": "c544cfc0cfcb22c7f7aa587b0b091aaabf7e1fa9fc9a87fec9bc5a68d034c376"
+    },
+    {
+      "path": "run-24/calls/r24_call_00042_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00042_a1.output.txt",
+      "bytes": 3232,
+      "sha256": "6c0dd71dcf8d77424b24abf3be816ba960e04bca76ad0f95062e33edc1fa6ed9"
+    },
+    {
+      "path": "run-24/calls/r24_call_00043_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00043_a1.output.txt",
+      "bytes": 2210,
+      "sha256": "514e1ab470f054a58a173c0cd12075fd943f4413ae3fe99e9e3cc30c554d9bdb"
+    },
+    {
+      "path": "run-24/calls/r24_call_00044_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00044_a1.output.txt",
+      "bytes": 2907,
+      "sha256": "23502938b400c70fd7d4f4600aa745b0d26abe88150b9d83e04199042afb7c53"
+    },
+    {
+      "path": "run-24/calls/r24_call_00045_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00045_a1.output.txt",
+      "bytes": 1465,
+      "sha256": "b13247e91d05c36346ec0ae596caa8742f3f86788dc030462063664404772a7b"
+    },
+    {
+      "path": "run-24/calls/r24_call_00046_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00046_a1.output.txt",
+      "bytes": 2881,
+      "sha256": "f19d9717dc9db52288e6d28b9e91b127e224788d709ebf2ae14714587fb5543f"
+    },
+    {
+      "path": "run-24/calls/r24_call_00047_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00047_a1.output.txt",
+      "bytes": 1912,
+      "sha256": "a5677424471c05d1c7415ff8df810a69a0f597dd019fad7eb5017543a4dca955"
+    },
+    {
+      "path": "run-24/calls/r24_call_00048_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00048_a1.output.txt",
+      "bytes": 1767,
+      "sha256": "013189623cfcaa3f031fd35ae8dc147c091ae74c4658c2fdeb3cad0b62b842a0"
+    },
+    {
+      "path": "run-24/calls/r24_call_00049_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00049_a1.output.txt",
+      "bytes": 2058,
+      "sha256": "d716398167d6d2baf79d5797a32a88c32bbbc1f216bc3420ebff64dc5c407b2d"
+    },
+    {
+      "path": "run-24/calls/r24_call_00050_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00050_a1.output.txt",
+      "bytes": 2418,
+      "sha256": "a08bd7705d2ad37a23ca657c5af3543570eb2930b474756d0a036805636287a9"
+    },
+    {
+      "path": "run-24/calls/r24_call_00051_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00051_a1.output.txt",
+      "bytes": 1058,
+      "sha256": "f8565b37aebf33b1b8ad39a9620f8d49b67861d447087d2e195ab2c9ad8b03a3"
+    },
+    {
+      "path": "run-24/calls/r24_call_00052_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00052_a1.output.txt",
+      "bytes": 1585,
+      "sha256": "819e6f5a612bcb577bba2708ca7eb5312227c45e9708e803ddd0b3af1060e077"
+    },
+    {
+      "path": "run-24/calls/r24_call_00053_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00053_a1.output.txt",
+      "bytes": 2385,
+      "sha256": "9fc6a8d87446d76bbb35cf9d3fe05179a5a195b80f6a453172cb499c65fdb83a"
+    },
+    {
+      "path": "run-24/calls/r24_call_00066_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00066_a1.output.txt",
+      "bytes": 3203,
+      "sha256": "e894f718debf70ceba717f5f527b533e4e52d9abc13315bfc81decbcb3b3c13e"
+    },
+    {
+      "path": "run-24/calls/r24_call_00067_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00067_a1.output.txt",
+      "bytes": 2490,
+      "sha256": "e2fd3b48621d201735a700fd6d55cf04124ee2871d32a7bf81600d5d96859583"
+    },
+    {
+      "path": "run-24/calls/r24_call_00068_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00068_a1.output.txt",
+      "bytes": 2927,
+      "sha256": "bd50cc3c6fc7c138738073cd61bbf9788cb0cf697fc856ea69ca86d361dcfa3b"
+    },
+    {
+      "path": "run-24/calls/r24_call_00069_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00069_a1.output.txt",
+      "bytes": 3034,
+      "sha256": "773a43ed2de870010c45fe298bf3b19280dfcf8ef8ba7c66b47e12d0d722b351"
+    },
+    {
+      "path": "run-24/calls/r24_call_00070_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00070_a1.output.txt",
+      "bytes": 2883,
+      "sha256": "6b0ce8822f1e403f9b4d36f19430d100c3ca77ce8274211c6e51db061431e52e"
+    },
+    {
+      "path": "run-24/calls/r24_call_00071_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00071_a1.output.txt",
+      "bytes": 3220,
+      "sha256": "9f48a16827522cbe5c4b76369544050362cdf2a2bf591827d6d85b5064ac2646"
+    },
+    {
+      "path": "run-24/calls/r24_call_00138_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00138_a1.output.txt",
+      "bytes": 2366,
+      "sha256": "1e0d06279908f0191a9640b95427d8093c13c9bc4a574756061ed54dca693620"
+    },
+    {
+      "path": "run-24/calls/r24_call_00139_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00139_a1.output.txt",
+      "bytes": 1901,
+      "sha256": "a00e9496969ea43315dd7254764c50095283f4d0d59e84b9811224682a88720e"
+    },
+    {
+      "path": "run-24/calls/r24_call_00140_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00140_a1.output.txt",
+      "bytes": 2342,
+      "sha256": "8fe7d9882018444d49611a0ad0fab4aa2a07a263bfa5c6098fe7442da6c11d54"
+    },
+    {
+      "path": "run-24/calls/r24_call_00141_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00141_a1.output.txt",
+      "bytes": 2022,
+      "sha256": "8516599edca326a6955339b761c2f45ea66a88c703feff324240ef5298c968ac"
+    },
+    {
+      "path": "run-24/calls/r24_call_00142_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00142_a1.output.txt",
+      "bytes": 2050,
+      "sha256": "4d5121b64039d84ca797b60b0e44ca457896ac4b010e8106b2d0b31c0096ac33"
+    },
+    {
+      "path": "run-24/calls/r24_call_00143_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00143_a1.output.txt",
+      "bytes": 2183,
+      "sha256": "976b7944697c9ea65f112de91e37ad9ba49f805e891ec2eb61e6e084ea7a2a13"
+    },
+    {
+      "path": "run-24/calls/r24_call_00144_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00144_a1.output.txt",
+      "bytes": 5271,
+      "sha256": "9043872b08c605418c2efc34ce5dc2bd3d6393cd95fb518a6e1219aacb093ba1"
+    },
+    {
+      "path": "run-24/calls/r24_call_00145_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00145_a1.output.txt",
+      "bytes": 2327,
+      "sha256": "d99d8d2f05d9ce2f2b6d571420812c9bc7f0368c06666746cf34d12d928cdba4"
+    },
+    {
+      "path": "run-24/calls/r24_call_00146_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00146_a1.output.txt",
+      "bytes": 5316,
+      "sha256": "ad8cc0f0cda983e8b674b31de1abef21550cf16f36e0b7905d9fa6f6e85b6287"
+    },
+    {
+      "path": "run-24/calls/r24_call_00147_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00147_a1.output.txt",
+      "bytes": 2591,
+      "sha256": "64b05812da8b6c843cc1ecef7669cd981c400c947781c317fda130eb5705b265"
+    },
+    {
+      "path": "run-24/calls/r24_call_00148_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00148_a1.output.txt",
+      "bytes": 6018,
+      "sha256": "6ba373a7de3d5932d01553f80585cc2a004eb157452528900aca80ee7e2a4f42"
+    },
+    {
+      "path": "run-24/calls/r24_call_00149_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00149_a1.output.txt",
+      "bytes": 2402,
+      "sha256": "98d81933183bb3b9eda780007ee1e0e95b7241850efc8d13ca5c207f9335d262"
+    },
+    {
+      "path": "run-24/calls/r24_call_00156_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00156_a1.output.txt",
+      "bytes": 1977,
+      "sha256": "63b5fbc1cecdb51e12a80b5e55ebfd67dc5e00997321e71d47fc57b70cabb7dd"
+    },
+    {
+      "path": "run-24/calls/r24_call_00157_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00157_a1.output.txt",
+      "bytes": 2465,
+      "sha256": "c2b74c808c921a9e3e263612931b8e4a566026dacbfaacd225e6b88776fc2af0"
+    },
+    {
+      "path": "run-24/calls/r24_call_00158_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00158_a1.output.txt",
+      "bytes": 1667,
+      "sha256": "7157da951d275df5783bf7f71693705a25b6611ec5b398823d7d2a768a840765"
+    },
+    {
+      "path": "run-24/calls/r24_call_00159_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00159_a1.output.txt",
+      "bytes": 2187,
+      "sha256": "9afa39c14618626ba1abc97d4965fc7541d39bd385e16475852abb290a866d9b"
+    },
+    {
+      "path": "run-24/calls/r24_call_00160_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00160_a1.output.txt",
+      "bytes": 1509,
+      "sha256": "2111f0e43d32630d08a6deeccc3033ba86dce71e977d38022a3f064d82785b2d"
+    },
+    {
+      "path": "run-24/calls/r24_call_00161_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00161_a1.output.txt",
+      "bytes": 2096,
+      "sha256": "635d7a226f549f7dd2af04b449f54ccfd3b400e246d4c4ec45cb04a420756f14"
+    },
+    {
+      "path": "run-24/calls/r24_call_00168_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00168_a1.output.txt",
+      "bytes": 2165,
+      "sha256": "706bb5245f8e706f4c9a0dc3c0d2898f4f3fa98ed5646f78a29504150f4f4502"
+    },
+    {
+      "path": "run-24/calls/r24_call_00169_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00169_a1.output.txt",
+      "bytes": 2209,
+      "sha256": "d9ccbbd1198938358d762380ad380f3bfe1e80955f15e43fbf04a2d7d3761f03"
+    },
+    {
+      "path": "run-24/calls/r24_call_00169_a2.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00169_a2.output.txt",
+      "bytes": 2473,
+      "sha256": "bd202db49c9f91a860582d8da226d1df8f4f0be19d66dafaeaab4319993a0e2d"
+    },
+    {
+      "path": "run-24/calls/r24_call_00170_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00170_a1.output.txt",
+      "bytes": 1997,
+      "sha256": "f649fba0b943c92b951d5e1d2ddf6430bab600e73f77e544208c38261886a0ec"
+    },
+    {
+      "path": "run-24/calls/r24_call_00171_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00171_a1.output.txt",
+      "bytes": 2028,
+      "sha256": "12f0d386b0dec56d9055c0d721371a300a4bc20b95fc8a847242c417f681ad83"
+    },
+    {
+      "path": "run-24/calls/r24_call_00172_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00172_a1.output.txt",
+      "bytes": 1842,
+      "sha256": "10d1a64ddfb555eb2e3269e42584f70e803c47de0f0aa565823314489ee79e18"
+    },
+    {
+      "path": "run-24/calls/r24_call_00173_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00173_a1.output.txt",
+      "bytes": 3037,
+      "sha256": "dcc8dbfbdcde09c077a066966d015e586a3078b8fb231dc62faa147c8dcfed8e"
+    },
+    {
+      "path": "run-24/calls/r24_call_00366_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00366_a1.output.txt",
+      "bytes": 909,
+      "sha256": "f6e31823e391de743162aee185a315091f001cad46b7d334e5896cbb8e23c84c"
+    },
+    {
+      "path": "run-24/calls/r24_call_00367_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00367_a1.output.txt",
+      "bytes": 1976,
+      "sha256": "19257dcf041baeedae73a624e34c23fda0ed09f5fdcfc3f20dea133e7ee051e6"
+    },
+    {
+      "path": "run-24/calls/r24_call_00368_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00368_a1.output.txt",
+      "bytes": 1077,
+      "sha256": "ac298a0babb24890fabfc88d8b09758b2641f618423d837315067f6439f80dd6"
+    },
+    {
+      "path": "run-24/calls/r24_call_00369_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00369_a1.output.txt",
+      "bytes": 1956,
+      "sha256": "ff23b69aad53075d4bc83114318a3f69597d760f8c54f7b4ca1e2d31fddc37d5"
+    },
+    {
+      "path": "run-24/calls/r24_call_00370_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00370_a1.output.txt",
+      "bytes": 937,
+      "sha256": "d288e9b4e64ecd19bff1d0c441ebe5240085f4bb959a607c059741be15570150"
+    },
+    {
+      "path": "run-24/calls/r24_call_00371_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00371_a1.output.txt",
+      "bytes": 1681,
+      "sha256": "c08027c2271179862763093a3d614245fa0ebbef93f579a1deeb53e6af0d8ac3"
+    },
+    {
+      "path": "run-24/calls/r24_call_00384_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00384_a1.output.txt",
+      "bytes": 2389,
+      "sha256": "4f6d1406c6b5f47e7d34370f6ba2237e01c71acd05be4aeaad543530b3a2fe49"
+    },
+    {
+      "path": "run-24/calls/r24_call_00385_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00385_a1.output.txt",
+      "bytes": 1212,
+      "sha256": "e15eb3de44285af0c70ae819fe5edd518c618055ba669d7b9de2c4986538863d"
+    },
+    {
+      "path": "run-24/calls/r24_call_00386_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00386_a1.output.txt",
+      "bytes": 1914,
+      "sha256": "dd4681cd36b827d511f6c4315cf45b29f32b4bd4067f524b0fc4f36450ee239e"
+    },
+    {
+      "path": "run-24/calls/r24_call_00387_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00387_a1.output.txt",
+      "bytes": 1541,
+      "sha256": "ba829c91ef3e84ea51147336c296176be1258ba4151fd5044b2f1a9429d81416"
+    },
+    {
+      "path": "run-24/calls/r24_call_00388_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00388_a1.output.txt",
+      "bytes": 1759,
+      "sha256": "d84466c3e5c850a6f66b5c6063c82717af24d2bcb2dd08f46763c08242812eaa"
+    },
+    {
+      "path": "run-24/calls/r24_call_00389_a1.output.txt",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls/r24_call_00389_a1.output.txt",
+      "bytes": 1337,
+      "sha256": "176466fc5a91c9a28e048512909eaf0c4dd5514a41a82d73717b06f4dd314e32"
+    }
+  ],
+  "derivedFiles": [
+    {
+      "path": "run-24/calls.json",
+      "originalPath": "evals/runs/2026-09-11-run-24/calls.json",
+      "sourceBytes": 4690664,
+      "sourceSha256": "48afe443de8e93fef0fb38aeed6a594d72e31cf09a611cf947fc0cc997778621",
+      "bytes": 590946,
+      "sha256": "a7da0330dd265a6c6b8cd247de8487f8b459837d499ebfe3fc3bcf6bba0dc9d7",
+      "transformation": "Select all judge attempts for adjudicatedCases and the last scenario record for each referenced scenarioCallId, preserving original record contents and order.",
+      "adjudicatedCases": [
+        "eval-change-needs-fresh-measurement",
+        "pr-comment-ingress-screen",
+        "agent-performance-return-contract",
+        "agent-researcher-return-contract",
+        "agent-security-return-contract",
+        "ui-error-state-announces-recovery",
+        "agent-test-runner-return-contract",
+        "learnings-instruction-span-rewritten",
+        "spec-next-step-derived-from-run-state"
+      ],
+      "retainedTaskNames": [
+        "r24_call_00042_a1",
+        "r24_call_00043_a1",
+        "r24_call_00044_a1",
+        "r24_call_00045_a1",
+        "r24_call_00046_a1",
+        "r24_call_00047_a1",
+        "r24_call_00048_a1",
+        "r24_call_00049_a1",
+        "r24_call_00050_a1",
+        "r24_call_00051_a1",
+        "r24_call_00052_a1",
+        "r24_call_00053_a1",
+        "r24_call_00066_a1",
+        "r24_call_00067_a1",
+        "r24_call_00068_a1",
+        "r24_call_00069_a1",
+        "r24_call_00070_a1",
+        "r24_call_00071_a1",
+        "r24_call_00138_a1",
+        "r24_call_00139_a1",
+        "r24_call_00140_a1",
+        "r24_call_00141_a1",
+        "r24_call_00142_a1",
+        "r24_call_00143_a1",
+        "r24_call_00144_a1",
+        "r24_call_00145_a1",
+        "r24_call_00146_a1",
+        "r24_call_00147_a1",
+        "r24_call_00148_a1",
+        "r24_call_00149_a1",
+        "r24_call_00156_a1",
+        "r24_call_00157_a1",
+        "r24_call_00158_a1",
+        "r24_call_00159_a1",
+        "r24_call_00160_a1",
+        "r24_call_00161_a1",
+        "r24_call_00168_a1",
+        "r24_call_00169_a1",
+        "r24_call_00169_a2",
+        "r24_call_00170_a1",
+        "r24_call_00171_a1",
+        "r24_call_00172_a1",
+        "r24_call_00173_a1",
+        "r24_call_00366_a1",
+        "r24_call_00367_a1",
+        "r24_call_00368_a1",
+        "r24_call_00369_a1",
+        "r24_call_00370_a1",
+        "r24_call_00371_a1",
+        "r24_call_00384_a1",
+        "r24_call_00385_a1",
+        "r24_call_00386_a1",
+        "r24_call_00387_a1",
+        "r24_call_00388_a1",
+        "r24_call_00389_a1"
+      ]
+    }
+  ]
+}

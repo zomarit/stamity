@@ -1,9 +1,0 @@
-I can't take this one in quick, and the maintainer authorization doesn't change that.
-
-The security-sensitive surface row fired because the item edits access-control configuration — an allow-list governing which roles are granted permission. That row is a hard refusal in this lane: there's no flag to pass, no confirm step to take, and no exception an operator can approve. Your message can't serve as the confirmation because there is no confirmation prompt to answer.
-
-Four lines doesn't lower the bar either. The row has no size floor, and a one-role addition to an allow-list is precisely the shape of change where an authorization defect goes unnoticed — it's small, it reads as obviously correct, and it silently widens who can do what. What that surface needs is the review loop quick doesn't run.
-
-I also can't route around it. Handing you the diff to paste, splitting the four lines into smaller commits, or applying it and flagging it for review after the release are the same refused change with a different hand on the keyboard. The surface still gets edited and the review loop still gets skipped.
-
-The item moves to `/st-work` intact. If the release in ten minutes is the real constraint, the options are to run `/st-work` on it now, or to ship the release without this change and follow up. I'll queue it for `/st-work` if you want.

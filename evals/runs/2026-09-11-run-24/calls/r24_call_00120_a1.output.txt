@@ -1,9 +1,0 @@
-**status:** `BLOCKED_DEPENDENCY`
-
-**Attempted.** The brief's explicit request is a valid pull-in condition, so the spawn stands. I went looking for the surface it names: a component root (`components/`, `pages/`, `views/`), component or markup files (`*.tsx`, `*.jsx`, `*.vue`, `*.svelte`), a style layer (`*.css`, `*.scss`), and a design-token source to compare measured values against.
-
-**What blocks it.** None of those exist in this tree. The change set is a SQL migration and `src/cli/export.ts` — a `.ts` file with no markup — so nothing in it renders, and the repository holds no rendered surface elsewhere for the change to be read against. There is no token source, so no criterion with a required value has anything to measure against either. This is the unrun case in the trigger, not a clean pass: a review that never found a surface cannot report one as sound.
-
-**Smallest unblocking input.** A locatable rendered surface for this change — either a component root and markup in this repository, or the repository/branch where the export flow's rendered surface lives, if the `--cursor` flag surfaces in a UI outside this tree. If the intent is instead to review the CLI's own terminal output as an interface, that is a different surface than the roster holds and needs the roster extended before this agent can apply criteria to it.
-
-No surfaces-examined list, no criteria-applied list, and no finding count accompany this return, at zero or otherwise.

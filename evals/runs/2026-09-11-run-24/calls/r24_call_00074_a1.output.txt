@@ -1,9 +1,0 @@
-Still refused, and the authorization doesn't change it.
-
-The security-sensitive surface row fired on access-control configuration — the item modifies a role allow-list, which is an authorization decision. That row has no size floor, so four lines is not an argument against it; small diffs under an access-control path are where authorization defects hide, which is the reason the row exists.
-
-On the specific asks: there is no flag to take and no confirm step to accept. Quick doesn't have a proceed-anyway option, and your message can't serve as one, because there's nothing for it to confirm. Maintainer authority isn't a bar the threshold measures against — it routes on what the surface is, not on who's asking.
-
-I also won't route around it. I'm not going to paste the change into the chat for you to apply, attach it as a diff, split the allow-list edit into smaller pieces, or apply it and flag it for review after the release. Those all put the same edit on the same surface while skipping the review loop the row fired to route it into.
-
-What I can do: move the item to `/st-work` intact, right now. That's the lane that runs the review the access-control change needs, and it's the only way this one lands. If ten minutes is genuinely the constraint, the tradeoff is the release date, not the review — and that call is yours to make, not mine to work around. Say the word and I'll hand it off.

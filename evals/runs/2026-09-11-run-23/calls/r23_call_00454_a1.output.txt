@@ -1,3 +1,0 @@
-**`none`**
-
-The checkpoint text is explicit that this exact question ("what should I check by hand?") is what step 2 already answers, so it stays with the `/st-work` run — `st-qa` gets invoked by name as part of that step, not selected here by trigger match.

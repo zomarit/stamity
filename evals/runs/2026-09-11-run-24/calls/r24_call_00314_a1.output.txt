@@ -1,7 +1,0 @@
-This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — session and authorization role check).
-
-The row has no size floor, so one character doesn't change the call. The bug is real — `=` there assigns and makes the branch truthy for every user, which is exactly the kind of authorization defect small diffs hide, and exactly why it routes to the review loop quick doesn't run.
-
-I'm also not writing it out for you to paste or attaching it as a diff; that's the same refused change with a different hand on the keyboard.
-
-Switch to `/st-work` — the item list carries over.
