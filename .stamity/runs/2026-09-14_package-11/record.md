@@ -647,3 +647,13 @@ always-on budget item stays open until the measurement lands.
   set hash (canaries K3s/K4s). Phase 2'': CI, the release dry run and the signing rehearsal on this
   commit, and **run 29, incremental against run 27** under the declared rule — the twelve cases whose
   files moved re-measure, 87 carry, calibration fresh.
+- 20:12Z — a launch fault, recorded: the launcher passed its optional prior-run flag through an
+  unquoted shell expansion that zsh does not word-split, so the driver saw one unknown argument and
+  prepared a full run; stopped at calibration after four calls (kept privately as
+  `run29-mislaunched-full`, no sample scored). The launcher now passes the flag as an array and refuses
+  to launch when the prepare output names no prior run. The same shell's `:r` modifier had eaten the
+  refspec of two earlier pinned-ref pushes; braces fix it.
+- 20:16Z — **run 29** launched, incremental against run 27 under the declared rule, on candidate
+  `47820d9`: 12 cases re-measure (every one for "case file bytes moved": the six repaired Briefs and
+  the seven dispositions, one overlapping), 87 carry with their three admitted samples, calibration
+  fresh; 77 calls. Release dry run and signing rehearsal dispatched on the candidate; CI running.
