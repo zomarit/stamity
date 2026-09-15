@@ -466,3 +466,13 @@ always-on budget item stays open until the measurement lands.
   detached worktree at the candidate, because the branch head now carries record-only commits and
   the driver binds every command to the candidate's tree. Calibration first; it is the third and last
   run of tonight's budget.
+- 08:20Z — run 27 calibrated 5/5 on first attempts; scoring started 08:20:39Z.
+- Run 26's export was tried from the candidate worktree and is **withheld from the public tree**: the
+  driver scores every undispatched call as a failed sample, so the artifact headlines a FAIL (golden
+  0.480, probes 0/30) for 166 scenario calls that were never made — a reading of the candidate that
+  did not happen. The run stays retained privately in full (131 graded scenario samples, 130 judges,
+  the journal with the operator note). What its graded half shows, for the record: no graded floor
+  case failed; three ordinary single-sample misses (`eval-change-needs-fresh-measurement` B3,
+  `agent-performance-return-contract` B6 — the row that also missed one sample in runs 21–24 —
+  and `agent-researcher-return-contract` B3), each case still passing two of three; guardrail hold
+  15/15; the one graded charter-only twin 3/3. The rule probes had not been reached.
