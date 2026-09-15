@@ -741,7 +741,7 @@ always-on budget item stays open until the measurement lands.
   the composed runs' § 8 self-comparison rows (not repeats; the set says so, the driver fixed).
 - The one click owed: approve the `npm-publish` deployment of the release run; then the private morning
   script verifies the publish and re-syncs the record.
-- 2026-09-16T00:0xZ — the cleanup party, after the tag: PR #37 (the maintainer's evidence-storage
+- 2026-09-15T22:12Z — the cleanup party, after the tag: PR #37 (the maintainer's evidence-storage
   cleanup, stacked on this branch) rebased onto the merged `main` without conflict, its archive
   procedure applied to the night's four public runs (25, 27, 29, 30 packed from the rebased commit,
   uploaded to the evidence release, downloaded, verified and restored byte-identical; pointers and
