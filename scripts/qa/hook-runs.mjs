@@ -80,13 +80,30 @@ export const CLIENT_RUNNERS = {
   },
 }
 
-/** Is `binary` runnable from here? `which`-free so it behaves the same wherever PATH is unusual. */
+/**
+ * Is `binary` runnable from here? `which`-free so it behaves the same wherever PATH is unusual.
+ *
+ * M-d: a successful `spawnSync` (no `probe.error`) does not by itself mean the binary answered —
+ * a shim that exits non-zero with nothing on stdout would otherwise report `present: true` with an
+ * empty `version`, which a caller then prints as "‹binary› " with a trailing space and nothing to
+ * show for it. `present` is therefore true only when the probe exited 0 OR printed something on
+ * stdout (a non-zero exit that still prints a version line is common enough — `--version` is not
+ * universally a zero-exit flag — so that case still counts, and the version string is what proves
+ * it). Anything else is reported, never silently upgraded to a version.
+ */
 export function binaryVersion(binary) {
   const probe = spawnSync(binary, ['--version'], { encoding: 'utf8', timeout: 60_000 })
   if (probe.error !== undefined && probe.error !== null) {
     return { present: false, reason: `${binary}: ${probe.error.message}` }
   }
-  return { present: true, version: (probe.stdout ?? '').trim().split('\n')[0] ?? '' }
+  const version = (probe.stdout ?? '').trim().split('\n')[0] ?? ''
+  if (probe.status === 0 || version !== '') {
+    return { present: true, version }
+  }
+  return {
+    present: false,
+    reason: `${binary}: present but its version probe failed (exit ${probe.status})`,
+  }
 }
 
 /**
@@ -154,7 +171,11 @@ export function runClient({ client, repoRoot, fixturesDir }) {
 
   const probe = binaryVersion(runner.binary)
   if (!probe.present) {
-    return { client, fixture: fixture.dir, status: 'not-run', reason: `not on PATH (${probe.reason})` }
+    // M-d: `probe.reason` now covers two different causes — genuinely absent (an ENOENT-style
+    // spawn error) and present-but-unusable (found on PATH, but `--version` neither exited 0 nor
+    // printed anything) — so the row's reason states the probe's own reason rather than assuming
+    // "not on PATH" for both.
+    return { client, fixture: fixture.dir, status: 'not-run', reason: probe.reason }
   }
 
   if (runner.args === undefined) {

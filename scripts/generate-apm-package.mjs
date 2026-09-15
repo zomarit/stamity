@@ -428,7 +428,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   // ── Corpus projection ────────────────────────────────────────────
 
   const { assertSafePath, buildContentIndex, COMMAND_ID_PREFIX, replacedClaimantOf, typeIdKey } = await import('../src/content/catalog.ts')
-  const { demotedRuleIds, ruleDeliveryInputOf } = await import('../src/content/ruleDelivery.ts')
+  const { declaredRuleGlobs, demotedRuleIds, ruleDeliveryInputOf } = await import('../src/content/ruleDelivery.ts')
   const { RULE_DELIVERY_DEFAULT } = await import('../src/types/manifest.ts')
   const { composeFrontmatter } = await import('../src/content/frontmatter.ts')
   const { contentPrefixFor } = await import('../src/types/markers.ts')
@@ -524,18 +524,14 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
    * two surfaces come to disagree about one rule's scope.
    */
   function applyToOf(item) {
-    const declared = item.frontmatter['globs']
-    const raw =
-      typeof declared === 'string'
-        ? declared.split(',')
-        : Array.isArray(declared)
-          ? declared.filter((entry) => typeof entry === 'string')
-          : []
-    const globs = new Set()
-    for (const glob of raw) {
-      const value = glob.trim()
-      if (value !== '') globs.add(value)
-    }
+    // N2: the extraction itself is `declaredRuleGlobs` (`../src/content/
+    // ruleDelivery.ts`), the same shared reader `src/adapters/claude.ts` and
+    // `src/adapters/copilot.ts` route through (M1) — this script already
+    // dynamic-imports that module a few lines up, so the earlier "native ESM,
+    // cannot import the TS module" premise for leaving it alone was false.
+    // Only the de-duplication stays local, matching the two adapters' own
+    // `[...new Set(declaredRuleGlobs(item))]` shape.
+    const globs = new Set(declaredRuleGlobs(item))
     return globs.size === 0 ? APPLY_TO_EVERY_FILE : [...globs].join(APPLY_TO_SEPARATOR)
   }
 

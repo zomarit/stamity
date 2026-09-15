@@ -77,6 +77,7 @@ import {
 } from "../content/catalog.ts";
 import {
   NO_DEMOTED_RULES,
+  SHARED_SKILLS_TREE_READERS,
   demotedRuleIds,
   ruleDeliveryInputOf,
 } from "../content/ruleDelivery.ts";
@@ -483,6 +484,7 @@ async function planRuleDelivery(
               .filter((item) => item.tools === undefined || item.tools.includes(tool))
               .map(ruleDeliveryInputOf),
             mode,
+            SHARED_SKILLS_TREE_READERS,
           )
         : new Set<string>(),
     ]),

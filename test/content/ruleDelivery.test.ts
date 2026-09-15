@@ -9,7 +9,7 @@ import {
   type RuleDeliveryInput,
 } from "../../src/content/ruleDelivery.ts";
 import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
-import { TOOLS } from "../../src/types/core.ts";
+import { TOOLS, type Tool } from "../../src/types/core.ts";
 
 /**
  * The delivery decision, per client, as a pure function of four rule facts.
@@ -112,6 +112,67 @@ describe("demotedRuleIds", () => {
     const criticalGlobless: RuleDeliveryInput = { ...GLOBLESS, critical: true };
     expect(idsOf(demotedRuleIds("claude", [criticalGlobless], "on-demand"))).toEqual([]);
     expect(idsOf(demotedRuleIds("copilot", [criticalGlobless], "on-demand"))).toEqual([]);
+  });
+
+  // N1: `.agents/skills/` is one file every shared-tree reader loads, and the
+  // shared projection (`skillsProjection.ts`, W3) refuses to place a
+  // `tools:`-restricted rule there unless `tools:` names every one of those
+  // readers. A demotion answer that ignored that fact would demote such a
+  // rule with no door left for it on that client — not always-on (demoted),
+  // not projected (W3 refuses the row).
+  describe("a tools:-restricted rule on a shared-tree client", () => {
+    const codexOnly: RuleDeliveryInput = { ...GLOBLESS, tools: ["codex"] };
+    const copilotOnly: RuleDeliveryInput = { ...GLOBLESS, tools: ["copilot"] };
+    const everyReader: RuleDeliveryInput = { ...GLOBLESS, tools: ["cursor", "copilot", "codex"] };
+    const sharedTreeReaders = new Set<Tool>(["cursor", "copilot", "codex"]);
+
+    it("codex refuses to demote its own tools:[codex]-only rule when sharedTreeReaders is passed", () => {
+      expect(
+        idsOf(demotedRuleIds("codex", [codexOnly], "on-demand", sharedTreeReaders)),
+      ).toEqual([]);
+    });
+
+    it("copilot refuses to demote its own tools:[copilot]-only rule when sharedTreeReaders is passed", () => {
+      expect(
+        idsOf(demotedRuleIds("copilot", [copilotOnly], "on-demand", sharedTreeReaders)),
+      ).toEqual([]);
+    });
+
+    it("codex and copilot still demote a rule whose tools: names every shared-tree reader", () => {
+      expect(
+        idsOf(demotedRuleIds("codex", [everyReader], "on-demand", sharedTreeReaders)),
+      ).toEqual([everyReader.id]);
+      expect(
+        idsOf(demotedRuleIds("copilot", [everyReader], "on-demand", sharedTreeReaders)),
+      ).toEqual([everyReader.id]);
+    });
+
+    it("claude carries no such guard: its own native path is unaffected by other clients' tools: coverage", () => {
+      // Claude reaches a demoted rule through its own re-targeted copy, not
+      // through the shared file codex and copilot read, so its demotion
+      // answer does not depend on `sharedTreeReaders` at all — it demotes a
+      // glob-less, non-critical, non-floor rule exactly the same whether or
+      // not `sharedTreeReaders` is passed, and whatever the rule's `tools:`
+      // says. (Real callers already exclude a rule from claude's own list
+      // whenever `tools:` names other clients and not claude —
+      // `planner.ts`'s per-tool filter — so this scenario is a property of
+      // the PREDICATE, not one `planRuleDelivery` actually drives.)
+      const claudeOnly: RuleDeliveryInput = { ...GLOBLESS, tools: ["claude"] };
+      expect(idsOf(demotedRuleIds("claude", [claudeOnly], "on-demand", sharedTreeReaders))).toEqual([
+        claudeOnly.id,
+      ]);
+      expect(idsOf(demotedRuleIds("claude", [claudeOnly], "on-demand"))).toEqual([claudeOnly.id]);
+    });
+
+    it("defaults sharedTreeReaders to empty when the caller passes none, so the guard never fires", () => {
+      // A caller that does not pass `sharedTreeReaders` (the pre-N1 call
+      // shape) gets the pre-N1 answer back: `projectableToSharedTree` is
+      // vacuously true over an empty set, so codex and copilot demote a
+      // `tools:`-restricted rule exactly as they did before this fix. Every
+      // real caller (`planner.ts`, `charter.ts`) now passes the real set;
+      // this pins the fallback's own shape rather than a caller's choice.
+      expect(idsOf(demotedRuleIds("codex", [codexOnly], "on-demand"))).toEqual([codexOnly.id]);
+    });
   });
 });
 

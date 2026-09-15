@@ -15,10 +15,10 @@ import {
   type ProjectSkillsOptions,
 } from "../../src/emit/skillsProjection.ts";
 import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
-import { NO_DEMOTED_RULES } from "../../src/content/ruleDelivery.ts";
+import { NO_DEMOTED_RULES, SHARED_SKILLS_TREE_READERS } from "../../src/content/ruleDelivery.ts";
 import { PLATFORM_TOOL_MARKER, buildAskUserPlatformTable } from "../../src/tools/translator.ts";
 import type { ContentSelection } from "../../src/types/content.ts";
-import type { Tool } from "../../src/types/core.ts";
+import { TOOLS, type Tool } from "../../src/types/core.ts";
 import type { DetectedSummary } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { makeVolume } from "../support/vfs.ts";
@@ -1102,6 +1102,19 @@ describe("NATIVE_SKILL_DIRS", () => {
       expect(NATIVE_SKILL_DIRS[tool], `${tool} reads ${SKILLS_PROJECTION_DIR}`).toBeUndefined();
     }
   });
+
+  // N1: `SHARED_SKILLS_TREE_READERS` (`../../src/content/ruleDelivery.ts`) is a
+  // second, independently-declared set naming the same clients this describe
+  // block covers — `demotedRuleIds` reads it because `src/content/*` cannot
+  // import `src/emit/*` (the wave-layering boundary). The two must agree, or
+  // a client gaining a native copy silently reopens the leak N1 fixed for
+  // whichever set nobody updated.
+  it("agrees with SHARED_SKILLS_TREE_READERS on exactly the clients without a native copy", () => {
+    for (const tool of TOOLS) {
+      const hasNativeCopy = NATIVE_SKILL_DIRS[tool] !== undefined;
+      expect(SHARED_SKILLS_TREE_READERS.has(tool), tool).toBe(!hasNativeCopy);
+    }
+  });
 });
 
 describe("retargetProjection", () => {
@@ -1458,6 +1471,55 @@ describe("projectSkills over demoted rules", () => {
     expect(pathsOf(rows)).toEqual([
       `${SKILLS_PROJECTION_DIR}/stamity-shared-scoped-rule/SKILL.md`,
     ]);
+  });
+
+  // N1: codex- and copilot-named twins of the claude-only case above. This
+  // level (`projectSkills` handed a `demotedRules` map directly) cannot see
+  // whether that map came from a `demotedRuleIds` call that itself refused
+  // the demotion (the real, planner-driven path, after N1) — it only proves
+  // the projection's OWN refusal still holds as defense in depth if some
+  // future caller ever hands it a `demotedRules` map that violates the
+  // invariant. `ruleDelivery.test.ts`'s "a tools:-restricted rule on a
+  // shared-tree client" cases are what pin the N1 fix itself: that a real
+  // `demotedRuleIds` call never produces such a map for codex or copilot.
+  it("skips the shared skill row for a tools:[codex]-only demoted rule, the codex twin", async () => {
+    const codexOnly: CatalogItem = {
+      type: "rule",
+      id: "codex-only-rule",
+      filePath: "/corpus/rules/stamity-codex-only-rule.md",
+      relativePath: "rules/stamity-codex-only-rule.md",
+      description: "Fixture rule, codex-only.",
+      tags: ["review"],
+      body: "\nCodex-only content.\n",
+      frontmatter: { id: "codex-only-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["codex"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [codexOnly],
+      demotedRules: demotedOn(["codex"], "codex-only-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([]);
+  });
+
+  it("skips the shared skill row for a tools:[copilot]-only demoted rule, the copilot twin", async () => {
+    const copilotOnly: CatalogItem = {
+      type: "rule",
+      id: "copilot-only-rule",
+      filePath: "/corpus/rules/stamity-copilot-only-rule.md",
+      relativePath: "rules/stamity-copilot-only-rule.md",
+      description: "Fixture rule, copilot-only.",
+      tags: ["review"],
+      body: "\nCopilot-only content.\n",
+      frontmatter: { id: "copilot-only-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["copilot"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [copilotOnly],
+      demotedRules: demotedOn(["copilot"], "copilot-only-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([]);
   });
 
   // M6: a demoted rule whose id an override tree also claims must project the

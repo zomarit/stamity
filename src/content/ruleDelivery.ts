@@ -28,9 +28,26 @@
 
 import { isFloorTag } from "./tags.ts";
 import type { CatalogItem } from "./catalog.ts";
-import type { Tool } from "../types/core.ts";
+import { TOOLS, type Tool } from "../types/core.ts";
 import { STATE_DIR } from "../types/markers.ts";
 import type { RuleDelivery } from "../types/manifest.ts";
+
+/**
+ * Every tool WITHOUT a native, re-targeted skills copy of its own — the
+ * clients that read `.agents/skills/` directly off disk rather than through a
+ * second, per-client tree. Owned here (content layer) rather than beside the
+ * native-copy path map itself (`../emit/skillsProjection.ts`,
+ * `NATIVE_SKILL_DIRS`) because {@link demotedRuleIds} needs this fact and
+ * `src/content/*` does not import `src/emit/*` (the wave-layering boundary
+ * `test/architecture/boundaries.test.ts` holds shrink-only) — the emit-layer
+ * projection is the one that imports FROM here instead, and
+ * `test/emit/skillsProjection.test.ts` pins that the two sets still agree, so
+ * a client gaining a native copy has one set to update, with a test that
+ * fails loudly if the other is forgotten.
+ */
+export const SHARED_SKILLS_TREE_READERS: ReadonlySet<Tool> = new Set(
+  TOOLS.filter((tool) => tool !== "claude"),
+);
 
 /**
  * Directory prefix of a rule projected as a skill:
@@ -46,7 +63,7 @@ import type { RuleDelivery } from "../types/manifest.ts";
  */
 export const RULE_SKILL_DIR_PREFIX = "stamity-";
 
-/** The four facts the delivery decision reads, resolved per rule. */
+/** The facts the delivery decision reads, resolved per rule. */
 export interface RuleDeliveryInput {
   /** Catalog id (unprefixed, as authored). */
   id: string;
@@ -58,6 +75,17 @@ export interface RuleDeliveryInput {
   floorTagged: boolean;
   /** True when every glob shares a literal directory a nested `AGENTS.md` can sit in. */
   anchored: boolean;
+  /**
+   * The rule's own `tools:` restriction, or `undefined` when it names every
+   * client. Read by {@link demotedRuleIds} alone (N1): a rule restricted to
+   * fewer tools than the shared skills tree's readers is never safe to demote
+   * on a shared-tree client, because the projection that would otherwise
+   * deliver it refuses to place a `tools:`-scoped rule's body somewhere every
+   * reader of that tree can load it (`../emit/skillsProjection.ts`, W3) — a
+   * demotion `demotedRuleIds` does not itself guard against would leave the
+   * rule delivered through no door at all on that client.
+   */
+  tools?: readonly Tool[];
 }
 
 /** The empty answer for every client — what `always-on` resolves to everywhere. */
@@ -97,21 +125,44 @@ export const NO_DEMOTED_RULES: Readonly<Record<Tool, ReadonlySet<string>>> = Obj
  *   package directory it is about. Everything else is better delivered as a
  *   skill the client pulls when its description matches than as another
  *   section of an appendix the 32 KiB budget is already dropping rules from.
+ *
+ * **N1: codex and copilot additionally refuse to demote a `tools:`-restricted
+ * rule that does not name every `sharedTreeReaders` tool.** Both reach a
+ * demoted rule through the shared `.agents/skills/` projection, which refuses
+ * to place a `tools:`-scoped rule's body where a client it never named could
+ * load it (`../emit/skillsProjection.ts`, W3) — so demoting such a rule for
+ * codex or copilot without this guard would leave it delivered through NO
+ * door there: not always-on (demoted), not projected (W3 refuses the shared
+ * row). Claude carries no such guard on purpose: it reaches a demoted rule
+ * through its own re-targeted NATIVE copy, not through the tools other
+ * clients would read the shared file from, so its demotion answer is
+ * unaffected by which OTHER clients a rule's `tools:` does or does not name.
  */
 export function demotedRuleIds(
   tool: Tool,
   rules: readonly RuleDeliveryInput[],
   mode: RuleDelivery,
+  sharedTreeReaders: ReadonlySet<Tool> = new Set(),
 ): ReadonlySet<string> {
   if (mode === "always-on" || tool === "cursor") return new Set();
+  // Never demote a rule that would be demoted with nowhere left to land: the
+  // shared-tree projection (W3) refuses a `tools:`-scoped rule whose `tools:`
+  // does not cover every reader of that tree, so a codex/copilot demotion
+  // that ignored the same fact would strand the rule with no delivery door.
+  const projectableToSharedTree = (rule: RuleDeliveryInput): boolean =>
+    rule.tools === undefined || [...sharedTreeReaders].every((reader) => rule.tools!.includes(reader));
   const demotes =
     tool === "codex"
-      ? (rule: RuleDeliveryInput) => !rule.critical && !rule.floorTagged && !rule.anchored
-      : (rule: RuleDeliveryInput) => !rule.critical && !rule.floorTagged && !rule.globScoped;
+      ? (rule: RuleDeliveryInput) =>
+          !rule.critical && !rule.floorTagged && !rule.anchored && projectableToSharedTree(rule)
+      : tool === "copilot"
+        ? (rule: RuleDeliveryInput) =>
+            !rule.critical && !rule.floorTagged && !rule.globScoped && projectableToSharedTree(rule)
+        : (rule: RuleDeliveryInput) => !rule.critical && !rule.floorTagged && !rule.globScoped;
   return new Set(rules.filter((rule) => demotes(rule)).map((rule) => rule.id));
 }
 
-/** The four facts of one catalog rule. */
+/** The facts of one catalog rule, resolved for the delivery decision. */
 export function ruleDeliveryInputOf(item: CatalogItem): RuleDeliveryInput {
   const globs = declaredRuleGlobs(item);
   return {
@@ -120,6 +171,7 @@ export function ruleDeliveryInputOf(item: CatalogItem): RuleDeliveryInput {
     critical: item.precedence === "critical",
     floorTagged: item.tags.some(isFloorTag),
     anchored: ruleAnchor(globs) !== null,
+    ...(item.tools === undefined ? {} : { tools: item.tools }),
   };
 }
 

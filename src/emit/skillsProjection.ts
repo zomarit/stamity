@@ -78,7 +78,11 @@ import {
   type ContentRoots,
 } from "../content/catalog.ts";
 import { composeFrontmatter, parseFrontmatter } from "../content/frontmatter.ts";
-import { RULE_SKILL_DIR_PREFIX, NO_DEMOTED_RULES } from "../content/ruleDelivery.ts";
+import {
+  RULE_SKILL_DIR_PREFIX,
+  NO_DEMOTED_RULES,
+  SHARED_SKILLS_TREE_READERS,
+} from "../content/ruleDelivery.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { verificationGatesFor } from "../detect/verificationGates.ts";
 import { PLATFORM_TOOL_MARKER, buildAskUserPlatformTable } from "../tools/translator.ts";
@@ -303,23 +307,35 @@ export async function projectSkills(
   );
 
   const demoted = options.demotedRules ?? NO_DEMOTED_RULES;
-  // Every tool without a {@link NATIVE_SKILL_DIRS} entry reads this SAME
-  // shared `.agents/skills/` file off disk — the frontmatter's own
+  // Every tool in {@link SHARED_SKILLS_TREE_READERS} reads this SAME shared
+  // `.agents/skills/` file off disk — the frontmatter's own
   // `metadata.stamity.tools` list is bookkeeping the projection writes, not a
   // gate any of those readers checks before loading it. A rule authored
   // `tools:` restricted (only some clients should ever see its body) is
   // therefore never safe to place here unless every shared-tree reader is one
   // of the tools it names: placing it anyway is how a `tools:`-scoped rule's
-  // body reaches a client it never named (W3). Skipping the shared row is the
-  // smaller cost — the rule still reaches its named clients through whatever
-  // native or always-on door they already have, and Claude (the one client
-  // with a private, re-targeted copy) is unaffected either way, since its own
-  // copy is filtered by {@link demoted} independently in `nativeSkillRows`.
-  const sharedTreeReaders = TOOLS.filter((tool) => NATIVE_SKILL_DIRS[tool] === undefined);
+  // body reaches a client it never named (W3, N1).
+  //
+  // N1: this skip is now mostly DEFENSIVE rather than load-bearing, for codex
+  // and copilot — `demotedRuleIds` (`../content/ruleDelivery.ts`) refuses to
+  // demote a `tools:`-restricted rule for either of them unless it names
+  // every {@link SHARED_SKILLS_TREE_READERS} tool, so `tools` below never
+  // contains codex or copilot for a rule this branch would otherwise drop,
+  // and their always-on delivery is what carries the rule instead. Claude is
+  // the one exception, by design: its demotion answer carries no such guard
+  // (claude reaches this rule through its own re-targeted native copy, not
+  // through this shared file, so the guard belongs to codex and copilot's
+  // shared door, not to claude's private one) — if claude alone demoted a
+  // rule this restrictive, this branch still drops the row, and claude's own
+  // native copy (filtered from the same {@link ruleRows} by `nativeSkillRows`)
+  // loses it too. That remaining gap is accepted, not fixed here.
   const ruleRows = (options.ruleItems ?? []).flatMap((item) => {
     const tools = TOOLS.filter((tool) => demoted[tool].has(item.id));
     if (tools.length === 0) return [];
-    if (item.tools !== undefined && !sharedTreeReaders.every((tool) => item.tools!.includes(tool))) {
+    if (
+      item.tools !== undefined &&
+      ![...SHARED_SKILLS_TREE_READERS].every((tool) => item.tools!.includes(tool))
+    ) {
       return [];
     }
     return [projectRuleAsSkill(item, tools, detection, gates)];

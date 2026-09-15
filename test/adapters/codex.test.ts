@@ -1634,6 +1634,40 @@ describe("codex honours the tools: restriction", () => {
     expect(shared).toBeDefined();
     expect(shared!.content).not.toContain("Guidance nobody outside claude should read.");
   });
+
+  // N1, golden-free: a `tools: [codex]`-only rule that is glob-less,
+  // non-critical, non-floor and non-anchored used to be DEMOTED under
+  // `on-demand` (nothing in the pre-N1 predicate read `tools:`) and then
+  // refused a shared `.agents/skills/` row (W3, since `tools:` does not name
+  // cursor or copilot too) — delivered through no door at all. With the N1
+  // guard, codex refuses to demote it in the first place, so it stays
+  // inlined in the root appendix. No golden byte-comparison: this asserts
+  // the one property N1 exists to hold, not the appendix's exact shape.
+  it("keeps a tools:[codex]-only rule inlined in the appendix under on-demand delivery", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "corpus/charter/stamity-charter.md": CHARTER_FIXTURE,
+      "corpus/agents/stamity-reviewer.md": REVIEWER_FIXTURE,
+      "corpus/rules/stamity-codex-private.md": ruleFixture("codex-private", {
+        description: "For codex only.",
+        tools: ["codex"],
+        body: "Guidance only codex should carry, demoted nowhere else it can land.",
+      }),
+    });
+    const ctx = ctxOf({
+      contentRoot: temp.path("corpus"),
+      rules: ["codex-private"],
+      ruleDelivery: "on-demand",
+    });
+
+    const plan = await composeEmissionPlanner({ codex: codexResiduePlanner }).plan(ctx);
+    const shared = plan.find((row) => row.path === "AGENTS.md");
+
+    expect(shared).toBeDefined();
+    expect(shared!.content).toContain(
+      "Guidance only codex should carry, demoted nowhere else it can land.",
+    );
+  });
 });
 
 

@@ -6,7 +6,7 @@ import { EngineError } from "../types/errors.ts";
 import { RULE_DELIVERY_DEFAULT, type RuleDelivery } from "../types/manifest.ts";
 import { resolveBundledContentRoot } from "./contentRoot.ts";
 import { parseFrontmatter } from "./frontmatter.ts";
-import { demotedRuleIds, type RuleDeliveryInput } from "./ruleDelivery.ts";
+import { SHARED_SKILLS_TREE_READERS, demotedRuleIds, type RuleDeliveryInput } from "./ruleDelivery.ts";
 
 /**
  * Charter loader — the one reader for the single `load: always` artifact.
@@ -317,7 +317,7 @@ export function composeAlwaysOnLoad(
   plan: AlwaysOnPlan,
   mode: RuleDelivery = RULE_DELIVERY_DEFAULT,
 ): number {
-  const demoted = demotedRuleIds(tool, plan.rules, mode);
+  const demoted = demotedRuleIds(tool, plan.rules, mode, SHARED_SKILLS_TREE_READERS);
   const unconditional = plan.rules.filter((rule) => {
     if (demoted.has(rule.id)) return false;
     if (RULE_APPENDIX_TOOLS.has(tool)) return true;

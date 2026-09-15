@@ -58,6 +58,26 @@ describe("binaryVersion", () => {
     expect(probe.present).toBe(true);
     expect(probe.version).toBe("fixture-1.2.3");
   });
+
+  it("reports present with the probed version for a non-zero exit that still prints one", () => {
+    // `--version` is not universally a zero-exit flag; a version line on stdout is evidence of
+    // presence on its own, exit code or not.
+    pathDirWith("stamity-qa-hookruns-nonzero-version", "#!/bin/sh\necho fixture-2.0.0\nexit 3\n");
+    const probe = binaryVersion("stamity-qa-hookruns-nonzero-version");
+    expect(probe.present).toBe(true);
+    expect(probe.version).toBe("fixture-2.0.0");
+  });
+
+  // M-d: a binary found on PATH is not the same claim as a binary that answered — a shim that
+  // exits non-zero with nothing on stdout used to be reported `present: true, version: ""`, which
+  // a caller then printed as "‹binary› " with nothing to show for it.
+  it("reports present: false when the probe exits non-zero with nothing on stdout", () => {
+    pathDirWith("stamity-qa-hookruns-broken-binary", "#!/bin/sh\nexit 1\n");
+    const probe = binaryVersion("stamity-qa-hookruns-broken-binary");
+    expect(probe.present).toBe(false);
+    expect(probe.reason).toContain("stamity-qa-hookruns-broken-binary");
+    expect(probe.reason).toContain("present but its version probe failed (exit 1)");
+  });
 });
 
 describe("runClient — a binary probed present with no measured invocation", () => {
