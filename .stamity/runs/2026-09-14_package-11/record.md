@@ -220,3 +220,33 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
 - Freeze: from this commit nothing under `content/`, `evals/`, `scripts/eval/`, `src/`, `docs/`,
   `website/` or the workflows changes; Phase 2 measures this tree — run 25 on the route of record,
   the release dry run, the pack signing rehearsal, CI on every leg, the full local gate.
+
+## Phase 2 — freeze and measure (candidate `f2b90dc8194ad12d423534c1b021be84c645337c`)
+
+- 02:57Z — branch pushed; draft PR #36 opened; release dry run (34923118084) and CI (34923118732),
+  PR checks (success) and the docs-site build (success) dispatched on the candidate.
+- The pack signing rehearsal workflow is pinned by name to the 1.7.0 candidate branch, which no
+  longer exists on origin, so its dispatch on this branch skipped every job. The pack code, the
+  rehearsal script and the workflow are byte-identical to v1.7.0, and the rehearsal signs a fixed
+  source identity rather than the checkout, so it was run by pushing the candidate commit under
+  that pinned ref name and dispatching there (run 34923283007); the ref is deleted once the run
+  completes. `Default applied: rehearsal pinned to a deleted branch → run it at the candidate under
+  the pinned name, no workflow edit (the workflows are frozen; unpinning is named at the close).`
+- **Run 25** (`prepare` at 02:57Z, route of record, SET-v7 over cases-v6, judge claude-fable-5-1,
+  scenarios claude-opus-5): terminal at calibration — fixture C3's judge matched the case verdict
+  (FAIL) but graded binding B1 pass against the human label fail; the task bytes were identical to
+  run 24's C3 (same sha256, 13,272 bytes), so the mismatch is judge variance on one label. Per the
+  protocol a calibration label mismatch is final and never re-rolled; the run scored nothing and is
+  retained. C4 admitted on its second attempt after a retryable admission failure on the first.
+- **Run 26** (`prepare` at 03:01Z, same candidate, same pins): calibration 5/5 matched (C4 again on
+  its second attempt, same retryable reason); scoring started 03:02:16Z. Runs 25 and 26 spend two of
+  the three-run budget.
+- QA checkpoint (`st-qa`, pinned to `f2b90dc`): 43 rows derived; 34 auto-proven from the run's test
+  runner with cited assertions and from the harness evidence; 9 rows left for a person, 71 minutes
+  in one session (Codex hook trust and observation; the three clients opening an on-demand rule
+  skill; the three new pages at 375/1440 in both themes; a 1.7.0-synced repository re-synced by the
+  candidate); sign-off **OPEN — the maintainer's walk**; rollback named per row. Its findings that are
+  not walk rows: the harness page list omitted the three pages this release adds (fixed in
+  `7260652`, the harness re-measures at this tree once the full gate completes — `scripts/qa/` is
+  outside the freeze), and the spec's REQ-PROVE-011 roster sentence reads four twins where the tree
+  holds three (corrected in the cut commit with the spec's status, a record of what shipped).
