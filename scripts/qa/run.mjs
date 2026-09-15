@@ -29,7 +29,7 @@ import { execFileSync } from 'node:child_process'
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
-import { extname, join, relative, resolve } from 'node:path'
+import { extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { carryForward, hashFile, inputHashMap, rowHash } from './bind.mjs'
 import { QA_ROWS } from './form.mjs'
@@ -58,6 +58,19 @@ const SITE_PACKAGE = join(REPO_ROOT, 'website', 'package.json')
 
 /** What to tell an operator whose browser binary is missing. Printed, never worked around. */
 const BROWSER_INSTALL_HINT = 'cd website && npx playwright install chromium'
+
+/**
+ * Is `candidate` outside `root`?
+ *
+ * M5: on Windows, `relative()` between two paths on different drives returns an ABSOLUTE path
+ * (e.g. `D:\fixtures` relative to `C:\repo`), not a `..`-prefixed one — checking only
+ * `startsWith('..')` reads that cross-drive path as "inside the repository" and lets it straight
+ * through a refusal meant to keep a fixture tree out from under the leak gate's walk.
+ */
+export function isOutsideRoot(root, candidate) {
+  const rel = relative(root, candidate)
+  return rel.startsWith('..') || isAbsolute(rel)
+}
 
 /**
  * Fixture files whose bytes decide what a hook row measures.
@@ -159,11 +172,16 @@ export async function loadBrowserLane() {
   try {
     playwrightPath = require.resolve('playwright')
     axePath = require.resolve('@axe-core/playwright')
-  } catch (error) {
+  } catch {
+    // S-4: `error.message` from a failed `require.resolve` carries the absolute
+    // resolution paths it searched, which is the evidence file leaking the
+    // operator's home directory (or the repo's own absolute path) into a
+    // committed artifact. The evidence names the fact — a package is missing —
+    // and the fix, never the path the resolver walked.
     return {
       available: false,
       reason:
-        `the browser lane's packages are not installed in website/ (${error.message}). ` +
+        "the browser lane's packages are not installed in website/. " +
         'Run `cd website && npm ci` and `' + BROWSER_INSTALL_HINT + '`.',
     }
   }
@@ -361,8 +379,12 @@ export async function main(argv) {
       let browser
       try {
         browser = await lane.playwright.chromium.launch()
-      } catch (error) {
-        browserSkipReason = `no browser binary: ${error.message.split('\n')[0]}. Run \`${BROWSER_INSTALL_HINT}\`.`
+      } catch {
+        // S-4: playwright's launch error carries the absolute path it looked
+        // for the browser binary under (an operator home directory in the
+        // common case). The evidence file states the fact and the fix, not
+        // the path.
+        browserSkipReason = `no browser binary. Run \`${BROWSER_INSTALL_HINT}\`.`
       }
       if (browser !== undefined) {
         harness.browser = browser.version()
@@ -390,7 +412,7 @@ export async function main(argv) {
   // lists untracked-but-not-ignored files, and a fixture carries whole emitted client trees. The
   // refusal is here rather than in a comment because the flag makes the mistake one keystroke away.
   const fixturesDir = options.fixtures === undefined ? undefined : resolve(REPO_ROOT, options.fixtures)
-  if (fixturesDir !== undefined && !relative(REPO_ROOT, fixturesDir).startsWith('..')) {
+  if (fixturesDir !== undefined && !isOutsideRoot(REPO_ROOT, fixturesDir)) {
     throw new Error(
       `--fixtures ${fixturesDir} is inside this repository. Fixtures are disposable client trees; ` +
         'keeping them under the repo leaves untracked files that every later gate run has to scan. ' +

@@ -169,6 +169,14 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // accounting counts because a session loads the whole file. The alternative
   // was to reword an invariant to buy the lines, which is the one edit the
   // block's hash pin exists to make deliberate. Net +3 on every client below.
+  // DEVIATION, recorded rather than fixed: the touchpoint index and conditional
+  // layer rewraps above ran to the file's own widest EXISTING line, not to the
+  // plan's ≤100-char bound — several conditional-layer lines sit at ~103-117
+  // chars (`content/charter/stamity-charter.md`, "## Conditional layer"). A
+  // rewrap to 100 would renumber every line after it, and eval-cases-v6 pins
+  // exact line numbers against this file's charter copy — so the width
+  // violation stays rather than moving a fixture nobody asked to move. Revisit
+  // together with the next line-count-changing edit to this section, not alone.
   // Held at 95 on 2026-09-15 under the `on-demand` flip: this client demotes
   // nothing — its own rule layer already defers a glob-less rule — so the
   // delivery change moves no line here. It is the control for the three below:
@@ -468,8 +476,13 @@ function requireField(
     );
   }
   // A bare `1.0` version or an unquoted date can reach here as a number or a
-  // Date depending on the YAML scalar, so the shape check runs on the rendered
-  // string rather than on `typeof value === "string"` alone.
+  // Date depending on the YAML scalar. `String(number)` can still match the
+  // pattern (a version IS digits), but `String(Date)` never matches the ISO
+  // `YYYY-MM-DD` regex below — `Date`'s own string form ("Mon Sep 15 2026...")
+  // is nothing like it. So the coercion does not let an unquoted date PASS;
+  // what it buys is the refusal message below reading the value a human wrote
+  // ("2026-09-15") instead of `[object Date]`, which `typeof value ===
+  // "string"` alone would have produced.
   const text = typeof value === "string" ? value : String(value);
   if (!pattern.test(text)) {
     throw new EngineError(

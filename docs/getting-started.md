@@ -103,7 +103,7 @@ Agent Plugins v1.0.0 packages install natively only for the 'copilot' target
 If you see that line with zero primitives deployed, upgrade the client and install again:
 `pip install --upgrade apm-cli`, `brew upgrade apm`, or whatever self-update your client offers.
 
-What arrives: 10 agents, 9 commands, 12 rules and 8 skills, each at the path its target reads.
+What arrives: 10 agents, 9 commands, 10 rules and 10 skills, each at the path its target reads.
 `codex` takes the agents and the skills only — APM's codex profile carries no command or rule
 class, and folds instructions into `AGENTS.md` when you run `apm compile`.
 

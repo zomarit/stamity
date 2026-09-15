@@ -202,7 +202,7 @@
 //     schema-bearing `plugin.json` only with the Agent Plugins `$schema`, and
 //     `.claude-plugin/plugin.json` names the schemastore one.
 //   - minus both               -> APM_PACKAGE, and it works end to end:
-//     10 agents, 9 commands, 12 rules and 8 skills deployed under the emitted
+//     10 agents, 9 commands, 10 rules and 10 skills deployed under the emitted
 //     ids, with each rule's `applyTo` translated into the target's own glob
 //     vocabulary.
 //
@@ -221,7 +221,7 @@
 // route deploys this package from the published tree AS IT STANDS, both plugin
 // surfaces present and nothing stripped: `apm install zomarit/stamity` and
 // `apm install zomarit/stamity#<tag>` each deploy 10 agents, 9 commands,
-// 12 rules and 8 skills per target, and the lockfile types the dependency
+// 10 rules and 10 skills per target, and the lockfile types the dependency
 // `apm_package`. The imperative LOCAL route (`apm install <path>`) is still
 // refused by design — the local-bundle route inspects `plugin.json` first — and
 // a `file://` spec is rejected outright, so the local form that reaches this

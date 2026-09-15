@@ -303,9 +303,26 @@ export async function projectSkills(
   );
 
   const demoted = options.demotedRules ?? NO_DEMOTED_RULES;
+  // Every tool without a {@link NATIVE_SKILL_DIRS} entry reads this SAME
+  // shared `.agents/skills/` file off disk — the frontmatter's own
+  // `metadata.stamity.tools` list is bookkeeping the projection writes, not a
+  // gate any of those readers checks before loading it. A rule authored
+  // `tools:` restricted (only some clients should ever see its body) is
+  // therefore never safe to place here unless every shared-tree reader is one
+  // of the tools it names: placing it anyway is how a `tools:`-scoped rule's
+  // body reaches a client it never named (W3). Skipping the shared row is the
+  // smaller cost — the rule still reaches its named clients through whatever
+  // native or always-on door they already have, and Claude (the one client
+  // with a private, re-targeted copy) is unaffected either way, since its own
+  // copy is filtered by {@link demoted} independently in `nativeSkillRows`.
+  const sharedTreeReaders = TOOLS.filter((tool) => NATIVE_SKILL_DIRS[tool] === undefined);
   const ruleRows = (options.ruleItems ?? []).flatMap((item) => {
     const tools = TOOLS.filter((tool) => demoted[tool].has(item.id));
-    return tools.length === 0 ? [] : [projectRuleAsSkill(item, tools, detection, gates)];
+    if (tools.length === 0) return [];
+    if (item.tools !== undefined && !sharedTreeReaders.every((tool) => item.tools!.includes(tool))) {
+      return [];
+    }
+    return [projectRuleAsSkill(item, tools, detection, gates)];
   });
 
   return [...perSkill.flat(), ...ruleRows].toSorted((a, b) =>

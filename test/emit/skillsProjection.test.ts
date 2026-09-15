@@ -1406,4 +1406,120 @@ describe("projectSkills over demoted rules", () => {
       `${SKILLS_PROJECTION_DIR}/stamity-question-protocol/SKILL.md`,
     ]);
   });
+
+  // W3: `.agents/skills/` is one file every projection reader (cursor, copilot,
+  // codex — everything without a NATIVE_SKILL_DIRS entry) loads off disk. A
+  // `tools:`-restricted rule demoted to a skill must never land there unless
+  // every one of those readers is named in its `tools:` — otherwise a client
+  // the rule never named can still read its body straight off the shared tree,
+  // bypassing the `tools:` contract entirely.
+  it("skips the shared skill row for a tools:-restricted demoted rule a projection reader is not named in", async () => {
+    const toolsRestricted: CatalogItem = {
+      type: "rule",
+      id: "claude-only-rule",
+      filePath: "/corpus/rules/stamity-claude-only-rule.md",
+      relativePath: "rules/stamity-claude-only-rule.md",
+      description: "Fixture rule, claude-only.",
+      tags: ["review"],
+      body: "\nClaude-only content.\n",
+      frontmatter: { id: "claude-only-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["claude"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [toolsRestricted],
+      // Claude is the only client this rule names, and claude is also the
+      // only client the demotion answer names it against — a demotion answer
+      // that respected `tools:` the way `planRuleDelivery` does. Even so, the
+      // shared-tree readers (cursor, copilot, codex) are not in `tools:`, so
+      // the row must not be written where they can read it.
+      demotedRules: demotedOn(["claude"], "claude-only-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([]);
+  });
+
+  it("still projects a tools:-restricted rule to the shared tree when every shared-tree reader is named", async () => {
+    const toolsRestricted: CatalogItem = {
+      type: "rule",
+      id: "shared-scoped-rule",
+      filePath: "/corpus/rules/stamity-shared-scoped-rule.md",
+      relativePath: "rules/stamity-shared-scoped-rule.md",
+      description: "Fixture rule, scoped to every shared-tree reader.",
+      tags: ["review"],
+      body: "\nContent every shared reader may see.\n",
+      frontmatter: { id: "shared-scoped-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["cursor", "copilot", "codex"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [toolsRestricted],
+      demotedRules: demotedOn(["cursor", "copilot", "codex"], "shared-scoped-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/stamity-shared-scoped-rule/SKILL.md`,
+    ]);
+  });
+
+  // M6: a demoted rule whose id an override tree also claims must project the
+  // OVERRIDE's body as a skill, not the shipped one — the same "replacement,
+  // not a filter" rule `projectSkills over an override tree` pins for skills,
+  // carried through the rule-as-skill door. `planRuleDelivery`
+  // (`../../src/emit/planner.ts:466-472`) resolves `ruleItems` off the SAME
+  // `index.byKey` reachability this test drives directly, so this is the
+  // combination the planner produces, not a hand-picked shortcut.
+  it("keeps the override's body for a rule that is both demoted and pack/override-claimed", async () => {
+    const ruleDoc = (id: string, description: string, body: string): string =>
+      artifact(
+        [
+          `id: ${id}`,
+          "type: rule",
+          `description: ${description}`,
+          "tags: [review]",
+          "load: always-on",
+          "obsolete_when: never",
+        ].join("\n"),
+        body,
+      );
+
+    const CORPUS_DIR = "corpus";
+    const OVERRIDE_DIR = "overrides";
+    const SHIPPED_MARKER = "Shipped rule body: the bundled instruction.";
+    const HOUSE_MARKER = "House rule body: this repository's own instruction.";
+    const volume = makeVolume({
+      [`${CORPUS_DIR}/rules/stamity-gamma-rule.md`]: ruleDoc(
+        "gamma-rule",
+        "The bundled version of this rule.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/rules/stamity-gamma-rule.md`]: ruleDoc(
+        "gamma-rule",
+        "The house version of this rule, authored in this repo.",
+        `${HOUSE_MARKER}\n`,
+      ),
+    });
+    const corpusRoot = `${volume.root}/${CORPUS_DIR}`;
+    const overrideRoot = `${volume.root}/${OVERRIDE_DIR}`;
+
+    const index = await buildContentIndex(
+      { root: corpusRoot, overrideRoot },
+      { fs: volume.fs },
+    );
+    const resolved = index.items.filter(
+      (item) => item.type === "rule" && index.byKey.get(`rule:gamma-rule`) === item,
+    );
+    expect(resolved).toHaveLength(1);
+
+    const rows = await projectSkills(contextOf([]), {
+      contentRoot: { root: corpusRoot, overrideRoot },
+      fs: volume.fs,
+      ruleItems: resolved,
+      demotedRules: demotedOn(["claude"], "gamma-rule"),
+    });
+
+    const row = rows.find((candidate) => candidate.path.endsWith("stamity-gamma-rule/SKILL.md"));
+    expect(row).toBeDefined();
+    expect(row!.content).toContain(HOUSE_MARKER);
+    expect(row!.content).not.toContain(SHIPPED_MARKER);
+    expect(row!.content).toContain("The house version of this rule, authored in this repo.");
+  });
 });

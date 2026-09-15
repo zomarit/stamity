@@ -578,6 +578,19 @@ describe("the rule, exercised against fixture trees", () => {
     expect(() => computeMergeReadyRate(empty)).toThrow(/carries the proof block/);
     rmSync(empty, { recursive: true, force: true });
   });
+
+  it("refuses a run directory name that would break out of a code span or table cell", () => {
+    // S-3: run ids are interpolated unescaped into `` `${run.run}` `` and
+    // `| ${run.run} |` on the rendered page; a name carrying a backtick or a
+    // pipe must be refused before it reaches that template rather than
+    // rendered as broken or injected Markdown.
+    const root = fixture({
+      "2026-01-02_ok | pwned`": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    expect(() => computeMergeReadyRate(root)).toThrow(EngineError);
+    expect(() => computeMergeReadyRate(root)).toThrow(/2026-01-02_ok \| pwned`/);
+    rmSync(root, { recursive: true, force: true });
+  });
 });
 
 describe("the snapshot seam", () => {

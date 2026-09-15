@@ -79,12 +79,14 @@ the number is: an exclusion nobody can see is a number nobody can check.
 - `2026-09-10_release-1.5.0` — no review verdict
 - `2026-09-11_package-10-readiness` — no record
 - `2026-09-11_package-10-session-evals` — no record
+- `2026-09-14_package-11` — run in progress
 
 ### What the number is limited by, stated rather than tuned away
 
-Sixteen run directories are outside the measure and every one of them is named above. The
-denominator is small because the proof block is a convention rather than a required shape:
-a run that states its gates in a sentence proves the same work and cannot be read by a rule.
+17 run directories are outside the measure and every one of them is named
+above. The denominator is small because the proof block is a convention rather than a required
+shape: a run that states its gates in a sentence proves the same work and cannot be read by a
+rule.
 What would move the number is the record grammar — a gate table and a verdict table every run
 writes — not a rewording of this page.
 
@@ -117,9 +119,9 @@ findings ledger with no open row.
 
 Three consequences worth stating, because they are what make the number worth reading:
 
-- **Exclusions are published, not dropped.** Every run directory appears exactly once across
-  the three lists above. Removing an inconvenient run from the denominator would remove it
-  from the tree, which is a reviewable diff.
+- **Exclusions are published, not dropped.** Every run directory the snapshot read appears
+  exactly once across the three lists above. Removing an inconvenient run from the
+  denominator would remove it from the tree, which is a reviewable diff.
 - **The measure is conservative where it is uncertain.** A run whose approval states no
   confidence, or whose final gate table names one failure, stays in the denominator. The
   number under-claims by construction.

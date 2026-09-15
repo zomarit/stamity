@@ -1,7 +1,7 @@
 ---
 id: codex-hooks-need-the-features-flag-and-exec-runs-none
 title: codex hooks need the features flag and exec runs none
-date: 2026-09-14
+date: 2026-09-15
 confidence: high
 summary: the adapter now emits [features] hooks = true (verified to flip the client feature); codex exec 0.154.0 still ran zero project hooks with trust bypassed
 reviewBy: 2026-12-01

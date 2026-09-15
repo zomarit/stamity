@@ -157,7 +157,7 @@ gap row, never as a claim.
 | Actor | Vector | Control (path) | Residual | Mapped ids | Gap or not applicable |
 |---|---|---|---|---|---|
 | A build-time dependency | Reaching the publishing credential | The job that builds does not hold it: gates, the isolated third-party route job and `publish` are separate jobs, `publish` takes no checkout and verifies the tarball hash against the gate job's output (`.github/workflows/release.yml`) | A compromised build dependency runs where no credential is | ASI04, LLM03, A08, MANAGE 3.1 | — |
-| Anyone | Publishing a build nobody can trace to this repository | `npm publish --provenance` over OIDC trusted publishing, so no long-lived token exists here, and third-party actions are SHA-pinned | The platform half — required reviewer, tag ruleset, trusted-publisher entry — is maintainer setup, re-verified at each cut rather than proven by a file | ASI04, A06, A08, GOVERN 1.5 | Gap: platform half is not code |
+| Anyone | Publishing a build nobody can trace to this repository | `npm publish --provenance` over OIDC trusted publishing, so no long-lived token exists here, and third-party actions are SHA-pinned | The platform half — required reviewer, tag ruleset, trusted-publisher entry — is maintainer setup, re-verified at each cut rather than proven by a file | ASI04, A06, A08, GOVERN 1.5, MANAGE 2.1 | Gap: platform half is not code |
 
 ## Gaps, stated
 

@@ -111,6 +111,9 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
 # a regeneration would drop the keys anyway. Your own keys are never clobbered: the engine
 # refuses to overwrite a file it does not own (sync reports an unmanaged-name collision),
 # so keep your file and add \`hooks = true\` INTO your existing [features] table.
+# Removing this key (or setting it false) makes every emitted hook inert with no other
+# signal — the client reads none of them — and \`sync\` restores \`hooks = true\` on this file
+# the next time it regenerates it.
 
 [features]
 hooks = true
@@ -1282,7 +1285,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".codex/agents/stamity-security.toml": "bfb665dc2b7846ee8bd91dad2901047153d3f1fb44d80ad13d6999c6e48fa58a 8265 bytes",
   ".codex/agents/stamity-spec-author.toml": "a5ff44abdcf42b6c4b2afae218e0d454764649a61605a17c57403bb69b118981 9714 bytes",
   ".codex/agents/stamity-test-runner.toml": "00cda976e28d5c10b0383d0251f965a7931491917f85e11322edcf6150d822c0 6295 bytes",
-  ".codex/config.toml": "61a6df0c4c3083aafc0e0ad9d2ca1724cc134211843e2424133a249bb34963c2 3068 bytes",
+  ".codex/config.toml": "6cc6cda56cb23939367ebe4f5a42c6ef22b844b01b2d3daebe3b05ed70265c80 3285 bytes",
   ".codex/hooks.json": "aeea6ba31ac9eb2c70506d6a8c66655ae9d503573aaae4d5dd127d1c8695b112 6683 bytes",
   ".cursor/agents/stamity-creator.md": "9cb2a22b302f230ad36e5c6b82fc703e2e5d5b510f4ed5771dd700e268391bbd 13732 bytes",
   ".cursor/agents/stamity-design-quality.md": "7c9ff339433878ac8af990b27c594f8c8dc8e3dc10f9ec3b30be92b0f3968df9 7783 bytes",
@@ -1374,7 +1377,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "5bc40c0996d3c05786f53c6b5210259134db9f7f41e9c52636154394d599a3b1 71175 bytes",
+  ".stamity/manifest.json": "b7cc39f60210690a12c598126cb96b0903e7db87c1befc1eaa94b834414d8fcf 71175 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "4264705c891740cc361e16c95a12e6d0920f1e5923427e4687c57c343d03bbed 24904 bytes",
@@ -1708,6 +1711,9 @@ exports[`emitted tree for codex > matches the residue-document golden byte for b
 # a regeneration would drop the keys anyway. Your own keys are never clobbered: the engine
 # refuses to overwrite a file it does not own (sync reports an unmanaged-name collision),
 # so keep your file and add \`hooks = true\` INTO your existing [features] table.
+# Removing this key (or setting it false) makes every emitted hook inert with no other
+# signal — the client reads none of them — and \`sync\` restores \`hooks = true\` on this file
+# the next time it regenerates it.
 
 [features]
 hooks = true
@@ -2363,7 +2369,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".codex/agents/stamity-security.toml": "bfb665dc2b7846ee8bd91dad2901047153d3f1fb44d80ad13d6999c6e48fa58a 8265 bytes",
   ".codex/agents/stamity-spec-author.toml": "a5ff44abdcf42b6c4b2afae218e0d454764649a61605a17c57403bb69b118981 9714 bytes",
   ".codex/agents/stamity-test-runner.toml": "00cda976e28d5c10b0383d0251f965a7931491917f85e11322edcf6150d822c0 6295 bytes",
-  ".codex/config.toml": "61a6df0c4c3083aafc0e0ad9d2ca1724cc134211843e2424133a249bb34963c2 3068 bytes",
+  ".codex/config.toml": "6cc6cda56cb23939367ebe4f5a42c6ef22b844b01b2d3daebe3b05ed70265c80 3285 bytes",
   ".codex/hooks.json": "aeea6ba31ac9eb2c70506d6a8c66655ae9d503573aaae4d5dd127d1c8695b112 6683 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "f8fbe8e8b09bc960be56387909425a4db0d79570de16d3fad0629c041839d681 9 bytes",
@@ -2376,7 +2382,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "870d34fdd7458d41219ea5ca97fdb374d60bbce3c3381dbb73cc6c846d925c38 15677 bytes",
+  ".stamity/manifest.json": "81cda8be627269dc94832ce528420ccbba4b35ddae19a759e07d3cb501e791b2 15677 bytes",
   "AGENTS.md": "4264705c891740cc361e16c95a12e6d0920f1e5923427e4687c57c343d03bbed 24904 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

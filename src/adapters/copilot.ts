@@ -15,6 +15,7 @@ import {
   typeIdKey,
   type CatalogItem,
 } from "../content/catalog.ts";
+import { declaredRuleGlobs } from "../content/ruleDelivery.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { detectPackageManager, type PackageManagerInfo } from "../detect/packageManager.ts";
 import { verificationGatesFromManifest } from "../emit/agentsMd.ts";
@@ -631,24 +632,12 @@ function bodyRenderer(ctx: EmissionContext): (raw: string) => string {
  * generator's defect to report, and this adapter's fallback (`applyTo: "**"`)
  * over-attaches rather than dropping the rule from the setup.
  *
- * A shared rule-scope reader belongs beside the other clients that need the
- * same answer; until one exists, this is deliberately the narrow read.
+ * The extraction itself is {@link declaredRuleGlobs} (`../content/
+ * ruleDelivery.ts`), the shared reader; only the de-duplication is local to
+ * this adapter's own `applyTo` rendering.
  */
 function declaredGlobs(item: CatalogItem): string[] {
-  const declared = item.frontmatter["globs"];
-  const raw =
-    typeof declared === "string"
-      ? declared.split(",")
-      : Array.isArray(declared)
-        ? declared.filter((entry) => typeof entry === "string")
-        : [];
-
-  const seen = new Set<string>();
-  for (const glob of raw) {
-    const value = glob.trim();
-    if (value !== "") seen.add(value);
-  }
-  return [...seen];
+  return [...new Set(declaredRuleGlobs(item))];
 }
 
 /**

@@ -178,6 +178,18 @@ const RELEASE_RUN = /_release-(\d+\.\d+\.\d+)$/;
 /** A run directory's date prefix. */
 const RUN_DATE = /^(\d{4}-\d{2}-\d{2})_/;
 
+/**
+ * The character set a run directory name may carry.
+ *
+ * S-3: run ids are interpolated unescaped into a code span and table cells on
+ * the rendered page (`` `${run.run}` `` and `| ${run.run} |`), the same way
+ * {@link SNAPSHOT_FILE} constrains a snapshot's own filename. A directory name
+ * carrying a backtick, a pipe, or a newline would break out of the Markdown it
+ * is rendered into, so the walk below refuses anything outside this set before
+ * it ever reaches the page.
+ */
+const RUN_ID_PATTERN = /^[\w.-]+$/;
+
 /** A snapshot file, with its date captured. */
 const SNAPSHOT_FILE = /^merge-ready-(\d{4}-\d{2}-\d{2})\.json$/;
 
@@ -436,6 +448,12 @@ export function computeMergeReadyRate(root: string = repoRoot()): MergeReadyRepo
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .toSorted();
+
+  for (const run of runs) {
+    if (!RUN_ID_PATTERN.test(run)) {
+      fail(`Run directory name ${JSON.stringify(run)} under ${RUNS_DIR} is not [\\w.-]+; refusing to interpolate it into the rendered page.`);
+    }
+  }
 
   const numerator: VerifiedRun[] = [];
   const denominator: DenominatedRun[] = [];
@@ -735,9 +753,10 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "",
     "### What the number is limited by, stated rather than tuned away",
     "",
-    "Sixteen run directories are outside the measure and every one of them is named above. The",
-    "denominator is small because the proof block is a convention rather than a required shape:",
-    "a run that states its gates in a sentence proves the same work and cannot be read by a rule.",
+    `${report.excluded.length} run directories are outside the measure and every one of them is named`,
+    "above. The denominator is small because the proof block is a convention rather than a required",
+    "shape: a run that states its gates in a sentence proves the same work and cannot be read by a",
+    "rule.",
     "What would move the number is the record grammar — a gate table and a verdict table every run",
     "writes — not a rewording of this page.",
     "",
@@ -770,9 +789,9 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "",
     "Three consequences worth stating, because they are what make the number worth reading:",
     "",
-    "- **Exclusions are published, not dropped.** Every run directory appears exactly once across",
-    "  the three lists above. Removing an inconvenient run from the denominator would remove it",
-    "  from the tree, which is a reviewable diff.",
+    "- **Exclusions are published, not dropped.** Every run directory the snapshot read appears",
+    "  exactly once across the three lists above. Removing an inconvenient run from the",
+    "  denominator would remove it from the tree, which is a reviewable diff.",
     "- **The measure is conservative where it is uncertain.** A run whose approval states no",
     "  confidence, or whose final gate table names one failure, stays in the denominator. The",
     "  number under-claims by construction.",

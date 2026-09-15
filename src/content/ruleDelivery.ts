@@ -81,10 +81,14 @@ export const NO_DEMOTED_RULES: Readonly<Record<Tool, ReadonlySet<string>>> = Obj
  *   with a native description-pull rule mode, so a rule with no globs already
  *   costs it nothing at launch and moving it would trade a rule the client
  *   understands for a skill it reads the same way.
- * - **claude, copilot** demote the GLOB-LESS rules. A glob-scoped rule is
- *   attached conditionally on both (`paths:`, `applyTo:`), so it is already
- *   paid for only when it applies; a rule with no globs is loaded on every
- *   session, and that is the whole cost this option exists to reclaim.
+ * - **claude, copilot** demote the GLOB-LESS rules that are neither
+ *   `critical` nor floor-tagged. A glob-scoped rule is attached conditionally
+ *   on both (`paths:`, `applyTo:`), so it is already paid for only when it
+ *   applies; a rule with no globs is loaded on every session, and that is the
+ *   whole cost this option exists to reclaim. The same floor guard codex
+ *   applies keeps a floor-tagged glob-less rule always-on here too: a floor
+ *   rule with nothing to anchor it to must not lose its every-session
+ *   delivery on any client.
  * - **codex** demotes everything that is neither `critical`, nor floor-tagged,
  *   nor anchorable to a nested `AGENTS.md`. It has no conditional layer, so
  *   the question is not "does this attach conditionally" but "does this have
@@ -103,7 +107,7 @@ export function demotedRuleIds(
   const demotes =
     tool === "codex"
       ? (rule: RuleDeliveryInput) => !rule.critical && !rule.floorTagged && !rule.anchored
-      : (rule: RuleDeliveryInput) => !rule.globScoped;
+      : (rule: RuleDeliveryInput) => !rule.critical && !rule.floorTagged && !rule.globScoped;
   return new Set(rules.filter((rule) => demotes(rule)).map((rule) => rule.id));
 }
 

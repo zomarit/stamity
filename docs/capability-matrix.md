@@ -218,7 +218,7 @@ Sources:
 
 - <https://learn.chatgpt.com/docs/agent-configuration/subagents> — accessed 2026-09-10
 - <https://learn.chatgpt.com/docs/hooks> — accessed 2026-09-10
-- <https://learn.chatgpt.com/docs/config-file/config-reference> — accessed 2026-09-10
+- <https://learn.chatgpt.com/docs/config-file/config-reference> — accessed 2026-09-15
 - <https://learn.chatgpt.com/docs/custom-prompts> — accessed 2026-09-10
 
 ## Hook guarantee honesty

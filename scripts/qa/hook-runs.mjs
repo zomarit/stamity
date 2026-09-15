@@ -49,8 +49,15 @@ const RUN_TIMEOUT_MS = 300_000
  * requirement and the per-hook `/hooks` review, and do not state whether `exec` loads the project
  * hook layer at all. So the honest row is `not-run` with that reason: driving `exec` here would
  * record a `failed` row about the client's headless behaviour and read as a defect in the emission.
- * `cursor` and `copilot` carry no runner here; their rows are `not-run` with the reason the run
- * records, which is a fact about this machine and not about the client.
+ * `cursor` and `copilot` carry documented binary names (`cursor-agent`, `copilot`) so the row is
+ * PROBED rather than asserted: {@link runClient} calls {@link binaryVersion} the same way it does
+ * for `claude`, and the reason is built from what that probe actually found (absent → "not on
+ * PATH"; present → the probed version) instead of a literal typed once and never rechecked. Neither
+ * carries an `args` entry: unlike `claude`'s `-p`/`--output-format` and codex's `exec`, this module
+ * has no MEASURED non-interactive invocation for either client's CLI to cite — inventing flags here
+ * would guess at a headless syntax and drive it, the same defect this module's own header warns
+ * against for codex's `exec`. So a present binary is still `not-run`, with the reason naming the
+ * probed version and the missing citation, rather than a run against unverified flags.
  */
 export const CLIENT_RUNNERS = {
   claude: {
@@ -66,13 +73,10 @@ export const CLIENT_RUNNERS = {
       'and the TUI observation stay human',
   },
   cursor: {
-    binary: null,
-    notRun:
-      'no headless CLI on this machine: `cursor` is the editor launcher and no `cursor-agent` binary is on PATH',
+    binary: 'cursor-agent',
   },
   copilot: {
-    binary: null,
-    notRun: 'not on PATH',
+    binary: 'copilot',
   },
 }
 
@@ -151,6 +155,19 @@ export function runClient({ client, repoRoot, fixturesDir }) {
   const probe = binaryVersion(runner.binary)
   if (!probe.present) {
     return { client, fixture: fixture.dir, status: 'not-run', reason: `not on PATH (${probe.reason})` }
+  }
+
+  if (runner.args === undefined) {
+    // Probed and present, but this module has no measured non-interactive invocation for the
+    // binary to drive — see CLIENT_RUNNERS' own note on why that is refused rather than guessed.
+    return {
+      client,
+      fixture: fixture.dir,
+      status: 'not-run',
+      reason:
+        `${runner.binary} ${probe.version} is on PATH, but no measured non-interactive ` +
+        'invocation is on record for it — driving it would guess at flags rather than measure them',
+    }
   }
 
   const result = spawnSync(runner.binary, runner.args, {

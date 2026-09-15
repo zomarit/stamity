@@ -247,7 +247,7 @@ const CODEX_FACTS: AdapterDialectFacts = {
     // and trust recorded against the hook's own hash.
     { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-09-10" },
     // `project_doc_max_bytes`, default 32768 — the budget shaped below.
-    { url: "https://learn.chatgpt.com/docs/config-file/config-reference", accessDate: "2026-09-10" },
+    { url: "https://learn.chatgpt.com/docs/config-file/config-reference", accessDate: "2026-09-15" },
     // Custom prompts: home-directory scope, deprecated — why no commands emit.
     { url: "https://learn.chatgpt.com/docs/custom-prompts", accessDate: "2026-09-10" },
   ],
@@ -780,6 +780,9 @@ export function composeConfigToml(core: CoreEmissionPlan, ctx: EmissionContext):
       "a regeneration would drop the keys anyway. Your own keys are never clobbered: the engine",
       "refuses to overwrite a file it does not own (sync reports an unmanaged-name collision),",
       "so keep your file and add `hooks = true` INTO your existing [features] table.",
+      "Removing this key (or setting it false) makes every emitted hook inert with no other",
+      "signal — the client reads none of them — and `sync` restores `hooks = true` on this file",
+      "the next time it regenerates it.",
     ],
     tables: [{ header: "features", entries: [["hooks", true]] }],
   });

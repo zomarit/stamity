@@ -648,11 +648,14 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
     // its ceiling, so the failure is the per-client rule firing, not arithmetic.
     expect(composeAlwaysOnLoad("codex", overBudget)).toBeGreaterThan(ceiling);
     expect(composeAlwaysOnLoad("cursor", overBudget)).toBe(ceiling);
-    // claude has no floor exemption — a glob-less rule is demoted there whatever
-    // it is tagged — so its over-budget case is the `always-on` mode, where the
-    // attachment filter is the only one that runs.
+    // CHANGED 2026-09-15 (S-1): claude now carries the same floor guard codex
+    // does — a critical, floor-tagged rule is never demoted there either, so
+    // BOTH modes push claude over the ceiling here. The old assertion
+    // (`on-demand` landing exactly on `ceiling`) encoded the bug this fixture
+    // now proves fixed: a floor-tagged glob-less rule used to lose its
+    // always-on delivery on claude even though codex kept it.
     expect(composeAlwaysOnLoad("claude", overBudget, "always-on")).toBeGreaterThan(ceiling);
-    expect(composeAlwaysOnLoad("claude", overBudget, "on-demand")).toBe(ceiling);
+    expect(composeAlwaysOnLoad("claude", overBudget, "on-demand")).toBeGreaterThan(ceiling);
 
     const globScoped: AlwaysOnPlan = {
       charterLines: 10,
@@ -666,9 +669,18 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
 
   it("fixture: the delivery filter, not the attachment filter, is what the flip changed", () => {
     // Two rules of the same size, identical but for the facts `demotedRuleIds`
-    // reads: one is a floor codex must keep, one is an ordinary glob-less rule.
-    // Both are 40 lines, so a mode that dropped neither and a mode that dropped
-    // both would each produce a number this case distinguishes.
+    // reads: one is a floor every client with the guard must keep, one only
+    // codex's ADDITIONAL anchor exemption keeps. Both are 40 lines, so a mode
+    // that dropped neither and a mode that dropped one would each produce a
+    // number this case distinguishes.
+    //
+    // CHANGED 2026-09-15 (S-1): the second rule used to be an "ordinary"
+    // glob-less rule with no exemption at all, and claude's `on-demand` answer
+    // used to equal the charter alone (100) — the bug this fixture now proves
+    // fixed. Claude carries the same floor guard codex does, so the
+    // floor-tagged rule is never demoted on claude either; what still
+    // distinguishes codex from claude is codex's OWN extra exemption for an
+    // anchored rule, which claude's predicate has no equivalent for.
     const floorRule: AlwaysOnRule = {
       id: "floor",
       lineCount: 40,
@@ -677,26 +689,29 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
       floorTagged: true,
       anchored: false,
     };
-    const ordinary: AlwaysOnRule = {
-      id: "ordinary",
+    const anchoredOnly: AlwaysOnRule = {
+      id: "anchored-only",
       lineCount: 40,
       globScoped: false,
       critical: false,
       floorTagged: false,
-      anchored: false,
+      anchored: true,
     };
-    const plan: AlwaysOnPlan = { charterLines: 100, rules: [floorRule, ordinary] };
+    const plan: AlwaysOnPlan = { charterLines: 100, rules: [floorRule, anchoredOnly] };
 
-    // always-on: every client that cannot defer a glob-less rule pays both.
+    // always-on: every client that cannot defer a glob-less rule pays both —
+    // unaffected by the floor guard, since `always-on` demotes nothing on any
+    // client and the attachment filter alone decides this case's two rules.
     expect(composeAlwaysOnLoad("claude", plan, "always-on")).toBe(180);
     expect(composeAlwaysOnLoad("codex", plan, "always-on")).toBe(180);
 
-    // on-demand: claude demotes every glob-less rule and is left with the
-    // charter; codex demotes only the one that is neither floor, critical nor
-    // anchored, so it keeps the floor — the two answers differ, which is the
-    // per-client half of the predicate firing.
-    expect(composeAlwaysOnLoad("claude", plan, "on-demand")).toBe(100);
-    expect(composeAlwaysOnLoad("codex", plan, "on-demand")).toBe(140);
+    // on-demand: claude keeps the floor rule (S-1's guard) and demotes the
+    // anchored-only one, which is not a floor exemption claude's predicate
+    // reads at all; codex keeps both — the floor rule on its own guard, the
+    // anchored one on the exemption only codex has — so the two answers still
+    // differ, now on the anchor exemption rather than on the floor bug.
+    expect(composeAlwaysOnLoad("claude", plan, "on-demand")).toBe(140);
+    expect(composeAlwaysOnLoad("codex", plan, "on-demand")).toBe(180);
     // Cursor's rule layer defers both under either mode.
     expect(composeAlwaysOnLoad("cursor", plan, "on-demand")).toBe(100);
   });

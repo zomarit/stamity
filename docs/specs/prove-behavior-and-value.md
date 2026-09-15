@@ -69,7 +69,11 @@ to a nested `AGENTS.md`; every other rule projects as a skill instead.
 Emission sums `name` plus `description` characters over every projected skill when codex is selected
 and refuses past 8,000 with a `VALIDATION_ERROR` naming the total and the cap (`…codex.ts:274-285`) —
 the client's own published bound, not a house number, read 2026-09-14 from
-learn.chatgpt.com/docs/build-skills and recorded with that date at `:121-142`.
+learn.chatgpt.com/docs/build-skills and recorded with that date at `:121-142`. The adapter's refusal
+is a `VALIDATION_ERROR`; the planner never lets that failure surface on its own terms — a residue
+planner that rejects is re-wrapped as an `ADAPTER_ERROR` naming the tool and carrying the original
+message (`src/emit/planner.ts:869-876`), so `sync` reports this row's refusal as an `ADAPTER_ERROR`
+whose text is the codex adapter's `VALIDATION_ERROR` message.
 
 - GIVEN skills summing past the cap WHEN emission runs for codex THEN it fails naming the measured
   total and `8000`; the matrix discloses both under "Always-on cost by client" from

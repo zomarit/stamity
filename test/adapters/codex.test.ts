@@ -843,6 +843,10 @@ describe("config.toml — one composed document, one writer", () => {
     expect(content).toContain("`codex exec --enable hooks`");
     // A user's own [features] table is not clobbered, and the comment says how.
     expect(content).toContain("add `hooks = true` INTO your existing [features] table");
+    // S-2: the preamble states the cost of removing the key and that sync
+    // restores it, not only how to add it back in by hand.
+    expect(content).toContain("makes every emitted hook inert with no other");
+    expect(content).toContain("`sync` restores `hooks = true` on this file");
   });
 
   it("names all three hook-loading steps above the flag, not the flag alone", async () => {

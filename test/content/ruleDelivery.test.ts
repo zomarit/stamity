@@ -8,7 +8,7 @@ import {
   ruleDeliveryInputOf,
   type RuleDeliveryInput,
 } from "../../src/content/ruleDelivery.ts";
-import type { CatalogItem } from "../../src/content/catalog.ts";
+import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
 import { TOOLS } from "../../src/types/core.ts";
 
 /**
@@ -97,6 +97,44 @@ describe("demotedRuleIds", () => {
 
   it("answers an empty rule set with an empty demotion set", () => {
     expect(idsOf(demotedRuleIds("codex", [], "on-demand"))).toEqual([]);
+  });
+
+  it("keeps a floor-tagged glob-less rule always-on on claude and copilot too", () => {
+    // S-1: the floor guard used to exist on the codex branch only, so a
+    // floor-tagged rule with no globs was demoted off the launch-context
+    // surface on claude and copilot even though codex kept it.
+    const floorlessGlobless: RuleDeliveryInput = { ...GLOBLESS, floorTagged: true };
+    expect(idsOf(demotedRuleIds("claude", [floorlessGlobless], "on-demand"))).toEqual([]);
+    expect(idsOf(demotedRuleIds("copilot", [floorlessGlobless], "on-demand"))).toEqual([]);
+  });
+
+  it("keeps a critical glob-less rule always-on on claude and copilot too", () => {
+    const criticalGlobless: RuleDeliveryInput = { ...GLOBLESS, critical: true };
+    expect(idsOf(demotedRuleIds("claude", [criticalGlobless], "on-demand"))).toEqual([]);
+    expect(idsOf(demotedRuleIds("copilot", [criticalGlobless], "on-demand"))).toEqual([]);
+  });
+});
+
+describe("demotedRuleIds — corpus-wide floor guarantee", () => {
+  it("never demotes a floor-tagged rule off always-on, on any client that has a demotion mode", async () => {
+    // Mirrors test/adapters/codex.test.ts's "delivers every floor-tagged
+    // rule" walk, for claude and copilot: a floor-tagged glob-less rule must
+    // never leave always-on delivery on ANY client, not only on codex.
+    const index = await buildContentIndex();
+    const inputs = index.items
+      .filter((item) => item.type === "rule")
+      .map((item) => ruleDeliveryInputOf(item));
+    const floorTagged = inputs.filter((rule) => rule.floorTagged).map((rule) => rule.id);
+    expect(floorTagged.length, "the corpus declares at least one floor-tagged rule").toBeGreaterThan(
+      0,
+    );
+
+    for (const tool of ["claude", "copilot"] as const) {
+      const demoted = demotedRuleIds(tool, inputs, "on-demand");
+      for (const id of floorTagged) {
+        expect(demoted.has(id), `${tool} must never demote floor-tagged rule ${id}`).toBe(false);
+      }
+    }
   });
 });
 

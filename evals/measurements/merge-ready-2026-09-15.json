@@ -99,6 +99,10 @@
     {
       "run": "2026-09-11_package-10-session-evals",
       "reason": "no record"
+    },
+    {
+      "run": "2026-09-14_package-11",
+      "reason": "run in progress"
     }
   ],
   "rate": {
@@ -107,7 +111,7 @@
     "value": 0.714
   },
   "computedFrom": {
-    "records": 19,
+    "records": 20,
     "newestRecordDate": "2026-09-10",
     "changelogHead": "1.7.0"
   }

@@ -94,6 +94,7 @@ import {
   typeIdKey,
   type CatalogItem,
 } from "../content/catalog.ts";
+import { declaredRuleGlobs } from "../content/ruleDelivery.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { AGENTS_MD_FILE, verificationGatesFromManifest } from "../emit/agentsMd.ts";
 import type {
@@ -840,25 +841,16 @@ function owner(artifactId: string, artifactType: ContentClass | "infra"): Emissi
  * Declared globs as a de-duplicated list, from either authoring shape — a
  * YAML list, or one comma-separated string. Anything else reads as no scope
  * (the description-only emission) rather than throwing: over-broad load is
- * recoverable, a dropped rule is invisible. Deliberately the narrow local
- * read, matching the sibling adapters, until a shared rule-scope reader
- * exists.
+ * recoverable, a dropped rule is invisible.
+ *
+ * The extraction itself is {@link declaredRuleGlobs} (`../content/
+ * ruleDelivery.ts`), the shared reader every rule-scope caller reads off the
+ * same frontmatter the same way; only the de-duplication is local, because
+ * this adapter's callers rely on one glob appearing once even when the
+ * corpus author declared it twice.
  */
 function declaredGlobs(item: CatalogItem): string[] {
-  const declared = item.frontmatter["globs"];
-  const raw =
-    typeof declared === "string"
-      ? declared.split(",")
-      : Array.isArray(declared)
-        ? declared.filter((entry) => typeof entry === "string")
-        : [];
-
-  const seen = new Set<string>();
-  for (const glob of raw) {
-    const value = glob.trim();
-    if (value !== "") seen.add(value);
-  }
-  return [...seen];
+  return [...new Set(declaredRuleGlobs(item))];
 }
 
 /**
