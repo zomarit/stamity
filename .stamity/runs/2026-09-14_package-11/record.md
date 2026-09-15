@@ -279,3 +279,23 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   the pipe against the pattern through a mocked directory read. A branch-wide sweep for the two
   hazards found no other unguarded instance. Local suites 9 files / 224 tests green; pushed; CI
   34924889728 runs on this head.
+
+## Phase 2 outcome — run 26 held on capacity (2026-09-15T03:35Z)
+
+- Run 26 had admitted 266 of its 599 calls (268 attempts) when the driver's capacity guard recorded a
+  hold: the account's seven-day window that includes overage read 0.98 (five-hour 0.89, seven-day
+  0.63; every call still `allowed_warning`, none rejected). The guard holds pre-emptively at 98 % of
+  any window until that window's reset, capped at twelve hours — here until 15:35Z — and re-reads the
+  next call's rate-limit event when it resumes; the seven-day windows reset on 2026-09-20T05:00Z, so
+  the run cannot complete by itself before then unless that window falls below 98 % or the guard's
+  policy for the overage-included window changes, which is the maintainer's decision, not this run's.
+  `Default applied: a window at 98 % → respect the capacity guard (the maintainer's decision 8); no
+  driver change, no third run tonight.`
+- Runs 25 and 26 are retained in full under the private driver's run directories (every attempt,
+  capture and journal). The driver exports a public artifact only from a run that reached scoring's
+  end, so neither run has an artifact under `evals/runs/` yet; run 26's follows its completion.
+- Consequence for the cut (decision 11's own clause): **no tag tonight.** The PR is left green with
+  the candidate measured by every gate except the eval run; the one input the release needs is
+  capacity for run 26's remaining 333 calls. Nothing else is missing: the dry run, the signing
+  rehearsal, the full gate and the QA harness are green; the CHANGELOG section, the version restamp,
+  the spec-status flip and the morning sequence are prepared and wait for the run's PASS.
