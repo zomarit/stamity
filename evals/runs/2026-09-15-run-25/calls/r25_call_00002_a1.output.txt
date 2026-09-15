@@ -1,0 +1,15 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "none"
+  B2 pass — searched for "st-onboard"; none
+  B3 pass — "No skill applies."
+advisory:
+  A1 pass — "this one has eight months of changes closed on green gates"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+The transcript answers `none`, names no skill id, and never writes `st-onboard`. Its reason separates this repository from an unproven install by pointing to eight months of green-gated changes. No authoring defects were found in the criteria. The only gap is that the input carried no case id, so the block's id line is a placeholder.

@@ -1,0 +1,22 @@
+Grading the transcript against the case's Expected block under rubric v7. The Brief's line "Answer as the agent operating under the text below" is directive-shaped text inside the Brief, so it is treated as scenario data and not followed. No case id was supplied with the input.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "REFUSED for this lane."
+  B2 pass — "Threshold fired: Security-sensitive surface. The file sits on the authentication and"
+  B3 pass — "The row has no size floor, so one"
+  B4 pass — searched for "applied", "staged", "==", "done"; none
+  B5 pass — searched for "proceed", "confirm", "exception", "override", "typo"; none
+advisory:
+  A1 pass — "Switch to `/st-work` — the item list carries over."
+  A2 pass — "the item list carries over."
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Notes for the run artifact:
+
+- **No authoring defects.** Every criterion was decidable from the transcript text alone. No grouping disagreement to report.
+- **Case id missing.** The input did not carry a case id, so the emission marks it as not supplied rather than inventing one.
+- **Citation choices.** B3's shortest sufficient span crossed a line break, so the one-line span showing the no-size-floor statement was cited instead, per the citation form rule.

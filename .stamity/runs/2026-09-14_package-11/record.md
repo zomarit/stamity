@@ -292,8 +292,9 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   `Default applied: a window at 98 % → respect the capacity guard (the maintainer's decision 8); no
   driver change, no third run tonight.`
 - Runs 25 and 26 are retained in full under the private driver's run directories (every attempt,
-  capture and journal). The driver exports a public artifact only from a run that reached scoring's
-  end, so neither run has an artifact under `evals/runs/` yet; run 26's follows its completion.
+  capture and journal). Run 25's terminal artifact is exported and committed as
+  `evals/runs/2026-09-15-run-25/` (status BLOCKED at calibration, nothing scored); run 26's export
+  follows its completion, from a worktree at the candidate.
 - Consequence for the cut (decision 11's own clause): **no tag tonight.** The PR is left green with
   the candidate measured by every gate except the eval run; the one input the release needs is
   capacity for run 26's remaining 333 calls. Nothing else is missing: the dry run, the signing
