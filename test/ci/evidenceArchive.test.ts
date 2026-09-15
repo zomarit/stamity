@@ -112,7 +112,64 @@ function forge(f: ReturnType<typeof fixture>, attack: string): void {
   expect(result.status, result.stderr).toBe(0);
 }
 
+// CPython's Windows path stat uses birthtime for ctime, while fstat uses
+// ChangeTime. Path stat can also infer execute bits from a filename extension.
+// Model those real API differences locally; the ordinary suite still runs on Windows.
+// https://github.com/python/cpython/blob/v3.13.7/Modules/posixmodule.c#L2069-L2071
+const WINDOWS_STAT = `
+import importlib.util, stat, sys
+spec = importlib.util.spec_from_file_location('evidence_archive', sys.argv[1])
+module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+behavior = sys.argv[2]
+real_fstat = module.os.fstat
+metadata_changed = False
+class HandleStat:
+    def __init__(self, info): self.info = info
+    def __getattr__(self, name):
+        if name == 'st_ctime_ns': return self.info.st_ctime_ns + 1000000000 + int(metadata_changed)
+        if name == 'st_mode' and stat.S_ISREG(self.info.st_mode): return self.info.st_mode & ~0o111
+        if name == 'st_ino' and behavior == 'different-file': return self.info.st_ino + 1
+        return getattr(self.info, name)
+module.os.fstat = lambda fd: HandleStat(real_fstat(fd))
+if behavior == 'ctime-change':
+    original = module.inspect_payload
+    def change_after_verification(*args, **kwargs):
+        global metadata_changed
+        original(*args, **kwargs)
+        metadata_changed = True
+    module.inspect_payload = change_after_verification
+sys.argv = [sys.argv[1]] + sys.argv[3:]
+sys.exit(module.main())
+`;
+
+function runWithWindowsStat(behavior: string, ...args: string[]) {
+  return command(python, ["-c", WINDOWS_STAT, script, behavior, ...args]);
+}
+
 describe("retained evidence archives", () => {
+  it.each(["git", "working-tree"])("captures and restores %s evidence when Windows stat APIs report different ctime and modes", (capture) => {
+    const f = fixture();
+    const flags = capture === "working-tree" ? ["--working-tree"] : [];
+    ok(runWithWindowsStat("stable", "pack", "--repo", f.repo, "--ref", f.sha, "--path", "runs/closed", ...flags,
+      "--repository", "example/evidence", "--output", f.archive, "--manifest", f.manifest));
+    ok(runWithWindowsStat("stable", "verify", "--archive", f.archive, "--manifest", f.manifest));
+    const destination = join(f.dir, "windows-stat-restored");
+    ok(runWithWindowsStat("stable", "restore", "--archive", f.archive, "--manifest", f.manifest, "--destination", destination));
+    expect(readFileSync(join(destination, "runs/closed/input.txt"), "utf8")).toBe("Original prompt.\n");
+    expect(readFileSync(join(destination, "runs/closed/nested/output.bin"))).toEqual(Buffer.from([0, 255, 4, 128, 10]));
+  });
+
+  it.each(["different-file", "ctime-change"])("still rejects %s with Windows stat API differences", (behavior) => {
+    const f = fixture();
+    ok(f.pack());
+    const destination = join(f.dir, "windows-stat-refused");
+    const result = runWithWindowsStat(behavior, "restore", "--archive", f.archive, "--manifest", f.manifest,
+      "--destination", destination);
+    expect(result.status, result.stdout).toBe(1);
+    expect(result.stderr).toContain("Archive changed");
+    expect(existsSync(destination)).toBe(false);
+  });
+
   it("packs pinned Git bytes deterministically despite dirty and untracked working files", () => {
     const f = fixture();
     ok(f.pack());

@@ -150,6 +150,17 @@ def fingerprint(info):
     return (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
+def same_file_version(path_info, handle_info):
+    # Windows path stat maps ctime to birthtime and infers execute bits from
+    # filename extensions; fstat exposes ChangeTime and handle-based permissions.
+    # Bind identity/content across APIs, then compare each full fingerprint only
+    # with a later result from that same API. No mutation fields are discarded.
+    return (os.path.samestat(path_info, handle_info) and
+            stat.S_IFMT(path_info.st_mode) == stat.S_IFMT(handle_info.st_mode) and
+            path_info.st_size == handle_info.st_size and
+            path_info.st_mtime_ns == handle_info.st_mtime_ns)
+
+
 def regular_info(path):
     info = path.lstat()
     require(not stat.S_ISLNK(info.st_mode) and
@@ -201,10 +212,13 @@ def entry_reader(args, entry, process):
         regular_info(path)
     descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
     with os.fdopen(descriptor, "rb") as stream:
-        require(fingerprint(os.fstat(stream.fileno())) == entry["state"],
+        path_info = regular_info(path)
+        handle_info = os.fstat(stream.fileno())
+        require(fingerprint(path_info) == entry["state"] and same_file_version(path_info, handle_info),
                 "Evidence changed before reading")
+        handle_state = fingerprint(handle_info)
         yield stream
-        require(fingerprint(os.fstat(stream.fileno())) == entry["state"] and
+        require(fingerprint(os.fstat(stream.fileno())) == handle_state and
                 fingerprint(regular_info(path)) == entry["state"], "Evidence changed while reading")
 
 
@@ -447,7 +461,10 @@ def verify_or_restore(args):
         initial = os.fstat(raw.fileno())
         require(stat.S_ISREG(initial.st_mode), "Archive must be a regular file")
         require(initial.st_size == descriptor["archive"]["bytes"], "Archive size mismatch")
+        initial_path = archive_path.stat()
+        require(same_file_version(initial_path, initial), "Archive changed before verification")
         archive_state = fingerprint(initial)
+        archive_path_state = fingerprint(initial_path)
         snapshot_state = None
 
         def unchanged():
@@ -455,7 +472,7 @@ def verify_or_restore(args):
             # detects rename/replacement. The private snapshot ties every payload
             # read to the bytes hashed even on filesystems with coarse timestamps.
             require(fingerprint(os.fstat(raw.fileno())) == archive_state and
-                    fingerprint(archive_path.stat()) == archive_state and
+                    fingerprint(archive_path.stat()) == archive_path_state and
                     (snapshot_state is None or fingerprint(os.fstat(snapshot.fileno())) == snapshot_state),
                     "Archive changed during verification or restore")
 
