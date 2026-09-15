@@ -173,3 +173,19 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   reads as present). Targeted suites after the cherry-picks: 58 files, 2,089 tests green; build and
   `stamity check` green; the sixteen leftover agent worktrees removed and pruned.
 - Next: a round-three read of the N1 fix, the QA harness re-run at this tree, then the candidate.
+
+### Review round three — 2026-09-15T03:18Z, request-changes
+
+- The four round-two findings read closed (N1 for codex and copilot, N2, M-d, qa/1) — but the fixer's
+  claim that claude's native copy keeps a `tools:`-restricted demoted rule was false: the projection
+  skips such a rule before the native copy is derived, so on claude it is delivered nowhere; the code
+  comment accepted that gap. Two new Warnings: the ratchet gate's fixture never reads `tools:` off a
+  corpus file, and the `fixture/` label change has no failing-first test. Four Minors (guard attached
+  by tool name; the absent-binary reason lost its plain framing; a signal-killed probe reads
+  "exit null"; a cross-drive `--site` could still label an absolute path) and one ledger-only note.
+  Rows review/28–35 opened; a fixer round dispatched for all but the ledger-only row.
+- QA harness re-run at `a523958` (before the checklist wording commit, which touches no QA input):
+  six rows passed, three not-run — Codex (`codex exec` runs no project hook headlessly), Cursor and
+  Copilot (no CLI on this machine); every `inputHashes` key repository-relative, zero local paths;
+  leak gate PASS across 7,609 files. The private human QA record for 1.8.0 is filed from the rendered
+  form; the three human rows are UNPERFORMED per decision 3, each bound to its input hashes.
