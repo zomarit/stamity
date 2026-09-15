@@ -70,7 +70,10 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The stated reason names the running `/st-work` command as the owner of this checkpoint —
-   its own step invokes the guided pass, so the request stays with the flow already
-   executing. The classification is what this case measures and is binding above; how
-   completely the reason is stated is recorded here.
+Disposition 2026-09-15: A1 deleted — the row scored how completely the reason is stated, in its
+own words, and `content/commands/st-work.md:200-216` requires no wording of the reason at all: it
+states that the checkpoint's step invokes the qa skill by name and that a request arriving there
+"stays with this command". The classification, which is what the source states, is bound by B1–B3.
+
+None declared for this case. Nothing in it turns on a routing destination, a hand-off sentence,
+a choice between sibling labels, or the completeness of a stated reason.

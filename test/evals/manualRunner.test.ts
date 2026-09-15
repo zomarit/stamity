@@ -10,7 +10,7 @@ import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiab
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
 import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation } from "../../scripts/eval/run.mjs";
-import { CASES_DIR, REPO_ROOT } from "./support.ts";
+import { REPO_ROOT } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 const passingRows = (scenario: { binding: string[] }) =>
@@ -1541,10 +1541,17 @@ describe("ordering criteria — tagged by the reader, listed by the aggregate", 
     const calls: Call[] = JSON.parse(read(`${run}/calls.json`));
     const byCallId = new Map(calls.map(call => [call.callId, call]));
     const output = (call: Call) => read(`${run}/calls/${call.taskName}.output.txt`);
+    // Run 24 scored against `evals/cases-v5/**` (its own artifact says so, RESULTS.md line 16),
+    // and a replay of its recorded grades is only a replay when it reads the case files that run
+    // read. Reading the live directory instead made this gate drift with the current set: the
+    // 2026-09-15 advisory dispositions removed two advisory rows from
+    // `agent-security-return-contract`, and the replay failed on a row-count mismatch against a
+    // run whose grades had not moved at all. Pinned to the run's own immutable directory.
+    const RUN_24_CASES = "evals/cases-v5";
     const caseOf = (id: string) => {
-      const path = ["golden", "adversarial", "probes"].map(group => `${CASES_DIR}/${group}/${id}.md`)
+      const path = ["golden", "adversarial", "probes"].map(group => `${RUN_24_CASES}/${group}/${id}.md`)
         .find(candidate => existsSync(join(REPO_ROOT, candidate)));
-      expect(path, `${id}: no case file under ${CASES_DIR}`).toBeDefined();
+      expect(path, `${id}: no case file under ${RUN_24_CASES}`).toBeDefined();
       return parseCase(read(path as string), path as string);
     };
     const replayed: string[] = [];

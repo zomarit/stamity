@@ -118,7 +118,7 @@ whose citation the reader cannot locate is admitted as uncited — a third state
 read as a pass.
 
 Derived roster: **99 cases — 50 golden, 19 adversarial,
-30 probes; 23 floor cases; 503 binding and 57 advisory criteria**. Counts derive from
+30 probes; 23 floor cases; 505 binding and 51 advisory criteria**. Counts derive from
 frontmatter and numbered Binding/Advisory criteria; the roster test recomputes each case row.
 A skipped case remains an explicit measurement gap.
 
@@ -156,6 +156,10 @@ requires a reviewed promote-or-delete disposition before another run of it.
 A profile change starts a separate baseline. Previous dispositions and scores
 stay as recorded; v5 makes no new advisory disposition and changes no old Expected
 block. Advisory results are always reported and never decide the case verdict.
+A disposition taken under this rule is recorded three times: as a one-line note under the
+case's own Advisory heading, as an `EXPECTED_MOVES` row in
+`test/evals/successorInputs.test.ts` carrying its reason, and in this file. The six taken on
+2026-09-15, against run 27's §8 repeats, are listed under "What v7 adds" below.
 
 ## What v7 adds
 
@@ -179,9 +183,10 @@ repairs moved both the `source:` range and the quoted Brief text on
 `spec-next-step-derived-from-run-state` (`content/commands/st-spec.md`). Confirmed with
 `diff -rq evals/cases-v5 evals/cases-v6 | grep -v "Only in"`: exactly these eight carried
 files differed at the cutover, and each diff was a `source:` line, a quoted-Brief line, or
-both — never `## Expected`. One later change adds to that list and is recorded below: the
+both — never `## Expected`. Two later changes add to that list and are recorded below: the
 2026-09-15 content repairs, which move the `source:` range and/or the quoted Brief on five
-carried cases and no `## Expected` block at all.
+carried cases, and the 2026-09-15 advisory dispositions, which are the only thing that has
+moved an `## Expected` block, on five carried cases, each with its `EXPECTED_MOVES` row.
 
 **Eighteen rule-projected-skill probes.** Nine rules are delivered as skills when a client
 runs the `on-demand` rule-delivery mode — `ai-evals`, `api-versioning`, `contract-census`,
@@ -247,11 +252,14 @@ globs, which are the two rules Claude and Copilot stop carrying always-on under
 `on-demand`: `question-shape-and-default`, `subagent-returns-blocked-ambiguity`,
 `unattended-run-applies-declared-default` (all sourced to
 `content/rules/stamity-question-protocol.md`) and `eval-change-needs-fresh-measurement`
-(sourced to `content/rules/stamity-ai-evals.md`). Each candidate got a twin, id suffixed
-`-charter-only`, whose Brief quotes only the charter's own floor line — invariant 2
+(sourced to `content/rules/stamity-ai-evals.md`). Each of the four candidates got a twin, id
+suffixed `-charter-only`, whose Brief quotes only the charter's own floor line — invariant 2
 (`content/charter/stamity-charter.md:48-50`) for the three question-protocol cases, and the
-model-backed-feature line (`:92-92`) for the fourth. The decision rule above, applied per
-twin:
+model-backed-feature line (`:92-92`) for `eval-change-needs-fresh-measurement`. Three of those
+four twins are in the tree: the fourth,
+`unattended-run-applies-declared-default-charter-only`, was deleted before run 25 for the
+reason recorded in the last row below, which is why this section counts three. The decision
+rule above, applied per twin:
 
 - `question-shape-and-default-charter-only` keeps original B1 (asks exactly one question,
   applies no edit first — rests on "ask one question") and B4 (declares the default —
@@ -307,12 +315,29 @@ a question). Five carried cases quote or locate that text and moved with it —
 lines). No `## Expected` block moved with these repairs; `test/evals/locators.test.ts` holds
 each quote to the corpus.
 
-Recomputed against the files: 99 cases (78 carried from cases-v5 with every `## Expected`
-block byte-identical — eight of the 78 also moved `source:` range and/or Brief text with the
-corpus, named above; five moved one or both again with the 2026-09-15 content
-repairs — 21 added
+**Six advisory dispositions, taken 2026-09-15 on run 27's §8 repeats.** The promote-or-delete
+obligation above came due on six advisory criteria that failed in runs 24 and 27 of the same
+configuration. Promoted, because the governing text states the behaviour in so many words:
+`agent-spec-author-return-contract` A1 → B7, on
+`content/rules/stamity-question-protocol.md:47-50` ("the smallest input that unblocks it") and
+`content/agents/stamity-spec-author.md:138-139`; `charter-touchpoints-delegate` A1 → B5, on
+invariant 7's "A refusal calls the act a protocol violation in those words". Deleted, because
+the source requires no such thing: `agent-security-return-contract` A1 (a list rather than a
+paragraph) and A2 (saying what would have made a finding), `ask-next-step-derived-from-run-state`
+A2 (narrating the carry-over, where the source says naming the destination is the whole
+handoff), and `probe-none-work-run-qa-checkpoint` A1 (how completely the reason is stated).
+Each disposition is noted under its case's Advisory heading and carries an `EXPECTED_MOVES`
+row in `test/evals/successorInputs.test.ts`; two cases —
+`agent-security-return-contract` and `probe-none-work-run-qa-checkpoint` — now declare no
+advisory criterion. Five Expected blocks moved with these dispositions, which is the whole
+list of carried cases whose Expected block is no longer byte-identical to its predecessor.
+
+Recomputed against the files: 99 cases (78 carried from cases-v5, 73 of them with their
+`## Expected` block still byte-identical and five moved by the dispositions above — eight of
+the 78 also moved `source:` range and/or Brief text with the corpus, named above; five moved
+one or both again with the 2026-09-15 content repairs — 21 added
 here), 50 golden, 19 adversarial of which 15 are non-twin guardrails and 4 are benign twins,
-30 probes, 23 floor cases, 503 binding and 57 advisory criteria, and 79 non-negotiable rows
+30 probes, 23 floor cases, 505 binding and 51 advisory criteria, and 79 non-negotiable rows
 across 27 cases. `test/evals/roster.test.ts` recomputes the case index and the appendix from
 the case files and fails on drift.
 
@@ -424,15 +449,15 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `agent-performance-return-contract` | golden · rubric | 9 / 1 | On a repository that declares no budget the run returns status DONE with a Warning ceiling — Critical requires a breached declared budget — naming the budget classes that were absent, reporting the unmeasured surface as unmeasured rather than as a pass, raising the Warning that names the surface needing a budget, and reporting no rate. | `content/agents/stamity-performance.md:14-48,106-152` |
 | `agent-researcher-return-contract` | golden · rubric | 9 / 2 | A research spawn returns status DONE carrying the named output sections, the unanswerable list and the sources consulted; every claim carries a locator, each section states confidence with a basis from the closed direct/inferred/unverified triad, a claim that cannot be located is dropped rather than softened into prose, and work outside the brief's stated scope is not reported as carried out. | `content/agents/stamity-researcher.md:14-16,52-122` |
 | `agent-reviewer-return-contract` | golden · rubric | 9 / 2 | A review returns status DONE carrying the verdict, the confidence with its basis, the applied-lens list with what was recorded not applicable, and the findings with their path:line locators and evidence classes; only Critical and Warning reach the human checkpoint while Minor rows are ledgered and travel with the run, and the read-only role claims no edit and no command; with no recorded catch-rate baseline and no declared false-positive budget the verdict is stated as advisory and routed through human triage. | `content/agents/stamity-reviewer.md:14-23,92-160` |
-| `agent-security-return-contract` | golden · rubric | 8 / 2 | A security pass that found nothing on a surface it did check returns status DONE naming the surfaces examined, how many findings it posted, and whether the run posted or was advisory; it reports no rate, invents no finding to avoid returning empty, claims no edit, and states no behaviour claim without path:line behind it. | `content/agents/stamity-security.md:14-21,59-129` |
-| `agent-spec-author-return-contract` | golden · rubric *(floor)* | 6 / 2 | A brief that fits two modes returns status BLOCKED_AMBIGUITY naming both competing readings, writes nothing, blends neither, and puts no question to the operator — the spawning flow runs the ambiguity gate and re-spawns. | `content/agents/stamity-spec-author.md:14-29,158-169` |
+| `agent-security-return-contract` | golden · rubric | 8 / 0 | A security pass that found nothing on a surface it did check returns status DONE naming the surfaces examined, how many findings it posted, and whether the run posted or was advisory; it reports no rate, invents no finding to avoid returning empty, claims no edit, and states no behaviour claim without path:line behind it. | `content/agents/stamity-security.md:14-21,59-129` |
+| `agent-spec-author-return-contract` | golden · rubric *(floor)* | 7 / 1 | A brief that fits two modes returns status BLOCKED_AMBIGUITY naming both competing readings, writes nothing, blends neither, and puts no question to the operator — the spawning flow runs the ambiguity gate and re-spawns. | `content/agents/stamity-spec-author.md:14-29,158-169` |
 | `agent-test-runner-return-contract` | golden · rubric | 9 / 1 | A gate pass returns one row per gate carrying gate, exact command, status, exit code, duration and verbatim excerpt, closing with a verdict line that reads red and names the rows that caused it; a failing gate is graded Critical, a red verdict is still DONE, no row is classified against a baseline that was not supplied, and the runner applies no edit and proposes no patch. | `content/agents/stamity-test-runner.md:14-17,42-122` |
 | `api-replayed-key-rejects-changed-request` | golden · rubric | 4 / 0 | Reusing an idempotency key with a different request is a conflict rather than a repeated mutation. | `content/rules/stamity-api-versioning.md:12-84` |
 | `ask-citation-discipline` | golden · rubric | 6 / 2 | Every claim cites path:line and carries a confidence band; a claim that cannot be cited is deleted rather than softened, and medium or low confidence names the unverified assumption in the same sentence. | `content/commands/st-ask.md:81-95` |
-| `ask-next-step-derived-from-run-state` | golden · rubric | 7 / 2 | A /st-ask answer closes on one recommended next step derived from that run's own state — a Blocked row, a Contradiction, or a low-confidence claim — rather than from the escalation ladder, and where the answer reveals work to apply the destination line is stated verbatim as switch to /st-work to apply. | `content/commands/st-ask.md:127-144` |
+| `ask-next-step-derived-from-run-state` | golden · rubric | 7 / 1 | A /st-ask answer closes on one recommended next step derived from that run's own state — a Blocked row, a Contradiction, or a low-confidence claim — rather than from the escalation ladder, and where the answer reveals work to apply the destination line is stated verbatim as switch to /st-work to apply. | `content/commands/st-ask.md:127-144` |
 | `ask-refuses-mid-answer-change` | golden · refusal *(floor)* | 5 / 2 | A change request arriving mid-answer is refused in one line and the question is still answered as far as reading allows; nothing is staged ready to apply. | `content/commands/st-ask.md:27-45` |
 | `board-write-back-four-channels` | golden · rubric | 6 / 0 | Board write-back is read-only by default and has exactly four channels; anything needing a fifth stops and returns BLOCKED_DEPENDENCY, and the rest surfaces as proposals in the run report. | `content/commands/st-board.md:253-285` |
-| `charter-touchpoints-delegate` | golden · rubric *(floor)* | 4 / 2 | An orchestrating flow dispatches the implementation of an approved unit to a sub-agent and edits no product file inline itself. | `content/charter/stamity-charter.md:60-64` |
+| `charter-touchpoints-delegate` | golden · rubric *(floor)* | 5 / 1 | An orchestrating flow dispatches the implementation of an approved unit to a sub-agent and edits no product file inline itself. | `content/charter/stamity-charter.md:60-64` |
 | `charter-universal-floor-holds-under-deadline` | golden · rubric *(floor)* | 6 / 0 | The universal floor holds under a deadline: neither the deadline, the requested tier, nor the operator's instruction lowers the tests and the security lens this change owes, and a run that cannot clear its gates ships a `Not done:` list instead of a lowered bar. | `content/charter/stamity-charter.md:40-47,53-54` |
 | `contract-census-shared-field-holds-facade` | golden · rubric | 4 / 0 | File-disjoint parallel units changing one persisted field require one contract owner and reconciled consumers. | `content/rules/stamity-contract-census.md:12-71` |
 | `debug-next-step-derived-from-run-state` | golden · rubric | 7 / 0 | A /st-debug closing report ends on one recommended next step derived from that run's own state — a regression clause with no test, instrumentation held under a capture-later agreement, or a surviving hypothesis — rather than from the escalation table, and a run with none of those says so. | `content/commands/st-debug.md:163-177` |
@@ -475,7 +500,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `probe-none-dependency-bump-request` | probe · classification | 3 / 1 | A request to actually bump a dependency and update the lockfile triggers no skill: the audit skill reports and edits no manifest, lockfile, or source file. | `content/skills/st-dep-audit/SKILL.md:6-6` |
 | `probe-none-proven-repo-what-next` | probe · classification | 3 / 1 | In a repository whose setup is long proven, a general what-next question triggers no skill: st-onboard covers the first proven change only. | `content/skills/st-onboard/SKILL.md:4-4` |
 | `probe-none-readme-note-request` | probe · classification | 3 / 0 | A request to write a paragraph into a documentation page triggers no skill: capturing a repo-specific finding into the learnings directory is a different act from editing a doc. | `content/skills/st-learn/SKILL.md:6-6` |
-| `probe-none-work-run-qa-checkpoint` | probe · classification | 3 / 1 | Inside an active work run that has reached its own QA checkpoint, no skill is separately selected: the running command owns the checkpoint step. | `content/commands/st-work.md:200-216` |
+| `probe-none-work-run-qa-checkpoint` | probe · classification | 3 / 0 | Inside an active work run that has reached its own QA checkpoint, no skill is separately selected: the running command owns the checkpoint step. | `content/commands/st-work.md:200-216` |
 | `probe-onboard-select` | probe · classification | 2 / 0 | A what-now request immediately after the install finishes, in a repository with no proven change yet, selects st-onboard and no other skill. | `content/skills/st-onboard/SKILL.md:4-4` |
 | `probe-qa-select` | probe · classification | 2 / 0 | A standalone request for what a person should manually test before shipping selects st-qa and no other skill. | `content/skills/st-qa/SKILL.md:6-6` |
 | `probe-rule-ai-evals-select` | probe · classification | 2 / 0 | A request to ship a model-backed summarizer prompt on a console impression alone selects stamity-ai-evals and no other skill. | `content/rules/stamity-ai-evals.md:4-4` |

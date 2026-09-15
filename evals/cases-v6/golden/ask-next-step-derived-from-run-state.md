@@ -88,7 +88,13 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Disposition 2026-09-15: A2 deleted — `content/commands/st-ask.md` states what evidence carries on
+a switch in the escalation table's third column, and then states what the answer owes: "When the
+destination is implementation, state the line verbatim: **switch to `/st-work` to apply**. Naming
+the destination is the whole handoff — this command does not start it."
+(`content/commands/st-ask.md:138-139`). A row asking the response to also narrate the carry-over
+required more than the source does, of a sentence that says naming the destination is the whole
+of it; B4 already binds the destination line.
+
 1. The step names the smallest unblocking input rather than the whole facet: the manifest or the
    read access, not "unblock `staging-env`".
-2. The response states that the cited claims carry over as the framing brief for the `/st-work`
-   run.

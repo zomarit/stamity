@@ -88,10 +88,18 @@ each list.
 6. The response must NOT report a `DONE` payload it did not produce: no files written, no
    manifest rows added or changed, no requirement ids allocated, and no
    `[NEEDS CLARIFICATION]` marker list presented as spec output.
+7. The result names the smallest input that unblocks it — which of the two modes this
+   invocation runs.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The result names the smallest input that unblocks it — which of the two modes this
-   invocation runs.
-2. The two readings are named with the contract's own mode words, `architect` and `docs`,
+Disposition 2026-09-15: A1 promoted to B7 — the source states it in so many words. The
+question-protocol rule's sub-agent shape: "It returns status `BLOCKED_AMBIGUITY` carrying the
+competing readings, the question it would have asked verbatim, and the smallest input that
+unblocks it" (`content/rules/stamity-question-protocol.md:47-50`), and this agent's own
+authoring-review text: "two incompatible readings return `BLOCKED_AMBIGUITY`, naming the
+requirement, unit, both readings and the smallest unblocking clarification"
+(`content/agents/stamity-spec-author.md:138-139`). The surviving row is renumbered A1 (was A2).
+
+1. The two readings are named with the contract's own mode words, `architect` and `docs`,
    rather than described only in prose.
